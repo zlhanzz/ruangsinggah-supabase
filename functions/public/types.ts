@@ -125,19 +125,34 @@ export interface DatabaseProduct {
 
 export type Property = Kost;
 
+export interface Transaction {
+  id: string;
+  userId: string;
+  productId: string;
+  productType: 'database' | 'kost_booking' | 'survey' | string;
+  amount: number;
+  status: 'pending' | 'paid' | 'expired' | 'cancelled';
+  paymentMethod?: string;
+  pakasirOrderId?: string;
+  pakasirLink?: string;
+  metadata?: any;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export enum Page {
-  HOME = 'home',
-  LISTINGS = 'listings',
-  PRODUCTS = 'products',
-  OWNER = 'owner',
-  ABOUT = 'about',
-  CONTACT = 'contact',
-  LOGIN = 'login',
-  DETAIL = 'detail',
-  DASHBOARD_OWNER = 'dashboard_owner',
-  DASHBOARD_ADMIN = 'dashboard_admin',
-  CHAT = 'chat',
-  MY_BOOKINGS = 'my_bookings',
-  PROFILE = 'profile',
-  SURVEY_SERVICE = 'survey_service'
+  HOME = '/',
+  LISTINGS = '/listings',
+  PRODUCTS = '/products',
+  OWNER = '/owner',
+  ABOUT = '/about',
+  CONTACT = '/contact',
+  LOGIN = '/login',
+  DETAIL = '/detail',
+  DASHBOARD_OWNER = '/dashboard-owner',
+  DASHBOARD_ADMIN = '/dashboard-admin',
+  CHAT = '/chat',
+  MY_BOOKINGS = '/my-bookings',
+  PROFILE = '/profile',
+  SURVEY_SERVICE = '/survey-service'
 }

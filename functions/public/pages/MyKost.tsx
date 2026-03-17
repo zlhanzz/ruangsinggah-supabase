@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { supabase } from '../supabase';
 import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X } from 'lucide-react';
 import { Page } from '../types';
 
@@ -44,21 +42,28 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
     const fetchMyKosts = async () => {
         setLoading(true);
         try {
-            const q = query(
-                collection(db, 'transactions'),
-                where('userId', '==', user.uid),
-                where('status', 'in', ['approved']) // Only show approved rent
-            );
+            const { data, error } = await supabase
+                .from('transactions')
+                .select('*')
+                .eq('user_id', user.uid)
+                .in('status', ['approved']);
 
-            const querySnapshot = await getDocs(q);
+            if (error) throw error;
+            
             const kostsData: any[] = [];
-
-            querySnapshot.forEach((doc) => {
-                const data = doc.data();
-                // Since one user might have multiple extensions, we should group by kostId.
-                // For simplicity, we just filter transactions that are explicitly "sewa_kost" core bookings.
-                if (data.type === 'sewa_kost' || !data.type) {
-                    kostsData.push({ id: doc.id, ...data });
+            data?.forEach((doc) => {
+                if (doc.type === 'sewa_kost' || !doc.type) {
+                    kostsData.push({ 
+                      id: doc.id, 
+                      kostName: doc.kost_name,
+                      kostId: doc.kost_id,
+                      roomType: doc.room_type,
+                      duration: doc.duration,
+                      period: doc.period,
+                      moveInDate: doc.move_in_date,
+                      totalPrice: doc.total_price,
+                      ...doc 
+                    });
                 }
             });
 
@@ -90,10 +95,19 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
         if (!extensionProof || !selectedKost) return;
         setIsSubmitting(true);
         try {
-            // Upload proof
-            const storageRef = ref(storage, `receipts/extensions/${user.uid}/${Date.now()}_${extensionProof.name}`);
-            await uploadBytes(storageRef, extensionProof);
-            const downloadURL = await getDownloadURL(storageRef);
+            // Upload proof ke Supabase Storage (bucket: receipts)
+            const fileExt = extensionProof.name.split('.').pop();
+            const fileName = `${user.uid}/${Date.now()}_ext.${fileExt}`;
+            
+            const { error: uploadError } = await supabase.storage
+                .from('receipts')
+                .upload(fileName, extensionProof);
+
+            if (uploadError) throw uploadError;
+            
+            const { data: { publicUrl } } = supabase.storage
+                .from('receipts')
+                .getPublicUrl(fileName);
 
             // Create extension transaction
             const basePrice = selectedKost.totalPrice / (selectedKost.duration || 1); // rough estimate of monthly base
@@ -101,23 +115,23 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
 
             const payload = {
                 type: 'perpanjangan_sewa',
-                kostId: selectedKost.kostId,
-                kostName: selectedKost.kostName,
-                tenantName: user.name || user.displayName || 'Penyewa',
-                userId: user.uid,
-                userEmail: user.email,
+                kost_id: selectedKost.kostId,
+                kost_name: selectedKost.kostName,
+                tenant_name: user.name || user.displayName || 'Penyewa',
+                user_id: user.uid,
+                user_email: user.email,
                 duration: extensionPeriod,
                 period: 'bulanan', // assume monthly extensions for now
-                roomType: selectedKost.roomType || '-',
-                totalPrice: extPrice,
-                receiptUrl: downloadURL,
+                room_type: selectedKost.roomType || '-',
+                total_price: extPrice,
+                receipt_url: publicUrl,
                 status: 'pending',
-                createdAt: serverTimestamp(),
-                proofAt: serverTimestamp(),
-                originalTransactionId: selectedKost.id
+                original_transaction_id: selectedKost.id
             };
 
-            await addDoc(collection(db, 'transactions'), payload);
+            const { error: dbError } = await supabase.from('transactions').insert([payload]);
+            if (dbError) throw dbError;
+            
             alert('Pengajuan perpanjangan sewa berhasil dikirim dan menunggu verifikasi Admin.');
             setShowExtensionModal(false);
             setExtensionProof(null);
@@ -134,25 +148,35 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
         if (!billProof || !selectedKost || !billName || !billAmount) return;
         setIsSubmitting(true);
         try {
-            const storageRef = ref(storage, `receipts/bills/${user.uid}/${Date.now()}_${billProof.name}`);
-            await uploadBytes(storageRef, billProof);
-            const downloadURL = await getDownloadURL(storageRef);
+            const fileExt = billProof.name.split('.').pop();
+            const fileName = `${user.uid}/${Date.now()}_bill.${fileExt}`;
+            
+            const { error: uploadError } = await supabase.storage
+                .from('receipts')
+                .upload(fileName, billProof);
+
+            if (uploadError) throw uploadError;
+            
+            const { data: { publicUrl } } = supabase.storage
+                .from('receipts')
+                .getPublicUrl(fileName);
 
             const payload = {
                 type: 'tagihan_ekstra',
-                kostId: selectedKost.kostId,
-                kostName: selectedKost.kostName,
-                userId: user.uid,
-                tenantName: user.name || user.displayName || 'Penyewa',
-                billName: billName,
-                totalPrice: parseInt(billAmount.replace(/\\D/g, '') || '0'),
-                receiptUrl: downloadURL,
+                kost_id: selectedKost.kostId,
+                kost_name: selectedKost.kostName,
+                user_id: user.uid,
+                tenant_name: user.name || user.displayName || 'Penyewa',
+                bill_name: billName,
+                total_price: parseInt(billAmount.replace(/\D/g, '') || '0'),
+                receipt_url: publicUrl,
                 status: 'pending',
-                createdAt: serverTimestamp(),
-                originalTransactionId: selectedKost.id
+                original_transaction_id: selectedKost.id
             };
 
-            await addDoc(collection(db, 'transactions'), payload);
+            const { error: dbError } = await supabase.from('transactions').insert([payload]);
+            if (dbError) throw dbError;
+            
             alert('Pembayaran tagihan ekstra berhasil dikirim dan menunggu verifikasi.');
             setShowExtraBillModal(false);
             setBillProof(null);
@@ -174,23 +198,34 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
         let photoUrl = '';
         try {
             if (complaintPhoto) {
-                const storageRef = ref(storage, `complaints/${user.uid}/${Date.now()}_${complaintPhoto.name}`);
-                await uploadBytes(storageRef, complaintPhoto);
-                photoUrl = await getDownloadURL(storageRef);
+                const fileExt = complaintPhoto.name.split('.').pop();
+                const fileName = `${user.uid}/${Date.now()}_comp.${fileExt}`;
+                
+                const { error: uploadError } = await supabase.storage
+                    .from('complaints')
+                    .upload(fileName, complaintPhoto);
+
+                if (uploadError) throw uploadError;
+                
+                const { data: { publicUrl } } = supabase.storage
+                    .from('complaints')
+                    .getPublicUrl(fileName);
+                photoUrl = publicUrl;
             }
 
-            await addDoc(collection(db, 'complaints'), {
-                kostId: selectedKost.kostId,
-                kostName: selectedKost.kostName,
-                userId: user.uid,
-                userName: user.name || user.displayName || 'Penyewa',
-                userPhone: user.phone || user.phoneNumber || '-',
+            const { error: dbError } = await supabase.from('complaints').insert([{
+                kost_id: selectedKost.kostId,
+                kost_name: selectedKost.kostName,
+                user_id: user.uid,
+                user_name: user.name || user.displayName || 'Penyewa',
+                user_phone: user.phone || user.phoneNumber || '-',
                 title: complaintTitle,
                 description: complaintDesc,
-                photoUrl: photoUrl,
+                photo_url: photoUrl,
                 status: 'open',
-                createdAt: serverTimestamp()
-            });
+            }]);
+            
+            if (dbError) throw dbError;
 
             alert('Komplain berhasil dikirim. Pemilik kost dan admin akan segera dihubungi.');
             setShowComplaintModal(false);

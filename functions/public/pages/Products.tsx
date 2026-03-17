@@ -2,7 +2,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { FORMAT_CURRENCY } from '../constants';
 import PaymentGateway from '../components/PaymentGateway';
+import InvoiceModal from '../components/InvoiceModal';
 import { getPublicDatabaseProducts } from '../userService';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import { supabase } from '../supabase';
 import { DatabaseProduct } from '../types';
 
 interface ProductsProps {
@@ -21,9 +24,40 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
   const [selectedCampus, setSelectedCampus] = useState('Semua Kampus');
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
-  const [detailItem, setDetailItem] = useState<DatabaseProduct | null>(null);
-  const [showPayment, setShowPayment] = useState<DatabaseProduct | null>(null);
   const [purchasedItem, setPurchasedItem] = useState<DatabaseProduct | null>(null);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // --- URL-BASED ROUTING ---
+  // Parse the current path relative to /products
+  const pathSegments = useMemo(() => {
+    const path = location.pathname.replace(/^\/products\/?/, '');
+    return path ? path.split('/') : [];
+  }, [location.pathname]);
+
+  const urlProductId = pathSegments[0] || null;
+  const urlAction = pathSegments[1] || null; // 'checkout' | 'payment' | null
+
+  // Derive which modal to show from URL
+  const detailItem = useMemo(() => {
+    if (!urlProductId || urlAction) return null;
+    return dbList.find(i => i.id === urlProductId) || null;
+  }, [urlProductId, urlAction, dbList]);
+
+  const showInvoice = useMemo(() => {
+    if (!urlProductId || urlAction !== 'checkout') return null;
+    return dbList.find(i => i.id === urlProductId) || null;
+  }, [urlProductId, urlAction, dbList]);
+
+  const showPaymentProduct = useMemo(() => {
+    if (!urlProductId || urlAction !== 'payment') return null;
+    return dbList.find(i => i.id === urlProductId) || null;
+  }, [urlProductId, urlAction, dbList]);
+
+  // Track existing order ID from query params (for email deep links or checkout flow)
+  const [existingOrderId, setExistingOrderId] = useState<string | undefined>(undefined);
 
   // Fetch Data
   useEffect(() => {
@@ -41,10 +75,41 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
     if (initialSelectedProductId && dbList.length > 0) {
       const item = dbList.find(i => i.id === initialSelectedProductId);
       if (item) {
-        setDetailItem(item);
+        navigate(`/products/${item.id}`, { replace: true });
       }
     }
   }, [initialSelectedProductId, dbList]);
+
+  // Handle order_id deep link from Email CTA
+  useEffect(() => {
+    const orderId = searchParams.get('order_id');
+    if (orderId && user && dbList.length > 0) {
+      const fetchOrderForPayment = async () => {
+        try {
+          const { data: order, error } = await supabase
+            .from('transactions')
+            .select('*')
+            .eq('id', orderId)
+            .single();
+
+          if (!error && order && order.status === 'pending') {
+            const product = dbList.find(p => p.id === order.product_id);
+            if (product) {
+               setExistingOrderId(orderId);
+               // Navigate to the payment URL
+               navigate(`/products/${product.id}/payment`, { replace: true });
+            }
+          } else if (order && order.status === 'paid') {
+             alert('Tagihan ini sudah dibayarkan sebelumnya.');
+             navigate('/products', { replace: true });
+          }
+        } catch (err) {
+          console.error("Deep link payment fetch failed", err);
+        }
+      };
+      fetchOrderForPayment();
+    }
+  }, [searchParams, user, dbList]);
 
   // Derived Cities
   const cities = useMemo(() => {
@@ -82,7 +147,7 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
   const handleBuyNow = (item: DatabaseProduct) => {
     // 1. Check Login
     if (!user) {
-      setDetailItem(null);
+      navigate('/products');
       if (confirm("Anda harus login untuk membeli database ini. Login sekarang?")) {
         onLoginRedirect?.();
       }
@@ -95,8 +160,7 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
       if (!isValid) return; // Parent will handle redirect to profile
     }
 
-    setDetailItem(null);
-    setShowPayment(item);
+    navigate(`/products/${item.id}/checkout`);
   };
 
   const resetFilters = () => {
@@ -286,7 +350,7 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
                 {filteredDatabases.map((item) => (
-                  <div key={item.id} className="group bg-white rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-2xl hover:shadow-orange-100 transition-all duration-500 cursor-pointer" onClick={() => setDetailItem(item)}>
+                  <div key={item.id} className="group bg-white rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-2xl hover:shadow-orange-100 transition-all duration-500 cursor-pointer" onClick={() => navigate(`/products/${item.id}`)}>
                     <div className="aspect-[4/3] overflow-hidden relative">
                       <img
                         src={item.fileUrls?.coverImage?.webp || item.fileUrls?.coverImage?.original || 'https://via.placeholder.com/400?text=No+Cover'}
@@ -337,7 +401,7 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
       {/* DETAIL MODAL - MOBILE OPTIMIZED */}
       {detailItem && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-md transition-opacity" onClick={() => setDetailItem(null)}></div>
+          <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-md transition-opacity" onClick={() => navigate('/products')}></div>
 
           <div className="relative bg-white w-full sm:max-w-2xl h-full sm:h-auto sm:max-h-[90vh] sm:rounded-[3rem] overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-500 shadow-2xl flex flex-col">
 
@@ -353,7 +417,7 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
 
                 {/* Close Button Mobile */}
                 <button
-                  onClick={() => setDetailItem(null)}
+                  onClick={() => navigate('/products')}
                   className="absolute top-4 right-4 sm:top-6 sm:right-6 w-10 h-10 bg-black/20 hover:bg-white/40 rounded-full flex items-center justify-center text-white transition-all backdrop-blur-lg border border-white/20 z-20"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -436,16 +500,41 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
         </div>
       )}
 
-      {/* Payment Gateway Modal */}
-      {showPayment && (
-        <PaymentGateway
-          amount={showPayment.price}
-          orderId={`DB-${showPayment.id.substring(0, 6).toUpperCase()}`}
-          onPaymentSuccess={() => {
-            setPurchasedItem(showPayment);
-            setShowPayment(null);
+      {/* Invoice Modal */}
+      {showInvoice && user && (
+        <InvoiceModal
+          productName={`Database Kost ${showInvoice.campus || showInvoice.area || ''}`}
+          price={showInvoice.price}
+          userName={user.name || 'User'}
+          userEmail={user.email}
+          userId={user.id}
+          productId={showInvoice.id}
+          productType="database"
+          onProceedToPayment={() => {
+             navigate(`/products/${showInvoice.id}/payment`);
           }}
-          onCancel={() => setShowPayment(null)}
+          onCancel={() => navigate('/products')}
+        />
+      )}
+
+      {/* Payment Gateway Modal */}
+      {showPaymentProduct && (
+        <PaymentGateway
+          amount={showPaymentProduct.price}
+          orderId={existingOrderId ? `ORD-${existingOrderId.substring(0,8).toUpperCase()}` : `DB-${showPaymentProduct.id.substring(0, 6).toUpperCase()}`}
+          existingOrderId={existingOrderId}
+          productId={showPaymentProduct.id}
+          productType="database"
+          userId={user?.id}
+          onPaymentSuccess={() => {
+            setPurchasedItem(showPaymentProduct);
+            setExistingOrderId(undefined);
+            navigate('/products');
+          }}
+          onCancel={() => {
+            setExistingOrderId(undefined);
+            navigate('/products');
+          }}
         />
       )}
 

@@ -1,933 +1,737 @@
-import { collection, query, where, getDocs, doc, getDoc, getDocFromServer, updateDoc, deleteDoc, serverTimestamp, setDoc, orderBy } from "firebase/firestore";
-import { getStorage, ref, deleteObject, uploadBytes, getDownloadURL } from "firebase/storage";
-import { app, authModular as auth, dbModular } from './firebase';
+import { supabase } from './supabase';
 import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject } from './types';
 
-// Use the pre-configured modular DB instance
-const db = dbModular;
-const storage = getStorage(app);
-
-// Interface untuk data list admin
+// ---- TYPE DEF ----
 export interface BasicPropertyInfo extends Partial<Kost> {
-    id: string;
-    namaKost: string;
-    status: 'draft' | 'published';
-    address: string;
-    imageUrls: string[];
-    videoUrls?: string[];
-    instagramUrl?: string;
-    tiktokUrl?: string;
+  id: string;
+  namaKost: string;
+  status: 'draft' | 'published';
+  address: string;
+  imageUrls: string[];
+  videoUrls?: string[];
+  instagramUrl?: string;
+  tiktokUrl?: string;
 }
 
+// ---- HELPERS ----
 
-
-// Check if user is admin
+// Check if user is admin by querying the users table
 export async function checkIfUserIsAdmin(uid: string): Promise<boolean> {
-    if (!uid) return false;
-    try {
-        const userDocRef = doc(db, "users", uid);
-        const userDocSnap = await getDocFromServer(userDocRef);
-        if (userDocSnap.exists()) {
-            return userDocSnap.data().isAdmin === true;
-        }
-        return false;
-    } catch (error) {
-        console.error("Error checking admin status:", error);
-        return false;
-    }
+  if (!uid) return false;
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('is_admin, role')
+      .eq('id', uid)
+      .single();
+    if (error) return false;
+    return data?.is_admin === true || data?.role === 'admin';
+  } catch {
+    return false;
+  }
 }
 
-// Helper: Delete file from Storage using URL parsing
+// Delete file from Supabase Storage using URL parsing
 async function deleteFileFromStorage(fileUrl: string): Promise<void> {
-    if (!fileUrl) return;
-
-    try {
-        const urlObj = new URL(fileUrl);
-        // Path di Storage adalah bagian setelah /o/ dan perlu di-decode
-        const pathInStorage = decodeURIComponent(urlObj.pathname.split('/o/')[1]);
-
-        const fileRef = ref(storage, pathInStorage);
-        await deleteObject(fileRef);
-        console.log(`Frontend: File Storage deleted: ${pathInStorage}`);
-    } catch (error: any) {
-        // Objek mungkin sudah tidak ada, ini adalah error umum dan tidak fatal jika delete sudah terjadi
-        if (error.code === 'storage/object-not-found') {
-            console.warn(`Frontend: File Storage already deleted or not found: ${fileUrl}`);
-        } else if (error.code === 'storage/unauthorized') {
-            console.warn(`Frontend: Permission denied deleting file ${fileUrl}. Skipping cleanup.`);
-        } else {
-            console.warn(`Frontend: Gagal menghapus file ${fileUrl} dari storage (non-fatal):`, error);
-            // We do NOT throw here anymore to prevent blocking the main operation (DB update/delete)
-        }
-    }
+  if (!fileUrl) return;
+  try {
+    // Supabase Storage URL format:
+    // https://<project>.supabase.co/storage/v1/object/public/<bucket>/<path>
+    const url = new URL(fileUrl);
+    const pathParts = url.pathname.split('/storage/v1/object/public/');
+    if (pathParts.length < 2) return;
+    const rest = pathParts[1];
+    const slashIdx = rest.indexOf('/');
+    if (slashIdx === -1) return;
+    const bucket = rest.substring(0, slashIdx);
+    const filePath = rest.substring(slashIdx + 1);
+    const { error } = await supabase.storage.from(bucket).remove([filePath]);
+    if (error) console.warn('Storage delete warning:', error.message);
+  } catch (e) {
+    console.warn('deleteFileFromStorage error (non-fatal):', e);
+  }
 }
 
-// Helper untuk membersihkan URL Firebase Storage — hanya hapus token, pertahankan ?alt=media
-// PENTING: ?alt=media wajib ada agar URL mengembalikan konten file (bukan JSON metadata)
-function normalizeFirebaseStorageUrlFrontend(url: string): string {
-    try {
-        const urlObj = new URL(url);
-        urlObj.searchParams.delete('token'); // Hapus token saja, pertahankan alt=media
-        // Pastikan ?alt=media ada (selalu dibutuhkan untuk akses file)
-        if (!urlObj.searchParams.has('alt')) {
-            urlObj.searchParams.set('alt', 'media');
-        }
-        return urlObj.toString();
-    } catch (e) {
-        console.warn("Frontend: Gagal menormalisasi URL:", url, e);
-        return url;
-    }
-}
-
-// Internal Helper: Upload file to specific structure
-async function uploadFileAndGetOriginalURL(file: File, entityId: string, fileType: 'images' | 'videos', entityCategory: 'properties' | 'databases' = 'properties', ownerUid?: string): Promise<string> {
-    const user = auth.currentUser;
-    if (user) {
-        await user.getIdToken(true); // Force refresh token to ensure up-to-date claims
-    } else {
-        console.error("FRONTEND DEBUG: Tidak ada user login saat upload.");
-        throw new Error("Unauthorized");
+// Helper: Convert Image to WebP client-side
+async function convertToWebP(file: File, quality: number = 0.8): Promise<File> {
+  return new Promise((resolve) => {
+    // Only process jpeg and png images
+    if (!file.type.match(/image\/(jpeg|jpg|png)/i)) {
+      return resolve(file);
     }
 
-    // Use provided ownerUid or fallback to current user.uid
-    const targetUid = ownerUid || user.uid;
-    const pathPrefix = (entityCategory === 'properties') ? `properties/${targetUid}/${entityId}/${fileType}/original` : `databases/${targetUid}/${entityId}/${fileType}/original`;
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
 
-    // Sanitasi nama file
-    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-    const fileName = `${Date.now()}_${sanitizedFileName}`;
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
 
-    const storageRef = ref(storage, `${pathPrefix}/${fileName}`);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return resolve(file);
+      
+      ctx.drawImage(img, 0, 0);
 
-    // Fallback Content Type Logic
-    let contentType = file.type;
-    if (!contentType) {
-        const ext = sanitizedFileName.split('.').pop()?.toLowerCase();
-        if (['jpg', 'jpeg'].includes(ext || '')) contentType = 'image/jpeg';
-        else if (ext === 'png') contentType = 'image/png';
-        else if (ext === 'webp') contentType = 'image/webp';
-        else contentType = 'application/octet-stream';
-    }
-
-    const metadata = { contentType: contentType };
-
-    console.log(`DEBUG FRONTEND: Mengupload ${fileType} ke path:`, `${pathPrefix}/${fileName}`);
-    console.log(`DEBUG FRONTEND: Bucket yang digunakan: ${storageRef.bucket}`);
-    console.log("FRONTEND DEBUG: Uploading with metadata:", metadata);
-
-    try {
-        console.log("FRONTEND DEBUG: Forcing token refresh before uploadBytes...");
-        const freshToken = await user.getIdToken(true);
-        console.log("FRONTEND DEBUG: Token refreshed. UID:", user.uid, "| Admin claim:", (await user.getIdTokenResult()).claims.admin);
-
-        // Upload file ke Storage
-        const snapshot = await uploadBytes(storageRef, file, metadata);
-        console.log("FRONTEND DEBUG: uploadBytes sukses. Membuat URL dari ref...");
-
-        // Construct URL langsung dari snapshot.ref — bypass getDownloadURL yang butuh read permission
-        // URL ini bekerja dengan rules: allow read: if true;
-        const bucket = snapshot.ref.bucket;
-        const encodedPath = encodeURIComponent(snapshot.ref.fullPath);
-        const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedPath}?alt=media`;
-        console.log(`DEBUG FRONTEND: Upload sukses, URL original: ${downloadUrl}`);
-        return normalizeFirebaseStorageUrlFrontend(downloadUrl);
-    } catch (error: any) {
-        console.error(`Frontend: Upload failed to ${pathPrefix}/${fileName}`, error);
-        console.error(`Frontend: Error code: ${error.code}, message: ${error.message}`);
-        if (error.code === 'storage/unauthorized') {
-            throw new Error(`Izin ditolak saat mengupload ke ${pathPrefix}. Pastikan Anda memiliki akses. (bucket: ${storageRef.bucket})`);
-        }
-        throw error;
-    }
-}
-
-
-// --- FUNGSI HELPER BARU UNTUK UPLOAD COVER DATABASE ---
-// Mengupload file ke path databases/{uid}/{databaseId}/cover/original/
-async function uploadCoverFileAndGetOriginalURL(file: File, databaseId: string, ownerUid?: string): Promise<string> {
-    const user = auth.currentUser;
-    if (user) {
-        await user.getIdToken(true);
-    } else {
-        console.error("FRONTEND DEBUG: Tidak ada user login saat upload cover.");
-        throw new Error("Unauthorized");
-    }
-
-    const targetUid = ownerUid || user.uid;
-    const sanitizedFileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-    const folderName = `databases/${targetUid}/${databaseId}/cover/original`;
-    const storageRef = ref(storage, `${folderName}/${sanitizedFileName}`);
-
-    // Fallback Content Type
-    let contentType = file.type;
-    if (!contentType) {
-        const ext = sanitizedFileName.split('.').pop()?.toLowerCase();
-        if (['jpg', 'jpeg'].includes(ext || '')) contentType = 'image/jpeg';
-        else if (ext === 'png') contentType = 'image/png';
-        else if (ext === 'webp') contentType = 'image/webp';
-        else contentType = 'application/octet-stream';
-    }
-
-    const metadata = {
-        contentType: contentType
-        // Removed customMetadata to avoid potential security rule conflicts
+      canvas.toBlob((blob) => {
+        if (!blob) return resolve(file);
+        
+        // Remove old extension and append .webp
+        const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+        const webpFile = new File([blob], `${baseName}.webp`, {
+          type: 'image/webp',
+          lastModified: Date.now(),
+        });
+        resolve(webpFile);
+      }, 'image/webp', quality);
     };
 
-    console.log("DEBUG FRONTEND: Mengupload cover database ke path:", `${folderName}/${sanitizedFileName}`);
-    console.log("FRONTEND DEBUG: Cover metadata (simplified):", metadata);
-
-    try {
-        console.log("FRONTEND DEBUG: Forcing token refresh before uploadBytes (cover)...");
-        await user.getIdToken(true);
-        await uploadBytes(storageRef, file, metadata);
-        return normalizeFirebaseStorageUrlFrontend(await getDownloadURL(storageRef));
-    } catch (error: any) {
-        console.error(`Frontend: Upload cover failed to ${folderName}`, error);
-        throw error;
-    }
-}
-// --- AKHIR FUNGSI HELPER BARU ---
-
-// Helper: Upload Document (Excel/PDF)
-async function uploadDocument(file: File, dbId: string, ownerUid?: string): Promise<string> {
-    const user = auth.currentUser;
-    if (user) {
-        await user.getIdToken(true);
-    } else {
-        console.error("FRONTEND DEBUG: Tidak ada user login saat upload doc.");
-        throw new Error("Unauthorized");
-    }
-
-    const targetUid = ownerUid || user.uid;
-    const sanitizedFileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-    const path = `databases/${targetUid}/${dbId}/${sanitizedFileName}`;
-    const storageRef = ref(storage, path);
-
-    let contentType = file.type;
-    if (!contentType) {
-        if (sanitizedFileName.endsWith('.pdf')) contentType = 'application/pdf';
-        else if (sanitizedFileName.match(/\.xls(x)?$/)) contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-        else contentType = 'application/octet-stream';
-    }
-
-    const metadata = {
-        contentType: contentType
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(file); // fallback to original file if parsing fails
     };
 
-    try {
-        console.log("FRONTEND DEBUG: Forcing token refresh before uploadBytes (doc)...");
-        await user.getIdToken(true);
-        await uploadBytes(storageRef, file, metadata);
-        return await getDownloadURL(storageRef);
-    } catch (error: any) {
-        console.error(`Frontend: Upload doc failed to ${path}`, error);
-        throw error;
-    }
+    img.src = objectUrl;
+  });
+}
+
+// Helper: Upload file to Supabase Storage, return public URL
+async function uploadFileToStorage(
+  file: File,
+  bucket: string,
+  pathPrefix: string
+): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized: tidak ada user yang login.');
+
+  // Convert to WebP if image
+  const processedFile = await convertToWebP(file);
+
+  const sanitizedFileName = processedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const fileName = `${Date.now()}_${sanitizedFileName}`;
+  const fullPath = `${pathPrefix}/${fileName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(bucket)
+    .upload(fullPath, processedFile, {
+      contentType: processedFile.type || 'application/octet-stream',
+      upsert: false,
+    });
+
+  if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+  const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(fullPath);
+  return urlData.publicUrl;
 }
 
 // Public Helper
 export async function uploadFileAndGetURL(file: File, folderName: string): Promise<string> {
-    const sanitizedFileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-    const storageRef = ref(storage, `${folderName}/${sanitizedFileName}`);
-    const metadata = { contentType: file.type || 'application/octet-stream' };
-    const snapshot = await uploadBytes(storageRef, file, metadata);
-    return await getDownloadURL(snapshot.ref);
+  return uploadFileToStorage(file, 'properties', folderName);
 }
 
-// --- PROPERTY FUNCTIONS ---
+// ---- PROPERTY FUNCTIONS ----
 
 export async function getAdminProperties(): Promise<BasicPropertyInfo[]> {
-    const user = auth.currentUser;
-    if (!user) throw new Error("Tidak ada admin yang login.");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Tidak ada admin yang login.');
 
-    try {
-        const isAdmin = await checkIfUserIsAdmin(user.uid);
-        const propertiesRef = collection(db, "properties");
+  const isAdmin = await checkIfUserIsAdmin(user.id);
 
-        let q;
-        if (isAdmin) {
-            q = query(propertiesRef);
-        } else {
-            q = query(propertiesRef, where("ownerUid", "==", user.uid));
-        }
+  let query = supabase.from('properties').select('*');
+  if (!isAdmin) {
+    query = query.eq('owner_uid', user.id);
+  }
 
-        const querySnapshot = await getDocs(q);
-        const properties: BasicPropertyInfo[] = [];
-        querySnapshot.forEach((doc) => {
-            const data = doc.data() as any;
-            const rawImages = data.imageUrls || [];
+  const { data, error } = await query;
+  if (error) throw error;
+  if (!data) return [];
 
-            // PRIORITIZATION LOGIC: WebP > Original > Thumbnail (agar gambar tidak burik/blur)
-            const images: string[] = rawImages.map((img: any) =>
-                typeof img === 'string' ? img : (img.webp || img.original || img.thumbnail || '')
-            ).filter((url: string) => url !== '');
+  return data.map((row) => {
+    const rawImages = row.image_urls || [];
+    const images: string[] = rawImages.map((img: any) =>
+      typeof img === 'string' ? img : (img.webp || img.original || img.thumbnail || '')
+    ).filter((u: string) => u !== '');
 
-            const rawVideos = data.videoUrls || [];
-            const videos: string[] = rawVideos.map((vid: any) =>
-                typeof vid === 'string' ? vid : (vid.original || '')
-            ).filter((url: string) => url !== '');
+    const rawVideos = row.video_urls || [];
+    const videos: string[] = rawVideos.map((vid: any) =>
+      typeof vid === 'string' ? vid : (vid.original || '')
+    ).filter((u: string) => u !== '');
 
-            properties.push({
-                id: doc.id,
-                ...data,
-                namaKost: data.title || data.namaKost,
-                status: data.status,
-                address: data.address,
-                imageUrls: images,
-                videoUrls: videos,
-                instagramUrl: data.instagramUrl || '',
-                tiktokUrl: data.tiktokUrl || '',
-                price: data.price || 0,
-                city: data.city || '',
-                type: data.type || 'Campur'
-            } as BasicPropertyInfo);
-        });
-        return properties;
-    } catch (error) {
-        console.error("Error mendapatkan properti admin:", error);
-        throw error;
-    }
+    return {
+      id: row.id,
+      namaKost: row.title || row.namaKost,
+      status: row.status,
+      address: row.address,
+      imageUrls: images,
+      videoUrls: videos,
+      instagramUrl: row.instagram_url || '',
+      tiktokUrl: row.tiktok_url || '',
+      price: row.price || 0,
+      city: row.city || '',
+      type: row.type || 'Campur',
+      ownerUid: row.owner_uid,
+      title: row.title,
+      description: row.description,
+      location: row.location,
+      facilities: row.facilities,
+      roomTypes: row.room_types,
+      rules: row.rules,
+      campuses: row.campuses,
+      publicFacilities: row.public_facilities,
+      isVerified: row.is_verified,
+    } as BasicPropertyInfo;
+  });
 }
 
-export async function addPropertyWithMedia(kostData: Partial<Kost>, imageFiles: File[], videoFiles: File[]): Promise<string> {
-    const user = auth.currentUser;
-    if (!user) throw new Error("Anda harus login.");
+export async function addPropertyWithMedia(
+  kostData: Partial<Kost>,
+  imageFiles: File[],
+  videoFiles: File[]
+): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Anda harus login.');
 
-    const propertiesRef = collection(db, "properties");
-    const newDocRef = doc(propertiesRef);
-    const propertyId = newDocRef.id;
+  // Generate a temporary ID for Storage path (will be overwritten with DB-generated UUID)
+  const tempId = crypto.randomUUID();
 
-    const existingImages = (kostData.imageUrls || []).map((url: any) =>
-        typeof url === 'string' ? { original: url } : url
+  const existingImages = (kostData.imageUrls || []).map((url: any) =>
+    typeof url === 'string' ? { original: url } : url
+  );
+  const existingVideos = (kostData.videoUrls || []).map((url: any) =>
+    typeof url === 'string' ? { original: url } : url
+  );
+
+  // Upload new images
+  const newImageObjects: ImageUrlObject[] = [];
+  for (const file of imageFiles) {
+    const url = await uploadFileToStorage(file, 'properties', `${user.id}/${tempId}/images/original`);
+    newImageObjects.push({ original: url });
+  }
+
+  // Upload new videos
+  const newVideoObjects: VideoUrlObject[] = [];
+  for (const file of videoFiles) {
+    const url = await uploadFileToStorage(file, 'properties', `${user.id}/${tempId}/videos/original`);
+    newVideoObjects.push({ original: url });
+  }
+
+  // Insert into Supabase (PostgreSQL)
+  const { data: inserted, error } = await supabase
+    .from('properties')
+    .insert({
+      owner_uid: user.id,
+      mitra_id: user.id, // Menambahkan mitra_id karena constraint di DB
+      title: kostData.title,
+      description: kostData.description,
+      price: Number(kostData.price || 0),
+      facilities: kostData.facilities || [],
+      address: kostData.address,
+      city: kostData.city,
+      type: kostData.type,
+      property_type: kostData.type, // Map the type specifically for Supabase DB
+      status: kostData.status || 'draft',
+      is_verified: kostData.isVerified ?? false,
+      rating: Number(kostData.rating || 0),
+      location: kostData.location,
+      image_urls: [...existingImages, ...newImageObjects],
+      video_urls: [...existingVideos, ...newVideoObjects],
+      instagram_url: kostData.instagramUrl || '',
+      tiktok_url: kostData.tiktokUrl || '',
+      room_types: kostData.roomTypes || [],
+      reviews: kostData.reviews || [],
+      rules: kostData.rules || [],
+      campuses: kostData.campuses || [],
+      public_facilities: kostData.publicFacilities || [],
+      virtual_tour_url: kostData.virtualTourUrl || '',
+      additional_fee_price: kostData.additionalFeePrice ? Number(kostData.additionalFeePrice) : null,
+      additional_fee_name: kostData.additionalFeeName || '',
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error("Supabase Insert Error:", error);
+    throw new Error(error.message);
+  }
+
+  if (error) throw error;
+  return inserted.id;
+}
+
+export async function updatePropertyWithMedia(
+  propertyId: string,
+  kostData: Partial<Kost>,
+  newImageFiles: File[],
+  newVideoFiles: File[]
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Anda harus login.');
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('properties')
+    .select('*')
+    .eq('id', propertyId)
+    .single();
+
+  if (fetchError || !existing) throw new Error('Properti tidak ditemukan.');
+
+  const isOwner = existing.owner_uid === user.id;
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isOwner && !isAdmin) throw new Error('Tidak memiliki izin.');
+
+  const currentImageObjects = existing.image_urls || [];
+  const currentVideoObjects = existing.video_urls || [];
+
+  const keptImageStrings = kostData.imageUrls || [];
+  const keptVideoStrings = kostData.videoUrls || [];
+
+  // Determine deletions
+  const itemsToDelete = currentImageObjects.filter((imgObj: any) => {
+    const isKept = keptImageStrings.some(keptUrl =>
+      keptUrl === imgObj.original ||
+      keptUrl === imgObj.webp ||
+      keptUrl === imgObj.thumbnail ||
+      keptUrl === imgObj
     );
-    const existingVideos = (kostData.videoUrls || []).map((url: any) =>
-        typeof url === 'string' ? { original: url } : url
+    return !isKept;
+  });
+
+  const videosToDelete = currentVideoObjects.filter((vidObj: any) => {
+    const url = typeof vidObj === 'string' ? vidObj : vidObj.original;
+    return !keptVideoStrings.includes(url);
+  });
+
+  // Delete removed files from Storage
+  await Promise.all([
+    ...itemsToDelete.map(async (item: any) => {
+      if (typeof item === 'string') await deleteFileFromStorage(item);
+      else {
+        if (item.original) await deleteFileFromStorage(item.original);
+        if (item.webp) await deleteFileFromStorage(item.webp);
+        if (item.thumbnail) await deleteFileFromStorage(item.thumbnail);
+      }
+    }),
+    ...videosToDelete.map(async (v: any) => {
+      const url = typeof v === 'string' ? v : v.original;
+      await deleteFileFromStorage(url);
+    })
+  ]);
+
+  // Filter kept objects
+  const finalImageObjects = currentImageObjects.filter((imgObj: any) => {
+    return keptImageStrings.some(keptUrl =>
+      keptUrl === imgObj.original ||
+      keptUrl === imgObj.webp ||
+      keptUrl === imgObj.thumbnail ||
+      keptUrl === imgObj
     );
+  });
 
-    // LANGKAH 1: Buat doc Firestore DULU (kosong imageUrls)
-    // Ini krusial agar Cloud Function bisa menemukan doc saat upload selesai
-    await setDoc(newDocRef, {
-        ...kostData,
-        imageUrls: [...existingImages],
-        videoUrls: [...existingVideos],
-        ownerUid: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        status: kostData.status || 'draft'
-    });
-    console.log(`Frontend DEBUG: Doc ${propertyId} dibuat di Firestore. Mulai upload gambar...`);
+  const finalVideoObjects = currentVideoObjects.filter((vidObj: any) => {
+    const url = typeof vidObj === 'string' ? vidObj : vidObj.original;
+    return keptVideoStrings.includes(url);
+  });
 
-    // LANGKAH 2: Upload gambar (Cloud Function trigger saat upload selesai, doc sudah ada)
-    const imageObjects: ImageUrlObject[] = [];
-    if (imageFiles && imageFiles.length > 0) {
-        const promises = imageFiles.map(file => uploadFileAndGetOriginalURL(file, propertyId, 'images', 'properties'));
-        const urls = await Promise.all(promises);
-        urls.forEach(url => imageObjects.push({ original: normalizeFirebaseStorageUrlFrontend(url) }));
-    }
+  // Upload new files
+  const newImageObjects: ImageUrlObject[] = [];
+  for (const file of newImageFiles) {
+    const url = await uploadFileToStorage(file, 'properties', `${user.id}/${propertyId}/images/original`);
+    newImageObjects.push({ original: url });
+  }
 
-    const videoObjects: VideoUrlObject[] = [];
-    if (videoFiles && videoFiles.length > 0) {
-        const promises = videoFiles.map(file => uploadFileAndGetOriginalURL(file, propertyId, 'videos', 'properties'));
-        const urls = await Promise.all(promises);
-        urls.forEach(url => videoObjects.push({ original: url }));
-    }
+  const newVideoObjects: VideoUrlObject[] = [];
+  for (const file of newVideoFiles) {
+    const url = await uploadFileToStorage(file, 'properties', `${user.id}/${propertyId}/videos/original`);
+    newVideoObjects.push({ original: url });
+  }
 
-    // LANGKAH 3: Update doc dengan URL original gambar yang baru diupload
-    if (imageObjects.length > 0 || videoObjects.length > 0) {
-        await updateDoc(newDocRef, {
-            imageUrls: [...existingImages, ...imageObjects],
-            videoUrls: [...existingVideos, ...videoObjects],
-            updatedAt: serverTimestamp()
-        });
-        console.log(`Frontend DEBUG: Doc ${propertyId} diupdate dengan URL original gambar.`);
-    }
+  const { error: updateError } = await supabase
+    .from('properties')
+    .update({
+      mitra_id: user.id,
+      title: kostData.title,
+      description: kostData.description,
+      price: Number(kostData.price || 0),
+      facilities: kostData.facilities,
+      address: kostData.address,
+      city: kostData.city,
+      type: kostData.type,
+      property_type: kostData.type, // Sync added column
+      status: kostData.status,
+      is_verified: kostData.isVerified,
+      rating: Number(kostData.rating || 0),
+      location: kostData.location,
+      image_urls: [...finalImageObjects, ...newImageObjects],
+      video_urls: [...finalVideoObjects, ...newVideoObjects],
+      instagram_url: kostData.instagramUrl,
+      tiktok_url: kostData.tiktokUrl,
+      room_types: kostData.roomTypes,
+      reviews: kostData.reviews,
+      rules: kostData.rules,
+      campuses: kostData.campuses,
+      public_facilities: kostData.publicFacilities,
+      virtual_tour_url: kostData.virtualTourUrl,
+      additional_fee_price: kostData.additionalFeePrice ? Number(kostData.additionalFeePrice) : null,
+      additional_fee_name: kostData.additionalFeeName,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', propertyId);
 
-    // LANGKAH 4: Polling WebP — NON-BLOCKING (tidak throw timeout)
-    // CF akan update Firestore secara async. Kita tunggu max 30 detik, lalu return apapun hasilnya
-    if (imageObjects.length > 0) {
-        let retries = 0;
-        const MAX_RETRIES = 15; // 15 x 2s = 30 detik (cukup untuk CF cold start)
-        const RETRY_DELAY_MS = 2000;
-
-        while (retries < MAX_RETRIES) {
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-            try {
-                const updatedSnap = await getDocFromServer(newDocRef);
-                const updatedData = updatedSnap.data() as any;
-                if (!updatedData) break;
-
-                const currentImages = updatedData.imageUrls || [];
-                const uploadedImages = currentImages.filter((img: any) => imageObjects.some(upImg => upImg.original === img.original));
-                const allNewImagesHaveWebp = uploadedImages.every((img: any) => img.webp);
-
-                console.log(`Frontend DEBUG: Di loop for ${propertyId}. Percobaan ${retries + 1}. allNewImagesHaveWebp:`, allNewImagesHaveWebp);
-
-                if (allNewImagesHaveWebp) {
-                    console.log(`Frontend DEBUG: WebP siap untuk properti ${propertyId}.`);
-                    return propertyId;
-                }
-            } catch (e) {
-                console.warn("Polling WebP failed, ignoring:", e);
-            }
-            retries++;
-        }
-        // Tidak throw error — WebP akan update di background oleh Cloud Function
-        console.warn(`Frontend: WebP belum siap setelah ${MAX_RETRIES} percobaan untuk ${propertyId}. Listing tersimpan dengan URL original, WebP akan muncul otomatis dalam beberapa detik.`);
-    }
-    return propertyId;
+  if (updateError) {
+    console.error("Supabase Update Error:", updateError);
+    throw new Error(updateError.message);
+  }
 }
-
-
-export async function updatePropertyWithMedia(propertyId: string, kostData: Partial<Kost>, newImageFiles: File[], newVideoFiles: File[]): Promise<void> {
-    const user = auth.currentUser;
-    if (!user) throw new Error("Anda harus login.");
-
-    const propertyRef = doc(db, "properties", propertyId);
-    const docSnap = await getDocFromServer(propertyRef);
-
-    if (!docSnap.exists()) throw new Error("Properti tidak ditemukan.");
-
-    const isOwner = docSnap.data()?.ownerUid === user.uid;
-    const isAdmin = await checkIfUserIsAdmin(user.uid);
-
-    if (!isOwner && !isAdmin) throw new Error("Tidak memiliki izin.");
-
-    const currentData = docSnap.data();
-    const currentImageObjects = currentData?.imageUrls || [];
-    const currentVideoObjects = currentData?.videoUrls || [];
-
-    // Determine deletions based on what is NOT in kostData.imageUrls (which are strings from UI)
-    const keptImageStrings = kostData.imageUrls || [];
-    const keptVideoStrings = kostData.videoUrls || [];
-
-    const itemsToDelete = currentImageObjects.filter((imgObj: any) => {
-        const isKept = keptImageStrings.some(keptUrl =>
-            keptUrl === imgObj.original ||
-            keptUrl === imgObj.webp ||
-            keptUrl === imgObj.thumbnail ||
-            keptUrl === imgObj // Legacy string support
-        );
-        return !isKept;
-    });
-
-    const videosToDelete = currentVideoObjects.filter((vidObj: any) => {
-        const url = typeof vidObj === 'string' ? vidObj : vidObj.original;
-        return !keptVideoStrings.includes(url);
-    });
-
-    // Execute Deletions Safely
-    await Promise.all([
-        ...itemsToDelete.map(async (item: any) => {
-            if (typeof item === 'string') await deleteFileFromStorage(item);
-            else {
-                if (item.original) await deleteFileFromStorage(item.original);
-                if (item.webp) await deleteFileFromStorage(item.webp);
-                if (item.thumbnail) await deleteFileFromStorage(item.thumbnail);
-            }
-        }),
-        ...videosToDelete.map(async (v: any) => {
-            const url = typeof v === 'string' ? v : v.original;
-            await deleteFileFromStorage(url);
-        })
-    ]);
-
-    // Filter Kept Objects for Update
-    const finalImageObjects = currentImageObjects.filter((imgObj: any) => {
-        const isKept = keptImageStrings.some(keptUrl =>
-            keptUrl === imgObj.original ||
-            keptUrl === imgObj.webp ||
-            keptUrl === imgObj.thumbnail ||
-            keptUrl === imgObj
-        );
-        return isKept;
-    });
-
-    const finalVideoObjects = currentVideoObjects.filter((vidObj: any) => {
-        const url = typeof vidObj === 'string' ? vidObj : vidObj.original;
-        return keptVideoStrings.includes(url);
-    });
-
-    // Upload New — gunakan UID admin yang sedang login, bukan ownerUid properti.
-    // Ini agar path storage selalu match rule: request.auth.uid == userId-in-path
-    const newImageObjects: ImageUrlObject[] = [];
-    if (newImageFiles && newImageFiles.length > 0) {
-        const promises = newImageFiles.map(file => uploadFileAndGetOriginalURL(file, propertyId, 'images', 'properties'));
-        const urls = await Promise.all(promises);
-        urls.forEach(url => newImageObjects.push({ original: url }));
-    }
-
-    const newVideoObjects: VideoUrlObject[] = [];
-    if (newVideoFiles && newVideoFiles.length > 0) {
-        const promises = newVideoFiles.map(file => uploadFileAndGetOriginalURL(file, propertyId, 'videos', 'properties'));
-        const urls = await Promise.all(promises);
-        urls.forEach(url => newVideoObjects.push({ original: url }));
-    }
-
-    await updateDoc(propertyRef, {
-        ...kostData,
-        imageUrls: [...finalImageObjects, ...newImageObjects],
-        videoUrls: [...finalVideoObjects, ...newVideoObjects],
-        updatedAt: serverTimestamp()
-    });
-
-    // Polling for WebP Update if new images were uploaded — NON-BLOCKING
-    if (newImageFiles.length > 0) {
-        let retries = 0;
-        const MAX_RETRIES = 15; // 15 x 2s = 30 detik, CF biasanya selesai dalam waktu ini
-        const RETRY_DELAY_MS = 2000;
-
-        while (retries < MAX_RETRIES) {
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-            try {
-                const updatedSnap = await getDocFromServer(propertyRef);
-                const updatedData = updatedSnap.data() as any;
-                if (!updatedData) break;
-
-                const currentImages = updatedData.imageUrls || [];
-                const newlyUploaded = currentImages.filter((img: any) => newImageObjects.some(up => up.original === img.original));
-                const allHaveWebp = newlyUploaded.every((img: any) => img.webp);
-
-                console.log(`Frontend DEBUG: Di loop update for ${propertyId}. Percobaan ${retries + 1}. allHaveWebp:`, allHaveWebp);
-
-                if (allHaveWebp) {
-                    console.log(`Frontend DEBUG: Update properti ${propertyId} berhasil dengan URL WebP.`);
-                    return;
-                }
-            } catch (e) {
-                console.warn("WebP polling failed during update:", e);
-            }
-            retries++;
-        }
-        // Tidak throw error — CF akan update Firestore dengan WebP secara async
-        console.warn(`Frontend: WebP belum siap setelah ${MAX_RETRIES} percobaan. Update tersimpan, WebP akan muncul otomatis.`);
-    }
-}
-
 
 export async function updatePropertyStatus(propertyId: string, newStatus: 'draft' | 'published'): Promise<void> {
-    const user = auth.currentUser;
-    if (!user) throw new Error("Tidak ada admin yang login.");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Tidak ada admin yang login.');
 
-    const propertyDocRef = doc(db, "properties", propertyId);
-    const docSnap = await getDocFromServer(propertyDocRef);
+  const { data: existing, error: fetchError } = await supabase
+    .from('properties')
+    .select('owner_uid')
+    .eq('id', propertyId)
+    .single();
 
-    if (!docSnap.exists()) throw new Error("Properti tidak ditemukan");
+  if (fetchError || !existing) throw new Error('Properti tidak ditemukan.');
 
-    const isOwner = docSnap.data()?.ownerUid === user.uid;
-    const isAdmin = await checkIfUserIsAdmin(user.uid);
+  const isOwner = existing.owner_uid === user.id;
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isOwner && !isAdmin) throw new Error('Anda tidak memiliki izin.');
 
-    if (!isOwner && !isAdmin) throw new Error("Anda tidak memiliki izin.");
+  const { error } = await supabase
+    .from('properties')
+    .update({ status: newStatus, updated_at: new Date().toISOString() })
+    .eq('id', propertyId);
 
-    await updateDoc(propertyDocRef, {
-        status: newStatus,
-        updatedAt: serverTimestamp()
-    });
+  if (error) throw error;
 }
 
 export async function deleteProperty(propertyId: string): Promise<void> {
-    const user = auth.currentUser;
-    if (!user) throw new Error("Tidak ada admin yang login.");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Tidak ada admin yang login.');
 
-    const propertyDocRef = doc(db, "properties", propertyId);
-    const docSnap = await getDocFromServer(propertyDocRef);
+  const { data: existing, error: fetchError } = await supabase
+    .from('properties')
+    .select('*')
+    .eq('id', propertyId)
+    .single();
 
-    if (!docSnap.exists()) throw new Error("Properti tidak ditemukan");
+  if (fetchError || !existing) throw new Error('Properti tidak ditemukan.');
 
-    const isOwner = docSnap.data()?.ownerUid === user.uid;
-    const isAdmin = await checkIfUserIsAdmin(user.uid);
+  const isOwner = existing.owner_uid === user.id;
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isOwner && !isAdmin) throw new Error('Anda tidak memiliki izin untuk menghapusnya.');
 
-    if (!isOwner && !isAdmin) throw new Error("Anda tidak memiliki izin untuk menghapusnya.");
-
-    try {
-        const data = docSnap.data() as Kost;
-        const deletePromises: Promise<void>[] = [];
-
-        // Hapus semua versi gambar
-        (data.imageUrls || []).forEach((img: any) => {
-            if (typeof img === 'string') {
-                deletePromises.push(deleteFileFromStorage(img));
-            } else {
-                if (img.original) deletePromises.push(deleteFileFromStorage(img.original));
-                if (img.webp) deletePromises.push(deleteFileFromStorage(img.webp));
-                if (img.thumbnail) deletePromises.push(deleteFileFromStorage(img.thumbnail));
-            }
-        });
-
-        // Hapus semua versi video
-        (data.videoUrls || []).forEach((vid: any) => {
-            if (typeof vid === 'string') {
-                deletePromises.push(deleteFileFromStorage(vid));
-            } else {
-                if (vid.original) deletePromises.push(deleteFileFromStorage(vid.original));
-            }
-        });
-
-        await Promise.all(deletePromises); // Tunggu semua file media dihapus dari Storage
-
-        await deleteDoc(propertyDocRef); // Hapus dokumen dari Firestore
-        console.log("Properti berhasil dihapus:", propertyId);
-    } catch (error) {
-        console.error("Error menghapus properti:", error);
-        throw error;
-    }
-}
-
-// Function to get details including raw object structure
-export async function getPropertyDetails(propertyId: string): Promise<any | null> {
-    const user = auth.currentUser;
-    if (!user) throw new Error("Tidak ada pengguna yang login.");
-
-    const propertyDocRef = doc(db, "properties", propertyId);
-    const docSnap = await getDoc(propertyDocRef);
-
-    if (docSnap.exists()) {
-        const data = docSnap.data();
-        // Transform to ensure fallbacks are ready
-        if (data) {
-            data.imageUrls = (data.imageUrls || []).map((img: any) => ({
-                original: typeof img === 'string' ? img : img.original,
-                webp: typeof img === 'string' ? img : (img.webp || img.original),
-                thumbnail: typeof img === 'string' ? img : (img.thumbnail || img.webp || img.original)
-            }));
-        }
-        return data;
+  // Delete all media files
+  const deletePromises: Promise<void>[] = [];
+  (existing.image_urls || []).forEach((img: any) => {
+    if (typeof img === 'string') {
+      deletePromises.push(deleteFileFromStorage(img));
     } else {
-        return null;
+      if (img.original) deletePromises.push(deleteFileFromStorage(img.original));
+      if (img.webp) deletePromises.push(deleteFileFromStorage(img.webp));
+      if (img.thumbnail) deletePromises.push(deleteFileFromStorage(img.thumbnail));
     }
+  });
+
+  (existing.video_urls || []).forEach((vid: any) => {
+    const url = typeof vid === 'string' ? vid : vid.original;
+    if (url) deletePromises.push(deleteFileFromStorage(url));
+  });
+
+  await Promise.all(deletePromises);
+
+  const { error } = await supabase.from('properties').delete().eq('id', propertyId);
+  if (error) throw error;
+  console.log('Properti berhasil dihapus:', propertyId);
 }
 
-// --- DATABASE PRODUCT FUNCTIONS ---
+export async function getPropertyDetails(propertyId: string): Promise<any | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Tidak ada pengguna yang login.');
+
+  const { data: row, error } = await supabase
+    .from('properties')
+    .select('*')
+    .eq('id', propertyId)
+    .single();
+
+  if (error || !row) return null;
+
+  // Normalize image URLs
+  row.imageUrls = (row.image_urls || []).map((img: any) => ({
+    original: typeof img === 'string' ? img : img.original,
+    webp: typeof img === 'string' ? img : (img.webp || img.original),
+    thumbnail: typeof img === 'string' ? img : (img.thumbnail || img.webp || img.original)
+  }));
+  row.videoUrls = row.video_urls || [];
+
+  return row;
+}
+
+// ---- DATABASE PRODUCT FUNCTIONS ----
 
 export async function getAllDatabases(): Promise<DatabaseProduct[]> {
-    const user = auth.currentUser;
-    if (!user) throw new Error("Unauthorized");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
 
-    // Only Admin
-    const isAdmin = await checkIfUserIsAdmin(user.uid);
-    if (!isAdmin) throw new Error("Access Denied");
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
 
-    const dbRef = collection(db, "availableDatabases");
-    const q = query(dbRef, orderBy("createdAt", "desc"));
-    const snapshot = await getDocs(q);
+  const { data, error } = await supabase
+    .from('available_databases')
+    .select('*')
+    .order('created_at', { ascending: false });
 
-    return snapshot.docs.map(doc => {
-        const data = doc.data();
-        let fileUrls = data.fileUrls || {};
+  if (error) throw error;
+  if (!data) return [];
 
-        // Migration for legacy data
-        if (!data.fileUrls) {
-            let coverImage: ImageUrlObject | undefined = undefined;
-            if (data.coverImageUrl) {
-                if (typeof data.coverImageUrl === 'string') {
-                    coverImage = { original: data.coverImageUrl };
-                } else {
-                    coverImage = data.coverImageUrl;
-                }
-            }
-
-            fileUrls = { ...fileUrls, coverImage };
-
-            if (data.fileUrl) {
-                if (data.fileType === 'link') {
-                    fileUrls.googleDrive = data.fileUrl;
-                } else {
-                    // Default to excel for legacy uploads
-                    fileUrls.excel = data.fileUrl;
-                }
-            }
-        }
-
-        return {
-            id: doc.id,
-            ...data,
-            fileUrls,
-            fileType: data.fileType || 'link',
-            status: data.status || 'available'
-        } as DatabaseProduct;
-    });
+  return data.map((row) => ({
+    id: row.id,
+    campus: row.campus || '',
+    city: row.city || '',
+    area: row.area || '',
+    description: row.description || '',
+    price: row.price || 0,
+    totalData: row.total_data || 0,
+    fileUrls: row.file_urls || {},
+    fileType: row.file_type || 'link',
+    fileName: row.file_name || '',
+    status: row.status || 'available',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  } as DatabaseProduct));
 }
-
-// Alias for addDatabaseProduct to match user request
-export { addDatabaseProduct as addDatabaseWithMedia };
 
 export async function addDatabaseProduct(
-    data: Partial<DatabaseProduct>,
-    coverFile: File | null,
-    documentFile: File | null
+  data: Partial<DatabaseProduct>,
+  coverFile: File | null,
+  documentFile: File | null
 ): Promise<string> {
-    const user = auth.currentUser;
-    if (!user) throw new Error("Unauthorized");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
 
-    const dbRef = collection(db, "availableDatabases");
-    const newDocRef = doc(dbRef);
-    const id = newDocRef.id;
+  const tempId = crypto.randomUUID();
+  let fileUrls = data.fileUrls || {};
+  let fileName = data.fileName || '';
 
-    let fileUrls = data.fileUrls || {};
+  if (coverFile) {
+    const url = await uploadFileToStorage(coverFile, 'databases', `${user.id}/${tempId}/cover/original`);
+    fileUrls = { ...fileUrls, coverImage: { original: url } };
+  }
 
-    if (coverFile) {
-        const url = await uploadCoverFileAndGetOriginalURL(coverFile, id);
-        fileUrls = { ...fileUrls, coverImage: { original: normalizeFirebaseStorageUrlFrontend(url) } };
+  if (data.fileType === 'upload' && documentFile) {
+    const docUrl = await uploadFileToStorage(documentFile, 'databases', `${user.id}/${tempId}`);
+    fileName = documentFile.name;
+    fileUrls = { ...fileUrls, file: docUrl };
+    if (fileName.toLowerCase().endsWith('.pdf')) {
+      fileUrls = { ...fileUrls, pdf: docUrl }; // Keep for backward compatibility
+    } else {
+      fileUrls = { ...fileUrls, excel: docUrl }; // Keep for backward compatibility
     }
-
-    let fileName = data.fileName || '';
-    if (data.fileType === 'upload' && documentFile) {
-        const docUrl = await uploadDocument(documentFile, id);
-        fileName = documentFile.name;
-        if (fileName.toLowerCase().endsWith('.pdf')) {
-            fileUrls = { ...fileUrls, pdf: docUrl };
-        } else {
-            fileUrls = { ...fileUrls, excel: docUrl };
-        }
+  } else if (data.fileType === 'link') {
+    const linkValue = (data as any).fileUrl || fileUrls.link || fileUrls.googleDrive;
+    if (linkValue) {
+      fileUrls = { ...fileUrls, link: linkValue };
     }
+  }
 
-    await setDoc(newDocRef, {
-        ...data,
-        fileUrls: fileUrls,
-        fileName: fileName,
-        status: data.status || 'available',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-    });
+  const { data: inserted, error } = await supabase
+    .from('available_databases')
+    .insert({
+      owner_uid: user.id,
+      campus: data.campus,
+      city: data.city,
+      area: data.area,
+      description: data.description,
+      price: data.price,
+      total_data: data.totalData,
+      file_urls: fileUrls,
+      file_type: data.fileType || 'link',
+      file_name: fileName,
+      status: data.status || 'available',
+    })
+    .select('id')
+    .single();
 
-    // Polling for Cover Image WebP
-    if (coverFile) {
-        let retries = 0;
-        const MAX_RETRIES = 60;
-        const RETRY_DELAY_MS = 2000;
-        while (retries < MAX_RETRIES) {
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-
-            try {
-                const snap = await getDocFromServer(newDocRef);
-                const updatedData = snap.data() as any;
-
-                // Periksa apakah coverImage di Firestore sudah memiliki URL webp
-                const webpUpdated = updatedData?.fileUrls?.coverImage?.webp;
-                console.log(`Frontend DEBUG: Di loop for ${id}. Percobaan ${retries + 1}. webpUpdated:`, webpUpdated);
-
-                if (webpUpdated) {
-                    console.log(`Frontend DEBUG: Firestore untuk database ${id} berhasil diperbarui dengan URL WebP cover.`);
-                    return id;
-                }
-            } catch (e) {
-                console.warn("Polling db WebP failed:", e);
-            }
-            retries++;
-        }
-        throw new Error("Timeout: Gagal mendapatkan URL WebP cover dari Firestore dalam waktu yang ditentukan.");
-    }
-    return id;
+  if (error) throw error;
+  return inserted.id;
 }
 
+// Alias
+export { addDatabaseProduct as addDatabaseWithMedia };
+
 export async function updateDatabaseProduct(
-    id: string,
-    data: Partial<DatabaseProduct>,
-    newCoverFile: File | null,
-    newDocumentFile: File | null
+  id: string,
+  data: Partial<DatabaseProduct>,
+  newCoverFile: File | null,
+  newDocumentFile: File | null
 ): Promise<void> {
-    const user = auth.currentUser;
-    if (!user) throw new Error("Unauthorized");
-    const docRef = doc(db, "availableDatabases", id);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
 
-    const docSnap = await getDocFromServer(docRef);
-    if (!docSnap.exists()) throw new Error("Database not found");
-    const currentData = docSnap.data();
+  const { data: current, error: fetchError } = await supabase
+    .from('available_databases')
+    .select('*')
+    .eq('id', id)
+    .single();
 
-    const ownerUid = currentData?.ownerUid;
-    let updates: any = { ...data, updatedAt: serverTimestamp() };
-    let fileUrls = { ...(currentData.fileUrls || {}), ...(data.fileUrls || {}) };
+  if (fetchError || !current) throw new Error('Database not found');
 
-    if (newCoverFile) {
-        // Delete old
-        const oldFileUrls = currentData.fileUrls;
-        if (oldFileUrls?.coverImage) {
-            const old = oldFileUrls.coverImage;
-            if (old.original) await deleteFileFromStorage(old.original);
-            if (old.webp) await deleteFileFromStorage(old.webp);
-            if (old.thumbnail) await deleteFileFromStorage(old.thumbnail);
-        } else if (currentData.coverImageUrl) { // Legacy cleanup
-            const old = currentData.coverImageUrl;
-            if (typeof old === 'string') await deleteFileFromStorage(old);
-            else {
-                if (old.original) await deleteFileFromStorage(old.original);
-                if (old.webp) await deleteFileFromStorage(old.webp);
-            }
-        }
+  let fileUrls = { ...(current.file_urls || {}), ...(data.fileUrls || {}) };
 
-        const url = await uploadCoverFileAndGetOriginalURL(newCoverFile, id, ownerUid);
-        fileUrls.coverImage = { original: normalizeFirebaseStorageUrlFrontend(url) };
+  if (newCoverFile) {
+    // Delete old cover
+    const oldCover = current.file_urls?.coverImage;
+    if (oldCover) {
+      if (oldCover.original) await deleteFileFromStorage(oldCover.original);
+      if (oldCover.webp) await deleteFileFromStorage(oldCover.webp);
+      if (oldCover.thumbnail) await deleteFileFromStorage(oldCover.thumbnail);
     }
+    const url = await uploadFileToStorage(newCoverFile, 'databases', `${current.owner_uid}/${id}/cover/original`);
+    fileUrls.coverImage = { original: url };
+  }
 
-    if (data.fileType === 'upload' && newDocumentFile) {
-        // Clean up old doc if exists
-        const oldFileUrls = currentData.fileUrls;
-        if (oldFileUrls?.excel) await deleteFileFromStorage(oldFileUrls.excel);
-        if (oldFileUrls?.pdf) await deleteFileFromStorage(oldFileUrls.pdf);
-        if (currentData.fileUrl) await deleteFileFromStorage(currentData.fileUrl); // Legacy
+  let updates: any = {
+    campus: data.campus,
+    city: data.city,
+    area: data.area,
+    description: data.description,
+    price: data.price,
+    total_data: data.totalData,
+    file_type: data.fileType,
+    status: data.status,
+    updated_at: new Date().toISOString(),
+  };
 
-        const docUrl = await uploadDocument(newDocumentFile, id, ownerUid);
-        updates.fileName = newDocumentFile.name;
-        if (newDocumentFile.name.toLowerCase().endsWith('.pdf')) {
-            fileUrls.pdf = docUrl;
-            delete fileUrls.excel; // Remove excel if switching to pdf
-        } else {
-            fileUrls.excel = docUrl;
-            delete fileUrls.pdf;
-        }
+  if (data.fileType === 'upload') {
+    if (newDocumentFile) {
+      // Delete old doc
+      if (current.file_urls?.file) await deleteFileFromStorage(current.file_urls.file);
+      if (current.file_urls?.excel) await deleteFileFromStorage(current.file_urls.excel);
+      if (current.file_urls?.pdf) await deleteFileFromStorage(current.file_urls.pdf);
+      
+      const docUrl = await uploadFileToStorage(newDocumentFile, 'databases', `${current.owner_uid}/${id}`);
+      updates.file_name = newDocumentFile.name;
+      fileUrls.file = docUrl;
+      
+      if (newDocumentFile.name.toLowerCase().endsWith('.pdf')) {
+        fileUrls.pdf = docUrl;
+        delete fileUrls.excel;
+      } else {
+        fileUrls.excel = docUrl;
+        delete fileUrls.pdf;
+      }
     }
-
-    updates.fileUrls = fileUrls;
-    // Remove legacy fields if they exist in updates (to clean up)
-    delete updates.coverImageUrl;
-    delete updates.fileUrl;
-
-    await updateDoc(docRef, updates);
-
-    // Polling for Cover Image WebP (Only if new file uploaded)
-    if (newCoverFile) {
-        let retries = 0;
-        const MAX_RETRIES = 60;
-        const RETRY_DELAY_MS = 2000;
-        while (retries < MAX_RETRIES) {
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-            try {
-                const snap = await getDocFromServer(docRef);
-                const updatedData = snap.data() as any;
-
-                const webpUpdated = updatedData?.fileUrls?.coverImage?.webp;
-                console.log(`Frontend DEBUG: Di loop update for ${id}. Percobaan ${retries + 1}. webpUpdated:`, webpUpdated);
-
-                if (webpUpdated) {
-                    console.log(`Frontend DEBUG: Firestore untuk database ${id} berhasil diperbarui dengan URL WebP cover.`);
-                    return;
-                }
-            } catch (e) { console.warn("Polling db update WebP failed:", e); }
-            retries++;
-        }
-        throw new Error("Timeout: Gagal mendapatkan URL WebP cover dari Firestore dalam waktu yang ditentukan.");
+  } else if (data.fileType === 'link') {
+    const linkValue = (data as any).fileUrl || fileUrls.link || fileUrls.googleDrive;
+    if (linkValue !== undefined) {
+      fileUrls.link = linkValue;
     }
+  }
+
+  updates.file_urls = fileUrls;
+
+  const { error } = await supabase.from('available_databases').update(updates).eq('id', id);
+  if (error) throw error;
 }
 
 export async function deleteDatabase(id: string): Promise<void> {
-    const user = auth.currentUser;
-    if (!user) throw new Error("Unauthorized");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
 
-    // Check ownership or admin status (assuming admin check is sufficient as per original code)
-    const isAdmin = await checkIfUserIsAdmin(user.uid);
-    if (!isAdmin) throw new Error("Access Denied");
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
 
-    const docRef = doc(db, "availableDatabases", id);
-    const docSnap = await getDocFromServer(docRef);
+  const { data: current, error: fetchError } = await supabase
+    .from('available_databases')
+    .select('*')
+    .eq('id', id)
+    .single();
 
-    if (!docSnap.exists()) {
-        throw new Error("Database tidak ditemukan.");
-    }
+  if (fetchError || !current) throw new Error('Database tidak ditemukan.');
 
-    try {
-        const data = docSnap.data() as DatabaseProduct;
-        const deletePromises: Promise<void>[] = [];
+  const deletePromises: Promise<void>[] = [];
+  const fu = current.file_urls || {};
+  if (fu.coverImage) {
+    if (fu.coverImage.original) deletePromises.push(deleteFileFromStorage(fu.coverImage.original));
+    if (fu.coverImage.webp) deletePromises.push(deleteFileFromStorage(fu.coverImage.webp));
+    if (fu.coverImage.thumbnail) deletePromises.push(deleteFileFromStorage(fu.coverImage.thumbnail));
+  }
+  if (fu.excel) deletePromises.push(deleteFileFromStorage(fu.excel));
+  if (fu.pdf) deletePromises.push(deleteFileFromStorage(fu.pdf));
 
-        // Hapus cover image jika ada
-        if (data.fileUrls?.coverImage) {
-            const img = data.fileUrls.coverImage;
-            if (img.original) deletePromises.push(deleteFileFromStorage(img.original));
-            if (img.webp) deletePromises.push(deleteFileFromStorage(img.webp));
-            if (img.thumbnail) deletePromises.push(deleteFileFromStorage(img.thumbnail));
-        }
+  await Promise.all(deletePromises);
 
-        // Hapus file dokumen jika ada
-        if (data.fileUrls?.excel) deletePromises.push(deleteFileFromStorage(data.fileUrls.excel));
-        if (data.fileUrls?.pdf) deletePromises.push(deleteFileFromStorage(data.fileUrls.pdf));
-
-        // Legacy cleanup (if needed, keeping it safe)
-        if (data.fileType === 'upload' && (data as any).fileUrl) { // Legacy field
-            deletePromises.push(deleteFileFromStorage((data as any).fileUrl));
-        }
-
-        await Promise.all(deletePromises); // Tunggu semua file media dihapus dari Storage
-
-        await deleteDoc(docRef); // Hapus dokumen dari Firestore
-        console.log("Database berhasil dihapus:", id);
-    } catch (error) {
-        console.error("Error menghapus database:", error);
-        throw error;
-    }
+  const { error } = await supabase.from('available_databases').delete().eq('id', id);
+  if (error) throw error;
+  console.log('Database berhasil dihapus:', id);
 }
 
 export async function getDatabaseDetails(databaseId: string): Promise<DatabaseProduct | null> {
-    const docRef = doc(db, "availableDatabases", databaseId);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        const data = docSnap.data() as any;
-        let fileUrls = data.fileUrls || {};
+  const { data: row, error } = await supabase
+    .from('available_databases')
+    .select('*')
+    .eq('id', databaseId)
+    .single();
 
-        // Migration for legacy data (same as getAllDatabases)
-        if (!data.fileUrls) {
-            let coverImage: ImageUrlObject | undefined = undefined;
-            if (data.coverImageUrl) {
-                if (typeof data.coverImageUrl === 'string') {
-                    coverImage = { original: data.coverImageUrl };
-                } else {
-                    coverImage = data.coverImageUrl;
-                }
-            }
+  if (error || !row) return null;
 
-            fileUrls = { ...fileUrls, coverImage };
-
-            if (data.fileUrl) {
-                if (data.fileType === 'link') {
-                    fileUrls.googleDrive = data.fileUrl;
-                } else {
-                    fileUrls.excel = data.fileUrl;
-                }
-            }
-        }
-
-        return {
-            id: docSnap.id,
-            ...data,
-            fileUrls,
-            fileType: data.fileType || 'link',
-            status: data.status || 'available'
-        } as DatabaseProduct;
-    }
-    return null;
+  return {
+    id: row.id,
+    campus: row.campus || '',
+    city: row.city || '',
+    area: row.area || '',
+    description: row.description || '',
+    price: row.price || 0,
+    totalData: row.total_data || 0,
+    fileUrls: row.file_urls || {},
+    fileType: row.file_type || 'link',
+    fileName: row.file_name || '',
+    status: row.status || 'available',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  } as DatabaseProduct;
 }
 
-// --- MITRA REGISTRATION FUNCTIONS ---
+// ---- MITRA REGISTRATION ----
 
 export async function getMitraRegistrations(): Promise<any[]> {
-    const user = auth.currentUser;
-    if (!user) throw new Error("Unauthorized");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
 
-    const isAdmin = await checkIfUserIsAdmin(user.uid);
-    if (!isAdmin) throw new Error("Access Denied");
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
 
-    const mitraRef = collection(db, "mitra_requests");
-    const q = query(mitraRef, orderBy("timestamp", "desc"));
-    const snapshot = await getDocs(q);
+  const { data, error } = await supabase
+    .from('mitra_requests')
+    .select('*')
+    .order('timestamp', { ascending: false });
 
-    return snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            id: doc.id,
-            ...data,
-            // Format date for UI compatibility
-            date: data.timestamp ? new Date(data.timestamp.toMillis()).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Hari Ini'
-        };
-    });
+  if (error) throw error;
+  if (!data) return [];
+
+  return data.map((row) => ({
+    ...row,
+    date: row.timestamp
+      ? new Date(row.timestamp).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+      : 'Hari Ini'
+  }));
 }
 
 export async function updateMitraRegistrationStatus(id: string, status: string): Promise<void> {
-    const user = auth.currentUser;
-    if (!user) throw new Error("Unauthorized");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
 
-    const isAdmin = await checkIfUserIsAdmin(user.uid);
-    if (!isAdmin) throw new Error("Access Denied");
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
 
-    const docRef = doc(db, "mitra_requests", id);
-    await updateDoc(docRef, {
-        status: status,
-        updatedAt: serverTimestamp()
-    });
+  const { error } = await supabase
+    .from('mitra_requests')
+    .update({ status: status, updated_at: new Date().toISOString() })
+    .eq('id', id);
+
+  if (error) throw error;
 }

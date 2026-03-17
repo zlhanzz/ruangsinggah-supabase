@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { supabase } from '../supabase';
 import { CheckCircle2, ShieldCheck, Video, MapPin, FileText, ArrowRight, Megaphone, Building2, ChevronLeft, Sparkles, TrendingUp, Wallet } from 'lucide-react';
 
 const Owner: React.FC = () => {
@@ -29,13 +28,19 @@ const Owner: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      await addDoc(collection(db, 'mitra_requests'), {
-        ...formData,
-        partnershipType: partnerType === 'manajemen' ? 'Kost Manager' : 'Mitra Pemasaran',
-        emptyRooms: parseInt(formData.emptyRooms) || 0,
-        status: 'pending',
-        timestamp: serverTimestamp()
-      });
+      const { error } = await supabase.from('mitra_requests').insert([{
+        owner_name: formData.ownerName,
+        phone: formData.phone,
+        email: formData.email,
+        kost_name: formData.kostName,
+        kost_type: formData.kostType,
+        partnership_type: partnerType === 'manajemen' ? 'Kost Manager' : 'Mitra Pemasaran',
+        empty_rooms: parseInt(formData.emptyRooms) || 0,
+        address: formData.address,
+        status: 'pending'
+      }]);
+
+      if (error) throw error;
 
       setIsSuccess(true);
       setFormData({
@@ -57,9 +62,7 @@ const Owner: React.FC = () => {
 
     } catch (error: any) {
       console.error("Error submitting form: ", error);
-      const msg = error?.code === 'permission-denied'
-        ? "Akses ditolak (permission-denied). Hubungi admin untuk mengatur Firestore Rules."
-        : `Terjadi kesalahan: ${error?.message || 'Unknown error'}. Silakan coba lagi.`;
+      const msg = `Terjadi kesalahan: ${error?.message || 'Unknown error'}. Silakan coba lagi.`;
       alert(msg);
     } finally {
       setIsSubmitting(false);

@@ -1,16 +1,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { signOut, updateProfile } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { auth, db, storage } from '../firebase';
+import { supabase } from '../supabase';
 
 interface ProfileProps {
   user: any;
   onLogout: () => void;
-  onSaveSuccess?: () => void; // Callback for parent to handle redirect
-  forceEdit?: boolean; // Prop to automatically open edit mode
-  onBack?: () => void; // Callback to go back to previous page
+  onSaveSuccess?: () => void;
+  forceEdit?: boolean;
+  onBack?: () => void;
 }
 
 const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceEdit, onBack }) => {
@@ -18,53 +15,41 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form State
   const [formData, setFormData] = useState({
     displayName: '',
     phone: '',
     occupation: '',
     institution: '',
-    gender: '', // Default neutral
-    relationshipStatus: '', // Default neutral (was maritalStatus)
-    religion: '', // Added Religion
+    gender: '',
+    relationshipStatus: '',
+    religion: '',
     address: '',
     photoURL: ''
   });
 
   const religions = [
-    "Islam",
-    "Kristen Protestan",
-    "Kristen Katolik",
-    "Hindu",
-    "Buddha",
-    "Konghucu",
-    "Lainnya"
+    'Islam', 'Kristen Protestan', 'Kristen Katolik',
+    'Hindu', 'Buddha', 'Konghucu', 'Lainnya'
   ];
 
-  // Initialize form data when user prop changes
   useEffect(() => {
     if (user) {
       setFormData({
-        // Use user.name as fallback if displayName is empty, as 'name' is the field in Firestore
-        displayName: user.displayName || user.name || '',
-        phone: user.phone || user.phoneNumber || '',
+        displayName: user.displayName || user.name || user.full_name || '',
+        phone: user.phone || user.phoneNumber || user.phone_number || '',
         occupation: user.occupation || '',
         institution: user.institution || '',
-        gender: user.gender || '', // Ensure neutral if undefined
-        // Map old maritalStatus to new relationshipStatus if exists, otherwise empty
-        relationshipStatus: user.relationshipStatus || user.maritalStatus || '',
-        religion: user.religion || '', // New field
+        gender: user.gender || '',
+        relationshipStatus: user.relationshipStatus || user.relationship_status || user.maritalStatus || '',
+        religion: user.religion || '',
         address: user.address || '',
-        photoURL: user.photoURL || ''
+        photoURL: user.photoURL || user.photo_url || user.avatar_url || ''
       });
     }
   }, [user]);
 
-  // Handle auto-edit mode if forced (e.g., pending transaction)
   useEffect(() => {
-    if (forceEdit) {
-      setIsEditing(true);
-    }
+    if (forceEdit) setIsEditing(true);
   }, [forceEdit]);
 
   if (!user) return null;
@@ -85,35 +70,39 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate size (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
-      alert("Ukuran foto maksimal 2MB");
+      alert('Ukuran foto maksimal 2MB');
       return;
     }
 
     setLoading(true);
     try {
-      const storageRef = ref(storage, `profile_photos/${user.uid}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
+      const sanitized = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+      const filePath = `${user.uid}/${Date.now()}_${sanitized}`;
 
-      setFormData(prev => ({ ...prev, photoURL: downloadURL }));
+      const { error: uploadError } = await supabase.storage
+        .from('profile-photos')
+        .upload(filePath, file, { contentType: file.type || 'image/jpeg', upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
+      setFormData(prev => ({ ...prev, photoURL: urlData.publicUrl }));
     } catch (error) {
-      console.error("Error uploading photo:", error);
-      alert("Gagal mengupload foto.");
+      console.error('Error uploading photo:', error);
+      alert('Gagal mengupload foto.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeletePhoto = () => {
-    if (window.confirm("Apakah Anda yakin ingin menghapus foto profil?")) {
+    if (window.confirm('Apakah Anda yakin ingin menghapus foto profil?')) {
       setFormData(prev => ({ ...prev, photoURL: '' }));
     }
   };
 
   const handleSave = async () => {
-    // Validate all mandatory fields
     if (
       !formData.displayName ||
       !formData.phone ||
@@ -124,37 +113,41 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
       !formData.relationshipStatus ||
       !formData.religion
     ) {
-      alert("Mohon lengkapi semua data wajib (Nama, WhatsApp, Pekerjaan, Kampus, Gender, Agama, Status Hubungan, Alamat).");
+      alert('Mohon lengkapi semua data wajib (Nama, WhatsApp, Pekerjaan, Kampus, Gender, Agama, Status Hubungan, Alamat).');
       return;
     }
 
     setLoading(true);
     try {
-      // 1. Update Firestore
-      const userDocRef = doc(db, 'users', user.uid);
-      await updateDoc(userDocRef, {
-        name: formData.displayName,
-        phone: formData.phone,
-        occupation: formData.occupation,
-        institution: formData.institution,
-        gender: formData.gender,
-        relationshipStatus: formData.relationshipStatus, // Save as relationshipStatus
-        religion: formData.religion, // Save religion
-        address: formData.address,
-        photoURL: formData.photoURL,
-        updatedAt: new Date().toISOString()
+      // 1. Update users table in Supabase
+      const { error: dbError } = await supabase
+        .from('users')
+        .update({
+          name: formData.displayName,
+          phone: formData.phone,
+          occupation: formData.occupation,
+          institution: formData.institution,
+          gender: formData.gender,
+          relationship_status: formData.relationshipStatus,
+          religion: formData.religion,
+          address: formData.address,
+          photo_url: formData.photoURL,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.uid);
+
+      if (dbError) throw dbError;
+
+      // 2. Update Supabase Auth user metadata
+      await supabase.auth.updateUser({
+        data: {
+          full_name: formData.displayName,
+          name: formData.displayName,
+          avatar_url: formData.photoURL,
+        }
       });
 
-      // 2. Update Firebase Auth Profile (DisplayName & PhotoURL only)
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        await updateProfile(currentUser, {
-          displayName: formData.displayName,
-          photoURL: formData.photoURL
-        });
-      }
-
-      // 3. Update Local Storage Backup (Optional but good for UX consistency)
+      // 3. Update localStorage
       const storedKey = `user_profile_${user.email}`;
       const storedData = localStorage.getItem(storedKey);
       if (storedData) {
@@ -163,36 +156,32 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
       }
 
       setIsEditing(false);
-
-      // Trigger parent callback to handle refresh and redirect
       if (onSaveSuccess) {
         onSaveSuccess();
       } else {
-        alert("Profil berhasil diperbarui!");
+        alert('Profil berhasil diperbarui!');
         window.location.reload();
       }
-
     } catch (error) {
-      console.error("Error saving profile:", error);
-      alert("Gagal menyimpan profil. Silakan coba lagi.");
+      console.error('Error saving profile:', error);
+      alert('Gagal menyimpan profil. Silakan coba lagi.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleCancel = () => {
-    // Revert changes
     if (user) {
       setFormData({
-        displayName: user.displayName || user.name || '',
-        phone: user.phone || user.phoneNumber || '',
+        displayName: user.displayName || user.name || user.full_name || '',
+        phone: user.phone || user.phoneNumber || user.phone_number || '',
         occupation: user.occupation || '',
         institution: user.institution || '',
         gender: user.gender || '',
-        relationshipStatus: user.relationshipStatus || user.maritalStatus || '',
+        relationshipStatus: user.relationshipStatus || user.relationship_status || user.maritalStatus || '',
         religion: user.religion || '',
         address: user.address || '',
-        photoURL: user.photoURL || ''
+        photoURL: user.photoURL || user.photo_url || user.avatar_url || ''
       });
     }
     setIsEditing(false);
@@ -219,7 +208,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                   </div>
                 )}
 
-                {/* Edit Photo Actions */}
                 {isEditing && (
                   <div className="absolute bottom-0 right-0 flex gap-2">
                     <button
@@ -300,19 +288,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">No. WhatsApp <span className="text-red-500">*</span></label>
                 {isEditing ? (
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
+                  <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange}
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
-                    placeholder="Contoh: 081234567890"
-                    required
-                  />
+                    placeholder="Contoh: 081234567890" required />
                 ) : (
-                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900">
-                    {formData.phone || '-'}
-                  </div>
+                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900">{formData.phone || '-'}</div>
                 )}
               </div>
 
@@ -320,19 +300,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Pekerjaan <span className="text-red-500">*</span></label>
                 {isEditing ? (
-                  <input
-                    type="text"
-                    name="occupation"
-                    value={formData.occupation}
-                    onChange={handleInputChange}
+                  <input type="text" name="occupation" value={formData.occupation} onChange={handleInputChange}
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
-                    placeholder="Contoh: Mahasiswa, Karyawan"
-                    required
-                  />
+                    placeholder="Contoh: Mahasiswa, Karyawan" required />
                 ) : (
-                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900">
-                    {formData.occupation || '-'}
-                  </div>
+                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900">{formData.occupation || '-'}</div>
                 )}
               </div>
 
@@ -340,19 +312,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Nama Kampus / Tempat Kerja <span className="text-red-500">*</span></label>
                 {isEditing ? (
-                  <input
-                    type="text"
-                    name="institution"
-                    value={formData.institution}
-                    onChange={handleInputChange}
+                  <input type="text" name="institution" value={formData.institution} onChange={handleInputChange}
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
-                    placeholder="Contoh: Universitas Indonesia, PT. Gojek"
-                    required
-                  />
+                    placeholder="Contoh: Universitas Indonesia, PT. Gojek" required />
                 ) : (
-                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900">
-                    {formData.institution || '-'}
-                  </div>
+                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900">{formData.institution || '-'}</div>
                 )}
               </div>
 
@@ -360,12 +324,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Jenis Kelamin <span className="text-red-500">*</span></label>
                 {isEditing ? (
-                  <select
-                    name="gender"
-                    value={formData.gender}
-                    onChange={handleInputChange}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none appearance-none cursor-pointer"
-                  >
+                  <select name="gender" value={formData.gender} onChange={handleInputChange}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none appearance-none cursor-pointer">
                     <option value="" disabled>Pilih Jenis Kelamin</option>
                     <option value="Pria">Pria</option>
                     <option value="Wanita">Wanita</option>
@@ -377,20 +337,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                 )}
               </div>
 
-              {/* Agama (New Field) */}
+              {/* Agama */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Agama <span className="text-red-500">*</span></label>
                 {isEditing ? (
-                  <select
-                    name="religion"
-                    value={formData.religion}
-                    onChange={handleInputChange}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none appearance-none cursor-pointer"
-                  >
+                  <select name="religion" value={formData.religion} onChange={handleInputChange}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none appearance-none cursor-pointer">
                     <option value="" disabled>Pilih Agama</option>
-                    {religions.map(r => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
+                    {religions.map(r => (<option key={r} value={r}>{r}</option>))}
                   </select>
                 ) : (
                   <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900">
@@ -403,12 +357,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Status Hubungan <span className="text-red-500">*</span></label>
                 {isEditing ? (
-                  <select
-                    name="relationshipStatus"
-                    value={formData.relationshipStatus}
-                    onChange={handleInputChange}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none appearance-none cursor-pointer"
-                  >
+                  <select name="relationshipStatus" value={formData.relationshipStatus} onChange={handleInputChange}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none appearance-none cursor-pointer">
                     <option value="" disabled>Pilih Status</option>
                     <option value="Single">Single</option>
                     <option value="Pacaran">Pacaran</option>
@@ -421,32 +371,22 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                 )}
               </div>
 
-              {/* Alamat Domisili (Full Width) */}
+              {/* Alamat Domisili */}
               <div className="space-y-2 md:col-span-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Alamat Domisili <span className="text-red-500">*</span></label>
                 {isEditing ? (
-                  <textarea
-                    name="address"
-                    rows={3}
-                    value={formData.address}
-                    onChange={handleInputChange}
+                  <textarea name="address" rows={3} value={formData.address} onChange={handleInputChange}
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none resize-none"
-                    placeholder="Alamat lengkap saat ini..."
-                    required
-                  />
+                    placeholder="Alamat lengkap saat ini..." required />
                 ) : (
-                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900 min-h-[5rem]">
-                    {formData.address || '-'}
-                  </div>
+                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900 min-h-[5rem]">{formData.address || '-'}</div>
                 )}
               </div>
 
               {/* Read Only Fields */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">User ID (Tidak dapat diubah)</label>
-                <div className="p-4 bg-gray-100 rounded-2xl border border-gray-200 font-mono text-xs text-gray-500">
-                  {user.uid}
-                </div>
+                <div className="p-4 bg-gray-100 rounded-2xl border border-gray-200 font-mono text-xs text-gray-500">{user.uid}</div>
               </div>
 
               {/* Account Status */}
@@ -488,9 +428,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                         <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                         Menyimpan...
                       </>
-                    ) : (
-                      'Simpan Perubahan'
-                    )}
+                    ) : 'Simpan Perubahan'}
                   </button>
                   <button
                     onClick={handleCancel}

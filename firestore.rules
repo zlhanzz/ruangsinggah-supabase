@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── HELPER FUNCTIONS ──────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // ─── USERS ─────────────────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // ─── PROPERTIES (Listings Kost) ─────────────────────────────────────────
+    match /properties/{propId} {
+      allow read: if true;  // Public can browse listings
+      allow write: if isAdmin();
+    }
+
+    // ─── AVAILABLE DATABASES (Produk DB Kost) ───────────────────────────────
+    match /availableDatabases/{dbId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ─── TRANSACTIONS (Orders Sewa Kost) ────────────────────────────────────
+    match /transactions/{txId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
+    }
+
+    // ─── DATABASE ORDERS ────────────────────────────────────────────────────
+    match /dbOrders/{orderId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
+    }
+
+    // ─── VERIFIKASI KOST ORDERS ─────────────────────────────────────────────
+    match /verifOrders/{orderId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
+    }
+
+    // ─── MITRA REQUESTS (Pendaftaran Kemitraan) ─────────────────────────────
+    // Public (unauthenticated) visitors can submit registration
+    // Only admins can read and update status
+    match /mitra_requests/{mitraId} {
+      allow create: if true;           // Siapapun bisa daftar mitra
+      allow read, update: if isAdmin(); // Hanya admin bisa baca & update status
+    }
+
+    // ─── COMPLAINTS ─────────────────────────────────────────────────────────
+    match /complaints/{compId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
+    }
+  }
+}

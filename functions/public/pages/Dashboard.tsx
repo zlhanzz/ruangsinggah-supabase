@@ -2,8 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Kost, RoomType, RoomPricing, PricingPeriod, DatabaseProduct } from '../types';
 import { FORMAT_CURRENCY } from '../constants';
-import { db } from '../firebase';
-import { collection, query, getDocs, orderBy, updateDoc, doc } from 'firebase/firestore';
+import { supabase } from '../supabase';
 import {
     getAdminProperties, updatePropertyStatus, deleteProperty, addPropertyWithMedia, updatePropertyWithMedia, BasicPropertyInfo,
     getAllDatabases, addDatabaseProduct, updateDatabaseProduct, deleteDatabase
@@ -235,8 +234,9 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
     // Form State (Property)
     const initialFormState: Partial<Kost> = {
         title: '', description: '', type: 'Campur', status: 'published', price: 0,
-        city: 'Bogor', address: '',
-        location: { lat: -6.559, lng: 106.725 }, imageUrls: [], videoUrls: [], instagramUrl: '', tiktokUrl: '', facilities: [], rules: [], roomTypes: [],
+        city: '', address: '',
+        location: { lat: -6.2088, lng: 106.8456 }, // Jakarta (Central) as neutral default
+        imageUrls: [], videoUrls: [], instagramUrl: '', tiktokUrl: '', facilities: [], rules: [], roomTypes: [],
         additionalFeePrice: 0, additionalFeeName: '', campuses: [], publicFacilities: []
     };
     const [formData, setFormData] = useState<Partial<Kost>>(initialFormState);
@@ -290,9 +290,13 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
         if (!isAdmin) return;
         setLoading(true);
         try {
-            const q = query(collection(db, 'complaints'), orderBy('createdAt', 'desc'));
-            const snapshot = await getDocs(q);
-            setComplaints(snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })));
+            const { data, error } = await supabase
+                .from('complaints')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setComplaints(data || []);
         } catch (error) {
             console.error("Gagal memuat komplain", error);
         } finally {
@@ -302,7 +306,13 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
 
     const handleUpdateComplaintStatus = async (id: string, newStatus: string) => {
         try {
-            await updateDoc(doc(db, 'complaints', id), { status: newStatus });
+            const { error } = await supabase
+                .from('complaints')
+                .update({ status: newStatus })
+                .eq('id', id);
+                
+            if (error) throw error;
+            
             setComplaints((prev: any[]) => prev.map(c => c.id === id ? { ...c, status: newStatus } : c));
             alert('Status Komplain diperbarui ke ' + newStatus);
         } catch (e) {
@@ -394,6 +404,8 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
         setNewImageFiles([]);
         setNewVideoFiles([]);
         setMapAddress("");
+        setSearchLocationText(""); // Reset search text
+        setSearchLocationResults([]); // Clear search results
         setActiveTab('info');
         setIsModalOpen(true);
     };
@@ -404,6 +416,8 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
         setNewImageFiles([]);
         setNewVideoFiles([]);
         setMapAddress(kost.address || ""); // Pre-fill address
+        setSearchLocationText(""); // Reset search text on edit
+        setSearchLocationResults([]); // Clear search results
         setActiveTab('info');
         setIsModalOpen(true);
     };
@@ -443,9 +457,9 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
             await loadProperties();
             if (onRefreshListings) onRefreshListings(); // Refresh public listings di App.tsx
             setIsModalOpen(false);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error saving property:", error);
-            alert("Gagal menyimpan properti. Coba lagi.");
+            alert("Gagal menyimpan properti: " + (error.message || "Buka console untuk detailnya"));
         } finally { setIsSubmitting(false); }
     };
 
@@ -461,7 +475,10 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
 
     const openEditDbModal = (dbItem: DatabaseProduct) => {
         setEditingDbId(dbItem.id);
-        setDbForm(dbItem);
+        const fileUrls = dbItem.fileUrls || (dbItem as any).file_urls || {};
+        const fileUrlValue = fileUrls.link || fileUrls.googleDrive || (dbItem as any).fileUrl || '';
+        
+        setDbForm({ ...dbItem, fileUrl: fileUrlValue });
         setDbCoverFile(null);
         setDbDocFile(null);
         setIsDbModalOpen(true);
@@ -667,8 +684,8 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
                             <h3 className="font-bold text-gray-900">Lokasi Kost (dengan Peta)</h3>
                             <div className="rounded-xl overflow-hidden border border-gray-200">
                                 <LocationPicker
-                                    lat={formData.location?.lat || -6.559}
-                                    lng={formData.location?.lng || 106.725}
+                                    lat={formData.location?.lat ?? -6.2088}
+                                    lng={formData.location?.lng ?? 106.8456}
                                     onLocationChange={(lat, lng, address) => {
                                         setFormData(prev => ({ ...prev, location: { lat, lng } }));
                                         setMapAddress(address);

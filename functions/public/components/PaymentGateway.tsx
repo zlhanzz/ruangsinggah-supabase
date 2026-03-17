@@ -1,28 +1,153 @@
 
 import React, { useState, useEffect } from 'react';
 import { FORMAT_CURRENCY } from '../constants';
+import { supabase } from '../supabase';
+import { Transaction } from '../types';
 
 interface PaymentGatewayProps {
   amount: number;
   orderId: string;
+  productId: string;
+  productType: 'database' | 'kost_booking' | 'survey'; // Support for different products
+  userId: string;
+  metadata?: any;
+  existingOrderId?: string;
   onPaymentSuccess: () => void;
   onCancel: () => void;
 }
 
-type MainMethod = 'qris' | 'va' | 'transfer';
-
-const PaymentGateway: React.FC<PaymentGatewayProps> = ({ amount, orderId, onPaymentSuccess, onCancel }) => {
-  const [mainMethod, setMainMethod] = useState<MainMethod | null>(null);
-  const [subMethod, setSubMethod] = useState<string | null>(null);
+const PaymentGateway: React.FC<PaymentGatewayProps> = ({ 
+  amount, 
+  orderId, 
+  productId, 
+  productType, 
+  userId, 
+  metadata = {},
+  existingOrderId,
+  onPaymentSuccess, 
+  onCancel 
+}) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(3600);
+  const [timeLeft, setTimeLeft] = useState(10800);
+  const [currentOrder, setCurrentOrder] = useState<Transaction | null>(null);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
+  const [directData, setDirectData] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  const PAYMENT_METHODS = [
+    { code: 'qris', name: 'QRIS', icon: '📱', color: 'bg-green-50' },
+    { code: 'bri_va', name: 'BRI Virtual Account', icon: '🏦', color: 'bg-blue-50' },
+    { code: 'bni_va', name: 'BNI Virtual Account', icon: '🏦', color: 'bg-orange-50' },
+    { code: 'mandiri_va', name: 'Mandiri Virtual Account', icon: '🏦', color: 'bg-yellow-50' },
+    { code: 'permata_va', name: 'Permata Virtual Account', icon: '🏦', color: 'bg-red-50' },
+    { code: 'atm_bersama', name: 'ATM Bersama', icon: '💳', color: 'bg-gray-100' },
+    { code: 'cimb_va', name: 'CIMB Virtual Account', icon: '🏦', color: 'bg-red-50' },
+    { code: 'maybank_va', name: 'Maybank Virtual Account', icon: '🏦', color: 'bg-yellow-50' },
+    { code: 'danamon_va', name: 'Danamon Virtual Account', icon: '🏦', color: 'bg-orange-50' },
+    { code: 'bsi_va', name: 'BSI Virtual Account', icon: '🏦', color: 'bg-green-50' },
+  ];
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+    let timer: any;
+    if (currentOrder && currentOrder.status !== 'paid' && currentOrder.status !== 'expired') {
+      timer = setInterval(() => {
+        const createdMs = new Date(currentOrder.created_at).getTime();
+        const diffSecs = Math.floor((new Date().getTime() - createdMs) / 1000);
+        const remaining = 10800 - diffSecs;
+        if (remaining <= 0) {
+          setTimeLeft(0);
+          clearInterval(timer);
+          if (currentOrder.status === 'pending') {
+             setCurrentOrder(prev => prev ? {...prev, status: 'expired'} : prev);
+          }
+        } else {
+          setTimeLeft(remaining);
+        }
+      }, 1000);
+    } else if (!currentOrder) {
+      timer = setInterval(() => {
+        setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    } else if (currentOrder.status === 'expired') {
+      setTimeLeft(0);
+    }
+    return () => { if (timer) clearInterval(timer); };
+  }, [currentOrder]);
+
+  // Check admin status
+  useEffect(() => {
+    const checkAdmin = async () => {
+      console.log("[DEBUG] checkAdmin starting for userId:", userId);
+      if (!userId) return;
+      
+      const { data, error } = await supabase
+        .from('users')
+        .select('is_admin, role')
+        .eq('id', userId)
+        .single();
+        
+      if (error) {
+        console.error("[DEBUG] checkAdmin error:", error);
+      }
+      
+      if (data) {
+        const isAdm = data.is_admin || data.role === 'admin';
+        console.log("[DEBUG] checkAdmin data found:", { data, isAdm });
+        setIsAdmin(isAdm);
+      } else {
+        console.log("[DEBUG] checkAdmin no data found for userId:", userId);
+      }
+    };
+    checkAdmin();
+  }, [userId]);
+
+  // Auto-initialize order on mount
+  useEffect(() => {
+    if (existingOrderId && !currentOrder) {
+      const fetchExisting = async () => {
+        setIsProcessing(true);
+        try {
+          const { data, error: fetchErr } = await supabase
+            .from('transactions')
+            .select('*')
+            .eq('id', existingOrderId)
+            .single();
+          if (fetchErr) throw fetchErr;
+          setCurrentOrder(data as Transaction);
+        } catch (err: any) {
+          setError('Gagal memuat detail tagihan: ' + err.message);
+        } finally {
+          setIsProcessing(false);
+        }
+      };
+      fetchExisting();
+    } else if (!existingOrderId && !currentOrder && !isProcessing && !error) {
+       handlePay();
+    }
+  }, [existingOrderId]);
+
+  // Poll for payment status
+  useEffect(() => {
+    if (!currentOrder || currentOrder.status === 'paid') return;
+
+    const pollInterval = setInterval(async () => {
+      const { data } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('id', currentOrder.id)
+        .single();
+
+      if (data && data.status === 'paid') {
+        clearInterval(pollInterval);
+        setCurrentOrder(data as Transaction);
+        onPaymentSuccess();
+      }
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, [currentOrder, onPaymentSuccess]);
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -31,36 +156,138 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({ amount, orderId, onPaym
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const handlePay = () => {
-    if (!mainMethod || (mainMethod !== 'qris' && !subMethod)) return;
+  const handlePay = async (method?: string) => {
     setIsProcessing(true);
-    setTimeout(() => {
+    setError(null);
+
+    try {
+      const response = await fetch('https://us-central1-ruangsinggahid-3afb2.cloudfunctions.net/createPakasirPayment', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          productId, 
+          productType, 
+          userId, 
+          metadata,
+          method: method, // Send the selected method
+          existingOrderId
+        })
+      });
+
+      const result = await response.json();
+      console.log("[DEBUG] createPakasirPayment Result:", result);
+      
+      if (!response.ok) throw new Error(result.message || 'Gagal membuat pembayaran');
+
+      setCurrentOrder(result.order);
+      setDirectData(result.directPayment);
+      
+      // If a method was selected but the API failed, show the error
+      if (method && result.apiStatus !== 'success') {
+        const errMsg = result.order?.metadata?.pakasir_error || result.message || 'Metode pembayaran ini sedang tidak tersedia. Silakan coba metode lain.';
+        console.error("[DEBUG] Pakasir API Error:", errMsg);
+        setError(errMsg);
+        setSelectedMethod(null);
+        setShowCheckout(false);
+        return;
+      }
+
+      console.log("[DEBUG] Payment successful, showing checkout:", method ? 'yes' : 'no');
+      if (method) setShowCheckout(true);
+    } catch (err: any) {
+      console.error("Payment Error:", err);
+      setError(err.message);
+    } finally {
       setIsProcessing(false);
-      onPaymentSuccess();
-    }, 2000);
+    }
   };
 
-  const vaBanks = [
-    { id: 'va_bri', name: 'BRI Virtual Account', icon: '🏦' },
-    { id: 'va_bca', name: 'BCA Virtual Account', icon: '🏦' },
-    { id: 'va_mandiri', name: 'Mandiri Virtual Account', icon: '🏦' },
-    { id: 'va_bsi', name: 'BSI Virtual Account', icon: '🌙' },
-  ];
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert('Berhasil disalin!');
+  };
 
-  const manualAccounts = [
-    { id: 'trf_bca', name: 'BCA', no: '1234-567-890', owner: 'PT Ruang Singgah Indonesia', icon: '💳' },
-    { id: 'trf_bri', name: 'BRI', no: '0987-654-321', owner: 'PT Ruang Singgah Indonesia', icon: '💳' },
-    { id: 'trf_dana', name: 'DANA', no: '0812-3456-7890', owner: 'RuangSinggah Official', icon: '📱' },
-  ];
+  const handleDownloadQR = async (qrData: string) => {
+    try {
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrData)}&size=500x500&margin=20`;
+      const response = await fetch(qrUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `QRIS_RuangSinggah_${orderId.replace(/#/g, '')}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download Error:", err);
+      alert("Gagal mengunduh QRIS. Silakan screenshot layar saja.");
+    }
+  };
+
+  const handleSimulatePayment = async () => {
+    if (!currentOrder) return;
+    setIsProcessing(true);
+    console.log("[DEBUG] Simulating payment via backend for order:", currentOrder.id);
+    try {
+      const response = await fetch('https://us-central1-ruangsinggahid-3afb2.cloudfunctions.net/simulatePaymentSuccess', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          orderId: currentOrder.id,
+          adminUserId: userId 
+        })
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Gagal simulasi');
+      
+      console.log("[DEBUG] Backend Simulation Success:", result);
+      alert("Simulasi BERHASIL! Database terupdate & Email Konfirmasi telah dipicu (Cek Console/Log jika email belum sampai).");
+      onPaymentSuccess();
+    } catch (err: any) {
+      console.error("[DEBUG] Simulation error:", err);
+      alert("Simulasi Gagal: " + err.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const isSandbox = JSON.stringify(directData || {}).toUpperCase().includes('SANDBOX');
+  
+  // DEBUG LOGS
+  useEffect(() => {
+    if (directData || isAdmin) {
+      console.log("[DEBUG] PaymentGateway State:", { 
+        isAdmin, 
+        isSandbox, 
+        hasCurrentOrder: !!currentOrder,
+        orderStatus: currentOrder?.status,
+        directDataSnippet: JSON.stringify(directData || {}).substring(0, 100)
+      });
+    }
+  }, [isAdmin, isSandbox, directData, currentOrder]);
+
+  const showAdminSim = isAdmin && (isSandbox || true) && currentOrder?.status === 'pending'; // Force show for admin during debug
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-0 sm:p-4 overflow-hidden">
       <div className="absolute inset-0 bg-gray-900/90 backdrop-blur-lg" onClick={onCancel}></div>
 
-      <div className="relative bg-white w-full h-full sm:h-auto sm:max-w-2xl sm:rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-10 duration-500">
+      <div className={`relative bg-white w-full h-full sm:max-w-3xl sm:rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-10 duration-500 ${showCheckout ? 'sm:h-auto' : 'sm:h-auto max-h-[95vh]'}`}>
+        
+        {/* Loading Overlay */}
+        {isProcessing && (
+          <div className="absolute inset-0 z-[200] bg-white/60 backdrop-blur-sm flex flex-col items-center justify-center p-10 text-center animate-in fade-in duration-300">
+             <div className="w-16 h-16 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin mb-6"></div>
+             <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">Menyiapkan Pembayaran...</h3>
+             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">Mohon tunggu sebentar.</p>
+          </div>
+        )}
 
-        {/* Header Mobile Summary */}
-        <div className="bg-gray-900 p-6 sm:p-8 text-white">
+        {/* Header Summary */}
+        <div className="bg-gray-900 p-6 sm:p-8 text-white flex-shrink-0">
           <div className="flex justify-between items-start mb-4">
             <div>
               <div className="flex items-center gap-2 mb-2">
@@ -69,9 +296,20 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({ amount, orderId, onPaym
               </div>
               <p className="text-xs text-gray-500">Order ID: <span className="text-gray-300 font-bold">#{orderId}</span></p>
             </div>
-            <button onClick={onCancel} className="p-2 hover:bg-white/10 rounded-full transition-colors sm:hidden">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
+            <div className="flex items-center gap-3">
+              {showCheckout && (
+                <button 
+                  onClick={() => { setShowCheckout(false); setSelectedMethod(null); setDirectData(null); }}
+                  className="p-2 hover:bg-white/10 rounded-full transition-colors flex items-center gap-2 text-gray-400"
+                >
+                  <span className="text-[10px] font-bold uppercase tracking-tighter">Ganti Bank</span>
+                </button>
+              )}
+              <button onClick={onCancel} className="p-2 hover:bg-white/10 rounded-full transition-colors flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-tighter text-gray-400 hidden sm:inline">Batalkan</span>
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
           </div>
 
           <div className="flex justify-between items-end">
@@ -86,130 +324,210 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({ amount, orderId, onPaym
           </div>
         </div>
 
-        {/* Payment Methods Area */}
-        <div className="flex-grow p-6 sm:p-10 overflow-y-auto space-y-6 bg-white">
-          <h2 className="text-lg font-black uppercase tracking-tight text-gray-900">Pilih Metode Pembayaran</h2>
+        {/* Content Area */}
+        <div className={`flex-grow overflow-y-auto bg-white flex flex-col p-6 sm:p-10`}>
+          {currentOrder?.status === 'expired' ? (
+            <div className="flex flex-col items-center justify-center text-center p-8 space-y-4 my-auto">
+               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-500 mb-2">
+                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+               </div>
+               <h3 className="text-xl font-black text-gray-900 uppercase tracking-widest">Waktu Habis</h3>
+               <p className="text-sm font-medium text-gray-500 max-w-sm">Sesi pembayaran telah kadaluarsa karena melewati batas waktu 3 jam. Silakan ulangi pemesanan dari awal.</p>
+               <button onClick={onCancel} className="mt-8 bg-gray-900 text-white px-8 py-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-orange-500 transition-colors">Tutup</button>
+            </div>
+          ) : !showCheckout ? (
+            <div className="space-y-8">
+              <div className="text-center sm:text-left">
+                <h2 className="text-xl font-black uppercase text-gray-900 tracking-tight">Pilih Metode Pembayaran</h2>
+                <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mt-1">100% Aman & Terverifikasi</p>
+              </div>
 
-          {/* 1. QRIS */}
-          <div className={`rounded-3xl border-2 transition-all ${mainMethod === 'qris' ? 'border-orange-500 bg-orange-50/30' : 'border-gray-50'}`}>
-            <button
-              onClick={() => { setMainMethod('qris'); setSubMethod(null); }}
-              className="w-full flex items-center gap-4 p-5"
-            >
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${mainMethod === 'qris' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-400'}`}>📱</div>
-              <div className="text-left flex-grow">
-                <p className="text-xs font-black uppercase tracking-tight text-gray-900">QRIS (Otomatis)</p>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Gopay, OVO, Dana, ShopeePay</p>
-              </div>
-              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${mainMethod === 'qris' ? 'border-orange-500 bg-orange-500 text-white' : 'border-gray-200'}`}>
-                {mainMethod === 'qris' && <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg>}
-              </div>
-            </button>
-            {mainMethod === 'qris' && (
-              <div className="px-5 pb-5 animate-in slide-in-from-top-2">
-                <div className="bg-white p-6 rounded-2xl border border-orange-100 flex flex-col items-center shadow-inner">
-                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=RS_BOOKING" className="w-40 h-40 opacity-90" alt="QRIS" />
-                  <p className="text-[10px] font-black uppercase text-gray-400 mt-4 tracking-widest">Scan dengan aplikasi e-wallet anda</p>
+              {error && (
+                <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-[10px] font-bold uppercase tracking-widest text-center">
+                  ⚠️ {error}
                 </div>
-              </div>
-            )}
-          </div>
+              )}
 
-          {/* 2. Virtual Account */}
-          <div className={`rounded-3xl border-2 transition-all ${mainMethod === 'va' ? 'border-orange-500 bg-orange-50/30' : 'border-gray-50'}`}>
-            <button
-              onClick={() => { setMainMethod('va'); setSubMethod(null); }}
-              className="w-full flex items-center gap-4 p-5"
-            >
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${mainMethod === 'va' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-400'}`}>🏦</div>
-              <div className="text-left flex-grow">
-                <p className="text-xs font-black uppercase tracking-tight text-gray-900">Virtual Account</p>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">BRI, BCA, Mandiri, BSI</p>
-              </div>
-              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${mainMethod === 'va' ? 'border-orange-500 bg-orange-500 text-white' : 'border-gray-200'}`}>
-                {mainMethod === 'va' && <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg>}
-              </div>
-            </button>
-            {mainMethod === 'va' && (
-              <div className="px-5 pb-5 grid grid-cols-1 gap-2 animate-in slide-in-from-top-2">
-                {vaBanks.map(bank => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {PAYMENT_METHODS.map((method) => (
                   <button
-                    key={bank.id}
-                    onClick={() => setSubMethod(bank.id)}
-                    className={`flex items-center justify-between p-4 rounded-xl border transition-all ${subMethod === bank.id ? 'bg-white border-orange-500 shadow-sm' : 'bg-white/50 border-gray-100 hover:bg-white'}`}
+                    key={method.code}
+                    disabled={isProcessing}
+                    onClick={() => {
+                      setSelectedMethod(method.code);
+                      handlePay(method.code);
+                    }}
+                    className={`flex items-center gap-4 p-5 rounded-3xl border-2 transition-all group active:scale-95 text-left ${
+                      selectedMethod === method.code 
+                      ? 'border-orange-500 bg-orange-50/50 shadow-lg' 
+                      : 'border-gray-50 bg-gray-50/50 hover:border-gray-200 hover:bg-white hover:shadow-xl'
+                    } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    <span className="text-xs font-bold text-gray-700">{bank.name}</span>
-                    <span className="text-xl">{bank.icon}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 3. Transfer Bank Manual */}
-          <div className={`rounded-3xl border-2 transition-all ${mainMethod === 'transfer' ? 'border-orange-500 bg-orange-50/30' : 'border-gray-50'}`}>
-            <button
-              onClick={() => { setMainMethod('transfer'); setSubMethod(null); }}
-              className="w-full flex items-center gap-4 p-5"
-            >
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${mainMethod === 'transfer' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-400'}`}>📄</div>
-              <div className="text-left flex-grow">
-                <p className="text-xs font-black uppercase tracking-tight text-gray-900">Transfer Bank Manual</p>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Verifikasi manual 1x24 jam</p>
-              </div>
-              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${mainMethod === 'transfer' ? 'border-orange-500 bg-orange-500 text-white' : 'border-gray-200'}`}>
-                {mainMethod === 'transfer' && <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg>}
-              </div>
-            </button>
-            {mainMethod === 'transfer' && (
-              <div className="px-5 pb-5 space-y-3 animate-in slide-in-from-top-2">
-                {manualAccounts.map(acc => (
-                  <button
-                    key={acc.id}
-                    onClick={() => setSubMethod(acc.id)}
-                    className={`w-full text-left p-4 rounded-2xl border transition-all ${subMethod === acc.id ? 'bg-white border-orange-500 shadow-md' : 'bg-white/50 border-gray-100'}`}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{acc.name} Official</span>
-                      <span className="text-lg">{acc.icon}</span>
+                    <div className={`w-12 h-12 ${method.color} rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform`}>
+                      {method.icon}
                     </div>
-                    <p className="text-sm font-black text-gray-900 tracking-tight">{acc.no}</p>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase mt-1">{acc.owner}</p>
-                    {subMethod === acc.id && (
-                      <div className="mt-3 pt-3 border-t border-gray-50">
-                        <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest bg-orange-50 px-2 py-1 rounded">Wajib Upload Bukti Transfer</span>
-                      </div>
-                    )}
+                    <div className="flex-grow">
+                      <p className="font-black text-xs uppercase tracking-tight text-gray-900">{method.name}</p>
+                    </div>
+                    <div className="text-gray-300 group-hover:text-orange-500 transform group-hover:translate-x-1 transition-all">
+                      {isProcessing && selectedMethod === method.code ? (
+                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
+                      )}
+                    </div>
                   </button>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="w-full flex flex-col items-center animate-in zoom-in-95 duration-300">
+               {/* Sticky Countdown Bar */}
+               <div className="w-full sticky top-0 z-10 bg-gray-900 rounded-2xl p-3 mb-6 flex items-center justify-between shadow-lg">
+                 <div className="flex items-center gap-2">
+                   <div className={`w-2 h-2 rounded-full ${timeLeft > 0 ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                   <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Sisa Waktu Bayar</span>
+                 </div>
+                 <span className={`text-sm font-mono font-black ${timeLeft > 300 ? 'text-white' : timeLeft > 0 ? 'text-orange-500' : 'text-red-500'}`}>{formatTime(timeLeft)}</span>
+               </div>
+               {selectedMethod === 'qris' ? (
+                 <div className="space-y-8 w-full max-w-sm text-center">
+                    <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl border border-gray-100 flex flex-col items-center">
+                        {(() => {
+                           // Pakasir might return the data in payment.data, qr_data, qr_string, or payment_number
+                           const qrData = directData?.payment?.data || 
+                                          directData?.qr_data || 
+                                          directData?.qr_string || 
+                                          directData?.payment_number || 
+                                          directData?.payment?.payment_number ||
+                                          directData?.data || '';
+                           console.log("[DEBUG] QR Data detected:", qrData ? (qrData.substring(0, 20) + "...") : "empty", "from directData:", directData);
+                           
+                           if (!qrData && !isProcessing) {
+                             return <div className="w-full aspect-square bg-gray-50 rounded-2xl flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase tracking-widest p-10">Data QRIS Belum Tersedia</div>;
+                           }
+
+                           return (
+                             <img 
+                               src={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrData)}&size=300x300&margin=10`} 
+                               alt="QRIS Code" 
+                               className="w-full h-full max-w-[250px] aspect-square object-contain"
+                             />
+                           );
+                        })()}
+                        <div className="mt-4 flex items-center gap-2">
+                            <span className="font-black text-xs uppercase tracking-widest text-gray-400">Scan via</span>
+                            <div className="flex gap-2 text-xl">📱 💳</div>
+                        </div>
+                    </div>
+                    {(() => {
+                        const qrData = directData?.payment?.data || 
+                                      directData?.qr_data || 
+                                      directData?.qr_string || 
+                                      directData?.payment_number || 
+                                      directData?.payment?.payment_number ||
+                                      directData?.data || '';
+                        if (qrData) {
+                          return (
+                            <button 
+                              onClick={() => handleDownloadQR(qrData)}
+                              className="mt-2 bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-orange-100 transition-all active:scale-95 flex items-center justify-center gap-2 mx-auto"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                              Unduh QRIS (PNG)
+                            </button>
+                          );
+                        }
+                        return null;
+                    })()}
+                    <div className="space-y-4">
+                        <h2 className="text-xl font-black uppercase text-gray-900">QRIS All Payment</h2>
+                        <ul className="text-[10px] font-bold uppercase tracking-widest text-gray-400 space-y-2">
+                            <li>1. Buka Aplikasi Pembayaran Anda</li>
+                            <li>2. Klik "Scan" atau "Bayar"</li>
+                            <li>3. Arahkan Kamera ke QR Code di atas</li>
+                            <li>4. Konfirmasi & Selesai</li>
+                        </ul>
+                    </div>
+
+                    {showAdminSim && (
+                        <button 
+                          onClick={handleSimulatePayment}
+                          className="w-full mt-4 bg-gray-900 border-2 border-dashed border-orange-500 text-orange-500 py-4 rounded-3xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all"
+                        >
+                          🛠️ ADMIN: SIMULASI BAYAR BERHASIL (SANDBOX ONLY)
+                        </button>
+                    )}
+                 </div>
+               ) : (
+                 <div className="space-y-10 w-full max-w-sm text-center py-6">
+                    <div className="space-y-6">
+                        <h2 className="text-xl font-black uppercase text-gray-900 tracking-tight">Instruksi Pembayaran</h2>
+                        <div className="bg-gray-50 p-8 rounded-[3rem] border border-gray-100 space-y-4">
+                            <div className="flex flex-col items-center gap-2">
+                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+                                    {PAYMENT_METHODS.find(m => m.code === selectedMethod)?.name || 'Nomor Virtual Account'}
+                                </span>
+                                <p className="text-3xl font-black text-gray-900 tracking-wider font-mono">
+                                    {(() => {
+                                        const va = directData?.payment?.va_number || 
+                                                   directData?.va_number || 
+                                                   directData?.payment_number || 
+                                                   directData?.payment?.payment_number ||
+                                                   directData?.pay_code || 
+                                                   directData?.payment_code || '---';
+                                        return va;
+                                    })()}
+                                </p>
+                            </div>
+                            <button 
+                              onClick={() => {
+                                const va = directData?.payment?.va_number || directData?.va_number || directData?.pay_code || directData?.payment_code || '';
+                                if (va) copyToClipboard(va);
+                              }}
+                              className="bg-white px-6 py-2.5 rounded-full border border-gray-200 text-[10px] font-black uppercase tracking-widest text-gray-600 hover:bg-gray-100 active:scale-95 transition-all shadow-sm"
+                            >
+                                Salin Nomor VA
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4 text-left">
+                        <div className="p-5 bg-blue-50/50 rounded-3xl border border-blue-100">
+                             <p className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-2">💡 Tips Pembayaran</p>
+                             <p className="text-xs font-bold text-blue-900/70 leading-relaxed">
+                                Silakan gunakan aplikasi mobile banking atau ATM terdekat. Pembayaran Anda akan terdeteksi otomatis dalam hitungan detik.
+                             </p>
+                         </div>
+                    </div>
+
+                    {showAdminSim && (
+                        <button 
+                          onClick={handleSimulatePayment}
+                          className="w-full mt-4 bg-gray-900 border-2 border-dashed border-orange-500 text-orange-500 py-4 rounded-3xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all"
+                        >
+                          🛠️ ADMIN: SIMULASI BAYAR BERHASIL (SANDBOX ONLY)
+                        </button>
+                    )}
+                 </div>
+               )}
+
+               <div className="mt-8 px-6 py-2.5 bg-orange-50 rounded-full border border-orange-100 flex items-center gap-2 animate-pulse">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-orange-600">Menunggu pembayaran terdeteksi sistem...</span>
+               </div>
+            </div>
+          )}
         </div>
 
         {/* Footer Actions */}
-        <div className="p-6 sm:p-10 border-t border-gray-50 bg-gray-50/50">
-          <button
-            onClick={handlePay}
-            disabled={!mainMethod || (mainMethod !== 'qris' && !subMethod) || isProcessing}
-            className={`w-full py-5 rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl transition-all flex items-center justify-center gap-3 active:scale-95 ${(!mainMethod || (mainMethod !== 'qris' && !subMethod))
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                : isProcessing
-                  ? 'bg-orange-400 text-white'
-                  : 'bg-orange-500 text-white shadow-orange-100 hover:bg-orange-600'
-              }`}
-          >
-            {isProcessing ? (
-              <>
-                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                Memverifikasi Dana...
-              </>
-            ) : (
-              'Saya Sudah Bayar'
-            )}
-          </button>
-          <p className="text-center text-[9px] text-gray-400 font-bold uppercase mt-4 tracking-widest">
-            Transaksimu di RuangSinggah dijamin aman & terenkripsi
+        <div className={`flex-shrink-0 p-6 sm:p-10 border-t border-gray-50 bg-gray-50/50 ${showCheckout ? 'py-6' : ''}`}>
+          
+          <p className="text-center text-[9px] text-gray-400 font-bold uppercase tracking-widest">
+            {showCheckout 
+              ? 'Silakan selesaikan pembayaran di atas' 
+              : 'Transaksimu di RuangSinggah dijamin aman & terenkripsi oleh Pakasir'
+            }
           </p>
         </div>
       </div>

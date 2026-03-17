@@ -579,6 +579,9 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
         <PaymentGateway
           amount={tempBookingData.total}
           orderId={`BOOK-${kost.id.substring(0, 4).toUpperCase()}-${Date.now().toString().substring(8)}`}
+          productId={kost.id}
+          productType="kost_booking"
+          userId={user?.id}
           onPaymentSuccess={handlePaymentSuccess}
           onCancel={() => setIsPaymentGatewayOpen(false)}
         />

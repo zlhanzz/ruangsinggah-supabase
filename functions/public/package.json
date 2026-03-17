@@ -11,10 +11,12 @@
   },
   "dependencies": {
     "@firebase/auth-types": "^0.13.0",
+    "@supabase/supabase-js": "^2.99.1",
     "firebase": "^12.9.0",
     "lucide-react": "^0.575.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.1",
     "recharts": "^3.7.0"
   },
   "devDependencies": {

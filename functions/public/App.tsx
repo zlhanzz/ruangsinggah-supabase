@@ -1,8 +1,6 @@
-
-import React, { useState, useEffect, useRef } from 'react';
-import { signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db, onAuthStateChanged } from './firebase';
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { supabase } from './supabase';
 import { Page, Kost } from './types';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -21,175 +19,156 @@ import MyKost from './pages/MyKost';
 import { getPublishedProperties } from './userService';
 
 const App: React.FC = () => {
-  const [activePage, setActivePage] = useState<Page>(Page.HOME);
-  const [selectedKostId, setSelectedKostId] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [user, setUser] = useState<any>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [listings, setListings] = useState<Kost[]>([]);
-  const [loadingListings, setLoadingListings] = useState(true); // New loading state
+  const [loadingListings, setLoadingListings] = useState(true);
   const [pendingTransaction, setPendingTransaction] = useState<{
     type: 'kost' | 'product';
     id: string;
   } | null>(null);
 
-  // Synkronisasi URL Hash untuk mengaktifkan tombol Back Browser
-  useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash.replace('#', '') as Page;
-      if (Object.values(Page).includes(hash)) {
-        setActivePage(hash);
-      } else if (!window.location.hash) {
-        setActivePage(Page.HOME);
-      }
-    };
-
-    // Jalankan satu kali saat page diload awal
-    if (window.location.hash) {
-      handleHashChange();
-    }
-
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
-
-  // Update hash tatkala status dari dalam React memicu pindah halaman
-  useEffect(() => {
-    const currentHash = window.location.hash.replace('#', '');
-    if (currentHash !== activePage) {
-      window.location.hash = activePage;
-    }
-  }, [activePage]);
-
   const handleBackNavigation = () => {
-    if (window.history.length > 2) { // Asumsikan ada history yg bisa di-pop
-      window.history.back();
+    if (window.history.length > 2) {
+      navigate(-1);
     } else {
-      setActivePage(user?.role === 'admin' ? Page.DASHBOARD_ADMIN : Page.HOME);
+      navigate(user?.role === 'admin' ? Page.DASHBOARD_ADMIN : Page.HOME);
     }
   };
 
-  // Fetch Public Listings on Mount
+  // Fetch Public Listings on Mount or after Auth resolves
   const fetchListings = async () => {
     setLoadingListings(true);
     try {
       const data = await getPublishedProperties();
       setListings(data);
     } catch (error) {
-      console.error("Failed to load listings", error);
+      console.error('Failed to load listings', error);
     } finally {
       setLoadingListings(false);
     }
   };
 
   useEffect(() => {
-    fetchListings();
-  }, []);
-
-  const forceRefreshTokenAndCheckClaims = async (currentUser: any) => {
-    if (currentUser) {
-      console.log("DEBUG: Refreshing ID token for user:", currentUser.uid);
-      try {
-        const idTokenResult = await currentUser.getIdTokenResult(true); // 'true' memaksa refresh
-        console.log("DEBUG: Fresh ID Token Claims:", idTokenResult.claims);
-        if (idTokenResult.claims.admin) {
-          console.log("DEBUG: Custom claim 'admin: true' ditemukan di token!");
-        } else {
-          console.error("DEBUG: Custom claim 'admin: true' TIDAK ditemukan di token setelah refresh.");
-        }
-      } catch (e) {
-        console.error("DEBUG: Error refreshing token:", e);
-      }
+    if (!loadingAuth) {
+      fetchListings();
     }
-  };
+  }, [loadingAuth]);
 
-  const fetchUserData = async (currentUser: any) => {
-    if (currentUser) {
-      try {
-        await currentUser.reload();
-        await forceRefreshTokenAndCheckClaims(currentUser);
-      } catch (e) {
-        console.log("Error reloading user", e);
+  // Build user object from Supabase session + users table
+  const fetchUserData = async (supabaseUser: any) => {
+    console.log("fetchUserData called with:", supabaseUser);
+    if (!supabaseUser) {
+      console.log("No supabaseUser, setting user to null.");
+      setUser(null);
+      setLoadingAuth(false);
+      return;
+    }
+
+    try {
+      console.log("Fetching profile for UID:", supabaseUser.id);
+      // Fetch profile from 'users' table
+      const { data: dbData, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', supabaseUser.id)
+        .single();
+        
+      if (error && error.code !== 'PGRST116') {
+        console.warn("Could not fetch user profile from public table:", error.message);
       }
+      
+      console.log("dbData received:", dbData);
 
-      if (currentUser.emailVerified) {
-        let dbData: any = {};
-        try {
-          const userDocRef = doc(db, 'users', currentUser.uid);
-          const docSnap = await getDoc(userDocRef);
-          if (docSnap.exists()) {
-            dbData = docSnap.data() || {};
-          }
-        } catch (err) {
-          console.error("Error fetching user profile from DB:", err);
-        }
+      const profile = dbData || {};
+      let role = profile.role || 'user';
+      if (profile.is_admin === true) role = 'admin';
+      
+      console.log("Determined role:", role);
 
-        const storedProfile = localStorage.getItem(`user_profile_${currentUser.email}`);
-        const extraData = storedProfile ? JSON.parse(storedProfile) : {};
+      const safeUser = {
+        uid: supabaseUser.id,
+        id: supabaseUser.id,
+        email: supabaseUser.email,
+        emailVerified: supabaseUser.email_confirmed_at != null,
+        photoURL: profile.photo_url || supabaseUser.user_metadata?.avatar_url || '',
+        displayName: profile.name || supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || '',
+        phoneNumber: profile.phone || '',
+        photo_url: profile.photo_url || '', // Keep original for reference
+        relationshipStatus: profile.relationship_status || '',
+        occupation: profile.occupation || '',
+        institution: profile.institution || '',
+        gender: profile.gender || '',
+        religion: profile.religion || '',
+        address: profile.address || '',
+        ...profile,
+        role,
+      };
 
-        let role = dbData.role || 'user';
-        if (dbData.isAdmin === true) {
-          role = 'admin';
-        }
+      setUser(safeUser);
 
-        const safeUser = {
-          uid: currentUser.uid,
-          email: currentUser.email,
-          emailVerified: currentUser.emailVerified,
-          photoURL: currentUser.photoURL,
-          displayName: dbData.name || currentUser.displayName || extraData.name,
-          phoneNumber: dbData.phone || currentUser.phoneNumber || extraData.phone,
-          ...extraData,
-          ...dbData,
-          role: role
-        };
-
-        setUser(safeUser);
-
-        if (role === 'admin' && activePage === Page.LOGIN) {
-          setActivePage(Page.DASHBOARD_ADMIN);
-        }
-
-      } else {
-        setUser(null);
+      if (role === 'admin' && location.pathname === Page.LOGIN) {
+        navigate(Page.DASHBOARD_ADMIN, { replace: true });
       }
-    } else {
+    } catch (err) {
+      console.error('Error fetching user data:', err);
       setUser(null);
     }
     setLoadingAuth(false);
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      await fetchUserData(currentUser);
-    });
-    return () => unsubscribe();
-  }, []);
+    let mounted = true;
 
-  // Handle kostId deep link
+    // Listen to auth changes (login/logout/token refresh and initial mount)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth event triggered:", event, session);
+      // INITIAL_SESSION occurs on first page load
+      if (
+        event === 'INITIAL_SESSION' ||
+        event === 'SIGNED_IN' || 
+        event === 'SIGNED_OUT' || 
+        event === 'USER_UPDATED' ||
+        event === 'TOKEN_REFRESHED'
+      ) {
+         if (mounted) {
+           // Gunakan setTimeout agar kita melepaskan Auth Lock yang sedang ditahan
+           // oleh event emitter Supabase, mencegah Deadlock `AbortError`.
+           setTimeout(() => {
+             if (mounted) fetchUserData(session?.user ?? null);
+           }, 0);
+         }
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle kostId deep link authentication check
   useEffect(() => {
     if (!loadingAuth) {
-      const params = new URLSearchParams(window.location.search);
-      const kostId = params.get('kostId');
-      if (kostId) {
-        // Prevent re-triggering by wiping the query param without refreshing
-        window.history.replaceState({}, document.title, window.location.pathname);
-        if (user) {
-          setSelectedKostId(kostId);
-          setActivePage(Page.DETAIL);
-        } else {
+      if (location.pathname === Page.DETAIL && !user) {
+        const params = new URLSearchParams(location.search);
+        const kostId = params.get('kostId');
+        if (kostId) {
           setPendingTransaction({ type: 'kost', id: kostId });
-          setActivePage(Page.LOGIN);
-          alert("Login terlebih dahulu untuk melihat detail kost.");
+          alert('Login terlebih dahulu untuk melihat detail kost.');
+          navigate(Page.LOGIN, { replace: true });
         }
       }
     }
-  }, [loadingAuth, user]);
+  }, [loadingAuth, user, location.pathname, location.search, navigate]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [activePage, selectedKostId]);
+  }, [location.pathname, location.search]);
 
-  // CRUD for local state update optimization
   const handleAddKost = (newKost: Kost) => {
     setListings(prev => [newKost, ...prev]);
   };
@@ -202,21 +181,23 @@ const App: React.FC = () => {
 
   const handleKostSelect = (id: string) => {
     if (!user) {
-      alert("Login terlebih dahulu untuk akses selengkapnya.");
-      setActivePage(Page.LOGIN);
+      alert('Login terlebih dahulu untuk akses selengkapnya.');
+      navigate(Page.LOGIN);
       return;
     }
-    setSelectedKostId(id);
-    setActivePage(Page.DETAIL);
+    navigate(`${Page.DETAIL}?kostId=${id}`);
   };
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
-      setActivePage(Page.HOME);
-      setPendingTransaction(null);
+      await supabase.auth.signOut();
     } catch (error) {
-      console.error("Logout Error", error);
+      console.error('Logout Error', error);
+    } finally {
+      // Force clear local state no matter what happens with Supabase backend
+      setUser(null);
+      navigate(Page.HOME);
+      setPendingTransaction(null);
     }
   };
 
@@ -235,124 +216,37 @@ const App: React.FC = () => {
   };
 
   const handleProfileSaveSuccess = async () => {
-    if (auth.currentUser) {
-      await fetchUserData(auth.currentUser);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      await fetchUserData(session.user);
     }
-    alert("Data Tersimpan");
+    alert('Data Tersimpan');
     if (pendingTransaction) {
       if (pendingTransaction.type === 'kost') {
-        setSelectedKostId(pendingTransaction.id);
-        setActivePage(Page.DETAIL);
+        navigate(`${Page.DETAIL}?kostId=${pendingTransaction.id}`);
       } else if (pendingTransaction.type === 'product') {
-        setActivePage(Page.PRODUCTS);
+        navigate(Page.PRODUCTS);
       }
       setPendingTransaction(null);
     } else {
       if (user?.role === 'admin') {
-        setActivePage(Page.DASHBOARD_ADMIN);
+        navigate(Page.DASHBOARD_ADMIN);
       } else {
-        setActivePage(Page.HOME);
+        navigate(Page.HOME);
       }
     }
   };
 
-  const renderPage = () => {
-    if (loadingAuth) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-white">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-        </div>
-      );
-    }
-
-    if (activePage === Page.DETAIL && selectedKostId) {
-      const kost = listings.find(k => k.id === selectedKostId);
-      if (kost) {
-        return (
-          <KostDetail
-            kost={kost}
-            onBack={() => setActivePage(Page.LISTINGS)}
-            user={user}
-            onLoginRedirect={() => setActivePage(Page.LOGIN)}
-            validateProfile={() => {
-              if (!isProfileComplete(user)) {
-                setPendingTransaction({ type: 'kost', id: kost.id });
-                alert("Silahkan lengkapi profile sebelum transaksi.");
-                setActivePage(Page.PROFILE);
-                return false;
-              }
-              return true;
-            }}
-          />
-        );
-      }
-    }
-
-    switch (activePage) {
-      case Page.HOME:
-        return <Home onPageChange={setActivePage} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />;
-      case Page.LISTINGS:
-        return <Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} />;
-      case Page.PRODUCTS:
-        return (
-          <Products
-            user={user}
-            onLoginRedirect={() => setActivePage(Page.LOGIN)}
-            initialSelectedProductId={pendingTransaction?.type === 'product' ? pendingTransaction.id : undefined}
-            validateProfile={(productId: string) => {
-              if (!isProfileComplete(user)) {
-                setPendingTransaction({ type: 'product', id: productId });
-                alert("Silahkan lengkapi profile sebelum transaksi.");
-                setActivePage(Page.PROFILE);
-                return false;
-              }
-              return true;
-            }}
-          />
-        );
-      case Page.OWNER:
-        return <Owner />;
-      case Page.ABOUT:
-        return <About />;
-      case Page.CONTACT:
-        return <Contact />;
-      case Page.SURVEY_SERVICE:
-        return <SurveyService />;
-      case Page.MY_BOOKINGS:
-        return <MyKost user={user} onPageChange={setActivePage} />;
-      case Page.LOGIN:
-        if (user) {
-          return user.role === 'admin'
-            ? <Dashboard role={user.role} onPageChange={setActivePage} listings={listings} onAdd={handleAddKost} onEdit={handleEditKost} onDelete={handleDeleteKost} />
-            : <Home onPageChange={setActivePage} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />;
-        }
-        return <Login onLoginSuccess={() => fetchUserData(auth.currentUser)} />;
-      case Page.PROFILE:
-        return (
-          <Profile
-            user={user}
-            onLogout={handleLogout}
-            onSaveSuccess={handleProfileSaveSuccess}
-            forceEdit={!!pendingTransaction}
-            onBack={handleBackNavigation}
-          />
-        );
-      case Page.DASHBOARD_ADMIN:
-        return <Dashboard role={user?.role || 'admin'} onPageChange={setActivePage} listings={listings} onAdd={handleAddKost} onEdit={handleEditKost} onDelete={handleDeleteKost} onRefreshListings={fetchListings} />;
-      case Page.DASHBOARD_OWNER:
-        return <Dashboard role={user?.role || 'owner'} onPageChange={setActivePage} listings={listings} onAdd={handleAddKost} onEdit={handleEditKost} onDelete={handleDeleteKost} onRefreshListings={fetchListings} />;
-      default:
-        return <Home onPageChange={setActivePage} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />;
-    }
-  };
+  const query = new URLSearchParams(location.search);
+  const selectedKostId = query.get('kostId');
+  const selectedKost = selectedKostId ? listings.find(k => k.id === selectedKostId) : null;
 
   return (
     <div className="min-h-screen flex flex-col font-sans selection:bg-orange-100 selection:text-orange-900">
       <Navbar
-        activePage={activePage}
+        activePage={location.pathname as Page}
         onPageChange={(page) => {
-          setActivePage(page);
-          setSelectedKostId(null);
+          navigate(page);
           setPendingTransaction(null);
         }}
         user={user}
@@ -360,10 +254,90 @@ const App: React.FC = () => {
       />
 
       <main className="flex-grow">
-        {renderPage()}
+        {loadingAuth ? (
+          <div className="min-h-screen flex items-center justify-center bg-white">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+          </div>
+        ) : (
+          <Routes>
+            <Route path={Page.HOME} element={<Home onPageChange={(p: Page) => navigate(p)} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />} />
+            <Route path={Page.LISTINGS} element={<Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} />} />
+            <Route path="/products/*" element={
+              <Products
+                user={user}
+                onLoginRedirect={() => navigate(Page.LOGIN)}
+                initialSelectedProductId={pendingTransaction?.type === 'product' ? pendingTransaction.id : undefined}
+                validateProfile={(productId: string) => {
+                  if (!isProfileComplete(user)) {
+                    setPendingTransaction({ type: 'product', id: productId });
+                    alert('Silahkan lengkapi profile sebelum transaksi.');
+                    navigate(Page.PROFILE);
+                    return false;
+                  }
+                  return true;
+                }}
+              />
+            } />
+            <Route path={Page.OWNER} element={<Owner />} />
+            <Route path={Page.ABOUT} element={<About />} />
+            <Route path={Page.CONTACT} element={<Contact />} />
+            <Route path={Page.SURVEY_SERVICE} element={<SurveyService />} />
+            <Route path={Page.MY_BOOKINGS} element={<MyKost user={user} onPageChange={(p: Page) => navigate(p)} />} />
+            
+            <Route path={Page.LOGIN} element={
+              user ? (
+                <Navigate to={user.role === 'admin' ? Page.DASHBOARD_ADMIN : Page.HOME} replace />
+              ) : (
+                <Login onLoginSuccess={() => supabase.auth.getSession().then(({ data: { session } }) => fetchUserData(session?.user ?? null))} />
+              )
+            } />
+            
+            <Route path={Page.PROFILE} element={
+              <Profile
+                user={user}
+                onLogout={handleLogout}
+                onSaveSuccess={handleProfileSaveSuccess}
+                forceEdit={!!pendingTransaction}
+                onBack={handleBackNavigation}
+              />
+            } />
+            
+            <Route path={Page.DASHBOARD_ADMIN} element={
+              <Dashboard role={user?.role || 'admin'} onPageChange={(p: Page) => navigate(p)} listings={listings} onAdd={handleAddKost} onEdit={handleEditKost} onDelete={handleDeleteKost} onRefreshListings={fetchListings} />
+            } />
+            
+            <Route path={Page.DASHBOARD_OWNER} element={
+              <Dashboard role={user?.role || 'owner'} onPageChange={(p: Page) => navigate(p)} listings={listings} onAdd={handleAddKost} onEdit={handleEditKost} onDelete={handleDeleteKost} onRefreshListings={fetchListings} />
+            } />
+            
+            <Route path={Page.DETAIL} element={
+              selectedKost ? (
+                <KostDetail
+                  kost={selectedKost}
+                  onBack={() => navigate(Page.LISTINGS)}
+                  user={user}
+                  onLoginRedirect={() => navigate(Page.LOGIN)}
+                  validateProfile={() => {
+                    if (!isProfileComplete(user)) {
+                      setPendingTransaction({ type: 'kost', id: selectedKost.id });
+                      alert('Silahkan lengkapi profile sebelum transaksi.');
+                      navigate(Page.PROFILE);
+                      return false;
+                    }
+                    return true;
+                  }}
+                />
+              ) : (
+                <Navigate to={Page.LISTINGS} replace />
+              )
+            } />
+
+            <Route path="*" element={<Navigate to={Page.HOME} replace />} />
+          </Routes>
+        )}
       </main>
 
-      <Footer onPageChange={setActivePage} />
+      <Footer onPageChange={(p: Page) => navigate(p)} />
     </div>
   );
 };

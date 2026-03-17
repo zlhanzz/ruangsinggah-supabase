@@ -1,16 +1,10 @@
 
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, updateProfile, sendEmailVerification, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { auth, db, googleProvider, signInWithPopup } from '../firebase';
+import { supabase } from '../supabase';
+import { Page } from '../types';
 
 interface LoginProps {
   onLoginSuccess?: () => void;
-}
-
-interface FireAuthError {
-  code?: string;
-  message?: string;
 }
 
 type AuthMode = 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD';
@@ -21,7 +15,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [verificationSent, setVerificationSent] = useState(false);
-  const [showPassword, setShowPassword] = useState(false); // New state for password visibility
+  const [showPassword, setShowPassword] = useState(false);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -30,27 +24,18 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     phone: ''
   });
 
-  const getErrorMessage = (code: string) => {
-    switch (code) {
-      case 'auth/email-already-in-use': return 'Email sudah terdaftar. Silakan login.';
-      case 'auth/invalid-email': return 'Format email tidak valid.';
-      case 'auth/user-not-found': return 'Email tidak terdaftar.';
-      case 'auth/wrong-password': return 'Kata sandi salah.';
-      case 'auth/invalid-credential': return 'Email atau kata sandi salah.';
-      case 'auth/weak-password': return 'Kata sandi terlalu lemah (min. 6 karakter).';
-      case 'auth/popup-closed-by-user': return 'Login dibatalkan oleh pengguna.';
-      case 'auth/too-many-requests': return 'Terlalu banyak percobaan. Coba lagi nanti.';
-      default: return `Terjadi kesalahan: ${code}`;
-    }
+  const getErrorMessage = (message: string) => {
+    if (message.includes('Email not confirmed')) return 'Email Anda belum diverifikasi. Silakan cek inbox/spam email Anda.';
+    if (message.includes('Invalid login credentials')) return 'Email atau kata sandi salah.';
+    if (message.includes('User already registered')) return 'Email sudah terdaftar. Silakan login.';
+    if (message.includes('Password should be at least')) return 'Kata sandi terlalu lemah (min. 6 karakter).';
+    if (message.includes('Unable to validate email')) return 'Format email tidak valid.';
+    if (message.includes('Email rate limit exceeded')) return 'Terlalu banyak percobaan. Coba lagi nanti.';
+    return `Terjadi kesalahan: ${message}`;
   };
 
   const resetForm = () => {
-    setFormData({
-      email: '',
-      password: '',
-      name: '',
-      phone: ''
-    });
+    setFormData({ email: '', password: '', name: '', phone: '' });
     setErrorMsg('');
     setSuccessMsg('');
     setShowPassword(false);
@@ -62,26 +47,26 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setErrorMsg('');
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
 
-      // RELOAD USER TO GET FRESH STATUS
-      if (userCredential.user) {
-        await userCredential.user.reload();
+      if (error) {
+        setErrorMsg(getErrorMessage(error.message));
+        return;
       }
 
-      // CHECK EMAIL VERIFICATION
-      if (userCredential.user && !userCredential.user.emailVerified) {
-        await signOut(auth); // Force logout
+      if (!data.user?.email_confirmed_at) {
+        await supabase.auth.signOut();
         setErrorMsg('Email Anda belum diverifikasi. Silakan cek inbox/spam email Anda untuk verifikasi akun.');
-        setLoading(false);
         return;
       }
 
       alert('Berhasil Masuk! Selamat datang kembali.');
       if (onLoginSuccess) onLoginSuccess();
-    } catch (error) {
-      const firebaseError = error as FireAuthError;
-      setErrorMsg(getErrorMessage(firebaseError.code || 'unknown'));
+    } catch (error: any) {
+      setErrorMsg(getErrorMessage(error.message || 'unknown'));
     } finally {
       setLoading(false);
     }
@@ -92,7 +77,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setLoading(true);
     setErrorMsg('');
 
-    // Validasi sederhana
     if (!formData.name || !formData.phone) {
       setErrorMsg('Mohon lengkapi Nama dan Nomor WhatsApp.');
       setLoading(false);
@@ -100,24 +84,50 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            full_name: formData.name,
+            name: formData.name,
+          },
+          emailRedirectTo: window.location.origin,
+        }
+      });
 
-      if (userCredential.user) {
-        // 1. Update Firebase Auth Profile (DisplayName)
-        await updateProfile(userCredential.user, {
-          displayName: formData.name
-        });
+      if (error) {
+        setErrorMsg(getErrorMessage(error.message));
+        return;
+      }
 
-        // 2. Save User Profile to Firestore (Persistent Storage)
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
-          name: formData.name,
-          phone: formData.phone,
-          email: formData.email,
-          role: 'user',
-          createdAt: new Date().toISOString()
-        }, { merge: true });
+      if (data.user) {
+        // Check if user already exists (identities is empty = email already registered)
+        if (data.user.identities && data.user.identities.length === 0) {
+          setErrorMsg('Email sudah terdaftar. Silakan login atau gunakan email lain.');
+          await supabase.auth.signOut();
+          return;
+        }
 
-        // 3. Backup to LocalStorage (Just in case)
+        // Try client-side upsert (as backup, trigger should handle this automatically)
+        // This runs while user is still authenticated from signUp
+        try {
+          await supabase.from('users').upsert({
+            id: data.user.id,
+            name: formData.name,
+            phone: formData.phone,
+            email: formData.email,
+            role: 'user',
+            is_admin: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'id' });
+        } catch (_upsertErr) {
+          // Non-fatal: DB trigger will handle this if client-side fails
+          console.warn('Client upsert skipped (trigger will handle):', _upsertErr);
+        }
+
+        // Backup to localStorage
         const profileData = {
           name: formData.name,
           phone: formData.phone,
@@ -125,21 +135,17 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         };
         localStorage.setItem(`user_profile_${formData.email}`, JSON.stringify(profileData));
 
-        // 4. Send Verification
-        await sendEmailVerification(userCredential.user);
-
-        // 5. Force Logout
-        await signOut(auth);
-
+        // Force sign out (user must verify email before logging in)
+        await supabase.auth.signOut();
         setVerificationSent(true);
       }
-    } catch (error) {
-      const firebaseError = error as FireAuthError;
-      setErrorMsg(getErrorMessage(firebaseError.code || 'unknown'));
+    } catch (error: any) {
+      setErrorMsg(getErrorMessage(error.message || 'unknown'));
     } finally {
       setLoading(false);
     }
   };
+
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,11 +160,16 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
 
     try {
-      await sendPasswordResetEmail(auth, formData.email);
-      setSuccessMsg(`Link reset password telah dikirim ke ${formData.email}`);
-    } catch (error) {
-      const firebaseError = error as FireAuthError;
-      setErrorMsg(getErrorMessage(firebaseError.code || 'unknown'));
+      const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
+        redirectTo: `${window.location.origin}${Page.LOGIN}`,
+      });
+      if (error) {
+        setErrorMsg(getErrorMessage(error.message));
+      } else {
+        setSuccessMsg(`Link reset password telah dikirim ke ${formData.email}`);
+      }
+    } catch (error: any) {
+      setErrorMsg(getErrorMessage(error.message || 'unknown'));
     } finally {
       setLoading(false);
     }
@@ -169,22 +180,19 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setErrorMsg('');
 
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      if (result.user) {
-        // Create/Update user doc in Firestore for Google Login too
-        await setDoc(doc(db, 'users', result.user.uid), {
-          name: result.user.displayName,
-          email: result.user.email,
-          lastLogin: new Date().toISOString()
-        }, { merge: true });
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+        }
+      });
+      if (error) {
+        setErrorMsg(getErrorMessage(error.message));
+        setLoading(false);
       }
-
-      alert('Berhasil masuk dengan Google!');
-      if (onLoginSuccess) onLoginSuccess();
-    } catch (error) {
-      const firebaseError = error as FireAuthError;
-      setErrorMsg(getErrorMessage(firebaseError.code || 'unknown'));
-    } finally {
+      // On success, Supabase redirects back. onAuthStateChange in App.tsx will pick it up.
+    } catch (error: any) {
+      setErrorMsg(getErrorMessage(error.message || 'unknown'));
       setLoading(false);
     }
   };
@@ -203,11 +211,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             Silakan cek kotak masuk atau folder spam Anda, lalu verifikasi akun sebelum login.
           </p>
           <button
-            onClick={() => {
-              setVerificationSent(false);
-              setMode('LOGIN');
-              resetForm();
-            }}
+            onClick={() => { setVerificationSent(false); setMode('LOGIN'); resetForm(); }}
             className="w-full bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-orange-600 transition-all"
           >
             Kembali ke Login
@@ -258,7 +262,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 handleForgotPassword
           }>
 
-            {/* REGISTER FIELDS - SIMPLIFIED */}
+            {/* REGISTER FIELDS */}
             {mode === 'REGISTER' && (
               <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                 <div>
@@ -286,7 +290,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               </div>
             )}
 
-            {/* Email Field (All Modes) */}
+            {/* Email Field */}
             <div className={mode === 'REGISTER' ? 'pt-0' : 'pt-2'}>
               <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Email</label>
               <input
@@ -299,7 +303,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               />
             </div>
 
-            {/* Password Field (Login & Register Only) */}
+            {/* Password Field */}
             {mode !== 'FORGOT_PASSWORD' && (
               <div>
                 <div className="flex justify-between items-center mb-2">
@@ -316,7 +320,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 </div>
                 <div className="relative">
                   <input
-                    type={showPassword ? "text" : "password"}
+                    type={showPassword ? 'text' : 'password'}
                     required
                     className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
                     placeholder="••••••••"
@@ -327,7 +331,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
-                    aria-label={showPassword ? "Sembunyikan password" : "Lihat password"}
+                    aria-label={showPassword ? 'Sembunyikan password' : 'Lihat password'}
                   >
                     {showPassword ? (
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
@@ -343,8 +347,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             <button
               type="submit"
               disabled={loading}
-              className={`w-full bg-orange-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 mt-6 ${loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-orange-600'
-                }`}
+              className={`w-full bg-orange-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 mt-6 ${loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-orange-600'}`}
             >
               {loading && (
                 <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
@@ -409,16 +412,13 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
               <div className="mt-8 text-center">
                 <p className="text-sm font-medium text-gray-500">
-                  {mode === 'LOGIN' ? "Belum punya akun? " : "Sudah punya akun? "}
+                  {mode === 'LOGIN' ? 'Belum punya akun? ' : 'Sudah punya akun? '}
                   <button
                     type="button"
-                    onClick={() => {
-                      setMode(mode === 'LOGIN' ? 'REGISTER' : 'LOGIN');
-                      resetForm();
-                    }}
+                    onClick={() => { setMode(mode === 'LOGIN' ? 'REGISTER' : 'LOGIN'); resetForm(); }}
                     className="text-orange-500 font-bold hover:text-orange-600 transition-colors hover:underline"
                   >
-                    {mode === 'LOGIN' ? "Daftar Sekarang" : "Masuk Disini"}
+                    {mode === 'LOGIN' ? 'Daftar Sekarang' : 'Masuk Disini'}
                   </button>
                 </p>
               </div>
