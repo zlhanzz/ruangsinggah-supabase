@@ -51,6 +51,15 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
 
   useEffect(() => {
     let timer: any;
+    
+    // Initial calculation immediately when currentOrder changes
+    if (currentOrder && currentOrder.created_at) {
+      const createdMs = new Date(currentOrder.created_at).getTime();
+      const diffSecs = Math.floor((new Date().getTime() - createdMs) / 1000);
+      const remaining = 10800 - diffSecs;
+      setTimeLeft(remaining > 0 ? remaining : 0);
+    }
+
     if (currentOrder && currentOrder.status !== 'paid' && currentOrder.status !== 'expired') {
       timer = setInterval(() => {
         const createdMs = new Date(currentOrder.created_at).getTime();
@@ -70,7 +79,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
       timer = setInterval(() => {
         setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
       }, 1000);
-    } else if (currentOrder.status === 'expired') {
+    } else if (currentOrder?.status === 'expired') {
       setTimeLeft(0);
     }
     return () => { if (timer) clearInterval(timer); };
@@ -191,7 +200,14 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
       const result = await response.json();
       console.log("[DEBUG] createPakasirPayment Result:", result);
       
-      if (!response.ok) throw new Error(result.message || 'Gagal membuat pembayaran');
+      if (!response.ok) {
+        if (response.status === 409) {
+          setError(result.message);
+          setIsProcessing(false);
+          return;
+        }
+        throw new Error(result.message || 'Gagal membuat pembayaran');
+      }
 
       setCurrentOrder(result.order);
       setDirectData(result.directPayment);

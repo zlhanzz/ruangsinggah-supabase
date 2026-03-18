@@ -296,6 +296,42 @@ export async function updateTransactionStatus(
   }
 }
 
+export async function deleteTransaction(transactionId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized: User not logged in.');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Unauthorized: User is not an admin.');
+
+  const { error } = await supabase
+    .from('transactions')
+    .delete()
+    .eq('id', transactionId);
+
+  if (error) {
+    console.error('Error deleting transaction:', error);
+    throw new Error(error.message);
+  }
+}
+
+export async function deleteTransactions(transactionIds: string[]): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized: User not logged in.');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Unauthorized: User is not an admin.');
+
+  const { error } = await supabase
+    .from('transactions')
+    .delete()
+    .in('id', transactionIds);
+
+  if (error) {
+    console.error('Error deleting multiple transactions:', error);
+    throw new Error(error.message);
+  }
+}
+
 export async function addPropertyWithMedia(
   kostData: Partial<Kost>,
   imageFiles: File[],

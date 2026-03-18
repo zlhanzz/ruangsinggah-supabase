@@ -526,7 +526,44 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
     let finalAmount = 0;
     let order: any = null;
 
-    if (existingOrderId) {
+    // Check for existing pending orders to prevent duplicates and handle expiration
+    if (!existingOrderId) {
+      const { data: existingPending, error: fetchPendingErr } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('product_id', productId)
+        .eq('product_type', productType)
+        .eq('status', 'pending');
+
+      if (!fetchPendingErr && existingPending && existingPending.length > 0) {
+        const now = new Date().getTime();
+        for (const pendingOrder of existingPending) {
+          const createdTime = new Date(pendingOrder.created_at).getTime();
+          const diffSecs = Math.floor((now - createdTime) / 1000);
+          
+          if (diffSecs >= 10800) {
+            console.log(`CREATE_PAYMENT: Marking expired order ${pendingOrder.id}`);
+            await supabase.from('transactions').update({ status: 'expired' }).eq('id', pendingOrder.id);
+          } else {
+            // Still active!
+            if (method && pendingOrder.payment_method === method) {
+              res.status(409).send({ 
+                message: 'Anda sudah memiliki pesanan aktif untuk produk ini dengan metode pembayaran yang sama. Silakan selesaikan pembayaran tersebut atau tunggu hingga kadaluarsa.' 
+              });
+              return;
+            }
+            // Resume the existing order
+            console.log(`CREATE_PAYMENT: Resuming existing active order: ${pendingOrder.id}`);
+            order = pendingOrder;
+            finalAmount = Number(order.amount);
+            break; 
+          }
+        }
+      }
+    }
+
+    if (existingOrderId && !order) {
         console.log(`CREATE_PAYMENT: Reusing existing order: ${existingOrderId}`);
         const { data: extOrder, error: extError } = await supabase
           .from('transactions')
@@ -534,9 +571,10 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
           .eq('id', existingOrderId)
           .single();
         if (extError || !extOrder) throw new Error('Order lama tidak ditemukan.');
+        if (extOrder.status === 'expired') throw new Error('Sesi pembayaran ini telah kadaluarsa (3 jam). Silakan buat pesanan baru.');
         order = extOrder;
         finalAmount = Number(order.amount);
-    } else {
+    } else if (!order) {
         // SECURITY: Fetch authoritative price from DB based on productType
         if (productType === 'database') {
             const { data: dbProd, error: dbError } = await supabase

@@ -5,6 +5,7 @@ import { FORMAT_CURRENCY } from '../constants';
 import { supabase } from '../supabase';
 import {
     getAdminTransactions, updateTransactionStatus, AdminTransaction,
+    deleteTransaction, deleteTransactions,
     getAllDatabases, addDatabaseProduct, updateDatabaseProduct, deleteDatabase
 } from '../adminService';
 import Listings from './Listings';
@@ -324,11 +325,42 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
         setLoading(true);
         try {
             const data = await getAdminTransactions();
-            // Filter only database transactions if needed, although service already does it if parameter is passed
-            // For now, let's filter purely by product_type === 'database' to be safe
-            setDbTransactions(data.filter(t => t.product_type === 'database'));
+            const dbTrx = data.filter(t => t.product_type === 'database');
+            setDbTransactions(dbTrx);
         } catch (error) {
             console.error("Gagal memuat transaksi database", error);
+        } finally {
+            setLoading(false);
+            setSelectedDbTrxIds([]);
+        }
+    };
+
+    const handleDeleteTransaction = async (id: string) => {
+        if (!window.confirm('Apakah Anda yakin ingin menghapus riwayat transaksi ini? Data yang dihapus tidak dapat dikembalikan.')) return;
+        
+        setLoading(true);
+        try {
+            await deleteTransaction(id);
+            alert('Transaksi berhasil dihapus');
+            loadDbTransactions();
+        } catch (error: any) {
+            alert('Gagal menghapus transaksi: ' + (error.message || 'Terjadi kesalahan'));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleBulkDeleteTransactions = async () => {
+        if (selectedDbTrxIds.length === 0) return;
+        if (!window.confirm(`Apakah Anda yakin ingin menghapus ${selectedDbTrxIds.length} transaksi terpilih? Data yang dihapus tidak dapat dikembalikan.`)) return;
+
+        setLoading(true);
+        try {
+            await deleteTransactions(selectedDbTrxIds);
+            alert(`${selectedDbTrxIds.length} transaksi berhasil dihapus`);
+            loadDbTransactions();
+        } catch (error: any) {
+            alert('Gagal menghapus transaksi: ' + (error.message || 'Terjadi kesalahan'));
         } finally {
             setLoading(false);
         }
@@ -1327,6 +1359,7 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
         { id: 'MTR-002', name: 'Ibu Sari Dewi', phone: '6285678901234', email: 'sari.dewi@email.com', date: '2026-02-22', status: 'Menunggu', city: 'Depok', propertyCount: 1, businessType: 'Kontrakan' },
     ]);
     const [dbTransactions, setDbTransactions] = useState<AdminTransaction[]>([]);
+    const [selectedDbTrxIds, setSelectedDbTrxIds] = useState<string[]>([]);
 
     // MANUAL ADDITION MODALS STATE
     const [isAddingManualRent, setIsAddingManualRent] = useState(false);
@@ -2378,17 +2411,53 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
 
     const renderDbTransactions = () => (
         <div className="space-y-6">
-            <div className="flex justify-between items-center mb-2">
-                <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Manajemen Pembelian Database</h2>
-                <button onClick={() => setIsAddingManualDb(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 shrink-0">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                    Tambah Manual
-                </button>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
+                <div>
+                    <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Manajemen Pembelian Database</h2>
+                    <p className="text-gray-500 text-sm mt-1">Total {dbTransactions.length} transaksi tercatat.</p>
+                </div>
+                <div className="flex gap-2 w-full md:w-auto">
+                    {selectedDbTrxIds.length > 0 && (
+                        <button 
+                            onClick={handleBulkDeleteTransactions}
+                            className="bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2.5 rounded-xl text-sm font-bold border border-red-200 shadow-sm transition-all active:scale-95 flex items-center gap-2"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            Hapus Terpilih ({selectedDbTrxIds.length})
+                        </button>
+                    )}
+                    <button onClick={() => setIsAddingManualDb(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 shrink-0">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                        Tambah Manual
+                    </button>
+                </div>
             </div>
+
+            {dbTransactions.length > 0 && (
+                <div className="flex items-center gap-2 px-1 py-2">
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                        <input 
+                            type="checkbox" 
+                            className="w-5 h-5 text-blue-600 rounded-lg border-gray-300 focus:ring-blue-500 transition-all cursor-pointer"
+                            checked={dbTransactions.length > 0 && selectedDbTrxIds.length === dbTransactions.length}
+                            onChange={(e) => {
+                                if (e.target.checked) {
+                                    setSelectedDbTrxIds(dbTransactions.map(t => t.id));
+                                } else {
+                                    setSelectedDbTrxIds([]);
+                                }
+                            }}
+                        />
+                        <span className="text-sm font-black text-gray-500 uppercase tracking-widest group-hover:text-blue-600 transition-colors">Pilih Semua</span>
+                    </label>
+                </div>
+            )}
+
             <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 flex gap-3 mb-2">
                 <span className="text-blue-500 shrink-0">📦</span>
                 <p className="text-sm font-medium text-blue-900">Transaksi via <strong>Transfer Bank</strong> perlu verifikasi bukti pembayaran sebelum akses database diberikan kepada pembeli.</p>
             </div>
+            
             <div className="grid grid-cols-1 gap-6">
                 {dbTransactions.length === 0 ? (
                     <div className="bg-white border-2 border-dashed border-gray-100 rounded-3xl p-12 text-center">
@@ -2413,6 +2482,8 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
                     // Status mapping
                     const displayStatus = trx.status === 'paid' ? 'Selesai' : trx.status === 'pending' ? 'Menunggu' : 'Dibatalkan';
                     const isManual = (paymentMethod || '').toLowerCase().includes('manual') || (paymentMethod || '').toLowerCase().includes('transfer');
+                    
+                    const isSelected = selectedDbTrxIds.includes(trx.id);
 
                     // Invoice data
                     const invoiceData = {
@@ -2431,9 +2502,26 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
                     };
 
                     return (
-                        <div key={trx.id} className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row gap-6 hover:shadow-md transition-shadow relative overflow-hidden">
+                        <div key={trx.id} className={`bg-white border ${isSelected ? 'border-blue-400 ring-2 ring-blue-50 shadow-md' : 'border-gray-100 shadow-sm'} rounded-2xl p-6 flex flex-col md:flex-row gap-6 hover:shadow-md transition-all relative overflow-hidden group`}>
                             {trx.status === 'paid' && <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/10 rounded-bl-full -z-0"></div>}
-                            <div className="flex-1 space-y-4 relative z-10">
+                            
+                            {/* Checkbox Overlay/Side */}
+                            <div className="absolute top-6 left-6 z-20">
+                                <input 
+                                    type="checkbox" 
+                                    className="w-6 h-6 text-blue-600 rounded-lg border-gray-300 focus:ring-blue-500 transition-all cursor-pointer shadow-sm"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                        if (e.target.checked) {
+                                            setSelectedDbTrxIds([...selectedDbTrxIds, trx.id]);
+                                        } else {
+                                            setSelectedDbTrxIds(selectedDbTrxIds.filter(id => id !== trx.id));
+                                        }
+                                    }}
+                                />
+                            </div>
+
+                            <div className="flex-1 space-y-4 relative z-10 pl-10">
                                 <div className="flex flex-wrap justify-between items-start border-b border-gray-50 pb-4 gap-2">
                                     <div>
                                         <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -2443,7 +2531,16 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
                                         </div>
                                         <p className="font-medium text-gray-500 text-sm">Pembeli: <button onClick={() => setViewingDbProfile({ ...buyer, ...metadata, dbName, dbType, dbCity, dbYear, status: displayStatus, id: trx.id, date: createdAt })} className="font-black text-orange-600 hover:text-orange-700 hover:underline underline-offset-2 transition-colors text-base">{buyer.name}</button></p>
                                     </div>
-                                    <span className={`inline-flex px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-lg border ${trx.status === 'pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : trx.status === 'paid' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{displayStatus}</span>
+                                    <div className="flex items-center gap-3">
+                                        <span className={`inline-flex px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-lg border ${trx.status === 'pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : trx.status === 'paid' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{displayStatus}</span>
+                                        <button 
+                                            onClick={() => handleDeleteTransaction(trx.id)}
+                                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95"
+                                            title="Hapus Transaksi"
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                     <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nama Database</p><p className="text-sm font-bold text-gray-900 mt-0.5">{dbName}</p></div>
@@ -2486,7 +2583,7 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
                                 )}
                                 <button onClick={() => setViewingDbInvoice(invoiceData)} className="w-full bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                    Lihat Invoice
+                                    Invoice Details
                                 </button>
                                 <button onClick={() => window.open(`https://wa.me/${buyer.phone}?text=${encodeURIComponent(`Halo ${buyer.name}, Admin RuangSinggah. Konfirmasi pesanan database (${trx.id.substring(0, 8)}) - ${dbName}. Mohon bantuannya.`)}`, '_blank')} className="w-full bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
                                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.711.956 2.873.956 3.182 0 5.768-2.585 5.77-5.765.001-3.181-2.586-5.768-5.768-5.768zm3.333 8.33c-.15.424-.877.817-1.229.845-.306.024-.652.128-2.146-.464-1.801-.715-2.956-2.548-3.047-2.671-.09-.122-.727-.968-.727-1.844 0-.875.452-1.304.613-1.472.161-.168.351-.21.468-.21.117 0 .234.004.336.008.109.006.255-.044.398.303.151.365.518 1.264.565 1.356.046.091.077.198.016.321-.061.121-.092.197-.184.304-.092.107-.193.226-.275.319-.092.105-.188.22-.083.402.105.183.468.775 1.002 1.25.688.614 1.27.8 1.455.892.183.092.29.077.397-.038.106-.115.46-.537.583-.721.122-.184.244-.154.409-.092.165.061 1.042.492 1.221.583.179.092.298.138.341.214.043.076.043.447-.107.871z" /></svg>
