@@ -13,6 +13,39 @@ export interface BasicPropertyInfo extends Partial<Kost> {
   tiktokUrl?: string;
 }
 
+export interface AdminTransaction {
+  id: string;
+  user_id: string;
+  product_id: string;
+  product_type: string;
+  amount: number;
+  status: string;
+  payment_method: string;
+  pakasir_order_id: string;
+  pakasir_link: string;
+  metadata: any;
+  created_at: string;
+  user: {
+    name: string;
+    email: string;
+    phone: string;
+    photo_url?: string;
+    occupation?: string;
+    institution?: string;
+    gender?: string;
+    religion?: string;
+    relationship_status?: string;
+  };
+  database?: {
+    campus: string;
+    city: string;
+    area: string;
+    file_type: string;
+    file_name: string;
+    price: number;
+  };
+}
+
 // ---- HELPERS ----
 
 // Check if user is admin by querying the users table
@@ -182,6 +215,85 @@ export async function getAdminProperties(): Promise<BasicPropertyInfo[]> {
       isVerified: row.is_verified,
     } as BasicPropertyInfo;
   });
+}
+
+export async function getAdminTransactions(productType?: string): Promise<AdminTransaction[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  let query = supabase
+    .from('transactions')
+    .select(`
+      *,
+      user:user_id (
+        name,
+        email,
+        phone,
+        photo_url,
+        occupation,
+        institution,
+        gender,
+        religion,
+        relationship_status
+      )
+    `)
+    .order('created_at', { ascending: false });
+
+  if (productType) {
+    query = query.eq('product_type', productType);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  if (!data) return [];
+
+  // Manual join for database details if applicable
+  const transactions = data as any[];
+  const dbIds = transactions
+    .filter(t => t.product_type === 'database' && t.product_id)
+    .map(t => t.product_id);
+
+  if (dbIds.length > 0) {
+    const { data: dbDetails, error: dbError } = await supabase
+      .from('available_databases')
+      .select('id, campus, city, area, file_type, file_name, price')
+      .in('id', dbIds);
+
+    if (!dbError && dbDetails) {
+      const dbMap = new Map(dbDetails.map(db => [db.id, db]));
+      transactions.forEach(t => {
+        if (t.product_type === 'database' && t.product_id) {
+          t.database = dbMap.get(t.product_id) || { id: t.product_id, campus: '-', city: '-', area: '-', file_type: '-', file_name: '-', price: 0 };
+        }
+      });
+    }
+  }
+
+  return transactions as AdminTransaction[];
+}
+
+export async function updateTransactionStatus(
+  transactionId: string,
+  newStatus: string
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized: User not logged in.');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Unauthorized: User is not an admin.');
+
+  const { error } = await supabase
+    .from('transactions')
+    .update({ status: newStatus, updated_at: new Date().toISOString() })
+    .eq('id', transactionId);
+
+  if (error) {
+    console.error('Error updating transaction status:', error);
+    throw new Error(error.message);
+  }
 }
 
 export async function addPropertyWithMedia(

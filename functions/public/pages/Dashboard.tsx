@@ -4,7 +4,7 @@ import { Kost, RoomType, RoomPricing, PricingPeriod, DatabaseProduct } from '../
 import { FORMAT_CURRENCY } from '../constants';
 import { supabase } from '../supabase';
 import {
-    getAdminProperties, updatePropertyStatus, deleteProperty, addPropertyWithMedia, updatePropertyWithMedia, BasicPropertyInfo,
+    getAdminTransactions, updateTransactionStatus, AdminTransaction,
     getAllDatabases, addDatabaseProduct, updateDatabaseProduct, deleteDatabase
 } from '../adminService';
 import Listings from './Listings';
@@ -320,10 +320,25 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
         }
     };
 
+    const loadDbTransactions = async () => {
+        setLoading(true);
+        try {
+            const data = await getAdminTransactions();
+            // Filter only database transactions if needed, although service already does it if parameter is passed
+            // For now, let's filter purely by product_type === 'database' to be safe
+            setDbTransactions(data.filter(t => t.product_type === 'database'));
+        } catch (error) {
+            console.error("Gagal memuat transaksi database", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (activeMenu === 'properties') loadProperties();
         if (activeMenu === 'databases') loadDatabases();
         if (activeMenu === 'complaints') loadComplaints();
+        if (activeMenu === 'transactions_db') loadDbTransactions();
     }, [isAdmin, activeMenu]);
 
     // --- PROPERTY HANDLERS ---
@@ -1311,60 +1326,7 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
         { id: 'MTR-001', name: 'Pak Haji Rohim', phone: '6281234568900', email: 'haji.rohim@email.com', date: '2026-02-21', status: 'Diproses', city: 'Bogor', propertyCount: 3, businessType: 'Kos-kosan' },
         { id: 'MTR-002', name: 'Ibu Sari Dewi', phone: '6285678901234', email: 'sari.dewi@email.com', date: '2026-02-22', status: 'Menunggu', city: 'Depok', propertyCount: 1, businessType: 'Kontrakan' },
     ]);
-    const [dummyDbOrders, setDummyDbOrders] = useState<any[]>([
-        {
-            id: 'DB-ORD-001',
-            // Profil Pembeli
-            name: 'Kevin Pratama',
-            email: 'kevin.pratama@gmail.com',
-            phone: '6281377223344',
-            occupation: 'Mahasiswa S2',
-            institution: 'Universitas Gadjah Mada',
-            gender: 'Pria',
-            religion: 'Kristen Protestan',
-            relationshipStatus: 'Single',
-            profileAddress: 'Jl. Kaliurang KM 5, Sleman, Yogyakarta 55281',
-            photoURL: 'https://i.pravatar.cc/150?img=7',
-            // Detail Pembelian
-            dbName: 'Data Mahasiswa Kost Bogor Raya 2024',
-            dbType: 'Data Mahasiswa',
-            dbCity: 'Bogor',
-            dbYear: '2024',
-            date: '2026-02-24',
-            status: 'Menunggu',
-            amount: 150000,
-            platformFee: 5000,
-            invoiceId: 'INV-DB-001',
-            paymentType: 'transfer',
-            paymentMethod: 'Transfer Bank Mandiri',
-            transferProofUrl: 'https://images.unsplash.com/photo-1554772954-84b39f8e1b49?w=600&q=80',
-        },
-        {
-            id: 'DB-ORD-002',
-            name: 'Anisa Rahayu',
-            email: 'anisa.rahayu@yahoo.com',
-            phone: '6285611122233',
-            occupation: 'Karyawan Swasta',
-            institution: 'PT. Startup Digital Indonesia',
-            gender: 'Wanita',
-            religion: 'Islam',
-            relationshipStatus: 'Single',
-            profileAddress: 'Jl. TB Simatupang No. 48, Pasar Minggu, Jakarta Selatan 12520',
-            photoURL: 'https://i.pravatar.cc/150?img=47',
-            dbName: 'Database Pencari Kost Depok 2024 – Semester Genap',
-            dbType: 'Data Pencari Kost',
-            dbCity: 'Depok',
-            dbYear: '2024',
-            date: '2026-02-23',
-            status: 'Selesai',
-            amount: 120000,
-            platformFee: 5000,
-            invoiceId: 'INV-DB-002',
-            paymentType: 'gateway',
-            paymentMethod: 'Midtrans - GoPay',
-            transferProofUrl: null,
-        },
-    ]);
+    const [dbTransactions, setDbTransactions] = useState<AdminTransaction[]>([]);
 
     // MANUAL ADDITION MODALS STATE
     const [isAddingManualRent, setIsAddingManualRent] = useState(false);
@@ -1403,28 +1365,10 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
         setManualRentForm({});
     };
 
-    const handleManualDbSubmit = (e: React.FormEvent) => {
+    const handleManualDbSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const newOrder = {
-            id: `DB-MAN-${Math.floor(Math.random() * 1000)}`,
-            name: manualDbForm.name || '-',
-            phone: manualDbForm.phone || '-',
-            email: manualDbForm.email || '-',
-            dbName: manualDbForm.dbName || '-',
-            dbType: manualDbForm.dbType || '-',
-            dbCity: manualDbForm.dbCity || '-',
-            dbYear: manualDbForm.dbYear || new Date().getFullYear().toString(),
-            paymentType: 'transfer',
-            paymentMethod: 'Manual Input',
-            date: manualDbForm.date || new Date().toISOString().split('T')[0],
-            status: manualDbForm.status || 'Selesai',
-            amount: Number(manualDbForm.amount) || 0,
-            platformFee: 0,
-            invoiceId: `INV-DB-MAN-${Math.floor(Math.random() * 1000)}`,
-        };
-        setDummyDbOrders([newOrder, ...dummyDbOrders]);
+        alert('Fitur tambah manual dinonaktifkan sementara. Transaksi akan muncul otomatis saat ada pembelian.');
         setIsAddingManualDb(false);
-        setManualDbForm({});
     };
 
     const handleManualVerifSubmit = (e: React.FormEvent) => {
@@ -2446,62 +2390,112 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
                 <p className="text-sm font-medium text-blue-900">Transaksi via <strong>Transfer Bank</strong> perlu verifikasi bukti pembayaran sebelum akses database diberikan kepada pembeli.</p>
             </div>
             <div className="grid grid-cols-1 gap-6">
-                {dummyDbOrders.map((ordr: any) => (
-                    <div key={ordr.id} className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row gap-6 hover:shadow-md transition-shadow relative overflow-hidden">
-                        {ordr.status === 'Selesai' && <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/10 rounded-bl-full -z-0"></div>}
-                        <div className="flex-1 space-y-4 relative z-10">
-                            <div className="flex flex-wrap justify-between items-start border-b border-gray-50 pb-4 gap-2">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                        <span className="bg-blue-100 text-blue-700 font-bold px-2 py-1 rounded text-[10px] uppercase tracking-wider">{ordr.id}</span>
-                                        <span className="text-xs text-gray-400 font-medium">Order: {ordr.date}</span>
-                                        <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${ordr.paymentType === 'gateway' ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-700'}`}>{ordr.paymentType === 'gateway' ? '⚡ Gateway' : '🏦 Transfer Manual'}</span>
-                                    </div>
-                                    <p className="font-medium text-gray-500 text-sm">Pembeli: <button onClick={() => setViewingDbProfile(ordr)} className="font-black text-orange-600 hover:text-orange-700 hover:underline underline-offset-2 transition-colors text-base">{ordr.name}</button></p>
-                                </div>
-                                <span className={`inline-flex px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-lg border ${ordr.status === 'Menunggu' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : ordr.status === 'Selesai' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{ordr.status}</span>
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nama Database</p><p className="text-sm font-bold text-gray-900 mt-0.5">{ordr.dbName}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jenis Data</p><p className="text-sm font-bold text-blue-600 mt-0.5">{ordr.dbType}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Kota / Tahun</p><p className="text-sm font-bold text-gray-900 mt-0.5">{ordr.dbCity} · {ordr.dbYear}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tanggal Beli</p><p className="text-sm font-bold text-gray-900 mt-0.5">{ordr.date}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Metode Bayar</p><p className={`text-sm font-bold mt-0.5 ${ordr.paymentType === 'gateway' ? 'text-blue-600' : 'text-amber-600'}`}>{ordr.paymentMethod}</p></div>
-                            </div>
-                        </div>
-                        <div className="flex flex-col gap-2.5 md:w-52 shrink-0 border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-6 relative z-10">
-                            <div className="mb-1">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Total Tagihan</p>
-                                <p className="text-xl font-black text-orange-500 text-right">{FORMAT_CURRENCY(ordr.amount + ordr.platformFee)}</p>
-                                <p className="text-[11px] text-gray-400 text-right">{ordr.invoiceId}</p>
-                            </div>
-                            {ordr.paymentType === 'transfer' && ordr.transferProofUrl && (
-                                <button onClick={() => setViewingDbProof({ id: ordr.id, name: ordr.name, proofUrl: ordr.transferProofUrl })} className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                    Lihat Bukti Transfer
-                                </button>
-                            )}
-                            {ordr.status === 'Menunggu' && (
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button onClick={() => alert(`Order ${ordr.id} dikonfirmasi! Akses database akan segera dikirim ke ${ordr.email}.`)} className="w-full bg-green-500 hover:bg-green-600 text-white py-2.5 rounded-xl text-xs font-bold active:scale-95 flex justify-center items-center gap-1">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Terima
-                                    </button>
-                                    <button onClick={() => { if (window.confirm(`Tolak order ${ordr.id}?`)) alert('Order ditolak.'); }} className="w-full bg-red-50 hover:bg-red-100 text-red-600 py-2.5 rounded-xl text-xs font-bold border border-red-200 active:scale-95 flex justify-center items-center gap-1">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>Tolak
-                                    </button>
-                                </div>
-                            )}
-                            <button onClick={() => setViewingDbInvoice(ordr)} className="w-full bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                Lihat Invoice
-                            </button>
-                            <button onClick={() => window.open(`https://wa.me/${ordr.phone}?text=${encodeURIComponent(`Halo ${ordr.name}, Admin RuangSinggah. Konfirmasi pesanan database (${ordr.id}) - ${ordr.dbName}. Mohon bantuannya.`)}`, '_blank')} className="w-full bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.711.956 2.873.956 3.182 0 5.768-2.585 5.77-5.765.001-3.181-2.586-5.768-5.768-5.768zm3.333 8.33c-.15.424-.877.817-1.229.845-.306.024-.652.128-2.146-.464-1.801-.715-2.956-2.548-3.047-2.671-.09-.122-.727-.968-.727-1.844 0-.875.452-1.304.613-1.472.161-.168.351-.21.468-.21.117 0 .234.004.336.008.109.006.255-.044.398.303.151.365.518 1.264.565 1.356.046.091.077.198.016.321-.061.121-.092.197-.184.304-.092.107-.193.226-.275.319-.092.105-.188.22-.083.402.105.183.468.775 1.002 1.25.688.614 1.27.8 1.455.892.183.092.29.077.397-.038.106-.115.46-.537.583-.721.122-.184.244-.154.409-.092.165.061 1.042.492 1.221.583.179.092.298.138.341.214.043.076.043.447-.107.871z" /></svg>
-                                Follow Up WA
-                            </button>
-                        </div>
+                {dbTransactions.length === 0 ? (
+                    <div className="bg-white border-2 border-dashed border-gray-100 rounded-3xl p-12 text-center">
+                        <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">📭</div>
+                        <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2">Belum Ada Transaksi</h3>
+                        <p className="text-gray-500 max-w-sm mx-auto font-medium">Semua pembelian database melalui website akan otomatis muncul di sini secara real-time.</p>
                     </div>
-                ))}
+                ) : dbTransactions.map((trx: AdminTransaction) => {
+                    const metadata = trx.metadata || {};
+                    const buyer = trx.user || { name: 'Unknown', email: '-', phone: '-' };
+                    const dbInfo = trx.database || { campus: '', city: '', area: '', file_type: '', price: 0 };
+                    const createdAtDate = new Date(trx.created_at);
+                    const createdAt = createdAtDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+                    // Map fields based on user feedback
+                    const dbName = metadata.dbName || (dbInfo.campus ? `${dbInfo.campus} - ${dbInfo.city}` : '-');
+                    const dbType = metadata.dbType || (dbInfo.file_type === 'link' ? 'Link Drive/Excel' : dbInfo.file_type === 'upload' ? 'File PDF/Original' : '-');
+                    const dbCity = metadata.dbCity || dbInfo.city || '-';
+                    const dbYear = metadata.dbYear || createdAtDate.getFullYear().toString();
+                    const paymentMethod = trx.payment_method || (trx.payment_method === null ? 'Belum dipilih' : '-');
+
+                    // Status mapping
+                    const displayStatus = trx.status === 'paid' ? 'Selesai' : trx.status === 'pending' ? 'Menunggu' : 'Dibatalkan';
+                    const isManual = (paymentMethod || '').toLowerCase().includes('manual') || (paymentMethod || '').toLowerCase().includes('transfer');
+
+                    // Invoice data
+                    const invoiceData = {
+                        ...trx,
+                        ...metadata,
+                        ...buyer,
+                        dbName,
+                        dbType,
+                        dbCity,
+                        dbYear,
+                        paymentMethod,
+                        date: createdAt,
+                        invoiceId: trx.pakasir_order_id || trx.id.substring(0, 12).toUpperCase(),
+                        amount: Number(trx.amount) || 0,
+                        platformFee: Number(metadata.platformFee) || 0
+                    };
+
+                    return (
+                        <div key={trx.id} className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row gap-6 hover:shadow-md transition-shadow relative overflow-hidden">
+                            {trx.status === 'paid' && <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/10 rounded-bl-full -z-0"></div>}
+                            <div className="flex-1 space-y-4 relative z-10">
+                                <div className="flex flex-wrap justify-between items-start border-b border-gray-50 pb-4 gap-2">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                            <span className="bg-blue-100 text-blue-700 font-bold px-2 py-1 rounded text-[10px] uppercase tracking-wider">{trx.id.substring(0, 8)}</span>
+                                            <span className="text-xs text-gray-400 font-medium">Dipesan: {createdAt}</span>
+                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${!isManual ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-700'}`}>{!isManual ? '⚡ Gateway' : '🏦 Transfer Manual'}</span>
+                                        </div>
+                                        <p className="font-medium text-gray-500 text-sm">Pembeli: <button onClick={() => setViewingDbProfile({ ...buyer, ...metadata, dbName, dbType, dbCity, dbYear, status: displayStatus, id: trx.id, date: createdAt })} className="font-black text-orange-600 hover:text-orange-700 hover:underline underline-offset-2 transition-colors text-base">{buyer.name}</button></p>
+                                    </div>
+                                    <span className={`inline-flex px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-lg border ${trx.status === 'pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : trx.status === 'paid' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{displayStatus}</span>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nama Database</p><p className="text-sm font-bold text-gray-900 mt-0.5">{dbName}</p></div>
+                                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jenis Data</p><p className="text-sm font-bold text-blue-600 mt-0.5">{dbType}</p></div>
+                                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Kota / Tahun</p><p className="text-sm font-bold text-gray-900 mt-0.5">{dbCity} · {dbYear}</p></div>
+                                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Order ID</p><p className="text-sm font-bold text-gray-900 mt-0.5">{trx.pakasir_order_id || trx.id.substring(0, 12)}</p></div>
+                                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Metode Bayar</p><p className={`text-sm font-bold mt-0.5 ${!isManual ? 'text-blue-600' : 'text-amber-600'}`}>{paymentMethod}</p></div>
+                                </div>
+                            </div>
+                            <div className="flex flex-col gap-2.5 md:w-52 shrink-0 border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-6 relative z-10">
+                                <div className="mb-1">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Total Tagihan</p>
+                                    <p className="text-xl font-black text-orange-500 text-right">{FORMAT_CURRENCY(trx.amount)}</p>
+                                </div>
+                                {isManual && metadata.transferProofUrl && (
+                                    <button onClick={() => setViewingDbProof({ id: trx.id, name: buyer.name, proofUrl: metadata.transferProofUrl })} className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                        Lihat Bukti Transfer
+                                    </button>
+                                )}
+                                {trx.status === 'pending' && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button onClick={async () => {
+                                            if (window.confirm('Warnai transaksi ini sebagai Selesai/Paid?')) {
+                                                await updateTransactionStatus(trx.id, 'paid');
+                                                loadDbTransactions();
+                                            }
+                                        }} className="w-full bg-green-500 hover:bg-green-600 text-white py-2.5 rounded-xl text-xs font-bold active:scale-95 flex justify-center items-center gap-1">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Terima
+                                        </button>
+                                        <button onClick={async () => {
+                                            if (window.confirm('Batalkan transaksi ini?')) {
+                                                await updateTransactionStatus(trx.id, 'cancelled');
+                                                loadDbTransactions();
+                                            }
+                                        }} className="w-full bg-red-50 hover:bg-red-100 text-red-600 py-2.5 rounded-xl text-xs font-bold border border-red-200 active:scale-95 flex justify-center items-center gap-1">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>Tolak
+                                        </button>
+                                    </div>
+                                )}
+                                <button onClick={() => setViewingDbInvoice(invoiceData)} className="w-full bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                    Lihat Invoice
+                                </button>
+                                <button onClick={() => window.open(`https://wa.me/${buyer.phone}?text=${encodeURIComponent(`Halo ${buyer.name}, Admin RuangSinggah. Konfirmasi pesanan database (${trx.id.substring(0, 8)}) - ${dbName}. Mohon bantuannya.`)}`, '_blank')} className="w-full bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.711.956 2.873.956 3.182 0 5.768-2.585 5.77-5.765.001-3.181-2.586-5.768-5.768-5.768zm3.333 8.33c-.15.424-.877.817-1.229.845-.306.024-.652.128-2.146-.464-1.801-.715-2.956-2.548-3.047-2.671-.09-.122-.727-.968-.727-1.844 0-.875.452-1.304.613-1.472.161-.168.351-.21.468-.21.117 0 .234.004.336.008.109.006.255-.044.398.303.151.365.518 1.264.565 1.356.046.091.077.198.016.321-.061.121-.092.197-.184.304-.092.107-.193.226-.275.319-.092.105-.188.22-.083.402.105.183.468.775 1.002 1.25.688.614 1.27.8 1.455.892.183.092.29.077.397-.038.106-.115.46-.537.583-.721.122-.184.244-.154.409-.092.165.061 1.042.492 1.221.583.179.092.298.138.341.214.043.076.043.447-.107.871z" /></svg>
+                                    Follow Up WA
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
             {viewingDbProfile && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setViewingDbProfile(null)}>
@@ -2557,9 +2551,9 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
                                 <div className="col-span-2"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nama Database</p><p className="font-bold text-gray-900">{viewingDbInvoice.dbName}</p></div>
                             </div>
                             <div className="border-t border-dashed border-gray-200 pt-4 space-y-2">
-                                <div className="flex justify-between text-sm"><span className="text-gray-600">Harga Database</span><span className="font-bold">{FORMAT_CURRENCY(viewingDbInvoice.amount)}</span></div>
-                                <div className="flex justify-between text-sm"><span className="text-gray-600">Biaya Platform</span><span className="font-bold">{FORMAT_CURRENCY(viewingDbInvoice.platformFee)}</span></div>
-                                <div className="flex justify-between text-sm font-black text-gray-900 border-t border-gray-100 pt-2"><span>Total Dibayar</span><span className="text-blue-600 text-base">{FORMAT_CURRENCY(viewingDbInvoice.amount + viewingDbInvoice.platformFee)}</span></div>
+                                <div className="flex justify-between text-sm"><span className="text-gray-600">Harga Database</span><span className="font-bold">{FORMAT_CURRENCY(viewingDbInvoice.amount || 0)}</span></div>
+                                <div className="flex justify-between text-sm"><span className="text-gray-600">Biaya Platform</span><span className="font-bold">{FORMAT_CURRENCY(viewingDbInvoice.platformFee || 0)}</span></div>
+                                <div className="flex justify-between text-sm font-black text-gray-900 border-t border-gray-100 pt-2"><span>Total Dibayar</span><span className="text-blue-600 text-base">{FORMAT_CURRENCY((viewingDbInvoice.amount || 0) + (viewingDbInvoice.platformFee || 0))}</span></div>
                             </div>
                             <div className={`rounded-xl p-3 flex gap-3 items-center ${viewingDbInvoice.paymentType === 'gateway' ? 'bg-blue-50 border border-blue-100' : 'bg-amber-50 border border-amber-100'}`}><span className="text-xl">{viewingDbInvoice.paymentType === 'gateway' ? '⚡' : '🏦'}</span><div><p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Metode</p><p className="font-bold text-gray-900 text-sm">{viewingDbInvoice.paymentMethod}</p></div></div>
                             <div className="flex gap-2 pt-1">

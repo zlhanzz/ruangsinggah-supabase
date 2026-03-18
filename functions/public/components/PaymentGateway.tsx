@@ -115,7 +115,21 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
             .eq('id', existingOrderId)
             .single();
           if (fetchErr) throw fetchErr;
-          setCurrentOrder(data as Transaction);
+          const order = data as Transaction;
+          setCurrentOrder(order);
+
+          // Restore payment method state so user doesn't have to re-select
+          const savedMethod = (order as any).payment_method || (order as any).metadata?.selected_method;
+          if (savedMethod) {
+            setSelectedMethod(savedMethod);
+            // If the payment was already created via Pakasir, restore the direct data from metadata
+            const savedDirectData = (order as any).metadata?.pakasir_response;
+            if (savedDirectData) {
+              setDirectData(savedDirectData);
+              setShowCheckout(true);
+            }
+            // If no direct data but method was set, we re-call the backend to re-create Pakasir payment
+          }
         } catch (err: any) {
           setError('Gagal memuat detail tagihan: ' + err.message);
         } finally {

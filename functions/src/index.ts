@@ -655,22 +655,83 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
               sender: { name: "RuangSinggah.id", email: "invoice@ruangsinggah.id" },
               to: [{ email: user.email, name: user.name || 'Pelanggan' }],
               subject: `Invoice Pembelian - ${productName}`,
-              htmlContent: `
-                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-                  <h2 style="color: #f97316;">Halo, ${user.name || 'Pelanggan'}!</h2>
-                  <p>Terima kasih atas pesanan Anda. Berikut adalah detail tagihan untuk <strong>${productName}</strong>.</p>
-                  <p>Silakan temukan dokumen PDF Invoice terlampir pada email ini.</p>
-                  
-                  <div style="background: #fff7ed; padding: 20px; border-radius: 12px; border: 1px solid #ffedd5; margin: 20px 0; text-align: center;">
-                    <p style="margin-top: 0; font-size: 15px; font-weight: bold; color: #9a3412;">
-                      Selesaikan payment sekarang sebelum kost-kost bagus area ini keburu full! Siapa cepat dia beruntung, buruan payment sekarang sebelum kehabisan.
-                    </p>
-                    <a href="https://ruangsinggah.id/payment-status/${order.id}" style="display: inline-block; background: #f97316; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; margin-top: 15px;">LANJUT KE PEMBAYARAN</a>
-                  </div>
-                  
-                  <p style="font-size: 12px; color: #666;">Abaikan pesan ini jika Anda tidak merasa melakukan pemesanan.</p>
-                </div>
-              `,
+              htmlContent: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0; padding:0; background:#f9fafb; font-family: Arial, Helvetica, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb; padding:30px 0">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; width:100%; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.08);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 32px 40px; text-align:center;">
+              <p style="margin:0; color:#f97316; font-size:24px; font-weight:900; letter-spacing:2px;">RUANGSINGGAH.ID</p>
+              <p style="margin:6px 0 0; color:#6b7280; font-size:11px; letter-spacing:3px; text-transform:uppercase;">Invoice Pembelian</p>
+            </td>
+          </tr>
+          
+          <!-- Body -->
+          <tr>
+            <td style="padding: 36px 40px;">
+              <p style="margin:0 0 8px; font-size:22px; font-weight:800; color:#111827;">Halo, ${user.name || 'Pelanggan'}! 👋</p>
+              <p style="margin:0 0 24px; font-size:15px; color:#6b7280; line-height:1.6;">Terima kasih atas pesanan Anda. Invoice untuk pembelian <strong style="color:#111827;">${productName}</strong> telah kami siapkan dan terlampir di bawah ini.</p>
+              
+              <!-- Order Detail Box -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb; border-radius:12px; border:1px solid #e5e7eb; margin-bottom:28px;">
+                <tr><td style="padding:20px 24px;">
+                  <p style="margin:0 0 4px; font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:2px;">Order ID</p>
+                  <p style="margin:0 0 16px; font-size:14px; font-weight:700; color:#111827; font-family: monospace;">${order.id}</p>
+                  <p style="margin:0 0 4px; font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:2px;">Produk</p>
+                  <p style="margin:0; font-size:14px; font-weight:700; color:#111827;">${productName}</p>
+                </td></tr>
+              </table>
+              
+              <!-- Urgency Box -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fff7ed; border-radius:12px; border:1px solid #fed7aa; margin-bottom:28px;">
+                <tr><td style="padding:20px 24px; text-align:center;">
+                  <p style="margin:0 0 16px; font-size:15px; font-weight:700; color:#9a3412; line-height:1.5;">
+                    ⏰ Selesaikan pembayaran sekarang sebelum slot habis!<br>
+                    <span style="font-weight:400; font-size:13px; color:#c2410c;">Sesi pembayaran berlaku selama 3 jam.</span>
+                  </p>
+                  <!-- CTA Button - Table-based for max email client compatibility -->
+                  <table cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto;">
+                    <tr>
+                      <td align="center" bgcolor="#f97316" style="border-radius:10px;">
+                        <a href="https://ruangsinggah.id/payment-status/${order.id}" target="_blank"
+                           style="display:inline-block; padding:16px 40px; font-size:15px; font-weight:800; color:#ffffff; text-decoration:none; border-radius:10px; background-color:#f97316; letter-spacing:0.5px; font-family:Arial,sans-serif;">
+                          ✅ SELESAIKAN PEMBAYARAN
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                </td></tr>
+              </table>
+              
+              <p style="margin:0; font-size:12px; color:#9ca3af; text-align:center; line-height:1.6;">
+                Abaikan pesan ini jika Anda tidak merasa melakukan pemesanan.<br>
+                Dokumen PDF Invoice terlampir pada email ini.
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f9fafb; padding:20px 40px; border-top:1px solid #e5e7eb; text-align:center;">
+              <p style="margin:0; font-size:11px; color:#9ca3af;">© 2026 RuangSinggah.id — Platform Kost Mahasiswa</p>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
               attachment: [{ content: base64Pdf, name: `Invoice_${order.id.substring(0,8).toUpperCase()}.pdf` }]
             };
 
@@ -693,6 +754,10 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
 
     // 4. Update order with Pakasir link and direct data (and invoice_sent status)
     const updatePayload: any = { pakasir_link: checkoutUrl };
+    if (method) {
+      // CRITICAL: Save payment_method to the dedicated column so admin dashboard shows it correctly
+      updatePayload.payment_method = method;
+    }
     if (directPayment) {
       updatePayload.pakasir_order_id = directPayment.id || directPayment.order_id;
       updatePayload.metadata = { 
