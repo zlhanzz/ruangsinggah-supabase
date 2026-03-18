@@ -684,10 +684,24 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
               <!-- Order Detail Box -->
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb; border-radius:12px; border:1px solid #e5e7eb; margin-bottom:28px;">
                 <tr><td style="padding:20px 24px;">
-                  <p style="margin:0 0 4px; font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:2px;">Order ID</p>
-                  <p style="margin:0 0 16px; font-size:14px; font-weight:700; color:#111827; font-family: monospace;">${order.id}</p>
-                  <p style="margin:0 0 4px; font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:2px;">Produk</p>
-                  <p style="margin:0; font-size:14px; font-weight:700; color:#111827;">${productName}</p>
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td style="padding-bottom:16px;">
+                        <p style="margin:0 0 4px; font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:2px;">Order ID</p>
+                        <p style="margin:0; font-size:14px; font-weight:700; color:#111827; font-family: monospace;">#${order.id.substring(0, 8).toUpperCase()}</p>
+                      </td>
+                      <td style="padding-bottom:16px; text-align:right;">
+                        <p style="margin:0 0 4px; font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:2px;">Total Bayar</p>
+                        <p style="margin:0; font-size:16px; font-weight:900; color:#f97316;">${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(finalAmount)}</p>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td colspan="2">
+                        <p style="margin:0 0 4px; font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:2px;">Produk</p>
+                        <p style="margin:0; font-size:14px; font-weight:700; color:#111827;">${productName}</p>
+                      </td>
+                    </tr>
+                  </table>
                 </td></tr>
               </table>
               
