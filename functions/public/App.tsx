@@ -16,6 +16,7 @@ import KostDetail from './pages/KostDetail';
 import Dashboard from './pages/Dashboard';
 import SurveyService from './pages/SurveyService';
 import MyKost from './pages/MyKost';
+import OrderPaymentStatus from './pages/OrderPaymentStatus';
 import { getPublishedProperties } from './userService';
 
 const App: React.FC = () => {
@@ -259,8 +260,9 @@ const App: React.FC = () => {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
           </div>
         ) : (
-          <Routes>
-            <Route path={Page.HOME} element={<Home onPageChange={(p: Page) => navigate(p)} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />} />
+           <Routes>
+             <Route path="/payment-status/:orderId" element={<OrderPaymentStatus user={user} />} />
+             <Route path={Page.HOME} element={<Home onPageChange={(p: Page) => navigate(p)} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />} />
             <Route path={Page.LISTINGS} element={<Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} />} />
             <Route path="/products/*" element={
               <Products
@@ -281,7 +283,7 @@ const App: React.FC = () => {
             <Route path={Page.OWNER} element={<Owner />} />
             <Route path={Page.ABOUT} element={<About />} />
             <Route path={Page.CONTACT} element={<Contact />} />
-            <Route path={Page.SURVEY_SERVICE} element={<SurveyService />} />
+            <Route path={Page.SURVEY_SERVICE} element={<SurveyService user={user} />} />
             <Route path={Page.MY_BOOKINGS} element={<MyKost user={user} onPageChange={(p: Page) => navigate(p)} />} />
             
             <Route path={Page.LOGIN} element={

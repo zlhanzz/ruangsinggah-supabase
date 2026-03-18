@@ -161,7 +161,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
     setError(null);
 
     try {
-      const response = await fetch('https://us-central1-ruangsinggahid-3afb2.cloudfunctions.net/createPakasirPayment', { 
+      const response = await fetch('https://createpakasirpayment-hzxlewhsuq-uc.a.run.app', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -231,7 +231,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
     setIsProcessing(true);
     console.log("[DEBUG] Simulating payment via backend for order:", currentOrder.id);
     try {
-      const response = await fetch('https://us-central1-ruangsinggahid-3afb2.cloudfunctions.net/simulatePaymentSuccess', {
+      const response = await fetch('https://simulatepaymentsuccess-hzxlewhsuq-uc.a.run.app', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -383,7 +383,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
           ) : (
             <div className="w-full flex flex-col items-center animate-in zoom-in-95 duration-300">
                {/* Sticky Countdown Bar */}
-               <div className="w-full sticky top-0 z-10 bg-gray-900 rounded-2xl p-3 mb-6 flex items-center justify-between shadow-lg">
+               <div className="hidden sm:flex w-full sticky top-0 z-10 bg-gray-900 rounded-2xl p-3 mb-6 items-center justify-between shadow-lg">
                  <div className="flex items-center gap-2">
                    <div className={`w-2 h-2 rounded-full ${timeLeft > 0 ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Sisa Waktu Bayar</span>

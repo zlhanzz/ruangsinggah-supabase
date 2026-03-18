@@ -317,6 +317,9 @@ async function sendSuccessEmail(orderId: string) {
         productName = "Booking Kost";
         // Might add a link to "My Bookings" page
         productLink = "https://ruangsinggah.id/my-kost";
+    } else if (order.product_type === 'survey') {
+        productName = "Jasa Survey Lokasi Kost";
+        productLink = "https://ruangsinggah.id/survey-service";
     }
 
     // 3. Configure Sender
@@ -344,6 +347,12 @@ async function sendSuccessEmail(orderId: string) {
               <p style="margin-top: 0;">Berikut adalah link akses database yang Anda beli:</p>
               <a href="${productLink}" style="display: inline-block; background: #f97316; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">AKSES DATABASE SEKARANG</a>
               <p style="font-size: 12px; color: #9a3412; margin-top: 15px;">*Harap simpan link ini dengan baik.</p>
+            </div>
+          ` : order.product_type === 'survey' ? `
+            <div style="background: #eff6ff; padding: 20px; border-radius: 12px; border: 1px solid #dbeafe; margin: 20px 0;">
+              <p style="margin-top: 0;">Terima kasih telah memesan <strong>Jasa Survey Lokasi</strong>.</p>
+              <p>Tim kami akan segera memverifikasi pembayaran Anda dan menghubungi Anda melalui WhatsApp untuk jadwal video call.</p>
+              <p style="font-size: 12px; color: #1e40af; margin-top: 15px;">*Pastikan nomor WhatsApp Anda aktif.</p>
             </div>
           ` : `
             <p>Silakan cek status pesanan Anda di halaman "My Kost" pada aplikasi kami.</p>
@@ -545,6 +554,8 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
               .single();
             if (propError || !prop) throw new Error('Listings properti tidak ditemukan.');
             finalAmount = Number(prop.price);
+        } else if (productType === 'survey') {
+            finalAmount = 70000;
         } else {
             throw new Error(`Unsupported product type: ${productType}`);
         }
@@ -654,7 +665,7 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
                     <p style="margin-top: 0; font-size: 15px; font-weight: bold; color: #9a3412;">
                       Selesaikan payment sekarang sebelum kost-kost bagus area ini keburu full! Siapa cepat dia beruntung, buruan payment sekarang sebelum kehabisan.
                     </p>
-                    <a href="https://ruangsinggah.id/products/${productId}/payment?order_id=${order.id}" style="display: inline-block; background: #f97316; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; margin-top: 15px;">LANJUT KE PEMBAYARAN</a>
+                    <a href="https://ruangsinggah.id/payment-status/${order.id}" style="display: inline-block; background: #f97316; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; margin-top: 15px;">LANJUT KE PEMBAYARAN</a>
                   </div>
                   
                   <p style="font-size: 12px; color: #666;">Abaikan pesan ini jika Anda tidak merasa melakukan pemesanan.</p>

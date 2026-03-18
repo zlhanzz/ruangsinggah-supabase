@@ -1,9 +1,16 @@
 import React, { useState, useRef } from 'react';
 import { CheckCircle, AlertTriangle, Video, MapPin, Calendar, Clock, ArrowRight, ShieldCheck, Wifi, Droplets, X } from 'lucide-react';
+import PaymentGateway from '../components/PaymentGateway';
 
-const SurveyService: React.FC = () => {
+interface SurveyServiceProps {
+  user: any;
+}
+
+const SurveyService: React.FC<SurveyServiceProps> = ({ user }) => {
   const offerSectionRef = useRef<HTMLDivElement>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
+  const [paymentMetadata, setPaymentMetadata] = useState<any>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -25,27 +32,47 @@ const SurveyService: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Format message for WhatsApp
-    const message = `Halo Admin RuangSinggah, saya ingin request Jasa Survey Lokasi Kost (Paket Rp 70.000).
+    if (!user) {
+      alert('Silakan login terlebih dahulu untuk melakukan pemesanan survey.');
+      return;
+    }
+
+    // Prepare metadata for payment and post-payment message
+    const metadata = {
+      ...formData,
+      service_name: 'Jasa Survey Lokasi Kost',
+      package_price: 70000
+    };
+
+    setPaymentMetadata(metadata);
+    setShowPayment(true);
+    setIsModalOpen(false); // Close form modal
+  };
+
+  const handlePaymentSuccess = () => {
+    setShowPayment(false);
     
+    // Format message for WhatsApp (only after payment success)
+    const message = `Halo Admin RuangSinggah, saya sudah melakukan PEMBAYARAN untuk Jasa Survey Lokasi Kost (Paket Rp 70.000).
+
 DATA DIRI:
-Nama: ${formData.name}
-No WA: ${formData.phone}
-Email: ${formData.email}
+Nama: ${paymentMetadata.name}
+No WA: ${paymentMetadata.phone}
+Email: ${paymentMetadata.email}
 
 DETAIL KOST:
-Nama Kost: ${formData.kostName}
-No Pemilik: ${formData.ownerPhone}
-Alamat: ${formData.kostAddress}
-Sumber Info: ${formData.source}
+Nama Kost: ${paymentMetadata.kostName}
+No Pemilik: ${paymentMetadata.ownerPhone}
+Alamat: ${paymentMetadata.kostAddress}
+Sumber Info: ${paymentMetadata.source}
 
 JADWAL SURVEY (VIDEO CALL):
-Tanggal: ${formData.surveyDate}
-Jam: ${formData.surveyTime}
+Tanggal: ${paymentMetadata.surveyDate}
+Jam: ${paymentMetadata.surveyTime}
 
-Catatan: ${formData.notes}
+Catatan: ${paymentMetadata.notes}
 
-Mohon diproses segera. Terima kasih.`;
+Mohon segera diproses. Terima kasih.`;
 
     const encodedMessage = encodeURIComponent(message);
     const whatsappUrl = `https://wa.me/6285156634283?text=${encodedMessage}`;
@@ -432,6 +459,20 @@ Mohon diproses segera. Terima kasih.`;
             </div>
           </div>
         </div>
+      )}
+
+      {/* PAYMENT MODAL */}
+      {showPayment && user && (
+        <PaymentGateway
+          amount={70000}
+          orderId={`SRV-${Date.now()}`}
+          productId="survey-service-pkg"
+          productType="survey"
+          userId={user.id}
+          metadata={paymentMetadata}
+          onPaymentSuccess={handlePaymentSuccess}
+          onCancel={() => setShowPayment(false)}
+        />
       )}
 
     </div>
