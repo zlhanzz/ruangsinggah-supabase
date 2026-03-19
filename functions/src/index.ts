@@ -982,14 +982,14 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
                   <tr>
                     <td style="padding:40px 50px;">
                       <h2 style="color:#111827; margin:0 0 20px; font-size:24px; text-align:center;">Halo! Ayo Konfirmasi Akun Anda</h2>
-                      <p style="color:#4b5563; font-size:16px; line-height:1.7; margin:16px 0;">Terima kasih telah mendaftar di RuangSinggah.id, platform penyedia kost dan akomodasi terbaik. Keamanan akun Anda adalah prioritas kami.</p>
-                      <p style="color:#4b5563; font-size:16px; line-height:1.7; margin:16px 0;">Untuk memulai perjalanan Anda mencarikan hunian yang nyaman, silakan klik tombol di bawah ini untuk memverifikasi alamat email dan mengaktifkan akses Anda secara penuh.</p>
+                      <p style="color:#374151; font-size:16px; line-height:1.7; margin:16px 0;">Terima kasih telah mendaftar di RuangSinggah.id, platform penyedia kost dan akomodasi terbaik. Keamanan akun Anda adalah prioritas kami.</p>
+                      <p style="color:#374151; font-size:16px; line-height:1.7; margin:16px 0;">Untuk memulai perjalanan Anda mencarikan hunian yang nyaman, silakan klik tombol di bawah ini untuk memverifikasi alamat email dan mengaktifkan akses Anda secara penuh.</p>
                       <table cellpadding="0" cellspacing="0" border="0" style="margin:30px auto;">
                         <tr><td align="center" bgcolor="#f97316" style="border-radius:12px;"><a href="${confirmationUrl}" target="_blank" style="display:inline-block; padding:18px 45px; font-size:16px; font-weight:bold; color:#ffffff; text-decoration:none;">KONFIRMASI AKUN SEKARANG</a></td></tr>
                       </table>
                       <div style="border-top:1px solid #f3f4f6; margin-top:40px; padding-top:24px;">
-                        <p style="margin:0; color:#9ca3af; font-size:13px; line-height:1.5;">Anda menerima email ini karena Anda mendaftar di situs web kami atau menggunakan aplikasi RuangSinggah.id. Jika Anda merasa tidak merasa melakukan pendaftaran ini, harap abaikan saja email ini.</p>
-                        <p style="margin:16px 0 0; color:#9ca3af; font-size:13px; line-height:1.5; font-weight:bold;">Tim RuangSinggah.id - Jakarta, Indonesia</p>
+                        <p style="margin:0; color:#6b7280; font-size:13px; line-height:1.5;">Anda menerima email ini karena Anda mendaftar di situs web kami atau menggunakan aplikasi RuangSinggah.id. Jika Anda merasa tidak merasa melakukan pendaftaran ini, harap abaikan saja email ini.</p>
+                        <p style="margin:16px 0 0; color:#6b7280; font-size:13px; line-height:1.5; font-weight:bold;">Tim RuangSinggah.id - Jakarta, Indonesia</p>
                       </div>
                     </td>
                   </tr>
@@ -1021,14 +1021,14 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
                   <tr>
                     <td style="padding:40px 50px;">
                       <h2 style="color:#111827; margin:0 0 20px; font-size:24px; text-align:center;">Lupa Kata Sandi?</h2>
-                      <p style="color:#4b5563; font-size:16px; line-height:1.7; margin:16px 0;">Kami menerima permintaan untuk mereset kata sandi akun RuangSinggah.id Anda. Jangan khawatir, kami akan membantu Anda kembali masuk.</p>
-                      <p style="color:#4b5563; font-size:16px; line-height:1.7; margin:16px 0;">Klik tombol di bawah ini untuk membuat kata sandi baru yang lebih aman. Link ini hanya berlaku selama 24 jam demi keamanan data Anda.</p>
+                      <p style="color:#374151; font-size:16px; line-height:1.7; margin:16px 0;">Kami menerima permintaan untuk mereset kata sandi akun RuangSinggah.id Anda. Jangan khawatir, kami akan membantu Anda kembali masuk.</p>
+                      <p style="color:#374151; font-size:16px; line-height:1.7; margin:16px 0;">Klik tombol di bawah ini untuk membuat kata sandi baru yang lebih aman. Link ini hanya berlaku selama 24 jam demi keamanan data Anda.</p>
                       <table cellpadding="0" cellspacing="0" border="0" style="margin:30px auto;">
                         <tr><td align="center" bgcolor="#f97316" style="border-radius:12px;"><a href="${confirmationUrl}" target="_blank" style="display:inline-block; padding:18px 45px; font-size:16px; font-weight:bold; color:#ffffff; text-decoration:none;">SETEL ULANG KATA SANDI</a></td></tr>
                       </table>
                       <div style="border-top:1px solid #f3f4f6; margin-top:40px; padding-top:24px;">
-                        <p style="margin:0; color:#9ca3af; font-size:13px; line-height:1.5;">Jika Anda tidak merasa meminta reset ini, abaikan email ini dan pastikan akun Anda tetap aman. Silakan hubungi bantuan jika ada aktivitas mencurigakan.</p>
-                        <p style="margin:16px 0 0; color:#9ca3af; font-size:13px; line-height:1.5; font-weight:bold;">Tim RuangSinggah.id - Managed by PT Ruang Singgah Indonesia</p>
+                        <p style="margin:0; color:#6b7280; font-size:13px; line-height:1.5;">Jika Anda tidak merasa meminta reset ini, abaikan email ini dan pastikan akun Anda tetap aman. Silakan hubungi bantuan jika ada aktivitas mencurigakan.</p>
+                        <p style="margin:16px 0 0; color:#6b7280; font-size:13px; line-height:1.5; font-weight:bold;">Tim RuangSinggah.id - Managed by PT Ruang Singgah Indonesia</p>
                       </div>
                     </td>
                   </tr>
