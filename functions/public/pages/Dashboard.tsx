@@ -600,6 +600,48 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
             setNewVideoFiles(prev => [...prev, ...Array.from(e.target.files!)]);
         }
     };
+
+    // --- MEDIA DRAG & DROP REORDER ---
+    const handleMediaDragStart = (e: React.DragEvent, index: number, type: 'existing' | 'new') => {
+        e.dataTransfer.setData('index', index.toString());
+        e.dataTransfer.setData('type', type);
+        // Visual feedback
+        if (e.currentTarget instanceof HTMLElement) {
+            e.currentTarget.style.opacity = '0.5';
+        }
+    };
+
+    const handleMediaDragEnd = (e: React.DragEvent) => {
+        if (e.currentTarget instanceof HTMLElement) {
+            e.currentTarget.style.opacity = '1';
+        }
+    };
+
+    const handleMediaDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    };
+
+    const handleMediaDrop = (e: React.DragEvent, dropIndex: number, dropType: 'existing' | 'new') => {
+        e.preventDefault();
+        const dragIndex = parseInt(e.dataTransfer.getData('index'));
+        const dragType = e.dataTransfer.getData('type');
+
+        if (dragType !== dropType) return; // Prevent mixing for now to keep logic simple
+        if (dragIndex === dropIndex) return;
+
+        if (dragType === 'existing') {
+            const items = [...(formData.imageUrls || [])];
+            const [movedItem] = items.splice(dragIndex, 1);
+            items.splice(dropIndex, 0, movedItem);
+            setFormData({ ...formData, imageUrls: items });
+        } else {
+            const items = [...newImageFiles];
+            const [movedItem] = items.splice(dragIndex, 1);
+            items.splice(dropIndex, 0, movedItem);
+            setNewImageFiles(items);
+        }
+    };
     const removeNewVideo = (index: number) => {
         setNewVideoFiles(prev => prev.filter((_, i) => i !== index));
     };
@@ -932,9 +974,21 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                             {formData.imageUrls && formData.imageUrls.length > 0 && (
                                 <div className="grid grid-cols-4 gap-4 mb-4">
                                     {formData.imageUrls.map((url, i) => (
-                                        <div key={i} className="relative aspect-square rounded-xl overflow-hidden group">
+                                        <div 
+                                            key={`existing-${i}`} 
+                                            className="relative aspect-square rounded-xl overflow-hidden group cursor-move hover:ring-2 hover:ring-orange-500 transition-all"
+                                            draggable
+                                            onDragStart={(e) => handleMediaDragStart(e, i, 'existing')}
+                                            onDragEnd={handleMediaDragEnd}
+                                            onDragOver={handleMediaDragOver}
+                                            onDrop={(e) => handleMediaDrop(e, i, 'existing')}
+                                        >
                                             <img src={url} className="w-full h-full object-cover" alt="" />
                                             <button type="button" onClick={() => removeExistingMedia('imageUrls', url)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                                            <div className="absolute bottom-1 left-1 bg-black/50 text-white text-[8px] px-1 rounded flex items-center gap-1 font-bold">
+                                                <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                                                {i + 1}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -945,9 +999,21 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                                     <p className="text-xs text-green-600 font-bold">Foto Baru:</p>
                                     <div className="grid grid-cols-4 gap-4">
                                         {newImageFiles.map((file, i) => (
-                                            <div key={i} className="relative aspect-square rounded-xl overflow-hidden group border-2 border-green-200">
+                                            <div 
+                                                key={`new-${i}`} 
+                                                className="relative aspect-square rounded-xl overflow-hidden group border-2 border-green-200 cursor-move hover:ring-2 hover:ring-green-500 transition-all"
+                                                draggable
+                                                onDragStart={(e) => handleMediaDragStart(e, i, 'new')}
+                                                onDragEnd={handleMediaDragEnd}
+                                                onDragOver={handleMediaDragOver}
+                                                onDrop={(e) => handleMediaDrop(e, i, 'new')}
+                                            >
                                                 <img src={URL.createObjectURL(file)} className="w-full h-full object-cover" alt="" />
                                                 <button type="button" onClick={() => removeNewImage(i)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                                                <div className="absolute bottom-1 left-1 bg-green-500/80 text-white text-[8px] px-1 rounded flex items-center gap-1 font-bold">
+                                                    <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                                                    {i + 1}
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
