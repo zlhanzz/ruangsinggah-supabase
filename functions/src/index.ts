@@ -1056,7 +1056,13 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
     const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'api-key': brevoApiKey },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        ...payload,
+        options: {
+            "clickTracking": false,
+            "openTracking": false
+        }
+      })
     });
 
     if (!resp.ok) {
