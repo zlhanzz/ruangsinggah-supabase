@@ -7,6 +7,7 @@ export interface BasicPropertyInfo extends Partial<Kost> {
   namaKost: string;
   status: 'draft' | 'published';
   address: string;
+  area: string;
   imageUrls: string[];
   videoUrls?: string[];
   instagramUrl?: string;
@@ -202,6 +203,7 @@ export async function getAdminProperties(): Promise<BasicPropertyInfo[]> {
       tiktokUrl: row.tiktok_url || '',
       price: row.price || 0,
       city: row.city || '',
+      area: row.area || '',
       type: row.type || 'Campur',
       ownerUid: row.owner_uid,
       title: row.title,
@@ -376,6 +378,7 @@ export async function addPropertyWithMedia(
       facilities: kostData.facilities || [],
       address: kostData.address,
       city: kostData.city,
+      area: kostData.area || '',
       type: kostData.type,
       property_type: kostData.type, // Map the type specifically for Supabase DB
       status: kostData.status || 'draft',
@@ -504,6 +507,7 @@ export async function updatePropertyWithMedia(
       facilities: kostData.facilities,
       address: kostData.address,
       city: kostData.city,
+      area: kostData.area,
       type: kostData.type,
       property_type: kostData.type, // Sync added column
       status: kostData.status,

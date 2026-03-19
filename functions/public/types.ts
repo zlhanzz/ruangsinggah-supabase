@@ -79,6 +79,7 @@ export interface Kost {
 
   // App specific fields
   city: string;
+  area: string;
   type: 'Putra' | 'Putri' | 'Campur';
   isVerified: boolean;
   rating: number;

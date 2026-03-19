@@ -305,11 +305,11 @@ const App: React.FC = () => {
             } />
             
             <Route path={Page.DASHBOARD_ADMIN} element={
-              <Dashboard role={user?.role || 'admin'} onPageChange={(p: Page) => navigate(p)} listings={listings} onAdd={handleAddKost} onEdit={handleEditKost} onDelete={handleDeleteKost} onRefreshListings={fetchListings} />
+              <Dashboard role={user?.role || 'admin'} uid={user?.id} onPageChange={(p: Page) => navigate(p)} listings={listings} onAdd={handleAddKost} onEdit={handleEditKost} onDelete={handleDeleteKost} onRefreshListings={fetchListings} />
             } />
             
             <Route path={Page.DASHBOARD_OWNER} element={
-              <Dashboard role={user?.role || 'owner'} onPageChange={(p: Page) => navigate(p)} listings={listings} onAdd={handleAddKost} onEdit={handleEditKost} onDelete={handleDeleteKost} onRefreshListings={fetchListings} />
+              <Dashboard role={user?.role || 'owner'} uid={user?.id} onPageChange={(p: Page) => navigate(p)} listings={listings} onAdd={handleAddKost} onEdit={handleEditKost} onDelete={handleDeleteKost} onRefreshListings={fetchListings} />
             } />
             
             <Route path={Page.DETAIL} element={

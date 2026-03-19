@@ -6,7 +6,9 @@ import { supabase } from '../supabase';
 import {
     getAdminTransactions, updateTransactionStatus, AdminTransaction,
     deleteTransaction, deleteTransactions,
-    getAllDatabases, addDatabaseProduct, updateDatabaseProduct, deleteDatabase
+    getAllDatabases, addDatabaseProduct, updateDatabaseProduct, deleteDatabase,
+    getAdminProperties, addPropertyWithMedia, updatePropertyWithMedia,
+    updatePropertyStatus, deleteProperty, BasicPropertyInfo
 } from '../adminService';
 import Listings from './Listings';
 import {
@@ -18,7 +20,8 @@ interface DashboardProps {
     role: string;
     onPageChange: (p: any) => void;
     listings?: Kost[];
-    onAdd?: (k: Kost) => void;
+    uid?: string;
+    onAdd: (kost: Kost) => void;
     onEdit?: (k: Kost) => void;
     onDelete?: (id: string) => void;
     onRefreshListings?: () => void; // Re-fetch public listings setelah admin save
@@ -124,7 +127,7 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
 
 type DashboardMenu = 'analytics' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_db' | 'mitra' | 'verification' | 'complaints';
 
-const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [], onAdd, onEdit, onDelete, onRefreshListings }) => {
+const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings = [], onAdd, onEdit, onDelete, onRefreshListings }) => {
     const isAdmin = role === 'admin';
     const [activeMenu, setActiveMenu] = useState<DashboardMenu>('analytics');
 
@@ -235,7 +238,7 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
     // Form State (Property)
     const initialFormState: Partial<Kost> = {
         title: '', description: '', type: 'Campur', status: 'published', price: 0,
-        city: '', address: '',
+        city: '', area: '', address: '',
         location: { lat: -6.2088, lng: 106.8456 }, // Jakarta (Central) as neutral default
         imageUrls: [], videoUrls: [], instagramUrl: '', tiktokUrl: '', facilities: [], rules: [], roomTypes: [],
         additionalFeePrice: 0, additionalFeeName: '', campuses: [], publicFacilities: []
@@ -375,7 +378,7 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
 
     // --- PROPERTY HANDLERS ---
 
-    const displayListings = isAdmin ? adminListings : listings.filter(k => k.ownerUid === 'owner_1');
+    const displayListings = isAdmin ? adminListings : listings.filter(k => k.ownerUid === uid || k.ownerUid === 'owner_1');
 
     const handleStatusToggle = async (id: string, currentStatus: string) => {
         try {
@@ -787,10 +790,14 @@ const Dashboards: React.FC<DashboardProps> = ({ role, onPageChange, listings = [
                         <div className="border-t border-gray-100 pt-6"></div>
 
                         {/* Additional fields needed for the app */}
-                        <div className="grid grid-cols-1 gap-6">
+                        <div className="grid grid-cols-2 gap-6">
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Kota</label>
-                                <input type="text" className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-orange-500" value={formData.city || ''} onChange={e => setFormData({ ...formData, city: e.target.value })} />
+                                <input type="text" className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-orange-500" value={formData.city || ''} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="Bojonegoro/Bogor..." />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Area (Kecamatan/Daerah)</label>
+                                <input type="text" className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-orange-500" value={formData.area || ''} onChange={e => setFormData({ ...formData, area: e.target.value })} placeholder="Dramaga/Dago..." />
                             </div>
                         </div>
                         <div className="space-y-2">
