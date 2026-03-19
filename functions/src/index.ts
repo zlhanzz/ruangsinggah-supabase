@@ -1038,12 +1038,12 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
     // Send via Brevo
     const brevoApiKey = brevoApiKeyParam.value();
     const payload = {
-      sender: { name: "RuangSinggah.id", email: "system@ruangsinggah.id" },
+      sender: { name: "RuangSinggah", email: "system@ruangsinggah.id" },
       to: [{ email: email }],
       replyTo: { email: "haloruangsinggah@gmail.com", name: "Support RuangSinggah" },
       subject: subject,
       htmlContent: htmlContent,
-      textContent: `Konfirmasi akun Anda di RuangSinggah.id dengan mengklik link berikut: ${confirmationUrl}`
+      textContent: `Halo! Ini adalah email konfirmasi akun untuk RuangSinggah.id. Silakan gunakan link berikut untuk memverifikasi email Anda atau mereset password: ${confirmationUrl}`
     };
 
     const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
