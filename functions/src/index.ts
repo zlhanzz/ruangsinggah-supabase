@@ -973,20 +973,24 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
       htmlContent = `
         <!DOCTYPE html>
         <html>
-        <body style="margin:0; padding:0; background:#f9fafb; font-family: Arial, sans-serif;">
+        <body style="margin:0; padding:0; background:#f9fafb; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
           <table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:40px 0">
             <tr>
               <td align="center">
-                <table width="600" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.05);">
-                  <tr><td style="background:#1a1a2e; padding:32px; text-align:center;"><p style="margin:0; color:#f97316; font-size:24px; font-weight:900;">RUANGSINGGAH.ID</p></td></tr>
+                <table width="600" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.05);">
+                  <tr><td style="background:#1a1a2e; padding:32px; text-align:center;"><p style="margin:0; color:#f97316; font-size:24px; font-weight:900; letter-spacing:1px;">RUANGSINGGAH.ID</p></td></tr>
                   <tr>
-                    <td style="padding:40px;">
-                      <h2 style="color:#111827; margin:0 0 16px;">Konfirmasi Email Anda</h2>
-                      <p style="color:#6b7280; font-size:16px; line-height:1.6; margin:0 0 24px;">Terima kasih telah mendaftar di RuangSinggah.id! Silakan klik tombol di bawah ini untuk memverifikasi alamat email Anda dan mengaktifkan akun.</p>
-                      <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
-                        <tr><td align="center" bgcolor="#f97316" style="border-radius:10px;"><a href="${confirmationUrl}" target="_blank" style="display:inline-block; padding:16px 40px; font-size:16px; font-weight:bold; color:#ffffff; text-decoration:none;">KONFIRMASI AKUN</a></td></tr>
+                    <td style="padding:40px 50px;">
+                      <h2 style="color:#111827; margin:0 0 20px; font-size:24px; text-align:center;">Halo! Ayo Konfirmasi Akun Anda</h2>
+                      <p style="color:#4b5563; font-size:16px; line-height:1.7; margin:16px 0;">Terima kasih telah mendaftar di RuangSinggah.id, platform penyedia kost dan akomodasi terbaik. Keamanan akun Anda adalah prioritas kami.</p>
+                      <p style="color:#4b5563; font-size:16px; line-height:1.7; margin:16px 0;">Untuk memulai perjalanan Anda mencarikan hunian yang nyaman, silakan klik tombol di bawah ini untuk memverifikasi alamat email dan mengaktifkan akses Anda secara penuh.</p>
+                      <table cellpadding="0" cellspacing="0" border="0" style="margin:30px auto;">
+                        <tr><td align="center" bgcolor="#f97316" style="border-radius:12px;"><a href="${confirmationUrl}" target="_blank" style="display:inline-block; padding:18px 45px; font-size:16px; font-weight:bold; color:#ffffff; text-decoration:none;">KONFIRMASI AKUN SEKARANG</a></td></tr>
                       </table>
-                      <p style="color:#9ca3af; font-size:12px; margin-top:32px; text-align:center;">Jika Anda tidak merasa mendaftar, abaikan email ini.</p>
+                      <div style="border-top:1px solid #f3f4f6; margin-top:40px; padding-top:24px;">
+                        <p style="margin:0; color:#9ca3af; font-size:13px; line-height:1.5;">Anda menerima email ini karena Anda mendaftar di situs web kami atau menggunakan aplikasi RuangSinggah.id. Jika Anda merasa tidak merasa melakukan pendaftaran ini, harap abaikan saja email ini.</p>
+                        <p style="margin:16px 0 0; color:#9ca3af; font-size:13px; line-height:1.5; font-weight:bold;">Tim RuangSinggah.id - Jakarta, Indonesia</p>
+                      </div>
                     </td>
                   </tr>
                 </table>
@@ -1008,20 +1012,24 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
       htmlContent = `
         <!DOCTYPE html>
         <html>
-        <body style="margin:0; padding:0; background:#f9fafb; font-family: Arial, sans-serif;">
+        <body style="margin:0; padding:0; background:#f9fafb; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
           <table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:40px 0">
             <tr>
               <td align="center">
-                <table width="600" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.05);">
-                  <tr><td style="background:#1a1a2e; padding:32px; text-align:center;"><p style="margin:0; color:#f97316; font-size:24px; font-weight:900;">RUANGSINGGAH.ID</p></td></tr>
+                <table width="600" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.05);">
+                  <tr><td style="background:#1a1a2e; padding:32px; text-align:center;"><p style="margin:0; color:#f97316; font-size:24px; font-weight:900; letter-spacing:1px;">RUANGSINGGAH.ID</p></td></tr>
                   <tr>
-                    <td style="padding:40px;">
-                      <h2 style="color:#111827; margin:0 0 16px;">Lupa Kata Sandi?</h2>
-                      <p style="color:#6b7280; font-size:16px; line-height:1.6; margin:0 0 24px;">Kami menerima permintaan untuk mereset kata sandi akun Anda. Klik tombol di bawah ini untuk membuat kata sandi baru.</p>
-                      <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
-                        <tr><td align="center" bgcolor="#f97316" style="border-radius:10px;"><a href="${confirmationUrl}" target="_blank" style="display:inline-block; padding:16px 40px; font-size:16px; font-weight:bold; color:#ffffff; text-decoration:none;">BUAT SANDI BARU</a></td></tr>
+                    <td style="padding:40px 50px;">
+                      <h2 style="color:#111827; margin:0 0 20px; font-size:24px; text-align:center;">Lupa Kata Sandi?</h2>
+                      <p style="color:#4b5563; font-size:16px; line-height:1.7; margin:16px 0;">Kami menerima permintaan untuk mereset kata sandi akun RuangSinggah.id Anda. Jangan khawatir, kami akan membantu Anda kembali masuk.</p>
+                      <p style="color:#4b5563; font-size:16px; line-height:1.7; margin:16px 0;">Klik tombol di bawah ini untuk membuat kata sandi baru yang lebih aman. Link ini hanya berlaku selama 24 jam demi keamanan data Anda.</p>
+                      <table cellpadding="0" cellspacing="0" border="0" style="margin:30px auto;">
+                        <tr><td align="center" bgcolor="#f97316" style="border-radius:12px;"><a href="${confirmationUrl}" target="_blank" style="display:inline-block; padding:18px 45px; font-size:16px; font-weight:bold; color:#ffffff; text-decoration:none;">SETEL ULANG KATA SANDI</a></td></tr>
                       </table>
-                      <p style="color:#9ca3af; font-size:12px; margin-top:32px; text-align:center;">Link ini hanya berlaku selama 24 jam. Jika Anda tidak meminta reset, segera amankan akun Anda.</p>
+                      <div style="border-top:1px solid #f3f4f6; margin-top:40px; padding-top:24px;">
+                        <p style="margin:0; color:#9ca3af; font-size:13px; line-height:1.5;">Jika Anda tidak merasa meminta reset ini, abaikan email ini dan pastikan akun Anda tetap aman. Silakan hubungi bantuan jika ada aktivitas mencurigakan.</p>
+                        <p style="margin:16px 0 0; color:#9ca3af; font-size:13px; line-height:1.5; font-weight:bold;">Tim RuangSinggah.id - Managed by PT Ruang Singgah Indonesia</p>
+                      </div>
                     </td>
                   </tr>
                 </table>
@@ -1040,10 +1048,9 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
     const payload = {
       sender: { name: "RuangSinggah", email: "system@ruangsinggah.id" },
       to: [{ email: email }],
-      replyTo: { email: "haloruangsinggah@gmail.com", name: "Support RuangSinggah" },
       subject: subject,
       htmlContent: htmlContent,
-      textContent: `Halo! Ini adalah email konfirmasi akun untuk RuangSinggah.id. Silakan gunakan link berikut untuk memverifikasi email Anda atau mereset password: ${confirmationUrl}`
+      textContent: `Halo! Ini adalah email resmi dari RuangSinggah.id. Silakan verifikasi akun Anda atau atur ulang kata sandi dengan mengikuti instruksi di link berikut: ${confirmationUrl}. Jika Anda memerlukan bantuan, silakan hubungi tim support kami.`
     };
 
     const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
