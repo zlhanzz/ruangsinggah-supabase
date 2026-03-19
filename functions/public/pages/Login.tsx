@@ -84,61 +84,31 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
+      // --- CUSTOM BRANDED SIGNUP ---
+      // Instead of calling supabase.auth.signUp (which triggers default email),
+      // we call our custom backend which sends a branded email via Brevo.
+      const response = await fetch('https://handlecustomauthemail-hzxlewhsuq-uc.a.run.app', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'signup',
+          email: formData.email,
+          password: formData.password,
+          metadata: {
             full_name: formData.name,
             name: formData.name,
-          },
-          emailRedirectTo: window.location.origin,
-        }
+            phone: formData.phone
+          }
+        })
       });
 
-      if (error) {
-        setErrorMsg(getErrorMessage(error.message));
+      if (!response.ok) {
+        const errData = await response.json();
+        setErrorMsg(getErrorMessage(errData.message || 'Gagal mendaftar'));
         return;
       }
 
-      if (data.user) {
-        // Check if user already exists (identities is empty = email already registered)
-        if (data.user.identities && data.user.identities.length === 0) {
-          setErrorMsg('Email sudah terdaftar. Silakan login atau gunakan email lain.');
-          await supabase.auth.signOut();
-          return;
-        }
-
-        // Try client-side upsert (as backup, trigger should handle this automatically)
-        // This runs while user is still authenticated from signUp
-        try {
-          await supabase.from('users').upsert({
-            id: data.user.id,
-            name: formData.name,
-            phone: formData.phone,
-            email: formData.email,
-            role: 'user',
-            is_admin: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'id' });
-        } catch (_upsertErr) {
-          // Non-fatal: DB trigger will handle this if client-side fails
-          console.warn('Client upsert skipped (trigger will handle):', _upsertErr);
-        }
-
-        // Backup to localStorage
-        const profileData = {
-          name: formData.name,
-          phone: formData.phone,
-          joinedAt: new Date().toISOString()
-        };
-        localStorage.setItem(`user_profile_${formData.email}`, JSON.stringify(profileData));
-
-        // Force sign out (user must verify email before logging in)
-        await supabase.auth.signOut();
-        setVerificationSent(true);
-      }
+      setVerificationSent(true);
     } catch (error: any) {
       setErrorMsg(getErrorMessage(error.message || 'unknown'));
     } finally {
@@ -160,11 +130,19 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
-        redirectTo: `${window.location.origin}${Page.LOGIN}`,
+      // --- CUSTOM BRANDED RECOVERY ---
+      const response = await fetch('https://handlecustomauthemail-hzxlewhsuq-uc.a.run.app', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'recovery',
+          email: formData.email
+        })
       });
-      if (error) {
-        setErrorMsg(getErrorMessage(error.message));
+
+      if (!response.ok) {
+        const errData = await response.json();
+        setErrorMsg(getErrorMessage(errData.message || 'Gagal mengirim link reset'));
       } else {
         setSuccessMsg(`Link reset password telah dikirim ke ${formData.email}`);
       }
