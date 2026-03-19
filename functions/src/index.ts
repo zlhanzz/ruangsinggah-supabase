@@ -934,6 +934,137 @@ export const pakasirWebhook = functions.https.onRequest(async (req, res) => {
   }
 });
 
+/**
+ * handleCustomAuthEmail: Generates a Supabase auth link and sends it via Brevo with custom branding.
+ * This bypasses Supabase's default sender and templates for full brand control.
+ */
+export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, async (req, res) => {
+  const { type, email, password, metadata: userMetadata } = req.body;
+  console.log(`CUSTOM_AUTH: Request received - Type: ${type}, Email: ${email}`);
+
+  if (!email || !type) {
+    res.status(400).send({ message: 'Missing email or type' });
+    return;
+  }
+
+  try {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Database client not available.');
+
+    let confirmationUrl = '';
+    let subject = '';
+    let htmlContent = '';
+    const redirectUrl = `https://ruangsinggah.id/login`;
+
+    if (type === 'signup') {
+      console.log(`CUSTOM_AUTH: Generating signup link for ${email}`);
+      const { data, error } = await supabase.auth.admin.generateLink({
+        type: 'signup',
+        email,
+        password: password || Math.random().toString(36).slice(-10), // Use random if not provided (should be provided)
+        options: { 
+            data: userMetadata || {},
+            redirectTo: redirectUrl
+        }
+      });
+      if (error) throw error;
+      confirmationUrl = data.properties.action_link;
+      subject = '🛡️ Konfirmasi Akun RuangSinggah.id';
+      htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <body style="margin:0; padding:0; background:#f9fafb; font-family: Arial, sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:40px 0">
+            <tr>
+              <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.05);">
+                  <tr><td style="background:#1a1a2e; padding:32px; text-align:center;"><p style="margin:0; color:#f97316; font-size:24px; font-weight:900;">RUANGSINGGAH.ID</p></td></tr>
+                  <tr>
+                    <td style="padding:40px;">
+                      <h2 style="color:#111827; margin:0 0 16px;">Konfirmasi Email Anda</h2>
+                      <p style="color:#6b7280; font-size:16px; line-height:1.6; margin:0 0 24px;">Terima kasih telah mendaftar di RuangSinggah.id! Silakan klik tombol di bawah ini untuk memverifikasi alamat email Anda dan mengaktifkan akun.</p>
+                      <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
+                        <tr><td align="center" bgcolor="#f97316" style="border-radius:10px;"><a href="${confirmationUrl}" target="_blank" style="display:inline-block; padding:16px 40px; font-size:16px; font-weight:bold; color:#ffffff; text-decoration:none;">KONFIRMASI AKUN</a></td></tr>
+                      </table>
+                      <p style="color:#9ca3af; font-size:12px; margin-top:32px; text-align:center;">Jika Anda tidak merasa mendaftar, abaikan email ini.</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>`;
+    } else if (type === 'recovery') {
+      console.log(`CUSTOM_AUTH: Generating recovery link for ${email}`);
+      const { data, error } = await supabase.auth.admin.generateLink({
+        type: 'recovery',
+        email,
+        options: { redirectTo: `${redirectUrl}?mode=recovery` }
+      });
+      if (error) throw error;
+      confirmationUrl = data.properties.action_link;
+      subject = '🔑 Reset Kata Sandi RuangSinggah.id';
+      htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <body style="margin:0; padding:0; background:#f9fafb; font-family: Arial, sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:40px 0">
+            <tr>
+              <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.05);">
+                  <tr><td style="background:#1a1a2e; padding:32px; text-align:center;"><p style="margin:0; color:#f97316; font-size:24px; font-weight:900;">RUANGSINGGAH.ID</p></td></tr>
+                  <tr>
+                    <td style="padding:40px;">
+                      <h2 style="color:#111827; margin:0 0 16px;">Lupa Kata Sandi?</h2>
+                      <p style="color:#6b7280; font-size:16px; line-height:1.6; margin:0 0 24px;">Kami menerima permintaan untuk mereset kata sandi akun Anda. Klik tombol di bawah ini untuk membuat kata sandi baru.</p>
+                      <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
+                        <tr><td align="center" bgcolor="#f97316" style="border-radius:10px;"><a href="${confirmationUrl}" target="_blank" style="display:inline-block; padding:16px 40px; font-size:16px; font-weight:bold; color:#ffffff; text-decoration:none;">BUAT SANDI BARU</a></td></tr>
+                      </table>
+                      <p style="color:#9ca3af; font-size:12px; margin-top:32px; text-align:center;">Link ini hanya berlaku selama 24 jam. Jika Anda tidak meminta reset, segera amankan akun Anda.</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>`;
+    } else {
+        res.status(400).send({ message: 'Unsupported type' });
+        return;
+    }
+
+    // Send via Brevo
+    const brevoApiKey = brevoApiKeyParam.value();
+    const payload = {
+      sender: { name: "RuangSinggah.id", email: "system@ruangsinggah.id" },
+      to: [{ email: email }],
+      replyTo: { email: "haloruangsinggah@gmail.com", name: "Support RuangSinggah" },
+      subject: subject,
+      htmlContent: htmlContent,
+      textContent: `Konfirmasi akun Anda di RuangSinggah.id dengan mengklik link berikut: ${confirmationUrl}`
+    };
+
+    const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'api-key': brevoApiKey },
+      body: JSON.stringify(payload)
+    });
+
+    if (!resp.ok) {
+        const errorText = await resp.text();
+        throw new Error(`Brevo Error: ${errorText}`);
+    }
+
+    console.log(`CUSTOM_AUTH: Email sent successfully for ${type}`);
+    res.status(200).send({ message: 'Success' });
+  } catch (err: any) {
+    console.error("CUSTOM_AUTH_ERROR:", err);
+    res.status(500).send({ message: err.message });
+  }
+});
+
 async function getDownloadURLFromRef(fileRef: any): Promise<string> {
     return `https://firebasestorage.googleapis.com/v0/b/${fileRef.bucket.name}/o/${encodeURIComponent(fileRef.name)}?alt=media`;
 }
