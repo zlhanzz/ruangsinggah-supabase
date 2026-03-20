@@ -18,6 +18,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -46,6 +47,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setShowPassword(false);
     setShowNewPassword(false);
     setShowConfirmPassword(false);
+    setResendTimer(0);
   };
 
   useEffect(() => {
@@ -54,7 +56,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       setMode('PASSWORD_UPDATE');
       setSuccessMsg('Silakan masukkan kata sandi baru Anda.');
       
-      // Tunggu sebentar agar Supabase memproses token dari URL/Fragment
       const checkSession = async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
@@ -64,6 +65,16 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       checkSession();
     }
   }, []);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendTimer]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,8 +107,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleRegister = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setLoading(true);
     setErrorMsg('');
 
@@ -130,6 +141,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       }
 
       setVerificationSent(true);
+      setResendTimer(120); // 2 menit
     } catch (error: any) {
       setErrorMsg(getErrorMessage(error.message || 'unknown'));
     } finally {
@@ -137,8 +149,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleForgotPassword = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setLoading(true);
     setErrorMsg('');
     setSuccessMsg('');
@@ -164,6 +176,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         setErrorMsg(getErrorMessage(errData.message || 'Gagal mengirim link reset'));
       } else {
         setSuccessMsg(`Link reset password telah dikirim ke ${formData.email}`);
+        setResendTimer(120); // 2 menit
       }
     } catch (error: any) {
       setErrorMsg(getErrorMessage(error.message || 'unknown'));
@@ -190,7 +203,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
 
     try {
-      // Pastikan ada sesi aktif sebelum update
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         setErrorMsg('Sesi tidak ditemukan. Link mungkin sudah kedaluwarsa atau tidak valid.');
@@ -247,22 +259,38 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-1.14.76a2 2 0 01-2.22 0l-1.14-.76" /></svg>
           </div>
           <h2 className="text-2xl font-black text-gray-900 mb-2">Verifikasi Email Terkirim</h2>
-          <p className="text-gray-500 mb-8 leading-relaxed">
+          <p className="text-gray-500 mb-6 leading-relaxed">
             Link verifikasi telah dikirim ke <strong>{formData.email}</strong>.<br />
-            Silakan cek kotak masuk atau folder spam Anda, lalu verifikasi akun sebelum login.
+            Silakan cek inbox atau folder spam Anda.
           </p>
-          <button
-            onClick={() => { setVerificationSent(false); setMode('LOGIN'); resetForm(); }}
-            className="w-full bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-orange-600 transition-all"
-          >
-            Kembali ke Login
-          </button>
+
+          <div className="space-y-3 mb-8">
+            {resendTimer > 0 ? (
+               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                 Kirim ulang tersedia dalam {resendTimer} detik
+               </p>
+            ) : (
+              <button
+                onClick={() => handleRegister()}
+                disabled={loading}
+                className="text-orange-500 font-bold text-sm hover:underline flex items-center justify-center gap-2 mx-auto"
+              >
+                Belum terima email? Kirim Ulang
+              </button>
+            )}
+            
+            <button
+              onClick={() => { setVerificationSent(false); setMode('LOGIN'); resetForm(); }}
+              className="w-full bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-orange-600 transition-all"
+            >
+              Kembali ke Login
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  // --- REUSABLE PASSWORD FIELD COMPONENT (FOR PEEK CONSISTENCY) ---
   const PasswordInput = ({ 
     label, 
     value, 
@@ -325,9 +353,26 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           )}
 
           {successMsg && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-100 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-              <svg className="w-5 h-5 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              <p className="text-xs font-bold text-green-500 text-left">{successMsg}</p>
+            <div className="mb-6 p-4 bg-green-50 border border-green-100 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 relative">
+                <div className="flex items-center gap-3">
+                    <svg className="w-5 h-5 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <p className="text-xs font-bold text-green-500 text-left pr-12">{successMsg}</p>
+                </div>
+                {mode === 'FORGOT_PASSWORD' && (
+                    <div className="mt-3">
+                         {resendTimer > 0 ? (
+                            <span className="text-[10px] font-bold text-gray-400 uppercase">Kirim ulang dalam {resendTimer}s</span>
+                         ) : (
+                            <button 
+                                type="button" 
+                                onClick={() => handleForgotPassword()}
+                                className="text-[10px] font-bold text-green-600 hover:underline uppercase"
+                            >
+                                Kirim Ulang Sekarang
+                            </button>
+                         )}
+                    </div>
+                )}
             </div>
           )}
 
@@ -407,7 +452,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     {showPassword ? (
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268-2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
                     ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268-2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                     )}
                   </button>
                 </div>
@@ -445,8 +490,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
             <button
               type="submit"
-              disabled={loading}
-              className={`w-full bg-orange-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 mt-6 ${loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-orange-600'}`}
+              disabled={loading || (mode === 'FORGOT_PASSWORD' && !!successMsg && resendTimer > 0)}
+              className={`w-full bg-orange-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 mt-6 ${(loading || (mode === 'FORGOT_PASSWORD' && !!successMsg && resendTimer > 0)) ? 'opacity-70 cursor-not-allowed' : 'hover:bg-orange-600'}`}
             >
               {loading && (
                 <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
