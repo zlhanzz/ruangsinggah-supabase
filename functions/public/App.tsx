@@ -290,7 +290,13 @@ const App: React.FC = () => {
               (user && !location.search.includes('mode=recovery')) ? (
                 <Navigate to={user.role === 'admin' ? Page.DASHBOARD_ADMIN : Page.HOME} replace />
               ) : (
-                <Login onLoginSuccess={() => supabase.auth.getSession().then(({ data: { session } }) => fetchUserData(session?.user ?? null))} />
+                <Login onLoginSuccess={() => {
+                  // Clear recovery URL params to allow App.tsx to redirect
+                  if (window.location.search.includes('mode=recovery')) {
+                    window.history.replaceState({}, document.title, window.location.origin + window.location.pathname);
+                  }
+                  supabase.auth.getSession().then(({ data: { session } }) => fetchUserData(session?.user ?? null));
+                }} />
               )
             } />
             
