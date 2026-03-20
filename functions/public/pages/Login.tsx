@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { Page } from '../types';
 
@@ -7,7 +7,7 @@ interface LoginProps {
   onLoginSuccess?: () => void;
 }
 
-type AuthMode = 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD';
+type AuthMode = 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD' | 'PASSWORD_UPDATE';
 
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [mode, setMode] = useState<AuthMode>('LOGIN');
@@ -20,6 +20,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    newPassword: '',
+    confirmPassword: '',
     name: '',
     phone: ''
   });
@@ -35,11 +37,19 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   };
 
   const resetForm = () => {
-    setFormData({ email: '', password: '', name: '', phone: '' });
+    setFormData({ email: '', password: '', newPassword: '', confirmPassword: '', name: '', phone: '' });
     setErrorMsg('');
     setSuccessMsg('');
     setShowPassword(false);
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mode') === 'recovery') {
+      setMode('PASSWORD_UPDATE');
+      setSuccessMsg('Silakan masukkan kata sandi baru Anda.');
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,9 +94,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
 
     try {
-      // --- CUSTOM BRANDED SIGNUP ---
-      // Instead of calling supabase.auth.signUp (which triggers default email),
-      // we call our custom backend which sends a branded email via Brevo.
       const response = await fetch('https://handlecustomauthemail-hzxlewhsuq-uc.a.run.app', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -116,7 +123,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
   };
 
-
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -130,7 +136,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
 
     try {
-      // --- CUSTOM BRANDED RECOVERY ---
       const response = await fetch('https://handlecustomauthemail-hzxlewhsuq-uc.a.run.app', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -145,6 +150,44 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         setErrorMsg(getErrorMessage(errData.message || 'Gagal mengirim link reset'));
       } else {
         setSuccessMsg(`Link reset password telah dikirim ke ${formData.email}`);
+      }
+    } catch (error: any) {
+      setErrorMsg(getErrorMessage(error.message || 'unknown'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg('');
+
+    if (formData.newPassword !== formData.confirmPassword) {
+      setErrorMsg('Konfirmasi kata sandi tidak cocok.');
+      setLoading(false);
+      return;
+    }
+
+    if (formData.newPassword.length < 6) {
+      setErrorMsg('Kata sandi minimal 6 karakter.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: formData.newPassword
+      });
+
+      if (error) {
+        setErrorMsg(getErrorMessage(error.message));
+      } else {
+        alert('Kata sandi berhasil diperbarui! Silakan login kembali.');
+        await supabase.auth.signOut();
+        window.history.replaceState({}, document.title, window.location.origin + Page.LOGIN);
+        setMode('LOGIN');
+        resetForm();
       }
     } catch (error: any) {
       setErrorMsg(getErrorMessage(error.message || 'unknown'));
@@ -168,14 +211,12 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         setErrorMsg(getErrorMessage(error.message));
         setLoading(false);
       }
-      // On success, Supabase redirects back. onAuthStateChange in App.tsx will pick it up.
     } catch (error: any) {
       setErrorMsg(getErrorMessage(error.message || 'unknown'));
       setLoading(false);
     }
   };
 
-  // --- RENDER SUCCESS VERIFICATION SCREEN ---
   if (verificationSent) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -199,27 +240,25 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     );
   }
 
-  // --- MAIN FORM RENDER ---
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-xl border border-gray-100 overflow-hidden">
         <div className="p-8 sm:p-12">
-
-          {/* Header Title */}
           <div className="text-center mb-10">
             <h2 className="text-3xl font-extrabold text-gray-900">
               {mode === 'LOGIN' && 'Selamat Datang!'}
               {mode === 'REGISTER' && 'Buat Akun Baru'}
               {mode === 'FORGOT_PASSWORD' && 'Reset Kata Sandi'}
+              {mode === 'PASSWORD_UPDATE' && 'Setel Sandi Baru'}
             </h2>
             <p className="mt-2 text-sm text-gray-500">
               {mode === 'LOGIN' && 'Masuk untuk mengelola kost favoritmu'}
               {mode === 'REGISTER' && 'Daftar & Verifikasi untuk akses penuh'}
               {mode === 'FORGOT_PASSWORD' && 'Masukkan email yang terdaftar'}
+              {mode === 'PASSWORD_UPDATE' && 'Masukkan kata sandi baru Anda'}
             </p>
           </div>
 
-          {/* Messages */}
           {errorMsg && (
             <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
               <svg className="w-5 h-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -237,10 +276,9 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           <form className="space-y-4" onSubmit={
             mode === 'LOGIN' ? handleLogin :
               mode === 'REGISTER' ? handleRegister :
-                handleForgotPassword
+                mode === 'PASSWORD_UPDATE' ? handleUpdatePassword :
+                  handleForgotPassword
           }>
-
-            {/* REGISTER FIELDS */}
             {mode === 'REGISTER' && (
               <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                 <div>
@@ -268,33 +306,31 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               </div>
             )}
 
-            {/* Email Field */}
-            <div className={mode === 'REGISTER' ? 'pt-0' : 'pt-2'}>
-              <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Email</label>
-              <input
-                type="email"
-                required
-                className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
-                placeholder="nama@gmail.com"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              />
-            </div>
+            {(mode === 'LOGIN' || mode === 'REGISTER' || mode === 'FORGOT_PASSWORD') && (
+              <div className={mode === 'REGISTER' ? 'pt-0' : 'pt-2'}>
+                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Email</label>
+                <input
+                  type="email"
+                  required
+                  className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
+                  placeholder="nama@gmail.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
+              </div>
+            )}
 
-            {/* Password Field */}
-            {mode !== 'FORGOT_PASSWORD' && (
+            {mode === 'LOGIN' && (
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <label className="block text-xs font-bold text-gray-400 uppercase">Kata Sandi</label>
-                  {mode === 'LOGIN' && (
-                    <button
-                      type="button"
-                      onClick={() => { setMode('FORGOT_PASSWORD'); setErrorMsg(''); setSuccessMsg(''); }}
-                      className="text-xs font-bold text-orange-500 hover:text-orange-600"
-                    >
-                      Lupa Sandi?
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setMode('FORGOT_PASSWORD'); setErrorMsg(''); setSuccessMsg(''); }}
+                    className="text-xs font-bold text-orange-500 hover:text-orange-600"
+                  >
+                    Lupa Sandi?
+                  </button>
                 </div>
                 <div className="relative">
                   <input
@@ -309,10 +345,9 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
-                    aria-label={showPassword ? 'Sembunyikan password' : 'Lihat password'}
                   >
                     {showPassword ? (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268-2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
                     ) : (
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                     )}
@@ -321,7 +356,49 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               </div>
             )}
 
-            {/* Submit Button */}
+            {mode === 'REGISTER' && (
+               <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Kata Sandi</label>
+                  <input
+                    type="password"
+                    required
+                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  />
+               </div>
+            )}
+
+            {mode === 'PASSWORD_UPDATE' && (
+              <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Kata Sandi Baru</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
+                    placeholder="••••••••"
+                    value={formData.newPassword}
+                    onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Konfirmasi Kata Sandi</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
+                    placeholder="••••••••"
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  />
+                </div>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
@@ -336,13 +413,13 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               {mode === 'LOGIN' && 'Masuk Sekarang'}
               {mode === 'REGISTER' && 'Daftar & Verifikasi Email'}
               {mode === 'FORGOT_PASSWORD' && 'Kirim Link Reset'}
+              {mode === 'PASSWORD_UPDATE' && 'Simpan Kata Sandi'}
             </button>
 
-            {/* Back Button for Forgot Password */}
-            {mode === 'FORGOT_PASSWORD' && (
+            {(mode === 'FORGOT_PASSWORD' || mode === 'PASSWORD_UPDATE') && (
               <button
                 type="button"
-                onClick={() => { setMode('LOGIN'); setErrorMsg(''); setSuccessMsg(''); }}
+                onClick={() => { setMode('LOGIN'); resetForm(); }}
                 className="w-full text-gray-500 font-bold text-sm py-2 hover:text-gray-900"
               >
                 Batal
@@ -350,8 +427,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             )}
           </form>
 
-          {/* Footer / Switch Mode */}
-          {mode !== 'FORGOT_PASSWORD' && (
+          {(mode === 'LOGIN' || mode === 'REGISTER') && (
             <div className="mt-8">
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
@@ -362,11 +438,11 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 </div>
               </div>
 
-              <div className="mt-6 grid grid-cols-2 gap-4">
+              <div className="mt-6">
                 <button
                   onClick={handleGoogleLogin}
                   type="button"
-                  className="flex items-center justify-center py-3 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors gap-2 text-sm font-semibold text-gray-700 col-span-2 sm:col-span-1"
+                  className="w-full flex items-center justify-center py-3 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors gap-2 text-sm font-semibold text-gray-700"
                 >
                   <svg className="w-5 h-5" viewBox="0 0 24 24">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -375,16 +451,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                   </svg>
                   Google
-                </button>
-                <button
-                  type="button"
-                  disabled
-                  className="flex items-center justify-center py-3 border border-gray-100 rounded-xl bg-gray-50 text-gray-400 gap-2 text-sm font-semibold cursor-not-allowed col-span-2 sm:col-span-1"
-                >
-                  <svg className="w-5 h-5 opacity-50" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2C6.477 2 2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.879V14.89h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12c0-5.523-4.477-10-10-10z" />
-                  </svg>
-                  Facebook
                 </button>
               </div>
 
@@ -402,7 +468,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               </div>
             </div>
           )}
-
         </div>
       </div>
     </div>

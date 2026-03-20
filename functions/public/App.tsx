@@ -287,7 +287,7 @@ const App: React.FC = () => {
             <Route path={Page.MY_BOOKINGS} element={<MyKost user={user} onPageChange={(p: Page) => navigate(p)} />} />
             
             <Route path={Page.LOGIN} element={
-              user ? (
+              (user && !location.search.includes('mode=recovery')) ? (
                 <Navigate to={user.role === 'admin' ? Page.DASHBOARD_ADMIN : Page.HOME} replace />
               ) : (
                 <Login onLoginSuccess={() => supabase.auth.getSession().then(({ data: { session } }) => fetchUserData(session?.user ?? null))} />
