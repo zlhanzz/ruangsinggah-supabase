@@ -12,6 +12,7 @@ type AuthMode = 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD' | 'PASSWORD_UPDATE';
 // --- REUSABLE PASSWORD FIELD COMPONENT (DEFINED OUTSIDE TO PREVENT RE-MOUNTING/FOCUS LOSS) ---
 const PasswordInput = ({ 
   label, 
+  rightLabel,
   value, 
   onChange, 
   show, 
@@ -20,7 +21,10 @@ const PasswordInput = ({
   required = true 
 }: any) => (
   <div>
-    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">{label}</label>
+    <div className="flex justify-between items-center mb-2">
+       <label className="block text-xs font-bold text-gray-400 uppercase">{label}</label>
+       {rightLabel}
+    </div>
     <div className="relative">
       <input
         type={show ? 'text' : 'password'}
@@ -427,6 +431,15 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             {mode === 'LOGIN' && (
               <PasswordInput 
                 label="Kata Sandi" 
+                rightLabel={
+                  <button
+                    type="button"
+                    onClick={() => { setMode('FORGOT_PASSWORD'); setErrorMsg(''); setSuccessMsg(''); }}
+                    className="text-xs font-bold text-orange-500 hover:text-orange-600"
+                  >
+                    Lupa Sandi?
+                  </button>
+                }
                 value={formData.password} 
                 onChange={(val: string) => setFormData({...formData, password: val})}
                 show={showPassword}
