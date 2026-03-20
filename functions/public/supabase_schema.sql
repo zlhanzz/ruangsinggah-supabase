@@ -377,7 +377,7 @@ CREATE POLICY "mitra_update_admin"
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.users (id, email, full_name, name, role, is_admin, created_at, updated_at)
+  INSERT INTO public.users (id, email, name, phone, role, is_admin, created_at, updated_at)
   VALUES (
     NEW.id,
     NEW.email,
@@ -386,17 +386,16 @@ BEGIN
       NEW.raw_user_meta_data->>'name',
       split_part(NEW.email, '@', 1)
     ),
-    COALESCE(
-      NEW.raw_user_meta_data->>'full_name',
-      NEW.raw_user_meta_data->>'name',
-      split_part(NEW.email, '@', 1)
-    ),
+    NEW.raw_user_meta_data->>'phone',
     'user',
     FALSE,
     NOW(),
     NOW()
   )
-  ON CONFLICT (id) DO NOTHING;
+  ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    phone = EXCLUDED.phone,
+    updated_at = NOW();
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
