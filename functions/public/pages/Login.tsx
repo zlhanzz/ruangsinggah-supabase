@@ -16,6 +16,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [successMsg, setSuccessMsg] = useState('');
   const [verificationSent, setVerificationSent] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -33,6 +35,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     if (message.includes('Password should be at least')) return 'Kata sandi terlalu lemah (min. 6 karakter).';
     if (message.includes('Unable to validate email')) return 'Format email tidak valid.';
     if (message.includes('Email rate limit exceeded')) return 'Terlalu banyak percobaan. Coba lagi nanti.';
+    if (message.includes('Auth session missing')) return 'Sesi kedaluwarsa. Silakan minta link reset baru.';
     return `Terjadi kesalahan: ${message}`;
   };
 
@@ -41,6 +44,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setErrorMsg('');
     setSuccessMsg('');
     setShowPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
   };
 
   useEffect(() => {
@@ -48,6 +53,15 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     if (params.get('mode') === 'recovery') {
       setMode('PASSWORD_UPDATE');
       setSuccessMsg('Silakan masukkan kata sandi baru Anda.');
+      
+      // Tunggu sebentar agar Supabase memproses token dari URL/Fragment
+      const checkSession = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          console.warn("Recovery mode detected but no session found yet.");
+        }
+      };
+      checkSession();
     }
   }, []);
 
@@ -176,6 +190,14 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
 
     try {
+      // Pastikan ada sesi aktif sebelum update
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setErrorMsg('Sesi tidak ditemukan. Link mungkin sudah kedaluwarsa atau tidak valid.');
+        setLoading(false);
+        return;
+      }
+
       const { error } = await supabase.auth.updateUser({
         password: formData.newPassword
       });
@@ -239,6 +261,42 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       </div>
     );
   }
+
+  // --- REUSABLE PASSWORD FIELD COMPONENT (FOR PEEK CONSISTENCY) ---
+  const PasswordInput = ({ 
+    label, 
+    value, 
+    onChange, 
+    show, 
+    setShow, 
+    placeholder = "••••••••",
+    required = true 
+  }: any) => (
+    <div>
+      <label className="block text-xs font-bold text-gray-400 uppercase mb-2">{label}</label>
+      <div className="relative">
+        <input
+          type={show ? 'text' : 'password'}
+          required={required}
+          className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <button
+          type="button"
+          onClick={() => setShow(!show)}
+          className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+        >
+          {show ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268-2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+          )}
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -357,45 +415,31 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             )}
 
             {mode === 'REGISTER' && (
-               <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Kata Sandi</label>
-                  <input
-                    type="password"
-                    required
-                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
-                    placeholder="••••••••"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  />
-               </div>
+               <PasswordInput 
+                  label="Kata Sandi" 
+                  value={formData.password} 
+                  onChange={(val: string) => setFormData({...formData, password: val})}
+                  show={showPassword}
+                  setShow={setShowPassword}
+               />
             )}
 
             {mode === 'PASSWORD_UPDATE' && (
               <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Kata Sandi Baru</label>
-                  <input
-                    type="password"
-                    required
-                    minLength={6}
-                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
-                    placeholder="••••••••"
-                    value={formData.newPassword}
-                    onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Konfirmasi Kata Sandi</label>
-                  <input
-                    type="password"
-                    required
-                    minLength={6}
-                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
-                    placeholder="••••••••"
-                    value={formData.confirmPassword}
-                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  />
-                </div>
+                <PasswordInput 
+                  label="Kata Sandi Baru" 
+                  value={formData.newPassword} 
+                  onChange={(val: string) => setFormData({...formData, newPassword: val})}
+                  show={showNewPassword}
+                  setShow={setShowNewPassword}
+                />
+                <PasswordInput 
+                  label="Konfirmasi Kata Sandi" 
+                  value={formData.confirmPassword} 
+                  onChange={(val: string) => setFormData({...formData, confirmPassword: val})}
+                  show={showConfirmPassword}
+                  setShow={setShowConfirmPassword}
+                />
               </div>
             )}
 
