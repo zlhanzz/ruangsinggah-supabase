@@ -9,6 +9,42 @@ interface LoginProps {
 
 type AuthMode = 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD' | 'PASSWORD_UPDATE';
 
+// --- REUSABLE PASSWORD FIELD COMPONENT (DEFINED OUTSIDE TO PREVENT RE-MOUNTING/FOCUS LOSS) ---
+const PasswordInput = ({ 
+  label, 
+  value, 
+  onChange, 
+  show, 
+  setShow, 
+  placeholder = "••••••••",
+  required = true 
+}: any) => (
+  <div>
+    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">{label}</label>
+    <div className="relative">
+      <input
+        type={show ? 'text' : 'password'}
+        required={required}
+        className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all font-medium"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <button
+        type="button"
+        onClick={() => setShow(!show)}
+        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors"
+      >
+        {show ? (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268-2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+        ) : (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268-2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+        )}
+      </button>
+    </div>
+  </div>
+);
+
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [mode, setMode] = useState<AuthMode>('LOGIN');
   const [loading, setLoading] = useState(false);
@@ -67,7 +103,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   }, []);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: any;
     if (resendTimer > 0) {
       interval = setInterval(() => {
         setResendTimer((prev) => prev - 1);
@@ -141,7 +177,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       }
 
       setVerificationSent(true);
-      setResendTimer(120); // 2 menit
+      setResendTimer(120);
     } catch (error: any) {
       setErrorMsg(getErrorMessage(error.message || 'unknown'));
     } finally {
@@ -176,7 +212,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         setErrorMsg(getErrorMessage(errData.message || 'Gagal mengirim link reset'));
       } else {
         setSuccessMsg(`Link reset password telah dikirim ke ${formData.email}`);
-        setResendTimer(120); // 2 menit
+        setResendTimer(120);
       }
     } catch (error: any) {
       setErrorMsg(getErrorMessage(error.message || 'unknown'));
@@ -261,7 +297,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           <h2 className="text-2xl font-black text-gray-900 mb-2">Verifikasi Email Terkirim</h2>
           <p className="text-gray-500 mb-6 leading-relaxed">
             Link verifikasi telah dikirim ke <strong>{formData.email}</strong>.<br />
-            Silakan cek inbox atau folder spam Anda.
+            Silakan cek kotak masuk atau folder spam Anda.
           </p>
 
           <div className="space-y-3 mb-8">
@@ -290,41 +326,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       </div>
     );
   }
-
-  const PasswordInput = ({ 
-    label, 
-    value, 
-    onChange, 
-    show, 
-    setShow, 
-    placeholder = "••••••••",
-    required = true 
-  }: any) => (
-    <div>
-      <label className="block text-xs font-bold text-gray-400 uppercase mb-2">{label}</label>
-      <div className="relative">
-        <input
-          type={show ? 'text' : 'password'}
-          required={required}
-          className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
-          placeholder={placeholder}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
-        <button
-          type="button"
-          onClick={() => setShow(!show)}
-          className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
-        >
-          {show ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268-2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-          )}
-        </button>
-      </div>
-    </div>
-  );
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -415,7 +416,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 <input
                   type="email"
                   required
-                  className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
+                  className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all font-medium"
                   placeholder="nama@gmail.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -424,39 +425,13 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             )}
 
             {mode === 'LOGIN' && (
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="block text-xs font-bold text-gray-400 uppercase">Kata Sandi</label>
-                  <button
-                    type="button"
-                    onClick={() => { setMode('FORGOT_PASSWORD'); setErrorMsg(''); setSuccessMsg(''); }}
-                    className="text-xs font-bold text-orange-500 hover:text-orange-600"
-                  >
-                    Lupa Sandi?
-                  </button>
-                </div>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
-                    placeholder="••••••••"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
-                  >
-                    {showPassword ? (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268-2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268-2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                    )}
-                  </button>
-                </div>
-              </div>
+              <PasswordInput 
+                label="Kata Sandi" 
+                value={formData.password} 
+                onChange={(val: string) => setFormData({...formData, password: val})}
+                show={showPassword}
+                setShow={setShowPassword}
+              />
             )}
 
             {mode === 'REGISTER' && (
