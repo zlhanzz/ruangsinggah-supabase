@@ -377,32 +377,36 @@ CREATE POLICY "mitra_update_admin"
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.users (id, email, name, phone, role, is_admin, created_at, updated_at)
-  VALUES (
-    NEW.id,
-    NEW.email,
-    COALESCE(
-      NEW.raw_user_meta_data->>'full_name',
-      NEW.raw_user_meta_data->>'name',
-      split_part(NEW.email, '@', 1)
-    ),
-    NEW.raw_user_meta_data->>'phone',
-    'user',
-    FALSE,
-    NOW(),
-    NOW()
-  )
-  ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name,
-    phone = EXCLUDED.phone,
-    updated_at = NOW();
+  -- Hanya sinkronisasi ke public.users jika email sudah diverifikasi
+  IF (NEW.email_confirmed_at IS NOT NULL) THEN
+    INSERT INTO public.users (id, email, name, phone, role, is_admin, created_at, updated_at)
+    VALUES (
+      NEW.id,
+      NEW.email,
+      COALESCE(
+        NEW.raw_user_meta_data->>'full_name',
+        NEW.raw_user_meta_data->>'name',
+        split_part(NEW.email, '@', 1)
+      ),
+      NEW.raw_user_meta_data->>'phone',
+      'user',
+      FALSE,
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      email = EXCLUDED.email,
+      name = EXCLUDED.name,
+      phone = EXCLUDED.phone,
+      updated_at = NOW();
+  END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
+  AFTER INSERT OR UPDATE OF email_confirmed_at ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 
