@@ -8,7 +8,8 @@ import {
     deleteTransaction, deleteTransactions,
     getAllDatabases, addDatabaseProduct, updateDatabaseProduct, deleteDatabase,
     getAdminProperties, addPropertyWithMedia, updatePropertyWithMedia,
-    updatePropertyStatus, deleteProperty, BasicPropertyInfo
+    updatePropertyStatus, deleteProperty, BasicPropertyInfo,
+    getAnalyticsSummary, AnalyticsSummary
 } from '../adminService';
 import { getUserTransactions } from '../userService';
 import Listings from './Listings';
@@ -206,6 +207,20 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
 
     // DATABASES STATE
     const [dbProducts, setDbProducts] = useState<DatabaseProduct[]>([]);
+    const [analyticsSummary, setAnalyticsSummary] = useState<AnalyticsSummary | null>(null);
+
+    const loadAnalyticsData = async () => {
+        if (!isAdmin) return;
+        setLoading(true);
+        try {
+            const data = await getAnalyticsSummary(dateFilter, customStartDate, customEndDate);
+            setAnalyticsSummary(data);
+        } catch (error) {
+            console.error("Gagal memuat data analitik", error);
+        } finally {
+            setLoading(false);
+        }
+    };
     const [isDbModalOpen, setIsDbModalOpen] = useState(false);
     const [editingDbId, setEditingDbId] = useState<string | null>(null);
     const initialDbForm: any = { campus: '', city: '', area: '', description: '', price: 0, totalData: 0, fileType: 'link', fileUrl: '' };
@@ -376,7 +391,8 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
         if (activeMenu === 'databases') loadDatabases();
         if (activeMenu === 'complaints') loadComplaints();
         if (activeMenu === 'transactions_db') loadDbTransactions();
-    }, [isAdmin, activeMenu]);
+        if (activeMenu === 'analytics') loadAnalyticsData();
+    }, [isAdmin, activeMenu, dateFilter, customStartDate, customEndDate]);
 
     // --- PROPERTY HANDLERS ---
 
@@ -1625,61 +1641,20 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
     };
 
     const renderAnalytics = () => {
-        // Mock data logic based on dateFilter
-        const trendData = generateTrendData(dateFilter, customStartDate, customEndDate, selectedYear);
-        let kostMultiplier = 1;
-        let dbMultiplier = 1;
-        let verifMultiplier = 1;
-
-        if (dateFilter === 'hari_ini') {
-            kostMultiplier = 0.05;
-            dbMultiplier = 0.1;
-            verifMultiplier = 0.08;
-        } else if (dateFilter === 'minggu_ini') {
-            kostMultiplier = 0.2;
-            dbMultiplier = 0.3;
-            verifMultiplier = 0.25;
-        } else if (dateFilter === 'bulan_ini') {
-            kostMultiplier = 0.6;
-            dbMultiplier = 0.5;
-            verifMultiplier = 0.7;
-        } else if (dateFilter === 'tahunan') {
-            kostMultiplier = 6.0;
-            dbMultiplier = 5.0;
-            verifMultiplier = 6.5;
-        }
-
-        const getMaxEndDate = () => {
-            if (!customStartDate) return undefined;
-            const start = new Date(customStartDate);
-            start.setMonth(start.getMonth() + 3);
-            return start.toISOString().split('T')[0];
-        };
-
-        const statsKost = {
-            users: Math.floor(154 * kostMultiplier),
-            active: Math.max(1, Math.floor(adminListings.length * kostMultiplier)),
-            revenue: 8500000 * kostMultiplier
-        };
-
-        const statsDb = {
-            buyers: Math.floor(89 * dbMultiplier),
-            active: Math.max(1, Math.floor(dbProducts.length * dbMultiplier)),
-            revenue: 4000000 * dbMultiplier
-        };
-
-        const statsVerif = {
-            orders: Math.floor(45 * verifMultiplier),
-            revenue: Math.floor(45 * verifMultiplier) * (verifikasiPrice || 70000)
-        };
-
-        const generalMultiplier = Math.max(kostMultiplier, dbMultiplier);
+        // Use real data from analyticsSummary
         const statsGeneral = {
-            users: Math.floor(243 * generalMultiplier), // 154 + 89
-            mitra: Math.floor(12 * generalMultiplier),
-            dbActive: statsDb.active,
-            totalRevenue: statsKost.revenue + statsDb.revenue + statsVerif.revenue
+            users: analyticsSummary?.totalUsers || 0,
+            revenue: analyticsSummary?.totalRevenue || 0,
+            mitra: analyticsSummary?.totalMitra || 0,
+            dbActive: analyticsSummary?.totalDatabases || 0
         };
+
+        const statsKost = analyticsSummary?.kostStats || { users: 0, active: 0, revenue: 0 };
+        const statsDb = analyticsSummary?.dbStats || { buyers: 0, active: 0, revenue: 0 };
+        const statsVerif = analyticsSummary?.verifStats || { orders: 0, revenue: 0 };
+
+        // Use real trend data from analyticsSummary
+        const trendData = analyticsSummary?.trendData || [];
 
         return (
             <div className="space-y-6 animate-in fade-in duration-500">
@@ -1752,7 +1727,7 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                         <StatCard title="Total Pengguna" value={statsGeneral.users.toString()} icon="👥" color="bg-blue-100 text-blue-700" />
-                        <StatCard title="Total Pendapatan" value={FORMAT_CURRENCY(statsGeneral.totalRevenue)} icon="💰" color="bg-orange-100 text-orange-700" />
+                        <StatCard title="Total Pendapatan" value={FORMAT_CURRENCY(statsGeneral.revenue)} icon="💰" color="bg-orange-100 text-orange-700" />
                         <StatCard title="Total Mitra Aktif" value={statsGeneral.mitra.toString()} icon="🤝" color="bg-emerald-100 text-emerald-700" />
                         <StatCard title="Total Database Aktif" value={statsGeneral.dbActive.toString()} icon="🗄️" color="bg-purple-100 text-purple-700" />
                     </div>

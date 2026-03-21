@@ -47,6 +47,28 @@ export interface AdminTransaction {
   };
 }
 
+export interface AnalyticsSummary {
+  totalUsers: number;
+  totalRevenue: number;
+  totalMitra: number;
+  totalDatabases: number;
+  kostStats: {
+    users: number;
+    active: number;
+    revenue: number;
+  };
+  dbStats: {
+    buyers: number;
+    active: number;
+    revenue: number;
+  };
+  verifStats: {
+    orders: number;
+    revenue: number;
+  };
+  trendData: any[];
+}
+
 // ---- HELPERS ----
 
 // Check if user is admin by querying the users table
@@ -886,4 +908,136 @@ export async function updateMitraRegistrationStatus(id: string, status: string):
     .eq('id', id);
 
   if (error) throw error;
+}
+
+export async function getAnalyticsSummary(dateFilter?: string, customStart?: string, customEnd?: string): Promise<AnalyticsSummary> {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(authUser.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  // 1. Total User Count (Global)
+  const { count: totalUsers } = await supabase
+    .from('users')
+    .select('*', { count: 'exact', head: true });
+
+  // 2. Total Databases
+  const { count: totalDatabases } = await supabase
+    .from('available_databases')
+    .select('*', { count: 'exact', head: true });
+
+  // 3. Properties (Active Listings & Mitra)
+  const { data: properties } = await supabase
+    .from('properties')
+    .select('owner_uid');
+  
+  const totalMitra = new Set(properties?.map(p => p.owner_uid)).size;
+  const totalActiveKosts = properties?.length || 0;
+
+  // 4. Transactions with Date Filtering
+  let query = supabase
+    .from('transactions')
+    .select('product_type, amount, status, created_at')
+    .or('status.eq.paid,status.eq.Selesai');
+
+  if (dateFilter && dateFilter !== 'all') {
+    const now = new Date();
+    if (dateFilter === 'hari_ini') {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      query = query.gte('created_at', start.toISOString());
+    } else if (dateFilter === 'minggu_ini') {
+      const day = now.getDay();
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1); 
+      const start = new Date(now.setDate(diff));
+      start.setHours(0,0,0,0);
+      query = query.gte('created_at', start.toISOString());
+    } else if (dateFilter === 'bulan_ini') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      query = query.gte('created_at', start.toISOString());
+    } else if (dateFilter === 'tahunan') {
+      const start = new Date(now.getFullYear(), 0, 1);
+      query = query.gte('created_at', start.toISOString());
+    } else if (dateFilter === 'custom' && customStart) {
+      query = query.gte('created_at', new Date(customStart).toISOString());
+      if (customEnd) {
+        const endDate = new Date(customEnd);
+        endDate.setHours(23, 59, 59, 999);
+        query = query.lte('created_at', endDate.toISOString());
+      }
+    }
+  }
+
+  const { data: transactions, error: trxError } = await query;
+  if (trxError) throw trxError;
+
+  const result: AnalyticsSummary = {
+    totalUsers: totalUsers || 0,
+    totalRevenue: 0,
+    totalMitra,
+    totalDatabases: totalDatabases || 0,
+    kostStats: { users: 0, active: totalActiveKosts, revenue: 0 },
+    dbStats: { buyers: 0, active: totalDatabases || 0, revenue: 0 },
+    verifStats: { orders: 0, revenue: 0 },
+    trendData: []
+  };
+
+  // Grouping for Trend Data
+  const trendMap = new Map<string, { pendapatan: number, pengguna: Set<string> }>();
+
+  transactions?.forEach(t => {
+    const amount = Number(t.amount || 0);
+    result.totalRevenue += amount;
+    if (t.product_type === 'rent') {
+      result.kostStats.revenue += amount;
+      result.kostStats.users++;
+    } else if (t.product_type === 'database') {
+      result.dbStats.revenue += amount;
+      result.dbStats.buyers++;
+    } else if (t.product_type === 'survey') {
+      result.verifStats.revenue += amount;
+      result.verifStats.orders++;
+    }
+
+    // Trend Grouping
+    const date = new Date(t.created_at);
+    let key = '';
+    if (dateFilter === 'hari_ini') {
+      key = `${date.getHours().toString().padStart(2, '0')}:00`;
+    } else if (dateFilter === 'minggu_ini') {
+       const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+       key = days[date.getDay()];
+    } else if (dateFilter === 'bulan_ini') {
+       const week = Math.ceil(date.getDate() / 7);
+       key = `Minggu ${week > 4 ? 4 : week}`;
+    } else if (dateFilter === 'tahunan') {
+       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
+       key = months[date.getMonth()];
+    } else {
+       key = `${date.getDate()}/${date.getMonth() + 1}`;
+    }
+
+    if (!trendMap.has(key)) trendMap.set(key, { pendapatan: 0, pengguna: new Set() });
+    const entry = trendMap.get(key)!;
+    entry.pendapatan += amount;
+    if ((t as any).user_id) entry.pengguna.add((t as any).user_id);
+  });
+
+  // Sort and format trend data
+  const sortedKeys = Array.from(trendMap.keys());
+  // Basic sort for time keys
+  // For simplicity, we just return the map entries. 
+  // In a real app we'd want to fill missing gaps (e.g. 0 revenue days).
+  result.trendData = sortedKeys.map(k => ({
+     time: k,
+     pendapatan: trendMap.get(k)!.pendapatan,
+     pengguna: trendMap.get(k)!.pengguna.size
+  }));
+
+  // If no trend data, provide at least one point to avoid chart crash
+  if (result.trendData.length === 0) {
+      result.trendData = [{ time: '-', pendapatan: 0, pengguna: 0 }];
+  }
+
+  return result;
 }
