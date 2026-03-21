@@ -1256,6 +1256,7 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
 
     // --- REALTIME TRANSACTIONS STATE ---
     const [rentTransactions, setRentTransactions] = useState<any[]>([]);
+    const [selectedRentTrxIds, setSelectedRentTrxIds] = useState<string[]>([]);
 
     const loadRentTransactions = async () => {
         setLoading(true);
@@ -1269,6 +1270,38 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
             }
         } catch (error) {
             console.error("Gagal memuat transaksi sewa kost", error);
+        } finally {
+            setLoading(false);
+            setSelectedRentTrxIds([]);
+        }
+    };
+
+    const handleDeleteRentTransaction = async (id: string) => {
+        if (!window.confirm('Apakah Anda yakin ingin menghapus riwayat transaksi ini? Data yang dihapus tidak dapat dikembalikan.')) return;
+
+        setLoading(true);
+        try {
+            await deleteTransaction(id);
+            alert('Transaksi berhasil dihapus');
+            loadRentTransactions();
+        } catch (error: any) {
+            alert('Gagal menghapus transaksi: ' + (error.message || 'Terjadi kesalahan'));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleBulkDeleteRentTransactions = async () => {
+        if (selectedRentTrxIds.length === 0) return;
+        if (!window.confirm(`Apakah Anda yakin ingin menghapus ${selectedRentTrxIds.length} transaksi terpilih? Data yang dihapus tidak dapat dikembalikan.`)) return;
+
+        setLoading(true);
+        try {
+            await deleteTransactions(selectedRentTrxIds);
+            alert(`${selectedRentTrxIds.length} transaksi berhasil dihapus`);
+            loadRentTransactions();
+        } catch (error: any) {
+            alert('Gagal menghapus transaksi: ' + (error.message || 'Terjadi kesalahan'));
         } finally {
             setLoading(false);
         }
@@ -2118,8 +2151,39 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
 
     const renderRentTransactions = () => (
         <div className="space-y-6">
-            <div className="flex justify-between items-center mb-2">
-                <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Manajemen Transaksi Sewa Kost</h2>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
+                <div className="flex flex-col gap-1">
+                    <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Manajemen Transaksi Sewa Kost</h2>
+                    {isAdmin && rentTransactions.length > 0 && (
+                        <div className="flex items-center gap-4 mt-2">
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <div className="relative flex items-center justify-center">
+                                    <input
+                                        type="checkbox"
+                                        className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-gray-300 checked:bg-orange-500 checked:border-orange-500 transition-all"
+                                        checked={selectedRentTrxIds.length === rentTransactions.length && rentTransactions.length > 0}
+                                        onChange={(e) => {
+                                            if (e.target.checked) setSelectedRentTrxIds(rentTransactions.map(t => t.id));
+                                            else setSelectedRentTrxIds([]);
+                                        }}
+                                    />
+                                    <svg className="absolute h-3.5 w-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
+                                </div>
+                                <span className="text-sm font-bold text-gray-600 group-hover:text-orange-600 transition-colors">Pilih Semua ({rentTransactions.length})</span>
+                            </label>
+                            
+                            {selectedRentTrxIds.length > 0 && (
+                                <button
+                                    onClick={handleBulkDeleteRentTransactions}
+                                    className="flex items-center gap-2 bg-red-50 hover:bg-red-500 text-red-600 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-red-100 transition-all shadow-sm active:scale-95"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    Hapus {selectedRentTrxIds.length} Terpilih
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
                 {isAdmin && (
                     <button onClick={() => setIsAddingManualRent(true)} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 shrink-0">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
@@ -2145,12 +2209,29 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                 {rentTransactions.map((rawTrx) => {
                     const trx = formatRentTrx(rawTrx);
                     return (
-                    <div key={trx.id} className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row gap-6 hover:shadow-md transition-shadow relative overflow-hidden">
+                    <div key={trx.id} className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row gap-6 hover:shadow-md transition-shadow relative overflow-hidden group/card">
+                        {isAdmin && (
+                            <div className="absolute top-4 left-4 z-[20]">
+                                <div className="relative flex items-center justify-center">
+                                    <input
+                                        type="checkbox"
+                                        className="peer h-6 w-6 cursor-pointer appearance-none rounded-lg border-2 border-gray-200 bg-white/80 backdrop-blur-sm checked:bg-orange-500 checked:border-orange-500 transition-all shadow-sm"
+                                        checked={selectedRentTrxIds.includes(trx.id)}
+                                        onChange={() => {
+                                            setSelectedRentTrxIds(prev =>
+                                                prev.includes(trx.id) ? prev.filter(id => id !== trx.id) : [...prev, trx.id]
+                                            );
+                                        }}
+                                    />
+                                    <svg className="absolute h-4 w-4 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
+                                </div>
+                            </div>
+                        )}
                         {trx.status === 'Selesai' && <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/10 rounded-bl-full -z-0"></div>}
 
                         <div className="flex-1 space-y-4 relative z-10">
                             <div className="flex flex-wrap justify-between items-start border-b border-gray-50 pb-4 gap-2">
-                                <div>
+                                <div className={isAdmin ? 'pl-8' : ''}>
                                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                                         <span className="bg-orange-100 text-orange-700 font-bold px-2 py-1 rounded text-[10px] uppercase tracking-wider">{trx.id.substring(0,8)}</span>
                                         <span className="text-xs text-gray-400 font-medium">Order: {trx.date}</span>
@@ -2257,6 +2338,15 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                                 >
                                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.711.956 2.873.956 3.182 0 5.768-2.585 5.77-5.765.001-3.181-2.586-5.768-5.768-5.768zm3.333 8.33c-.15.424-.877.817-1.229.845-.306.024-.652.128-2.146-.464-1.801-.715-2.956-2.548-3.047-2.671-.09-.122-.727-.968-.727-1.844 0-.875.452-1.304.613-1.472.161-.168.351-.21.468-.21.117 0 .234.004.336.008.109.006.255-.044.398.303.151.365.518 1.264.565 1.356.046.091.077.198.016.321-.061.121-.092.197-.184.304-.092.107-.193.226-.275.319-.092.105-.188.22-.083.402.105.183.468.775 1.002 1.25.688.614 1.27.8 1.455.892.183.092.29.077.397-.038.106-.115.46-.537.583-.721.122-.184.244-.154.409-.092.165.061 1.042.492 1.221.583.179.092.298.138.341.214.043.076.043.447-.107.871z" /></svg>
                                     Follow Up WA
+                                </button>
+                            )}
+                            {isAdmin && (
+                                <button
+                                    onClick={() => handleDeleteRentTransaction(trx.id)}
+                                    className="w-full bg-white hover:bg-red-50 text-gray-400 hover:text-red-500 border border-gray-100 hover:border-red-100 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5 opacity-0 group-hover/card:opacity-100"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    Hapus Transaksi
                                 </button>
                             )}
                         </div>
