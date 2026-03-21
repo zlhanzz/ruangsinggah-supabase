@@ -187,3 +187,56 @@ export async function getUserTransactions(uid: string): Promise<any[]> {
   }
 }
 
+export async function addPropertyReview(propertyId: string, review: { userId: string; userName: string; rating: number; comment: string }) {
+  try {
+    const { data: property, error: fetchError } = await supabase
+      .from('properties')
+      .select('reviews')
+      .eq('id', propertyId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const currentReviews = property.reviews || [];
+    const newReview = {
+      ...review,
+      date: new Date().toISOString()
+    };
+    const updatedReviews = [...currentReviews, newReview];
+
+    // Calculate new average rating
+    const totalRating = updatedReviews.reduce((sum: number, r: any) => sum + (Number(r.rating) || 0), 0);
+    const newAverageRating = Number((totalRating / updatedReviews.length).toFixed(1));
+
+    // Use RPC to bypass RLS for rating/reviews update if necessary
+    const { error: rpcError } = await supabase.rpc('submit_property_review', {
+      prop_id: propertyId,
+      new_review: newReview, // RPC appends this to the array
+      new_rating: newAverageRating
+    });
+
+    if (rpcError) throw rpcError;
+    return { success: true };
+  } catch (error) {
+    console.error('Error adding property review:', error);
+    throw error;
+  }
+}
+
+export async function getExtraBills(userId: string): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('product_type', 'tagihan_ekstra')
+      .eq('status', 'pending');
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching extra bills:', error);
+    return [];
+  }
+}
+

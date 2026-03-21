@@ -501,3 +501,65 @@ CREATE POLICY "transactions_insert_own"
 CREATE POLICY "transactions_admin_all" 
   ON public.transactions FOR ALL 
   USING (public.is_admin());
+
+-- ============================================================
+-- STEP 12: COMPLAINTS TABLE
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.complaints (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kost_id          UUID REFERENCES public.properties(id) ON DELETE CASCADE,
+  kost_name        TEXT,
+  user_id          UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  user_name        TEXT,
+  user_phone       TEXT,
+  title            TEXT NOT NULL,
+  description      TEXT NOT NULL,
+  photo_url        TEXT,
+  status           TEXT NOT NULL DEFAULT 'open', -- open, in_progress, resolved
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ENABLE RLS
+ALTER TABLE public.complaints ENABLE ROW LEVEL SECURITY;
+
+-- POLICIES
+CREATE POLICY "complaints_select_all" 
+  ON public.complaints FOR SELECT 
+  USING (auth.uid() = user_id OR public.is_admin());
+
+CREATE POLICY "complaints_insert_own" 
+  ON public.complaints FOR INSERT 
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "complaints_admin_all" 
+  ON public.complaints FOR ALL 
+  USING (public.is_admin());
+
+-- ============================================================
+-- STEP 13: SECURE REVIEW FUNCTION (Bypass RLS for rating updates)
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.submit_property_review(
+  prop_id UUID,
+  new_review JSONB,
+  new_rating NUMERIC
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  -- Perform the update
+  UPDATE public.properties
+  SET 
+    reviews = reviews || new_review,
+    rating = new_rating,
+    updated_at = NOW()
+  WHERE id = prop_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.submit_property_review(UUID, JSONB, NUMERIC) TO authenticated;
