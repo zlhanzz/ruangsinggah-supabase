@@ -582,6 +582,11 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           productId={kost.id}
           productType="kost_booking"
           userId={user?.id}
+          metadata={{ 
+            kostName: kost.title, 
+            periodLabel: periodLabels[selectedPeriod] || selectedPeriod, 
+            ...tempBookingData 
+          }}
           onPaymentSuccess={handlePaymentSuccess}
           onCancel={() => setIsPaymentGatewayOpen(false)}
         />

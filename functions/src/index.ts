@@ -437,7 +437,7 @@ export const simulatePaymentSuccess = functions.https.onRequest({ cors: true }, 
 
 // --- PAKASIR PAYMENT FUNCTIONS ---
 
-function generatePDFBuffer(orderId: string, userName: string, productName: string, amount: number, dateStr: string): Promise<string> {
+function generatePDFBuffer(orderId: string, userName: string, productName: string, amount: number, dateStr: string, detailLabel: string = 'Produk', headerTitle: string = 'INVOICE', periodText: string = ''): Promise<string> {
   const PDFDocument = require('pdfkit');
   return new Promise((resolve, reject) => {
     try {
@@ -456,7 +456,7 @@ function generatePDFBuffer(orderId: string, userName: string, productName: strin
          .fillColor('#111827').text('.id');
       
       // Invoice Info Right Aligned
-      doc.fontSize(20).fillColor('#374151').text('INVOICE', 50, 50, { align: 'right', width: 495 });
+      doc.fontSize(20).fillColor('#374151').text(headerTitle.toUpperCase(), 50, 50, { align: 'right', width: 495 });
       doc.fontSize(10).fillColor('#6b7280').text(`Order ID: #${orderId.substring(0,8).toUpperCase()}`, 50, 75, { align: 'right', width: 495 });
       doc.text(`Tanggal: ${dateStr}`, 50, 90, { align: 'right', width: 495 });
       
@@ -469,7 +469,7 @@ function generatePDFBuffer(orderId: string, userName: string, productName: strin
       // --- TABLE HEADER ---
       const tableTop = 220;
       doc.font('Helvetica-Bold').fontSize(10).fillColor('#111827');
-      doc.text('Deskripsi Produk', 50, tableTop);
+      doc.text(`Deskripsi ${detailLabel}`, 50, tableTop);
       doc.text('Kuantitas', 350, tableTop, { width: 50, align: 'center' });
       doc.text('Harga Satuan', 420, tableTop, { width: 125, align: 'right' });
       
@@ -480,7 +480,7 @@ function generatePDFBuffer(orderId: string, userName: string, productName: strin
       const rowTop = tableTop + 30;
       doc.font('Helvetica').fontSize(10).fillColor('#374151');
       doc.text(productName, 50, rowTop, { width: 280 });
-      doc.text('1', 350, rowTop, { width: 50, align: 'center' });
+      doc.text('1' + (periodText ? periodText.replace(' /', '') : ''), 350, rowTop, { width: 50, align: 'center' });
       doc.text(`Rp ${amount.toLocaleString('id-ID')}`, 420, rowTop, { width: 125, align: 'right' });
 
       // Line under row
@@ -673,6 +673,10 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
        try {
           const { data: user } = await supabase.from('users').select('name, email').eq('id', userId).single();
           let productName = 'Produk RuangSinggah';
+          let detailLabel = 'Produk';
+          let headerTitle = 'Invoice Pembelian';
+          let periodText = '';
+
           if (productType === 'database') {
              const { data: dbProd } = await supabase.from('available_databases').select('campus, area').eq('id', productId).single();
              if (dbProd) {
@@ -681,17 +685,25 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
           } else if (productType === 'kost_booking' || productType === 'property') {
              const kName = order.metadata?.kostName || order.metadata?.item || '';
              const kPeriod = order.metadata?.periodLabel || order.metadata?.period || '1 Bulan';
-             productName = kName ? `Sewa Kost ${kName} - ${kPeriod}` : 'Sewa Kost RuangSinggah';
+             productName = kName ? `${kName}` : 'RuangSinggah';
+             headerTitle = 'Invoice Sewa Kost';
+             detailLabel = 'Kost';
+             periodText = ` / ${kPeriod}`;
           } else if (productType === 'survey') {
              const kName = order.metadata?.kostName || order.metadata?.item || '';
-             productName = kName ? `Layanan Survey Kost ${kName}` : 'Layanan Survey Kost';
+             productName = kName ? `Survey Kost ${kName}` : 'Survey Kost';
+             headerTitle = 'Invoice Layanan Survey';
+             detailLabel = 'Layanan';
           }
           const base64Pdf = await generatePDFBuffer(
                order.id, 
                user?.name || 'Pelanggan', 
                productName, 
                finalAmount, 
-               new Date().toLocaleDateString('id-ID')
+               new Date().toLocaleDateString('id-ID'),
+               detailLabel,
+               headerTitle,
+               periodText
           );
           
           const brevoApiKey = brevoApiKeyParam.value();
@@ -699,7 +711,7 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
             const payload = {
               sender: { name: "RuangSinggah.id", email: "invoice@ruangsinggah.id" },
               to: [{ email: user.email, name: user.name || 'Pelanggan' }],
-              subject: `Invoice Pembelian - ${productName}`,
+              subject: `${headerTitle} RuangSinggah.id`,
               htmlContent: `<!DOCTYPE html>
 <html>
 <head>
@@ -716,7 +728,7 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
           <tr>
             <td style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 32px 40px; text-align:center;">
               <p style="margin:0; color:#f97316; font-size:24px; font-weight:900; letter-spacing:2px;">RUANGSINGGAH.ID</p>
-              <p style="margin:6px 0 0; color:#6b7280; font-size:11px; letter-spacing:3px; text-transform:uppercase;">Invoice Pembelian</p>
+              <p style="margin:6px 0 0; color:#6b7280; font-size:11px; letter-spacing:3px; text-transform:uppercase;">${headerTitle}</p>
             </td>
           </tr>
           
@@ -724,7 +736,7 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
           <tr>
             <td style="padding: 36px 40px;">
               <p style="margin:0 0 8px; font-size:22px; font-weight:800; color:#111827;">Halo, ${user.name || 'Pelanggan'}! 👋</p>
-              <p style="margin:0 0 24px; font-size:15px; color:#6b7280; line-height:1.6;">Terima kasih atas pesanan Anda. Invoice untuk pembelian <strong style="color:#111827;">${productName}</strong> telah kami siapkan dan terlampir di bawah ini.</p>
+              <p style="margin:0 0 24px; font-size:15px; color:#6b7280; line-height:1.6;">Terima kasih atas pesanan Anda. ${headerTitle} untuk <strong style="color:#111827;">${productName}</strong> telah kami siapkan dan terlampir di bawah ini.</p>
               
               <!-- Order Detail Box -->
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb; border-radius:12px; border:1px solid #e5e7eb; margin-bottom:28px;">
@@ -737,12 +749,12 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
                       </td>
                       <td style="padding-bottom:16px; text-align:right;">
                         <p style="margin:0 0 4px; font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:2px;">Total Bayar</p>
-                        <p style="margin:0; font-size:16px; font-weight:900; color:#f97316;">${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(finalAmount)}</p>
+                        <p style="margin:0; font-size:16px; font-weight:900; color:#f97316;">${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(finalAmount)}<span style="font-size:11px; color:#9ca3af; font-weight:600;">${periodText}</span></p>
                       </td>
                     </tr>
                     <tr>
                       <td colspan="2">
-                        <p style="margin:0 0 4px; font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:2px;">Produk</p>
+                        <p style="margin:0 0 4px; font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:2px;">${detailLabel}</p>
                         <p style="margin:0; font-size:14px; font-weight:700; color:#111827;">${productName}</p>
                       </td>
                     </tr>
