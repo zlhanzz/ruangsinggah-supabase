@@ -103,6 +103,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         }
       };
       checkSession();
+    } else if (params.get('verified') === 'true') {
+      setSuccessMsg('Email berhasil diverifikasi! Silakan login dengan email dan kata sandi Anda.');
+      // Clear param from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 

@@ -125,8 +125,17 @@ const App: React.FC = () => {
     let mounted = true;
 
     // Listen to auth changes (login/logout/token refresh and initial mount)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("Auth event triggered:", event, session);
+
+      // Intercept verification redirect (signup)
+      const hash = window.location.hash;
+      if (event === 'SIGNED_IN' && hash.includes('type=signup')) {
+        await supabase.auth.signOut();
+        navigate('/login?verified=true', { replace: true });
+        return;
+      }
+
       // INITIAL_SESSION occurs on first page load
       if (
         event === 'INITIAL_SESSION' ||
