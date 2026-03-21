@@ -678,6 +678,13 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
              if (dbProd) {
                productName = `Database Kost ${dbProd.campus || dbProd.area || ''}`;
              }
+          } else if (productType === 'kost_booking' || productType === 'property') {
+             const kName = order.metadata?.kostName || order.metadata?.item || '';
+             const kPeriod = order.metadata?.periodLabel || order.metadata?.period || '1 Bulan';
+             productName = kName ? `Sewa Kost ${kName} - ${kPeriod}` : 'Sewa Kost RuangSinggah';
+          } else if (productType === 'survey') {
+             const kName = order.metadata?.kostName || order.metadata?.item || '';
+             productName = kName ? `Layanan Survey Kost ${kName}` : 'Layanan Survey Kost';
           }
           const base64Pdf = await generatePDFBuffer(
                order.id, 
