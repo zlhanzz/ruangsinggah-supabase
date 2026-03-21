@@ -2090,7 +2090,7 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
         return {
             id: t.id,
             rawDate: t.created_at,
-            date: new Date(t.created_at).toLocaleDateString('id-ID'),
+            date: new Date(t.created_at).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' WIB',
             name: t.user?.name || t.metadata?.name || 'Penyewa',
             email: t.user?.email || t.metadata?.email,
             phone: t.user?.phone || t.metadata?.phone,

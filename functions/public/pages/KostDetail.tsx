@@ -585,6 +585,19 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           metadata={{ 
             kostName: kost.title, 
             periodLabel: periodLabels[selectedPeriod] || selectedPeriod, 
+            roomType: tempBookingData.variantName,
+            startDate: tempBookingData.startDate,
+            endDate: (() => {
+               const d = new Date(tempBookingData.startDate);
+               const p = tempBookingData.period;
+               if (p === 'harian') d.setDate(d.getDate() + 1);
+               else if (p === 'mingguan') d.setDate(d.getDate() + 7);
+               else if (p === 'bulanan') d.setMonth(d.getMonth() + 1);
+               else if (p === '3bulanan') d.setMonth(d.getMonth() + 3);
+               else if (p === '6bulanan') d.setMonth(d.getMonth() + 6);
+               else if (p === 'tahunan') d.setFullYear(d.getFullYear() + 1);
+               return d.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+            })(),
             ...tempBookingData 
           }}
           onPaymentSuccess={handlePaymentSuccess}
