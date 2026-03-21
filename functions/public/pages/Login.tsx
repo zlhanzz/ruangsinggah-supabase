@@ -298,11 +298,19 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-1.14.76a2 2 0 01-2.22 0l-1.14-.76" /></svg>
           </div>
-          <h2 className="text-2xl font-black text-gray-900 mb-2">Verifikasi Email Terkirim</h2>
-          <p className="text-gray-500 mb-6 leading-relaxed">
+          <h2 className="text-2xl font-black text-gray-900 mb-2 leading-tight">Verifikasi Email Terkirim</h2>
+          <p className="text-gray-500 mb-2 leading-relaxed">
             Link verifikasi telah dikirim ke <strong>{formData.email}</strong>.<br />
             Silakan cek kotak masuk atau folder spam Anda.
           </p>
+
+          <button
+            onClick={() => setVerificationSent(false)}
+            className="text-[10px] uppercase tracking-widest font-bold text-orange-500 hover:text-orange-600 mb-6 flex items-center gap-1 mx-auto transition-colors"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+            Salah email? Ubah disini
+          </button>
 
           <div className="space-y-3 mb-8">
             {resendTimer > 0 ? (
