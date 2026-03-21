@@ -2111,6 +2111,7 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
             startDate: t.metadata?.startDate || '-',
             endDate: t.metadata?.endDate || '-',
             transferProofUrl: t.metadata?.transferProofUrl || null,
+            platformFee: Number(t.metadata?.platformFee) || 0,
             invoiceId: t.pakasir_order_id || `INV-${t.id.substring(0,8).toUpperCase()}`,
         };
     };

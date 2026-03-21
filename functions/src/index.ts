@@ -314,8 +314,9 @@ async function sendSuccessEmail(orderId: string) {
             productLink = product.file_urls?.link || product.file_urls?.file || product.file_urls?.googleDrive || '';
         }
     } else if (order.product_type === 'kost_booking') {
-        productName = "Booking Kost";
-        // Might add a link to "My Bookings" page
+        const kName = order.metadata?.kostName || order.metadata?.item || '';
+        const kPeriod = order.metadata?.periodLabel || order.metadata?.period || '-';
+        productName = kName ? `Sewa Kost ${kName} (${kPeriod})` : "Booking Kost";
         productLink = "https://ruangsinggah.id/my-kost";
     } else if (order.product_type === 'survey') {
         productName = "Jasa Survey Lokasi Kost";
@@ -354,6 +355,18 @@ async function sendSuccessEmail(orderId: string) {
               <p>Tim kami akan segera memverifikasi pembayaran Anda dan menghubungi Anda melalui WhatsApp untuk jadwal video call.</p>
               <p style="font-size: 12px; color: #1e40af; margin-top: 15px;">*Pastikan nomor WhatsApp Anda aktif.</p>
             </div>
+          ` : order.product_type === 'kost_booking' ? `
+            <div style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #334155; font-size: 16px;">Detail Penyewaan:</h3>
+              <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #475569;">
+                <tr><td style="padding: 6px 0; width: 40%;"><strong>Nama Kost</strong></td><td>: ${order.metadata?.kostName || order.metadata?.item || '-'}</td></tr>
+                <tr><td style="padding: 6px 0;"><strong>Tipe Kamar</strong></td><td>: ${order.metadata?.roomType || '-'}</td></tr>
+                <tr><td style="padding: 6px 0;"><strong>Durasi Sewa</strong></td><td>: ${order.metadata?.periodLabel || order.metadata?.period || '-'}</td></tr>
+                <tr><td style="padding: 6px 0;"><strong>Masa Sewa</strong></td><td>: ${order.metadata?.startDate || '-'} s/d ${order.metadata?.endDate || '-'}</td></tr>
+              </table>
+            </div>
+            <p>Silakan cek status pesanan Anda di halaman "My Kost" pada aplikasi kami.</p>
+            <a href="${productLink}" style="display: inline-block; background: #f97316; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">CEK STATUS BOOKING</a>
           ` : `
             <p>Silakan cek status pesanan Anda di halaman "My Kost" pada aplikasi kami.</p>
             <a href="${productLink}" style="display: inline-block; background: #f97316; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">CEK STATUS BOOKING</a>
