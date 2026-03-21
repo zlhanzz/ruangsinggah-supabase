@@ -156,3 +156,34 @@ export async function getPublicDatabaseProducts(): Promise<DatabaseProduct[]> {
     return [];
   }
 }
+
+export async function getUserTransactions(uid: string): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select(`
+        *,
+        user:user_id (
+          name,
+          email,
+          phone,
+          photo_url,
+          gender,
+          occupation,
+          institution,
+          religion,
+          relationship_status,
+          address
+        )
+      `)
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching user transactions:', error);
+    return [];
+  }
+}
+

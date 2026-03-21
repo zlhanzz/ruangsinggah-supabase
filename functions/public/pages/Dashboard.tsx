@@ -10,7 +10,9 @@ import {
     getAdminProperties, addPropertyWithMedia, updatePropertyWithMedia,
     updatePropertyStatus, deleteProperty, BasicPropertyInfo
 } from '../adminService';
+import { getUserTransactions } from '../userService';
 import Listings from './Listings';
+
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
     BarChart, Bar, Legend
@@ -1252,131 +1254,42 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
         }
     };
 
-    // --- DUMMY DATA UNTUK UI BARU ---
-    const [dummyTransactions, setDummyTransactions] = useState<any[]>([
-        {
-            id: 'TRX-EKSTRA-001',
-            date: '2026-08-10',
-            name: 'Budi Santoso',
-            phone: '081234567891',
-            item: 'Kost Singgah 2',
-            roomType: 'Tagihan Tambahan',
-            periodLabel: '-',
-            paymentMethod: 'Transfer Bank BCA',
-            paymentType: 'transfer',
-            amount: 150000,
-            status: 'Menunggu',
-            startDate: '-',
-            endDate: '-',
-            transferProofUrl: 'https://via.placeholder.com/400x600?text=Bukti+Transfer+Tagihan',
-            invoiceId: `INV-EKS-${Math.floor(Math.random() * 10000)}`,
-            isExtra: true
-        },
-        {
-            id: 'TRX-EXT-002',
-            date: '2026-08-11',
-            name: 'Ayu Lestari',
-            phone: '081234567892',
-            item: 'Kost Tulip',
-            roomType: 'Kamar Standard AC',
-            periodLabel: 'Perpanjangan 1 Bulan',
-            paymentMethod: 'Transfer Bank Mandiri',
-            paymentType: 'transfer',
-            amount: 850000,
-            status: 'Menunggu',
-            startDate: '2026-08-15',
-            endDate: '2026-09-15',
-            transferProofUrl: 'https://via.placeholder.com/400x600?text=Bukti+Transfer+Perpanjangan',
-            invoiceId: `INV-EXT-${Math.floor(Math.random() * 10000)}`,
-            isExtension: true
-        },
-        {
-            id: 'TRX-2026-001',
-            // Profil Penyewa
-            name: 'Budi Santoso',
-            email: 'budi.santoso@gmail.com',
-            phone: '6281234567890',
-            occupation: 'Mahasiswa S1',
-            institution: 'Institut Pertanian Bogor',
-            gender: 'Pria',
-            religion: 'Islam',
-            relationshipStatus: 'Single',
-            profileAddress: 'Jl. Raya Dramaga No. 45, Bogor Barat, Jawa Barat 16680',
-            photoURL: 'https://i.pravatar.cc/150?img=11',
-            // Detail Transaksi
-            item: 'KOST MADANI',
-            address: 'Dramaga, Bogor',
-            roomType: 'Standard (Kipas)',
-            periodLabel: 'Bulanan',
-            paymentType: 'transfer',
-            paymentMethod: 'Transfer Bank BCA',
-            paymentBank: 'BCA',
-            transferProofUrl: 'https://images.unsplash.com/photo-1554774853-d50f9c681ae2?w=600&q=80',
-            date: '2026-02-24',
-            startDate: '2026-03-01',
-            endDate: '2026-04-01',
-            status: 'Menunggu',
-            amount: 850000,
-            platformFee: 15000,
-            invoiceId: 'INV-2026-001',
-        },
-        {
-            id: 'TRX-2026-002',
-            name: 'Siti Aminah',
-            email: 'siti.aminah@outlook.com',
-            phone: '6289876543210',
-            occupation: 'Karyawan Swasta',
-            institution: 'PT. Telekomunikasi Indonesia',
-            gender: 'Wanita',
-            religion: 'Islam',
-            relationshipStatus: 'Single',
-            profileAddress: 'Jl. Margonda Raya No. 12, Depok, Jawa Barat 16431',
-            photoURL: 'https://i.pravatar.cc/150?img=5',
-            item: 'Kost Melati',
-            address: 'Margonda, Depok',
-            roomType: 'Deluxe (AC)',
-            periodLabel: '3 Bulan',
-            paymentType: 'gateway',
-            paymentMethod: 'Midtrans - GoPay',
-            paymentBank: null,
-            transferProofUrl: null,
-            date: '2026-02-23',
-            startDate: '2026-02-28',
-            endDate: '2026-05-28',
-            status: 'Selesai',
-            amount: 3600000,
-            platformFee: 45000,
-            invoiceId: 'INV-2026-002',
-        },
-        {
-            id: 'TRX-2026-003',
-            name: 'Ahmad Fauzi',
-            email: 'ahmad.fauzi@yahoo.com',
-            phone: '6285555123456',
-            occupation: 'Dosen / Peneliti',
-            institution: 'Universitas Indonesia',
-            gender: 'Pria',
-            religion: 'Islam',
-            relationshipStatus: 'Menikah',
-            profileAddress: 'Jl. Pemuda No. 8, Rawamangun, Jakarta Timur 13220',
-            photoURL: 'https://i.pravatar.cc/150?img=15',
-            item: 'Kost Orange Residence',
-            address: 'Dramaga, Bogor',
-            roomType: 'Executive VIP',
-            periodLabel: 'Tahunan',
-            paymentType: 'transfer',
-            paymentMethod: 'Transfer Bank Mandiri',
-            paymentBank: 'Mandiri',
-            transferProofUrl: 'https://images.unsplash.com/photo-1554772954-84b39f8e1b49?w=600&q=80',
-            date: '2026-02-22',
-            startDate: '2026-03-10',
-            endDate: '2027-03-10',
-            status: 'Ditolak',
-            amount: 25000000,
-            platformFee: 250000,
-            invoiceId: 'INV-2026-003',
-        },
-    ]);
+    // --- REALTIME TRANSACTIONS STATE ---
+    const [rentTransactions, setRentTransactions] = useState<any[]>([]);
+
+    const loadRentTransactions = async () => {
+        setLoading(true);
+        try {
+            if (isAdmin) {
+                const data = await getAdminTransactions();
+                setRentTransactions(data.filter(t => t.product_type !== 'database'));
+            } else if (uid) {
+                const data = await getUserTransactions(uid);
+                setRentTransactions(data.filter((t: any) => t.product_type !== 'database'));
+            }
+        } catch (error) {
+            console.error("Gagal memuat transaksi sewa kost", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeMenu === 'transactions_rent') {
+            loadRentTransactions();
+
+            const channel = supabase.channel('realtime_rent_trx')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => {
+                    loadRentTransactions();
+                })
+                .subscribe();
+
+            return () => {
+                supabase.removeChannel(channel);
+            };
+        }
+    }, [activeMenu, isAdmin, uid]);
+
     const [dummyVerifications, setDummyVerifications] = useState<any[]>([
         {
             id: 'SRV-2026-001',
@@ -1446,28 +1359,37 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
 
     const [isAddingManualMitra, setIsAddingManualMitra] = useState(false);
     const [manualMitraForm, setManualMitraForm] = useState<any>({});
-    const handleManualRentSubmit = (e: React.FormEvent) => {
+    const handleManualRentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const newOrder = {
-            id: `TRX-MAN-${Math.floor(Math.random() * 10000)}`,
-            name: manualRentForm.name || '-',
-            phone: manualRentForm.phone || '-',
-            email: manualRentForm.email || '-',
-            item: manualRentForm.item || '-',
-            roomType: manualRentForm.roomType || '-',
-            periodLabel: manualRentForm.periodLabel || 'Bulanan',
-            paymentType: 'transfer',
-            paymentMethod: 'Manual Input',
-            date: manualRentForm.date || new Date().toISOString().split('T')[0],
-            startDate: manualRentForm.startDate || '-',
-            endDate: manualRentForm.endDate || '-',
-            status: manualRentForm.status || 'Selesai',
-            amount: Number(manualRentForm.amount) || 0,
-            platformFee: 0,
-            invoiceId: `INV-MAN-${Math.floor(Math.random() * 10000)}`,
-        };
-        setDummyTransactions([newOrder, ...dummyTransactions]);
         setIsAddingManualRent(false);
+        if (!isAdmin) {
+            alert('Akses ditolak.');
+            return;
+        }
+        try {
+            await supabase.from('transactions').insert({
+                user_id: uid, 
+                product_id: '00000000-0000-0000-0000-000000000000', 
+                product_type: 'kost_booking',
+                amount: Number(manualRentForm.amount) || 0,
+                status: manualRentForm.status === 'Selesai' ? 'paid' : 'pending',
+                payment_method: manualRentForm.paymentMethod || 'Manual Input',
+                metadata: {
+                    name: manualRentForm.name || '-',
+                    phone: manualRentForm.phone || '-',
+                    email: manualRentForm.email || '-',
+                    kostName: manualRentForm.item || '-',
+                    roomType: manualRentForm.roomType || '-',
+                    period: manualRentForm.periodLabel || 'Bulanan',
+                    startDate: manualRentForm.startDate || '-',
+                    endDate: manualRentForm.endDate || '-'
+                }
+            });
+            alert('Transaksi manual ditambahkan!');
+        } catch(e) {
+            console.error(e);
+            alert('Gagal menambah transaksi manual');
+        }
         setManualRentForm({});
     };
 
@@ -2164,14 +2086,45 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
         </div>
     );
 
+    const formatRentTrx = (t: any) => {
+        return {
+            id: t.id,
+            rawDate: t.created_at,
+            date: new Date(t.created_at).toLocaleDateString('id-ID'),
+            name: t.user?.name || t.metadata?.name || 'Penyewa',
+            email: t.user?.email || t.metadata?.email,
+            phone: t.user?.phone || t.metadata?.phone,
+            photoURL: t.user?.photo_url || t.metadata?.photoURL,
+            gender: t.user?.gender || t.metadata?.gender,
+            occupation: t.user?.occupation || t.metadata?.occupation,
+            institution: t.user?.institution || t.metadata?.institution,
+            religion: t.user?.religion || t.metadata?.religion,
+            relationshipStatus: t.user?.relationship_status || t.metadata?.relationshipStatus,
+            profileAddress: t.user?.address || t.metadata?.profileAddress,
+            paymentType: (t.payment_method || '').toLowerCase().includes('transfer') ? 'transfer' : 'gateway',
+            item: t.metadata?.kostName || t.product_type,
+            roomType: t.metadata?.roomType || '-',
+            periodLabel: t.metadata?.period || '-',
+            paymentMethod: t.payment_method || '-',
+            amount: t.amount,
+            status: t.status === 'pending' ? 'Menunggu' : (t.status === 'paid' ? 'Selesai' : (t.status === 'cancelled' ? 'Ditolak' : t.status)),
+            startDate: t.metadata?.startDate || '-',
+            endDate: t.metadata?.endDate || '-',
+            transferProofUrl: t.metadata?.transferProofUrl || null,
+            invoiceId: t.pakasir_order_id || `INV-${t.id.substring(0,8).toUpperCase()}`,
+        };
+    };
+
     const renderRentTransactions = () => (
         <div className="space-y-6">
             <div className="flex justify-between items-center mb-2">
                 <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Manajemen Transaksi Sewa Kost</h2>
-                <button onClick={() => setIsAddingManualRent(true)} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 shrink-0">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                    Tambah Manual
-                </button>
+                {isAdmin && (
+                    <button onClick={() => setIsAddingManualRent(true)} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 shrink-0">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                        Tambah Manual
+                    </button>
+                )}
             </div>
             <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 flex gap-3 mb-6">
                 <div className="text-blue-500 shrink-0">
@@ -2183,7 +2136,14 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
             </div>
 
             <div className="grid grid-cols-1 gap-6">
-                {dummyTransactions.map((trx) => (
+                {rentTransactions.length === 0 ? (
+                    <div className="bg-white border text-center border-gray-100 rounded-2xl p-12 shadow-sm">
+                        <p className="text-gray-500 font-medium">Belum ada data transaksi.</p>
+                    </div>
+                ) : null}
+                {rentTransactions.map((rawTrx) => {
+                    const trx = formatRentTrx(rawTrx);
+                    return (
                     <div key={trx.id} className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row gap-6 hover:shadow-md transition-shadow relative overflow-hidden">
                         {trx.status === 'Selesai' && <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/10 rounded-bl-full -z-0"></div>}
 
@@ -2191,7 +2151,7 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                             <div className="flex flex-wrap justify-between items-start border-b border-gray-50 pb-4 gap-2">
                                 <div>
                                     <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                        <span className="bg-orange-100 text-orange-700 font-bold px-2 py-1 rounded text-[10px] uppercase tracking-wider">{trx.id}</span>
+                                        <span className="bg-orange-100 text-orange-700 font-bold px-2 py-1 rounded text-[10px] uppercase tracking-wider">{trx.id.substring(0,8)}</span>
                                         <span className="text-xs text-gray-400 font-medium">Order: {trx.date}</span>
                                         <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${(trx as any).paymentType === 'gateway' ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-700'}`}>
                                             {(trx as any).paymentType === 'gateway' ? '⚡ Gateway' : '🏦 Transfer Manual'}
@@ -2252,17 +2212,27 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                                 </button>
                             )}
 
-                            {trx.status === 'Menunggu' && (
+                            {trx.status === 'Menunggu' && isAdmin && (
                                 <div className="grid grid-cols-2 gap-2">
                                     <button
-                                        onClick={() => alert(`Transaksi ${trx.id} dikonfirmasi! Kamar ${trx.roomType} resmi terpesan untuk ${trx.name}.`)}
+                                        onClick={async () => {
+                                            if (window.confirm(`Terima transaksi ini?`)) {
+                                                await updateTransactionStatus(trx.id, 'paid');
+                                                alert(`Transaksi dikonfirmasi!`);
+                                            }
+                                        }}
                                         className="w-full bg-green-500 hover:bg-green-600 text-white py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 flex justify-center items-center gap-1"
                                     >
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                                         Terima
                                     </button>
                                     <button
-                                        onClick={() => { if (window.confirm(`Tolak transaksi ${trx.id}?`)) alert('Transaksi ditolak.'); }}
+                                        onClick={async () => {
+                                            if (window.confirm(`Tolak transaksi ini?`)) {
+                                                await updateTransactionStatus(trx.id, 'cancelled');
+                                                alert('Transaksi ditolak.');
+                                            }
+                                        }}
                                         className="w-full bg-red-50 hover:bg-red-100 text-red-600 py-2.5 rounded-xl text-xs font-bold transition-all border border-red-200 active:scale-95 flex justify-center items-center gap-1"
                                     >
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -2279,19 +2249,23 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                                 Lihat Invoice
                             </button>
 
-                            <button
-                                onClick={() => window.open(`https://wa.me/${trx.phone}?text=${encodeURIComponent(`Halo ${trx.name}, saya Admin RuangSinggah.id. Kami ingin melakukan konfirmasi terkait transaksi sewa kost Anda (${trx.id}) untuk properti ${trx.item}. Mohon bantuannya. Terima kasih.`)}`, '_blank')}
-                                className="w-full bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5 group"
-                            >
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.711.956 2.873.956 3.182 0 5.768-2.585 5.77-5.765.001-3.181-2.586-5.768-5.768-5.768zm3.333 8.33c-.15.424-.877.817-1.229.845-.306.024-.652.128-2.146-.464-1.801-.715-2.956-2.548-3.047-2.671-.09-.122-.727-.968-.727-1.844 0-.875.452-1.304.613-1.472.161-.168.351-.21.468-.21.117 0 .234.004.336.008.109.006.255-.044.398.303.151.365.518 1.264.565 1.356.046.091.077.198.016.321-.061.121-.092.197-.184.304-.092.107-.193.226-.275.319-.092.105-.188.22-.083.402.105.183.468.775 1.002 1.25.688.614 1.27.8 1.455.892.183.092.29.077.397-.038.106-.115.46-.537.583-.721.122-.184.244-.154.409-.092.165.061 1.042.492 1.221.583.179.092.298.138.341.214.043.076.043.447-.107.871z" /></svg>
-                                Follow Up WA
-                            </button>
+                            {isAdmin && (
+                                <button
+                                    onClick={() => window.open(`https://wa.me/${trx.phone}?text=${encodeURIComponent(`Halo ${trx.name}, saya Admin RuangSinggah.id. Kami ingin melakukan konfirmasi terkait transaksi sewa kost Anda (${trx.id}) untuk properti ${trx.item}. Mohon bantuannya. Terima kasih.`)}`, '_blank')}
+                                    className="w-full bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5 group"
+                                >
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.711.956 2.873.956 3.182 0 5.768-2.585 5.77-5.765.001-3.181-2.586-5.768-5.768-5.768zm3.333 8.33c-.15.424-.877.817-1.229.845-.306.024-.652.128-2.146-.464-1.801-.715-2.956-2.548-3.047-2.671-.09-.122-.727-.968-.727-1.844 0-.875.452-1.304.613-1.472.161-.168.351-.21.468-.21.117 0 .234.004.336.008.109.006.255-.044.398.303.151.365.518 1.264.565 1.356.046.091.077.198.016.321-.061.121-.092.197-.184.304-.092.107-.193.226-.275.319-.092.105-.188.22-.083.402.105.183.468.775 1.002 1.25.688.614 1.27.8 1.455.892.183.092.29.077.397-.038.106-.115.46-.537.583-.721.122-.184.244-.154.409-.092.165.061 1.042.492 1.221.583.179.092.298.138.341.214.043.076.043.447-.107.871z" /></svg>
+                                    Follow Up WA
+                                </button>
+                            )}
                         </div>
                     </div>
-                ))}
+                    );
+                })}
             </div>
 
             {/* ── MODAL: PROFIL PENYEWA ─────────────────────── */}
+
             {viewingProfile && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setViewingProfile(null)}>
                     <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
