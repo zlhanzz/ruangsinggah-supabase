@@ -1043,14 +1043,20 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
         return;
     }
 
+    // Unique ID to prevent Gmail threading/clipping
+    const emailRef = `Ref: ${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
+
+    const footerId = `<div style="margin-top:20px; border-top:1px solid #eee; padding-top:10px; color:#9fa6b2; font-size:10px; text-align:center;">Email ID: ${emailRef}</div>`;
+    const finalHtml = htmlContent.replace('</body>', `${footerId}</body>`);
+
     // Send via Brevo
     const brevoApiKey = brevoApiKeyParam.value();
     const payload = {
       sender: { name: "RuangSinggah", email: "system@ruangsinggah.id" },
       to: [{ email: email }],
       subject: subject,
-      htmlContent: htmlContent,
-      textContent: `Halo! Ini adalah email resmi dari RuangSinggah.id. Silakan verifikasi akun Anda atau atur ulang kata sandi dengan mengikuti instruksi di link berikut: ${confirmationUrl}. Jika Anda memerlukan bantuan, silakan hubungi tim support kami.`
+      htmlContent: finalHtml,
+      textContent: `Halo! Ini adalah email resmi dari RuangSinggah.id. Silakan verifikasi akun Anda atau atur ulang kata sandi dengan mengikuti instruksi di link berikut: ${confirmationUrl}. [ID: ${emailRef}]. Jika Anda memerlukan bantuan, silakan hubungi tim support kami.`
     };
 
     const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
