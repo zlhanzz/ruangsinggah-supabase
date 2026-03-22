@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, Zap } from 'lucide-react';
 import { Page } from '../types';
 import { addPropertyReview, getExtraBills } from '../userService';
 
@@ -8,6 +8,29 @@ interface MyKostProps {
     user: any;
     onPageChange: (page: Page) => void;
 }
+
+const SkeletonLoader = () => (
+    <div className="space-y-6 animate-pulse">
+        {[1, 2].map((i) => (
+            <div key={i} className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm flex flex-col lg:flex-row gap-10">
+                <div className="flex-1">
+                    <div className="flex items-start gap-4 mb-6">
+                        <div className="w-20 h-20 bg-gray-200 rounded-2xl shrink-0" />
+                        <div className="flex-1 space-y-3">
+                            <div className="h-6 bg-gray-200 rounded-md w-3/4" />
+                            <div className="h-4 bg-gray-200 rounded-md w-1/2" />
+                        </div>
+                    </div>
+                    <div className="h-20 bg-gray-100 rounded-xl" />
+                </div>
+                <div className="lg:w-72 space-y-3">
+                    <div className="h-10 bg-gray-200 rounded-xl" />
+                    <div className="h-10 bg-gray-200 rounded-xl" />
+                </div>
+            </div>
+        ))}
+    </div>
+);
 
 const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
     const [loading, setLoading] = useState(true);
@@ -40,6 +63,8 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
     const [complaintDesc, setComplaintDesc] = useState('');
     const [complaintPhoto, setComplaintPhoto] = useState<File | null>(null);
 
+    const [recommendations, setRecommendations] = useState<any[]>([]);
+
     useEffect(() => {
         if (user) {
             fetchMyKosts();
@@ -49,24 +74,29 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
     const fetchMyKosts = async () => {
         setLoading(true);
         try {
-            // Fetch rent transactions
+            console.log('Fetching My Kosts for user:', user.uid);
+            // Fetch rent transactions - more inclusive statuses for debugging
             const { data, error } = await supabase
                 .from('transactions')
                 .select('*')
-                .eq('user_id', user.uid)
-                .in('status', ['approved', 'paid', 'Selesai']);
+                .eq('user_id', user.uid);
 
             if (error) throw error;
             
+            console.log('Raw transactions fetched:', data);
+            
             const kostsData: any[] = [];
             data?.forEach((doc) => {
-                if (doc.product_type === 'rent' || doc.type === 'sewa_kost' || !doc.product_type) {
-                    // Calculate days remaining if endDate exists in metadata
+                // Check if it's a rent transaction
+                const isRent = doc.product_type === 'rent' || doc.type === 'sewa_kost' || !doc.product_type || doc.category === 'kost';
+                const isApproved = ['approved', 'paid', 'Selesai', 'success', 'Berhasil'].includes(doc.status);
+
+                console.log(`Checking transaction ${doc.id}: isRent=${isRent}, status=${doc.status}, isApproved=${isApproved}`);
+
+                if (isRent && isApproved) {
                     let daysRem = null;
                     const metadata = doc.metadata || {};
                     if (metadata.endDate) {
-                        // Attempt to parse "21 Maret 2026" or similar if it's not ISO
-                        // For now we assume if it's stored in metadata it might be ISO or we can try to parse it
                         const end = new Date(metadata.endDate);
                         if (!isNaN(end.getTime())) {
                            const diff = end.getTime() - new Date().getTime();
@@ -90,7 +120,18 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                 }
             });
 
+            console.log('Processed Kosts Data:', kostsData);
             setActiveKosts(kostsData);
+
+            // If empty, fetch recommendations
+            if (kostsData.length === 0) {
+                const { data: recData } = await supabase
+                    .from('properties')
+                    .select('id, title, price, city, image_urls, type, rating')
+                    .eq('status', 'published')
+                    .limit(3);
+                setRecommendations(recData || []);
+            }
 
             // Fetch extra bills
             const bills = await getExtraBills(user.uid);
@@ -298,53 +339,79 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-20">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+            <div className="min-h-screen bg-gray-50 pt-28 pb-12">
+                <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex items-center gap-4 mb-10">
+                        <div className="w-12 h-12 bg-gray-200 rounded-full animate-pulse" />
+                        <div className="space-y-2">
+                            <div className="h-8 bg-gray-200 rounded-md w-48 animate-pulse" />
+                            <div className="h-4 bg-gray-200 rounded-md w-32 animate-pulse" />
+                        </div>
+                    </div>
+                    <SkeletonLoader />
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 pt-20 pb-12">
-            <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-[#F8FAFC] pt-20 pb-12 font-outfitSelection">
+            {/* Background Decorations */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+                <div className="absolute -top-[10%] -right-[10%] w-[40%] h-[40%] bg-orange-100/30 rounded-full blur-[120px]" />
+                <div className="absolute top-[20%] -left-[10%] w-[30%] h-[30%] bg-blue-100/20 rounded-full blur-[100px]" />
+            </div>
+
+            <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
 
                 {/* Header */}
-                <div className="flex items-center justify-between mb-8">
-                    <div className="flex items-center gap-4">
+                <div className="flex items-center justify-between mb-10">
+                    <div className="flex items-center gap-5">
                         <button
                             onClick={() => onPageChange(Page.HOME)}
-                            className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                            className="group p-3 bg-white hover:bg-orange-500 rounded-2xl shadow-sm border border-gray-100 transition-all duration-300"
                         >
-                            <ArrowLeft className="w-5 h-5 text-gray-600" />
+                            <ArrowLeft className="w-5 h-5 text-gray-600 group-hover:text-white transition-colors" />
                         </button>
                         <div>
-                            <h1 className="text-2xl sm:text-3xl font-black text-gray-900">Kost Saya</h1>
-                            <p className="text-gray-500 text-sm mt-1">Kelola kos yang sedang Anda sewa saat ini</p>
+                            <h1 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight">Kost Saya</h1>
+                            <p className="text-gray-500 text-sm mt-1 font-medium flex items-center gap-1.5">
+                                <Zap className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
+                                Kelola hunian aktif Anda dengan mudah
+                            </p>
                         </div>
                     </div>
                 </div>
 
                 {extraBills.length > 0 && (
-                    <div className="mb-10 animate-in fade-in slide-in-from-top-4 duration-500">
-                        <div className="flex items-center gap-2 mb-4">
-                            <Receipt className="w-5 h-5 text-orange-500" />
-                            <h2 className="text-lg font-bold text-gray-900">Tagihan Menunggu Pembayaran</h2>
+                    <div className="mb-12 animate-in fade-in slide-in-from-top-6 duration-700">
+                        <div className="flex items-center justify-between mb-5">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-orange-100 rounded-lg">
+                                    <Receipt className="w-5 h-5 text-orange-600" />
+                                </div>
+                                <h2 className="text-xl font-black text-gray-900">Tagihan Menunggu</h2>
+                            </div>
+                            <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">{extraBills.length} Tagihan</span>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             {extraBills.map(bill => (
-                                <div key={bill.id} className="bg-white p-5 rounded-2xl border-2 border-orange-100 shadow-sm flex items-center justify-between">
+                                <div key={bill.id} className="group bg-white p-6 rounded-[2rem] border border-orange-100 shadow-xl shadow-orange-900/5 flex items-center justify-between hover:scale-[1.02] transition-transform duration-300">
                                     <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{bill.bill_name || 'Tagihan Ekstra'}</p>
-                                        <p className="text-lg font-black text-gray-900 mt-1">
+                                        <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">{bill.bill_name || 'Tagihan Ekstra'}</p>
+                                        <p className="text-2xl font-black text-gray-900 mt-1">
                                             {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(bill.amount || 0)}
                                         </p>
-                                        <p className="text-[10px] text-orange-600 font-bold mt-1 bg-orange-50 px-2 py-0.5 rounded-full inline-block">Belum Dibayar</p>
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
+                                            <p className="text-[11px] text-gray-500 font-bold">Menunggu Pembayaran</p>
+                                        </div>
                                     </div>
                                     <button 
                                         onClick={() => handleOpenBill({ ...bill, kostName: bill.kost_name, kostId: bill.product_id })}
-                                        className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-orange-100 transition-all active:scale-95"
+                                        className="bg-gray-900 hover:bg-orange-600 text-white px-6 py-3 rounded-2xl text-xs font-black transition-all shadow-lg active:scale-95"
                                     >
-                                        Bayar Sekarang
+                                        BAYAR
                                     </button>
                                 </div>
                             ))}
@@ -353,132 +420,215 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                 )}
 
                 {activeKosts.length === 0 ? (
-                    <div className="bg-white rounded-[2rem] p-12 text-center border border-gray-100 shadow-sm flex flex-col items-center justify-center">
-                        <div className="w-24 h-24 bg-orange-50 rounded-full flex items-center justify-center mb-6">
-                            <AlertCircle className="w-12 h-12 text-orange-400" />
+                    <div className="space-y-12">
+                        {/* Enhanced Empty State Card */}
+                        <div className="relative overflow-hidden bg-white/70 backdrop-blur-xl rounded-[3rem] p-12 text-center border border-white shadow-2xl shadow-gray-200/50 flex flex-col items-center justify-center animate-in zoom-in-95 duration-700">
+                            <div className="absolute top-0 right-0 p-8 opacity-10">
+                                <Search className="w-32 h-32" />
+                            </div>
+                            
+                            <div className="relative">
+                                <div className="w-28 h-28 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mb-8 shadow-2xl shadow-orange-300 border-4 border-white">
+                                    <AlertCircle className="w-12 h-12 text-white" />
+                                </div>
+                                <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg">
+                                    <Clock className="w-5 h-5 text-orange-500" />
+                                </div>
+                            </div>
+
+                            <h3 className="text-3xl font-black text-gray-900 mb-4 tracking-tight">Belum Ada Kost Aktif</h3>
+                            <p className="text-gray-500 max-w-sm mx-auto mb-10 font-medium leading-relaxed">
+                                Sepertinya Anda belum memiliki hunian yang aktif. Jangan khawatir, hunian impian Anda hanya berjarak satu klik saja!
+                            </p>
+                            
+                            <button
+                                onClick={() => onPageChange(Page.LISTINGS)}
+                                className="group bg-orange-500 hover:bg-orange-600 text-white px-10 py-5 rounded-[2rem] font-black text-sm uppercase tracking-widest transition-all shadow-2xl shadow-orange-200 active:scale-95 flex items-center gap-3"
+                            >
+                                Mulai Cari Sekarang
+                                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                            </button>
                         </div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">Belum Ada Kost Aktif</h3>
-                        <p className="text-gray-500 max-w-md mx-auto mb-8">
-                            Anda belum memiliki kost yang berstatus disewa atau sedang dalam proses penyewaan aktif. Mulai cari hunian impian Anda sekarang!
-                        </p>
-                        <button
-                            onClick={() => onPageChange(Page.LISTINGS)}
-                            className="bg-orange-500 text-white px-8 py-3 rounded-xl font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-200"
-                        >
-                            Cari Kost Baru
-                        </button>
+
+                        {/* Property Recommendations */}
+                        {recommendations.length > 0 && (
+                            <div className="animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
+                                <div className="flex items-center justify-between mb-6 px-4">
+                                    <h2 className="text-2xl font-black text-gray-900 tracking-tight">Rekomendasi Terpopuler</h2>
+                                    <button onClick={() => onPageChange(Page.LISTINGS)} className="text-orange-500 text-sm font-black flex items-center gap-1 hover:gap-2 transition-all">
+                                        Lihat Semua <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                                    {recommendations.map(prop => (
+                                        <div 
+                                            key={prop.id} 
+                                            className="group bg-white rounded-[2rem] overflow-hidden border border-gray-100 shadow-xl shadow-gray-200/50 hover:shadow-2xl transition-all duration-500 cursor-pointer"
+                                            onClick={() => onPageChange(Page.LISTINGS)} // In real app, go to detail
+                                        >
+                                            <div className="relative h-48 overflow-hidden">
+                                                <img 
+                                                    src={prop.image_urls?.[0] || 'https://via.placeholder.com/400x300'} 
+                                                    alt={prop.title} 
+                                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                                                />
+                                                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-1 shadow-sm">
+                                                    <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                                                    <span className="text-[10px] font-black">{prop.rating || '5.0'}</span>
+                                                </div>
+                                                <button className="absolute top-4 right-4 p-2 bg-white/90 backdrop-blur-md rounded-full text-gray-400 hover:text-red-500 transition-colors">
+                                                    <Heart className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                            <div className="p-5">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">{prop.type || 'Kost'}</span>
+                                                    <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
+                                                        <MapPin className="w-3 h-3" /> {prop.city}
+                                                    </span>
+                                                </div>
+                                                <h4 className="font-black text-gray-900 mb-3 line-clamp-1">{prop.title}</h4>
+                                                <div className="flex items-center justify-between pt-4 border-t border-gray-50">
+                                                    <p className="text-orange-600 font-black">
+                                                        {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(prop.price)}
+                                                        <span className="text-[10px] text-gray-400 font-bold ml-1">/ Bln</span>
+                                                    </p>
+                                                    <div className="p-2 bg-orange-50 rounded-lg group-hover:bg-orange-500 group-hover:text-white transition-colors">
+                                                        <ChevronRight className="w-4 h-4" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 ) : (
-                    <div className="space-y-6">
+                    <div className="space-y-10">
                         {activeKosts.map((kost) => (
-                            <div key={kost.id} className="bg-white rounded-2xl sm:rounded-[2rem] p-5 sm:p-8 border border-gray-100 shadow-sm flex flex-col lg:flex-row gap-6 lg:gap-10">
-                                {/* Visual / Info Kiri */}
-                                <div className="flex-1">
-                                    <div className="flex items-start gap-4 mb-6">
-                                        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-orange-100 rounded-2xl flex items-center justify-center shrink-0">
-                                            <MapPin className="w-8 h-8 text-orange-500" />
+                            <div key={kost.id} className="group relative bg-white/70 backdrop-blur-2xl rounded-[3.5rem] p-8 sm:p-12 border border-white shadow-2xl shadow-gray-200/50 flex flex-col lg:flex-row gap-10 lg:gap-14 hover:scale-[1.01] transition-all duration-500 overflow-hidden">
+                                {/* Animated Background Glow */}
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-orange-400/10 to-transparent rounded-full blur-3xl -mr-32 -mt-32 group-hover:from-orange-400/20 transition-all duration-700" />
+                                
+                                {/* Visual / Info Left */}
+                                <div className="flex-1 relative z-10">
+                                    <div className="flex items-start gap-8 mb-10">
+                                        <div className="relative">
+                                            <div className="w-24 h-24 sm:w-28 sm:h-28 bg-gradient-to-br from-orange-500 to-orange-600 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-orange-200 border-4 border-white transform -rotate-3 group-hover:rotate-0 transition-all duration-500">
+                                                <MapPin className="w-12 h-12 text-white" />
+                                            </div>
+                                            <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-2xl shadow-lg flex items-center justify-center border-2 border-orange-50">
+                                                <Zap className="w-5 h-5 text-orange-500 fill-orange-500" />
+                                            </div>
                                         </div>
+
                                         <div className="flex-1">
-                                            <div className="flex items-center justify-between">
-                                                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
-                                                    {kost.kostName || 'Kost Tanpa Nama'}
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                                <h2 className="text-3xl sm:text-4xl font-black text-gray-900 leading-tight tracking-tight">
+                                                    {kost.kostName || 'Kost Tersembunyi'}
                                                 </h2>
                                                 {kost.daysRemaining !== null && (
-                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                                                        kost.daysRemaining <= 7 ? 'bg-red-100 text-red-600 border border-red-200' : 'bg-green-100 text-green-600 border border-green-200'
+                                                    <div className={`px-5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2.5 shadow-sm border whitespace-nowrap ${
+                                                        kost.daysRemaining <= 7 
+                                                        ? 'bg-red-50 text-red-600 border-red-100' 
+                                                        : 'bg-emerald-50 text-emerald-600 border-emerald-100'
                                                     }`}>
+                                                        <span className={`w-2.5 h-2.5 rounded-full ${kost.daysRemaining <= 7 ? 'bg-red-500 animate-ping' : 'bg-emerald-500'}`} />
                                                         {kost.daysRemaining < 0 ? 'Sewa Berakhir' : `${kost.daysRemaining} Hari Lagi`}
-                                                    </span>
+                                                    </div>
                                                 )}
                                             </div>
-                                            <div className="flex flex-wrap items-center gap-2 mt-2 text-sm text-gray-500 font-medium">
-                                                <span className="bg-gray-100 px-3 py-1 rounded-full text-gray-700">
-                                                    {kost.roomType || 'Tipe Kamar Default'}
+                                            <div className="flex flex-wrap items-center gap-3 mt-6">
+                                                <span className="bg-gray-100/80 backdrop-blur-sm px-5 py-2.5 rounded-2xl text-[11px] font-black text-gray-700 uppercase tracking-wider">
+                                                    {kost.roomType || 'Standard Room'}
                                                 </span>
-                                                <span>•</span>
-                                                <span className="flex items-center gap-1 text-green-600 bg-green-50 px-3 py-1 rounded-full">
-                                                    <CheckCircle className="w-4 h-4" /> Sedang Disewa
+                                                <span className="flex items-center gap-2.5 text-emerald-600 bg-emerald-50/80 backdrop-blur-sm px-5 py-2.5 rounded-2xl border border-emerald-100 text-[11px] font-black uppercase tracking-wider">
+                                                    <CheckCircle className="w-4 h-4" /> SEDANG DISEWA
                                                 </span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* Riwayat Sewa Singkat */}
-                                    <div className="bg-gray-50 rounded-xl p-4 sm:p-5 border border-gray-200 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                        <div>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Durasi</p>
-                                            <p className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                                                <Clock className="w-4 h-4 text-orange-500" /> {kost.duration || 1} {kost.period || 'Bulan'}
-                                            </p>
+                                    {/* Stats Grid */}
+                                    <div className="bg-[#FBFCFE]/80 backdrop-blur-sm rounded-[2.5rem] p-8 sm:p-10 border border-gray-100 grid grid-cols-2 sm:grid-cols-4 gap-8 hover:border-orange-200 group-hover:bg-white transition-all duration-500">
+                                        <div className="space-y-2">
+                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Durasi</p>
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 bg-orange-100 rounded-xl"><Clock className="w-4 h-4 text-orange-600" /></div>
+                                                <p className="text-lg font-black text-gray-900">{kost.duration || 1} {kost.period || 'Bulan'}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Mulai Masuk</p>
-                                            <p className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                                                <FileText className="w-4 h-4 text-blue-500" /> {kost.moveInDate || '-'}
-                                            </p>
+                                        <div className="space-y-2">
+                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Mulai</p>
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 bg-blue-100 rounded-xl"><FileText className="w-4 h-4 text-blue-600" /></div>
+                                                <p className="text-lg font-black text-gray-900">{kost.moveInDate || '-'}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Akhir Sewa</p>
-                                            <p className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                                                <Calendar className="w-4 h-4 text-red-500" /> {kost.endDate || '-'}
-                                            </p>
+                                        <div className="space-y-2">
+                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Selesai</p>
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 bg-rose-100 rounded-xl"><Calendar className="w-4 h-4 text-rose-600" /></div>
+                                                <p className="text-lg font-black text-gray-900">{kost.endDate || '-'}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Biaya Awal</p>
-                                            <p className="text-sm font-bold text-gray-900">
-                                                {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(kost.totalPrice || 0)}
-                                            </p>
+                                        <div className="space-y-2">
+                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Tagihan</p>
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 bg-emerald-100 rounded-xl"><Receipt className="w-4 h-4 text-emerald-600" /></div>
+                                                <p className="text-lg font-black text-emerald-600">
+                                                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(kost.totalPrice || 0)}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Actions Kanan */}
-                                <div className="flex flex-col gap-2.5 lg:w-72 shrink-0 justify-center">
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center mb-1">Layanan Penitipan</p>
-
-                                    <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
+                                {/* Actions Column */}
+                                <div className="flex flex-col gap-4 lg:w-80 shrink-0 justify-center relative z-10">
+                                    <div className="grid grid-cols-1 gap-4">
                                         <button
                                             onClick={() => handleOpenExtension(kost)}
-                                            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors text-xs shadow-md"
+                                            className="group/btn bg-orange-500 hover:bg-orange-600 text-white px-8 py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-3 transition-all text-[13px] shadow-2xl shadow-orange-200 active:scale-95"
                                         >
-                                            <Plus className="w-4 h-4" /> Perpanjang
+                                            <Plus className="w-5 h-5 group-hover/btn:rotate-90 transition-transform" /> PERPANJANG SEWA
                                         </button>
 
                                         <button
                                             onClick={() => {
-                                                const phone = '628123456789'; // RuangSinggah Central Number
+                                                const phone = '628123456789';
                                                 const text = `Halo RuangSinggah! Saya ${user.name || 'Penyewa'}, penyewa di ${kost.kostName}. Saya ingin bertanya mengenai...`;
                                                 window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
                                             }}
-                                            className="bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors text-xs shadow-md"
+                                            className="bg-gray-900 hover:bg-emerald-600 text-white px-8 py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-3 transition-all text-[13px] shadow-2xl shadow-gray-300 active:scale-95"
                                         >
-                                            <Smartphone className="w-4 h-4" /> Hubungi Pemilik
+                                            <Smartphone className="w-5 h-5" /> HUBUNGI PEMILIK
                                         </button>
                                     </div>
 
-                                    <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
+                                    <div className="grid grid-cols-2 gap-3">
                                         <button
                                             onClick={() => handleOpenBill(kost)}
-                                            className="bg-white border border-gray-300 hover:border-blue-500 hover:text-blue-600 text-gray-700 px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors text-xs"
+                                            className="bg-white border-2 border-gray-100 hover:border-blue-500 hover:text-blue-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[11px] group/item"
                                         >
-                                            <Receipt className="w-4 h-4" /> Bayar Tagihan
+                                            <Receipt className="w-4 h-4 group-hover/item:scale-110 transition-transform" /> TAGIHAN
                                         </button>
 
                                         <button
                                             onClick={() => handleOpenRating(kost)}
-                                            className="bg-white border border-gray-300 hover:border-yellow-500 hover:text-yellow-600 text-gray-700 px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors text-xs"
+                                            className="bg-white border-2 border-gray-100 hover:border-yellow-500 hover:text-yellow-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[11px] group/item"
                                         >
-                                            <Star className="w-4 h-4" /> Beri Penilaian
+                                            <Star className="w-4 h-4 group-hover/item:rotate-12 transition-transform" /> PENILAIAN
                                         </button>
                                     </div>
 
                                     <button
                                         onClick={() => handleOpenComplaint(kost)}
-                                        className="w-full bg-white border border-gray-300 hover:border-red-500 hover:text-red-600 text-gray-700 px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors text-xs"
+                                        className="w-full bg-white border-2 border-gray-100 hover:border-red-500 hover:bg-red-50 hover:text-red-600 text-gray-500 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[11px] mt-2 group/comp"
                                     >
-                                        <MessageSquare className="w-4 h-4" /> Ajukan Komplain
+                                        <MessageSquare className="w-4 h-4 group-hover/comp:-translate-y-0.5 transition-transform" /> AJUKAN KOMPLAIN
                                     </button>
-
                                 </div>
                             </div>
                         ))}
