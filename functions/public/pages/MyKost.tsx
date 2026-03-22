@@ -673,6 +673,16 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                 <div className="flex flex-col gap-4 lg:w-80 shrink-0 justify-center relative z-10">
                                     <div className="grid grid-cols-1 gap-4">
                                         <button
+                                            onClick={() => {
+                                                const query = `${kost.kostName} ${kost.location || ''} ${kost.city || ''}`.trim();
+                                                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
+                                            }}
+                                            className="bg-white border-2 border-gray-100 hover:border-emerald-500 hover:text-emerald-600 text-gray-700 px-8 py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-3 transition-all text-[13px] shadow-2xl shadow-gray-100 active:scale-95 group/loc"
+                                        >
+                                            <MapPin className="w-5 h-5 group-hover/loc:-translate-y-0.5 transition-transform" /> LIHAT LOKASI KOST
+                                        </button>
+
+                                        <button
                                             onClick={() => handleOpenExtension(kost)}
                                             className="group/btn bg-orange-500 hover:bg-orange-600 text-white px-8 py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-3 transition-all text-[13px] shadow-2xl shadow-orange-200 active:scale-95"
                                         >
@@ -691,29 +701,19 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                         </button>
                                     </div>
 
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                    <div className="grid grid-cols-2 gap-3">
                                         <button
                                             onClick={() => handleOpenBill(kost)}
-                                            className="bg-white border-2 border-gray-100 hover:border-blue-500 hover:text-blue-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex flex-col items-center justify-center gap-1.5 transition-all text-[10px] group/item"
+                                            className="bg-white border-2 border-gray-100 hover:border-blue-500 hover:text-blue-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[11px] group/item"
                                         >
                                             <Receipt className="w-4 h-4 group-hover/item:-translate-y-0.5 transition-transform" /> TAGIHAN
                                         </button>
 
                                         <button
                                             onClick={() => handleOpenRating(kost)}
-                                            className="bg-white border-2 border-gray-100 hover:border-yellow-500 hover:text-yellow-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex flex-col items-center justify-center gap-1.5 transition-all text-[10px] group/item"
+                                            className="bg-white border-2 border-gray-100 hover:border-yellow-500 hover:text-yellow-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[11px] group/item"
                                         >
                                             <Star className="w-4 h-4 group-hover/item:rotate-12 transition-transform" /> PENILAIAN
-                                        </button>
-
-                                        <button
-                                            onClick={() => {
-                                                const query = `${kost.kostName} ${kost.location || ''} ${kost.city || ''}`.trim();
-                                                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
-                                            }}
-                                            className="bg-white border-2 border-gray-100 hover:border-emerald-500 hover:text-emerald-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex flex-col items-center justify-center gap-1.5 transition-all text-[10px] group/item"
-                                        >
-                                            <MapPin className="w-4 h-4 group-hover/item:-translate-y-0.5 transition-transform" /> LOKASI
                                         </button>
                                     </div>
 
