@@ -1041,6 +1041,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                         </form>
                     </div>
                 </div>
+            )}
             {/* 5. Payment Gateway Integration */}
             {showPaymentGateway && (
                 <PaymentGateway
