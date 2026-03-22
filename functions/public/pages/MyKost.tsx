@@ -157,6 +157,8 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                 totalPrice: 2500000,
                 status: 'Selesai',
                 displayImage: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&q=80&w=2070',
+                location: 'Jl. Margonda Raya No. 123',
+                city: 'Depok',
                 pendingBills: [
                     { id: 'b-dummy-1', bill_name: 'Tagihan Listrik (Januari)', amount: 150000, status: 'pending', created_at: new Date().toISOString() },
                     { id: 'b-dummy-2', bill_name: 'Iuran WiFi & Sampah', amount: 75000, status: 'pending', created_at: new Date().toISOString() }
@@ -689,19 +691,29 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                         </button>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                         <button
                                             onClick={() => handleOpenBill(kost)}
-                                            className="bg-white border-2 border-gray-100 hover:border-blue-500 hover:text-blue-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[11px] group/item"
+                                            className="bg-white border-2 border-gray-100 hover:border-blue-500 hover:text-blue-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex flex-col items-center justify-center gap-1.5 transition-all text-[10px] group/item"
                                         >
-                                            <Receipt className="w-4 h-4 group-hover/item:scale-110 transition-transform" /> TAGIHAN
+                                            <Receipt className="w-4 h-4 group-hover/item:-translate-y-0.5 transition-transform" /> TAGIHAN
                                         </button>
 
                                         <button
                                             onClick={() => handleOpenRating(kost)}
-                                            className="bg-white border-2 border-gray-100 hover:border-yellow-500 hover:text-yellow-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[11px] group/item"
+                                            className="bg-white border-2 border-gray-100 hover:border-yellow-500 hover:text-yellow-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex flex-col items-center justify-center gap-1.5 transition-all text-[10px] group/item"
                                         >
                                             <Star className="w-4 h-4 group-hover/item:rotate-12 transition-transform" /> PENILAIAN
+                                        </button>
+
+                                        <button
+                                            onClick={() => {
+                                                const query = `${kost.kostName} ${kost.location || ''} ${kost.city || ''}`.trim();
+                                                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
+                                            }}
+                                            className="bg-white border-2 border-gray-100 hover:border-emerald-500 hover:text-emerald-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex flex-col items-center justify-center gap-1.5 transition-all text-[10px] group/item"
+                                        >
+                                            <MapPin className="w-4 h-4 group-hover/item:-translate-y-0.5 transition-transform" /> LOKASI
                                         </button>
                                     </div>
 
