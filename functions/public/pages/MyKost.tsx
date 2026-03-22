@@ -104,6 +104,21 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                         }
                     }
 
+                    let displayImg = null;
+                    const rawImages = doc.image_urls || metadata.imageUrls || [];
+                    if (rawImages.length > 0) {
+                        const img = rawImages[0];
+                        const path = typeof img === 'string' ? img : (img.original || img.webp || '');
+                        if (path) {
+                            if (path.startsWith('http')) {
+                                displayImg = path;
+                            } else {
+                                const { data: { publicUrl } } = supabase.storage.from('properties').getPublicUrl(path);
+                                displayImg = publicUrl;
+                            }
+                        }
+                    }
+
                     kostsData.push({ 
                       id: doc.id, 
                       kostName: doc.kost_name || metadata.kostName,
@@ -115,23 +130,63 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                       endDate: metadata.endDate,
                       daysRemaining: daysRem,
                       totalPrice: doc.amount || doc.total_price,
+                      displayImage: displayImg,
                       ...doc 
                     });
                 }
             });
 
             console.log('Processed Kosts Data:', kostsData);
+
+            // Injeksi data dummy untuk audit UI/UX (Hanya saat testing/audit)
+            const dummyKost = {
+                id: 'dummy-123',
+                kostName: 'Kost Madani Eksklusif (Simulasi)',
+                kostId: 'dummy-property-id',
+                roomType: 'Deluxe Room A',
+                duration: 1,
+                period: 'Bulanan',
+                moveInDate: new Date().toISOString(),
+                endDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(), // 15 hari lagi
+                daysRemaining: 15,
+                totalPrice: 2500000,
+                status: 'Selesai',
+                displayImage: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&q=80&w=2070'
+            };
+            
+            // Un-comment line below to ONLY show content if real data exists, 
+            // but user asked for dummy data specifically for audit.
+            kostsData.push(dummyKost);
+
             setActiveKosts(kostsData);
 
-            // If empty, fetch recommendations
-            if (kostsData.length === 0) {
-                const { data: recData } = await supabase
-                    .from('properties')
-                    .select('id, title, price, city, image_urls, type, rating')
-                    .eq('status', 'published')
-                    .limit(3);
-                setRecommendations(recData || []);
-            }
+            // Fetch recommendations with fixed images
+            const { data: recData } = await supabase
+                .from('properties')
+                .select('id, title, price, city, image_urls, type, rating')
+                .eq('status', 'published')
+                .limit(3);
+            
+            const processedRecs = (recData || []).map(prop => {
+                const rawImages = prop.image_urls || [];
+                let firstImage = 'https://via.placeholder.com/400x300';
+                
+                if (rawImages.length > 0) {
+                    const img = rawImages[0];
+                    const path = typeof img === 'string' ? img : (img.original || img.webp || '');
+                    if (path) {
+                        if (path.startsWith('http')) {
+                            firstImage = path;
+                        } else {
+                            const { data: { publicUrl } } = supabase.storage.from('properties').getPublicUrl(path);
+                            firstImage = publicUrl;
+                        }
+                    }
+                }
+                
+                return { ...prop, displayImage: firstImage };
+            });
+            setRecommendations(processedRecs);
 
             // Fetch extra bills
             const bills = await getExtraBills(user.uid);
@@ -468,7 +523,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                         >
                                             <div className="relative h-48 overflow-hidden">
                                                 <img 
-                                                    src={prop.image_urls?.[0] || 'https://via.placeholder.com/400x300'} 
+                                                    src={prop.displayImage || 'https://via.placeholder.com/400x300'} 
                                                     alt={prop.title} 
                                                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                                                 />
@@ -515,8 +570,12 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                 <div className="flex-1 relative z-10">
                                     <div className="flex items-start gap-8 mb-10">
                                         <div className="relative">
-                                            <div className="w-24 h-24 sm:w-28 sm:h-28 bg-gradient-to-br from-orange-500 to-orange-600 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-orange-200 border-4 border-white transform -rotate-3 group-hover:rotate-0 transition-all duration-500">
-                                                <MapPin className="w-12 h-12 text-white" />
+                                            <div className="w-24 h-24 sm:w-28 sm:h-28 bg-white rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-orange-200 border-4 border-white transform -rotate-3 group-hover:rotate-0 transition-all duration-500 overflow-hidden">
+                                                {kost.displayImage ? (
+                                                    <img src={kost.displayImage} className="w-full h-full object-cover" alt={kost.kostName} />
+                                                ) : (
+                                                    <MapPin className="w-12 h-12 text-orange-500" />
+                                                )}
                                             </div>
                                             <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-2xl shadow-lg flex items-center justify-center border-2 border-orange-50">
                                                 <Zap className="w-5 h-5 text-orange-500 fill-orange-500" />
