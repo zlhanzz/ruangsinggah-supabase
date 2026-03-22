@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, Zap } from 'lucide-react';
 import { Page } from '../types';
 import { addPropertyReview, getExtraBills } from '../userService';
+import PaymentGateway from '../components/PaymentGateway';
 
 interface MyKostProps {
     user: any;
@@ -65,6 +66,14 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
 
     const [recommendations, setRecommendations] = useState<any[]>([]);
 
+    // Payment Gateway states
+    const [showPaymentGateway, setShowPaymentGateway] = useState(false);
+    const [paymentAmount, setPaymentAmount] = useState(0);
+    const [paymentOrderId, setPaymentOrderId] = useState('');
+    const [paymentProductId, setPaymentProductId] = useState('');
+    const [paymentProductType, setPaymentProductType] = useState<'kost_booking' | 'database' | 'survey'>('kost_booking');
+    const [paymentMetadata, setPaymentMetadata] = useState<any>({});
+
     useEffect(() => {
         if (user) {
             fetchMyKosts();
@@ -75,7 +84,6 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
         setLoading(true);
         try {
             console.log('Fetching My Kosts for user:', user.uid);
-            // Fetch rent transactions - more inclusive statuses for debugging
             const { data, error } = await supabase
                 .from('transactions')
                 .select('*')
@@ -83,15 +91,10 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
 
             if (error) throw error;
             
-            console.log('Raw transactions fetched:', data);
-            
             const kostsData: any[] = [];
             data?.forEach((doc) => {
-                // Check if it's a rent transaction
                 const isRent = doc.product_type === 'rent' || doc.type === 'sewa_kost' || !doc.product_type || doc.category === 'kost';
                 const isApproved = ['approved', 'paid', 'Selesai', 'success', 'Berhasil'].includes(doc.status);
-
-                console.log(`Checking transaction ${doc.id}: isRent=${isRent}, status=${doc.status}, isApproved=${isApproved}`);
 
                 if (isRent && isApproved) {
                     let daysRem = null;
@@ -136,9 +139,10 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                 }
             });
 
-            console.log('Processed Kosts Data:', kostsData);
+            // Fetch extra bills
+            const bills = await getExtraBills(user.uid);
 
-            // Injeksi data dummy untuk audit UI/UX (Hanya saat testing/audit)
+            // Injeksi data dummy untuk audit UI/UX
             const dummyKost = {
                 id: 'dummy-123',
                 kostName: 'Kost Madani Eksklusif (Simulasi)',
@@ -146,52 +150,45 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                 roomType: 'Deluxe Room A',
                 duration: 1,
                 period: 'Bulanan',
+                basePrice: 2500000,
                 moveInDate: new Date().toISOString(),
-                endDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(), // 15 hari lagi
+                endDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
                 daysRemaining: 15,
                 totalPrice: 2500000,
                 status: 'Selesai',
-                displayImage: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&q=80&w=2070'
+                displayImage: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&q=80&w=2070',
+                pendingBills: [
+                    { id: 'b-dummy-1', bill_name: 'Tagihan Listrik (Januari)', amount: 150000, status: 'pending', created_at: new Date().toISOString() },
+                    { id: 'b-dummy-2', bill_name: 'Iuran WiFi & Sampah', amount: 75000, status: 'pending', created_at: new Date().toISOString() }
+                ],
+                totalPendingBills: 225000
             };
-            
-            // Un-comment line below to ONLY show content if real data exists, 
-            // but user asked for dummy data specifically for audit.
             kostsData.push(dummyKost);
 
-            setActiveKosts(kostsData);
+            // Associate extra bills with real kosts
+            const activeWithBills = kostsData.map(k => {
+                if (k.id === 'dummy-123') return k;
+                const pendBills = (bills || []).filter(b => (b.product_id === k.kostId || b.kost_id === k.kostId) && b.status === 'pending');
+                const totalPend = pendBills.reduce((acc, b) => acc + (b.amount || 0), 0);
+                return { ...k, pendingBills: pendBills, totalPendingBills: totalPend };
+            });
 
-            // Fetch recommendations with fixed images
-            const { data: recData } = await supabase
-                .from('properties')
-                .select('id, title, price, city, image_urls, type, rating')
-                .eq('status', 'published')
-                .limit(3);
-            
+            setActiveKosts(activeWithBills);
+
+            // Recommendations
+            const { data: recData } = await supabase.from('properties').select('id, title, price, city, image_urls, type, rating').eq('status', 'published').limit(3);
             const processedRecs = (recData || []).map(prop => {
                 const rawImages = prop.image_urls || [];
                 let firstImage = 'https://via.placeholder.com/400x300';
-                
                 if (rawImages.length > 0) {
                     const img = rawImages[0];
                     const path = typeof img === 'string' ? img : (img.original || img.webp || '');
-                    if (path) {
-                        if (path.startsWith('http')) {
-                            firstImage = path;
-                        } else {
-                            const { data: { publicUrl } } = supabase.storage.from('properties').getPublicUrl(path);
-                            firstImage = publicUrl;
-                        }
-                    }
+                    if (path) firstImage = path.startsWith('http') ? path : supabase.storage.from('properties').getPublicUrl(path).data.publicUrl;
                 }
-                
                 return { ...prop, displayImage: firstImage };
             });
             setRecommendations(processedRecs);
-
-            // Fetch extra bills
-            const bills = await getExtraBills(user.uid);
-            setExtraBills(bills);
-
+            setExtraBills(bills || []);
         } catch (error) {
             console.error('Error fetching my kosts:', error);
         } finally {
@@ -199,8 +196,20 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
         }
     };
 
+    const handleStartPayment = (amount: number, prodId: string, prodType: any, metadata: any) => {
+        setPaymentAmount(amount);
+        setPaymentProductId(prodId);
+        setPaymentProductType(prodType);
+        setPaymentMetadata(metadata);
+        setPaymentOrderId(`${prodType.toUpperCase()}-${Date.now()}`);
+        setShowPaymentGateway(true);
+        setShowExtensionModal(false);
+        setShowExtraBillModal(false);
+    };
+
     const handleOpenExtension = (kost: any) => {
         setSelectedKost(kost);
+        setExtensionPeriod(1);
         setShowExtensionModal(true);
     };
 
@@ -588,13 +597,20 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                                     {kost.kostName || 'Kost Tersembunyi'}
                                                 </h2>
                                                 {kost.daysRemaining !== null && (
-                                                    <div className={`px-5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2.5 shadow-sm border whitespace-nowrap ${
+                                                    <div className={`group/badge relative px-6 py-3.5 rounded-[1.5rem] text-[11px] font-black uppercase tracking-[0.15em] flex items-center gap-3 shadow-2xl border transition-all duration-500 ${
                                                         kost.daysRemaining <= 7 
-                                                        ? 'bg-red-50 text-red-600 border-red-100' 
+                                                        ? 'bg-red-600 text-white border-red-500 scale-110 -rotate-2 shadow-red-200 z-20' 
                                                         : 'bg-emerald-50 text-emerald-600 border-emerald-100'
                                                     }`}>
-                                                        <span className={`w-2.5 h-2.5 rounded-full ${kost.daysRemaining <= 7 ? 'bg-red-500 animate-ping' : 'bg-emerald-500'}`} />
-                                                        {kost.daysRemaining < 0 ? 'Sewa Berakhir' : `${kost.daysRemaining} Hari Lagi`}
+                                                        <div className={`w-3 h-3 rounded-full flex items-center justify-center ${kost.daysRemaining <= 7 ? 'bg-white shadow-[0_0_15px_rgba(255,255,255,0.8)]' : 'bg-emerald-500'}`}>
+                                                            {kost.daysRemaining <= 7 && <div className="w-full h-full bg-white rounded-full animate-ping opacity-75" />}
+                                                        </div>
+                                                        <span className="relative">
+                                                            {kost.daysRemaining < 0 ? 'Masa Sewa Habis' : `${kost.daysRemaining} Hari Tersisa`}
+                                                        </span>
+                                                        {kost.daysRemaining <= 7 && (
+                                                             <Zap className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300 animate-bounce" />
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -707,105 +723,215 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
             {/* 1. Modal Perpanjangan Sewa */}
             {showExtensionModal && selectedKost && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/80 backdrop-blur-sm overflow-y-auto">
-                    <div className="bg-white rounded-3xl w-full max-w-md my-auto relative shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="bg-orange-500 p-6 text-white">
-                            <button onClick={() => setShowExtensionModal(false)} className="absolute top-4 right-4 text-white/70 hover:text-white bg-black/10 hover:bg-black/20 rounded-full p-2 transition-colors">
+                    <div className="bg-white rounded-[3rem] w-full max-w-lg my-auto relative shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="bg-orange-600 p-8 text-white relative">
+                            <button onClick={() => setShowExtensionModal(false)} className="absolute top-6 right-6 text-white/70 hover:text-white bg-black/10 hover:bg-black/20 rounded-full p-2 transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                                    <Clock className="w-5 h-5 text-white" />
+                            <div className="flex items-center gap-4 mb-3">
+                                <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
+                                    <Clock className="w-6 h-6 text-white" />
                                 </div>
-                                <h3 className="text-xl font-bold">Perpanjang Sewa</h3>
+                                <div>
+                                    <h3 className="text-2xl font-black tracking-tight">Perpanjang Sewa</h3>
+                                    <p className="text-orange-100/80 text-xs font-bold uppercase tracking-widest">{selectedKost.kostName}</p>
+                                </div>
                             </div>
-                            <p className="text-orange-100 text-sm">Masukan detail perpanjangan bulan untuk kost {selectedKost.kostName}.</p>
                         </div>
 
-                        <form onSubmit={submitExtension} className="p-6">
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase">Periode Perpanjangan (Bulan)</label>
-                                    <div className="mt-2 flex items-center border border-gray-200 rounded-xl overflow-hidden">
-                                        <button type="button" onClick={() => setExtensionPeriod(Math.max(1, extensionPeriod - 1))} className="px-5 py-3 bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold border-r border-gray-200">-</button>
-                                        <input type="number" readOnly value={extensionPeriod} className="w-full text-center py-3 font-black text-lg focus:outline-none bg-white" />
-                                        <button type="button" onClick={() => setExtensionPeriod(extensionPeriod + 1)} className="px-5 py-3 bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold border-l border-gray-200">+</button>
+                        <div className="p-8">
+                            <div className="space-y-8">
+                                {/* Duration Selector */}
+                                <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-4">Pilih Durasi Perpanjangan</label>
+                                    <div className="flex items-center justify-between bg-white p-2 rounded-2xl border border-gray-200">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setExtensionPeriod(Math.max(1, extensionPeriod - 1))} 
+                                            className="w-12 h-12 flex items-center justify-center bg-gray-50 hover:bg-orange-500 hover:text-white rounded-xl text-gray-700 font-bold transition-all active:scale-90"
+                                        >
+                                            -
+                                        </button>
+                                        <div className="text-center">
+                                            <span className="text-2xl font-black text-gray-900">{extensionPeriod}</span>
+                                            <span className="text-sm font-bold text-gray-500 ml-2">{selectedKost.period || 'Bulan'}</span>
+                                        </div>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setExtensionPeriod(extensionPeriod + 1)} 
+                                            className="w-12 h-12 flex items-center justify-center bg-gray-50 hover:bg-orange-500 hover:text-white rounded-xl text-gray-700 font-bold transition-all active:scale-90"
+                                        >
+                                            +
+                                        </button>
                                     </div>
                                 </div>
 
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase">Bukti Pembayaran / Transfer</label>
-                                    <div className="mt-2 text-center text-sm text-gray-500 mb-2 bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-start gap-2">
-                                        <AlertCircle className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                                        <span className="text-left text-blue-800 text-xs">Mohon transfer senilai <b>{new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format((selectedKost.totalPrice / (selectedKost.duration || 1)) * extensionPeriod)}</b> ke rekening pemilik untuk diverifikasi admin.</span>
-                                    </div>
-                                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-orange-500 transition-colors">
-                                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                            <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                                            <p className="text-sm font-bold text-gray-600">
-                                                {extensionProof ? extensionProof.name : "Pilih File Bukti (JPG/PNG)"}
-                                            </p>
+                                {/* Price Breakdown */}
+                                <div className="space-y-4">
+                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] px-2">Rincian Pembayaran</h4>
+                                    <div className="bg-white border-2 border-dashed border-gray-100 rounded-[2rem] p-6 space-y-4">
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-500 font-medium">Sewa Kost ({extensionPeriod} {selectedKost.period || 'Bulan'})</span>
+                                            <span className="text-gray-900 font-black">
+                                                {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format((selectedKost.basePrice || selectedKost.totalPrice / (selectedKost.duration || 1)) * extensionPeriod)}
+                                            </span>
                                         </div>
-                                        <input type="file" className="hidden" accept="image/*" onChange={(e) => setExtensionProof(e.target.files?.[0] || null)} required />
-                                    </label>
+                                        
+                                        {selectedKost.totalPendingBills > 0 && (
+                                            <div className="flex justify-between items-center text-sm py-3 border-y border-gray-50">
+                                                <div className="flex flex-col">
+                                                    <span className="text-gray-500 font-medium">Tagihan Tambahan Tertunggak</span>
+                                                    <span className="text-[10px] text-orange-500 font-black uppercase">Wajib Dilunasi</span>
+                                                </div>
+                                                <span className="text-gray-900 font-black">
+                                                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(selectedKost.totalPendingBills)}
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        <div className="flex justify-between items-center pt-2">
+                                            <span className="text-gray-900 font-black uppercase tracking-widest text-xs">Total Bayar</span>
+                                            <span className="text-2xl font-black text-orange-600">
+                                                {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(
+                                                    ((selectedKost.basePrice || selectedKost.totalPrice / (selectedKost.duration || 1)) * extensionPeriod) + 
+                                                    (selectedKost.totalPendingBills || 0)
+                                                )}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex gap-3 items-start">
+                                    <Zap className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                                    <p className="text-[11px] text-blue-800 font-medium leading-relaxed">
+                                        Pembayaran akan dikonfirmasi otomatis melalui sistem <b>Payment Gateway</b>. Anda dapat menggunakan QRIS atau Virtual Account.
+                                    </p>
                                 </div>
                             </div>
 
-                            <div className="mt-8 pt-6 border-t border-gray-100 flex gap-3">
-                                <button type="button" onClick={() => setShowExtensionModal(false)} className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-50 rounded-xl border border-transparent">Batal</button>
-                                <button type="submit" disabled={isSubmitting || !extensionProof} className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-lg disabled:opacity-50 transition-colors">
-                                    {isSubmitting ? 'Mengirim...' : 'Kirim Pengajuan'}
+                            <div className="mt-10 flex gap-4">
+                                <button type="button" onClick={() => setShowExtensionModal(false)} className="flex-1 py-4 text-gray-500 font-black uppercase text-[11px] tracking-widest hover:bg-gray-50 rounded-2xl transition-colors">Batal</button>
+                                <button 
+                                    onClick={() => {
+                                        const total = ((selectedKost.basePrice || selectedKost.totalPrice / (selectedKost.duration || 1)) * extensionPeriod) + (selectedKost.totalPendingBills || 0);
+                                        handleStartPayment(total, selectedKost.kostId, 'kost_booking', {
+                                            extensionPeriod,
+                                            extensionType: 'manual_extension',
+                                            includeBills: true,
+                                            pendingBills: selectedKost.pendingBills
+                                        });
+                                    }}
+                                    className="flex-[2] py-4 bg-gray-900 hover:bg-orange-600 text-white font-black uppercase text-[11px] tracking-[0.2em] rounded-2xl shadow-2xl shadow-gray-200 transition-all active:scale-95"
+                                >
+                                    Lanjut ke Pembayaran
                                 </button>
                             </div>
-                        </form>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* 2. Modal Tagihan Tambahan */}
+            {/* 2. Modal Tagihan Tambahan (Invoice Style) */}
             {showExtraBillModal && selectedKost && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/80 backdrop-blur-sm overflow-y-auto">
-                    <div className="bg-white rounded-3xl w-full max-w-md my-auto relative shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="bg-blue-600 p-6 text-white">
-                            <button onClick={() => setShowExtraBillModal(false)} className="absolute top-4 right-4 text-white/70 hover:text-white bg-black/10 hover:bg-black/20 rounded-full p-2 transition-colors">
+                    <div className="bg-white rounded-[3rem] w-full max-w-lg my-auto relative shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+                        {/* Invoice Header */}
+                        <div className="bg-[#1a1a1a] p-8 text-white relative">
+                            <button onClick={() => setShowExtraBillModal(false)} className="absolute top-6 right-6 text-white/50 hover:text-white bg-white/10 rounded-full p-2 transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                                    <Receipt className="w-5 h-5 text-white" />
+                            <div className="flex justify-between items-start mb-6">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-2 text-orange-500">
+                                        <FileText className="w-5 h-5 font-black" />
+                                        <span className="text-[10px] font-black uppercase tracking-[0.3em]">Official Invoice</span>
+                                    </div>
+                                    <h3 className="text-2xl font-black tracking-tight">Tagihan Ekstra</h3>
                                 </div>
-                                <h3 className="text-xl font-bold">Tagihan Ekstra Kost</h3>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">ID Kost</p>
+                                    <p className="text-xs font-bold text-gray-300">{selectedKost.kostId?.substring(0, 8).toUpperCase()}</p>
+                                </div>
                             </div>
-                            <p className="blue-100 text-sm opacity-90">Bayar tagihan seperti Air, WiFi, Denda, dll untuk {selectedKost.kostName}.</p>
+                            <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Nama Properti</p>
+                                <p className="text-sm font-bold text-white mb-1">{selectedKost.kostName}</p>
+                                <p className="text-[10px] text-gray-400 font-medium italic">{selectedKost.roomType || 'Tipe Kamar Standard'}</p>
+                            </div>
                         </div>
 
-                        <form onSubmit={submitExtraBill} className="p-6 space-y-5">
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase">Nama Tagihan</label>
-                                <input type="text" required value={billName} onChange={(e) => setBillName(e.target.value)} placeholder="Contoh: Iuran WiFi Agustus" className="w-full mt-1.5 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase">Jumlah Rp</label>
-                                <input type="text" required placeholder="Contoh: 150000" value={billAmount} onChange={(e) => setBillAmount(e.target.value.replace(/\\D/g, ''))} className="w-full mt-1.5 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-lg font-black focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase">Bukti Transfer</label>
-                                <label className="mt-1.5 flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-blue-500 transition-colors">
-                                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                        <p className="text-sm font-bold text-gray-600">
-                                            {billProof ? billProof.name : "Unggah Bukti Transaksi"}
-                                        </p>
+                        <div className="p-8">
+                            <div className="space-y-6">
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] px-2">Item Tagihan</h4>
+                                
+                                <div className="space-y-3">
+                                    {selectedKost.pendingBills && selectedKost.pendingBills.length > 0 ? (
+                                        selectedKost.pendingBills.map((bill: any, idx: number) => (
+                                            <div key={bill.id || idx} className="flex justify-between items-center p-5 bg-gray-50 rounded-2xl hover:bg-white hover:shadow-xl hover:shadow-gray-100 border border-transparent hover:border-gray-100 transition-all group">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                                                        <Receipt className="w-5 h-5 text-gray-400 group-hover:text-blue-500" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-black text-gray-800">{bill.bill_name || 'Tagihan Tanpa Nama'}</p>
+                                                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter mt-0.5">
+                                                            Tgl Tagihan: {new Date(bill.created_at || Date.now()).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <p className="text-sm font-black text-gray-900 uppercase">
+                                                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(bill.amount)}
+                                                </p>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-center py-10 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-100">
+                                            <CheckCircle className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
+                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Semua Tagihan Lunas</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Summary */}
+                                {selectedKost.totalPendingBills > 0 && (
+                                    <div className="mt-8 pt-8 border-t-2 border-dashed border-gray-100">
+                                        <div className="flex justify-between items-end">
+                                            <div>
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">Total yang Harus Dibayar</p>
+                                                <p className="text-3xl font-black text-blue-600 tracking-tighter">
+                                                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(selectedKost.totalPendingBills)}
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="px-3 py-1 bg-amber-100 text-amber-700 rounded-lg text-[9px] font-black uppercase tracking-widest mb-2 inline-block">Menunggu Pembayaran</div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <input type="file" className="hidden" accept="image/*" onChange={(e) => setBillProof(e.target.files?.[0] || null)} required />
-                                </label>
+                                )}
                             </div>
 
-                            <div className="mt-6 pt-6 border-t border-gray-100 flex gap-3">
-                                <button type="button" onClick={() => setShowExtraBillModal(false)} className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-50 rounded-xl border border-transparent">Batal</button>
-                                <button type="submit" disabled={isSubmitting || !billProof} className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg disabled:opacity-50 transition-colors">
-                                    {isSubmitting ? 'Mengirim...' : 'Kirim Tagihan'}
-                                </button>
+                            <div className="mt-10 flex gap-4">
+                                <button type="button" onClick={() => setShowExtraBillModal(false)} className="flex-1 py-4 text-gray-500 font-black uppercase text-[11px] tracking-widest hover:bg-gray-50 rounded-2xl transition-colors">Tutup</button>
+                                {selectedKost.totalPendingBills > 0 && (
+                                    <button 
+                                        onClick={() => handleStartPayment(selectedKost.totalPendingBills, selectedKost.kostId, 'kost_booking', {
+                                            billPayment: true,
+                                            kostId: selectedKost.kostId,
+                                            kostName: selectedKost.kostName,
+                                            pendingBills: selectedKost.pendingBills
+                                        })}
+                                        className="flex-[2] py-4 bg-blue-600 hover:bg-blue-700 text-white font-black uppercase text-[11px] tracking-[0.2em] rounded-2xl shadow-2xl shadow-blue-100 transition-all active:scale-95"
+                                    >
+                                        Bayar Sekarang
+                                    </button>
+                                )}
                             </div>
-                        </form>
+                        </div>
+                        
+                        <div className="bg-gray-50 p-4 border-t border-gray-100 flex items-center justify-center gap-2">
+                             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                             <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Secure Checkout Powered by Pakasir</span>
+                        </div>
                     </div>
                 </div>
             )}
@@ -915,8 +1041,29 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                         </form>
                     </div>
                 </div>
+            {/* 5. Payment Gateway Integration */}
+            {showPaymentGateway && (
+                <PaymentGateway
+                    amount={paymentAmount}
+                    orderId={paymentOrderId}
+                    productId={paymentProductId}
+                    productType={paymentProductType}
+                    userId={user.uid}
+                    metadata={{
+                        ...paymentMetadata,
+                        userName: user.name || user.displayName || 'Penyewa',
+                        userEmail: user.email,
+                        timestamp: new Date().toISOString(),
+                        productName: selectedKost?.kostName
+                    }}
+                    onPaymentSuccess={() => {
+                        setShowPaymentGateway(false);
+                        alert('Pembayaran Berhasil! Data sewa Anda sedang diperbarui.');
+                        fetchMyKosts(); // Refresh data
+                    }}
+                    onCancel={() => setShowPaymentGateway(false)}
+                />
             )}
-
         </div>
     );
 };
