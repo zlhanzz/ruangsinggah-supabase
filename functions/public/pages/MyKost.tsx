@@ -610,33 +610,40 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                     </div>
 
                                     {/* Stats Grid */}
-                                    <div className="bg-[#FBFCFE]/80 backdrop-blur-sm rounded-[2.5rem] p-8 sm:p-10 border border-gray-100 grid grid-cols-2 sm:grid-cols-4 gap-8 hover:border-orange-200 group-hover:bg-white transition-all duration-500">
-                                        <div className="space-y-2">
-                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Durasi</p>
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 bg-orange-100 rounded-xl"><Clock className="w-4 h-4 text-orange-600" /></div>
-                                                <p className="text-lg font-black text-gray-900">{kost.duration || 1} {kost.period || 'Bulan'}</p>
+                                    <div className="bg-[#FBFCFE]/80 backdrop-blur-sm rounded-[2.5rem] p-6 sm:p-10 border border-gray-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 hover:border-orange-200 group-hover:bg-white transition-all duration-500">
+                                        <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:gap-2">
+                                            <div className="p-3 bg-orange-100 rounded-2xl"><Clock className="w-5 h-5 text-orange-600" /></div>
+                                            <div>
+                                                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Durasi</p>
+                                                <p className="text-base sm:text-lg font-black text-gray-900">{kost.duration || 1} {kost.period || 'Bulan'}</p>
                                             </div>
                                         </div>
-                                        <div className="space-y-2">
-                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Mulai</p>
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 bg-blue-100 rounded-xl"><FileText className="w-4 h-4 text-blue-600" /></div>
-                                                <p className="text-lg font-black text-gray-900">{kost.moveInDate || '-'}</p>
+
+                                        <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:gap-2">
+                                            <div className="p-3 bg-blue-100 rounded-2xl"><FileText className="w-5 h-5 text-blue-600" /></div>
+                                            <div>
+                                                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Mulai</p>
+                                                <p className="text-base sm:text-lg font-black text-gray-900">
+                                                    {kost.moveInDate ? new Date(kost.moveInDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+                                                </p>
                                             </div>
                                         </div>
-                                        <div className="space-y-2">
-                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Selesai</p>
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 bg-rose-100 rounded-xl"><Calendar className="w-4 h-4 text-rose-600" /></div>
-                                                <p className="text-lg font-black text-gray-900">{kost.endDate || '-'}</p>
+
+                                        <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:gap-2">
+                                            <div className="p-3 bg-rose-100 rounded-2xl"><Calendar className="w-5 h-5 text-rose-600" /></div>
+                                            <div>
+                                                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Selesai</p>
+                                                <p className="text-base sm:text-lg font-black text-gray-900">
+                                                    {kost.endDate ? new Date(kost.endDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+                                                </p>
                                             </div>
                                         </div>
-                                        <div className="space-y-2">
-                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Tagihan</p>
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 bg-emerald-100 rounded-xl"><Receipt className="w-4 h-4 text-emerald-600" /></div>
-                                                <p className="text-lg font-black text-emerald-600">
+
+                                        <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:gap-2">
+                                            <div className="p-3 bg-emerald-100 rounded-2xl"><Receipt className="w-5 h-5 text-emerald-600" /></div>
+                                            <div>
+                                                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Tagihan</p>
+                                                <p className="text-base sm:text-lg font-black text-emerald-600">
                                                     {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(kost.totalPrice || 0)}
                                                 </p>
                                             </div>
