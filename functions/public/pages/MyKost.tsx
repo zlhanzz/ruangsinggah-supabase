@@ -594,14 +594,34 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                         </div>
 
                                         <div className="flex-1">
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                                <h2 className="text-3xl sm:text-4xl font-black text-gray-900 leading-tight tracking-tight">
-                                                    {kost.kostName || 'Kost Tersembunyi'}
-                                                </h2>
+                                                <div className="flex flex-col gap-2">
+                                                    <h2 className="text-3xl sm:text-4xl font-black text-gray-900 leading-tight tracking-tight">
+                                                        {kost.kostName || 'Kost Tersembunyi'}
+                                                    </h2>
+                                                    {/* Quick Rating Stars */}
+                                                    <div className="flex items-center gap-1.5 bg-white/50 backdrop-blur-sm self-start px-3 py-1.5 rounded-xl border border-gray-100 shadow-sm">
+                                                        {[1, 2, 3, 4, 5].map((s) => (
+                                                            <button
+                                                                key={s}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setRatingValue(s);
+                                                                    setRatingComment('');
+                                                                    setSelectedKost(kost);
+                                                                    setShowRatingModal(true);
+                                                                }}
+                                                                className="transition-all hover:scale-125 hover:-translate-y-0.5"
+                                                            >
+                                                                <Star className={`w-4 h-4 ${s <= 0 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`} />
+                                                            </button>
+                                                        ))}
+                                                        <span className="text-[10px] font-black text-gray-400 ml-2 uppercase tracking-widest">Beri Rating</span>
+                                                    </div>
+                                                </div>
                                                 {kost.daysRemaining !== null && (
                                                     <div className={`group/badge relative px-6 py-3.5 rounded-[1.5rem] text-[11px] font-black uppercase tracking-[0.15em] flex items-center gap-3 shadow-2xl border transition-all duration-500 ${
                                                         kost.daysRemaining <= 7 
-                                                        ? 'bg-red-600 text-white border-red-500 scale-110 -rotate-2 shadow-red-200 z-20' 
+                                                        ? 'bg-red-600 text-white border-red-500 shadow-red-200 z-20' 
                                                         : 'bg-emerald-50 text-emerald-600 border-emerald-100'
                                                     }`}>
                                                         <div className={`w-3 h-3 rounded-full flex items-center justify-center ${kost.daysRemaining <= 7 ? 'bg-white shadow-[0_0_15px_rgba(255,255,255,0.8)]' : 'bg-emerald-500'}`}>
@@ -615,7 +635,6 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                                         )}
                                                     </div>
                                                 )}
-                                            </div>
                                             <div className="flex flex-wrap items-center gap-3 mt-6">
                                                 <span className="bg-gray-100/80 backdrop-blur-sm px-5 py-2.5 rounded-2xl text-[11px] font-black text-gray-700 uppercase tracking-wider">
                                                     {kost.roomType || 'Standard Room'}
@@ -697,7 +716,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                         </button>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 gap-3">
                                         <button
                                             onClick={() => {
                                                 const phone = '628123456789';
@@ -707,13 +726,6 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                             className="bg-white border-2 border-gray-100 hover:border-emerald-500 hover:text-emerald-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[11px] group/item"
                                         >
                                             <Smartphone className="w-4 h-4 group-hover/item:-translate-y-0.5 transition-transform" /> HUBUNGI PEMILIK
-                                        </button>
-
-                                        <button
-                                            onClick={() => handleOpenRating(kost)}
-                                            className="bg-white border-2 border-gray-100 hover:border-yellow-500 hover:text-yellow-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[11px] group/item"
-                                        >
-                                            <Star className="w-4 h-4 group-hover/item:rotate-12 transition-transform" /> PENILAIAN
                                         </button>
                                     </div>
 
