@@ -595,9 +595,13 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
 
                                         <div className="flex-1">
                                                 <div className="flex flex-col gap-2">
-                                                    <h2 className="text-3xl sm:text-4xl font-black text-gray-900 leading-tight tracking-tight">
+                                                    <button 
+                                                        onClick={() => onPageChange('products', { id: kost.kostId })}
+                                                        className="text-3xl sm:text-4xl font-black text-gray-900 leading-tight tracking-tight text-left hover:text-orange-500 transition-colors group/title flex items-center gap-3"
+                                                    >
                                                         {kost.kostName || 'Kost Tersembunyi'}
-                                                    </h2>
+                                                        <ChevronRight className="w-8 h-8 opacity-0 -translate-x-4 group-hover/title:opacity-100 group-hover/title:translate-x-0 transition-all text-orange-500" />
+                                                    </button>
                                                     {/* Quick Rating Stars */}
                                                     <div className="flex items-center gap-1.5 bg-white/50 backdrop-blur-sm self-start px-3 py-1.5 rounded-xl border border-gray-100 shadow-sm">
                                                         {[1, 2, 3, 4, 5].map((s) => (
@@ -619,7 +623,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                                     </div>
                                                 </div>
                                                 {kost.daysRemaining !== null && (
-                                                    <div className={`group/badge relative px-6 py-3.5 rounded-[1.5rem] text-[11px] font-black uppercase tracking-[0.15em] flex items-center gap-3 shadow-2xl border transition-all duration-500 ${
+                                                    <div className={`group/badge relative px-6 py-3.5 rounded-[1.5rem] text-[11px] font-black uppercase tracking-[0.15em] flex items-center gap-3 shadow-2xl border transition-all duration-500 self-start ${
                                                         kost.daysRemaining <= 7 
                                                         ? 'bg-red-600 text-white border-red-500 shadow-red-200 z-20' 
                                                         : 'bg-emerald-50 text-emerald-600 border-emerald-100'
@@ -710,7 +714,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
 
                                         <button
                                             onClick={() => handleOpenBill(kost)}
-                                            className="bg-white border-2 border-gray-100 hover:border-blue-500 hover:text-blue-600 text-gray-700 px-8 py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-3 transition-all text-[13px] shadow-2xl shadow-gray-100 active:scale-95 group/bill"
+                                            className="bg-gray-900 hover:bg-emerald-600 text-white px-8 py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-3 transition-all text-[13px] shadow-2xl shadow-gray-300 active:scale-95 group/bill"
                                         >
                                             <Receipt className="w-5 h-5 group-hover/bill:-translate-y-0.5 transition-transform" /> LIHAT TAGIHAN
                                         </button>
@@ -870,7 +874,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                         <FileText className="w-5 h-5 font-black" />
                                         <span className="text-[10px] font-black uppercase tracking-[0.3em]">Official Invoice</span>
                                     </div>
-                                    <h3 className="text-2xl font-black tracking-tight">Tagihan Ekstra</h3>
+                                    <h3 className="text-2xl font-black tracking-tight">Tagihan</h3>
                                 </div>
                                 <div className="text-right">
                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">ID Kost</p>
