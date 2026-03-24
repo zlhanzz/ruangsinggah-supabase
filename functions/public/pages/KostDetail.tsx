@@ -4,6 +4,8 @@ import { Kost, RoomType, PricingPeriod } from '../types';
 import { FORMAT_CURRENCY } from '../constants';
 import BookingModal from '../components/BookingModal';
 import PaymentGateway from '../components/PaymentGateway';
+import ChatWindow from '../components/ChatWindow';
+import { getOrCreateChatSession } from '../chatService';
 
 interface KostDetailProps {
   kost: Kost;
@@ -55,6 +57,9 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   const [isPaymentGatewayOpen, setIsPaymentGatewayOpen] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(false);
   const [tempBookingData, setTempBookingData] = useState<any>(null);
+  const [showChatWindow, setShowChatWindow] = useState(false);
+  const [activeChatSession, setActiveChatSession] = useState<any>(null);
+  const [isSubmittingChat, setIsSubmittingChat] = useState(false);
 
   const defaultRoom: RoomType = {
     name: 'Standard Room',
@@ -131,6 +136,29 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
 
   const activePrice = getPriceForPeriod(selectedPeriod);
 
+  const handleOpenChat = async () => {
+    if (!user) {
+      if (confirm("Anda harus login untuk memulai chat dengan pemilik. Login sekarang?")) {
+        onLoginRedirect?.();
+      }
+      return;
+    }
+
+    try {
+      setIsSubmittingChat(true);
+      // owner_uid is available in the kost object
+      const ownerId = kost.ownerUid || 'admin-system-id';
+      const session = await getOrCreateChatSession(user.uid, ownerId, kost.id);
+      setActiveChatSession(session);
+      setShowChatWindow(true);
+    } catch (error) {
+      console.error('Failed to open chat:', error);
+      alert('Gagal membuka chat. Silakan coba lagi nanti.');
+    } finally {
+      setIsSubmittingChat(false);
+    }
+  };
+
   // Check if location data is valid (non-zero coordinates)
   const hasValidLocation = kost.location && (kost.location.lat !== 0 || kost.location.lng !== 0);
   const hasCampuses = kost.campuses && kost.campuses.length > 0;
@@ -201,7 +229,13 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </button>
         <span className="font-bold text-gray-900 truncate max-w-[200px] uppercase tracking-tight text-xs">{kost.title}</span>
-        <button onClick={() => onStartChat?.(kost.id)} className="text-orange-500 font-black text-sm uppercase tracking-widest">Tanya</button>
+        <button 
+          onClick={handleOpenChat} 
+          disabled={isSubmittingChat}
+          className="text-orange-500 font-black text-sm uppercase tracking-widest disabled:opacity-50"
+        >
+          {isSubmittingChat ? '...' : 'Tanya'}
+        </button>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-12">
@@ -553,10 +587,11 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                     {selectedRoom.isAvailable === false ? 'Kamar Penuh' : `Ajukan Sewa (${periodLabels[selectedPeriod] || selectedPeriod})`}
                   </button>
                   <button
-                    onClick={() => onStartChat?.(kost.id)}
-                    className="w-full bg-white text-gray-900 border-2 border-gray-100 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:border-gray-900 transition-all active:scale-95"
+                    onClick={handleOpenChat}
+                    disabled={isSubmittingChat}
+                    className="w-full bg-white text-gray-900 border-2 border-gray-100 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:border-gray-900 transition-all active:scale-95 disabled:opacity-50"
                   >
-                    Chat Pemilik
+                    {isSubmittingChat ? 'Membuka Chat...' : 'Chat Pemilik'}
                   </button>
                 </div>
               </div>
@@ -602,6 +637,14 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           }}
           onPaymentSuccess={handlePaymentSuccess}
           onCancel={() => setIsPaymentGatewayOpen(false)}
+        />
+      )}
+
+      {showChatWindow && activeChatSession && (
+        <ChatWindow 
+          session={activeChatSession}
+          currentUser={user}
+          onClose={() => setShowChatWindow(false)}
         />
       )}
     </div>

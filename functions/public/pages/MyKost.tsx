@@ -3,7 +3,9 @@ import { supabase } from '../supabase';
 import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, Zap } from 'lucide-react';
 import { Page } from '../types';
 import { addPropertyReview, getExtraBills } from '../userService';
+import { getOrCreateChatSession } from '../chatService';
 import PaymentGateway from '../components/PaymentGateway';
+import ChatWindow from '../components/ChatWindow';
 
 interface MyKostProps {
     user: any;
@@ -43,6 +45,8 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
     const [showExtraBillModal, setShowExtraBillModal] = useState(false);
     const [showComplaintModal, setShowComplaintModal] = useState(false);
     const [showRatingModal, setShowRatingModal] = useState(false);
+    const [showChatWindow, setShowChatWindow] = useState(false);
+    const [activeChatSession, setActiveChatSession] = useState<any>(null);
     const [selectedKost, setSelectedKost] = useState<any>(null);
 
     // Rating form state
@@ -79,6 +83,23 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
             fetchMyKosts();
         }
     }, [user]);
+
+    const handleOpenChat = async (kost: any) => {
+        if (!user) return;
+        try {
+            setIsSubmitting(true);
+            // In a real scenario, owner_uid should come from the property data
+            const ownerId = kost.ownerUid || 'admin-system-id'; 
+            const session = await getOrCreateChatSession(user.uid, ownerId, kost.id);
+            setActiveChatSession(session);
+            setShowChatWindow(true);
+        } catch (error) {
+            console.error('Failed to open chat:', error);
+            alert('Gagal membuka chat. Silakan coba lagi nanti.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     const fetchMyKosts = async () => {
         setLoading(true);
@@ -722,11 +743,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
 
                                     <div className="grid grid-cols-1 gap-3">
                                         <button
-                                            onClick={() => {
-                                                const phone = '628123456789';
-                                                const text = `Halo RuangSinggah! Saya ${user.name || 'Penyewa'}, penyewa di ${kost.kostName}. Saya ingin bertanya mengenai...`;
-                                                window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
-                                            }}
+                                            onClick={() => handleOpenChat(kost)}
                                             className="bg-white border-2 border-gray-100 hover:border-emerald-500 hover:text-emerald-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[11px] group/item"
                                         >
                                             <Smartphone className="w-4 h-4 group-hover/item:-translate-y-0.5 transition-transform" /> HUBUNGI PEMILIK
@@ -1109,6 +1126,15 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                     </div>
                 </div>
             )}
+
+            {showChatWindow && activeChatSession && (
+                <ChatWindow 
+                    session={activeChatSession}
+                    currentUser={user}
+                    onClose={() => setShowChatWindow(false)}
+                />
+            )}
+
             {/* 5. Payment Gateway Integration */}
             {showPaymentGateway && (
                 <PaymentGateway

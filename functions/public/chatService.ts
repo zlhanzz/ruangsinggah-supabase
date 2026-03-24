@@ -1,0 +1,169 @@
+import { supabase } from './supabase';
+
+export interface ChatSession {
+  id: string;
+  user_id: string;
+  owner_id: string;
+  property_id?: string;
+  last_message?: string;
+  last_message_at?: string;
+  created_at: string;
+  updated_at: string;
+  owner?: any;
+  user?: any;
+  property?: any;
+}
+
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  sender_id: string;
+  sender_type: 'user' | 'owner';
+  content: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+/**
+ * Mendapatkan atau membuat sesi chat antara user dan owner
+ */
+export async function getOrCreateChatSession(userId: string, ownerId: string, propertyId?: string): Promise<ChatSession> {
+  // Cek apakah sudah ada sesi untuk kombinasi ini
+  let query = supabase
+    .from('chat_sessions')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('owner_id', ownerId);
+    
+  if (propertyId) {
+    query = query.eq('property_id', propertyId);
+  } else {
+    query = query.is('property_id', null);
+  }
+
+  const { data: existing, error: fetchError } = await query.maybeSingle();
+
+  if (fetchError) {
+    console.error('Error fetching chat session:', fetchError);
+    throw fetchError;
+  }
+
+  if (existing) return existing;
+
+  // Buat sesi baru jika belum ada
+  const { data: newSession, error: createError } = await supabase
+    .from('chat_sessions')
+    .insert({
+      user_id: userId,
+      owner_id: ownerId,
+      property_id: propertyId
+    })
+    .select()
+    .single();
+
+  if (createError) {
+    console.error('Error creating chat session:', createError);
+    throw createError;
+  }
+
+  return newSession;
+}
+
+/**
+ * Mengambil semua pesan dalam satu sesi
+ */
+export async function getChatMessages(sessionId: string): Promise<ChatMessage[]> {
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching chat messages:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * Mengirim pesan baru
+ */
+export async function sendMessage(sessionId: string, senderId: string, senderType: 'user' | 'owner', content: string) {
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .insert({
+      session_id: sessionId,
+      sender_id: senderId,
+      sender_type: senderType,
+      content
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error sending message:', error);
+    throw error;
+  }
+
+  // Update last_message di sesi untuk preview di daftar chat
+  const { error: sessionError } = await supabase
+    .from('chat_sessions')
+    .update({
+      last_message: content,
+      last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', sessionId);
+
+  if (sessionError) {
+    console.error('Error updating session last message:', sessionError);
+  }
+
+  return data;
+}
+
+/**
+ * Subscribe ke pesan baru secara real-time
+ */
+export function subscribeToMessages(sessionId: string, onMessage: (message: ChatMessage) => void) {
+  return supabase
+    .channel(`chat:${sessionId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'chat_messages',
+        filter: `session_id=eq.${sessionId}`
+      },
+      (payload) => {
+        onMessage(payload.new as ChatMessage);
+      }
+    )
+    .subscribe();
+}
+
+/**
+ * Mendapatkan daftar semua sesi chat milik user
+ */
+export async function getMyChatSessions(userId: string): Promise<ChatSession[]> {
+  const { data, error } = await supabase
+    .from('chat_sessions')
+    .select(`
+      *,
+      owner:owner_id (name, photo_url),
+      user:user_id (name, photo_url),
+      property:property_id (title)
+    `)
+    .or(`user_id.eq.${userId},owner_id.eq.${userId}`)
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching my chat sessions:', error);
+    return [];
+  }
+
+  return data || [];
+}
