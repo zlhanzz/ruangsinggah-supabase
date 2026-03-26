@@ -1,6 +1,8 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Page } from '../types';
+import { Bell, MessageSquare } from 'lucide-react';
+import NotificationDropdown from './NotificationDropdown';
+import { notificationService } from '../notificationService';
 
 interface NavbarProps {
   activePage: Page;
@@ -11,8 +13,11 @@ interface NavbarProps {
 
 const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogout }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const desktopProfileRef = useRef<HTMLDivElement>(null);
   const mobileProfileRef = useRef<HTMLDivElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
 
   const navItems = [
     { label: 'Beranda', id: Page.HOME },
@@ -28,14 +33,42 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
       const target = event.target as Node;
       const isOutsideDesktop = !desktopProfileRef.current || !desktopProfileRef.current.contains(target);
       const isOutsideMobile = !mobileProfileRef.current || !mobileProfileRef.current.contains(target);
+      const isOutsideNotifications = !notificationsRef.current || !notificationsRef.current.contains(target);
 
       if (isOutsideDesktop && isOutsideMobile) {
         setIsProfileOpen(false);
+      }
+      if (isOutsideNotifications) {
+        setIsNotificationsOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Notification Sync
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchUnread = async () => {
+      try {
+        const notifs = await notificationService.getNotifications(user.uid);
+        setUnreadCount(notifs.filter(n => !n.is_read).length);
+      } catch (err) {
+        console.error("Failed to fetch unread count:", err);
+      }
+    };
+
+    fetchUnread();
+
+    const subscription = notificationService.subscribeToNotifications(user.uid, () => {
+      fetchUnread();
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [user]);
 
   const getInitials = (name: string) => {
     return name
@@ -88,9 +121,30 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                       onClick={() => onPageChange(Page.DASHBOARD_ADMIN)}
                       className="bg-gray-900 text-white px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest hover:bg-orange-500 transition-colors"
                     >
-                      Admin Panel
                     </button>
                   )}
+
+                  {/* NOTIFICATION BELL */}
+                  <div className="relative" ref={notificationsRef}>
+                    <button 
+                      onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                      className="p-2 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-xl transition-all relative group"
+                    >
+                      <Bell className={`w-6 h-6 transition-transform group-hover:rotate-12 ${isNotificationsOpen ? 'text-orange-500' : ''}`} />
+                      {unreadCount > 0 && (
+                        <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white animate-bounce-short">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
+                    </button>
+
+                    {isNotificationsOpen && (
+                      <NotificationDropdown 
+                        user={user} 
+                        onClose={() => setIsNotificationsOpen(false)} 
+                      />
+                    )}
+                  </div>
 
                   <div className="relative" ref={desktopProfileRef}>
                     <button
@@ -191,7 +245,33 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
               )}
             </div>
 
-            <div className="md:hidden flex items-center gap-4">
+            <div className="md:hidden flex items-center gap-2">
+              {/* MOBILE NOTIFICATION BELL */}
+              {user && (
+                <div className="relative" ref={notificationsRef}>
+                  <button 
+                    onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                    className="p-2 text-gray-400 hover:text-orange-500 rounded-xl transition-all relative"
+                  >
+                    <Bell className={`w-5 h-5 ${isNotificationsOpen ? 'text-orange-500' : ''}`} />
+                    {unreadCount > 0 && (
+                      <span className="absolute top-1.5 right-1.5 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {isNotificationsOpen && (
+                    <div className="fixed inset-x-0 top-20 px-4 z-[110]">
+                      <NotificationDropdown 
+                        user={user} 
+                        onClose={() => setIsNotificationsOpen(false)} 
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Mobile User Profile (Avatar only) or Login button */}
               {user ? (
                 <div className="relative" ref={mobileProfileRef}>
@@ -271,7 +351,7 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
       </nav>
 
       {/* Edge-to-Edge Mobile Bottom Navigation */}
-      {[Page.HOME, Page.LISTINGS, Page.PRODUCTS, Page.MY_BOOKINGS].includes(activePage) && (
+      {[Page.HOME, Page.LISTINGS, Page.PRODUCTS, Page.MY_BOOKINGS, Page.CHAT].includes(activePage) && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 w-full z-[100] bg-white border-t border-gray-100 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.05)]">
           <div className="flex items-center justify-around pb-1 pt-2">
             <button
@@ -280,6 +360,16 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
             >
               <svg className={`w-6 h-6 ${activePage === Page.HOME ? 'stroke-orange-500 fill-orange-50' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={activePage === Page.HOME ? 2.5 : 2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
               <span className={`text-[11px] ${activePage === Page.HOME ? 'font-bold' : 'font-medium'}`}>Beranda</span>
+            </button>
+
+            <button
+              onClick={() => onPageChange(Page.CHAT)}
+              className={`flex-1 flex flex-col items-center gap-1 p-2 transition-all ${activePage === Page.CHAT ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'}`}
+            >
+              <div className="relative">
+                <MessageSquare className={`w-6 h-6 ${activePage === Page.CHAT ? 'stroke-orange-500 fill-orange-50' : ''}`} />
+              </div>
+              <span className={`text-[11px] ${activePage === Page.CHAT ? 'font-bold' : 'font-medium'}`}>Pesan</span>
             </button>
 
             <button

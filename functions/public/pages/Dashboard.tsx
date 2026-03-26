@@ -12,12 +12,14 @@ import {
     getAnalyticsSummary, AnalyticsSummary
 } from '../adminService';
 import { getUserTransactions } from '../userService';
+import { notificationService } from '../notificationService';
 import Listings from './Listings';
 
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
     BarChart, Bar, Legend
 } from 'recharts';
+import { Zap } from 'lucide-react';
 
 interface DashboardProps {
     role: string;
@@ -139,6 +141,7 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
     const [customStartDate, setCustomStartDate] = useState<string>('');
     const [customEndDate, setCustomEndDate] = useState<string>('');
     const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
+    const [dashboardViewMode, setDashboardViewMode] = useState<'personal' | 'global'>(isAdmin ? 'global' : 'personal');
 
     // --- STATE BARU UNTUK KONFIRMASI DELETE ---
     const [showConfirmDeleteModal, setShowConfirmDeleteModal] = useState(false);
@@ -213,7 +216,12 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
         if (!isAdmin) return;
         setLoading(true);
         try {
-            const data = await getAnalyticsSummary(dateFilter, customStartDate, customEndDate);
+            const data = await getAnalyticsSummary(
+                dateFilter, 
+                customStartDate, 
+                customEndDate, 
+                dashboardViewMode === 'personal' ? uid : undefined
+            );
             setAnalyticsSummary(data);
         } catch (error) {
             console.error("Gagal memuat data analitik", error);
@@ -252,13 +260,17 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
     // Temporary state for adding tags inside room types
     const [tempTagInput, setTempTagInput] = useState<{ [key: string]: string }>({});
 
+    // --- RENT TRANSACTION FILTER ---
+    const [rentFilter, setRentFilter] = useState<'all' | 'pengajuan' | 'realisasi' | 'perpanjangan'>('all');
+
     // Form State (Property)
     const initialFormState: Partial<Kost> = {
         title: '', description: '', type: 'Campur', status: 'published', price: 0,
         city: '', area: '', address: '',
         location: { lat: -6.2088, lng: 106.8456 }, // Jakarta (Central) as neutral default
         imageUrls: [], videoUrls: [], instagramUrl: '', tiktokUrl: '', facilities: [], rules: [], roomTypes: [],
-        additionalFeePrice: 0, additionalFeeName: '', campuses: [], publicFacilities: []
+        additionalFeePrice: 0, additionalFeeName: '', campuses: [], publicFacilities: [],
+        omnichannelContactName: '', omnichannelContactPhone: '', omnichannelContactType: 'owner'
     };
     const [formData, setFormData] = useState<Partial<Kost>>(initialFormState);
 
@@ -282,7 +294,7 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
         if (!isAdmin) return;
         setLoading(true);
         try {
-            const data = await getAdminProperties();
+            const data = await getAdminProperties(dashboardViewMode === 'personal' ? uid : undefined);
             setAdminListings(data);
         } catch (error) {
             console.error("Gagal memuat properti:", error);
@@ -392,7 +404,7 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
         if (activeMenu === 'complaints') loadComplaints();
         if (activeMenu === 'transactions_db') loadDbTransactions();
         if (activeMenu === 'analytics') loadAnalyticsData();
-    }, [isAdmin, activeMenu, dateFilter, customStartDate, customEndDate]);
+    }, [isAdmin, activeMenu, dateFilter, customStartDate, customEndDate, dashboardViewMode]);
 
     // --- PROPERTY HANDLERS ---
 
@@ -757,6 +769,36 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                         <div className="space-y-2">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Deskripsi Lengkap</label>
                             <textarea rows={6} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} placeholder="Jelaskan keunggulan kost..." />
+                        </div>
+
+                         {/* Omnichannel Contact Section */}
+                         <div className="bg-orange-50/50 p-6 rounded-2xl border border-orange-100 space-y-4">
+                            <h4 className="text-[10px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-2 text-sm">
+                                <Zap className="w-3 h-3" /> Omnichannel Contact (WhatsApp Forwarding)
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nama Kontak</label>
+                                    <input type="text" className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-orange-500" value={formData.omnichannelContactName || ''} onChange={e => setFormData({ ...formData, omnichannelContactName: e.target.value })} placeholder="Nama Pemilik/Penjaga" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">WhatsApp (628...)</label>
+                                    <input type="text" className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-orange-500" value={formData.omnichannelContactPhone || ''} onChange={e => setFormData({ ...formData, omnichannelContactPhone: e.target.value })} placeholder="628123456789" />
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pihak Bertanggung Jawab</label>
+                                <div className="flex gap-6 mt-1">
+                                    <label className="flex items-center gap-2 cursor-pointer group">
+                                        <input type="radio" name="contactType" value="owner" checked={formData.omnichannelContactType === 'owner' || !formData.omnichannelContactType} onChange={() => setFormData({ ...formData, omnichannelContactType: 'owner' })} className="w-4 h-4 text-orange-500 focus:ring-orange-500 border-gray-300" />
+                                        <span className="text-xs font-bold text-gray-700 group-hover:text-orange-600 transition-colors uppercase tracking-widest">Pemilik Kost</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer group">
+                                        <input type="radio" name="contactType" value="caretaker" checked={formData.omnichannelContactType === 'caretaker'} onChange={() => setFormData({ ...formData, omnichannelContactType: 'caretaker' })} className="w-4 h-4 text-orange-500 focus:ring-orange-500 border-gray-300" />
+                                        <span className="text-xs font-bold text-gray-700 group-hover:text-orange-600 transition-colors uppercase tracking-widest">Penjaga Kost</span>
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 );
@@ -1278,7 +1320,7 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
         setLoading(true);
         try {
             if (isAdmin) {
-                const data = await getAdminTransactions();
+                const data = await getAdminTransactions(undefined, dashboardViewMode === 'personal' ? uid : undefined);
                 setRentTransactions(data.filter(t => t.product_type !== 'database'));
             } else if (uid) {
                 const data = await getUserTransactions(uid);
@@ -1337,7 +1379,7 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                 supabase.removeChannel(channel);
             };
         }
-    }, [activeMenu, isAdmin, uid]);
+    }, [activeMenu, isAdmin, uid, dashboardViewMode]);
 
     const [dummyVerifications, setDummyVerifications] = useState<any[]>([
         {
@@ -1514,11 +1556,11 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                 </div>
                 <SidebarItem icon="🛒" label="Sewa Kost" isActive={activeMenu === 'transactions_rent'} onClick={() => setActiveMenu('transactions_rent')} />
                 <SidebarItem icon="📦" label="Pembelian DB" isActive={activeMenu === 'transactions_db'} onClick={() => setActiveMenu('transactions_db')} />
+                <SidebarItem icon="✅" label="Verifikasi Kost" isActive={activeMenu === 'verifikasi'} onClick={() => setActiveMenu('verifikasi')} />
 
                 <div className="pt-4 pb-2">
-                    <p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Permohonan</p>
+                    <p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Pendaftaran</p>
                 </div>
-                <SidebarItem icon="✅" label="Verifikasi Kost" isActive={activeMenu === 'verifikasi'} onClick={() => setActiveMenu('verifikasi')} />
                 <SidebarItem icon="🤝" label="Pendaftar Mitra" isActive={activeMenu === 'mitra'} onClick={() => setActiveMenu('mitra')} />
                 <SidebarItem icon="🛠️" label="Komplain" isActive={activeMenu === 'complaints'} onClick={() => setActiveMenu('complaints')} />
             </nav>
@@ -1638,6 +1680,14 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
             );
         }
         return null;
+    };
+
+    const getMaxEndDate = () => {
+        if (!customStartDate) return '';
+        const start = new Date(customStartDate);
+        const maxEnd = new Date(start);
+        maxEnd.setMonth(start.getMonth() + 3);
+        return maxEnd.toISOString().split('T')[0];
     };
 
     const renderAnalytics = () => {
@@ -2115,12 +2165,14 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
             periodLabel: t.metadata?.period || '-',
             paymentMethod: t.payment_method || '-',
             amount: t.amount,
-            status: t.status === 'pending' ? 'Menunggu' : (t.status === 'paid' ? 'Selesai' : (t.status === 'cancelled' ? 'Ditolak' : t.status)),
+            status: (t.status === 'pending' || t.status === 'PENDING_APPROVAL') ? 'Menunggu' : (t.status === 'paid' ? 'Selesai' : (t.status === 'cancelled' || t.status === 'REJECTED' ? 'Ditolak' : t.status)),
+            rawStatus: t.status,
             startDate: t.metadata?.startDate || '-',
             endDate: t.metadata?.endDate || '-',
             transferProofUrl: t.metadata?.transferProofUrl || null,
             platformFee: Number(t.metadata?.platformFee) || 0,
             invoiceId: t.pakasir_order_id || `INV-${t.id.substring(0,8).toUpperCase()}`,
+            type: t.type || t.product_type || 'rent'
         };
     };
 
@@ -2175,13 +2227,54 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                 </p>
             </div>
 
+            {/* Rent Filter Tabs */}
+            <div className="flex flex-wrap gap-2 mb-6">
+                {[
+                    { id: 'all', label: 'Semua Transaksi', icon: '📋' },
+                    { id: 'pengajuan', label: 'Pengajuan Sewa', icon: '⏳' },
+                    { id: 'realisasi', label: 'Penyewaan Terealisasi', icon: '✅' },
+                    { id: 'perpanjangan', label: 'Perpanjangan Sewa', icon: '➕' }
+                ].map((tab) => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setRentFilter(tab.id as any)}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${rentFilter === tab.id
+                            ? 'bg-orange-500 text-white shadow-md'
+                            : 'bg-white text-gray-500 border border-gray-100 hover:bg-gray-50'
+                            }`}
+                    >
+                        <span>{tab.icon}</span>
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
             <div className="grid grid-cols-1 gap-6">
-                {rentTransactions.length === 0 ? (
-                    <div className="bg-white border text-center border-gray-100 rounded-2xl p-12 shadow-sm">
-                        <p className="text-gray-500 font-medium">Belum ada data transaksi.</p>
-                    </div>
-                ) : null}
-                {rentTransactions.map((rawTrx) => {
+                {(() => {
+                    const filtered = rentTransactions.filter(t => {
+                        if (rentFilter === 'all') return true;
+                        
+                        // Status and Type logic for filtering
+                        const isPending = t.status === 'pending' || t.status === 'PENDING_APPROVAL';
+                        const isPaid = ['paid', 'Selesai', 'success', 'Berhasil'].includes(t.status);
+                        const isExtension = t.type === 'perpanjangan_sewa' || t.product_type === 'perpanjangan_sewa' || t.metadata?.extensionType === 'manual_extension';
+
+                        if (rentFilter === 'pengajuan') return isPending && !isExtension;
+                        if (rentFilter === 'realisasi') return isPaid;
+                        if (rentFilter === 'perpanjangan') return isExtension;
+                        
+                        return true;
+                    });
+
+                    if (filtered.length === 0) {
+                        return (
+                            <div className="bg-white border text-center border-gray-100 rounded-2xl p-12 shadow-sm">
+                                <p className="text-gray-500 font-medium">Belum ada data transaksi untuk kategori ini.</p>
+                            </div>
+                        );
+                    }
+
+                    return filtered.map((rawTrx) => {
                     const trx = formatRentTrx(rawTrx);
                     return (
                     <div key={trx.id} className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row gap-6 hover:shadow-md transition-shadow relative overflow-hidden group/card">
@@ -2273,21 +2366,52 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                                 <div className="grid grid-cols-2 gap-2">
                                     <button
                                         onClick={async () => {
-                                            if (window.confirm(`Terima transaksi ini?`)) {
-                                                await updateTransactionStatus(trx.id, 'paid');
-                                                alert(`Transaksi dikonfirmasi!`);
+                                            const isPendingApproval = trx.rawStatus === 'PENDING_APPROVAL';
+                                            const confirmMsg = isPendingApproval 
+                                                ? 'Setujui pengajuan ini? Status akan berubah menjadi "Menunggu Pembayaran".'
+                                                : 'Konfirmasi pembayaran manual ini? Status akan berubah menjadi "Selesai".';
+                                            
+                                            if (window.confirm(confirmMsg)) {
+                                                const nextStatus = isPendingApproval ? 'AWAITING_PAYMENT' : 'paid';
+                                                await updateTransactionStatus(trx.id, nextStatus);
+                                                
+                                                // Trigger Notification
+                                                notificationService.createNotification({
+                                                  user_id: trx.user_id,
+                                                  title: isPendingApproval ? 'Pengajuan Disetujui!' : 'Pembayaran Terverifikasi',
+                                                  message: isPendingApproval 
+                                                    ? `Pengajuan sewa ${trx.item} telah disetujui. Silakan lakukan pembayaran.`
+                                                    : `Pembayaran untuk ${trx.item} telah diverifikasi oleh Admin.`,
+                                                  type: isPendingApproval ? 'rental' : 'payment',
+                                                  link: '/my-bookings'
+                                                }).catch(err => console.error("Failed to create admin approval notification:", err));
+
+                                                alert(`Transaksi berhasil ${isPendingApproval ? 'disetujui' : 'dikonfirmasi'}!`);
+                                                loadRentTransactions();
                                             }
                                         }}
                                         className="w-full bg-green-500 hover:bg-green-600 text-white py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 flex justify-center items-center gap-1"
                                     >
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                        Terima
+                                        {trx.rawStatus === 'PENDING_APPROVAL' ? 'Setujui' : 'Terima'}
                                     </button>
                                     <button
                                         onClick={async () => {
+                                            const nextStatus = trx.rawStatus === 'PENDING_APPROVAL' ? 'REJECTED' : 'cancelled';
                                             if (window.confirm(`Tolak transaksi ini?`)) {
-                                                await updateTransactionStatus(trx.id, 'cancelled');
+                                                await updateTransactionStatus(trx.id, nextStatus);
+                                                
+                                                // Trigger Notification
+                                                notificationService.createNotification({
+                                                  user_id: trx.user_id,
+                                                  title: 'Pengajuan Ditolak',
+                                                  message: `Mohon maaf, pengajuan sewa ${trx.item} Anda telah ditolak oleh pemilik/admin.`,
+                                                  type: 'rental',
+                                                  link: '/my-bookings'
+                                                }).catch(err => console.error("Failed to create admin rejection notification:", err));
+
                                                 alert('Transaksi ditolak.');
+                                                loadRentTransactions();
                                             }
                                         }}
                                         className="w-full bg-red-50 hover:bg-red-100 text-red-600 py-2.5 rounded-xl text-xs font-bold transition-all border border-red-200 active:scale-95 flex justify-center items-center gap-1"
@@ -2327,7 +2451,8 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                         </div>
                     </div>
                     );
-                })}
+                })
+            })()}
             </div>
 
             {/* ── MODAL: PROFIL PENYEWA ─────────────────────── */}
@@ -2922,6 +3047,32 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
             {/* MAIN CONTENT AREA */}
             <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
                 <div className="max-w-7xl mx-auto">
+                    
+                    {/* VIEW MODE TOGGLE (Admin Only) */}
+                    {isAdmin && (
+                        <div className="flex justify-between items-center mb-8 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
+                            <div className="flex bg-gray-100 p-1 rounded-xl">
+                                <button 
+                                    onClick={() => setDashboardViewMode('global')}
+                                    className={`px-4 sm:px-6 py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all ${dashboardViewMode === 'global' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    🌐 Global View
+                                </button>
+                                <button 
+                                    onClick={() => setDashboardViewMode('personal')}
+                                    className={`px-4 sm:px-6 py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all ${dashboardViewMode === 'personal' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    👤 My Properties
+                                </button>
+                            </div>
+                            <div className="hidden md:flex items-center gap-3 px-4">
+                                <div className={`w-2 h-2 rounded-full ${dashboardViewMode === 'global' ? 'bg-green-500 animate-pulse' : 'bg-orange-500'}`}></div>
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                    {dashboardViewMode === 'global' ? 'System-wide monitoring' : 'Isolated Property View'}
+                                </span>
+                            </div>
+                        </div>
+                    )}
 
                     {/* MOBILE MENU DROPDOWN (if no sidebar) */}
                     {isAdmin && (
@@ -2934,9 +3085,10 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                                 <option value="analytics">📊 Ringkasan Analisis</option>
                                 <option value="properties">🏠 Kelola Kost</option>
                                 <option value="databases">🗄️ Kelola Database</option>
+                                <option value="verification">⚙️ Katalog Verifikasi</option>
                                 <option value="transactions_rent">🛒 Sewa Kost</option>
                                 <option value="transactions_db">📦 Pembelian DB</option>
-                                <option value="verification">✅ Verifikasi Kost</option>
+                                <option value="verifikasi">✅ Verifikasi Kost (Order)</option>
                                 <option value="mitra">🤝 Pendaftar Mitra</option>
                                 <option value="complaints">🛠️ Komplain</option>
                             </select>

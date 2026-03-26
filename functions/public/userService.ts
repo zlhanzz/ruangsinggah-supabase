@@ -69,6 +69,9 @@ export async function getPublishedProperties(): Promise<Kost[]> {
         additionalFeeName: row.additional_fee_name,
         createdAt: convertTimestamp(row.created_at),
         updatedAt: convertTimestamp(row.updated_at),
+        omnichannelContactName: row.omnichannel_contact_name,
+        omnichannelContactPhone: row.omnichannel_contact_phone,
+        omnichannelContactType: row.omnichannel_contact_type,
       } as Kost;
     });
   } catch (error: any) {
@@ -119,6 +122,9 @@ export async function getPublishedPropertyDetails(propertyId: string): Promise<K
       publicFacilities: row.public_facilities || [],
       createdAt: convertTimestamp(row.created_at),
       updatedAt: convertTimestamp(row.updated_at),
+      omnichannelContactName: row.omnichannel_contact_name,
+      omnichannelContactPhone: row.omnichannel_contact_phone,
+      omnichannelContactType: row.omnichannel_contact_type,
     } as Kost;
   } catch (error) {
     console.error('Error getting property details:', error);
@@ -239,4 +245,51 @@ export async function getExtraBills(userId: string): Promise<any[]> {
     return [];
   }
 }
+export async function createBookingRequest(bookingData: {
+  userId: string;
+  productId: string;
+  productType: string;
+  amount: number;
+  metadata: any;
+}) {
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .insert([{
+        user_id: bookingData.userId,
+        product_id: bookingData.productId,
+        product_type: bookingData.productType,
+        amount: bookingData.amount,
+        status: 'PENDING_APPROVAL',
+        metadata: bookingData.metadata
+      }])
+      .select()
+      .single();
 
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error creating booking request:', error);
+    throw error;
+  }
+}
+
+export async function cancelBookingRequest(transactionId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .update({ 
+        status: 'CANCELLED', 
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', transactionId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error cancelling booking request:', error);
+    throw error;
+  }
+}

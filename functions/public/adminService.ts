@@ -188,14 +188,16 @@ export async function uploadFileAndGetURL(file: File, folderName: string): Promi
 
 // ---- PROPERTY FUNCTIONS ----
 
-export async function getAdminProperties(): Promise<BasicPropertyInfo[]> {
+export async function getAdminProperties(ownerUid?: string): Promise<BasicPropertyInfo[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Tidak ada admin yang login.');
 
   const isAdmin = await checkIfUserIsAdmin(user.id);
 
   let query = supabase.from('properties').select('*');
-  if (!isAdmin) {
+  if (ownerUid) {
+    query = query.eq('owner_uid', ownerUid);
+  } else if (!isAdmin) {
     query = query.eq('owner_uid', user.id);
   }
 
@@ -237,24 +239,30 @@ export async function getAdminProperties(): Promise<BasicPropertyInfo[]> {
       campuses: row.campuses,
       publicFacilities: row.public_facilities,
       isVerified: row.is_verified,
+      omnichannelContactName: row.omnichannel_contact_name,
+      omnichannelContactPhone: row.omnichannel_contact_phone,
+      omnichannelContactType: row.omnichannel_contact_type,
     } as BasicPropertyInfo;
   });
 }
 
-export async function getAdminTransactions(productType?: string): Promise<AdminTransaction[]> {
+export async function getAdminTransactions(limitOrType?: number | string, ownerUid?: string): Promise<AdminTransaction[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 
   const isAdmin = await checkIfUserIsAdmin(user.id);
   if (!isAdmin) throw new Error('Access Denied');
 
-  let query = supabase
+  const limit = typeof limitOrType === 'number' ? limitOrType : 50;
+
+  // 1. Fetch Transactions
+  const { data: rawTransactions, error: trxError } = await supabase
     .from('transactions')
     .select(`
       *,
       user:user_id (
-        name,
-        email,
+        name, 
+        email, 
         phone,
         photo_url,
         occupation,
@@ -264,44 +272,48 @@ export async function getAdminTransactions(productType?: string): Promise<AdminT
         relationship_status
       )
     `)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(limit);
 
-  if (productType) {
-    query = query.eq('product_type', productType);
-  }
+  if (trxError) throw trxError;
+  const transactions = (rawTransactions || []) as any[];
 
-  const { data, error } = await query;
-  if (error) throw error;
-  if (!data) return [];
+  // 2. Fetch Properties for mapping
+  const { data: properties } = await supabase
+    .from('properties')
+    .select('id, title, owner_uid');
+  const propertyMap = new Map(properties?.map(p => [p.id, p]) || []);
 
-  // Manual join for database details if applicable
-  const transactions = data as any[];
-  const dbIds = transactions
-    .filter(t => t.product_type === 'database' && t.product_id)
-    .map(t => t.product_id);
-
+  // 3. Fetch Databases for mapping (optimistically)
+  const dbIds = transactions.filter(t => t.product_type === 'database').map(t => t.product_id);
+  let dbMap = new Map();
   if (dbIds.length > 0) {
-    const { data: dbDetails, error: dbError } = await supabase
+    const { data: dbs } = await supabase
       .from('available_databases')
       .select('id, campus, city, area, file_type, file_name, price')
       .in('id', dbIds);
-
-    if (!dbError && dbDetails) {
-      const dbMap = new Map(dbDetails.map(db => [db.id, db]));
-      transactions.forEach(t => {
-        if (t.product_type === 'database' && t.product_id) {
-          t.database = dbMap.get(t.product_id) || { id: t.product_id, campus: '-', city: '-', area: '-', file_type: '-', file_name: '-', price: 0 };
-        }
-      });
-    }
+    dbMap = new Map(dbs?.map(db => [db.id, db]) || []);
   }
 
-  return transactions as AdminTransaction[];
+  // 4. Map & Filter
+  const mapped = transactions.map(t => ({
+    ...t,
+    product_name: t.metadata?.item || t.product_id,
+    properties: propertyMap.get(t.product_id) || null,
+    database: dbMap.get(t.product_id) || null,
+  })) as (AdminTransaction & { properties: any })[];
+
+  if (ownerUid) {
+    return mapped.filter(t => t.properties?.owner_uid === ownerUid) as AdminTransaction[];
+  }
+
+  return mapped as AdminTransaction[];
 }
 
 export async function updateTransactionStatus(
   transactionId: string,
-  newStatus: string
+  newStatus: string,
+  additionalUpdates: any = {}
 ): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized: User not logged in.');
@@ -311,7 +323,11 @@ export async function updateTransactionStatus(
 
   const { error } = await supabase
     .from('transactions')
-    .update({ status: newStatus, updated_at: new Date().toISOString() })
+    .update({ 
+        status: newStatus, 
+        updated_at: new Date().toISOString(),
+        ...additionalUpdates
+    })
     .eq('id', transactionId);
 
   if (error) {
@@ -419,6 +435,9 @@ export async function addPropertyWithMedia(
       virtual_tour_url: kostData.virtualTourUrl || '',
       additional_fee_price: kostData.additionalFeePrice ? Number(kostData.additionalFeePrice) : null,
       additional_fee_name: kostData.additionalFeeName || '',
+      omnichannel_contact_name: kostData.omnichannelContactName || '',
+      omnichannel_contact_phone: kostData.omnichannelContactPhone || '',
+      omnichannel_contact_type: kostData.omnichannelContactType || 'owner',
     })
     .select('id')
     .single();
@@ -548,6 +567,9 @@ export async function updatePropertyWithMedia(
       virtual_tour_url: kostData.virtualTourUrl,
       additional_fee_price: kostData.additionalFeePrice ? Number(kostData.additionalFeePrice) : null,
       additional_fee_name: kostData.additionalFeeName,
+      omnichannel_contact_name: kostData.omnichannelContactName,
+      omnichannel_contact_phone: kostData.omnichannelContactPhone,
+      omnichannel_contact_type: kostData.omnichannelContactType,
       updated_at: new Date().toISOString(),
     })
     .eq('id', propertyId);
@@ -910,7 +932,12 @@ export async function updateMitraRegistrationStatus(id: string, status: string):
   if (error) throw error;
 }
 
-export async function getAnalyticsSummary(dateFilter?: string, customStart?: string, customEnd?: string): Promise<AnalyticsSummary> {
+export async function getAnalyticsSummary(
+  dateFilter: string = 'all', 
+  customStart?: string, 
+  customEnd?: string,
+  ownerUid?: string
+): Promise<AnalyticsSummary> {
   const { data: { user: authUser } } = await supabase.auth.getUser();
   if (!authUser) throw new Error('Unauthorized');
 
@@ -928,9 +955,11 @@ export async function getAnalyticsSummary(dateFilter?: string, customStart?: str
     .select('*', { count: 'exact', head: true });
 
   // 3. Properties (Active Listings & Mitra)
-  const { data: properties } = await supabase
-    .from('properties')
-    .select('owner_uid');
+  let propQuery = supabase.from('properties').select('owner_uid');
+  if (ownerUid) {
+    propQuery = propQuery.eq('owner_uid', ownerUid);
+  }
+  const { data: properties } = await propQuery;
   
   const totalMitra = new Set(properties?.map(p => p.owner_uid)).size;
   const totalActiveKosts = properties?.length || 0;
@@ -938,7 +967,7 @@ export async function getAnalyticsSummary(dateFilter?: string, customStart?: str
   // 4. Transactions with Date Filtering
   let query = supabase
     .from('transactions')
-    .select('product_type, amount, status, created_at')
+    .select('product_type, amount, status, created_at, product_id')
     .or('status.eq.paid,status.eq.Selesai');
 
   if (dateFilter && dateFilter !== 'all') {
@@ -968,8 +997,20 @@ export async function getAnalyticsSummary(dateFilter?: string, customStart?: str
     }
   }
 
-  const { data: transactions, error: trxError } = await query;
+  const { data: rawTransactions, error: trxError } = await query;
   if (trxError) throw trxError;
+
+  // Filter transactions by ownerUid in-memory if needed
+  let transactions = rawTransactions || [];
+  if (ownerUid) {
+    const { data: ownerProps } = await supabase
+      .from('properties')
+      .select('id')
+      .eq('owner_uid', ownerUid);
+    
+    const ownerPropIds = new Set(ownerProps?.map(p => p.id) || []);
+    transactions = transactions.filter(t => ownerPropIds.has(t.product_id));
+  }
 
   const result: AnalyticsSummary = {
     totalUsers: totalUsers || 0,

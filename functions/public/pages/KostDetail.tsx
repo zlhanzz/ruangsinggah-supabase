@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { Kost, RoomType, PricingPeriod } from '../types';
+import { Kost, RoomType, PricingPeriod, Page } from '../types';
 import { FORMAT_CURRENCY } from '../constants';
 import BookingModal from '../components/BookingModal';
 import PaymentGateway from '../components/PaymentGateway';
 import ChatWindow from '../components/ChatWindow';
 import { getOrCreateChatSession } from '../chatService';
+import { createBookingRequest } from '../userService';
 
 interface KostDetailProps {
   kost: Kost;
@@ -117,10 +118,47 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     setIsBookingModalOpen(true);
   };
 
-  const handleConfirmBooking = (data: any) => {
-    setTempBookingData(data);
-    setIsBookingModalOpen(false);
-    setIsPaymentGatewayOpen(true);
+  const handleConfirmBooking = async (data: any) => {
+    try {
+      setTempBookingData(data);
+      setIsBookingModalOpen(false);
+      
+      if (!user) {
+        alert('Anda harus login untuk melakukan pengajuan sewa.');
+        return;
+      }
+
+      await createBookingRequest({
+        userId: user.id || user.uid,
+        productId: kost.id,
+        productType: 'kost_booking',
+        amount: data.total,
+        metadata: {
+          kostName: kost.title,
+          imageUrls: kost.image_urls,
+          periodLabel: periodLabels[selectedPeriod] || selectedPeriod,
+          roomType: data.variantName,
+          startDate: data.startDate,
+          endDate: (() => {
+             const d = new Date(data.startDate);
+             const p = data.period;
+             if (p === 'harian') d.setDate(d.getDate() + 1);
+             else if (p === 'mingguan') d.setDate(d.getDate() + 7);
+             else if (p === 'bulanan') d.setMonth(d.getMonth() + 1);
+             else if (p === '3bulanan') d.setMonth(d.getMonth() + 3);
+             else if (p === '6bulanan') d.setMonth(d.getMonth() + 6);
+             else if (p === 'tahunan') d.setFullYear(d.getFullYear() + 1);
+             return d.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+          })(),
+          ...data
+        }
+      });
+
+      setBookingSuccess(true);
+    } catch (err) {
+      console.error('Failed to submit booking request:', err);
+      alert('Gagal mengirim pengajuan sewa. Silakan coba lagi.');
+    }
   };
 
   const handlePaymentSuccess = () => {
@@ -210,11 +248,16 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-green-50 rounded-full animate-ping opacity-20"></div>
           </div>
           <div>
-            <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight mb-4">Pembayaran Berhasil!</h2>
-            <p className="text-gray-500 font-medium">Kost Anda telah ter-booking dengan aman. Silakan hubungi pemilik untuk koordinasi masuk.</p>
+            <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight mb-4 text-center">Pengajuan Terkirim!</h2>
+            <p className="text-gray-500 font-medium text-center">Pengajuan sewa Anda telah terkirim ke pemilik kost. Mohon tunggu konfirmasi ketersediaan kamar. Anda akan menerima notifikasi untuk langkah pembayaran selanjutnya.</p>
           </div>
           <div className="flex flex-col gap-4">
-            <button onClick={() => window.location.reload()} className="bg-orange-500 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-orange-100 active:scale-95 transition-all">Selesaikan & Kembali</button>
+            <button 
+              onClick={() => window.location.href = Page.MY_BOOKINGS} 
+              className="bg-orange-500 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-orange-100 active:scale-95 transition-all"
+            >
+              Selesaikan & Lihat Status
+            </button>
           </div>
         </div>
       </div>
@@ -645,6 +688,9 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           session={activeChatSession}
           currentUser={user}
           onClose={() => setShowChatWindow(false)}
+          propertyName={kost.title}
+          contactName={kost.omnichannelContactName}
+          contactType={kost.omnichannelContactType}
         />
       )}
     </div>

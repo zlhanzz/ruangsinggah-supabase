@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { notificationService } from './notificationService';
 
 export interface ChatSession {
   id: string;
@@ -19,7 +20,7 @@ export interface ChatMessage {
   session_id: string;
   sender_id: string;
   sender_type: 'user' | 'owner';
-  content: string;
+  message: string;
   is_read: boolean;
   created_at: string;
 }
@@ -97,7 +98,7 @@ export async function sendMessage(sessionId: string, senderId: string, senderTyp
       session_id: sessionId,
       sender_id: senderId,
       sender_type: senderType,
-      content
+      message: content
     })
     .select()
     .single();
@@ -119,6 +120,29 @@ export async function sendMessage(sessionId: string, senderId: string, senderTyp
 
   if (sessionError) {
     console.error('Error updating session last message:', sessionError);
+  }
+
+  // Notify recipient
+  try {
+    const { data: session } = await supabase
+      .from('chat_sessions')
+      .select('user_id, owner_id')
+      .eq('id', sessionId)
+      .single();
+
+    if (session) {
+      const recipientId = senderType === 'user' ? session.owner_id : session.user_id;
+      // We don't have sender name here easily, so we use a generic title
+      notificationService.createNotification({
+        user_id: recipientId,
+        title: 'Pesan Baru',
+        message: content.length > 60 ? content.substring(0, 60) + '...' : content,
+        type: 'chat',
+        link: '/my-bookings' // Defaulting to my-bookings since it often contains chat entry points
+      }).catch(err => console.error("Failed to create chat notification:", err));
+    }
+  } catch (err) {
+    console.error("Error in notification trigger:", err);
   }
 
   return data;

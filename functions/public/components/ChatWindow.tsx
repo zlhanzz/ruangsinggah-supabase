@@ -6,9 +6,12 @@ interface ChatWindowProps {
   session: ChatSession;
   currentUser: any;
   onClose: () => void;
+  propertyName?: string;
+  contactName?: string;
+  contactType?: 'owner' | 'caretaker';
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, propertyName, contactName, contactType }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -81,10 +84,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose }
               <MessageSquare className="w-6 h-6 text-orange-500" />
             </div>
             <div>
-              <h3 className="text-lg font-black tracking-tight leading-none mb-1">RuangSinggah Chat</h3>
+              <h3 className="text-lg font-black tracking-tight leading-none mb-1">
+                {propertyName || 'RuangSinggah Chat'}
+              </h3>
               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest flex items-center gap-2">
                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" /> 
-                Omnichannel Integrated
+                {contactName 
+                  ? `${contactName} (${contactType === 'caretaker' ? 'Penjaga' : 'Pemilik'})` 
+                  : (contactType === 'caretaker' ? 'Penjaga Kost' : 'Pemilik Kost')}
               </p>
             </div>
           </div>
@@ -93,13 +100,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose }
           </button>
         </div>
 
-        {/* Info Banner */}
-        <div className="bg-orange-50 px-6 py-3 border-b border-orange-100 flex items-center gap-3">
-          <Zap className="w-4 h-4 text-orange-500 fill-orange-500" />
-          <p className="text-[10px] text-orange-800 font-bold uppercase tracking-widest">
-            Pesan diteruskan ke WhatsApp Pemilik Kost
-          </p>
-        </div>
 
         {/* Messages List */}
         <div 

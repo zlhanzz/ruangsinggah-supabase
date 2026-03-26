@@ -95,6 +95,11 @@ export interface Kost {
   // Additional Fees
   additionalFeePrice?: number;
   additionalFeeName?: string;
+
+  // Omnichannel Contact Info
+  omnichannelContactName?: string;
+  omnichannelContactPhone?: string;
+  omnichannelContactType?: 'owner' | 'caretaker';
 }
 
 export interface ImageUrlObject {

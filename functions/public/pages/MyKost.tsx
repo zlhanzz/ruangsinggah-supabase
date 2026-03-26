@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, Zap } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, Zap, XCircle } from 'lucide-react';
 import { Page } from '../types';
 import { addPropertyReview, getExtraBills } from '../userService';
 import { getOrCreateChatSession } from '../chatService';
+import { getReviews } from '../costService';
+import { cancelBookingRequest } from '../userService';
 import PaymentGateway from '../components/PaymentGateway';
 import ChatWindow from '../components/ChatWindow';
 
@@ -36,8 +38,10 @@ const SkeletonLoader = () => (
 );
 
 const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
-    const [loading, setLoading] = useState(true);
     const [activeKosts, setActiveKosts] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [activeTab, setActiveTab] = useState<'diajukan' | 'aktif' | 'riwayat'>('diajukan');
     const [extraBills, setExtraBills] = useState<any[]>([]);
 
     // Modal states
@@ -56,7 +60,6 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
     // Extension form state
     const [extensionPeriod, setExtensionPeriod] = useState(1);
     const [extensionProof, setExtensionProof] = useState<File | null>(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Extra bill form state
     const [billName, setBillName] = useState('');
@@ -88,36 +91,124 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
         if (!user) return;
         try {
             setIsSubmitting(true);
-            // In a real scenario, owner_uid should come from the property data
-            const ownerId = kost.ownerUid || 'admin-system-id'; 
-            const session = await getOrCreateChatSession(user.uid, ownerId, kost.id);
-            setActiveChatSession(session);
+            
+            // Ambil detail properti untuk mendapatkan info omnichannel
+            const { data: propData, error: propError } = await supabase
+                .from('properties')
+                .select('owner_uid, title, omnichannel_contact_name, omnichannel_contact_type')
+                .eq('id', kost.kostId)
+                .single();
+            
+            if (propError) {
+                console.warn('Property not found in Supabase for chat:', propError);
+                // Fallback jika properti tidak ditemukan di Supabase (misal data legacy)
+                const ownerId = 'admin-system-id'; // Tetap fallback admin, tapi akan gagal di DB jika bukan UUID
+                const session = await getOrCreateChatSession(user.uid, ownerId, null);
+                
+                setActiveChatSession({
+                    ...session,
+                    propertyName: kost.kostName || 'Kost Saya',
+                    contactName: 'Admin',
+                    contactType: 'owner'
+                });
+                setShowChatWindow(true);
+                return;
+            }
+
+            const ownerId = propData.owner_uid;
+            if (!ownerId) {
+                alert('Pemilik kost ini belum terdaftar di sistem chat. Hubungi admin RS jika berkelanjutan.');
+                return;
+            }
+
+            const session = await getOrCreateChatSession(user.uid, ownerId, kost.kostId);
+            
+            setActiveChatSession({
+                ...session,
+                propertyName: propData.title || kost.kostName,
+                contactName: propData.omnichannel_contact_name,
+                contactType: propData.omnichannel_contact_type
+            });
             setShowChatWindow(true);
         } catch (error) {
             console.error('Failed to open chat:', error);
-            alert('Gagal membuka chat. Silakan coba lagi nanti.');
+            alert('Gagal membuka chat. Pastikan koneksi internet stabil atau hubungi sistem admin RuangSinggah.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
+    const handleCancelBooking = async (kost: any) => {
+        if (!confirm(`Apakah Anda yakin ingin membatalkan pengajuan sewa untuk ${kost.kostName}? Tindakan ini tidak dapat dibatalkan.`)) {
+            return;
+        }
+
+        try {
+            setIsSubmitting(true);
+            await cancelBookingRequest(kost.id);
+            alert('Pengajuan sewa berhasil dibatalkan.');
+            fetchMyKosts(); // Refresh list
+        } catch (error) {
+            console.error('Failed to cancel booking:', error);
+            alert('Gagal membatalkan pengajuan. Silakan coba lagi nanti.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleOpenPayment = (kost: any) => {
+        setSelectedKost(kost);
+        setPaymentAmount(kost.totalPrice || kost.amount || 0);
+        setPaymentOrderId(kost.id);
+        setPaymentProductId(kost.kostId);
+        setPaymentProductType('kost_booking');
+        setPaymentMetadata({
+            kostName: kost.kostName,
+            roomType: kost.roomType,
+            duration: kost.duration,
+            period: kost.period,
+            startDate: kost.moveInDate,
+            endDate: kost.endDate
+        });
+        setShowPaymentGateway(true);
+    };
+
     const fetchMyKosts = async () => {
         setLoading(true);
         try {
-            console.log('Fetching My Kosts for user:', user.uid);
             const { data, error } = await supabase
                 .from('transactions')
                 .select('*')
                 .eq('user_id', user.uid);
 
-            if (error) throw error;
+            if (error) {
+                console.error('fetchMyKosts error:', error);
+                throw error;
+            }
+
+            // Batch fetch unique properties since join might fail due to FK issues
+            const productIds = Array.from(new Set(data?.map(d => d.product_id || d.kost_id).filter(id => !!id)));
+            const { data: propertiesData } = await supabase
+                .from('properties')
+                .select('id, title, image_urls, owner_uid, city, area')
+                .in('id', productIds);
+            
+            const propMap = (propertiesData || []).reduce((acc: any, p: any) => {
+                acc[p.id] = p;
+                return acc;
+            }, {});
             
             const kostsData: any[] = [];
             data?.forEach((doc) => {
-                const isRent = doc.product_type === 'rent' || doc.type === 'sewa_kost' || !doc.product_type || doc.category === 'kost';
-                const isApproved = ['approved', 'paid', 'Selesai', 'success', 'Berhasil'].includes(doc.status);
+                const isRent = doc.product_type === 'rent' || doc.type === 'sewa_kost' || doc.product_type === 'kost_booking' || !doc.product_type || doc.category === 'kost';
+                const statusLower = (doc.status || '').toLowerCase();
+                const isApproved = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(statusLower);
+                const isPendingApproval = statusLower === 'pending_approval';
+                const isAwaitingPayment = statusLower === 'awaiting_payment';
+                const isRejected = statusLower === 'rejected';
+                const isCancelled = statusLower === 'cancelled';
 
-                if (isRent && isApproved) {
+                if (isRent && (isApproved || isPendingApproval || isAwaitingPayment || isRejected || isCancelled)) {
                     let daysRem = null;
                     const metadata = doc.metadata || {};
                     if (metadata.endDate) {
@@ -129,7 +220,9 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                     }
 
                     let displayImg = null;
-                    const rawImages = doc.image_urls || metadata.imageUrls || [];
+                    const prop = propMap[doc.product_id || doc.kost_id];
+                    const rawImages = prop?.image_urls || doc.image_urls || metadata.imageUrls || [];
+                    
                     if (rawImages.length > 0) {
                         const img = rawImages[0];
                         const path = typeof img === 'string' ? img : (img.original || img.webp || '');
@@ -143,10 +236,17 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                         }
                     }
 
+                    // Fallback to fetching property image if missing in metadata
+                    if (!displayImg && (doc.kost_id || doc.product_id)) {
+                        const id = doc.kost_id || doc.product_id;
+                        // Since this is a loop, ideally we'd batch fetch, but for small counts this is okay.
+                        // Or we can just rely on the user creating a NEW booking with the updated metadata.
+                    }
+
                     kostsData.push({ 
                       id: doc.id, 
-                      kostName: doc.kost_name || metadata.kostName,
-                      kostId: doc.kost_id || doc.product_id,
+                      kostName: prop?.title || doc.properties?.title || doc.kost_name || metadata.kostName,
+                      kostId: prop?.id || doc.properties?.id || doc.kost_id || doc.product_id,
                       roomType: doc.room_type || metadata.roomType,
                       duration: doc.duration || metadata.duration,
                       period: doc.period || metadata.periodLabel,
@@ -160,37 +260,45 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                 }
             });
 
+            // De-duplicate by kostId to avoid showing multiple cards for the same property
+            // Priority: PAID > AWAITING_PAYMENT > PENDING_APPROVAL > REJECTED/CANCELLED
+            const statusPriority: Record<string, number> = {
+                'paid': 4, 'approved': 4, 'selesai': 4, 'success': 4, 'berhasil': 4,
+                'awaiting_payment': 3,
+                'pending_approval': 2,
+                'rejected': 1, 'cancelled': 1
+            };
+
+            const uniqueKosts = Object.values(kostsData.reduce((acc: Record<string, any>, curr: any) => {
+                const kostId = curr.kostId;
+                if (!acc[kostId]) {
+                    acc[kostId] = curr;
+                } else {
+                    const existingStatus = (acc[kostId].status || '').toLowerCase();
+                    const currentStatus = (curr.status || '').toLowerCase();
+                    
+                    const pExisting = statusPriority[existingStatus] || 0;
+                    const pCurrent = statusPriority[currentStatus] || 0;
+
+                    if (pCurrent > pExisting) {
+                        acc[kostId] = curr;
+                    } else if (pCurrent === pExisting) {
+                        // If priority is same, take the latest one
+                        const tExisting = new Date(acc[kostId].created_at || 0).getTime();
+                        const tCurrent = new Date(curr.created_at || 0).getTime();
+                        if (tCurrent > tExisting) {
+                            acc[kostId] = curr;
+                        }
+                    }
+                }
+                return acc;
+            }, {}));
+
             // Fetch extra bills
             const bills = await getExtraBills(user.uid);
 
-            // Injeksi data dummy untuk audit UI/UX
-            const dummyKost = {
-                id: 'dummy-123',
-                kostName: 'Kost Madani Eksklusif (Simulasi)',
-                kostId: 'dummy-property-id',
-                roomType: 'Deluxe Room A',
-                duration: 1,
-                period: 'Bulanan',
-                basePrice: 2500000,
-                moveInDate: new Date().toISOString(),
-                endDate: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
-                daysRemaining: 4,
-                totalPrice: 2500000,
-                status: 'Selesai',
-                displayImage: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&q=80&w=2070',
-                location: 'Jl. Margonda Raya No. 123',
-                city: 'Depok',
-                pendingBills: [
-                    { id: 'b-dummy-1', bill_name: 'Tagihan Listrik (Januari)', amount: 150000, status: 'pending', created_at: new Date().toISOString() },
-                    { id: 'b-dummy-2', bill_name: 'Iuran WiFi & Sampah', amount: 75000, status: 'pending', created_at: new Date().toISOString() }
-                ],
-                totalPendingBills: 225000
-            };
-            kostsData.push(dummyKost);
-
             // Associate extra bills with real kosts
-            const activeWithBills = kostsData.map(k => {
-                if (k.id === 'dummy-123') return k;
+            const activeWithBills = uniqueKosts.map(k => {
                 const pendBills = (bills || []).filter(b => (b.product_id === k.kostId || b.kost_id === k.kostId) && b.status === 'pending');
                 const totalPend = pendBills.reduce((acc, b) => acc + (b.amount || 0), 0);
                 return { ...k, pendingBills: pendBills, totalPendingBills: totalPend };
@@ -424,6 +532,22 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
         }
     };
 
+    const filteredKosts = activeKosts.filter(kost => {
+        const statusLower = (kost.status || '').toLowerCase();
+        const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(statusLower);
+        const isPending = ['pending_approval', 'awaiting_payment', 'rejected', 'cancelled'].includes(statusLower);
+        
+        const now = new Date();
+        const endDate = kost.endDate ? new Date(kost.endDate) : null;
+        const isActiveStay = isPaid && (!endDate || now <= endDate);
+        const isPastStay = isPaid && endDate && now > endDate;
+
+        if (activeTab === 'diajukan') return isPending || isPaid;
+        if (activeTab === 'aktif') return isActiveStay;
+        if (activeTab === 'riwayat') return isPastStay;
+        return false;
+    });
+
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-50 pt-28 pb-12">
@@ -451,22 +575,59 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
 
             <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
 
-                {/* Header */}
-                <div className="flex items-center justify-between mb-10">
-                    <div className="flex items-center gap-5">
-                        <button
-                            onClick={() => onPageChange(Page.HOME)}
-                            className="group p-3 bg-white hover:bg-orange-500 rounded-2xl shadow-sm border border-gray-100 transition-all duration-300"
-                        >
-                            <ArrowLeft className="w-5 h-5 text-gray-600 group-hover:text-white transition-colors" />
-                        </button>
-                        <div>
-                            <h1 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight">Kost Saya</h1>
-                            <p className="text-gray-500 text-sm mt-1 font-medium flex items-center gap-1.5">
-                                <Zap className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
-                                Kelola hunian aktif Anda dengan mudah
-                            </p>
+                {/* Header Section */}
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+                    <div>
+                        <div className="flex items-center gap-4 mb-4">
+                            <button 
+                                onClick={() => onPageChange(Page.HOME)}
+                                className="p-3 bg-white rounded-2xl shadow-sm border border-gray-100 hover:bg-orange-50 hover:border-orange-200 transition-all active:scale-95 group"
+                            >
+                                <ArrowLeft className="w-5 h-5 text-gray-400 group-hover:text-orange-500" />
+                            </button>
+                            <h1 className="text-4xl sm:text-5xl font-black text-gray-900 tracking-tight">Kost Saya</h1>
                         </div>
+                        <p className="flex items-center gap-2 text-gray-500 font-bold ml-16 md:ml-0">
+                            <Zap className="w-4 h-4 text-orange-500 fill-orange-500" /> 
+                            Kelola hunian aktif Anda dengan mudah
+                        </p>
+                    </div>
+
+                    {/* Navigation Tabs */}
+                    <div className="bg-gray-100/50 p-1.5 rounded-[2rem] flex items-center gap-1 self-start md:self-auto border border-gray-100/80 backdrop-blur-sm">
+                        {[
+                            { id: 'diajukan', label: 'Diajukan', count: activeKosts.filter(k => {
+                                const s = (k.status || '').toLowerCase();
+                                return ['pending_approval', 'awaiting_payment'].includes(s);
+                            }).length },
+                            { id: 'aktif', label: 'Aktif', count: activeKosts.filter(k => {
+                                const s = (k.status || '').toLowerCase();
+                                const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(s);
+                                return isPaid && (!k.endDate || new Date() <= new Date(k.endDate));
+                            }).length },
+                            { id: 'riwayat', label: 'Riwayat', count: activeKosts.filter(k => {
+                                const s = (k.status || '').toLowerCase();
+                                const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(s);
+                                return isPaid && k.endDate && new Date() > new Date(k.endDate);
+                            }).length }
+                        ].map((tab) => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id as any)}
+                                className={`px-6 py-3.5 rounded-[1.5rem] text-[11px] font-black uppercase tracking-[0.15em] transition-all duration-300 flex items-center gap-2.5 ${
+                                    activeTab === tab.id 
+                                    ? 'bg-white text-orange-500 shadow-xl shadow-orange-100/50 border border-orange-100' 
+                                    : 'text-gray-400 hover:text-gray-600 hover:bg-white/50'
+                                }`}
+                            >
+                                {tab.label}
+                                {tab.count > 0 && (
+                                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] ${activeTab === tab.id ? 'bg-orange-100 text-orange-600' : 'bg-gray-200 text-gray-500'}`}>
+                                        {tab.count}
+                                    </span>
+                                )}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
@@ -506,95 +667,50 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                     </div>
                 )}
 
-                {activeKosts.length === 0 ? (
-                    <div className="space-y-12">
-                        {/* Enhanced Empty State Card */}
-                        <div className="relative overflow-hidden bg-white/70 backdrop-blur-xl rounded-[3rem] p-12 text-center border border-white shadow-2xl shadow-gray-200/50 flex flex-col items-center justify-center animate-in zoom-in-95 duration-700">
-                            <div className="absolute top-0 right-0 p-8 opacity-10">
-                                <Search className="w-32 h-32" />
-                            </div>
+                {filteredKosts.length > 0 ? (
+                    <div className="space-y-6 sm:space-y-8">
+                        {filteredKosts.map((kost) => {
+                            const statusLower = (kost.status || '').toLowerCase();
+                            const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(statusLower);
+                            const isCompact = ['cancelled', 'rejected'].includes(statusLower) || (activeTab === 'diajukan' && isPaid);
                             
-                            <div className="relative">
-                                <div className="w-28 h-28 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mb-8 shadow-2xl shadow-orange-300 border-4 border-white">
-                                    <AlertCircle className="w-12 h-12 text-white" />
-                                </div>
-                                <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg">
-                                    <Clock className="w-5 h-5 text-orange-500" />
-                                </div>
-                            </div>
-
-                            <h3 className="text-3xl font-black text-gray-900 mb-4 tracking-tight">Belum Ada Kost Aktif</h3>
-                            <p className="text-gray-500 max-w-sm mx-auto mb-10 font-medium leading-relaxed">
-                                Sepertinya Anda belum memiliki hunian yang aktif. Jangan khawatir, hunian impian Anda hanya berjarak satu klik saja!
-                            </p>
-                            
-                            <button
-                                onClick={() => onPageChange(Page.LISTINGS)}
-                                className="group bg-orange-500 hover:bg-orange-600 text-white px-10 py-5 rounded-[2rem] font-black text-sm uppercase tracking-widest transition-all shadow-2xl shadow-orange-200 active:scale-95 flex items-center gap-3"
-                            >
-                                Mulai Cari Sekarang
-                                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                            </button>
-                        </div>
-
-                        {/* Property Recommendations */}
-                        {recommendations.length > 0 && (
-                            <div className="animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
-                                <div className="flex items-center justify-between mb-6 px-4">
-                                    <h2 className="text-2xl font-black text-gray-900 tracking-tight">Rekomendasi Terpopuler</h2>
-                                    <button onClick={() => onPageChange(Page.LISTINGS)} className="text-orange-500 text-sm font-black flex items-center gap-1 hover:gap-2 transition-all">
-                                        Lihat Semua <ChevronRight className="w-4 h-4" />
-                                    </button>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                                    {recommendations.map(prop => (
-                                        <div 
-                                            key={prop.id} 
-                                            className="group bg-white rounded-[2rem] overflow-hidden border border-gray-100 shadow-xl shadow-gray-200/50 hover:shadow-2xl transition-all duration-500 cursor-pointer"
-                                            onClick={() => onPageChange(Page.LISTINGS)} // In real app, go to detail
-                                        >
-                                            <div className="relative h-48 overflow-hidden">
-                                                <img 
-                                                    src={prop.displayImage || 'https://via.placeholder.com/400x300'} 
-                                                    alt={prop.title} 
-                                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                                                />
-                                                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-1 shadow-sm">
-                                                    <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                                                    <span className="text-[10px] font-black">{prop.rating || '5.0'}</span>
+                            if (isCompact) {
+                                return (
+                                    <div key={kost.id} className="group flex items-center gap-4 sm:gap-6 bg-white/40 backdrop-blur-md rounded-[2rem] p-4 sm:p-5 border border-white shadow-lg hover:shadow-xl transition-all duration-300">
+                                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-white shadow-sm shrink-0">
+                                            {kost.displayImage ? (
+                                                <img src={kost.displayImage} className="w-full h-full object-cover opacity-60 grayscale-[50%]" alt={kost.kostName} />
+                                            ) : (
+                                                <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                                                    <MapPin className="w-6 h-6 text-gray-300" />
                                                 </div>
-                                                <button className="absolute top-4 right-4 p-2 bg-white/90 backdrop-blur-md rounded-full text-gray-400 hover:text-red-500 transition-colors">
-                                                    <Heart className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                            <div className="p-5">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">{prop.type || 'Kost'}</span>
-                                                    <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
-                                                        <MapPin className="w-3 h-3" /> {prop.city}
-                                                    </span>
-                                                </div>
-                                                <h4 className="font-black text-gray-900 mb-3 line-clamp-1">{prop.title}</h4>
-                                                <div className="flex items-center justify-between pt-4 border-t border-gray-50">
-                                                    <p className="text-orange-600 font-black">
-                                                        {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(prop.price)}
-                                                        <span className="text-[10px] text-gray-400 font-bold ml-1">/ Bln</span>
-                                                    </p>
-                                                    <div className="p-2 bg-orange-50 rounded-lg group-hover:bg-orange-500 group-hover:text-white transition-colors">
-                                                        <ChevronRight className="w-4 h-4" />
-                                                    </div>
-                                                </div>
-                                            </div>
+                                            )}
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <div className="space-y-10">
-                        {activeKosts.map((kost) => (
-                            <div key={kost.id} className="group relative bg-white/70 backdrop-blur-2xl rounded-[3.5rem] p-8 sm:p-12 border border-white shadow-2xl shadow-gray-200/50 flex flex-col lg:flex-row gap-10 lg:gap-14 hover:scale-[1.01] transition-all duration-500 overflow-hidden">
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="text-lg sm:text-xl font-black text-gray-500 truncate">{kost.kostName || 'Kost Tersembunyi'}</h4>
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{kost.roomType || 'Standard Room'}</p>
+                                        </div>
+                                        <div className="flex flex-col items-end gap-2 pr-2">
+                                            {statusLower === 'cancelled' ? (
+                                                <span className="flex items-center gap-1.5 text-gray-400 bg-gray-50 px-4 py-2 rounded-xl text-[10px] font-black uppercase border border-gray-100 italic">
+                                                    <XCircle className="w-3.5 h-3.5" /> DIBATALKAN
+                                                </span>
+                                            ) : statusLower === 'rejected' ? (
+                                                <span className="flex items-center gap-1.5 text-red-400 bg-red-50/50 px-4 py-2 rounded-xl text-[10px] font-black uppercase border border-red-100 italic">
+                                                    <XCircle className="w-3.5 h-3.5" /> DITOLAK
+                                                </span>
+                                            ) : (
+                                                <span className="flex items-center gap-1.5 text-emerald-500 bg-emerald-50 px-4 py-2 rounded-xl text-[10px] font-black uppercase border border-emerald-100 italic">
+                                                    <CheckCircle className="w-3.5 h-3.5" /> LUNAS
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <div key={kost.id} className="group relative bg-white/70 backdrop-blur-2xl rounded-[3.5rem] p-8 sm:p-12 border border-white shadow-2xl shadow-gray-200/50 flex flex-col lg:flex-row gap-10 lg:gap-14 hover:scale-[1.01] transition-all duration-500 overflow-hidden">
                                 {/* Animated Background Glow */}
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-orange-400/10 to-transparent rounded-full blur-3xl -mr-32 -mt-32 group-hover:from-orange-400/20 transition-all duration-700" />
                                 
@@ -617,33 +733,35 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                         <div className="flex-1">
                                                 <div className="flex flex-col gap-2">
                                                     <button 
-                                                        onClick={() => onPageChange('products', { id: kost.kostId })}
+                                                        onClick={() => onPageChange(`${Page.DETAIL}?kostId=${kost.kostId}` as any)}
                                                         className="text-3xl sm:text-4xl font-black text-gray-900 leading-tight tracking-tight text-left hover:text-orange-500 transition-colors group/title flex items-center gap-3"
                                                     >
                                                         {kost.kostName || 'Kost Tersembunyi'}
                                                         <ChevronRight className="w-8 h-8 opacity-0 -translate-x-4 group-hover/title:opacity-100 group-hover/title:translate-x-0 transition-all text-orange-500" />
                                                     </button>
                                                     {/* Quick Rating Stars */}
-                                                    <div className="flex items-center gap-1.5 bg-white/50 backdrop-blur-sm self-start px-3 py-1.5 rounded-xl border border-gray-100 shadow-sm">
-                                                        {[1, 2, 3, 4, 5].map((s) => (
-                                                            <button
-                                                                key={s}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setRatingValue(s);
-                                                                    setRatingComment('');
-                                                                    setSelectedKost(kost);
-                                                                    setShowRatingModal(true);
-                                                                }}
-                                                                className="transition-all hover:scale-125 hover:-translate-y-0.5"
-                                                            >
-                                                                <Star className={`w-4 h-4 ${s <= 0 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`} />
-                                                            </button>
-                                                        ))}
-                                                        <span className="text-[10px] font-black text-gray-400 ml-2 uppercase tracking-widest">Beri Rating</span>
-                                                    </div>
+                                                    {['approved', 'paid', 'Selesai', 'success', 'Berhasil'].includes(kost.status) && (
+                                                        <div className="flex items-center gap-1.5 bg-white/50 backdrop-blur-sm self-start px-3 py-1.5 rounded-xl border border-gray-100 shadow-sm">
+                                                            {[1, 2, 3, 4, 5].map((s) => (
+                                                                <button
+                                                                    key={s}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setRatingValue(s);
+                                                                        setRatingComment('');
+                                                                        setSelectedKost(kost);
+                                                                        setShowRatingModal(true);
+                                                                    }}
+                                                                    className="transition-all hover:scale-125 hover:-translate-y-0.5"
+                                                                >
+                                                                    <Star className={`w-4 h-4 ${s <= 0 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`} />
+                                                                </button>
+                                                            ))}
+                                                            <span className="text-[10px] font-black text-gray-400 ml-2 uppercase tracking-widest">Beri Rating</span>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                {kost.daysRemaining !== null && (
+                                                {kost.daysRemaining !== null && ['approved', 'paid', 'Selesai', 'success', 'Berhasil'].includes(kost.status) && (
                                                     <div className={`group/badge relative px-6 py-3.5 rounded-[1.5rem] text-[11px] font-black uppercase tracking-[0.15em] flex items-center gap-3 shadow-2xl border transition-all duration-500 self-start ${
                                                         kost.daysRemaining <= 7 
                                                         ? 'bg-red-600 text-white border-red-500 shadow-red-200 z-20' 
@@ -664,58 +782,77 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                                 <span className="bg-gray-100/80 backdrop-blur-sm px-5 py-2.5 rounded-2xl text-[11px] font-black text-gray-700 uppercase tracking-wider">
                                                     {kost.roomType || 'Standard Room'}
                                                 </span>
-                                                <span className="flex items-center gap-2.5 text-emerald-600 bg-emerald-50/80 backdrop-blur-sm px-5 py-2.5 rounded-2xl border border-emerald-100 text-[11px] font-black uppercase tracking-wider">
-                                                    <CheckCircle className="w-4 h-4" /> SEDANG DISEWA
-                                                </span>
+                                                {statusLower === 'pending_approval' && (
+                                                    <span className="flex items-center gap-2.5 text-orange-600 bg-orange-50/80 backdrop-blur-sm px-5 py-2.5 rounded-2xl border border-orange-100 text-[11px] font-black uppercase tracking-wider">
+                                                        <Clock className="w-4 h-4" /> MENUNGGU PERSETUJUAN
+                                                    </span>
+                                                )}
+                                                {statusLower === 'awaiting_payment' && (
+                                                    <span className="flex items-center gap-2.5 text-blue-600 bg-blue-50/80 backdrop-blur-sm px-5 py-2.5 rounded-2xl border border-blue-100 text-[11px] font-black uppercase tracking-wider">
+                                                        <Zap className="w-4 h-4 fill-blue-600" /> DISETUJUI, SILAKAN BAYAR
+                                                    </span>
+                                                )}
+                                                {statusLower === 'rejected' && (
+                                                    <span className="flex items-center gap-2.5 text-red-600 bg-red-50/80 backdrop-blur-sm px-5 py-2.5 rounded-2xl border border-red-100 text-[11px] font-black uppercase tracking-wider">
+                                                        <XCircle className="w-4 h-4" /> PENGAJUAN DITOLAK
+                                                    </span>
+                                                )}
+                                                {isPaid && (
+                                                    <span className="flex items-center gap-2.5 text-emerald-600 bg-emerald-50/80 backdrop-blur-sm px-5 py-2.5 rounded-2xl border border-emerald-100 text-[11px] font-black uppercase tracking-wider">
+                                                        <CheckCircle className="w-4 h-4" /> SEDANG DISEWA
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* Stats Grid */}
-                                    <div className="bg-[#FBFCFE]/80 backdrop-blur-sm rounded-[2.5rem] p-6 sm:p-10 border border-gray-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 hover:border-orange-200 group-hover:bg-white transition-all duration-500">
-                                        <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:gap-2">
-                                            <div className="p-3 bg-orange-100 rounded-2xl"><Clock className="w-5 h-5 text-orange-600" /></div>
-                                            <div>
-                                                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Durasi</p>
-                                                <p className="text-base sm:text-lg font-black text-gray-900">{kost.duration || 1} {kost.period || 'Bulan'}</p>
+                                    {/* Stats Grid - Only show if approved/paid */}
+                                    {['approved', 'paid', 'Selesai', 'success', 'Berhasil', 'AWAITING_PAYMENT'].includes(kost.status) && (
+                                        <div className="bg-[#FBFCFE]/80 backdrop-blur-sm rounded-[2.5rem] p-6 sm:p-10 border border-gray-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 hover:border-orange-200 group-hover:bg-white transition-all duration-500">
+                                            <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:gap-2">
+                                                <div className="p-3 bg-orange-100 rounded-2xl"><Clock className="w-5 h-5 text-orange-600" /></div>
+                                                <div>
+                                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Durasi</p>
+                                                    <p className="text-base sm:text-lg font-black text-gray-900">{kost.duration || 1} {kost.period || 'Bulan'}</p>
+                                                </div>
                                             </div>
-                                        </div>
 
-                                        <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:gap-2">
-                                            <div className="p-3 bg-blue-100 rounded-2xl"><FileText className="w-5 h-5 text-blue-600" /></div>
-                                            <div>
-                                                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Mulai</p>
-                                                <p className="text-base sm:text-lg font-black text-gray-900">
-                                                    {kost.moveInDate ? new Date(kost.moveInDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
-                                                </p>
+                                            <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:gap-2">
+                                                <div className="p-3 bg-blue-100 rounded-2xl"><FileText className="w-5 h-5 text-blue-600" /></div>
+                                                <div>
+                                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Mulai</p>
+                                                    <p className="text-base sm:text-lg font-black text-gray-900">
+                                                        {kost.moveInDate ? new Date(kost.moveInDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+                                                    </p>
+                                                </div>
                                             </div>
-                                        </div>
 
-                                        <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:gap-2">
-                                            <div className="p-3 bg-rose-100 rounded-2xl"><Calendar className="w-5 h-5 text-rose-600" /></div>
-                                            <div>
-                                                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Selesai</p>
-                                                <p className="text-base sm:text-lg font-black text-gray-900">
-                                                    {kost.endDate ? new Date(kost.endDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
-                                                </p>
+                                            <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:gap-2">
+                                                <div className="p-3 bg-rose-100 rounded-2xl"><Calendar className="w-5 h-5 text-rose-600" /></div>
+                                                <div>
+                                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Selesai</p>
+                                                    <p className="text-base sm:text-lg font-black text-gray-900">
+                                                        {kost.endDate ? new Date(kost.endDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+                                                    </p>
+                                                </div>
                                             </div>
-                                        </div>
 
-                                        <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:gap-2">
-                                            <div className="p-3 bg-emerald-100 rounded-2xl"><Receipt className="w-5 h-5 text-emerald-600" /></div>
-                                            <div>
-                                                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Tagihan</p>
-                                                <p className="text-base sm:text-lg font-black text-emerald-600">
-                                                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(kost.totalPrice || 0)}
-                                                </p>
+                                            <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:gap-2">
+                                                <div className="p-3 bg-emerald-100 rounded-2xl"><Receipt className="w-5 h-5 text-emerald-600" /></div>
+                                                <div>
+                                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Tagihan</p>
+                                                    <p className="text-base sm:text-lg font-black text-emerald-600">
+                                                        {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(kost.totalPrice || 0)}
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
 
                                 {/* Actions Column */}
-                                <div className="flex flex-col gap-4 lg:w-80 shrink-0 justify-center relative z-10">
-                                    <div className="grid grid-cols-1 gap-4">
+                                 <div className="flex flex-col gap-6 lg:w-80 shrink-0 justify-start relative z-10 pt-4">
+                                    <div className="grid grid-cols-1 gap-6">
                                         <button
                                             onClick={() => {
                                                 const query = `${kost.kostName} ${kost.location || ''} ${kost.city || ''}`.trim();
@@ -726,22 +863,36 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                             <MapPin className="w-5 h-5 group-hover/loc:-translate-y-0.5 transition-transform" /> LIHAT LOKASI KOST
                                         </button>
 
-                                        <button
-                                            onClick={() => handleOpenExtension(kost)}
-                                            className="group/btn bg-orange-500 hover:bg-orange-600 text-white px-8 py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-3 transition-all text-[13px] shadow-2xl shadow-orange-200 active:scale-95"
-                                        >
-                                            <Plus className="w-5 h-5 group-hover/btn:rotate-90 transition-transform" /> PERPANJANG SEWA
-                                        </button>
+                                         {kost.status === 'AWAITING_PAYMENT' && (
+                                            <button
+                                                onClick={() => handleOpenPayment(kost)}
+                                                className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-7 rounded-[2.2rem] font-black flex flex-col items-center justify-center gap-1 transition-all text-[15px] shadow-2xl shadow-orange-200 active:scale-95 animate-subtle-bounce relative"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <Receipt className="w-6 h-6" /> BAYAR SEWA SEKARANG
+                                                </div>
+                                                <span className="text-[10px] opacity-80 font-bold uppercase tracking-widest text-white">Klik untuk buka link pembayaran</span>
+                                            </button>
+                                        )}
 
-                                        <button
-                                            onClick={() => handleOpenBill(kost)}
-                                            className="bg-gray-900 hover:bg-emerald-600 text-white px-8 py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-3 transition-all text-[13px] shadow-2xl shadow-gray-300 active:scale-95 group/bill"
-                                        >
-                                            <Receipt className="w-5 h-5 group-hover/bill:-translate-y-0.5 transition-transform" /> LIHAT TAGIHAN
-                                        </button>
-                                    </div>
+                                        {['approved', 'paid', 'Selesai', 'success', 'Berhasil'].includes(kost.status) && (
+                                            <>
+                                                <button
+                                                    onClick={() => handleOpenExtension(kost)}
+                                                    className="group/btn bg-orange-500 hover:bg-orange-600 text-white px-8 py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-3 transition-all text-[13px] shadow-2xl shadow-orange-200 active:scale-95"
+                                                >
+                                                    <Plus className="w-5 h-5 group-hover/btn:rotate-90 transition-transform" /> PERPANJANG SEWA
+                                                </button>
 
-                                    <div className="grid grid-cols-1 gap-3">
+                                                <button
+                                                    onClick={() => handleOpenBill(kost)}
+                                                    className="bg-gray-900 hover:bg-emerald-600 text-white px-8 py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-3 transition-all text-[13px] shadow-2xl shadow-gray-300 active:scale-95 group/bill"
+                                                >
+                                                    <Receipt className="w-5 h-5 group-hover/bill:-translate-y-0.5 transition-transform" /> LIHAT TAGIHAN
+                                                </button>
+                                            </>
+                                        )}
+
                                         <button
                                             onClick={() => handleOpenChat(kost)}
                                             className="bg-white border-2 border-gray-100 hover:border-emerald-500 hover:text-emerald-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[11px] group/item"
@@ -750,15 +901,72 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                         </button>
                                     </div>
 
-                                    <button
-                                        onClick={() => handleOpenComplaint(kost)}
-                                        className="w-full bg-white border-2 border-gray-100 hover:border-red-500 hover:bg-red-50 hover:text-red-600 text-gray-500 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[11px] mt-2 group/comp"
-                                    >
-                                        <MessageSquare className="w-4 h-4 group-hover/comp:-translate-y-0.5 transition-transform" /> AJUKAN KOMPLAIN
-                                    </button>
+                                    {['approved', 'paid', 'Selesai', 'success', 'Berhasil'].includes(kost.status) && (
+                                        <button
+                                            onClick={() => handleOpenComplaint(kost)}
+                                            className="w-full bg-white border-2 border-gray-100 hover:border-red-500 hover:bg-red-50 hover:text-red-600 text-gray-500 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[11px] mt-2 group/comp"
+                                        >
+                                            <MessageSquare className="w-4 h-4 group-hover/comp:-translate-y-0.5 transition-transform" /> AJUKAN KOMPLAIN
+                                        </button>
+                                    )}
+
+                                    {activeTab === 'riwayat' && (
+                                        <button
+                                            onClick={() => onPageChange(`${Page.DETAIL}?kostId=${kost.kostId}` as any)}
+                                            className="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[11px] mt-4 shadow-xl shadow-orange-100 active:scale-95"
+                                        >
+                                            <Search className="w-4 h-4" /> AJUKAN SEWA LAGI
+                                        </button>
+                                    )}
+
+                                    {/* Cancellation Button for Pending/Awaiting States */}
+                                    {(kost.status === 'PENDING_APPROVAL' || kost.status === 'AWAITING_PAYMENT') && (
+                                        <button
+                                            onClick={() => handleCancelBooking(kost)}
+                                            className="w-full bg-white border-2 border-gray-100 hover:border-red-500 hover:bg-red-50 hover:text-red-600 text-gray-500 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[11px] mt-4 group/cancel"
+                                        >
+                                            <XCircle className="w-4 h-4 group-hover/cancel:rotate-90 transition-transform" /> BATALKAN PENGAJUAN
+                                        </button>
+                                    )}
+
+                                    {/* Cancelled Status Placeholder */}
+                                    {kost.status === 'CANCELLED' && (
+                                        <div className="w-full bg-gray-50 border-2 border-gray-100 text-gray-400 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-3 text-[11px] mt-4 opacity-75 cursor-not-allowed italic">
+                                            <XCircle className="w-4 h-4" /> PENGAJUAN DIBATALKAN
+                                        </div>
+                                    )}
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="bg-white rounded-[3.5rem] p-12 sm:p-24 shadow-2xl shadow-gray-100 border border-gray-50 text-center animate-in fade-in slide-in-from-bottom-8 duration-700">
+                        <div className="relative inline-block mb-10">
+                            <div className="w-32 h-32 bg-orange-50 rounded-full flex items-center justify-center animate-pulse">
+                                <Search className="w-12 h-12 text-orange-200" />
+                            </div>
+                            <div className="absolute top-0 right-0 w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center border border-gray-50 animate-bounce">
+                                <X className="w-6 h-6 text-orange-500" />
+                            </div>
+                        </div>
+                        <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight mb-4">
+                            {activeTab === 'diajukan' ? 'Belum Ada Pengajuan' : activeTab === 'aktif' ? 'Belum Ada Kost Aktif' : 'Belum Ada Riwayat'}
+                        </h2>
+                        <p className="text-gray-500 font-medium max-w-sm mx-auto mb-10 leading-relaxed">
+                            {activeTab === 'diajukan' 
+                                ? 'Sepertinya Anda belum mengajukan sewa kost apa pun. Yuk cari hunian impianmu sekarang!' 
+                                : activeTab === 'aktif' 
+                                ? 'Anda belum memiliki hunian yang aktif. Jangan khawatir, kost incaranmu hanya berjarak satu klik!' 
+                                : 'Belum ada riwayat penyewaan kost di akun Anda.'}
+                        </p>
+                        <button 
+                            onClick={() => onPageChange(Page.LISTINGS)}
+                            className="bg-orange-500 hover:bg-orange-600 text-white px-10 py-5 rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-orange-200 transition-all active:scale-95 flex items-center gap-3 mx-auto"
+                        >
+                            MULAI CARI SEKARANG
+                            <ChevronRight className="w-5 h-5" />
+                        </button>
                     </div>
                 )}
             </div>
@@ -1132,6 +1340,9 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                     session={activeChatSession}
                     currentUser={user}
                     onClose={() => setShowChatWindow(false)}
+                    propertyName={activeChatSession.propertyName}
+                    contactName={activeChatSession.contactName}
+                    contactType={activeChatSession.contactType}
                 />
             )}
 

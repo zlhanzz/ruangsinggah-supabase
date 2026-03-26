@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { FORMAT_CURRENCY } from '../constants';
 import { supabase } from '../supabase';
+import { notificationService } from '../notificationService';
 import { Transaction } from '../types';
 
 interface PaymentGatewayProps {
@@ -165,6 +166,22 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
       if (data && data.status === 'paid') {
         clearInterval(pollInterval);
         setCurrentOrder(data as Transaction);
+        
+        const m = metadata as any;
+        const isDatabase = productType === 'database' || productType === 'available_database';
+        
+        notificationService.createNotification({
+          user_id: userId,
+          title: isDatabase ? 'Database Terkirim!' : 'Pembayaran Berhasil!',
+          message: isDatabase 
+            ? `Database ${m.name || m.area || 'Kost'} telah dikirim ke email Anda. Silakan cek Inbox atau folder Spam.`
+            : `Pembayaran sewa ${m.kostName || 'Kost'} senilai Rp ${amount.toLocaleString('id-ID')} telah berhasil diverifikasi.`,
+          type: 'payment',
+          link: isDatabase 
+            ? 'https://mail.google.com/mail/u/0/#search/RuangSinggah' 
+            : '/my-bookings'
+        }).catch(err => console.error("Failed to create payment notification:", err));
+
         onPaymentSuccess();
       }
     }, 5000);

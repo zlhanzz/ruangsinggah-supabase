@@ -148,6 +148,11 @@ ALTER TABLE public.available_databases ADD COLUMN IF NOT EXISTS area        TEXT
 ALTER TABLE public.available_databases ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE public.available_databases ADD COLUMN IF NOT EXISTS price       NUMERIC(15,2) DEFAULT 0;
 ALTER TABLE public.available_databases ADD COLUMN IF NOT EXISTS total_data  INTEGER DEFAULT 0;
+
+-- Tambahan kolom untuk Omnichannel Chat di PROPERTIES
+ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS omnichannel_contact_name TEXT;
+ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS omnichannel_contact_phone TEXT;
+ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS omnichannel_contact_type TEXT DEFAULT 'owner'; -- 'owner' | 'caretaker'
 ALTER TABLE public.available_databases ADD COLUMN IF NOT EXISTS file_urls   JSONB DEFAULT '{}';
 ALTER TABLE public.available_databases ADD COLUMN IF NOT EXISTS file_type   TEXT DEFAULT 'link';
 ALTER TABLE public.available_databases ADD COLUMN IF NOT EXISTS file_name   TEXT;
@@ -477,7 +482,7 @@ CREATE TABLE IF NOT EXISTS public.transactions (
   product_id       UUID NOT NULL, -- ID of the Cost/Database/Service
   product_type     TEXT NOT NULL, -- 'database', 'kost_booking', 'survey', etc.
   amount           NUMERIC(15,2) NOT NULL,
-  status           TEXT NOT NULL DEFAULT 'pending', -- pending, paid, expired, cancelled
+  status           TEXT NOT NULL DEFAULT 'PENDING_APPROVAL', -- PENDING_APPROVAL, AWAITING_PAYMENT, PAID, REJECTED, CANCELLED
   payment_method   TEXT,
   pakasir_order_id TEXT,
   pakasir_link     TEXT,
@@ -563,3 +568,93 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.submit_property_review(UUID, JSONB, NUMERIC) TO authenticated;
+
+
+-- ============================================================
+-- STEP 14: CHAT TABLES (Sessions & Messages)
+-- ============================================================
+
+-- 1. Create chat_sessions table
+CREATE TABLE IF NOT EXISTS public.chat_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    owner_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    property_id UUID REFERENCES public.properties(id) ON DELETE SET NULL,
+    last_message TEXT,
+    last_message_at TIMESTAMPTZ DEFAULT now(),
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 2. Create chat_messages table
+CREATE TABLE IF NOT EXISTS public.chat_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID NOT NULL REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
+    sender_id UUID NOT NULL REFERENCES public.users(id),
+    sender_type TEXT NOT NULL CHECK (sender_type IN ('user', 'owner')),
+    message TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 3. Enable RLS
+ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
+
+-- 4. Hapus policy lama jika ada (mencegah error 42710)
+DROP POLICY IF EXISTS "Users can view their own chat sessions" ON public.chat_sessions;
+DROP POLICY IF EXISTS "Users can start a chat session" ON public.chat_sessions;
+DROP POLICY IF EXISTS "Users can view messages in their sessions" ON public.chat_messages;
+DROP POLICY IF EXISTS "Users can send messages in their sessions" ON public.chat_messages;
+
+-- 5. Kebijakan RLS (Hanya pihak terlibat yang bisa akses)
+CREATE POLICY "Users can view their own chat sessions"
+ON public.chat_sessions FOR SELECT
+USING (auth.uid() = user_id OR auth.uid() = owner_id);
+
+CREATE POLICY "Users can start a chat session"
+ON public.chat_sessions FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
+-- 5. Policies for chat_messages
+CREATE POLICY "Users can view messages in their sessions"
+ON public.chat_messages FOR SELECT
+USING (
+    EXISTS (
+        SELECT 1 FROM public.chat_sessions
+        WHERE chat_sessions.id = chat_messages.session_id
+        AND (chat_sessions.user_id = auth.uid() OR chat_sessions.owner_id = auth.uid())
+    )
+);
+
+CREATE POLICY "Users can send messages in their sessions"
+ON public.chat_messages FOR INSERT
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM public.chat_sessions
+        WHERE chat_sessions.id = chat_messages.session_id
+        AND (chat_sessions.user_id = auth.uid() OR chat_sessions.owner_id = auth.uid())
+    )
+    AND auth.uid() = sender_id
+);
+
+-- 6. Realtime Enrollment
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    CREATE PUBLICATION supabase_realtime;
+  END IF;
+END $$;
+
+-- Enroll (only if not already added)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' 
+    AND schemaname = 'public' 
+    AND tablename = 'chat_messages'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_messages;
+  END IF;
+END $$;
