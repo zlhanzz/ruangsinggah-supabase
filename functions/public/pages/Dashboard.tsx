@@ -130,7 +130,7 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
     );
 };
 
-type DashboardMenu = 'analytics' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_db' | 'mitra' | 'verification' | 'complaints';
+type DashboardMenu = 'analytics' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_db' | 'mitra' | 'verification' | 'complaints' | 'verifikasi';
 
 const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings = [], onAdd, onEdit, onDelete, onRefreshListings }) => {
     const isAdmin = role === 'admin';
@@ -1549,7 +1549,6 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                 </div>
                 <SidebarItem icon="🏠" label="Kelola Kost" isActive={activeMenu === 'properties'} onClick={() => setActiveMenu('properties')} />
                 <SidebarItem icon="🗄️" label="Kelola Database" isActive={activeMenu === 'databases'} onClick={() => setActiveMenu('databases')} />
-                <SidebarItem icon="🛡️" label="Verifikasi Kost" isActive={activeMenu === 'verification'} onClick={() => setActiveMenu('verification')} />
 
                 <div className="pt-4 pb-2">
                     <p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Transaksi & Klien</p>

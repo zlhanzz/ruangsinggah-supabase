@@ -6,9 +6,12 @@ interface SurveyServiceProps {
   user: any;
 }
 
+const SURVEY_PRODUCT_ID = '5ea7b4e9-6f8d-4a11-b845-8c7a726359e1';
+
 const SurveyService: React.FC<SurveyServiceProps> = ({ user }) => {
   const offerSectionRef = useRef<HTMLDivElement>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
   const [showPayment, setShowPayment] = useState(false);
   const [paymentMetadata, setPaymentMetadata] = useState<any>(null);
 
@@ -40,6 +43,7 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user }) => {
     // Prepare metadata for payment and post-payment message
     const metadata = {
       ...formData,
+      item: 'Jasa Survey Lokasi Kost',
       service_name: 'Jasa Survey Lokasi Kost',
       package_price: 70000
     };
@@ -291,171 +295,278 @@ Mohon segera diproses. Terima kasih.`;
         </div>
       </section>
 
-      {/* FORM MODAL */}
+      {/* FORM MODAL WITH WIZARD FLOW */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm overflow-y-auto">
-          <div className="relative w-full max-w-3xl bg-white rounded-3xl shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-300">
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="absolute top-6 right-6 p-2 bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-900 rounded-full transition-colors z-10"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="p-8 sm:p-10 max-h-[85vh] overflow-y-auto custom-scrollbar">
-              <div className="text-center mb-8 pr-8">
-                <h2 className="text-2xl sm:text-3xl font-black text-gray-900 mb-3">Formulir Request Survey</h2>
-                <p className="text-gray-600 text-sm">Isi data di bawah ini, admin kami akan segera menghubungi Anda untuk konfirmasi pembayaran dan jadwal.</p>
+          <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-300">
+            {/* Header & Close */}
+            <div className="sticky top-0 bg-white/80 backdrop-blur-md rounded-t-3xl p-6 border-b border-gray-100 flex items-center justify-between z-20">
+              <div>
+                <h2 className="text-xl font-black text-gray-900 uppercase">Request Survey</h2>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Langkah {currentStep} dari 4</p>
               </div>
+              <button
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setCurrentStep(1);
+                }}
+                className="p-2 bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-900 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Progress Bar */}
+            <div className="bg-gray-100 h-1.5 w-full overflow-hidden">
+              <div
+                className="bg-orange-500 h-full transition-all duration-500 ease-out"
+                style={{ width: `${(currentStep / 4) * 100}%` }}
+              ></div>
+            </div>
 
-                {/* Data Diri */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider border-b pb-2">Data Pemesan</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-8 sm:p-10 max-h-[70vh] overflow-y-auto custom-scrollbar">
+              {/* STEP 1: DATA DIRI */}
+              {currentStep === 1 && (
+                <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+                  <div className="bg-orange-50 p-4 rounded-2xl flex items-start gap-3 mb-6">
+                    <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 shrink-0">
+                      <ShieldCheck className="w-6 h-6" />
+                    </div>
                     <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1">Nama Lengkap</label>
+                      <p className="font-bold text-gray-900 text-sm">Data Pemesan</p>
+                      <p className="text-xs text-gray-500">Beritahu kami kemana hasil survey harus dikirimkan.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Nama Lengkap</label>
                       <input
                         type="text"
                         required
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
                         placeholder="Nama Anda"
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1">Nomor WhatsApp</label>
-                      <input
-                        type="tel"
-                        required
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-                        placeholder="08xxxxxxxxxx"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-bold text-gray-700 mb-1">Email</label>
-                      <input
-                        type="email"
-                        required
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-                        placeholder="email@contoh.com"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Data Kost */}
-                <div className="space-y-4 pt-4">
-                  <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider border-b pb-2">Detail Kost Tujuan</h3>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Nama Kost / Link Kost</label>
-                    <input
-                      type="text"
-                      required
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-                      placeholder="Nama Kost atau Link Google Maps"
-                      value={formData.kostName}
-                      onChange={(e) => setFormData({ ...formData, kostName: e.target.value })}
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1">Nomor HP Pemilik/Penjaga</label>
-                      <input
-                        type="tel"
-                        required
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-                        placeholder="Untuk janjian survey"
-                        value={formData.ownerPhone}
-                        onChange={(e) => setFormData({ ...formData, ownerPhone: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1">Sumber Informasi</label>
-                      <select
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm bg-white"
-                        value={formData.source}
-                        onChange={(e) => setFormData({ ...formData, source: e.target.value })}
-                      >
-                        <option value="database">Database RuangSinggah</option>
-                        <option value="social_media">Sosial Media (IG/TikTok)</option>
-                        <option value="google_maps">Google Maps</option>
-                        <option value="friends">Teman/Kerabat</option>
-                        <option value="other">Lainnya</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Alamat Lengkap Kost</label>
-                    <textarea
-                      required
-                      rows={2}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-                      placeholder="Alamat lengkap agar surveyor tidak nyasar"
-                      value={formData.kostAddress}
-                      onChange={(e) => setFormData({ ...formData, kostAddress: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                {/* Jadwal Survey */}
-                <div className="space-y-4 pt-4">
-                  <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider border-b pb-2">Jadwal Video Call</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1">Tanggal Survey</label>
-                      <div className="relative">
-                        <Calendar className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Nomor WhatsApp</label>
                         <input
-                          type="date"
+                          type="tel"
                           required
-                          className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-                          value={formData.surveyDate}
-                          onChange={(e) => setFormData({ ...formData, surveyDate: e.target.value })}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
+                          placeholder="08xxxxxxxxxx"
+                          value={formData.phone}
+                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         />
                       </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1">Jam (WIB)</label>
-                      <div className="relative">
-                        <Clock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Email</label>
                         <input
-                          type="time"
+                          type="email"
                           required
-                          className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-                          value={formData.surveyTime}
-                          onChange={(e) => setFormData({ ...formData, surveyTime: e.target.value })}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
+                          placeholder="email@contoh.com"
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         />
                       </div>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* STEP 2: INFO KOST */}
+              {currentStep === 2 && (
+                <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+                  <div className="bg-blue-50 p-4 rounded-2xl flex items-start gap-3 mb-6">
+                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 shrink-0">
+                      <MapPin className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900 text-sm">Lokasi Kost</p>
+                      <p className="text-xs text-gray-500">Bantu kami menemukan lokasi kost yang ingin disurvey.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Nama Kost / Link Kost</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
+                        placeholder="Nama Kost atau Link Google Maps"
+                        value={formData.kostName}
+                        onChange={(e) => setFormData({ ...formData, kostName: e.target.value })}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">No HP Pemilik/Penjaga</label>
+                        <input
+                          type="tel"
+                          required
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
+                          placeholder="Untuk janjian survey"
+                          value={formData.ownerPhone}
+                          onChange={(e) => setFormData({ ...formData, ownerPhone: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Sumber Info</label>
+                        <select
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-white"
+                          value={formData.source}
+                          onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                        >
+                          <option value="database">Database RuangSinggah</option>
+                          <option value="social_media">Sosial Media</option>
+                          <option value="google_maps">Google Maps</option>
+                          <option value="other">Lainnya</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Alamat Lengkap</label>
+                      <textarea
+                        required
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
+                        placeholder="Alamat lengkap lokasi kost..."
+                        rows={2}
+                        value={formData.kostAddress}
+                        onChange={(e) => setFormData({ ...formData, kostAddress: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 3: JADWAL */}
+              {currentStep === 3 && (
+                <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+                  <div className="bg-green-50 p-4 rounded-2xl flex items-start gap-3 mb-6">
+                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center text-green-600 shrink-0">
+                      <Calendar className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900 text-sm">Jadwal Survey</p>
+                      <p className="text-xs text-gray-500">Pilih waktu yang tepat untuk melakukan video call live.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Tanggal</label>
+                      <input
+                        type="date"
+                        required
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
+                        value={formData.surveyDate}
+                        onChange={(e) => setFormData({ ...formData, surveyDate: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Jam (WIB)</label>
+                      <input
+                        type="time"
+                        required
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
+                        value={formData.surveyTime}
+                        onChange={(e) => setFormData({ ...formData, surveyTime: e.target.value })}
+                      />
+                    </div>
+                  </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Catatan Khusus (Opsional)</label>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Catatan (Opsional)</label>
                     <textarea
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
+                      placeholder="Tolong cek kebersihan kamar mandi, dll..."
                       rows={2}
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-                      placeholder="Contoh: Tolong cek apakah parkiran motor aman, atau cek kebersihan dapur umum."
                       value={formData.notes}
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                     />
                   </div>
                 </div>
+              )}
 
-                <button
-                  type="submit"
-                  className="w-full bg-gray-900 text-white font-bold py-4 rounded-xl hover:bg-gray-800 transition-colors shadow-lg active:scale-[0.98] mt-8 text-lg"
-                >
-                  Survey Sekarang
-                </button>
-                <p className="text-center text-xs text-gray-500 mt-4">
-                  Dengan mengklik tombol di atas, Anda akan diarahkan ke WhatsApp Admin untuk konfirmasi.
-                </p>
-              </form>
+              {/* STEP 4: KONFIRMASI */}
+              {currentStep === 4 && (
+                <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+                  <div className="bg-indigo-50 p-4 rounded-2xl flex items-start gap-3 mb-6">
+                    <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 shrink-0">
+                      <ShieldCheck className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900 text-sm">Konfirmasi Pesanan</p>
+                      <p className="text-xs text-gray-500">Periksa kembali detail pesanan Anda sebelum membayar.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 bg-gray-50 p-5 rounded-2xl border border-gray-100">
+                    <div className="flex justify-between text-xs py-1 border-b border-gray-200">
+                      <span className="text-gray-400 font-bold uppercase">Layanan</span>
+                      <span className="text-gray-900 font-black italic">JASA SURVEY LOKASI</span>
+                    </div>
+                    <div className="flex justify-between text-xs py-1 border-b border-gray-200">
+                      <span className="text-gray-400 font-bold uppercase">Kost</span>
+                      <span className="text-gray-900 font-bold">{formData.kostName}</span>
+                    </div>
+                    <div className="flex justify-between text-xs py-1 border-b border-gray-200">
+                      <span className="text-gray-400 font-bold uppercase">Jadwal</span>
+                      <span className="text-gray-900 font-bold">{formData.surveyDate} @ {formData.surveyTime} WIB</span>
+                    </div>
+                    <div className="flex justify-between text-sm pt-2">
+                      <span className="text-gray-900 font-black uppercase tracking-tighter">Total Bayar</span>
+                      <span className="text-orange-600 font-black">Rp 70.000</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-3 bg-blue-50/50 rounded-xl border border-blue-100 italic">
+                    <AlertTriangle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-blue-700 leading-relaxed font-medium">
+                      Anda akan diarahkan ke Payment Gateway aman kami. Segera setelah pembayaran lunas, sistem akan mengirimkan konfirmasi ke tim surveyor kami.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Navigation */}
+            <div className="p-6 border-t border-gray-100 bg-gray-50/30 rounded-b-3xl">
+              <div className="flex gap-3">
+                {currentStep > 1 && (
+                  <button
+                    onClick={() => setCurrentStep(currentStep - 1)}
+                    className="flex-1 py-3.5 bg-white text-gray-500 font-bold rounded-xl border border-gray-200 hover:bg-gray-50 transition-all"
+                  >
+                    Kembali
+                  </button>
+                )}
+                {currentStep < 4 ? (
+                  <button
+                    onClick={() => {
+                      // Basic validation per step
+                      if (currentStep === 1 && (!formData.name || !formData.phone || !formData.email)) return alert('Harap isi semua data diri');
+                      if (currentStep === 2 && (!formData.kostName || !formData.kostAddress)) return alert('Harap isi detail kost');
+                      if (currentStep === 3 && (!formData.surveyDate || !formData.surveyTime)) return alert('Harap pilih jadwal');
+                      setCurrentStep(currentStep + 1);
+                    }}
+                    className="flex-[2] py-3.5 bg-gray-900 text-white font-bold rounded-xl shadow-lg hover:bg-gray-800 transition-all flex items-center justify-center gap-2"
+                  >
+                    Lanjutkan <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSubmit}
+                    className="flex-[2] py-3.5 bg-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-500/30 hover:bg-orange-600 transition-all flex items-center justify-center gap-2"
+                  >
+                    Selesaikan & Bayar <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -466,7 +577,7 @@ Mohon segera diproses. Terima kasih.`;
         <PaymentGateway
           amount={70000}
           orderId={`SRV-${Date.now()}`}
-          productId="survey-service-pkg"
+          productId={SURVEY_PRODUCT_ID}
           productType="survey"
           userId={user.id}
           metadata={paymentMetadata}
