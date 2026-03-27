@@ -36,7 +36,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     if (user) {
       setFormData({
         displayName: user.displayName || user.name || user.full_name || '',
-        phone: user.phone || user.phoneNumber || user.phone_number || '',
+        phone: user.phone || user.phoneNumber || user.phone_number ? 
+               (user.phone || user.phoneNumber || user.phone_number).replace(/^(\+62|62|0)/, '') : '',
         occupation: user.occupation || '',
         institution: user.institution || '',
         gender: user.gender || '',
@@ -103,9 +104,19 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
   };
 
   const handleSave = async () => {
+    const normalizePhone = (p: string) => {
+      if (!p) return '';
+      let clean = p.replace(/\D/g, ''); 
+      if (clean.startsWith('0')) clean = clean.substring(1);
+      if (clean.startsWith('62')) clean = clean.substring(2);
+      return `+62${clean}`;
+    };
+
+    const finalPhone = normalizePhone(formData.phone);
+
     if (
       !formData.displayName ||
-      !formData.phone ||
+      !finalPhone ||
       !formData.occupation ||
       !formData.institution ||
       !formData.address ||
@@ -124,7 +135,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
         .from('users')
         .update({
           name: formData.displayName,
-          phone: formData.phone,
+          phone: finalPhone,
           occupation: formData.occupation,
           institution: formData.institution,
           gender: formData.gender,
@@ -288,11 +299,25 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">No. WhatsApp <span className="text-red-500">*</span></label>
                 {isEditing ? (
-                  <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
-                    placeholder="Contoh: 081234567890" required />
+                  <div className="flex bg-gray-50 border border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-500 transition-all overflow-hidden group">
+                    <div className="px-4 py-3 bg-gray-100 border-r border-gray-200 text-gray-400 font-black text-xs flex items-center group-focus-within:text-orange-500">+62</div>
+                    <input 
+                      type="tel" 
+                      name="phone" 
+                      value={formData.phone} 
+                      onChange={(e) => {
+                        let val = e.target.value.replace(/\D/g, '');
+                        if (val.startsWith('0')) val = val.substring(1);
+                        if (val.startsWith('62')) val = val.substring(2);
+                        setFormData({ ...formData, phone: val });
+                      }}
+                      className="flex-1 px-4 py-3 text-sm font-bold text-gray-900 bg-transparent outline-none"
+                      placeholder="8xxxxxxxxxx" required />
+                  </div>
                 ) : (
-                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900">{formData.phone || '-'}</div>
+                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900">
+                    {formData.phone ? `+62 ${formData.phone}` : '-'}
+                  </div>
                 )}
               </div>
 

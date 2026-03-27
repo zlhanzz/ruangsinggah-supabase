@@ -113,7 +113,7 @@ const OrderPaymentStatus: React.FC<OrderPaymentStatusProps> = ({ user }) => {
           // However, here we are on a dedicated status page.
           if (order.product_type === 'survey') {
              // For survey, we might need the same WA redirection logic here if the user just paid from email.
-             alert('Pembayaran Berhasil! Silakan hubungi admin via WhatsApp untuk jadwal survey.');
+             alert('Pesanan Survey Berhasil! Silakan hubungi admin via WhatsApp untuk jadwal survey.');
              window.open('https://wa.me/6285156634283', '_blank');
           }
           navigate('/');

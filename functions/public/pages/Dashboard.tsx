@@ -5,11 +5,13 @@ import { FORMAT_CURRENCY } from '../constants';
 import { supabase } from '../supabase';
 import {
     getAdminTransactions, updateTransactionStatus, AdminTransaction,
+    processBookingApproval,
     deleteTransaction, deleteTransactions,
     getAllDatabases, addDatabaseProduct, updateDatabaseProduct, deleteDatabase,
     getAdminProperties, addPropertyWithMedia, updatePropertyWithMedia,
     updatePropertyStatus, deleteProperty, BasicPropertyInfo,
-    getAnalyticsSummary, AnalyticsSummary
+    getAnalyticsSummary, AnalyticsSummary,
+    getAdminSurveyRequests, updateSurveyRequest, SurveyRequest
 } from '../adminService';
 import { getUserTransactions } from '../userService';
 import { notificationService } from '../notificationService';
@@ -330,10 +332,43 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
 
             if (error) throw error;
             setComplaints(data || []);
-        } catch (error) {
-            console.error("Gagal memuat komplain", error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // --- SURVEY REQUESTS STATE ---
+    const [surveyRequests, setSurveyRequests] = useState<SurveyRequest[]>([]);
+    const [isEditingSurvey, setIsEditingSurvey] = useState<SurveyRequest | null>(null);
+    const [surveyForm, setSurveyForm] = useState<Partial<SurveyRequest>>({});
+
+    const loadSurveyRequests = async () => {
+        if (!isAdmin) return;
+        setLoading(true);
+        try {
+            const data = await getAdminSurveyRequests();
+            setSurveyRequests(data);
+        } catch (error) {
+            console.error("Gagal memuat survey requests", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleUpdateSurvey = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!isEditingSurvey) return;
+        setIsSubmitting(true);
+        try {
+            await updateSurveyRequest(isEditingSurvey.id, surveyForm);
+            alert('Survey berhasil diperbarui');
+            loadSurveyRequests();
+            setIsEditingSurvey(null);
+        } catch (error) {
+            console.error("Gagal update survey", error);
+            alert('Gagal update survey');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -404,6 +439,7 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
         if (activeMenu === 'complaints') loadComplaints();
         if (activeMenu === 'transactions_db') loadDbTransactions();
         if (activeMenu === 'analytics') loadAnalyticsData();
+        if (activeMenu === 'verifikasi') loadSurveyRequests();
     }, [isAdmin, activeMenu, dateFilter, customStartDate, customEndDate, dashboardViewMode]);
 
     // --- PROPERTY HANDLERS ---
@@ -2366,27 +2402,27 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                                     <button
                                         onClick={async () => {
                                             const isPendingApproval = trx.rawStatus === 'PENDING_APPROVAL';
-                                            const confirmMsg = isPendingApproval 
-                                                ? 'Setujui pengajuan ini? Status akan berubah menjadi "Menunggu Pembayaran".'
-                                                : 'Konfirmasi pembayaran manual ini? Status akan berubah menjadi "Selesai".';
                                             
-                                            if (window.confirm(confirmMsg)) {
-                                                const nextStatus = isPendingApproval ? 'AWAITING_PAYMENT' : 'paid';
-                                                await updateTransactionStatus(trx.id, nextStatus);
-                                                
-                                                // Trigger Notification
-                                                notificationService.createNotification({
-                                                  user_id: trx.user_id,
-                                                  title: isPendingApproval ? 'Pengajuan Disetujui!' : 'Pembayaran Terverifikasi',
-                                                  message: isPendingApproval 
-                                                    ? `Pengajuan sewa ${trx.item} telah disetujui. Silakan lakukan pembayaran.`
-                                                    : `Pembayaran untuk ${trx.item} telah diverifikasi oleh Admin.`,
-                                                  type: isPendingApproval ? 'rental' : 'payment',
-                                                  link: '/my-bookings'
-                                                }).catch(err => console.error("Failed to create admin approval notification:", err));
-
-                                                alert(`Transaksi berhasil ${isPendingApproval ? 'disetujui' : 'dikonfirmasi'}!`);
-                                                loadRentTransactions();
+                                            if (isPendingApproval) {
+                                                if (window.confirm('Setujui pengajuan ini? System akan membuat link pembayaran dan menyiapkan pesan WhatsApp.')) {
+                                                    try {
+                                                        const result = await processBookingApproval(trx.id, 'accept');
+                                                        if (result.success) {
+                                                            alert('Booking disetujui! Membuka WhatsApp untuk kirim link pembayaran...');
+                                                            if (result.whatsappUrl) window.open(result.whatsappUrl, '_blank');
+                                                            loadRentTransactions();
+                                                        }
+                                                    } catch (err: any) {
+                                                        alert('Error: ' + err.message);
+                                                    }
+                                                }
+                                            } else {
+                                                // Manual transfer verification
+                                                if (window.confirm('Konfirmasi pembayaran manual ini? Status akan berubah menjadi "Selesai".')) {
+                                                    await updateTransactionStatus(trx.id, 'paid');
+                                                    alert('Pembayaran berhasil dikonfirmasi!');
+                                                    loadRentTransactions();
+                                                }
                                             }
                                         }}
                                         className="w-full bg-green-500 hover:bg-green-600 text-white py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 flex justify-center items-center gap-1"
@@ -2396,21 +2432,26 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                                     </button>
                                     <button
                                         onClick={async () => {
-                                            const nextStatus = trx.rawStatus === 'PENDING_APPROVAL' ? 'REJECTED' : 'cancelled';
-                                            if (window.confirm(`Tolak transaksi ini?`)) {
-                                                await updateTransactionStatus(trx.id, nextStatus);
-                                                
-                                                // Trigger Notification
-                                                notificationService.createNotification({
-                                                  user_id: trx.user_id,
-                                                  title: 'Pengajuan Ditolak',
-                                                  message: `Mohon maaf, pengajuan sewa ${trx.item} Anda telah ditolak oleh pemilik/admin.`,
-                                                  type: 'rental',
-                                                  link: '/my-bookings'
-                                                }).catch(err => console.error("Failed to create admin rejection notification:", err));
-
-                                                alert('Transaksi ditolak.');
-                                                loadRentTransactions();
+                                            const isPendingApproval = trx.rawStatus === 'PENDING_APPROVAL';
+                                            const confirmMsg = isPendingApproval ? 'Tolak pengajuan booking ini?' : 'Batalkan transaksi ini?';
+                                            
+                                            if (window.confirm(confirmMsg)) {
+                                                try {
+                                                    if (isPendingApproval) {
+                                                        const reason = window.prompt('Alasan penolakan (opsional):') || '';
+                                                        const result = await processBookingApproval(trx.id, 'reject', reason);
+                                                        if (result.success) {
+                                                            alert('Booking ditolak.');
+                                                            if (result.whatsappUrl) window.open(result.whatsappUrl, '_blank');
+                                                        }
+                                                    } else {
+                                                        await updateTransactionStatus(trx.id, 'cancelled');
+                                                        alert('Transaksi dibatalkan.');
+                                                    }
+                                                    loadRentTransactions();
+                                                } catch (err: any) {
+                                                    alert('Error: ' + err.message);
+                                                }
                                             }
                                         }}
                                         className="w-full bg-red-50 hover:bg-red-100 text-red-600 py-2.5 rounded-xl text-xs font-bold transition-all border border-red-200 active:scale-95 flex justify-center items-center gap-1"
@@ -2915,62 +2956,91 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                 <p className="text-sm font-medium text-violet-900">Harga layanan: <strong>Rp 70.000/lokasi</strong>. Transfer Bank perlu verifikasi manual sebelum survey dijadwalkan.</p>
             </div>
             <div className="grid grid-cols-1 gap-6">
-                {dummyVerifications.map((req: any) => (
+                {surveyRequests.map((req: SurveyRequest) => (
                     <div key={req.id} className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row gap-6 hover:shadow-md transition-shadow relative overflow-hidden">
-                        {req.status === 'Dijadwalkan' && <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/10 rounded-bl-full"></div>}
+                        {(req.status === 'AGENT_ASSIGNED' || req.status === 'SURVEYING') && <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/10 rounded-bl-full"></div>}
                         <div className="flex-1 space-y-4 relative z-10">
                             <div className="flex flex-wrap justify-between items-start border-b border-gray-50 pb-4 gap-2">
                                 <div>
                                     <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                        <span className="bg-violet-100 text-violet-700 font-bold px-2 py-1 rounded text-[10px] uppercase tracking-wider">{req.id}</span>
-                                        <span className="text-xs text-gray-400 font-medium">Order: {req.date}</span>
-                                        <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${req.paymentType === 'gateway' ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-700'}`}>{req.paymentType === 'gateway' ? '⚡ Gateway' : '🏦 Transfer Manual'}</span>
+                                        <span className="bg-violet-100 text-violet-700 font-bold px-2 py-1 rounded text-[10px] uppercase tracking-wider">#{req.id.slice(0,8)}</span>
+                                        <span className="text-xs text-gray-400 font-medium">Order: {new Date(req.created_at).toLocaleDateString('id-ID')}</span>
+                                        <span className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-violet-50 text-violet-600">Jasa Survey</span>
                                     </div>
-                                    <p className="font-medium text-gray-500 text-sm">Pemesan: <button onClick={() => setViewingVerifProfile(req)} className="font-black text-orange-600 hover:text-orange-700 hover:underline underline-offset-2 transition-colors text-base">{req.name}</button></p>
+                                    <p className="font-medium text-gray-500 text-sm">Pemesan: <button onClick={() => setViewingVerifProfile(req.user)} className="font-black text-orange-600 hover:text-orange-700 hover:underline underline-offset-2 transition-colors text-base">{req.user?.name || 'User'}</button></p>
                                 </div>
-                                <span className={`inline-flex px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-lg border ${req.status === 'Menunggu' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : req.status === 'Dijadwalkan' ? 'bg-blue-50 text-blue-700 border-blue-200' : req.status === 'Selesai' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{req.status}</span>
+                                <span className={`inline-flex px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-lg border 
+                                    ${req.status === 'AWAITING_PAYMENT' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
+                                      req.status === 'PENDING_ASSIGNMENT' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                                      req.status === 'AGENT_ASSIGNED' ? 'bg-blue-50 text-blue-700 border-blue-200' : 
+                                      req.status === 'SURVEYING' ? 'bg-blue-100 text-blue-800 border-blue-300 animate-pulse' : 
+                                      req.status === 'COMPLETED' ? 'bg-green-50 text-green-700 border-green-200' : 
+                                      'bg-red-50 text-red-700 border-red-200'}`}>
+                                    {req.status === 'AWAITING_PAYMENT' ? 'Menunggu Pembayaran' : 
+                                     req.status === 'PENDING_ASSIGNMENT' ? 'Menunggu Agen' : 
+                                     req.status === 'AGENT_ASSIGNED' ? 'Agen Ditetapkan' : 
+                                     req.status === 'SURVEYING' ? 'Proses Survey' : 
+                                     req.status === 'COMPLETED' ? 'Selesai' : 
+                                     req.status}
+                                </span>
                             </div>
                             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Kost Dituju</p><p className="font-bold text-gray-900 text-sm mt-0.5">{req.kostName}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">HP Pemilik/Penjaga</p><p className="font-bold text-gray-900 text-sm mt-0.5">{req.ownerPhone}</p></div>
-                                <div className="col-span-2"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alamat Kost</p><p className="font-bold text-gray-900 text-sm mt-0.5">{req.kostAddress}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sumber Info</p><p className="font-bold text-gray-900 text-sm mt-0.5">{req.source}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Metode Bayar</p><p className={`font-bold text-sm mt-0.5 ${req.paymentType === 'gateway' ? 'text-blue-600' : 'text-amber-600'}`}>{req.paymentMethod}</p></div>
-                                <div className="col-span-2"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">📅 Jadwal Video Call Survey</p><p className="font-bold text-violet-700 text-sm mt-0.5">{req.surveyDate} · Pukul {req.surveyTime} WIB</p></div>
+                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Kost Dituju</p><p className="font-bold text-gray-900 text-sm mt-0.5">{req.kost_name}</p></div>
+                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">HP Pemilik/Penjaga</p><p className="font-bold text-gray-900 text-sm mt-0.5">{req.owner_phone}</p></div>
+                                <div className="col-span-2"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alamat Kost</p><p className="font-bold text-gray-900 text-sm mt-0.5">{req.kost_address}</p></div>
+                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jadwal Survey</p><p className="font-bold text-violet-700 text-sm mt-0.5">{req.survey_date} · {req.survey_time}</p></div>
+                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Agen / Surveyor</p><p className="font-bold text-gray-900 text-sm mt-0.5">{req.agent_name || '-'}</p></div>
+                                {req.result_drive_link && (
+                                    <div className="col-span-2">
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Link Hasil Survey</p>
+                                        <a href={req.result_drive_link} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold text-sm hover:underline flex items-center gap-1">
+                                            🔗 Buka Google Drive <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                        </a>
+                                    </div>
+                                )}
                             </div>
-                            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Catatan Khusus dari Pemesan</p>
-                                <p className="text-sm text-gray-700 italic">"{req.notes}"</p>
-                            </div>
-                        </div>
-                        <div className="flex flex-col gap-2.5 md:w-52 shrink-0 border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-6 relative z-10">
-                            <div className="mb-1">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Biaya Layanan</p>
-                                <p className="text-xl font-black text-violet-600 text-right">{FORMAT_CURRENCY(req.amount)}</p>
-                                <p className="text-[11px] text-gray-400 text-right">{req.invoiceId}</p>
-                            </div>
-                            {req.paymentType === 'transfer' && req.transferProofUrl && (
-                                <button onClick={() => setViewingVerifProof({ id: req.id, name: req.name, proofUrl: req.transferProofUrl })} className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                    Lihat Bukti Transfer
-                                </button>
-                            )}
-                            {req.status === 'Menunggu' && (
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button onClick={() => alert(`Pesanan ${req.id} dikonfirmasi!`)} className="w-full bg-green-500 hover:bg-green-600 text-white py-2.5 rounded-xl text-xs font-bold active:scale-95 flex justify-center items-center gap-1"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Terima</button>
-                                    <button onClick={() => { if (window.confirm(`Tolak pesanan ${req.id}?`)) alert('Ditolak.'); }} className="w-full bg-red-50 hover:bg-red-100 text-red-600 py-2.5 rounded-xl text-xs font-bold border border-red-200 active:scale-95 flex justify-center items-center gap-1"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>Tolak</button>
+                            {req.notes && (
+                                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Catatan Pemesan</p>
+                                    <p className="text-sm text-gray-700 italic">"{req.notes}"</p>
                                 </div>
                             )}
-                            <button onClick={() => setViewingVerifInvoice(req)} className="w-full bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>Lihat Invoice
+                        </div>
+                        <div className="flex flex-col gap-2.5 md:w-52 shrink-0 border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-6 relative z-10">
+                            <button 
+                                onClick={() => {
+                                    setIsEditingSurvey(req);
+                                    setSurveyForm({
+                                        status: req.status,
+                                        agent_name: req.agent_name,
+                                        agent_phone: req.agent_phone,
+                                        result_drive_link: req.result_drive_link
+                                    });
+                                }} 
+                                className="w-full bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all flex justify-center items-center gap-2"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2.25 2.25 0 113.182 3.182L12.75 20.25 9 21l.75-3.75 11.25-11.25z" /></svg>
+                                Kelola Survey
                             </button>
-                            <button onClick={() => window.open(`https://wa.me/${req.phone}?text=${encodeURIComponent(`Halo ${req.name}, Admin RuangSinggah. Konfirmasi pesanan Jasa Survey (${req.id}) untuk kost ${req.kostName}, jadwal ${req.surveyDate} pukul ${req.surveyTime} WIB.`)}`, '_blank')} className="w-full bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
+                            
+                            <button onClick={() => window.open(`https://wa.me/${req.user?.phone}?text=${encodeURIComponent(`Halo ${req.user?.name}, Admin RuangSinggah. Konfirmasi pesanan Jasa Survey untuk kost ${req.kost_name}.`)}`, '_blank')} className="w-full bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.711.956 2.873.956 3.182 0 5.768-2.585 5.77-5.765.001-3.181-2.586-5.768-5.768-5.768zm3.333 8.33c-.15.424-.877.817-1.229.845-.306.024-.652.128-2.146-.464-1.801-.715-2.956-2.548-3.047-2.671-.09-.122-.727-.968-.727-1.844 0-.875.452-1.304.613-1.472.161-.168.351-.21.468-.21.117 0 .234.004.336.008.109.006.255-.044.398.303.151.365.518 1.264.565 1.356.046.091.077.198.016.321-.061.121-.092.197-.184.304-.092.107-.193.226-.275.319-.092.105-.188.22-.083.402.105.183.468.775 1.002 1.25.688.614 1.27.8 1.455.892.183.092.29.077.397-.038.106-.115.46-.537.583-.721.122-.184.244-.154.409-.092.165.061 1.042.492 1.221.583.179.092.298.138.341.214.043.076.043.447-.107.871z" /></svg>
-                                Follow Up WA
+                                Chat User
                             </button>
+
+                            {req.agent_phone && (
+                                <button onClick={() => window.open(`https://wa.me/${req.agent_phone}?text=${encodeURIComponent(`Halo ${req.agent_name}, Admin RuangSinggah. Update untuk survey kost ${req.kost_name}.`)}`, '_blank')} className="w-full bg-blue-50 hover:bg-blue-500 text-blue-600 hover:text-white border border-blue-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
+                                    Chat Agen
+                                </button>
+                            )}
                         </div>
                     </div>
                 ))}
+                {surveyRequests.length === 0 && (
+                    <div className="bg-gray-50 rounded-2xl p-12 text-center border-2 border-dashed border-gray-200">
+                        <p className="text-gray-500 font-bold">Belum ada permohonan survey.</p>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -3496,6 +3566,87 @@ const Dashboards: React.FC<DashboardProps> = ({ role, uid, onPageChange, listing
                                     </div>
                                 </div>
                                 <button type="submit" className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-black uppercase tracking-wider shadow-lg active:scale-95 transition-all mt-6">Simpan Transaksi DB</button>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* MODAL EDIT SURVEY */}
+                {isEditingSurvey && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsEditingSurvey(null)}></div>
+                        <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95">
+                            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-violet-50/50">
+                                <div><h2 className="text-xl font-black uppercase text-violet-900">Kelola Survey</h2><p className="text-xs font-bold text-violet-500 uppercase tracking-widest mt-1">Update Status & Agen Surveyor</p></div>
+                                <button onClick={() => setIsEditingSurvey(null)} className="w-8 h-8 flex items-center justify-center border rounded-full hover:bg-white transition-colors">&times;</button>
+                            </div>
+                            <form onSubmit={handleUpdateSurvey} className="flex-grow overflow-y-auto p-6 space-y-5">
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status Survey</label>
+                                        <select 
+                                            className="w-full mt-1.5 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-violet-500 transition-all outline-none"
+                                            value={surveyForm.status}
+                                            onChange={e => setSurveyForm({ ...surveyForm, status: e.target.value })}
+                                        >
+                                            <option value="AWAITING_PAYMENT">Menunggu Pembayaran</option>
+                                            <option value="PENDING_ASSIGNMENT">Menunggu Agen (Paid)</option>
+                                            <option value="AGENT_ASSIGNED">Agen Ditetapkan</option>
+                                            <option value="SURVEYING">Sedang Survey (Aktif)</option>
+                                            <option value="COMPLETED">Selesai (Arsip)</option>
+                                            <option value="CANCELLED">Dibatalkan</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nama Agen</label>
+                                            <input 
+                                                className="w-full mt-1.5 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-violet-500 transition-all outline-none"
+                                                value={surveyForm.agent_name || ''}
+                                                onChange={e => setSurveyForm({ ...surveyForm, agent_name: e.target.value })}
+                                                placeholder="Contoh: Budi Santoso"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">WhatsApp Agen</label>
+                                            <input 
+                                                className="w-full mt-1.5 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-violet-500 transition-all outline-none"
+                                                value={surveyForm.agent_phone || ''}
+                                                onChange={e => setSurveyForm({ ...surveyForm, agent_phone: e.target.value })}
+                                                placeholder="6281234..."
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Link Hasil Survey (Google Drive)</label>
+                                        <input 
+                                            className="w-full mt-1.5 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-violet-500 transition-all outline-none"
+                                            value={surveyForm.result_drive_link || ''}
+                                            onChange={e => setSurveyForm({ ...surveyForm, result_drive_link: e.target.value })}
+                                            placeholder="https://drive.google.com/..."
+                                        />
+                                        <p className="text-[10px] text-gray-400 mt-1.5 font-medium italic">* Link ini akan tampil di dashboard pengguna setelah survey selesai.</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-3 pt-4">
+                                    <button 
+                                        type="button"
+                                        onClick={() => setIsEditingSurvey(null)}
+                                        className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                                    >
+                                        Batal
+                                    </button>
+                                    <button 
+                                        type="submit" 
+                                        disabled={isSubmitting}
+                                        className="flex-[2] py-3.5 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+                                    >
+                                        {isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}
+                                    </button>
+                                </div>
                             </form>
                         </div>
                     </div>

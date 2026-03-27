@@ -336,6 +336,23 @@ export async function updateTransactionStatus(
   }
 }
 
+export async function processBookingApproval(
+  transactionId: string,
+  decision: 'accept' | 'reject',
+  reason?: string
+): Promise<{ success: boolean; status: string; paymentLink?: string; whatsappUrl?: string }> {
+  const { data, error } = await supabase.functions.invoke('process-booking-approval', {
+    body: { transactionId, decision, reason }
+  });
+
+  if (error) {
+    console.error('Edge Function Error:', error);
+    throw new Error(error.message || 'Gagal memproses persetujuan booking.');
+  }
+
+  return data;
+}
+
 export async function deleteTransaction(transactionId: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized: User not logged in.');
@@ -1081,4 +1098,74 @@ export async function getAnalyticsSummary(
   }
 
   return result;
+}
+
+// ---- SURVEY REQUEST FUNCTIONS ----
+
+export interface SurveyRequest extends any {
+  id: string;
+  user_id: string;
+  transaction_id: string;
+  status: string;
+  kost_name: string;
+  kost_address: string;
+  owner_phone: string;
+  survey_date: string;
+  survey_time: string;
+  notes: string;
+  agent_name?: string;
+  agent_phone?: string;
+  result_drive_link?: string;
+  created_at: string;
+  user?: {
+    name: string;
+    email: string;
+    phone: string;
+    photo_url?: string;
+  };
+}
+
+export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  const { data, error } = await supabase
+    .from('survey_requests')
+    .select(`
+      *,
+      user:user_id (
+        name,
+        email,
+        phone,
+        photo_url
+      )
+    `)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return (data || []) as SurveyRequest[];
+}
+
+export async function updateSurveyRequest(
+  id: string,
+  updates: Partial<SurveyRequest>
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  const { error } = await supabase
+    .from('survey_requests')
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', id);
+
+  if (error) throw error;
 }

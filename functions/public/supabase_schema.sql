@@ -658,3 +658,37 @@ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_messages;
   END IF;
 END $$;
+
+-- ============================================================
+-- STEP 15: SURVEY REQUESTS TABLE
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.survey_requests (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  transaction_id    UUID REFERENCES public.transactions(id) ON DELETE CASCADE,
+  user_id           UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  kost_name         TEXT NOT NULL,
+  kost_address      TEXT NOT NULL,
+  owner_phone       TEXT,
+  survey_date       DATE,
+  survey_time       TIME,
+  notes             TEXT,
+  status            TEXT NOT NULL DEFAULT 'AWAITING_PAYMENT', 
+  -- Statuses: AWAITING_PAYMENT, PENDING_ASSIGNMENT, AGENT_ASSIGNED, SURVEYING, COMPLETED, CANCELLED
+  agent_name        TEXT,
+  agent_phone       TEXT,
+  result_drive_link TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ENABLE RLS
+ALTER TABLE public.survey_requests ENABLE ROW LEVEL SECURITY;
+
+-- POLICIES
+CREATE POLICY "surveys_select_own" ON public.survey_requests FOR SELECT USING (auth.uid() = user_id OR public.is_admin());
+CREATE POLICY "surveys_insert_own" ON public.survey_requests FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "surveys_admin_all" ON public.survey_requests FOR ALL USING (public.is_admin());
+
+-- AKTIFKAN REALTIME
+ALTER PUBLICATION supabase_realtime ADD TABLE public.survey_requests;

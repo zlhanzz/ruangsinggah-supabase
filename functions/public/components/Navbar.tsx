@@ -77,12 +77,7 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
   };
 
   const handleNavClick = (pageId: Page) => {
-    // RESTRICTION: Check if page is Listings or Products and user is not logged in
-    if ((pageId === Page.LISTINGS || pageId === Page.PRODUCTS) && !user) {
-      alert("Login terlebih dahulu untuk akses selengkapnya.");
-      onPageChange(Page.LOGIN);
-      return;
-    }
+    // No dynamic restrictions here; page-level logic handles auth where needed
 
     onPageChange(pageId);
   };

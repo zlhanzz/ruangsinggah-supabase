@@ -39,6 +39,7 @@ const SkeletonLoader = () => (
 
 const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
     const [activeKosts, setActiveKosts] = useState<any[]>([]);
+    const [surveyRequests, setSurveyRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState<'diajukan' | 'aktif' | 'riwayat'>('diajukan');
@@ -84,6 +85,8 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
     useEffect(() => {
         if (user) {
             fetchMyKosts();
+        } else {
+            setLoading(false);
         }
     }, [user]);
 
@@ -318,6 +321,76 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                 }
                 return { ...prop, displayImage: firstImage };
             });
+            // Fetch surveys
+            const { data: surveysData, error: surveysError } = await supabase
+                .from('survey_requests')
+                .select('*')
+                .eq('user_id', user.uid);
+            
+            if (surveysError) {
+                console.error('fetchSurveys error:', surveysError);
+            } else {
+                // DUMMY DATA FOR UI REVIEW
+                const dummySurveys = [
+                    {
+                        id: 'dummy-1',
+                        status: 'AWAITING_PAYMENT',
+                        kost_name: 'Kost Orange Suite',
+                        kost_address: 'Jl. Melati No. 12, Jakarta',
+                        owner_phone: '0812-3456-7890',
+                        survey_date: '2026-03-30',
+                        survey_time: '14:00',
+                        created_at: new Date().toISOString()
+                    },
+                    {
+                        id: 'dummy-2',
+                        status: 'PENDING_ASSIGNMENT',
+                        kost_name: 'Kost Blue Resident',
+                        kost_address: 'Jl. Mawar No. 5, Bandung',
+                        owner_phone: '0856-7890-1234',
+                        survey_date: '2026-03-31',
+                        survey_time: '10:00',
+                        created_at: new Date().toISOString()
+                    },
+                    {
+                        id: 'dummy-3',
+                        status: 'AGENT_ASSIGNED',
+                        kost_name: 'Kost Purple Garden',
+                        kost_address: 'Jl. Anggrek No. 22, Surabaya',
+                        owner_phone: '0821-2222-3333',
+                        survey_date: '2026-04-01',
+                        survey_time: '13:00',
+                        agent_name: 'Budi Surveyor',
+                        agent_phone: '628123456789',
+                        created_at: new Date().toISOString()
+                    },
+                    {
+                        id: 'dummy-4',
+                        status: 'SURVEYING',
+                        kost_name: 'Kost Emerald Park',
+                        kost_address: 'Jl. Tulip No. 8, Medan',
+                        owner_phone: '0819-8888-9999',
+                        survey_date: '2026-04-02',
+                        survey_time: '11:00',
+                        agent_name: 'Siti Surveyor',
+                        agent_phone: '628987654321',
+                        created_at: new Date().toISOString()
+                    },
+                    {
+                        id: 'dummy-5',
+                        status: 'COMPLETED',
+                        kost_name: 'Kost Black Diamond',
+                        kost_address: 'Jl. Kamboja No. 15, Makassar',
+                        owner_phone: '0811-0000-1111',
+                        survey_date: '2026-04-03',
+                        survey_time: '16:00',
+                        result_drive_link: 'https://drive.google.com/drive/folders/dummy',
+                        created_at: new Date().toISOString()
+                    }
+                ];
+                setSurveyRequests([...dummySurveys, ...(surveysData || [])]);
+            }
+
             setRecommendations(processedRecs);
             setExtraBills(bills || []);
         } catch (error) {
@@ -533,20 +606,217 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
     };
 
     const filteredKosts = activeKosts.filter(kost => {
-        const statusLower = (kost.status || '').toLowerCase();
-        const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(statusLower);
-        const isPending = ['pending_approval', 'awaiting_payment', 'rejected', 'cancelled'].includes(statusLower);
+        const isPaid = ['paid', 'approved', 'selesai', 'success', 'berhasil'].includes((kost.status || '').toLowerCase());
+        const isPastStay = kost.daysRemaining !== null && kost.daysRemaining < 0;
         
-        const now = new Date();
-        const endDate = kost.endDate ? new Date(kost.endDate) : null;
-        const isActiveStay = isPaid && (!endDate || now <= endDate);
-        const isPastStay = isPaid && endDate && now > endDate;
-
-        if (activeTab === 'diajukan') return isPending || isPaid;
-        if (activeTab === 'aktif') return isActiveStay;
-        if (activeTab === 'riwayat') return isPastStay;
+        if (activeTab === 'diajukan') return ['pending_approval', 'awaiting_payment'].includes((kost.status || '').toLowerCase());
+        if (activeTab === 'aktif') return isPaid && !isPastStay;
+        if (activeTab === 'riwayat') return isPastStay || ['rejected', 'cancelled'].includes((kost.status || '').toLowerCase());
         return false;
     });
+
+    const filteredSurveys = surveyRequests.filter(survey => {
+        const status = survey.status;
+        // Logic: Surveys can appear in multiple tabs as "history" (minimized)
+        if (activeTab === 'diajukan') return true; // Show all in Diajukan
+        if (activeTab === 'aktif') return ['AGENT_ASSIGNED', 'SURVEYING', 'COMPLETED'].includes(status);
+        if (activeTab === 'riwayat') return ['COMPLETED', 'CANCELLED'].includes(status);
+        return false;
+    });
+
+    const renderSurveyCard = (survey: any, compact: boolean = false) => {
+        const status = survey.status;
+        const statusColors: any = {
+            'AWAITING_PAYMENT': 'bg-orange-50 text-orange-600 border-orange-100',
+            'PENDING_ASSIGNMENT': 'bg-blue-50 text-blue-600 border-blue-100',
+            'AGENT_ASSIGNED': 'bg-purple-50 text-purple-600 border-purple-100',
+            'SURVEYING': 'bg-emerald-50 text-emerald-600 border-emerald-100',
+            'COMPLETED': 'bg-gray-900 text-white border-transparent',
+            'CANCELLED': 'bg-gray-100 text-gray-400 border-gray-200'
+        };
+
+        const statusLabels: any = {
+            'AWAITING_PAYMENT': 'Menunggu Pembayaran',
+            'PENDING_ASSIGNMENT': 'Mencari Agen Surveyor',
+            'AGENT_ASSIGNED': 'Agen Surveyor Ditetapkan',
+            'SURVEYING': 'Sedang Proses Survey',
+            'COMPLETED': 'Survey Selesai',
+            'CANCELLED': 'Survey Dibatalkan'
+        };
+
+        const currentStatusColor = statusColors[status] || 'bg-gray-50 text-gray-500 border-gray-100';
+        const currentLabel = statusLabels[status] || status;
+
+        if (compact) {
+            return (
+                <div key={survey.id} className="group flex items-center gap-4 sm:gap-6 bg-white/40 backdrop-blur-md rounded-[2.5rem] p-4 sm:p-5 border border-white shadow-lg hover:shadow-xl transition-all duration-300">
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-gray-50 shrink-0 transform group-hover:rotate-3 transition-transform">
+                        <Search className="w-8 h-8 text-blue-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-0.5">Layanan Jasa Survey</p>
+                        <h4 className="text-lg sm:text-xl font-black text-gray-800 truncate">{survey.kost_name || 'Survey Lokasi Kost'}</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                            <div className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${currentStatusColor}`}>
+                                {currentLabel}
+                            </div>
+                            {survey.agent_name && (
+                                <span className="text-[10px] font-bold text-gray-400 italic">• Surveyor: {survey.agent_name}</span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2 pr-2">
+                        {status === 'AWAITING_PAYMENT' ? (
+                            <button
+                                onClick={() => {
+                                    setPaymentAmount(70000);
+                                    setPaymentOrderId(survey.transaction_id);
+                                    setPaymentProductId('5ea7b4e9-6f8d-4a11-b845-8c7a726359e1');
+                                    setPaymentProductType('survey');
+                                    setPaymentMetadata({
+                                        kostName: survey.kost_name,
+                                        kostAddress: survey.kost_address
+                                    });
+                                    setShowPaymentGateway(true);
+                                }}
+                                className="bg-orange-500 hover:bg-orange-600 text-white p-3 rounded-xl shadow-lg shadow-orange-100 active:scale-90 transition-all flex items-center gap-2"
+                                title="Bayar Sekarang"
+                            >
+                                <Receipt className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase">Bayar</span>
+                            </button>
+                        ) : survey.agent_phone ? (
+                            <button
+                                onClick={() => window.open(`https://wa.me/${survey.agent_phone.replace(/\D/g, '')}`, '_blank')}
+                                className="bg-emerald-500 hover:bg-emerald-600 text-white p-3 rounded-xl shadow-lg shadow-emerald-100 active:scale-90 transition-all"
+                                title="Hubungi Surveyor"
+                            >
+                                <Smartphone className="w-4 h-4" />
+                            </button>
+                        ) : (
+                            <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center border border-gray-100">
+                                <Zap className="w-4 h-4 text-gray-300 animate-pulse" />
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div key={survey.id} className="group relative bg-white/70 backdrop-blur-2xl rounded-[3.5rem] p-8 sm:p-12 border border-white shadow-2xl shadow-gray-200/50 flex flex-col lg:flex-row gap-10 lg:gap-14 hover:scale-[1.01] transition-all duration-500 overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-400/10 to-transparent rounded-full blur-3xl -mr-32 -mt-32 group-hover:from-blue-400/20 transition-all duration-700" />
+                
+                <div className="flex-1 relative z-10">
+                    <div className="flex items-start gap-8 mb-8">
+                        <div className="relative">
+                            <div className="w-24 h-24 sm:w-28 sm:h-28 bg-white rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-blue-200 border-4 border-white transform rotate-3 group-hover:rotate-0 transition-all duration-500">
+                                <Search className="w-12 h-12 text-blue-500" />
+                            </div>
+                            <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-2xl shadow-lg flex items-center justify-center border-2 border-blue-50">
+                                <Zap className="w-5 h-5 text-blue-500 fill-blue-500" />
+                            </div>
+                        </div>
+
+                        <div className="flex-1">
+                            <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] mb-2">Layanan Jasa Survey</h4>
+                            <h3 className="text-3xl sm:text-4xl font-black text-gray-900 leading-tight tracking-tight mb-4">
+                                {survey.kost_name || 'Survey Lokasi Kost'}
+                            </h3>
+                            <div className="flex flex-col gap-3 mt-4 text-gray-500 font-medium text-sm">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-orange-50 rounded-lg"><MapPin className="w-4 h-4 text-orange-500" /></div>
+                                    <span className="text-gray-600">{survey.kost_address}</span>
+                                </div>
+                                {survey.owner_phone && (
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-emerald-50 rounded-lg"><Smartphone className="w-4 h-4 text-emerald-500" /></div>
+                                        <span className="text-gray-600 font-bold">Pemilik: {survey.owner_phone}</span>
+                                    </div>
+                                )}
+                                {(survey.survey_date || survey.survey_time) && (
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-blue-50 rounded-lg"><Calendar className="w-4 h-4 text-blue-500" /></div>
+                                        <span className="text-gray-600 font-bold italic bg-blue-50/50 px-3 py-1 rounded-xl border border-blue-100/50">
+                                            Jadwal: {survey.survey_date ? new Date(survey.survey_date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '-'} @ {survey.survey_time || '-'}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className={`px-6 py-4 rounded-[1.5rem] text-[11px] font-black uppercase tracking-[0.15em] flex items-center gap-3 border transition-all duration-500 self-start ${currentStatusColor}`}>
+                        <div className={`w-3 h-3 rounded-full animate-pulse bg-current`} />
+                        {currentLabel}
+                    </div>
+
+                    {survey.agent_name && (
+                        <div className="mt-8 bg-white/50 backdrop-blur-sm p-6 rounded-[2rem] border border-gray-100 flex items-center gap-4">
+                            <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center text-xl font-black text-gray-400">
+                                {survey.agent_name.charAt(0)}
+                            </div>
+                            <div>
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Surveyor Anda</p>
+                                <p className="text-base font-black text-gray-900">{survey.agent_name}</p>
+                                <p className="text-xs font-bold text-emerald-600">{survey.agent_phone || 'Nomor tersedia'}</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex flex-col gap-6 lg:w-80 shrink-0 justify-center relative z-10 pt-4">
+                    {status === 'AWAITING_PAYMENT' ? (
+                        <button
+                            onClick={() => {
+                                setPaymentAmount(70000);
+                                setPaymentOrderId(survey.transaction_id);
+                                setPaymentProductId('5ea7b4e9-6f8d-4a11-b845-8c7a726359e1');
+                                setPaymentProductType('survey');
+                                setPaymentMetadata({
+                                    kostName: survey.kost_name,
+                                    kostAddress: survey.kost_address
+                                });
+                                setShowPaymentGateway(true);
+                            }}
+                            className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-6 rounded-[2rem] font-black flex flex-col items-center justify-center gap-1 transition-all text-sm shadow-2xl shadow-orange-200 active:scale-95 animate-subtle-bounce"
+                        >
+                            <div className="flex items-center gap-3">
+                                <Receipt className="w-6 h-6" /> BAYAR SURVEY SEKARANG
+                            </div>
+                            <span className="text-[10px] opacity-80 font-bold uppercase tracking-widest">Rp 70.000 (Satu kali bayar)</span>
+                        </button>
+                    ) : status === 'COMPLETED' && survey.result_drive_link ? (
+                        <button
+                            onClick={() => window.open(survey.result_drive_link, '_blank')}
+                            className="bg-gray-900 hover:bg-emerald-600 text-white px-8 py-6 rounded-[2rem] font-black flex items-center justify-center gap-3 transition-all text-sm shadow-2xl shadow-gray-300 active:scale-95 group/drive"
+                        >
+                            <FileText className="w-6 h-6 group-hover/drive:-translate-y-1 transition-transform" /> LIHAT HASIL SURVEY
+                        </button>
+                    ) : (
+                        <div className="p-8 text-center bg-gray-50 rounded-[2.5rem] border border-dashed border-gray-200">
+                            <Zap className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-relaxed">
+                                {status === 'PENDING_ASSIGNMENT' ? 'Pesanan Sedang Diproses Admin' : 
+                                 status === 'AGENT_ASSIGNED' ? 'Surveyor Sedang Menuju Lokasi' :
+                                 status === 'SURVEYING' ? 'Surveyor Sedang Mengambil Foto & Video' :
+                                 'Mohon Tunggu Sebentar'}
+                            </p>
+                        </div>
+                    )}
+
+                    {survey.agent_phone && (
+                        <button
+                            onClick={() => window.open(`https://wa.me/${survey.agent_phone.replace(/\D/g, '')}`, '_blank')}
+                            className="w-full bg-emerald-50 text-emerald-600 border-2 border-emerald-100 hover:bg-emerald-100 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[11px]"
+                        >
+                            <Smartphone className="w-4 h-4" /> HUBUNGI SURVEYOR
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    };
 
     if (loading) {
         return (
@@ -560,6 +830,38 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                         </div>
                     </div>
                     <SkeletonLoader />
+                </div>
+            </div>
+        );
+    }
+
+    if (!user) {
+        return (
+            <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center pt-24 sm:pt-32 pb-12 p-4">
+                <div className="max-w-md w-full bg-white rounded-[3.5rem] p-12 text-center shadow-2xl shadow-orange-900/5 border border-gray-50 flex flex-col items-center animate-in fade-in slide-in-from-bottom-8 duration-700">
+                    <div className="relative mb-10">
+                        <div className="w-32 h-32 bg-orange-50 rounded-full flex items-center justify-center animate-pulse">
+                            <Plus className="w-12 h-12 text-orange-200" />
+                        </div>
+                        <div className="absolute top-0 right-0 w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center border border-gray-50">
+                            <Search className="w-6 h-6 text-orange-500" />
+                        </div>
+                    </div>
+                    <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight mb-4 leading-tight">Mulai Kelola <br /> Kost Kamu</h2>
+                    <p className="text-gray-500 font-medium mb-10 leading-relaxed">Informasi booking dan survey hanya tersedia untuk pengguna yang telah masuk.</p>
+                    <button 
+                        onClick={() => onPageChange(Page.LOGIN)}
+                        className="w-full bg-orange-500 hover:bg-orange-600 text-white py-5 rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-orange-200 transition-all active:scale-95 flex items-center justify-center gap-3"
+                    >
+                        MASUK / DAFTAR
+                        <ChevronRight className="w-5 h-5" />
+                    </button>
+                    <button 
+                         onClick={() => onPageChange(Page.HOME)}
+                         className="mt-6 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-orange-500 transition-colors"
+                    >
+                        Kembali ke Beranda
+                    </button>
                 </div>
             </div>
         );
@@ -594,22 +896,21 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                     </div>
 
                     {/* Navigation Tabs */}
-                    <div className="bg-gray-100/50 p-1.5 rounded-[2rem] flex items-center gap-1 self-start md:self-auto border border-gray-100/80 backdrop-blur-sm">
-                        {[
+                    <div className="bg-gray-100/50 p-1.5 rounded-[2rem] flex items-center gap-1 self-start md:self-auto border border-gray-100/80 backdrop-blur-sm">                        {[
                             { id: 'diajukan', label: 'Diajukan', count: activeKosts.filter(k => {
                                 const s = (k.status || '').toLowerCase();
                                 return ['pending_approval', 'awaiting_payment'].includes(s);
-                            }).length },
+                            }).length + surveyRequests.length },
                             { id: 'aktif', label: 'Aktif', count: activeKosts.filter(k => {
                                 const s = (k.status || '').toLowerCase();
                                 const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(s);
                                 return isPaid && (!k.endDate || new Date() <= new Date(k.endDate));
-                            }).length },
+                            }).length + surveyRequests.filter(s => ['AGENT_ASSIGNED', 'SURVEYING', 'COMPLETED'].includes(s.status)).length },
                             { id: 'riwayat', label: 'Riwayat', count: activeKosts.filter(k => {
                                 const s = (k.status || '').toLowerCase();
                                 const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(s);
                                 return isPaid && k.endDate && new Date() > new Date(k.endDate);
-                            }).length }
+                            }).length + surveyRequests.filter(s => ['COMPLETED', 'CANCELLED'].includes(s.status)).length }
                         ].map((tab) => (
                             <button
                                 key={tab.id}
@@ -667,8 +968,18 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                     </div>
                 )}
 
-                {filteredKosts.length > 0 ? (
+                {(filteredKosts.length > 0 || filteredSurveys.length > 0) ? (
                     <div className="space-y-6 sm:space-y-8">
+                        {/* Render Surveys First in Diajukan/Aktif */}
+                        {filteredSurveys.map(survey => {
+                            let isCompact = true;
+                            const s = survey.status;
+                            if (activeTab === 'diajukan' && ['AWAITING_PAYMENT', 'PENDING_ASSIGNMENT'].includes(s)) isCompact = false;
+                            if (activeTab === 'aktif' && ['AGENT_ASSIGNED', 'SURVEYING'].includes(s)) isCompact = false;
+                            if (activeTab === 'riwayat' && s === 'COMPLETED') isCompact = false;
+                            return renderSurveyCard(survey, isCompact);
+                        })}
+                        
                         {filteredKosts.map((kost) => {
                             const statusLower = (kost.status || '').toLowerCase();
                             const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(statusLower);
@@ -729,8 +1040,9 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                                 <Zap className="w-5 h-5 text-orange-500 fill-orange-500" />
                                             </div>
                                         </div>
-
-                                        <div className="flex-1">
+                                    </div>
+                                    
+                                    <div className="flex-1">
                                                 <div className="flex flex-col gap-2">
                                                     <button 
                                                         onClick={() => onPageChange(`${Page.DETAIL}?kostId=${kost.kostId}` as any)}
@@ -844,11 +1156,10 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                                     <p className="text-base sm:text-lg font-black text-emerald-600">
                                                         {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(kost.totalPrice || 0)}
                                                     </p>
-                                                </div>
                                             </div>
                                         </div>
-                                    )}
-                                </div>
+                                    </div>
+                                )}
 
                                 {/* Actions Column */}
                                  <div className="flex flex-col gap-6 lg:w-80 shrink-0 justify-start relative z-10 pt-4">
@@ -1372,14 +1683,5 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
         </div>
     );
 };
-
-// Quick explicit mock CheckCircleIcon component since it's not exported differently from lucide
-function CheckCircleIcon(props: any) {
-    return (
-        <svg fill="currentColor" viewBox="0 0 20 20" {...props}>
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-        </svg>
-    );
-}
 
 export default MyKost;

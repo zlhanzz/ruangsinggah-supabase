@@ -293,7 +293,7 @@ const App: React.FC = () => {
             <Route path={Page.OWNER} element={<Owner />} />
             <Route path={Page.ABOUT} element={<About />} />
             <Route path={Page.CONTACT} element={<Contact />} />
-            <Route path={Page.SURVEY_SERVICE} element={<SurveyService user={user} />} />
+            <Route path={Page.SURVEY_SERVICE} element={<SurveyService user={user} onPageChange={(p: Page) => navigate(p)} />} />
             <Route path={Page.MY_BOOKINGS} element={<MyKost user={user} onPageChange={(p: Page) => navigate(p)} />} />
             <Route path={Page.CHAT} element={<Chat user={user} onPageChange={(p: Page) => navigate(p)} />} />
             

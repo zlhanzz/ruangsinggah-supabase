@@ -156,7 +156,17 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setLoading(true);
     setErrorMsg('');
 
-    if (!formData.name || !formData.phone) {
+    const normalizePhone = (p: string) => {
+      if (!p) return '';
+      let clean = p.replace(/\D/g, ''); 
+      if (clean.startsWith('0')) clean = clean.substring(1);
+      if (clean.startsWith('62')) clean = clean.substring(2);
+      return `+62${clean}`;
+    };
+
+    const finalPhone = normalizePhone(formData.phone);
+
+    if (!formData.name || !finalPhone) {
       setErrorMsg('Mohon lengkapi Nama dan Nomor WhatsApp.');
       setLoading(false);
       return;
@@ -173,7 +183,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           metadata: {
             full_name: formData.name,
             name: formData.name,
-            phone: formData.phone
+            phone: finalPhone
           }
         })
       });
@@ -414,14 +424,22 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Nomor WhatsApp</label>
-                  <input
-                    type="tel"
-                    required
-                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
-                    placeholder="0812xxxx"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  />
+                  <div className="flex bg-gray-50 border border-gray-100 rounded-xl focus-within:ring-2 focus-within:ring-orange-500/10 focus-within:border-orange-500 transition-all overflow-hidden group">
+                     <div className="px-4 py-3 bg-gray-100 border-r border-gray-200 text-gray-400 font-black text-xs flex items-center group-focus-within:text-orange-500">+62</div>
+                     <input
+                      type="tel"
+                      required
+                      className="flex-1 px-4 py-3 bg-transparent outline-none font-medium"
+                      placeholder="8xxxxxxxxxx"
+                      value={formData.phone}
+                      onChange={(e) => {
+                        let val = e.target.value.replace(/\D/g, '');
+                        if (val.startsWith('0')) val = val.substring(1);
+                        if (val.startsWith('62')) val = val.substring(2);
+                        setFormData({ ...formData, phone: val });
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             )}

@@ -350,7 +350,15 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
                 {filteredDatabases.map((item) => (
-                  <div key={item.id} className="group bg-white rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-2xl hover:shadow-orange-100 transition-all duration-500 cursor-pointer" onClick={() => navigate(`/products/${item.id}`)}>
+                  <div key={item.id} className="group bg-white rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-2xl hover:shadow-orange-100 transition-all duration-500 cursor-pointer" onClick={() => {
+                    if (!user) {
+                      if (confirm("Silakan login terlebih dahulu untuk melihat detail produk database. Login sekarang?")) {
+                        onLoginRedirect?.();
+                      }
+                      return;
+                    }
+                    navigate(`/products/${item.id}`);
+                  }}>
                     <div className="aspect-[4/3] overflow-hidden relative">
                       <img
                         src={item.fileUrls?.coverImage?.webp || item.fileUrls?.coverImage?.original || 'https://via.placeholder.com/400?text=No+Cover'}

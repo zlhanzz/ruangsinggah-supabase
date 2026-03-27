@@ -15,15 +15,6 @@ interface HomeProps {
 const Home: React.FC<HomeProps> = ({ onPageChange, onKostSelect, user, listings = [], loading = false }) => {
   const featuredKosts = listings.filter(k => k.isVerified).slice(0, 3);
 
-  const handleRestrictedAction = (page: Page) => {
-    if (!user) {
-      alert("Login terlebih dahulu untuk akses selengkapnya.");
-      onPageChange(Page.LOGIN);
-      return;
-    }
-    onPageChange(page);
-  };
-
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
@@ -41,14 +32,14 @@ const Home: React.FC<HomeProps> = ({ onPageChange, onKostSelect, user, listings 
             </p>
             <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center items-center animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
               <button
-                onClick={() => handleRestrictedAction(Page.LISTINGS)}
+                onClick={() => onPageChange(Page.LISTINGS)}
                 className="w-full sm:w-auto bg-orange-500 text-white px-6 py-4 sm:px-10 sm:py-5 rounded-2xl sm:rounded-[2rem] font-black text-xs sm:text-sm uppercase tracking-widest hover:bg-orange-600 transition-all shadow-2xl shadow-orange-100 active:scale-95 flex items-center justify-center gap-2 sm:gap-3 group"
               >
                 <Search className="w-4 h-4 sm:w-5 sm:h-5 text-orange-200 group-hover:text-white transition-colors" />
                 Cari Kost Sekarang
               </button>
               <button
-                onClick={() => handleRestrictedAction(Page.PRODUCTS)}
+                onClick={() => onPageChange(Page.PRODUCTS)}
                 className="w-full sm:w-auto bg-black text-white px-6 py-4 sm:px-10 sm:py-5 rounded-2xl sm:rounded-[2rem] font-black text-xs sm:text-sm uppercase tracking-widest hover:bg-gray-900 transition-all shadow-xl hover:shadow-2xl active:scale-95 flex items-center justify-center gap-2 sm:gap-3 group border-2 border-gray-900 hover:border-black"
               >
                 <svg className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -92,7 +83,7 @@ const Home: React.FC<HomeProps> = ({ onPageChange, onKostSelect, user, listings 
               <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] sm:text-xs">Unit terbaik yang baru saja diverifikasi ulang oleh tim lapangan.</p>
             </div>
             <button
-              onClick={() => handleRestrictedAction(Page.LISTINGS)}
+              onClick={() => onPageChange(Page.LISTINGS)}
               className="mt-6 sm:mt-8 md:mt-0 bg-gray-900 text-white px-6 py-3.5 sm:px-8 sm:py-4 rounded-xl sm:rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-widest hover:bg-orange-500 transition-all shadow-xl active:scale-95"
             >
               Lihat Semua Kost

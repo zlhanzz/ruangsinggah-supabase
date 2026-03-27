@@ -1,18 +1,21 @@
-import React, { useState, useRef } from 'react';
-import { CheckCircle, AlertTriangle, Video, MapPin, Calendar, Clock, ArrowRight, ShieldCheck, Wifi, Droplets, X } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { CheckCircle, AlertTriangle, Video, MapPin, Calendar, Clock, ArrowRight, ShieldCheck, Wifi, Droplets, X, ChevronRight } from 'lucide-react';
+import { Page } from '../types';
 import PaymentGateway from '../components/PaymentGateway';
 
 interface SurveyServiceProps {
   user: any;
+  onPageChange: (page: Page) => void;
 }
 
 const SURVEY_PRODUCT_ID = '5ea7b4e9-6f8d-4a11-b845-8c7a726359e1';
 
-const SurveyService: React.FC<SurveyServiceProps> = ({ user }) => {
+const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange }) => {
   const offerSectionRef = useRef<HTMLDivElement>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [showPayment, setShowPayment] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [paymentMetadata, setPaymentMetadata] = useState<any>(null);
 
   const [formData, setFormData] = useState({
@@ -22,11 +25,25 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user }) => {
     kostName: '',
     ownerPhone: '',
     kostAddress: '',
-    source: 'database', // 'database', 'social_media', 'other'
+    source: '', // 'database', 'social_media', 'other'
     surveyDate: '',
     surveyTime: '',
     notes: ''
   });
+
+  // Pre-fill form with user profile data when modal opens
+  useEffect(() => {
+    if (isModalOpen && user) {
+      setFormData(prev => ({
+        ...prev,
+        // Only set if field is empty to prevent overwriting user input, 
+        // but typically it's fine to reset it on first open
+        name: user.name || user.displayName || prev.name,
+        phone: user.phone ? user.phone.replace(/^(\+62|62|0)/, '') : prev.phone,
+        email: user.email || prev.email
+      }));
+    }
+  }, [isModalOpen, user]);
 
   const scrollToOffer = () => {
     offerSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -40,9 +57,20 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user }) => {
       return;
     }
 
+    // Normalize phone numbers to include +62 if not present
+    const normalizePhone = (p: string) => {
+      if (!p) return '';
+      let clean = p.replace(/\D/g, ''); // Ambil hanya angka
+      if (clean.startsWith('0')) clean = clean.substring(1);
+      if (clean.startsWith('62')) clean = clean.substring(2);
+      return `+62${clean}`;
+    };
+
     // Prepare metadata for payment and post-payment message
     const metadata = {
       ...formData,
+      phone: normalizePhone(formData.phone),
+      ownerPhone: normalizePhone(formData.ownerPhone),
       item: 'Jasa Survey Lokasi Kost',
       service_name: 'Jasa Survey Lokasi Kost',
       package_price: 70000
@@ -55,6 +83,7 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user }) => {
 
   const handlePaymentSuccess = () => {
     setShowPayment(false);
+    setShowSuccess(true);
     
     // Format message for WhatsApp (only after payment success)
     const message = `Halo Admin RuangSinggah, saya sudah melakukan PEMBAYARAN untuk Jasa Survey Lokasi Kost (Paket Rp 70.000).
@@ -83,6 +112,52 @@ Mohon segera diproses. Terima kasih.`;
 
     window.open(whatsappUrl, '_blank');
   };
+
+  if (showSuccess) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center p-4">
+        <div className="max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in-95 duration-500">
+          <div className="relative">
+            <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto shadow-xl shadow-green-50 relative z-10">
+              <CheckCircle className="w-12 h-12" />
+            </div>
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-green-50 rounded-full animate-ping opacity-20"></div>
+          </div>
+          <div>
+            <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight mb-4 text-center">Pesanan Survey Berhasil!</h2>
+            <p className="text-gray-500 font-medium text-center">Pembayaran Jasa Survey Anda telah kami terima dan sedang diproses. Tim kami akan segera menghubungi Anda untuk koordinasi lebih lanjut.</p>
+          </div>
+          <div className="bg-orange-50 p-6 rounded-[2rem] border border-orange-100 text-left">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Detail Pesanan</p>
+            <div className="space-y-2">
+               <div className="flex justify-between text-sm">
+                 <span className="text-gray-500 font-bold">Kost:</span>
+                 <span className="text-gray-900 font-black">{paymentMetadata?.kostName || '-'}</span>
+               </div>
+               <div className="flex justify-between text-sm">
+                 <span className="text-gray-500 font-bold">Jadwal:</span>
+                 <span className="text-gray-900 font-black">{paymentMetadata?.surveyDate} @ {paymentMetadata?.surveyTime} WIB</span>
+               </div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-4">
+            <button 
+              onClick={() => onPageChange(Page.MY_BOOKINGS)} 
+              className="bg-orange-500 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-orange-100 active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              Lihat Status di Kost Saya <ChevronRight className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={() => onPageChange(Page.HOME)} 
+              className="text-gray-500 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-50 transition-all"
+            >
+              Kembali ke Beranda
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white font-sans">
@@ -285,7 +360,14 @@ Mohon segera diproses. Terima kasih.`;
             </div>
 
             <button
-              onClick={() => setIsModalOpen(true)}
+              onClick={() => {
+                if (!user) {
+                  alert('Silakan login terlebih dahulu untuk mengakses formulir survey.');
+                  onPageChange(Page.LOGIN);
+                  return;
+                }
+                setIsModalOpen(true);
+              }}
               className="w-full py-4 bg-orange-500 text-white rounded-xl font-bold text-lg hover:bg-orange-600 hover:scale-[1.02] transition-all shadow-lg shadow-orange-500/30"
             >
               Ambil Promo Ini Sekarang
@@ -353,14 +435,22 @@ Mohon segera diproses. Terima kasih.`;
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Nomor WhatsApp</label>
-                        <input
-                          type="tel"
-                          required
-                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
-                          placeholder="08xxxxxxxxxx"
-                          value={formData.phone}
-                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        />
+                        <div className="flex bg-white rounded-xl border border-gray-200 focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-orange-500 transition-all overflow-hidden group">
+                           <div className="px-4 py-3 bg-gray-50 border-r border-gray-100 text-gray-400 font-black text-xs flex items-center group-focus-within:text-orange-500">+62</div>
+                           <input
+                            type="tel"
+                            required
+                            className="flex-1 px-4 py-3 outline-none text-sm font-medium"
+                            placeholder="8xxxxxxxxxx"
+                            value={formData.phone}
+                            onChange={(e) => {
+                              let val = e.target.value.replace(/\D/g, '');
+                              if (val.startsWith('0')) val = val.substring(1);
+                              if (val.startsWith('62')) val = val.substring(2);
+                              setFormData({ ...formData, phone: val });
+                            }}
+                          />
+                        </div>
                       </div>
                       <div>
                         <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Email</label>
@@ -406,14 +496,22 @@ Mohon segera diproses. Terima kasih.`;
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">No HP Pemilik/Penjaga</label>
-                        <input
-                          type="tel"
-                          required
-                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
-                          placeholder="Untuk janjian survey"
-                          value={formData.ownerPhone}
-                          onChange={(e) => setFormData({ ...formData, ownerPhone: e.target.value })}
-                        />
+                        <div className="flex bg-white rounded-xl border border-gray-200 focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-orange-500 transition-all overflow-hidden group">
+                           <div className="px-4 py-3 bg-gray-50 border-r border-gray-100 text-gray-400 font-black text-xs flex items-center group-focus-within:text-orange-500">+62</div>
+                           <input
+                            type="tel"
+                            required
+                            className="flex-1 px-4 py-3 outline-none text-sm font-medium"
+                            placeholder="8xxxxxxxxxx"
+                            value={formData.ownerPhone}
+                            onChange={(e) => {
+                              let val = e.target.value.replace(/\D/g, '');
+                              if (val.startsWith('0')) val = val.substring(1);
+                              if (val.startsWith('62')) val = val.substring(2);
+                              setFormData({ ...formData, ownerPhone: val });
+                            }}
+                          />
+                        </div>
                       </div>
                       <div>
                         <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Sumber Info</label>
@@ -422,7 +520,8 @@ Mohon segera diproses. Terima kasih.`;
                           value={formData.source}
                           onChange={(e) => setFormData({ ...formData, source: e.target.value })}
                         >
-                          <option value="database">Database RuangSinggah</option>
+                          <option value="" disabled>Pilih Sumber Info</option>
+                          <option value="database">Database Properti</option>
                           <option value="social_media">Sosial Media</option>
                           <option value="google_maps">Google Maps</option>
                           <option value="other">Lainnya</option>
@@ -463,20 +562,67 @@ Mohon segera diproses. Terima kasih.`;
                       <input
                         type="date"
                         required
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all cursor-pointer bg-white"
                         value={formData.surveyDate}
                         onChange={(e) => setFormData({ ...formData, surveyDate: e.target.value })}
+                        onClick={(e) => (e.target as any).showPicker?.()}
+                        min={new Date().toISOString().split('T')[0]} // Prevents past dates
                       />
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {[
+                          { label: 'Besok', offset: 1 },
+                          { label: 'Lusa', offset: 2 }
+                        ].map(q => {
+                          const d = new Date();
+                          d.setDate(d.getDate() + q.offset);
+                          const dateStr = d.toISOString().split('T')[0];
+                          const isActive = formData.surveyDate === dateStr;
+                          return (
+                            <button
+                              key={q.label}
+                              type="button"
+                              onClick={() => setFormData({ ...formData, surveyDate: dateStr })}
+                              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${
+                                isActive 
+                                  ? 'bg-orange-500 text-white border-orange-500 shadow-md' 
+                                  : 'bg-white text-gray-500 border-gray-100 hover:border-orange-200'
+                              }`}
+                            >
+                              {q.label}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                     <div>
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Jam (WIB)</label>
                       <input
                         type="time"
                         required
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all cursor-pointer bg-white"
                         value={formData.surveyTime}
                         onChange={(e) => setFormData({ ...formData, surveyTime: e.target.value })}
+                        onClick={(e) => (e.target as any).showPicker?.()}
                       />
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {['09:00', '11:00', '13:30', '16:00'].map(slot => {
+                          const isActive = formData.surveyTime === slot;
+                          return (
+                            <button
+                              key={slot}
+                              type="button"
+                              onClick={() => setFormData({ ...formData, surveyTime: slot })}
+                              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${
+                                isActive 
+                                  ? 'bg-orange-500 text-white border-orange-500 shadow-md' 
+                                  : 'bg-white text-gray-500 border-gray-100 hover:border-orange-200'
+                              }`}
+                            >
+                              {slot}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                   <div>
@@ -550,7 +696,7 @@ Mohon segera diproses. Terima kasih.`;
                     onClick={() => {
                       // Basic validation per step
                       if (currentStep === 1 && (!formData.name || !formData.phone || !formData.email)) return alert('Harap isi semua data diri');
-                      if (currentStep === 2 && (!formData.kostName || !formData.kostAddress)) return alert('Harap isi detail kost');
+                      if (currentStep === 2 && (!formData.kostName || !formData.kostAddress || !formData.source)) return alert('Harap isi detail kost dan sumber info');
                       if (currentStep === 3 && (!formData.surveyDate || !formData.surveyTime)) return alert('Harap pilih jadwal');
                       setCurrentStep(currentStep + 1);
                     }}

@@ -172,10 +172,16 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
         
         notificationService.createNotification({
           user_id: userId,
-          title: isDatabase ? 'Database Terkirim!' : 'Pembayaran Berhasil!',
+          title: isDatabase 
+            ? 'Database Terkirim!' 
+            : productType === 'survey' 
+              ? 'Pesanan Survey Berhasil!' 
+              : 'Pembayaran Berhasil!',
           message: isDatabase 
             ? `Database ${m.name || m.area || 'Kost'} telah dikirim ke email Anda. Silakan cek Inbox atau folder Spam.`
-            : `Pembayaran sewa ${m.kostName || 'Kost'} senilai Rp ${amount.toLocaleString('id-ID')} telah berhasil diverifikasi.`,
+            : productType === 'survey'
+              ? `Pembayaran Jasa Survey ${m.kostName || 'Kost'} senilai Rp ${amount.toLocaleString('id-ID')} telah berhasil diverifikasi.`
+              : `Pembayaran sewa ${m.kostName || 'Kost'} senilai Rp ${amount.toLocaleString('id-ID')} telah berhasil diverifikasi.`,
           type: 'payment',
           link: isDatabase 
             ? 'https://mail.google.com/mail/u/0/#search/RuangSinggah' 
@@ -183,6 +189,11 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
         }).catch(err => console.error("Failed to create payment notification:", err));
 
         onPaymentSuccess();
+        if (productType === 'survey') {
+             // For survey, we might need the same WA redirection logic here if the user just paid from email.
+             alert('Pesanan Survey Berhasil! Silakan hubungi admin via WhatsApp untuk jadwal survey.');
+             window.open('https://wa.me/6285156634283', '_blank');
+          }
       }
     }, 5000);
 
@@ -380,6 +391,15 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                </div>
                <h3 className="text-xl font-black text-gray-900 uppercase tracking-widest">Waktu Habis</h3>
                <p className="text-sm font-medium text-gray-500 max-w-sm">Sesi pembayaran telah kadaluarsa karena melewati batas waktu 3 jam. Silakan ulangi pemesanan dari awal.</p>
+               <button onClick={onCancel} className="mt-8 bg-gray-900 text-white px-8 py-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-orange-500 transition-colors">Tutup</button>
+            </div>
+          ) : currentOrder?.status === 'paid' && productType === 'survey' ? (
+            <div className="flex flex-col items-center justify-center text-center p-8 space-y-4 my-auto">
+               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-green-500 mb-2">
+                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+               </div>
+               <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight mb-4 text-center">Pesanan Survey Berhasil!</h2>
+            <p className="text-gray-500 font-medium text-center">Pembayaran Jasa Survey Anda telah kami terima dan sedang diproses. Tim kami akan segera menghubungi Anda untuk koordinasi lebih lanjut.</p>
                <button onClick={onCancel} className="mt-8 bg-gray-900 text-white px-8 py-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-orange-500 transition-colors">Tutup</button>
             </div>
           ) : !showCheckout ? (
