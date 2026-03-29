@@ -2,7 +2,8 @@
 export enum UserRole {
   USER = 'user',
   OWNER = 'owner',
-  ADMIN = 'admin'
+  ADMIN = 'admin',
+  SURVEY_AGENT = 'survey_agent'
 }
 
 export interface Message {
@@ -121,6 +122,8 @@ export interface DatabaseProduct {
     pdf?: string;
     googleDrive?: string;
     coverImage?: ImageUrlObject;
+    file?: string;
+    link?: string;
   };
   fileType: 'link' | 'upload'; // Google Drive Link or Direct Upload
   fileName?: string; // Original filename if upload
@@ -160,5 +163,6 @@ export enum Page {
   CHAT = '/chat',
   MY_BOOKINGS = '/my-bookings',
   PROFILE = '/profile',
-  SURVEY_SERVICE = '/survey-service'
+  SURVEY_SERVICE = '/survey-service',
+  DASHBOARD_AGENT = '/dashboard-agent'
 }

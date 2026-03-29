@@ -71,20 +71,25 @@ export interface AnalyticsSummary {
 
 // ---- HELPERS ----
 
+// Get current user role
+export async function getUserRole(uid: string): Promise<string> {
+  if (!uid) return 'user';
+  try {
+    const { data, error } = await supabase.from('users').select('role, is_admin').eq('id', uid).single();
+    if (error || !data) return 'user';
+    if (data.role && data.role !== 'user') return data.role;
+    if (data.is_admin === true) return 'admin';
+    return 'user';
+  } catch {
+    return 'user';
+  }
+}
+
 // Check if user is admin by querying the users table
 export async function checkIfUserIsAdmin(uid: string): Promise<boolean> {
   if (!uid) return false;
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('is_admin, role')
-      .eq('id', uid)
-      .single();
-    if (error) return false;
-    return data?.is_admin === true || data?.role === 'admin';
-  } catch {
-    return false;
-  }
+  const role = await getUserRole(uid);
+  return role === 'admin';
 }
 
 // Delete file from Supabase Storage using URL parsing
@@ -106,6 +111,34 @@ async function deleteFileFromStorage(fileUrl: string): Promise<void> {
   } catch (e) {
     console.warn('deleteFileFromStorage error (non-fatal):', e);
   }
+}
+
+// Upload survey photo
+export async function uploadSurveyPhoto(file: File, surveyId: string): Promise<string> {
+  try {
+    const webpFile = await convertToWebP(file);
+    const fileName = `${surveyId}/${Date.now()}_${Math.random().toString(36).substring(7)}.webp`;
+    
+    const { error } = await supabase.storage
+      .from('surveys')
+      .upload(fileName, webpFile);
+
+    if (error) throw error;
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('surveys')
+      .getPublicUrl(fileName);
+
+    return publicUrl;
+  } catch (error) {
+    console.error('Error uploading survey photo:', error);
+    throw error;
+  }
+}
+
+// Delete survey photo
+export async function deleteSurveyPhoto(fileUrl: string): Promise<void> {
+  await deleteFileFromStorage(fileUrl);
 }
 
 // Helper: Convert Image to WebP client-side
@@ -1102,9 +1135,10 @@ export async function getAnalyticsSummary(
 
 // ---- SURVEY REQUEST FUNCTIONS ----
 
-export interface SurveyRequest extends any {
+export interface SurveyRequest {
   id: string;
   user_id: string;
+  kost_id: string;
   transaction_id: string;
   status: string;
   kost_name: string;
@@ -1115,7 +1149,26 @@ export interface SurveyRequest extends any {
   notes: string;
   agent_name?: string;
   agent_phone?: string;
+  assigned_agent_id?: string;
   result_drive_link?: string;
+  evaluation_summary?: {
+    room_facilities?: string;
+    room_facilities_photos?: string[];
+    bathroom_facilities?: string;
+    bathroom_facilities_photos?: string[];
+    water_check?: string;
+    water_check_photos?: string[];
+    wifi_check?: string;
+    wifi_check_photos?: string[];
+    security_check?: string;
+    security_check_photos?: string[];
+    access_check?: string;
+    access_check_photos?: string[];
+    resident_testimonial?: string;
+    resident_testimonial_photos?: string[];
+  };
+  user_rating?: number;
+  user_comment?: string;
   created_at: string;
   user?: {
     name: string;
@@ -1129,10 +1182,13 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 
-  const isAdmin = await checkIfUserIsAdmin(user.id);
-  if (!isAdmin) throw new Error('Access Denied');
+  const role = await getUserRole(user.id);
+  const isAdmin = role === 'admin';
+  const isAgent = role === 'survey_agent';
 
-  const { data, error } = await supabase
+  // Allow regular users too
+
+  let query = supabase
     .from('survey_requests')
     .select(`
       *,
@@ -1142,8 +1198,16 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
         phone,
         photo_url
       )
-    `)
-    .order('created_at', { ascending: false });
+    `);
+
+  if (isAgent) {
+    query = query.eq('assigned_agent_id', user.id);
+  } else if (!isAdmin) {
+    // Regular user: only see their own requests
+    query = query.eq('user_id', user.id);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) throw error;
   return (data || []) as SurveyRequest[];
@@ -1156,8 +1220,16 @@ export async function updateSurveyRequest(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 
-  const isAdmin = await checkIfUserIsAdmin(user.id);
-  if (!isAdmin) throw new Error('Access Denied');
+  const role = await getUserRole(user.id);
+  const isAdmin = role === 'admin';
+  const isAgent = role === 'survey_agent';
+
+  // Regular users can update their own (for feedback/rating)
+  const { data: existing } = await supabase.from('survey_requests').select('user_id, assigned_agent_id').eq('id', id).single();
+  
+  if (!isAdmin && user.id !== existing?.user_id && user.id !== existing?.assigned_agent_id) {
+     throw new Error('Access Denied');
+  }
 
   const { error } = await supabase
     .from('survey_requests')
@@ -1168,4 +1240,61 @@ export async function updateSurveyRequest(
     .eq('id', id);
 
   if (error) throw error;
+}
+
+export async function getSurveyAgents(): Promise<{id: string, name: string, phone: string}[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+  
+  const role = await getUserRole(user.id);
+  if (role !== 'admin') throw new Error('Access Denied');
+
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, name, phone')
+    .eq('role', 'survey_agent');
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getAgentVerificationRequests(): Promise<any[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('role', 'survey_agent')
+    .eq('verification_status', 'pending')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function updateAgentVerificationStatus(agentId: string, status: 'verified' | 'unverified', reason?: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  const { error } = await supabase
+    .from('users')
+    .update({ 
+      verification_status: status,
+      verification_notes: reason || null,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', agentId);
+
+  if (error) throw error;
+
+  // Optional: If you want to also update auth user metadata (if they are synced)
+  // This is tricky because we can't update other people's auth metadata from the client.
+  // We assume the system uses public.users for the source of truth for verification.
 }

@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { notificationService } from './notificationService';
+import { sendNotification } from './notificationService';
 
 export interface ChatSession {
   id: string;
@@ -133,13 +133,13 @@ export async function sendMessage(sessionId: string, senderId: string, senderTyp
     if (session) {
       const recipientId = senderType === 'user' ? session.owner_id : session.user_id;
       // We don't have sender name here easily, so we use a generic title
-      notificationService.createNotification({
-        user_id: recipientId,
-        title: 'Pesan Baru',
-        message: content.length > 60 ? content.substring(0, 60) + '...' : content,
-        type: 'chat',
-        link: '/my-bookings' // Defaulting to my-bookings since it often contains chat entry points
-      }).catch(err => console.error("Failed to create chat notification:", err));
+      sendNotification(
+        recipientId,
+        'Pesan Baru',
+        content.length > 60 ? content.substring(0, 60) + '...' : content,
+        'info', // We didn't define 'chat' as a valid type in notificationService
+        { sessionId, link: '/my-bookings' }
+      ).catch(err => console.error("Failed to create chat notification:", err));
     }
   } catch (err) {
     console.error("Error in notification trigger:", err);

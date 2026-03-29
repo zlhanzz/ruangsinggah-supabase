@@ -213,6 +213,30 @@ AS $$
   );
 $$;
 
+CREATE OR REPLACE FUNCTION public.is_survey_agent()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.users
+    WHERE id = auth.uid() AND (role = 'survey_agent')
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_owner()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.users
+    WHERE id = auth.uid() AND (role = 'owner')
+  );
+$$;
+
 
 -- ============================================================
 -- STEP 3: ENABLE RLS pada semua tabel
@@ -428,6 +452,10 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('profile-photos', 'profile-photos', TRUE)
 ON CONFLICT DO NOTHING;
 
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('surveys', 'surveys', TRUE)
+ON CONFLICT DO NOTHING;
+
 
 -- ============================================================
 -- STEP 10: STORAGE POLICIES
@@ -454,6 +482,19 @@ CREATE POLICY "storage_databases_insert"
 CREATE POLICY "storage_databases_select"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'databases');
+
+-- Bucket: surveys
+CREATE POLICY "storage_surveys_insert"
+  ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'surveys' AND auth.uid() IS NOT NULL);
+
+CREATE POLICY "storage_surveys_select"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'surveys');
+
+CREATE POLICY "storage_surveys_delete"
+  ON storage.objects FOR DELETE
+  USING (bucket_id = 'surveys' AND auth.uid() IS NOT NULL);
 
 CREATE POLICY "storage_databases_delete"
   ON storage.objects FOR DELETE
@@ -677,7 +718,9 @@ CREATE TABLE IF NOT EXISTS public.survey_requests (
   -- Statuses: AWAITING_PAYMENT, PENDING_ASSIGNMENT, AGENT_ASSIGNED, SURVEYING, COMPLETED, CANCELLED
   agent_name        TEXT,
   agent_phone       TEXT,
+  assigned_agent_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
   result_drive_link TEXT,
+  evaluation_summary JSONB DEFAULT '{}'::jsonb,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -686,9 +729,44 @@ CREATE TABLE IF NOT EXISTS public.survey_requests (
 ALTER TABLE public.survey_requests ENABLE ROW LEVEL SECURITY;
 
 -- POLICIES
-CREATE POLICY "surveys_select_own" ON public.survey_requests FOR SELECT USING (auth.uid() = user_id OR public.is_admin());
+CREATE POLICY "surveys_select_own" ON public.survey_requests FOR SELECT USING (auth.uid() = user_id OR auth.uid() = assigned_agent_id OR public.is_admin());
 CREATE POLICY "surveys_insert_own" ON public.survey_requests FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "surveys_update_agent" ON public.survey_requests FOR UPDATE USING (auth.uid() = assigned_agent_id OR public.is_admin());
 CREATE POLICY "surveys_admin_all" ON public.survey_requests FOR ALL USING (public.is_admin());
 
 -- AKTIFKAN REALTIME
 ALTER PUBLICATION supabase_realtime ADD TABLE public.survey_requests;
+
+-- ============================================================
+-- STEP 16: NOTIFICATIONS TABLE
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.notifications (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  title       TEXT NOT NULL,
+  message     TEXT NOT NULL,
+  type        TEXT NOT NULL DEFAULT 'info', -- info, success, warning, error, assignment, submission
+  metadata    JSONB DEFAULT '{}'::jsonb,
+  is_read     BOOLEAN DEFAULT false,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ENABLE RLS
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+
+-- POLICIES
+CREATE POLICY "notifications_select_own" 
+  ON public.notifications FOR SELECT 
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "notifications_update_own" 
+  ON public.notifications FOR UPDATE 
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "notifications_insert_system" 
+  ON public.notifications FOR INSERT 
+  WITH CHECK (true);
+
+-- AKTIFKAN REALTIME
+ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;

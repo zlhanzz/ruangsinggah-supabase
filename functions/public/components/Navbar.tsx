@@ -110,12 +110,13 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
 
               {user ? (
                 <div className="flex items-center gap-4">
-                  {/* ADMIN LINK */}
-                  {user.role === 'admin' && (
+                  {/* ADMIN & AGENT LINK */}
+                  {['admin', 'survey_agent', 'owner'].includes(user.role) && (
                     <button
-                      onClick={() => onPageChange(Page.DASHBOARD_ADMIN)}
+                      onClick={() => onPageChange(user.role === 'admin' ? Page.DASHBOARD_ADMIN : user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : Page.DASHBOARD_OWNER)}
                       className="bg-gray-900 text-white px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest hover:bg-orange-500 transition-colors"
                     >
+                      {user.role === 'admin' ? 'Admin Panel' : user.role === 'survey_agent' ? 'Agent Panel' : 'Owner Panel'}
                     </button>
                   )}
 
@@ -197,15 +198,15 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                         >
                           Kost Saya
                         </button>
-                        {user.role === 'admin' && (
+                        {['admin', 'survey_agent', 'owner'].includes(user.role) && (
                           <button
                             onClick={() => {
-                              onPageChange(Page.DASHBOARD_ADMIN);
+                              onPageChange(user.role === 'admin' ? Page.DASHBOARD_ADMIN : user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : Page.DASHBOARD_OWNER);
                               setIsProfileOpen(false);
                             }}
-                            className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 font-bold"
+                            className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 font-bold border-t border-gray-50"
                           >
-                            Dashboard Admin
+                            {user.role === 'admin' ? 'Dashboard Admin' : user.role === 'survey_agent' ? 'Dashboard Agen' : 'Dashboard Pemilik'}
                           </button>
                         )}
                         <button
@@ -309,15 +310,15 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                       >
                         Kost Saya
                       </button>
-                      {user.role === 'admin' && (
+                      {['admin', 'survey_agent', 'owner'].includes(user.role) && (
                         <button
                           onClick={() => {
-                            onPageChange(Page.DASHBOARD_ADMIN);
+                            onPageChange(user.role === 'admin' ? Page.DASHBOARD_ADMIN : user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : Page.DASHBOARD_OWNER);
                             setIsProfileOpen(false);
                           }}
                           className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 font-bold border-t border-gray-50"
                         >
-                          Dashboard Admin
+                          {user.role === 'admin' ? 'Dashboard Admin' : user.role === 'survey_agent' ? 'Dashboard Agen' : 'Dashboard Pemilik'}
                         </button>
                       )}
                       <button

@@ -37,7 +37,12 @@ const App: React.FC = () => {
     if (window.history.length > 2) {
       navigate(-1);
     } else {
-      navigate(user?.role === 'admin' ? Page.DASHBOARD_ADMIN : Page.HOME);
+      navigate(
+        user?.role === 'admin' ? Page.DASHBOARD_ADMIN : 
+        user?.role === 'survey_agent' ? Page.DASHBOARD_AGENT : 
+        user?.role === 'owner' ? Page.DASHBOARD_OWNER : 
+        Page.HOME
+      );
     }
   };
 
@@ -87,7 +92,7 @@ const App: React.FC = () => {
 
       const profile = dbData || {};
       let role = profile.role || 'user';
-      if (profile.is_admin === true) role = 'admin';
+      if (profile.is_admin === true && role === 'user') role = 'admin';
       
       console.log("Determined role:", role);
 
@@ -112,8 +117,10 @@ const App: React.FC = () => {
 
       setUser(safeUser);
 
-      if (role === 'admin' && location.pathname === Page.LOGIN) {
-        navigate(Page.DASHBOARD_ADMIN, { replace: true });
+      if (location.pathname === Page.LOGIN) {
+        if (role === 'admin') navigate(Page.DASHBOARD_ADMIN, { replace: true });
+        else if (role === 'survey_agent') navigate(Page.DASHBOARD_AGENT, { replace: true });
+        else if (role === 'owner') navigate(Page.DASHBOARD_OWNER, { replace: true });
       }
     } catch (err) {
       console.error('Error fetching user data:', err);
@@ -242,6 +249,10 @@ const App: React.FC = () => {
     } else {
       if (user?.role === 'admin') {
         navigate(Page.DASHBOARD_ADMIN);
+      } else if (user?.role === 'survey_agent') {
+        navigate(Page.DASHBOARD_AGENT);
+      } else if (user?.role === 'owner') {
+        navigate(Page.DASHBOARD_OWNER);
       } else {
         navigate(Page.HOME);
       }
@@ -299,7 +310,12 @@ const App: React.FC = () => {
             
             <Route path={Page.LOGIN} element={
               (user && !location.search.includes('mode=recovery')) ? (
-                <Navigate to={user.role === 'admin' ? Page.DASHBOARD_ADMIN : Page.HOME} replace />
+                <Navigate to={
+                  user.role === 'admin' ? Page.DASHBOARD_ADMIN : 
+                  user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : 
+                  user.role === 'owner' ? Page.DASHBOARD_OWNER : 
+                  Page.HOME
+                } replace />
               ) : (
                 <Login onLoginSuccess={() => {
                   // Clear recovery URL params to allow App.tsx to redirect
@@ -322,11 +338,45 @@ const App: React.FC = () => {
             } />
             
             <Route path={Page.DASHBOARD_ADMIN} element={
-              <Dashboard role={user?.role || 'admin'} uid={user?.id} onPageChange={(p: Page) => navigate(p)} listings={listings} onAdd={handleAddKost} onEdit={handleEditKost} onDelete={handleDeleteKost} onRefreshListings={fetchListings} />
+              <Dashboard 
+                role={user?.role || ''} 
+                uid={user?.id} 
+                verificationStatus={user?.verification_status}
+                onPageChange={(p: Page) => navigate(p)} 
+                listings={listings} 
+                onAdd={handleAddKost} 
+                onEdit={handleEditKost} 
+                onDelete={handleDeleteKost} 
+                onRefreshListings={fetchListings} 
+              />
             } />
             
             <Route path={Page.DASHBOARD_OWNER} element={
-              <Dashboard role={user?.role || 'owner'} uid={user?.id} onPageChange={(p: Page) => navigate(p)} listings={listings} onAdd={handleAddKost} onEdit={handleEditKost} onDelete={handleDeleteKost} onRefreshListings={fetchListings} />
+              <Dashboard 
+                role={user?.role || 'owner'} 
+                uid={user?.id} 
+                verificationStatus={user?.verification_status}
+                onPageChange={(p: Page) => navigate(p)} 
+                listings={listings} 
+                onAdd={handleAddKost} 
+                onEdit={handleEditKost} 
+                onDelete={handleDeleteKost} 
+                onRefreshListings={fetchListings} 
+              />
+            } />
+            
+            <Route path={Page.DASHBOARD_AGENT} element={
+              <Dashboard 
+                role={user?.role || 'survey_agent'} 
+                uid={user?.id} 
+                verificationStatus={user?.verification_status}
+                onPageChange={(p: Page) => navigate(p)} 
+                listings={listings} 
+                onAdd={handleAddKost} 
+                onEdit={handleEditKost} 
+                onDelete={handleDeleteKost} 
+                onRefreshListings={fetchListings} 
+              />
             } />
             
             <Route path={Page.DETAIL} element={

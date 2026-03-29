@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, Zap, XCircle } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle } from 'lucide-react';
 import { Page } from '../types';
 import { addPropertyReview, getExtraBills } from '../userService';
 import { getOrCreateChatSession } from '../chatService';
@@ -53,6 +53,8 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
     const [showChatWindow, setShowChatWindow] = useState(false);
     const [activeChatSession, setActiveChatSession] = useState<any>(null);
     const [selectedKost, setSelectedKost] = useState<any>(null);
+    const [selectedSurvey, setSelectedSurvey] = useState<any>(null);
+    const [showSurveySummaryModal, setShowSurveySummaryModal] = useState(false);
 
     // Rating form state
     const [ratingValue, setRatingValue] = useState(5);
@@ -330,65 +332,8 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
             if (surveysError) {
                 console.error('fetchSurveys error:', surveysError);
             } else {
-                // DUMMY DATA FOR UI REVIEW
-                const dummySurveys = [
-                    {
-                        id: 'dummy-1',
-                        status: 'AWAITING_PAYMENT',
-                        kost_name: 'Kost Orange Suite',
-                        kost_address: 'Jl. Melati No. 12, Jakarta',
-                        owner_phone: '0812-3456-7890',
-                        survey_date: '2026-03-30',
-                        survey_time: '14:00',
-                        created_at: new Date().toISOString()
-                    },
-                    {
-                        id: 'dummy-2',
-                        status: 'PENDING_ASSIGNMENT',
-                        kost_name: 'Kost Blue Resident',
-                        kost_address: 'Jl. Mawar No. 5, Bandung',
-                        owner_phone: '0856-7890-1234',
-                        survey_date: '2026-03-31',
-                        survey_time: '10:00',
-                        created_at: new Date().toISOString()
-                    },
-                    {
-                        id: 'dummy-3',
-                        status: 'AGENT_ASSIGNED',
-                        kost_name: 'Kost Purple Garden',
-                        kost_address: 'Jl. Anggrek No. 22, Surabaya',
-                        owner_phone: '0821-2222-3333',
-                        survey_date: '2026-04-01',
-                        survey_time: '13:00',
-                        agent_name: 'Budi Surveyor',
-                        agent_phone: '628123456789',
-                        created_at: new Date().toISOString()
-                    },
-                    {
-                        id: 'dummy-4',
-                        status: 'SURVEYING',
-                        kost_name: 'Kost Emerald Park',
-                        kost_address: 'Jl. Tulip No. 8, Medan',
-                        owner_phone: '0819-8888-9999',
-                        survey_date: '2026-04-02',
-                        survey_time: '11:00',
-                        agent_name: 'Siti Surveyor',
-                        agent_phone: '628987654321',
-                        created_at: new Date().toISOString()
-                    },
-                    {
-                        id: 'dummy-5',
-                        status: 'COMPLETED',
-                        kost_name: 'Kost Black Diamond',
-                        kost_address: 'Jl. Kamboja No. 15, Makassar',
-                        owner_phone: '0811-0000-1111',
-                        survey_date: '2026-04-03',
-                        survey_time: '16:00',
-                        result_drive_link: 'https://drive.google.com/drive/folders/dummy',
-                        created_at: new Date().toISOString()
-                    }
-                ];
-                setSurveyRequests([...dummySurveys, ...(surveysData || [])]);
+                // Actual data from Supabase
+                setSurveyRequests(surveysData || []);
             }
 
             setRecommendations(processedRecs);
@@ -628,10 +573,10 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
         const status = survey.status;
         const statusColors: any = {
             'AWAITING_PAYMENT': 'bg-orange-50 text-orange-600 border-orange-100',
-            'PENDING_ASSIGNMENT': 'bg-blue-50 text-blue-600 border-blue-100',
-            'AGENT_ASSIGNED': 'bg-purple-50 text-purple-600 border-purple-100',
-            'SURVEYING': 'bg-emerald-50 text-emerald-600 border-emerald-100',
-            'COMPLETED': 'bg-gray-900 text-white border-transparent',
+            'PENDING_ASSIGNMENT': 'bg-orange-50 text-orange-600 border-orange-100',
+            'AGENT_ASSIGNED': 'bg-orange-50 text-orange-600 border-orange-100',
+            'SURVEYING': 'bg-orange-50 text-orange-600 border-orange-100',
+            'COMPLETED': 'bg-orange-900 text-white border-transparent',
             'CANCELLED': 'bg-gray-100 text-gray-400 border-gray-200'
         };
 
@@ -695,7 +640,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                             </button>
                         ) : (
                             <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center border border-gray-100">
-                                <Zap className="w-4 h-4 text-gray-300 animate-pulse" />
+                                <span className="text-sm">⚡</span>
                             </div>
                         )}
                     </div>
@@ -705,21 +650,21 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
 
         return (
             <div key={survey.id} className="group relative bg-white/70 backdrop-blur-2xl rounded-[3.5rem] p-8 sm:p-12 border border-white shadow-2xl shadow-gray-200/50 flex flex-col lg:flex-row gap-10 lg:gap-14 hover:scale-[1.01] transition-all duration-500 overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-400/10 to-transparent rounded-full blur-3xl -mr-32 -mt-32 group-hover:from-blue-400/20 transition-all duration-700" />
+                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-orange-400/10 to-transparent rounded-full blur-3xl -mr-32 -mt-32 group-hover:from-orange-400/20 transition-all duration-700" />
                 
                 <div className="flex-1 relative z-10">
                     <div className="flex items-start gap-8 mb-8">
                         <div className="relative">
-                            <div className="w-24 h-24 sm:w-28 sm:h-28 bg-white rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-blue-200 border-4 border-white transform rotate-3 group-hover:rotate-0 transition-all duration-500">
-                                <Search className="w-12 h-12 text-blue-500" />
+                            <div className="w-24 h-24 sm:w-28 sm:h-28 bg-white rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-orange-200 border-4 border-white transform rotate-3 group-hover:rotate-0 transition-all duration-500">
+                                <Search className="w-12 h-12 text-orange-500" />
                             </div>
-                            <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-2xl shadow-lg flex items-center justify-center border-2 border-blue-50">
-                                <Zap className="w-5 h-5 text-blue-500 fill-blue-500" />
+                            <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-2xl shadow-lg flex items-center justify-center border-2 border-orange-50">
+                                <span className="text-base">⚡</span>
                             </div>
                         </div>
 
                         <div className="flex-1">
-                            <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] mb-2">Layanan Jasa Survey</h4>
+                            <h4 className="text-[10px] font-black text-orange-500 uppercase tracking-[0.3em] mb-2">Layanan Jasa Survey</h4>
                             <h3 className="text-3xl sm:text-4xl font-black text-gray-900 leading-tight tracking-tight mb-4">
                                 {survey.kost_name || 'Survey Lokasi Kost'}
                             </h3>
@@ -736,8 +681,8 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                 )}
                                 {(survey.survey_date || survey.survey_time) && (
                                     <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-blue-50 rounded-lg"><Calendar className="w-4 h-4 text-blue-500" /></div>
-                                        <span className="text-gray-600 font-bold italic bg-blue-50/50 px-3 py-1 rounded-xl border border-blue-100/50">
+                                        <div className="p-2 bg-orange-50 rounded-lg"><Calendar className="w-4 h-4 text-orange-500" /></div>
+                                        <span className="text-gray-600 font-bold italic bg-orange-50/50 px-3 py-1 rounded-xl border border-orange-100/50">
                                             Jadwal: {survey.survey_date ? new Date(survey.survey_date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '-'} @ {survey.survey_time || '-'}
                                         </span>
                                     </div>
@@ -761,6 +706,27 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                 <p className="text-base font-black text-gray-900">{survey.agent_name}</p>
                                 <p className="text-xs font-bold text-emerald-600">{survey.agent_phone || 'Nomor tersedia'}</p>
                             </div>
+                        </div>
+                    )}
+
+                    {status === 'COMPLETED' && survey.evaluation_summary && (
+                        <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {[
+                                { id: 'room_facilities', icon: '🛏️', label: 'Kamar' },
+                                { id: 'bathroom_facilities', icon: '🚿', label: 'WC' },
+                                { id: 'security_check', icon: '🛡️', label: 'Keamanan' },
+                                { id: 'wifi_check', icon: '📶', label: 'WiFi' },
+                            ].map(item => (
+                                <div key={item.id} className="bg-gray-50/50 border border-gray-100 p-3 rounded-2xl">
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                        <span>{item.icon}</span>
+                                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{item.label}</span>
+                                    </div>
+                                    <p className="text-[10px] font-bold text-gray-700 truncate">
+                                        {survey.evaluation_summary[item.id] || 'N/A'}
+                                    </p>
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>
@@ -788,14 +754,27 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                         </button>
                     ) : status === 'COMPLETED' && survey.result_drive_link ? (
                         <button
-                            onClick={() => window.open(survey.result_drive_link, '_blank')}
+                            onClick={() => {
+                                // Safety parse if evaluation_summary is string
+                                let parsedSummary = survey.evaluation_summary;
+                                if (typeof survey.evaluation_summary === 'string') {
+                                    try {
+                                        parsedSummary = JSON.parse(survey.evaluation_summary);
+                                    } catch (e) {
+                                        console.error("Error parsing evaluation_summary", e);
+                                        parsedSummary = {};
+                                    }
+                                }
+                                setSelectedSurvey({ ...survey, evaluation_summary: parsedSummary });
+                                setShowSurveySummaryModal(true);
+                            }}
                             className="bg-gray-900 hover:bg-emerald-600 text-white px-8 py-6 rounded-[2rem] font-black flex items-center justify-center gap-3 transition-all text-sm shadow-2xl shadow-gray-300 active:scale-95 group/drive"
                         >
                             <FileText className="w-6 h-6 group-hover/drive:-translate-y-1 transition-transform" /> LIHAT HASIL SURVEY
                         </button>
                     ) : (
                         <div className="p-8 text-center bg-gray-50 rounded-[2.5rem] border border-dashed border-gray-200">
-                            <Zap className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+                            <span className="text-2xl block mb-3">⚡</span>
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-relaxed">
                                 {status === 'PENDING_ASSIGNMENT' ? 'Pesanan Sedang Diproses Admin' : 
                                  status === 'AGENT_ASSIGNED' ? 'Surveyor Sedang Menuju Lokasi' :
@@ -890,7 +869,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                             <h1 className="text-4xl sm:text-5xl font-black text-gray-900 tracking-tight">Kost Saya</h1>
                         </div>
                         <p className="flex items-center gap-2 text-gray-500 font-bold ml-16 md:ml-0">
-                            <Zap className="w-4 h-4 text-orange-500 fill-orange-500" /> 
+                            <span className="text-sm">⚡</span>
                             Kelola hunian aktif Anda dengan mudah
                         </p>
                     </div>
@@ -1037,7 +1016,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                                 )}
                                             </div>
                                             <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-2xl shadow-lg flex items-center justify-center border-2 border-orange-50">
-                                                <Zap className="w-5 h-5 text-orange-500 fill-orange-500" />
+                                                <span className="text-base">⚡</span>
                                             </div>
                                         </div>
                                     </div>
@@ -1366,7 +1345,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                 </div>
 
                                 <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex gap-3 items-start">
-                                    <Zap className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                                    <span className="text-base">⚡</span>
                                     <p className="text-[11px] text-blue-800 font-medium leading-relaxed">
                                         Pembayaran akan dikonfirmasi otomatis melalui sistem <b>Payment Gateway</b>. Anda dapat menggunakan QRIS atau Virtual Account.
                                     </p>
@@ -1679,6 +1658,126 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                     }}
                     onCancel={() => setShowPaymentGateway(false)}
                 />
+            )}
+
+            {/* 6. Modal Summary Survey */}
+            {showSurveySummaryModal && selectedSurvey && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/80 backdrop-blur-sm overflow-y-auto">
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-2xl my-auto relative shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+                        {/* Header */}
+                        <div className="bg-gray-900 p-8 text-white relative flex-shrink-0">
+                            <button onClick={() => setShowSurveySummaryModal(false)} className="absolute top-6 right-6 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-2 transition-colors">
+                                <X className="w-6 h-6" />
+                            </button>
+                            <div className="flex items-center gap-4 mb-2">
+                                <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
+                                    <FileText className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                    <h4 className="text-[10px] font-black text-white/50 uppercase tracking-[0.3em] mb-1">Hasil Survey Lokasi</h4>
+                                    <h3 className="text-2xl font-black">{selectedSurvey.kost_name}</h3>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-8 overflow-y-auto custom-scrollbar bg-gray-50/50 flex-grow">
+                            <div className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm mb-8">
+                                <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                    <CheckCircle className="w-4 h-4 text-emerald-500" /> Summary Penilaian Unit Kost
+                                </h4>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {[
+                                        { id: 'room_facilities', label: 'Fasilitas Kamar', icon: '🛏️', color: 'bg-blue-50 text-blue-600' },
+                                        { id: 'bathroom_facilities', label: 'Fasilitas WC', icon: '🚿', color: 'bg-emerald-50 text-emerald-600' },
+                                        { id: 'water_check', label: 'Pengecekan Air', icon: '💧', color: 'bg-cyan-50 text-cyan-600' },
+                                        { id: 'wifi_check', label: 'Pengecekan WiFi', icon: '📶', color: 'bg-indigo-50 text-indigo-600' },
+                                        { id: 'security_check', label: 'Pengecekan Keamanan', icon: '🛡️', color: 'bg-purple-50 text-purple-600' },
+                                        { id: 'access_check', label: 'Akses Umum/Toko', icon: '📍', color: 'bg-orange-50 text-orange-600' },
+                                    ].map((item) => (
+                                        <div key={item.id} className="space-y-4">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`p-1.5 rounded-lg text-xs ${item.color.split(' ')[0]}`}>{item.icon}</span>
+                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{item.label}</span>
+                                            </div>
+                                            <div className="bg-gray-50 p-5 rounded-[2rem] border border-gray-100/50">
+                                                <p className="text-sm font-bold text-gray-800 mb-4 leading-relaxed">
+                                                    {selectedSurvey.evaluation_summary?.[item.id] || 'Tidak ada catatan surveyor untuk poin ini.'}
+                                                </p>
+                                                
+                                                {/* Space for photos */}
+                                                <div className="space-y-2">
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                                        ⚡ Bukti Foto Lapangan
+                                                    </p>
+                                                    <div className="grid grid-cols-3 gap-3">
+                                                        {selectedSurvey.evaluation_summary?.[`${item.id}_photos`]?.length > 0 ? (
+                                                            selectedSurvey.evaluation_summary[`${item.id}_photos`].map((url: string, idx: number) => (
+                                                                <div 
+                                                                    key={idx} 
+                                                                    className="relative aspect-square rounded-2xl overflow-hidden border border-gray-200 cursor-pointer hover:scale-[1.03] active:scale-95 transition-all shadow-sm group"
+                                                                    onClick={() => window.open(url, '_blank')}
+                                                                >
+                                                                    <img src={url} alt={`${item.label} proof`} className="w-full h-full object-cover" />
+                                                                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
+                                                                    </div>
+                                                                </div>
+                                                            ))
+                                                        ) : (
+                                                            <div className="col-span-3 h-20 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center bg-white/50">
+                                                                <p className="text-[10px] font-bold text-gray-400 italic">Tidak ada lampiran foto</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    
+                                    <div className="md:col-span-2 space-y-2 pt-4 border-t border-gray-100">
+                                        <div className="flex items-center gap-2">
+                                            <span className="p-1.5 rounded-lg text-xs bg-pink-50">💬</span>
+                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Wawancara Testimoni Penghuni</span>
+                                        </div>
+                                        <div className="relative">
+                                            <div className="absolute top-0 left-0 text-4xl text-gray-100 font-serif">"</div>
+                                            <p className="text-sm font-medium text-gray-600 italic bg-gray-50 p-4 rounded-xl border border-gray-100/50 relative z-10 pl-8">
+                                                {selectedSurvey.evaluation_summary?.resident_testimonial || 'Belum ada testimoni penghuni yang tercatat.'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Drive Link Section */}
+                            {selectedSurvey.result_drive_link && (
+                                <div className="bg-emerald-50 rounded-[2rem] p-8 border border-emerald-100 text-center">
+                                    <h4 className="text-[11px] font-black text-emerald-700 uppercase tracking-widest mb-4">Dokumentasi Lengkap</h4>
+                                    <p className="text-sm text-emerald-800 font-medium mb-6">Lihat foto dan video detail hasil survei di folder Google Drive kami.</p>
+                                    <button 
+                                        onClick={() => window.open(selectedSurvey.result_drive_link, '_blank')}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-3 mx-auto"
+                                    >
+                                        <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M7.71 3.5l2.43 4.2h9.11L16.82 3.5H7.71zM3.48 11.02l2.44 4.2h9.11l2.42-4.2H3.48zm2.44-5.22L1.5 13l4.42 7.65 4.42-7.65L5.92 5.8z" /></svg>
+                                        Buka Google Drive
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-8 bg-white border-t border-gray-100 relative flex-shrink-0">
+                            <button 
+                                onClick={() => setShowSurveySummaryModal(false)}
+                                className="w-full py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all"
+                            >
+                                Selesai Membaca
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

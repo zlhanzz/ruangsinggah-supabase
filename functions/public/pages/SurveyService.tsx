@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { CheckCircle, AlertTriangle, Video, MapPin, Calendar, Clock, ArrowRight, ShieldCheck, Wifi, Droplets, X, ChevronRight } from 'lucide-react';
 import { Page } from '../types';
 import PaymentGateway from '../components/PaymentGateway';
+import { supabase } from '../supabase';
+import { notificationService } from '../notificationService';
 
 interface SurveyServiceProps {
   user: any;
@@ -81,36 +83,50 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange }) => 
     setIsModalOpen(false); // Close form modal
   };
 
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = async () => {
     setShowPayment(false);
     setShowSuccess(true);
     
-    // Format message for WhatsApp (only after payment success)
-    const message = `Halo Admin RuangSinggah, saya sudah melakukan PEMBAYARAN untuk Jasa Survey Lokasi Kost (Paket Rp 70.000).
+    try {
+      // 1. Save order to Supabase
+      const { data: newRequest, error } = await supabase
+        .from('survey_requests')
+        .insert([{
+          user_id: user.uid || user.id,
+          kost_name: paymentMetadata.kostName,
+          kost_address: paymentMetadata.kostAddress,
+          owner_phone: paymentMetadata.ownerPhone,
+          survey_date: paymentMetadata.surveyDate,
+          survey_time: paymentMetadata.surveyTime,
+          notes: `${paymentMetadata.notes}\n[Sumber Info: ${paymentMetadata.source}]`,
+          status: 'PENDING_ASSIGNMENT'
+        }])
+        .select()
+        .single();
+        
+      if (error) throw error;
+      
+      // 2. Fetch all admins and send them a real-time notification
+      const { data: admins } = await supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'admin');
+        
+      if (admins && admins.length > 0) {
+        for (const admin of admins) {
+          await notificationService.createNotification(
+            admin.id,
+            'Pesanan Jasa Survey Baru',
+            `Ada pesanan survey baru untuk Kost: ${paymentMetadata.kostName} dari ${paymentMetadata.name}. Segera cek dan tugaskan agent!`,
+            'assignment',
+            { survey_id: newRequest?.id }
+          );
+        }
+      }
+    } catch (err) {
+      console.error('Failed to save survey order to database:', err);
+    }
 
-DATA DIRI:
-Nama: ${paymentMetadata.name}
-No WA: ${paymentMetadata.phone}
-Email: ${paymentMetadata.email}
-
-DETAIL KOST:
-Nama Kost: ${paymentMetadata.kostName}
-No Pemilik: ${paymentMetadata.ownerPhone}
-Alamat: ${paymentMetadata.kostAddress}
-Sumber Info: ${paymentMetadata.source}
-
-JADWAL SURVEY (VIDEO CALL):
-Tanggal: ${paymentMetadata.surveyDate}
-Jam: ${paymentMetadata.surveyTime}
-
-Catatan: ${paymentMetadata.notes}
-
-Mohon segera diproses. Terima kasih.`;
-
-    const encodedMessage = encodeURIComponent(message);
-    const whatsappUrl = `https://wa.me/6285156634283?text=${encodedMessage}`;
-
-    window.open(whatsappUrl, '_blank');
   };
 
   if (showSuccess) {
@@ -166,7 +182,7 @@ Mohon segera diproses. Terima kasih.`;
       <section className="relative pt-8 pb-8 sm:pb-16 lg:pt-32 lg:pb-32 overflow-hidden bg-white">
         <div className="absolute inset-0 bg-orange-50/50 -z-10"></div>
         <div className="absolute top-0 right-0 -mr-20 -mt-20 w-72 h-72 lg:w-96 lg:h-96 bg-orange-200 rounded-full blur-3xl opacity-30"></div>
-        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-64 h-64 lg:w-80 lg:h-80 bg-blue-200 rounded-full blur-3xl opacity-30"></div>
+        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-64 h-64 lg:w-80 lg:h-80 bg-amber-200 rounded-full blur-3xl opacity-30"></div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-6 sm:gap-10 lg:gap-12 items-center">
@@ -271,11 +287,11 @@ Mohon segera diproses. Terima kasih.`;
             {/* Kanan: Solusi (Gain) - Tema Biru */}
             <div className="order-2 md:order-2">
               <h2 className="text-3xl font-black text-gray-900 mb-6">
-                Kenapa Harus Lewat <span className="text-blue-600">RuangSinggah</span>?
+                Kenapa Harus Lewat <span className="text-orange-600">RuangSinggah</span>?
               </h2>
               <div className="space-y-6">
-                <div className="flex gap-4 p-4 rounded-2xl hover:bg-blue-50 transition-colors border border-transparent hover:border-blue-100">
-                  <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 shadow-sm">
+                <div className="flex gap-4 p-4 rounded-2xl hover:bg-orange-50 transition-colors border border-transparent hover:border-orange-100">
+                  <div className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 shadow-sm">
                     <ShieldCheck className="w-6 h-6" />
                   </div>
                   <div>
@@ -283,8 +299,8 @@ Mohon segera diproses. Terima kasih.`;
                     <p className="text-gray-600 mt-1">Banyak modus penipuan kost fiktif minta DP duluan. Kami pastikan kostnya beneran ada dan pemiliknya valid.</p>
                   </div>
                 </div>
-                <div className="flex gap-4 p-4 rounded-2xl hover:bg-blue-50 transition-colors border border-transparent hover:border-blue-100">
-                  <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 shadow-sm">
+                <div className="flex gap-4 p-4 rounded-2xl hover:bg-orange-50 transition-colors border border-transparent hover:border-orange-100">
+                  <div className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 shadow-sm">
                     <Video className="w-6 h-6" />
                   </div>
                   <div>
@@ -292,8 +308,8 @@ Mohon segera diproses. Terima kasih.`;
                     <p className="text-gray-600 mt-1">Lihat kondisi kamar, kamar mandi, dan lingkungan sekitar secara langsung lewat video call. No edit-edit club.</p>
                   </div>
                 </div>
-                <div className="flex gap-4 p-4 rounded-2xl hover:bg-blue-50 transition-colors border border-transparent hover:border-blue-100">
-                  <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 shadow-sm">
+                <div className="flex gap-4 p-4 rounded-2xl hover:bg-orange-50 transition-colors border border-transparent hover:border-orange-100">
+                  <div className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 shadow-sm">
                     <MapPin className="w-6 h-6" />
                   </div>
                   <div>
@@ -311,7 +327,7 @@ Mohon segera diproses. Terima kasih.`;
       {/* OFFER SECTION */}
       <section ref={offerSectionRef} className="py-20 bg-gray-900 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-orange-500 rounded-full blur-[100px] opacity-20"></div>
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-500 rounded-full blur-[100px] opacity-20"></div>
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-amber-500 rounded-full blur-[100px] opacity-20"></div>
 
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <h2 className="text-3xl md:text-4xl font-black mb-4">Paket Survey Anti-Zonk</h2>
@@ -471,8 +487,8 @@ Mohon segera diproses. Terima kasih.`;
               {/* STEP 2: INFO KOST */}
               {currentStep === 2 && (
                 <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                  <div className="bg-blue-50 p-4 rounded-2xl flex items-start gap-3 mb-6">
-                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 shrink-0">
+                  <div className="bg-orange-50 p-4 rounded-2xl flex items-start gap-3 mb-6">
+                    <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 shrink-0">
                       <MapPin className="w-6 h-6" />
                     </div>
                     <div>
@@ -641,8 +657,8 @@ Mohon segera diproses. Terima kasih.`;
               {/* STEP 4: KONFIRMASI */}
               {currentStep === 4 && (
                 <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                  <div className="bg-indigo-50 p-4 rounded-2xl flex items-start gap-3 mb-6">
-                    <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 shrink-0">
+                  <div className="bg-orange-50 p-4 rounded-2xl flex items-start gap-3 mb-6">
+                    <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 shrink-0">
                       <ShieldCheck className="w-6 h-6" />
                     </div>
                     <div>
@@ -670,9 +686,9 @@ Mohon segera diproses. Terima kasih.`;
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3 p-3 bg-blue-50/50 rounded-xl border border-blue-100 italic">
-                    <AlertTriangle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
-                    <p className="text-[10px] text-blue-700 leading-relaxed font-medium">
+                  <div className="flex items-start gap-3 p-3 bg-orange-50/50 rounded-xl border border-orange-100 italic">
+                    <AlertTriangle className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-orange-700 leading-relaxed font-medium">
                       Anda akan diarahkan ke Payment Gateway aman kami. Segera setelah pembayaran lunas, sistem akan mengirimkan konfirmasi ke tim surveyor kami.
                     </p>
                   </div>

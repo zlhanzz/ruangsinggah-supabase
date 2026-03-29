@@ -138,19 +138,19 @@ const Owner: React.FC = () => {
             {/* Kartu Kost Manager */}
             <div
               onClick={() => setPartnerType('manajemen')}
-              className="bg-white rounded-[2rem] p-8 lg:p-10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(59,130,246,0.1)] border-2 border-transparent hover:border-blue-500 transition-all duration-300 group flex flex-col cursor-pointer relative overflow-hidden"
+              className="bg-white rounded-[2rem] p-8 lg:p-10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgba(249,115,22,0.1)] border-2 border-transparent hover:border-orange-500 transition-all duration-300 group flex flex-col cursor-pointer relative overflow-hidden"
             >
               {/* Decorative Accent */}
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-100 to-blue-50 rounded-bl-[100px] -z-0 opacity-50 group-hover:scale-110 transition-transform"></div>
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-orange-100 to-orange-50 rounded-bl-[100px] -z-0 opacity-50 group-hover:scale-110 transition-transform"></div>
 
               <div className="relative z-10 flex-grow">
-                <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600 mb-8 group-hover:-translate-y-2 transition-transform duration-300 shadow-sm border border-blue-200/50">
+                <div className="w-16 h-16 bg-orange-100 rounded-2xl flex items-center justify-center text-orange-600 mb-8 group-hover:-translate-y-2 transition-transform duration-300 shadow-sm border border-orange-200/50">
                   <Building2 className="w-8 h-8" />
                 </div>
 
                 <h2 className="text-2xl sm:text-3xl font-black text-gray-900 mb-4 tracking-tight flex items-center gap-3">
                   Kost Manager
-                  <span className="bg-blue-600 text-white text-[9px] px-2.5 py-1 rounded-full uppercase tracking-widest shadow-md">Premium</span>
+                  <span className="bg-orange-600 text-white text-[9px] px-2.5 py-1 rounded-full uppercase tracking-widest shadow-md">Premium</span>
                 </h2>
                 <p className="text-gray-500 text-sm sm:text-base leading-relaxed mb-8">
                   Trima beres! Percayakan pemasaran hingga operasional harian kost Anda sepenuhnya kepada ahlinya.
@@ -158,14 +158,14 @@ const Owner: React.FC = () => {
 
                 <div className="space-y-4 mb-10">
                   {[
-                    { title: 'Manajemen Kamar Terpadu (Ketersediaan & Keterisian)', icon: <CheckCircle2 className="w-4 h-4 text-blue-500" /> },
-                    { title: 'Manajemen Penghuni Berbasis Sistem (Identitas & Histori)', icon: <CheckCircle2 className="w-4 h-4 text-blue-500" /> },
-                    { title: 'Penagihan Sewa Jatuh Tempo Otomatis', icon: <CheckCircle2 className="w-4 h-4 text-blue-500" /> },
-                    { title: 'Pemasaran Prioritas Platform & Konten Sosial Media', icon: <CheckCircle2 className="w-4 h-4 text-blue-500" /> },
-                    { title: 'Laporan Keuangan & Okupansi Bulanan Lengkap', icon: <CheckCircle2 className="w-4 h-4 text-blue-500" /> }
+                    { title: 'Manajemen Kamar Terpadu (Ketersediaan & Keterisian)', icon: <CheckCircle2 className="w-4 h-4 text-orange-500" /> },
+                    { title: 'Manajemen Penghuni Berbasis Sistem (Identitas & Histori)', icon: <CheckCircle2 className="w-4 h-4 text-orange-500" /> },
+                    { title: 'Penagihan Sewa Jatuh Tempo Otomatis', icon: <CheckCircle2 className="w-4 h-4 text-orange-500" /> },
+                    { title: 'Pemasaran Prioritas Platform & Konten Sosial Media', icon: <CheckCircle2 className="w-4 h-4 text-orange-500" /> },
+                    { title: 'Laporan Keuangan & Okupansi Bulanan Lengkap', icon: <CheckCircle2 className="w-4 h-4 text-orange-500" /> }
                   ].map((feat, i) => (
                     <div key={i} className="flex items-start gap-4">
-                      <div className="mt-1 bg-blue-50 p-1.5 rounded-lg border border-blue-100">
+                      <div className="mt-1 bg-orange-50 p-1.5 rounded-lg border border-orange-100">
                         {feat.icon}
                       </div>
                       <span className="text-sm font-bold text-gray-700 leading-tight">{feat.title}</span>
@@ -175,7 +175,7 @@ const Owner: React.FC = () => {
               </div>
 
               <div className="mt-auto relative z-10">
-                <button className="w-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-blue-200 hover:shadow-blue-300 flex items-center justify-center gap-2 border border-blue-500">
+                <button className="w-full bg-orange-600 hover:bg-orange-700 active:scale-95 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-orange-200 hover:shadow-orange-300 flex items-center justify-center gap-2 border border-orange-500">
                   Pilih Kost Manager <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
               </div>
@@ -189,7 +189,7 @@ const Owner: React.FC = () => {
 
   // Setelah user memilih opsi, render Hero Landing Page Spesifik
   const isManajemen = partnerType === 'manajemen';
-  const themeColor = isManajemen ? 'blue' : 'orange';
+  const themeColor = 'orange';
 
   return (
     <div className="min-h-screen bg-gray-50">

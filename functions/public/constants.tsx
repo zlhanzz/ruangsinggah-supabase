@@ -10,6 +10,7 @@ export const MOCK_KOSTS: Kost[] = [
     type: 'Putri',
     address: 'Dramaga, Bogor',
     city: 'Bogor',
+    area: 'Dramaga',
     price: 1200000,
     imageUrls: [
       'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=800',
@@ -66,6 +67,7 @@ export const MOCK_KOSTS: Kost[] = [
     type: 'Putra',
     address: 'Margonda, Depok',
     city: 'Depok',
+    area: 'Margonda',
     price: 2500000,
     imageUrls: [
       'https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&q=80&w=800',
@@ -112,6 +114,7 @@ export const MOCK_KOSTS: Kost[] = [
     type: 'Campur',
     address: 'Coblong, Bandung',
     city: 'Bandung',
+    area: 'Coblong',
     price: 1500000,
     imageUrls: [
       'https://images.unsplash.com/photo-1554995207-c18c203602cb?auto=format&fit=crop&q=80&w=800',

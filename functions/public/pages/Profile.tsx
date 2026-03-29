@@ -24,8 +24,14 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     relationshipStatus: '',
     religion: '',
     address: '',
-    photoURL: ''
+    photoURL: '',
+    ktp_number: '',
+    ktp_photo_url: '',
+    verification_status: 'unverified'
   });
+  const [ktpPhotoFile, setKtpPhotoFile] = useState<File | null>(null);
+  const [isUploadingKtp, setIsUploadingKtp] = useState(false);
+
 
   const religions = [
     'Islam', 'Kristen Protestan', 'Kristen Katolik',
@@ -44,7 +50,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
         relationshipStatus: user.relationshipStatus || user.relationship_status || user.maritalStatus || '',
         religion: user.religion || '',
         address: user.address || '',
-        photoURL: user.photoURL || user.photo_url || user.avatar_url || ''
+        photoURL: user.photoURL || user.photo_url || user.avatar_url || '',
+        ktp_number: user.ktp_number || '',
+        ktp_photo_url: user.ktp_photo_url || '',
+        verification_status: user.verification_status || 'unverified'
       });
     }
   }, [user]);
@@ -55,6 +64,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
 
   if (!user) return null;
   const isAdmin = user.role === 'admin';
+  const isAgent = user.role === 'survey_agent';
 
   const getInitials = (name: string) => {
     return name
@@ -96,6 +106,44 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
       setLoading(false);
     }
   };
+
+  const handleKtpUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Ukuran foto KTP maksimal 2MB');
+      return;
+    }
+
+    setIsUploadingKtp(true);
+    try {
+      const sanitized = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+      const filePath = `${user.uid}/ktp_${Date.now()}_${sanitized}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('ktp-photos')
+        .upload(filePath, file, { contentType: file.type || 'image/jpeg', upsert: true });
+
+      if (uploadError) {
+        // Fallback to profile-photos if ktp-photos doesn't exist yet
+        const { error: fallbackError } = await supabase.storage
+          .from('profile-photos')
+          .upload(filePath, file, { contentType: file.type || 'image/jpeg', upsert: true });
+        
+        if (fallbackError) throw uploadError;
+      }
+
+      const { data: urlData } = supabase.storage.from(uploadError ? 'profile-photos' : 'ktp-photos').getPublicUrl(filePath);
+      setFormData(prev => ({ ...prev, ktp_photo_url: urlData.publicUrl }));
+    } catch (error) {
+      console.error('Error uploading KTP:', error);
+      alert('Gagal mengupload KTP.');
+    } finally {
+      setIsUploadingKtp(false);
+    }
+  };
+
 
   const handleDeletePhoto = () => {
     if (window.confirm('Apakah Anda yakin ingin menghapus foto profil?')) {
@@ -143,8 +191,13 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
           religion: formData.religion,
           address: formData.address,
           photo_url: formData.photoURL,
+          ktp_number: isAgent ? formData.ktp_number : undefined,
+          ktp_photo_url: isAgent ? formData.ktp_photo_url : undefined,
+          // Set to pending if they just uploaded or changed KTP number
+          verification_status: isAgent && (formData.ktp_number !== user.ktp_number || formData.ktp_photo_url !== user.ktp_photo_url) ? 'pending' : formData.verification_status,
           updated_at: new Date().toISOString()
         })
+
         .eq('id', user.uid);
 
       if (dbError) throw dbError;
@@ -182,19 +235,21 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
   };
 
   const handleCancel = () => {
-    if (user) {
       setFormData({
         displayName: user.displayName || user.name || user.full_name || '',
-        phone: user.phone || user.phoneNumber || user.phone_number || '',
+        phone: user.phone || user.phoneNumber || user.phone_number ? 
+               (user.phone || user.phoneNumber || user.phone_number).replace(/^(\+62|62|0)/, '') : '',
         occupation: user.occupation || '',
         institution: user.institution || '',
         gender: user.gender || '',
         relationshipStatus: user.relationshipStatus || user.relationship_status || user.maritalStatus || '',
         religion: user.religion || '',
         address: user.address || '',
-        photoURL: user.photoURL || user.photo_url || user.avatar_url || ''
+        photoURL: user.photoURL || user.photo_url || user.avatar_url || '',
+        ktp_number: user.ktp_number || '',
+        ktp_photo_url: user.ktp_photo_url || '',
+        verification_status: user.verification_status || 'unverified'
       });
-    }
     setIsEditing(false);
   };
 
@@ -266,13 +321,13 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                   <h1 className="text-3xl font-black text-gray-900 text-center">
                     {formData.displayName || 'Pengguna Tanpa Nama'}
                   </h1>
-                  {isAdmin && (
+                  {(isAdmin || isAgent) && (
                     <div className="relative group/tooltip">
-                      <svg className="w-6 h-6 text-blue-500 fill-current" viewBox="0 0 20 20">
+                      <svg className={`w-6 h-6 ${isAgent ? 'text-orange-500' : 'text-orange-500'} fill-current`} viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
                       <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-gray-900 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                        Administrator Terverifikasi
+                        {isAgent ? 'Agen Survey Terverifikasi' : 'Administrator Terverifikasi'}
                       </span>
                     </div>
                   )}
@@ -395,7 +450,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                   </div>
                 )}
               </div>
-
               {/* Alamat Domisili */}
               <div className="space-y-2 md:col-span-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Alamat Domisili <span className="text-red-500">*</span></label>
@@ -408,6 +462,98 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                 )}
               </div>
 
+
+              {/* KHUSUS AGEN: VERIFIKASI IDENTITAS */}
+              {isAgent && (
+                <div className="md:col-span-2 mt-4 space-y-6">
+                  <div className="bg-orange-50 border border-orange-100 rounded-[2rem] p-8">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 bg-orange-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-orange-200">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Verifikasi Identitas Agen</h3>
+                        <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mt-1">Wajib bagi Agen Survey RuangSinggah</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {/* Nomor KTP */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Nomor KTP (NIK) <span className="text-red-500">*</span></label>
+                        {isEditing ? (
+                          <input 
+                            type="text" 
+                            name="ktp_number" 
+                            value={formData.ktp_number} 
+                            onChange={(e) => setFormData({...formData, ktp_number: e.target.value.replace(/\D/g, '').substring(0, 16)})}
+                            className="w-full bg-white border border-gray-200 rounded-xl px-5 py-3.5 text-sm font-bold text-gray-900 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all"
+                            placeholder="16 Digit NIK KTP" required />
+                        ) : (
+                          <div className="p-4 bg-white/50 rounded-2xl border border-white font-mono font-bold text-gray-900">
+                            {formData.ktp_number ? formData.ktp_number.replace(/(\d{4})/g, '$1 ').trim() : '-'}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Foto KTP */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Foto KTP <span className="text-red-500">*</span></label>
+                        {isEditing ? (
+                          <div className="flex flex-col gap-3">
+                            {formData.ktp_photo_url ? (
+                              <div className="relative group aspect-[3/2] rounded-2xl overflow-hidden border-2 border-orange-200">
+                                <img src={formData.ktp_photo_url} alt="KTP" className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px]">
+                                  <label className="cursor-pointer bg-white text-gray-900 p-2 rounded-lg font-bold text-[10px] uppercase">Ganti
+                                    <input type="file" className="hidden" accept="image/*" onChange={handleKtpUpload} disabled={isUploadingKtp} />
+                                  </label>
+                                </div>
+                              </div>
+                            ) : (
+                              <label className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-orange-200 bg-white rounded-2xl hover:bg-orange-100/50 transition-all cursor-pointer group">
+                                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center text-orange-500 group-hover:scale-110 transition-transform">
+                                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-xs font-black text-orange-600 uppercase tracking-widest">{isUploadingKtp ? 'Sedang Upload...' : 'Upload Foto KTP'}</p>
+                                  <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">Maksimal 2MB (JPG/PNG)</p>
+                                </div>
+                                <input type="file" className="hidden" accept="image/*" onChange={handleKtpUpload} disabled={isUploadingKtp} />
+                              </label>
+                            )}
+                          </div>
+                        ) : (
+                          formData.ktp_photo_url ? (
+                            <div className="aspect-[3/2] rounded-2xl overflow-hidden border-2 border-white shadow-sm">
+                              <img src={formData.ktp_photo_url} alt="KTP Verified" className="w-full h-full object-cover" />
+                            </div>
+                          ) : (
+                            <div className="p-4 bg-white/50 rounded-2xl border border-white font-bold text-red-400 italic text-xs">Belum upload foto KTP</div>
+                          )
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-8 flex items-center justify-between border-t border-orange-200 pt-6">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${formData.verification_status === 'verified' ? 'bg-green-500' : formData.verification_status === 'pending' ? 'bg-orange-500 animate-pulse' : 'bg-red-500'}`}></div>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Status Verifikasi:</span>
+                      </div>
+                      <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm
+                        ${formData.verification_status === 'verified' ? 'bg-green-500 text-white' : 
+                          formData.verification_status === 'pending' ? 'bg-orange-500 text-white' : 
+                          'bg-red-500 text-white'}`}>
+                        {formData.verification_status === 'verified' ? 'Terverifikasi' : 
+                         formData.verification_status === 'pending' ? 'Menunggu Review' : 
+                         'Belum Terverifikasi'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+
               {/* Read Only Fields */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">User ID (Tidak dapat diubah)</label>
@@ -417,14 +563,18 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               {/* Account Status */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Status Akun</label>
-                {isAdmin ? (
-                  <div className="flex items-center gap-3 p-4 bg-blue-50 rounded-2xl border border-blue-200">
-                    <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white shadow-sm">
+                {(isAdmin || isAgent) ? (
+                  <div className="flex items-center gap-3 p-4 rounded-2xl border bg-orange-50 border-orange-200">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-sm bg-orange-500">
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
                     </div>
                     <div>
-                      <p className="font-black text-blue-800 text-sm uppercase tracking-tight">Administrator Terverifikasi</p>
-                      <p className="text-[10px] text-blue-600 font-bold">Akun ini memiliki akses pengelolaan sistem.</p>
+                      <p className="font-black tracking-tight text-sm uppercase text-orange-800">
+                        {isAgent ? 'Agen Survey Terverifikasi' : 'Administrator Terverifikasi'}
+                      </p>
+                      <p className="text-[10px] font-bold text-orange-600">
+                        {isAgent ? 'Akun ini memiliki akses khusus survey kost.' : 'Akun ini memiliki akses pengelolaan sistem.'}
+                      </p>
                     </div>
                   </div>
                 ) : (

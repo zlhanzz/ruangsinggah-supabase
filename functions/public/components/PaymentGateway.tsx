@@ -170,23 +170,24 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
         const m = metadata as any;
         const isDatabase = productType === 'database' || productType === 'available_database';
         
-        notificationService.createNotification({
-          user_id: userId,
-          title: isDatabase 
+        notificationService.createNotification(
+          userId,
+          isDatabase 
             ? 'Database Terkirim!' 
             : productType === 'survey' 
               ? 'Pesanan Survey Berhasil!' 
               : 'Pembayaran Berhasil!',
-          message: isDatabase 
+          isDatabase 
             ? `Database ${m.name || m.area || 'Kost'} telah dikirim ke email Anda. Silakan cek Inbox atau folder Spam.`
             : productType === 'survey'
               ? `Pembayaran Jasa Survey ${m.kostName || 'Kost'} senilai Rp ${amount.toLocaleString('id-ID')} telah berhasil diverifikasi.`
               : `Pembayaran sewa ${m.kostName || 'Kost'} senilai Rp ${amount.toLocaleString('id-ID')} telah berhasil diverifikasi.`,
-          type: 'payment',
-          link: isDatabase 
+          'payment',
+          {},
+          isDatabase 
             ? 'https://mail.google.com/mail/u/0/#search/RuangSinggah' 
             : '/my-bookings'
-        }).catch(err => console.error("Failed to create payment notification:", err));
+        ).catch(err => console.error("Failed to create payment notification:", err));
 
         onPaymentSuccess();
         if (productType === 'survey') {
