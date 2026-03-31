@@ -378,7 +378,10 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
                           <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{item.totalData}+ Kost</p>
                         </div>
-                        <p className="text-sm font-black text-gray-900">{FORMAT_CURRENCY(item.price)}</p>
+                        <div className="text-right">
+                          <p className="text-sm font-black text-gray-900 leading-none">{FORMAT_CURRENCY(item.price)} <span className="text-[9px] text-gray-400 font-bold uppercase">/tahun</span></p>
+                          <p className="text-[9px] font-black text-orange-500 uppercase tracking-tight mt-1">Cuma {FORMAT_CURRENCY(Math.floor(item.price / 12))}/bulan</p>
+                        </div>
                       </div>
                       <button className="w-full py-2.5 sm:py-3 bg-gray-900 text-white rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:bg-orange-500 transition-all shadow-xl active:scale-95 group-hover:bg-orange-500">Lihat Detail</button>
                     </div>
@@ -492,8 +495,11 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
             <div className="bg-white border-t border-gray-100 px-5 py-4 sm:px-8 sm:py-6 sm:py-8 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)] sticky bottom-0 z-30">
               <div className="flex items-center justify-between gap-4 sm:gap-6">
                 <div className="shrink-0">
-                  <p className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Akses Selamanya</p>
-                  <p className="text-xl sm:text-3xl font-black text-gray-900 tracking-tighter">{FORMAT_CURRENCY(detailItem.price)}</p>
+                  <div className="flex items-baseline gap-1">
+                    <p className="text-2xl sm:text-4xl font-black text-gray-900 tracking-tighter leading-none">{FORMAT_CURRENCY(detailItem.price)}</p>
+                    <p className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-widest">/tahun</p>
+                  </div>
+                  <p className="text-[10px] font-black text-orange-500 uppercase tracking-tight mt-1 sm:mt-1.5">Cuma {FORMAT_CURRENCY(Math.floor(detailItem.price / 12))}/bulan</p>
                 </div>
                 <button
                   onClick={() => handleBuyNow(detailItem)}
