@@ -93,10 +93,14 @@ const App: React.FC = () => {
 
       const profile = dbData || {};
       let role = profile.role || 'user';
-      if (profile.is_admin === true && (role === 'user' || role === 'mitra')) role = 'admin'; // Admin override
+      if (profile.is_admin === true && (role === 'user' || role === 'mitra' || role === 'owner')) role = 'admin'; // Admin override
       
-      // Normalize 'mitra' to 'owner' for internal logic consistency
-      if (role === 'mitra') role = 'owner';
+      // Normalize 'mitra' or 'owner' to 'owner' for internal logic consistency
+      const normalizedRole = role.toLowerCase();
+      if (normalizedRole === 'mitra' || normalizedRole === 'owner') role = 'owner';
+      else if (normalizedRole === 'admin') role = 'admin';
+      else if (normalizedRole === 'survey_agent') role = 'survey_agent';
+      else role = 'user';
       
       console.log("Determined role:", role);
 

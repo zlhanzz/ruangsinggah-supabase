@@ -154,6 +154,13 @@ export const MOCK_KOSTS: Kost[] = [
   }
 ];
 
+export const INDONESIAN_BANKS = [
+  "BCA", "MANDIRI", "BNI", "BRI", "BSI (Bank Syariah Indonesia)", 
+  "BTN", "CIMB NIAGA", "PERMATA", "DANAMON", "OCBC NISP", 
+  "MAYBANK", "BANK MEGA", "BANK JAGO", "ALLO BANK", "SEABANK",
+  "LINE BANK", "OVO", "GOPAY", "DANA", "SHOPEEPAY", "LAINNYA"
+];
+
 export const FORMAT_CURRENCY = (amount: number) => {
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',

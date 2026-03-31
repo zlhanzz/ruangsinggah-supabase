@@ -409,20 +409,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                         </div>
                     </div>
 
-                    <p className="text-[10px] text-gray-300 text-center font-bold uppercase tracking-widest px-8">Data keuangan sekarang dikelola secara otomatis oleh sistem pencairan dana admin.</p>
                 </div>
-            </div>
-
-            {/* Logout Section */}
-            <div className="max-w-md mx-auto pt-8">
-                <button 
-                    onClick={onLogout}
-                    className="w-full h-16 rounded-[2rem] bg-rose-50 border border-rose-100 text-rose-500 font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-rose-100"
-                >
-                    <LogOut size={18} />
-                    Keluar dari Dashboard
-                </button>
-                <p className="text-[10px] text-gray-300 text-center font-bold uppercase tracking-widest mt-6">RuangSinggah id • Pro v2.5.0</p>
             </div>
         </div>
     );

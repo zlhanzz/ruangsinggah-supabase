@@ -8,6 +8,8 @@ import { URL } from 'url';
 // PDFDocument is lazy-loaded inside generatePDFBuffer to avoid Firebase deploy timeout
 // --- AKHIR IMPOR ---
 
+import { createSurveyFolder } from './googleDriveUtils';
+
 admin.initializeApp();
 const gcs = new Storage();
 const db = admin.firestore();
@@ -401,54 +403,41 @@ async function sendSuccessEmail(orderId: string) {
 }
 
 /**
- * simulatePaymentSuccess: Force updates a transaction to 'paid' and triggers notification.
- * Admin only (verified by userId in payload).
+ * sendEmailWithAttachment: Generic helper to send an email with an attachment (like an invoice) via Brevo.
  */
-export const simulatePaymentSuccess = functions.https.onRequest({ cors: true }, async (req, res) => {
-  const { orderId, adminUserId } = req.body;
-  console.log(`SIMULATE_SUCCESS: Start for Order ${orderId} (Admin: ${adminUserId})`);
+async function sendEmailWithAttachment(toEmail: string, subject: string, text: string, attachmentBase64: string, filename: string) {
+  const brevoApiKey = brevoApiKeyParam.value();
+  if (!brevoApiKey) return;
 
-  if (!orderId || !adminUserId) {
-    res.status(400).send({ message: 'Missing orderId or adminUserId' });
-    return;
-  }
+  const payload = {
+    sender: { name: "RuangSinggah.id", email: "invoice@ruangsinggah.id" },
+    to: [{ email: toEmail }],
+    subject: subject,
+    textContent: text,
+    attachment: [{
+      content: attachmentBase64,
+      name: filename
+    }]
+  };
 
   try {
-    const supabase = getSupabase();
-    if (!supabase) throw new Error('DB Client error');
-
-    // 1. Verify Admin Status in DB
-    const { data: user } = await supabase
-      .from('users')
-      .select('is_admin, role')
-      .eq('id', adminUserId)
-      .single();
-    
-    if (!user || !(user.is_admin || user.role === 'admin')) {
-      res.status(403).send({ message: 'Unauthorized. Only admins can simulate.' });
-      return;
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': brevoApiKey
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+        const err = await response.text();
+        console.error("EMAIL_ATTACH_ERROR:", err);
     }
-
-    // 2. Update Transaction
-    const { error: updateError } = await supabase
-      .from('transactions')
-      .update({ status: 'paid', updated_at: new Date().toISOString() })
-      .eq('id', orderId);
-
-    if (updateError) throw updateError;
-
-    // 3. Trigger Email
-    console.log(`SIMULATE_SUCCESS: Update successful. Triggering email...`);
-    await sendSuccessEmail(orderId);
-
-    res.status(200).send({ message: 'Simulation successful. Transaction updated and email triggered.' });
-  } catch (err: any) {
-    console.error("SIMULATE_SUCCESS_ERROR:", err);
-    res.status(500).send({ message: err.message });
+  } catch (err) {
+    console.error("EMAIL_ATTACH_EXCEPTION:", err);
   }
-});
-
-// --- PAKASIR PAYMENT FUNCTIONS ---
+}
 
 function generatePDFBuffer(orderId: string, userName: string, productName: string, amount: number, dateStr: string, detailLabel: string = 'Produk', headerTitle: string = 'INVOICE', periodText: string = ''): Promise<string> {
   const PDFDocument = require('pdfkit');
@@ -545,7 +534,6 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
         .from('transactions')
         .select('*')
         .eq('user_id', userId)
-        .eq('product_id', productId)
         .eq('product_type', productType)
         .eq('status', 'pending');
 
@@ -559,18 +547,32 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
             console.log(`CREATE_PAYMENT: Marking expired order ${pendingOrder.id}`);
             await supabase.from('transactions').update({ status: 'expired' }).eq('id', pendingOrder.id);
           } else {
-            // Still active!
-            if (method && pendingOrder.payment_method === method) {
-              res.status(409).send({ 
-                message: 'Anda sudah memiliki pesanan aktif untuk produk ini dengan metode pembayaran yang sama. Silakan selesaikan pembayaran tersebut atau tunggu hingga kadaluarsa.' 
-              });
-              return;
+            // Check if it's the exact same product (or same kost for survey)
+            const isSameSurvey = productType === 'survey' && 
+                                (pendingOrder.metadata as any)?.kostName === (metadata as any)?.kostName;
+            const isSameProduct = pendingOrder.product_id === productId;
+
+            if (isSameProduct || isSameSurvey) {
+              // Priority 1: Check if method matches exactly to avoid double payment same method
+              if (method && pendingOrder.payment_method === method) {
+                console.log(`CREATE_PAYMENT: Reusing existing EXACT order ${pendingOrder.id}`);
+                order = pendingOrder;
+                break;
+              }
+              
+              // Priority 2: Resume existing order but maybe with new method
+              console.log(`CREATE_PAYMENT: Resuming existing pending order ${pendingOrder.id} for ${productType}`);
+              const { data: updatedOrder } = await supabase
+                .from('transactions')
+                .update({ payment_method: method || pendingOrder.payment_method })
+                .eq('id', pendingOrder.id)
+                .select()
+                .single();
+              
+              order = updatedOrder || pendingOrder;
+              finalAmount = Number(order.amount);
+              break;
             }
-            // Resume the existing order
-            console.log(`CREATE_PAYMENT: Resuming existing active order: ${pendingOrder.id}`);
-            order = pendingOrder;
-            finalAmount = Number(order.amount);
-            break; 
           }
         }
       }
@@ -620,6 +622,7 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
             product_type: productType,
             amount: finalAmount,
             metadata: metadata || {},
+            payment_method: method || null,
             status: 'pending'
           })
           .select('*')
@@ -627,9 +630,53 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
 
         if (orderError) throw orderError;
         order = newOrder;
+
+        // NEW: If survey, record into survey_requests
+        if (productType === 'survey') {
+            console.log(`CREATE_PAYMENT: Recording survey_request for order ${order.id}`);
+            
+            const { data: existingSrv } = await supabase
+              .from('survey_requests')
+              .select('id')
+              .eq('transaction_id', order.id)
+              .maybeSingle();
+
+            const surveyData = {
+              transaction_id: order.id,
+              user_id: userId,
+              kost_name: metadata.kostName || 'Survey Kost',
+              kost_address: metadata.kostAddress || '-',
+              owner_phone: metadata.ownerPhone || '',
+              survey_date: metadata.surveyDate || null,
+              survey_time: metadata.surveyTime || null,
+              notes: `${metadata.notes || ''}\n[Via Backend]`.trim(),
+              status: 'AWAITING_PAYMENT'
+            };
+
+            if (existingSrv) {
+              await supabase.from('survey_requests').update(surveyData).eq('id', existingSrv.id);
+            } else {
+              await supabase.from('survey_requests').insert([surveyData]);
+            }
+            
+            // Send Admin Notification about NEW survey request
+            try {
+              const { data: admins } = await supabase.from('users').select('id').eq('role', 'admin');
+              if (admins) {
+                for (const admin of admins) {
+                  await supabase.from('notifications').insert({
+                    user_id: admin.id,
+                    title: 'Survey Baru Terdeteksi',
+                    message: `Ada pesanan survey baru untuk Kost: ${metadata.kostName}. User sedang dialihkan ke pembayaran.`,
+                    type: 'assignment'
+                  });
+                }
+              }
+            } catch (ignore) {}
+        }
     }
 
-    // 2. Construct Pakasir Checkout URL (Integrasi Via URL - Section B)
+    // 2. Construct Pakasir Checkout URL
     const pakasirSlug = 'ruangsinggah-id';
     const PAKASIR_API_KEY = 'dE2c8NpqVcyMGZG81OMhHUXywQ8uVvCB';
     const checkoutUrl = `https://app.pakasir.com/pay/${pakasirSlug}/${finalAmount}?order_id=${order.id}`;
@@ -640,241 +687,86 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
     if (method) {
       try {
         const apiUrl = `https://app.pakasir.com/api/transactioncreate/${method}`;
-        const cleanOrderId = order.id; // Keep hyphens as seen in dashboard screenshot
-        const cleanAmount = Math.round(finalAmount);
+        const cleanOrderId = order.id;
+        const cleanAmount = Math.round(Number(order.amount) || finalAmount);
 
-        const callPakasir = async (slug: string) => {
-          const payload = {
-            project: slug,
+        const apiResponse = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            project: pakasirSlug,
             order_id: cleanOrderId,
             amount: cleanAmount,
             api_key: PAKASIR_API_KEY
-          };
-
-          const apiResponse = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          return await apiResponse.json();
-        };
-
-        console.log(`CREATE_PAYMENT: Calling Pakasir API: ${apiUrl} (Slug: ${pakasirSlug})`);
-        let result = await callPakasir(pakasirSlug);
-        console.log(`CREATE_PAYMENT: Pakasir API Raw Response:`, JSON.stringify(result));
+          })
+        });
+        const result = await apiResponse.json();
+        console.log(`CREATE_PAYMENT: Pakasir Response:`, JSON.stringify(result));
 
         if (result.status === 'success' || result.payment || result.data) {
           directPayment = result.payment || result.data || result;
           apiStatus = 'success';
-          console.log(`CREATE_PAYMENT: Recognized success. Data attached.`);
         } else {
           apiStatus = result.status || 'api_error';
-          console.error(`CREATE_PAYMENT: Pakasir API reported failure:`, result.message || 'No message');
           metadata.pakasir_error = result.message || JSON.stringify(result);
         }
       } catch (e: any) {
         apiStatus = 'fetch_exception';
-        console.error("CREATE_PAYMENT: Fetch Exception during Pakasir API call:", e.message);
         metadata.pakasir_error = `Fetch Error: ${e.message}`;
       }
     }
 
-    // 3. Send Email & PDF Invoice if method selected, success, and not sent yet
-    let emailSentSuccessfully = false;
-    if (method && apiStatus === 'success' && !order.metadata?.invoice_sent) {
-       console.log(`CREATE_PAYMENT: Sending Invoice Email for Order ${order.id}`);
-       try {
-          const { data: user } = await supabase.from('users').select('name, email').eq('id', userId).single();
-          let productName = 'Produk RuangSinggah';
-          let detailLabel = 'Produk';
-          let headerTitle = 'Invoice Pembelian';
-          let periodText = '';
-
-          if (productType === 'database') {
-             const { data: dbProd } = await supabase.from('available_databases').select('campus, area').eq('id', productId).single();
-             if (dbProd) {
-               productName = `Database Kost ${dbProd.campus || dbProd.area || ''}`;
-             }
-          } else if (productType === 'kost_booking' || productType === 'property') {
-             const kName = order.metadata?.kostName || order.metadata?.item || '';
-             const kPeriod = order.metadata?.periodLabel || order.metadata?.period || '1 Bulan';
-             productName = kName ? `${kName}` : 'RuangSinggah';
-             headerTitle = 'Invoice Sewa Kost';
-             detailLabel = 'Kost';
-             periodText = ` / ${kPeriod}`;
-          } else if (productType === 'survey') {
-             const kName = order.metadata?.kostName || order.metadata?.item || '';
-             productName = kName ? `Survey Kost ${kName}` : 'Survey Kost';
-             headerTitle = 'Invoice Layanan Survey';
-             detailLabel = 'Layanan';
-          }
-          const base64Pdf = await generatePDFBuffer(
-               order.id, 
-               user?.name || 'Pelanggan', 
-               productName, 
-               finalAmount, 
-               new Date().toLocaleDateString('id-ID'),
-               detailLabel,
-               headerTitle,
-               periodText
-          );
-          
-          const brevoApiKey = brevoApiKeyParam.value();
-          if (user?.email && brevoApiKey) {
-            const payload = {
-              sender: { name: "RuangSinggah.id", email: "invoice@ruangsinggah.id" },
-              to: [{ email: user.email, name: user.name || 'Pelanggan' }],
-              subject: `${headerTitle} RuangSinggah.id`,
-              htmlContent: `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0; padding:0; background:#f9fafb; font-family: Arial, Helvetica, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb; padding:30px 0">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; width:100%; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.08);">
-          
-          <!-- Header -->
-          <tr>
-            <td style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 32px 40px; text-align:center;">
-              <p style="margin:0; color:#f97316; font-size:24px; font-weight:900; letter-spacing:2px;">RUANGSINGGAH.ID</p>
-              <p style="margin:6px 0 0; color:#6b7280; font-size:11px; letter-spacing:3px; text-transform:uppercase;">${headerTitle}</p>
-            </td>
-          </tr>
-          
-          <!-- Body -->
-          <tr>
-            <td style="padding: 36px 40px;">
-              <p style="margin:0 0 8px; font-size:22px; font-weight:800; color:#111827;">Halo, ${user.name || 'Pelanggan'}! 👋</p>
-              <p style="margin:0 0 24px; font-size:15px; color:#6b7280; line-height:1.6;">Terima kasih atas pesanan Anda. ${headerTitle} untuk <strong style="color:#111827;">${productName}</strong> telah kami siapkan dan terlampir di bawah ini.</p>
-              
-              <!-- Order Detail Box -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb; border-radius:12px; border:1px solid #e5e7eb; margin-bottom:28px;">
-                <tr><td style="padding:20px 24px;">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                    <tr>
-                      <td style="padding-bottom:16px;">
-                        <p style="margin:0 0 4px; font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:2px;">Order ID</p>
-                        <p style="margin:0; font-size:14px; font-weight:700; color:#111827; font-family: monospace;">#${order.id.substring(0, 8).toUpperCase()}</p>
-                      </td>
-                      <td style="padding-bottom:16px; text-align:right;">
-                        <p style="margin:0 0 4px; font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:2px;">Total Bayar</p>
-                        <p style="margin:0; font-size:16px; font-weight:900; color:#f97316;">${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(finalAmount)}<span style="font-size:11px; color:#9ca3af; font-weight:600;">${periodText}</span></p>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td colspan="2">
-                        <p style="margin:0 0 4px; font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:2px;">${detailLabel}</p>
-                        <p style="margin:0; font-size:14px; font-weight:700; color:#111827;">${productName}</p>
-                      </td>
-                    </tr>
-                  </table>
-                </td></tr>
-              </table>
-              
-              <!-- Urgency Box -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fff7ed; border-radius:12px; border:1px solid #fed7aa; margin-bottom:28px;">
-                <tr><td style="padding:20px 24px; text-align:center;">
-                  <p style="margin:0 0 16px; font-size:15px; font-weight:700; color:#9a3412; line-height:1.5;">
-                    ⏰ Selesaikan pembayaran sekarang sebelum slot habis!<br>
-                    <span style="font-weight:400; font-size:13px; color:#c2410c;">Sesi pembayaran berlaku selama 3 jam.</span>
-                  </p>
-                  <!-- CTA Button - Table-based for max email client compatibility -->
-                  <table cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto;">
-                    <tr>
-                      <td align="center" bgcolor="#f97316" style="border-radius:10px;">
-                        <a href="https://ruangsinggah.id/payment-status/${order.id}" target="_blank"
-                           style="display:inline-block; padding:16px 40px; font-size:15px; font-weight:800; color:#ffffff; text-decoration:none; border-radius:10px; background-color:#f97316; letter-spacing:0.5px; font-family:Arial,sans-serif;">
-                          ✅ SELESAIKAN PEMBAYARAN
-                        </a>
-                      </td>
-                    </tr>
-                  </table>
-                </td></tr>
-              </table>
-              
-              <p style="margin:0; font-size:12px; color:#9ca3af; text-align:center; line-height:1.6;">
-                Abaikan pesan ini jika Anda tidak merasa melakukan pemesanan.<br>
-                Dokumen PDF Invoice terlampir pada email ini.
-              </p>
-            </td>
-          </tr>
-          
-          <!-- Footer -->
-          <tr>
-            <td style="background:#f9fafb; padding:20px 40px; border-top:1px solid #e5e7eb; text-align:center;">
-              <p style="margin:0; font-size:11px; color:#9ca3af;">© 2026 RuangSinggah.id — Platform Kost Mahasiswa</p>
-            </td>
-          </tr>
-          
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`,
-              attachment: [{ content: base64Pdf, name: `Invoice_${order.id.substring(0,8).toUpperCase()}.pdf` }]
-            };
-
-            const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
-              method: 'POST',
-              headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'api-key': brevoApiKey },
-              body: JSON.stringify(payload)
-            });
-            if (!resp.ok) {
-               console.error("CREATE_PAYMENT: Failed to send Brevo PDF:", await resp.text());
-            } else {
-               emailSentSuccessfully = true;
-               console.log("CREATE_PAYMENT: Invoice email sent successfully.");
-            }
-          }
-       } catch (err: any) {
-          console.error("CREATE_PAYMENT: Invoice Error during payment creation:", err.message);
-       }
-    }
-
-    // 4. Update order with Pakasir link and direct data (and invoice_sent status)
-    const updatePayload: any = { pakasir_link: checkoutUrl };
-    if (method) {
-      // CRITICAL: Save payment_method to the dedicated column so admin dashboard shows it correctly
-      updatePayload.payment_method = method;
-    }
+    // 3. Update order with results
+    const updatePayload: any = { 
+        pakasir_link: checkoutUrl,
+        payment_method: method || order.payment_method
+    };
     if (directPayment) {
       updatePayload.pakasir_order_id = directPayment.id || directPayment.order_id;
-      updatePayload.metadata = { 
-        ...order.metadata, 
-        pakasir_response: directPayment,
-        selected_method: method,
-        api_status: apiStatus,
-        invoice_sent: order.metadata?.invoice_sent || emailSentSuccessfully
-      };
-    } else if (method) {
-      updatePayload.metadata = {
-        ...order.metadata,
-        selected_method: method,
-        api_status: apiStatus,
-        invoice_sent: order.metadata?.invoice_sent || emailSentSuccessfully
-      };
+      updatePayload.metadata = { ...order.metadata, is_simulated: false };
     }
 
-    const { data: updatedOrder, error: updateError } = await supabase
+    const { data: updatedOrder } = await supabase
       .from('transactions')
       .update(updatePayload)
       .eq('id', order.id)
       .select('*')
       .single();
 
-    if (updateError) throw updateError;
+    // 4. Send Invoice Email if method selected and API success
+    if (method && apiStatus === 'success' && directPayment) {
+      try {
+        const { data: userData } = await supabase.from('users').select('full_name, email').eq('id', userId).single();
+        if (userData && userData.email) {
+          const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+          const productName = productType === 'survey' ? `Survey Kost: ${metadata.kostName}` : (productType === 'database' ? 'Akses Database' : 'Booking Properti');
+          
+          const pdfBase64 = await generatePDFBuffer(
+            order.id, 
+            userData.full_name || 'Pelanggan', 
+            productName, 
+            finalAmount, 
+            dateStr
+          );
 
-    console.log(`CREATE_PAYMENT: Success. Order: ${order.id}, API Status: ${apiStatus}`);
+          await sendEmailWithAttachment(
+            userData.email,
+            `Invoice Pembayaran #${order.id.substring(0,8).toUpperCase()}`,
+            `Halo ${userData.full_name || 'User'}, silakan selesaikan pembayaran Anda. Detail invoice terlampir.`,
+            pdfBase64,
+            `Invoice-${order.id.substring(0,8)}.pdf`
+          );
+        }
+      } catch (err) {
+        console.error("CREATE_PAYMENT: Failed to send invoice email:", err);
+      }
+    }
+
     res.status(200).send({ 
-      order: updatedOrder,
+      order: updatedOrder || order,
       directPayment: directPayment,
       apiStatus: apiStatus,
-      message: metadata.pakasir_error || (apiStatus !== 'success' && apiStatus !== 'not_requested' ? 'Gagal mendapatkan data pembayaran dari Pakasir' : null)
+      message: metadata.pakasir_error || null
     });
   } catch (error: any) {
     console.error("CREATE_PAYMENT_ERROR:", error);
@@ -883,23 +775,15 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
 });
 
 /**
- * pakasirWebhook: Receives payment confirmation from Pakasir
+ * simulatePaymentSuccess: Admin-only function to manually trigger a success state for testing.
+ * Now synced with real webhook logic via completeSurveyProcess.
  */
-export const pakasirWebhook = functions.https.onRequest(async (req, res) => {
-  const payload = req.body;
-  console.log("PAKASIR_WEBHOOK: Payload received:", JSON.stringify(payload));
-  
-  // Basic security check (Project Slug)
-  if (payload.project !== 'ruangsinggah-id') {
-    console.warn("PAKASIR_WEBHOOK: Forbidden project slug:", payload.project);
-    res.status(403).send('Forbidden');
-    return;
-  }
+export const simulatePaymentSuccess = functions.https.onRequest({ cors: true }, async (req, res) => {
+  const { orderId, adminUserId } = req.body;
+  console.log(`SIMULATE_SUCCESS: Start for Order ${orderId} (By: ${adminUserId})`);
 
-  const { order_id, status, amount } = payload;
-  
-  if (!order_id) {
-    res.status(400).send('Missing order_id');
+  if (!orderId || !adminUserId) {
+    res.status(400).send({ message: 'Missing orderId or adminUserId' });
     return;
   }
 
@@ -907,60 +791,124 @@ export const pakasirWebhook = functions.https.onRequest(async (req, res) => {
     const supabase = getSupabase();
     if (!supabase) throw new Error('Database client not available.');
 
-    // SECURITY: Verify amount in webhook matches the amount in our record
-    const { data: order, error: fetchError } = await supabase
-      .from('transactions')
-      .select('amount, status')
-      .eq('id', order_id)
-      .single();
-
-    if (fetchError || !order) {
-      console.error("PAKASIR_WEBHOOK: Transaction not found:", order_id);
-      res.status(404).send('Not Found');
+    // 1. Verify Admin
+    const { data: user } = await supabase.from('users').select('role').eq('id', adminUserId).single();
+    if (!user || user.role !== 'admin') {
+      res.status(403).send({ message: 'Unauthorized. Admin only.' });
       return;
     }
+
+    // 2. Clear transaction status
+    const { data: order, error: fetchErr } = await supabase.from('transactions').select('*').eq('id', orderId).single();
+    if (fetchErr || !order) throw new Error('Order not found.');
 
     if (order.status === 'paid') {
-      res.status(200).send('OK (Already Paid)');
+      res.status(200).send({ message: 'Order already paid.' });
       return;
     }
 
-    // Amount verification
-    if (Math.abs(Number(order.amount) - Number(amount)) > 10) {
-      console.error(`PAKASIR_WEBHOOK: Amount mismatch! DB: ${order.amount}, Recv: ${amount}`);
-      res.status(400).send('Mismatch');
+    // 3. Mark as paid
+    console.log(`SIMULATE_SUCCESS: Updating transaction ${orderId} to 'paid'`);
+    await supabase.from('transactions').update({ 
+        status: 'paid', 
+        updated_at: new Date().toISOString(),
+        metadata: { ...order.metadata, is_simulated: true }
+    }).eq('id', orderId);
+
+    // 4. Complete Survey Process (Status Update & Drive Folder)
+    if (order.product_type === 'survey') {
+      await completeSurveyProcess(supabase, orderId, order.product_type);
+    }
+
+    await sendSuccessEmail(orderId);
+
+    res.status(200).send({ message: 'Simulation successful', orderId });
+  } catch (err: any) {
+    console.error("SIMULATE_SUCCESS_ERROR:", err);
+    res.status(500).send({ message: 'Simulation failed: ' + err.message });
+  }
+});
+
+/**
+ * completeSurveyProcess: Helper to move survey from AWAITING_PAYMENT to PENDING_ASSIGNMENT.
+ * Creates Drive folder and updates status. Shared by webhook and simulation.
+ */
+async function completeSurveyProcess(supabase: any, orderId: string, productType: string) {
+  if (productType !== 'survey') return;
+  console.log(`COMPLETE_SURVEY: Starting for Order ${orderId}`);
+  try {
+    const { data: srvData } = await supabase
+      .from('survey_requests')
+      .select('kost_name, status')
+      .eq('transaction_id', orderId)
+      .maybeSingle();
+
+    if (!srvData) {
+      console.warn(`COMPLETE_SURVEY: No survey_request found for transaction ${orderId}`);
       return;
     }
 
-    // Documentation Section D: Status "completed" means success
+    if (srvData.status !== 'AWAITING_PAYMENT') {
+        console.log(`COMPLETE_SURVEY: Survey ${orderId} is already ${srvData.status}. Skipping.`);
+        return;
+    }
+
+    const folderName = `Survey - ${srvData.kost_name || 'Kost'} - ${orderId.substring(0,8).toUpperCase()}`;
+    const ROOT_FOLDER_ID = '1KS-uAMJZg7deddNCB4XxRrPpXsQjq1tk';
+    const driveLink = await createSurveyFolder(folderName, ROOT_FOLDER_ID);
+
+    await supabase
+      .from('survey_requests')
+      .update({ 
+        status: 'PENDING_ASSIGNMENT', 
+        result_drive_link: driveLink,
+        updated_at: new Date().toISOString() 
+      })
+      .eq('transaction_id', orderId);
+      
+    console.log(`COMPLETE_SURVEY: Success. Drive: ${driveLink}`);
+  } catch (err) {
+    console.error("COMPLETE_SURVEY_ERROR:", err);
+    // Minimal fallback: at least update the status
+    await supabase.from('survey_requests').update({ status: 'PENDING_ASSIGNMENT' }).eq('transaction_id', orderId);
+  }
+}
+
+/**
+ * pakasirWebhook: Receives payment confirmation from Pakasir
+ */
+export const pakasirWebhook = functions.https.onRequest(async (req, res) => {
+  const payload = req.body;
+  console.log("PAKASIR_WEBHOOK: Received:", JSON.stringify(payload));
+  if (payload.project !== 'ruangsinggah-id') { res.status(403).send('Forbidden'); return; }
+  const { order_id, status } = payload;
+  if (!order_id) { res.status(400).send('Missing order_id'); return; }
+
+  try {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('DB Error');
+
+    const { data: order } = await supabase.from('transactions').select('amount, status').eq('id', order_id).single();
+    if (!order || order.status === 'paid') { res.status(200).send('OK'); return; }
+
     const isSuccess = status === 'completed' || status === 'success';
     const newStatus = isSuccess ? 'paid' : (status === 'expired' ? 'expired' : 'cancelled');
 
-    // Atomic update to avoid race conditions: only update if it is still pending
-    const { data: updatedTx, error } = await supabase
+    const { data: updatedTx } = await supabase
       .from('transactions')
       .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq('id', order_id)
       .eq('status', 'pending')
-      .select()
-      .maybeSingle();
+      .select().maybeSingle();
     
-    if (error) throw error;
-    
-    if (!updatedTx) {
-       console.log(`PAKASIR_WEBHOOK: Order ${order_id} was already processed or not pending. Ignoring duplicate webhook.`);
-       res.status(200).send('OK (Already Processed)');
-       return;
-    }
-
-    console.log(`PAKASIR_WEBHOOK: Order ${order_id} updated to ${newStatus}. Triggering notification...`);
-    
-    if (newStatus === 'paid') {
+    if (updatedTx && newStatus === 'paid') {
       await sendSuccessEmail(order_id);
+      if (updatedTx.product_type === 'survey') {
+        await completeSurveyProcess(supabase, order_id, updatedTx.product_type);
+      }
     }
-    
     res.status(200).send('OK');
-  } catch (err: any) {
+  } catch (err) {
     console.error("PAKASIR_WEBHOOK_ERROR:", err);
     res.status(500).send('Internal Error');
   }
@@ -1112,6 +1060,59 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
     res.status(200).send({ message: 'Success' });
   } catch (err: any) {
     console.error("CUSTOM_AUTH_ERROR:", err);
+    res.status(500).send({ message: err.message });
+  }
+});
+
+/**
+ * manualCreateSurveyFolder: Manually triggers folder creation for a specific survey ID.
+ * Admin only.
+ */
+export const manualCreateSurveyFolder = functions.https.onRequest({ cors: true }, async (req, res) => {
+  const { surveyId, adminUserId } = req.body;
+  console.log(`MANUAL_DRIVE: Start for Survey ${surveyId} (Admin: ${adminUserId})`);
+
+  if (!surveyId || !adminUserId) {
+    res.status(400).send({ message: 'Missing surveyId or adminUserId' });
+    return;
+  }
+
+  try {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('DB Client error');
+
+    // 1. Verify Admin
+    const { data: user } = await supabase.from('users').select('role').eq('id', adminUserId).single();
+    if (!user || user.role !== 'admin') {
+      res.status(403).send({ message: 'Unauthorized' });
+      return;
+    }
+
+    // 2. Fetch Survey Data
+    const { data: survey, error } = await supabase
+      .from('survey_requests')
+      .select('kost_name, transaction_id, result_drive_link')
+      .eq('id', surveyId)
+      .single();
+
+    if (error || !survey) throw new Error('Survey not found or error');
+
+    // 3. Create Folder if not exists
+    const ROOT_FOLDER_ID = '1KS-uAMJZg7deddNCB4XxRrPpXsQjq1tk';
+    const folderName = `Survey - ${survey.kost_name || 'Kost'} - ${survey.id?.substring(0,8).toUpperCase() || surveyId.substring(0,8).toUpperCase()}`;
+    
+    console.log(`MANUAL_DRIVE: Creating folder: ${folderName}`);
+    const driveLink = await createSurveyFolder(folderName, ROOT_FOLDER_ID);
+
+    // 4. Update DB
+    await supabase.from('survey_requests').update({ 
+      result_drive_link: driveLink,
+      updated_at: new Date().toISOString()
+    }).eq('id', surveyId);
+
+    res.status(200).send({ message: 'Success', driveLink });
+  } catch (err: any) {
+    console.error("MANUAL_DRIVE_ERROR:", err);
     res.status(500).send({ message: err.message });
   }
 });

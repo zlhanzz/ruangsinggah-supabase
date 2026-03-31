@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabase';
 import KostFormMitra from '../components/KostFormMitra';
 import { Kost, Page } from '../types';
-import { FORMAT_CURRENCY } from '../constants';
+import { FORMAT_CURRENCY, INDONESIAN_BANKS } from '../constants';
 import { getOwnerProperties, getOwnerBookings, updateBookingStatus } from '../userService';
 import { getMyChatSessions, ChatSession } from '../chatService';
 import { 
@@ -10,7 +11,7 @@ import {
 import { 
     Zap, Home, ClipboardList, Wallet, User, 
     Plus, Edit, Eye, Check, MessageSquare, Search, Filter, MoreHorizontal, ArrowUpRight,
-    Clock, LogOut, Bell, ChevronRight, TrendingUp, Menu, X
+    Clock, LogOut, Bell, ChevronRight, TrendingUp, Menu, X, Landmark, CreditCard, Save
 } from 'lucide-react';
 import MitraProfile from './MitraProfile';
 import ChatWindow from '../components/ChatWindow';
@@ -112,6 +113,36 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [stats, setStats] = useState({ totalRevenue: 0, pendingApprovals: 0, totalViews: 1240, ctr: 4.2 });
     const [showKostForm, setShowKostForm] = useState(false);
     const [editingKost, setEditingKost] = useState<Partial<Kost> | null>(null);
+    
+    // Withdrawal Bank Info State
+    const [withdrawalAccount, setWithdrawalAccount] = useState({
+        bank_name: user?.bank_name || 'BCA',
+        bank_account: user?.bank_account || '123 - 4567 - 8890',
+        bank_account_name: user?.bank_account_name || user?.displayName || user?.name || '-'
+    });
+    const [isEditingBank, setIsEditingBank] = useState(false);
+    const [isSavingBank, setIsSavingBank] = useState(false);
+    const [editForm, setEditForm] = useState({...withdrawalAccount});
+
+    const saveWithdrawalAccount = async () => {
+        setIsSavingBank(true);
+        try {
+            const { error } = await supabase.from('users').update({
+                bank_name: editForm.bank_name,
+                bank_account: editForm.bank_account,
+                bank_account_name: editForm.bank_account_name
+            }).eq('id', uid);
+            if (error) throw error;
+            
+            setWithdrawalAccount({...editForm});
+            setIsEditingBank(false);
+            alert('Rekening penarikan diperbarui!');
+        } catch (e: any) {
+            alert('Gagal menyimpan: ' + e.message);
+        } finally {
+            setIsSavingBank(false);
+        }
+    };
 
     const isVerified = user?.verification_status === 'verified';
 
@@ -156,7 +187,21 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         }
     };
 
-    useEffect(() => { loadData(); }, [uid]);
+    useEffect(() => { 
+        if (user) {
+            setWithdrawalAccount({
+                bank_name: user.bank_name || 'BCA',
+                bank_account: user.bank_account || '123 - 4567 - 8890',
+                bank_account_name: user.bank_account_name || user.displayName || user.name || '-'
+            });
+            setEditForm({
+                bank_name: user.bank_name || 'BCA',
+                bank_account: user.bank_account || '123 - 4567 - 8890',
+                bank_account_name: user.bank_account_name || user.displayName || user.name || '-'
+            });
+        }
+        loadData(); 
+    }, [uid, user]);
 
     const handleApprove = async (id: string) => {
         if (!window.confirm('Setujui pesanan ini? Calon penghuni akan diminta melakukan pembayaran.')) return;
@@ -773,16 +818,16 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                                 {/* Bank Account */}
                                 <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm flex flex-col">
-                                    <h4 className="font-black text-gray-900 mb-5">Rekening Bank</h4>
+                                    <h4 className="font-black text-gray-900 mb-5">Rekening Penarikan</h4>
                                     <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-4 flex-1">
-                                        <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center text-blue-600 font-black text-lg border border-gray-100">BCA</div>
+                                        <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center text-orange-500 font-black text-[10px] uppercase border border-gray-100 px-2 text-center break-all leading-tight">{withdrawalAccount.bank_name}</div>
                                         <div>
-                                            <p className="font-black text-gray-900">123 - 4567 - 8890</p>
-                                            <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-widest">A/N {user?.displayName || 'Pemilik Kost'}</p>
+                                            <p className="font-black text-gray-900">{withdrawalAccount.bank_account}</p>
+                                            <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-widest">A/N {withdrawalAccount.bank_account_name}</p>
                                         </div>
                                     </div>
-                                    <button className="mt-4 h-11 w-full border-2 border-dashed border-gray-200 text-gray-400 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-gray-50 transition-colors">
-                                        + Ganti Rekening Bank
+                                    <button className="mt-4 h-11 w-full border-2 border-dashed border-gray-200 text-gray-400 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-orange-50 hover:text-orange-500 hover:border-orange-200 transition-colors" onClick={() => { setEditForm({...withdrawalAccount}); setIsEditingBank(true); }} >
+                                        + Ganti Rekening Penarikan
                                     </button>
                                 </div>
                             </div>
@@ -848,6 +893,100 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     onSuccess={() => { setShowKostForm(false); setEditingKost(null); loadData(); }}
                 />
             )}
+            
+            {/* Bank Edit Modal */}
+            {isEditingBank && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsEditingBank(false)} />
+                    <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 fade-in duration-300">
+                        <div className="bg-orange-500 p-8 text-white relative">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+                            <div className="flex items-center gap-4 relative z-10">
+                                <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center border border-white/30 backdrop-blur-md">
+                                    <Landmark size={24} />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-black uppercase tracking-tight">Rekening Penarikan</h3>
+                                    <p className="text-xs font-bold opacity-80 uppercase tracking-widest">Atur kemana dana Anda akan ditarik</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="p-8 space-y-6">
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Nama Bank / Dompet (BCA, Mandiri, OVO, dll)</label>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><Landmark size={18} /></div>
+                                        <select 
+                                            value={editForm.bank_name}
+                                            onChange={e => setEditForm({...editForm, bank_name: e.target.value})}
+                                            className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-4 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all appearance-none cursor-pointer"
+                                        >
+                                            <option value="" disabled>Pilih Bank / Dompet</option>
+                                            {INDONESIAN_BANKS.map(bank => (
+                                                <option key={bank} value={bank}>{bank}</option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><ChevronRight size={16} className="rotate-90" /></div>
+                                    </div>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Nomor Rekening / Virtual Account</label>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"><CreditCard size={18} /></div>
+                                        <input 
+                                            type="text" 
+                                            value={editForm.bank_account}
+                                            onChange={e => setEditForm({...editForm, bank_account: e.target.value})}
+                                            placeholder="Contoh: 1234567890"
+                                            className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-4 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                                        />
+                                    </div>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block ml-1">Atas Nama (Sesuai Rekening)</label>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"><User size={18} /></div>
+                                        <input 
+                                            type="text" 
+                                            value={editForm.bank_account_name}
+                                            onChange={e => setEditForm({...editForm, bank_account_name: e.target.value.toUpperCase()})}
+                                            placeholder="Contoh: AHMAD SUBARI"
+                                            className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-4 text-sm font-bold text-gray-900 uppercase focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="flex gap-3 pt-2">
+                                <button 
+                                    onClick={() => setIsEditingBank(false)}
+                                    className="flex-1 h-12 rounded-2xl border border-gray-100 text-gray-400 font-black text-[10px] uppercase tracking-widest hover:bg-gray-50 transition-all active:scale-95"
+                                >
+                                    Batal
+                                </button>
+                                <button 
+                                    onClick={saveWithdrawalAccount}
+                                    disabled={isSavingBank || !editForm.bank_name || !editForm.bank_account || !editForm.bank_account_name}
+                                    className="flex-[2] h-12 bg-gray-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-gray-200 hover:bg-orange-500 hover:shadow-orange-100 transition-all active:scale-95 disabled:bg-gray-200 disabled:shadow-none"
+                                >
+                                    {isSavingBank ? (
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                    ) : (
+                                        <>
+                                            <Save size={16} />
+                                            Simpan Rekening
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 };
@@ -871,3 +1010,4 @@ const StatCard: React.FC<{ label: string; value: string; sub: string; icon: Reac
 );
 
 export default MitraDashboard;
+

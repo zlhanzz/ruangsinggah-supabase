@@ -1307,8 +1307,60 @@ export async function updateAgentVerificationStatus(agentId: string, status: 've
     .eq('id', agentId);
 
   if (error) throw error;
+}
 
-  // Optional: If you want to also update auth user metadata (if they are synced)
-  // This is tricky because we can't update other people's auth metadata from the client.
-  // We assume the system uses public.users for the source of truth for verification.
+// ---- MITRA MANAGEMENT FUNCTIONS ----
+
+export async function getAdminMitraRequests(): Promise<any[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  const { data, error } = await supabase
+    .from('mitra_requests')
+    .select('*')
+    .order('timestamp', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function updateMitraRequestStatus(
+  requestId: string, 
+  status: 'accepted' | 'rejected' | 'pending', 
+  userId?: string
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  // 1. Update the request status
+  const { error: requestError } = await supabase
+    .from('mitra_requests')
+    .update({ 
+      status, 
+      updated_at: new Date().toISOString() 
+    })
+    .eq('id', requestId);
+
+  if (requestError) throw requestError;
+
+  // 2. If accepted and userId is provided, update the user's role in the users table
+  if (status === 'accepted' && userId) {
+    const { error: userError } = await supabase
+      .from('users')
+      .update({ 
+        role: 'owner', // Use 'owner' as the internal dashboard role
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (userError) {
+      console.warn('Failed to update user role, but request was accepted:', userError);
+    }
+  }
 }

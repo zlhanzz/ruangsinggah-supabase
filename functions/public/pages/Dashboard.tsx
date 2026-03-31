@@ -13,7 +13,8 @@ import {
     getAnalyticsSummary, AnalyticsSummary,
     getAdminSurveyRequests, updateSurveyRequest, deleteSurveyRequest, deleteSurveyRequests, getSurveyAgents, generateManualDriveFolder,
     getAgentVerificationRequests, updateAgentVerificationStatus,
-    uploadSurveyPhoto, deleteSurveyPhoto
+    uploadSurveyPhoto, deleteSurveyPhoto,
+    getAdminMitraRequests, updateMitraRequestStatus
 } from '../adminService';
 import AgentDashboard from './AgentDashboard';
 import { getUserTransactions } from '../userService';
@@ -198,6 +199,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
     // File Upload State (Property)
     const [newImageFiles, setNewImageFiles] = useState<File[]>([]);
     const [newVideoFiles, setNewVideoFiles] = useState<File[]>([]);
+    const [mitraRequests, setMitraRequests] = useState<any[]>([]);
 
     const [tempRuleInput, setTempRuleInput] = useState('');
     const [tempFacilityInput, setTempFacilityInput] = useState('');
@@ -1717,7 +1719,23 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                 supabase.removeChannel(channel);
             };
         }
+        
+        if (activeMenu === 'mitra' && isAdmin) {
+            loadMitraRequests();
+        }
     }, [activeMenu, isAdmin, uid, dashboardViewMode]);
+
+    const loadMitraRequests = async () => {
+        setLoading(true);
+        try {
+            const data = await getAdminMitraRequests();
+            setMitraRequests(data);
+        } catch (err) {
+            console.error('Failed to load mitra requests:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const [dummyVerifications, setDummyVerifications] = useState<any[]>([
         {
@@ -1768,10 +1786,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
             paymentMethod: 'Midtrans - QRIS',
             transferProofUrl: null,
         },
-    ]);
-    const [dummyMitra, setDummyMitra] = useState<any[]>([
-        { id: 'MTR-001', name: 'Pak Haji Rohim', phone: '6281234568900', email: 'haji.rohim@email.com', date: '2026-02-21', status: 'Diproses', city: 'Bogor', propertyCount: 3, businessType: 'Kos-kosan' },
-        { id: 'MTR-002', name: 'Ibu Sari Dewi', phone: '6285678901234', email: 'sari.dewi@email.com', date: '2026-02-22', status: 'Menunggu', city: 'Depok', propertyCount: 1, businessType: 'Kontrakan' },
     ]);
     const [dbTransactions, setDbTransactions] = useState<AdminTransaction[]>([]);
     const [selectedDbTrxIds, setSelectedDbTrxIds] = useState<string[]>([]);
@@ -4169,38 +4183,76 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                 <p className="text-sm font-medium text-orange-900">Daftar pendaftar yang ingin bergabung sebagai <strong>Mitra Pemilik Kost</strong>. Hubungi via WA untuk verifikasi dan onboarding.</p>
             </div>
             <div className="grid grid-cols-1 gap-4">
-                {dummyMitra.map((mitra: any) => (
+                {mitraRequests.length === 0 ? (
+                    <div className="text-center py-20 bg-white border border-gray-100 rounded-2xl">
+                        <div className="text-4xl mb-4">📭</div>
+                        <h3 className="text-gray-900 font-bold mb-1">Belum Ada Pendaftar</h3>
+                        <p className="text-gray-500 text-sm">Pendaftaran mitra yang masuk akan muncul di sini.</p>
+                    </div>
+                ) : mitraRequests.map((mitra: any) => (
                     <div key={mitra.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row gap-4 hover:shadow-md transition-shadow">
                         <div className="flex-1">
                             <div className="flex flex-wrap justify-between items-start gap-2 mb-3">
                                 <div>
                                     <div className="flex items-center gap-2 mb-1">
-                                        <span className="bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">{mitra.id}</span>
-                                        <span className="text-xs text-gray-400">{mitra.date}</span>
+                                        <span className="bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">{mitra.id.substring(0, 8)}</span>
+                                        <span className="text-xs text-gray-400">{new Date(mitra.timestamp).toLocaleDateString('id-ID')}</span>
                                     </div>
                                     <p className="font-medium text-gray-500 text-sm">Nama: <span className="font-black text-gray-900 text-base">{mitra.name}</span></p>
                                 </div>
-                                <span className={`inline-flex px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-lg border ${mitra.status === 'Menunggu' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : mitra.status === 'Diproses' ? 'bg-blue-50 text-blue-700 border-blue-200' : mitra.status === 'Diterima' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{mitra.status}</span>
+                                <span className={`inline-flex px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg border ${
+                                    mitra.status === 'accepted' ? 'bg-green-50 text-green-700 border-green-100' : 
+                                    mitra.status === 'rejected' ? 'bg-red-50 text-red-700 border-red-100' : 
+                                    'bg-yellow-50 text-yellow-700 border-yellow-100'
+                                }`}>
+                                    {mitra.status === 'accepted' ? 'Diterima' : mitra.status === 'rejected' ? 'Ditolak' : 'Menunggu'}
+                                </span>
                             </div>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">No. WA</p><p className="font-bold text-gray-900 text-sm mt-0.5">{mitra.phone}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Kota</p><p className="font-bold text-gray-900 text-sm mt-0.5">{mitra.city}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jenis Bisnis</p><p className="font-bold text-gray-900 text-sm mt-0.5">{mitra.businessType}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jml. Properti</p><p className="font-bold text-orange-600 text-sm mt-0.5">{mitra.propertyCount} unit</p></div>
+                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Kost</p><p className="font-bold text-gray-900 text-sm mt-0.5">{mitra.property_name || '-'}</p></div>
+                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</p><p className="font-bold text-gray-900 text-[11px] break-all leading-tight mt-1">{mitra.email || '-'}</p></div>
+                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alamat</p><p className="font-bold text-orange-600 text-[11px] leading-tight mt-1 line-clamp-1">{mitra.property_address || '-'}</p></div>
                             </div>
                         </div>
                         <div className="flex flex-col gap-2 sm:w-44 shrink-0 border-t sm:border-t-0 sm:border-l border-gray-100 pt-3 sm:pt-0 sm:pl-5 justify-center">
-                            {(mitra.status === 'Menunggu' || mitra.status === 'Diproses') && (
+                            {mitra.status !== 'accepted' && mitra.status !== 'rejected' && (
                                 <div className="grid grid-cols-2 gap-2">
-                                    <button onClick={() => alert(`Mitra ${mitra.name} (${mitra.id}) diterima!`)} className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-xl text-xs font-bold active:scale-95 flex justify-center items-center gap-1">
+                                    <button 
+                                        onClick={async () => {
+                                            if (window.confirm(`Terima pendaftaran ${mitra.name} sebagai Mitra Pemilik? Ini akan memperbarui role akun mereka.`)) {
+                                                try {
+                                                    await updateMitraRequestStatus(mitra.id, 'accepted', mitra.user_id);
+                                                    alert('Mitra diterima dan role akun diperbarui!');
+                                                    loadMitraRequests();
+                                                } catch (err) {
+                                                    alert('Gagal menerima mitra: ' + (err instanceof Error ? err.message : 'Unknown error'));
+                                                }
+                                            }
+                                        }} 
+                                        className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-xl text-xs font-bold active:scale-95 flex justify-center items-center gap-1 shadow-sm"
+                                    >
                                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Terima
                                     </button>
-                                    <button onClick={() => { if (window.confirm(`Tolak pendaftaran ${mitra.name}?`)) alert('Ditolak.'); }} className="w-full bg-red-50 hover:bg-red-100 text-red-600 py-2 rounded-xl text-xs font-bold border border-red-200 active:scale-95 flex justify-center items-center gap-1">
+                                    <button 
+                                        onClick={async () => {
+                                            if (window.confirm(`Tolak pendaftaran ${mitra.name}?`)) {
+                                                try {
+                                                    await updateMitraRequestStatus(mitra.id, 'rejected');
+                                                    alert('Pendaftaran ditolak.');
+                                                    loadMitraRequests();
+                                                } catch (err) {
+                                                    alert('Gagal menolak mitra: ' + (err instanceof Error ? err.message : 'Unknown error'));
+                                                }
+                                            }
+                                        }} 
+                                        className="w-full bg-red-50 hover:bg-red-100 text-red-600 py-2 rounded-xl text-xs font-bold border border-red-200 active:scale-95 flex justify-center items-center gap-1"
+                                    >
                                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>Tolak
                                     </button>
                                 </div>
                             )}
-                            <button onClick={() => window.open(`https://wa.me/${mitra.phone}?text=${encodeURIComponent(`Halo ${mitra.name}, kami dari Admin RuangSinggah.id. Terima kasih sudah mendaftar sebagai Mitra (${mitra.id}). Kami ingin melanjutkan proses verifikasi Anda. Apakah ada waktu untuk berdiskusi?`)}`, '_blank')} className="w-full bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
+                            <button onClick={() => window.open(`https://wa.me/${mitra.phone}?text=${encodeURIComponent(`Halo ${mitra.name}, kami dari Admin RuangSinggah.id. Terima kasih sudah mendaftar sebagai Mitra. Kami ingin melanjutkan proses verifikasi Anda. Apakah ada waktu untuk berdiskusi?`)}`, '_blank')} className="w-full bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.711.956 2.873.956 3.182 0 5.768-2.585 5.77-5.765.001-3.181-2.586-5.768-5.768-5.768zm3.333 8.33c-.15.424-.877.817-1.229.845-.306.024-.652.128-2.146-.464-1.801-.715-2.956-2.548-3.047-2.671-.09-.122-.727-.968-.727-1.844 0-.875.452-1.304.613-1.472.161-.168.351-.21.468-.21.117 0 .234.004.336.008.109.006.255-.044.398.303.151.365.518 1.264.565 1.356.046.091.077.198.016.321-.061.121-.092.197-.184.304-.092.107-.193.226-.275.319-.092.105-.188.22-.083.402.105.183.468.775 1.002 1.25.688.614 1.27.8 1.455.892.183.092.29.077.397-.038.106-.115.46-.537.583-.721.122-.184.244-.154.409-.092.165.061 1.042.492 1.221.583.179.092.298.138.341.214.043.076.043.447-.107.871z" /></svg>
                                 Follow Up WA
                             </button>
