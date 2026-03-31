@@ -17,6 +17,7 @@ import Dashboard from './pages/Dashboard';
 import SurveyService from './pages/SurveyService';
 import MyKost from './pages/MyKost';
 import Chat from './pages/Chat';
+import MitraDashboard from './pages/MitraDashboard';
 import OrderPaymentStatus from './pages/OrderPaymentStatus';
 import { getPublishedProperties } from './userService';
 
@@ -40,7 +41,7 @@ const App: React.FC = () => {
       navigate(
         user?.role === 'admin' ? Page.DASHBOARD_ADMIN : 
         user?.role === 'survey_agent' ? Page.DASHBOARD_AGENT : 
-        user?.role === 'owner' ? Page.DASHBOARD_OWNER : 
+        user?.role === 'owner' ? Page.DASHBOARD_MITRA : 
         Page.HOME
       );
     }
@@ -92,7 +93,10 @@ const App: React.FC = () => {
 
       const profile = dbData || {};
       let role = profile.role || 'user';
-      if (profile.is_admin === true && role === 'user') role = 'admin';
+      if (profile.is_admin === true && (role === 'user' || role === 'mitra')) role = 'admin'; // Admin override
+      
+      // Normalize 'mitra' to 'owner' for internal logic consistency
+      if (role === 'mitra') role = 'owner';
       
       console.log("Determined role:", role);
 
@@ -120,7 +124,7 @@ const App: React.FC = () => {
       if (location.pathname === Page.LOGIN) {
         if (role === 'admin') navigate(Page.DASHBOARD_ADMIN, { replace: true });
         else if (role === 'survey_agent') navigate(Page.DASHBOARD_AGENT, { replace: true });
-        else if (role === 'owner') navigate(Page.DASHBOARD_OWNER, { replace: true });
+        else if (role === 'owner') navigate(Page.DASHBOARD_MITRA, { replace: true });
       }
     } catch (err) {
       console.error('Error fetching user data:', err);
@@ -252,7 +256,7 @@ const App: React.FC = () => {
       } else if (user?.role === 'survey_agent') {
         navigate(Page.DASHBOARD_AGENT);
       } else if (user?.role === 'owner') {
-        navigate(Page.DASHBOARD_OWNER);
+        navigate(Page.DASHBOARD_MITRA);
       } else {
         navigate(Page.HOME);
       }
@@ -263,17 +267,27 @@ const App: React.FC = () => {
   const selectedKostId = query.get('kostId');
   const selectedKost = selectedKostId ? listings.find(k => k.id === selectedKostId) : null;
 
+  // Pages that manage their own navigation & header
+  const isDashboardPage = [
+    Page.DASHBOARD_MITRA,
+    Page.DASHBOARD_ADMIN,
+    Page.DASHBOARD_AGENT,
+    Page.DASHBOARD_OWNER,
+  ].includes(location.pathname as Page);
+
   return (
     <div className="min-h-screen flex flex-col font-sans selection:bg-orange-100 selection:text-orange-900">
-      <Navbar
-        activePage={location.pathname as Page}
-        onPageChange={(page) => {
-          navigate(page);
-          setPendingTransaction(null);
-        }}
-        user={user}
-        onLogout={handleLogout}
-      />
+      {!isDashboardPage && (
+        <Navbar
+          activePage={location.pathname as Page}
+          onPageChange={(page) => {
+            navigate(page);
+            setPendingTransaction(null);
+          }}
+          user={user}
+          onLogout={handleLogout}
+        />
+      )}
 
       <main className="flex-grow">
         {loadingAuth ? (
@@ -313,7 +327,7 @@ const App: React.FC = () => {
                 <Navigate to={
                   user.role === 'admin' ? Page.DASHBOARD_ADMIN : 
                   user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : 
-                  user.role === 'owner' ? Page.DASHBOARD_OWNER : 
+                  user.role === 'owner' ? Page.DASHBOARD_MITRA : 
                   Page.HOME
                 } replace />
               ) : (
@@ -340,6 +354,7 @@ const App: React.FC = () => {
             <Route path={Page.DASHBOARD_ADMIN} element={
               <Dashboard 
                 role={user?.role || ''} 
+                user={user}
                 uid={user?.id} 
                 verificationStatus={user?.verification_status}
                 onPageChange={(p: Page) => navigate(p)} 
@@ -351,23 +366,25 @@ const App: React.FC = () => {
               />
             } />
             
-            <Route path={Page.DASHBOARD_OWNER} element={
-              <Dashboard 
-                role={user?.role || 'owner'} 
-                uid={user?.id} 
-                verificationStatus={user?.verification_status}
-                onPageChange={(p: Page) => navigate(p)} 
-                listings={listings} 
-                onAdd={handleAddKost} 
-                onEdit={handleEditKost} 
-                onDelete={handleDeleteKost} 
-                onRefreshListings={fetchListings} 
+            <Route path={Page.DASHBOARD_MITRA} element={
+              <MitraDashboard 
+                user={user}
+                uid={user?.id}
+                onPageChange={(p: Page) => navigate(p)}
+                onAddKost={handleAddKost}
+                onEditKost={handleEditKost}
+                onDeleteKost={handleDeleteKost}
               />
+            } />
+            
+            <Route path={Page.DASHBOARD_OWNER} element={
+              <Navigate to={Page.DASHBOARD_MITRA} replace />
             } />
             
             <Route path={Page.DASHBOARD_AGENT} element={
               <Dashboard 
                 role={user?.role || 'survey_agent'} 
+                user={user}
                 uid={user?.id} 
                 verificationStatus={user?.verification_status}
                 onPageChange={(p: Page) => navigate(p)} 

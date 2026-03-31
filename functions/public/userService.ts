@@ -274,6 +274,128 @@ export async function createBookingRequest(bookingData: {
   }
 }
 
+export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
+  try {
+    const { data, error } = await supabase
+      .from('properties')
+      .select('*')
+      .eq('owner_uid', ownerUid)
+      .order('updated_at', { ascending: false });
+
+    if (error) throw error;
+    if (!data) return [];
+
+    return data.map((row) => {
+      const rawImages = row.image_urls || [];
+      const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
+      const rawVideos = row.video_urls || [];
+      const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');
+
+      return {
+        id: row.id,
+        ownerUid: row.owner_uid,
+        title: row.title || 'Tanpa Nama',
+        description: row.description || '',
+        price: row.price || 0,
+        facilities: row.facilities || [],
+        address: row.address || '',
+        city: row.city || '',
+        type: row.type || 'Campur',
+        status: row.status || 'published',
+        isVerified: row.is_verified ?? false,
+        rating: row.rating || 0,
+        location: row.location || { lat: 0, lng: 0 },
+        imageUrls: images,
+        videoUrls: videos,
+        instagramUrl: row.instagram_url || '',
+        tiktokUrl: row.tiktok_url || '',
+        roomTypes: row.room_types || [],
+        reviews: row.reviews || [],
+        rules: row.rules || [],
+        campuses: row.campuses || [],
+        publicFacilities: row.public_facilities || [],
+        views: row.views || 0,
+        createdAt: convertTimestamp(row.created_at),
+        updatedAt: convertTimestamp(row.updated_at),
+      } as Kost;
+    });
+  } catch (error) {
+    console.error('Error fetching owner properties:', error);
+    return [];
+  }
+}
+
+export async function incrementPropertyView(propertyId: string) {
+  try {
+    const { error } = await supabase.rpc('increment_property_view', { prop_id: propertyId });
+    // If RPC fails (e.g. not created yet), fallback to regular increment
+    if (error) {
+      const { data: prop } = await supabase.from('properties').select('views').eq('id', propertyId).single();
+      const newViews = (prop?.views || 0) + 1;
+      await supabase.from('properties').update({ views: newViews }).eq('id', propertyId);
+    }
+  } catch (error) {
+    console.error('Error incrementing view:', error);
+  }
+}
+
+export async function getOwnerBookings(ownerUid: string): Promise<any[]> {
+  try {
+    // First, get all property IDs owned by this Mitra
+    const { data: properties, error: propError } = await supabase
+      .from('properties')
+      .select('id')
+      .eq('owner_uid', ownerUid);
+
+    if (propError) throw propError;
+    if (!properties || properties.length === 0) return [];
+
+    const propertyIds = properties.map(p => p.id);
+
+    // Then, fetch transactions related to these properties
+    const { data, error } = await supabase
+      .from('transactions')
+      .select(`
+        *,
+        user:user_id (
+          name,
+          email,
+          phone,
+          photo_url,
+          gender,
+          occupation,
+          institution
+        )
+      `)
+      .in('product_id', propertyIds)
+      .eq('product_type', 'kost_booking')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching owner bookings:', error);
+    return [];
+  }
+}
+
+export async function updateBookingStatus(transactionId: string, status: 'PAID' | 'REJECTED' | 'CANCELLED' | string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('transactions')
+      .update({ 
+        status, 
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', transactionId);
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error updating booking status:', error);
+    throw error;
+  }
+}
+
 export async function cancelBookingRequest(transactionId: string) {
   try {
     const { data, error } = await supabase

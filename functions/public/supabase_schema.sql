@@ -24,6 +24,12 @@ CREATE TABLE IF NOT EXISTS public.users (
   religion            TEXT,
   relationship_status TEXT,
   photo_url           TEXT,
+  -- Agent Verification Fields
+  verification_status TEXT NOT NULL DEFAULT 'unverified', -- unverified, pending, verified
+  ktp_number          TEXT,
+  ktp_address         TEXT,
+  ktp_photo_url       TEXT,
+  verification_notes  TEXT,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -41,6 +47,11 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS gender              TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS religion            TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS relationship_status TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS photo_url           TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS verification_status TEXT NOT NULL DEFAULT 'unverified';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS ktp_number          TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS ktp_address         TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS ktp_photo_url       TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS verification_notes  TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
@@ -309,6 +320,11 @@ CREATE POLICY "users_insert_own"
   ON public.users FOR INSERT
   WITH CHECK (auth.uid() = id);
 
+-- Admin update profil siapa saja (untuk verifikasi)
+CREATE POLICY "users_update_admin"
+  ON public.users FOR UPDATE
+  USING (public.is_admin());
+
 
 -- ============================================================
 -- STEP 5: POLICIES untuk tabel PROPERTIES
@@ -456,6 +472,10 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('surveys', 'surveys', TRUE)
 ON CONFLICT DO NOTHING;
 
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('survey-photos', 'survey-photos', TRUE)
+ON CONFLICT DO NOTHING;
+
 
 -- ============================================================
 -- STEP 10: STORAGE POLICIES
@@ -495,6 +515,19 @@ CREATE POLICY "storage_surveys_select"
 CREATE POLICY "storage_surveys_delete"
   ON storage.objects FOR DELETE
   USING (bucket_id = 'surveys' AND auth.uid() IS NOT NULL);
+
+-- Bucket: survey-photos
+CREATE POLICY "storage_photos_survey_insert"
+  ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'survey-photos' AND auth.uid() IS NOT NULL);
+
+CREATE POLICY "storage_photos_survey_select"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'survey-photos');
+
+CREATE POLICY "storage_photos_survey_delete"
+  ON storage.objects FOR DELETE
+  USING (bucket_id = 'survey-photos' AND auth.uid() IS NOT NULL);
 
 CREATE POLICY "storage_databases_delete"
   ON storage.objects FOR DELETE
@@ -748,6 +781,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
   message     TEXT NOT NULL,
   type        TEXT NOT NULL DEFAULT 'info', -- info, success, warning, error, assignment, submission
   metadata    JSONB DEFAULT '{}'::jsonb,
+  link        TEXT,  -- Kolom tambahan untuk link redirect notifikasi
   is_read     BOOLEAN DEFAULT false,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

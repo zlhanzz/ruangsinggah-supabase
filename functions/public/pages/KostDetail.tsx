@@ -5,6 +5,7 @@ import { FORMAT_CURRENCY } from '../constants';
 import BookingModal from '../components/BookingModal';
 import PaymentGateway from '../components/PaymentGateway';
 import ChatWindow from '../components/ChatWindow';
+import { incrementPropertyView } from '../userService';
 import { getOrCreateChatSession } from '../chatService';
 import { createBookingRequest } from '../userService';
 
@@ -53,6 +54,13 @@ const TransportIcon: React.FC<{ mode?: string }> = ({ mode }) => {
 const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user, onLoginRedirect, validateProfile }) => {
   const [currentPhoto, setCurrentPhoto] = useState(0);
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
+
+  // Auto-track view
+  useEffect(() => {
+    if (kost.id) {
+      incrementPropertyView(kost.id);
+    }
+  }, [kost.id]);
   const [selectedPeriod, setSelectedPeriod] = useState<PricingPeriod>('bulanan');
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isPaymentGatewayOpen, setIsPaymentGatewayOpen] = useState(false);

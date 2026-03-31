@@ -83,50 +83,13 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange }) => 
     setIsModalOpen(false); // Close form modal
   };
 
-  const handlePaymentSuccess = async () => {
+  const handlePaymentSuccess = async (transactionId?: string) => {
     setShowPayment(false);
     setShowSuccess(true);
     
-    try {
-      // 1. Save order to Supabase
-      const { data: newRequest, error } = await supabase
-        .from('survey_requests')
-        .insert([{
-          user_id: user.uid || user.id,
-          kost_name: paymentMetadata.kostName,
-          kost_address: paymentMetadata.kostAddress,
-          owner_phone: paymentMetadata.ownerPhone,
-          survey_date: paymentMetadata.surveyDate,
-          survey_time: paymentMetadata.surveyTime,
-          notes: `${paymentMetadata.notes}\n[Sumber Info: ${paymentMetadata.source}]`,
-          status: 'PENDING_ASSIGNMENT'
-        }])
-        .select()
-        .single();
-        
-      if (error) throw error;
-      
-      // 2. Fetch all admins and send them a real-time notification
-      const { data: admins } = await supabase
-        .from('users')
-        .select('id')
-        .eq('role', 'admin');
-        
-      if (admins && admins.length > 0) {
-        for (const admin of admins) {
-          await notificationService.createNotification(
-            admin.id,
-            'Pesanan Jasa Survey Baru',
-            `Ada pesanan survey baru untuk Kost: ${paymentMetadata.kostName} dari ${paymentMetadata.name}. Segera cek dan tugaskan agent!`,
-            'assignment',
-            { survey_id: newRequest?.id }
-          );
-        }
-      }
-    } catch (err) {
-      console.error('Failed to save survey order to database:', err);
-    }
-
+    // NOTE: Manual database insertion was removed here.
+    // The survey_request is now created by the backend (createPakasirPayment) 
+    // and status is updated via Webhook to prevent duplication.
   };
 
   if (showSuccess) {
@@ -741,9 +704,9 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange }) => 
           orderId={`SRV-${Date.now()}`}
           productId={SURVEY_PRODUCT_ID}
           productType="survey"
-          userId={user.id}
+          userId={user.uid || user.id}
           metadata={paymentMetadata}
-          onPaymentSuccess={handlePaymentSuccess}
+          onPaymentSuccess={(transactionId) => handlePaymentSuccess(transactionId)}
           onCancel={() => setShowPayment(false)}
         />
       )}

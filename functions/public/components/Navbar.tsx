@@ -93,9 +93,9 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
             </div>
 
             <div className="hidden md:flex items-center space-x-6">
-              {navItems.map((item) => (
+              {navItems.map((item, index) => (
                 <button
-                  key={item.id}
+                  key={`${item.id}-${index}`}
                   onClick={() => handleNavClick(item.id)}
                   className={`${activePage === item.id
                     ? 'text-orange-600 font-semibold'
@@ -110,10 +110,14 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
 
               {user ? (
                 <div className="flex items-center gap-4">
-                  {/* ADMIN & AGENT LINK */}
-                  {['admin', 'survey_agent', 'owner'].includes(user.role) && (
+                  {['admin', 'survey_agent', 'owner', 'mitra'].includes(user.role) && (
                     <button
-                      onClick={() => onPageChange(user.role === 'admin' ? Page.DASHBOARD_ADMIN : user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : Page.DASHBOARD_OWNER)}
+                      onClick={() => {
+                        const targetPage = user.role === 'admin' ? Page.DASHBOARD_ADMIN : 
+                                           user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : 
+                                           Page.DASHBOARD_MITRA;
+                        onPageChange(targetPage);
+                      }}
                       className="bg-gray-900 text-white px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest hover:bg-orange-500 transition-colors"
                     >
                       {user.role === 'admin' ? 'Admin Panel' : user.role === 'survey_agent' ? 'Agent Panel' : 'Owner Panel'}
@@ -198,10 +202,13 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                         >
                           Kost Saya
                         </button>
-                        {['admin', 'survey_agent', 'owner'].includes(user.role) && (
+                        {['admin', 'survey_agent', 'owner', 'mitra'].includes(user.role) && (
                           <button
                             onClick={() => {
-                              onPageChange(user.role === 'admin' ? Page.DASHBOARD_ADMIN : user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : Page.DASHBOARD_OWNER);
+                              const targetPage = user.role === 'admin' ? Page.DASHBOARD_ADMIN : 
+                                               user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : 
+                                               Page.DASHBOARD_MITRA;
+                              onPageChange(targetPage);
                               setIsProfileOpen(false);
                             }}
                             className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 font-bold border-t border-gray-50"
@@ -310,10 +317,13 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                       >
                         Kost Saya
                       </button>
-                      {['admin', 'survey_agent', 'owner'].includes(user.role) && (
+                      {['admin', 'survey_agent', 'owner', 'mitra'].includes(user.role) && (
                         <button
                           onClick={() => {
-                            onPageChange(user.role === 'admin' ? Page.DASHBOARD_ADMIN : user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : Page.DASHBOARD_OWNER);
+                            const targetPage = user.role === 'admin' ? Page.DASHBOARD_ADMIN : 
+                                             user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : 
+                                             Page.DASHBOARD_MITRA;
+                            onPageChange(targetPage);
                             setIsProfileOpen(false);
                           }}
                           className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 font-bold border-t border-gray-50"

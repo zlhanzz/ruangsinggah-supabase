@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Kost, RoomType, RoomPricing, PricingPeriod, DatabaseProduct, Page } from '../types';
+import { Kost, RoomType, RoomPricing, PricingPeriod, DatabaseProduct, Page, SurveyRequest } from '../types';
 import { FORMAT_CURRENCY } from '../constants';
 import { supabase } from '../supabase';
 import {
@@ -11,7 +11,7 @@ import {
     getAdminProperties, addPropertyWithMedia, updatePropertyWithMedia,
     updatePropertyStatus, deleteProperty, BasicPropertyInfo,
     getAnalyticsSummary, AnalyticsSummary,
-    getAdminSurveyRequests, updateSurveyRequest, getSurveyAgents, SurveyRequest,
+    getAdminSurveyRequests, updateSurveyRequest, deleteSurveyRequest, deleteSurveyRequests, getSurveyAgents, generateManualDriveFolder,
     getAgentVerificationRequests, updateAgentVerificationStatus,
     uploadSurveyPhoto, deleteSurveyPhoto
 } from '../adminService';
@@ -26,99 +26,7 @@ import {
 } from 'recharts';
 import { Zap } from 'lucide-react';
 
-const getDummySurveyData = (uid: string): SurveyRequest[] => [
-    {
-        id: 'SURV-DUMMY-REQ-001',
-        created_at: new Date(Date.now() - 3600000).toISOString(),
-        user_id: 'user_new',
-        kost_id: 'kost_new',
-        kost_name: 'Kost Kamarku Menteng',
-        kost_address: 'Jl. Menteng No. 5',
-        survey_date: '2026-04-05',
-        survey_time: '09:00',
-        status: 'PENDING_ASSIGNMENT',
-        owner_phone: '081234567890',
-        notes: 'Cek AC dan kebersihan lingkungan.',
-        assigned_agent_id: uid,
-        agent_name: 'Arif',
-        user: { name: 'Rina Wijaya', email: 'rina@example.com', phone: '087711223344' }
-    },
-    {
-        id: 'SURV-DUMMY-ACT-001',
-        created_at: new Date(Date.now() - 86400000).toISOString(),
-        user_id: 'user_active',
-        kost_id: 'kost_active',
-        kost_name: 'Kost Exclusive Menteng',
-        kost_address: 'Jl. Menteng Raya No. 12, Jakarta Pusat',
-        survey_date: '2026-03-30',
-        survey_time: '14:00',
-        status: 'AGENT_ASSIGNED',
-        owner_phone: '081234567890',
-        notes: 'Mohon cek kebersihan kamar mandi dan AC.',
-        assigned_agent_id: uid,
-        agent_name: 'Arif',
-        user: { name: 'Andi Pratama', email: 'andi@example.com', phone: '087788990011' }
-    },
-    {
-        id: 'SURV-DUMMY-RES-001',
-        created_at: new Date(Date.now() - 172800000).toISOString(),
-        user_id: 'user_reschedule',
-        kost_id: 'kost_reschedule',
-        kost_name: 'Green Residence Depok',
-        kost_address: 'Jl. Margonda Raya No. 45, Depok',
-        survey_date: '2026-04-10',
-        survey_time: '11:00',
-        status: 'RESCHEDULED',
-        owner_phone: '081266778899',
-        notes: 'User minta diundur karena ada urusan mendadak.',
-        assigned_agent_id: uid,
-        agent_name: 'Arif',
-        user: { name: 'Siti Aminah', email: 'siti@example.com', phone: '085522334455' }
-    },
-    {
-        id: 'SURV-DUMMY-ACT-002',
-        created_at: new Date(Date.now() - 172800000).toISOString(),
-        user_id: 'user_surveying',
-        kost_id: 'kost_surveying',
-        kost_name: 'Kost Putri Hijau',
-        kost_address: 'Jl. Margonda Raya No. 45, Depok',
-        survey_date: '2026-03-31',
-        survey_time: '10:00',
-        status: 'SURVEYING',
-        owner_phone: '085566778899',
-        notes: 'Pastikan sinyal WiFi di lantai 2 lancar.',
-        assigned_agent_id: uid,
-        agent_name: 'Arif',
-        user: { name: 'Siti Aminah', email: 'siti@example.com', phone: '085522334455' }
-    },
-    {
-        id: 'SURV-DUMMY-HIS-001',
-        created_at: new Date(Date.now() - 259200000).toISOString(),
-        user_id: 'user_done',
-        kost_id: 'kost_done',
-        kost_name: 'Apartemen Margonda Residence',
-        kost_address: 'Tower A, Jl. Margonda Depok',
-        survey_date: '2026-03-25',
-        survey_time: '16:00',
-        status: 'COMPLETED',
-        owner_phone: '089900112233',
-        result_drive_link: 'https://drive.google.com/drive/folders/dummy-link-1',
-        assigned_agent_id: uid,
-        agent_name: 'Arif',
-        user: { name: 'Budi Santoso', email: 'budi@example.com', phone: '081299887766' },
-        evaluation_summary: {
-           room_facilities: 'Kamar bersih, AC dingin, bed baru.',
-           bathroom_facilities: 'Kamar mandi dalam, shower air panas berfungsi.',
-           water_check: 'Air lancar dan jernih.',
-           wifi_check: 'WiFi 50Mbps stabil.',
-           security_check: 'CCTV 24 jam, ada penjaga kos.',
-           access_check: 'Akses mobil mudah, parkir luas.',
-           resident_testimonial: 'Penghuni lain cukup tenang.'
-        },
-        user_rating: 5,
-        user_comment: 'Sangat detail laporannya, agen arif sangat membantu. Terima kasih!'
-    }
-];
+
 
 const DUMMY_WITHDRAWAL_DATA = [
     {
@@ -151,6 +59,7 @@ interface DashboardProps {
     onDelete?: (id: string) => void;
     onRefreshListings?: () => void; // Re-fetch public listings setelah admin save
     verificationStatus?: string;
+    user?: any;
 }
 
 // Leaflet Type Definition stub
@@ -253,7 +162,7 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
 
 type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_db' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'tenants' | 'agent_verification';
 
-const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings = [], onAdd, onEdit, onDelete, onRefreshListings, verificationStatus }) => {
+const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, listings = [], onAdd, onEdit, onDelete, onRefreshListings, verificationStatus }) => {
     const isAdmin = role === 'admin';
     const isAgent = role === 'survey_agent';
     const isOwner = role === 'owner';
@@ -274,6 +183,24 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
     const [showConfirmDeleteModal, setShowConfirmDeleteModal] = useState(false);
     const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'kost' | 'database' } | null>(null);
     // --- AKHIR STATE BARU ---
+
+    // Form State (Property)
+    const initialFormState: Partial<Kost> = {
+        title: '', description: '', type: 'Campur', status: 'published', price: 0,
+        city: '', area: '', address: '',
+        location: { lat: -6.2088, lng: 106.8456 }, // Jakarta (Central) as neutral default
+        imageUrls: [], videoUrls: [], instagramUrl: '', tiktokUrl: '', facilities: [], rules: [], roomTypes: [],
+        additionalFeePrice: 0, additionalFeeName: '', campuses: [], publicFacilities: [],
+        omnichannelContactName: '', omnichannelContactPhone: '', omnichannelContactType: 'owner'
+    };
+    const [formData, setFormData] = useState<Partial<Kost>>(initialFormState);
+
+    // File Upload State (Property)
+    const [newImageFiles, setNewImageFiles] = useState<File[]>([]);
+    const [newVideoFiles, setNewVideoFiles] = useState<File[]>([]);
+
+    const [tempRuleInput, setTempRuleInput] = useState('');
+    const [tempFacilityInput, setTempFacilityInput] = useState('');
 
     // PROPERTIES STATE
     const [adminListings, setAdminListings] = useState<BasicPropertyInfo[]>([]);
@@ -390,23 +317,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
     // --- RENT TRANSACTION FILTER ---
     const [rentFilter, setRentFilter] = useState<'all' | 'pengajuan' | 'realisasi' | 'perpanjangan'>('all');
 
-    // Form State (Property)
-    const initialFormState: Partial<Kost> = {
-        title: '', description: '', type: 'Campur', status: 'published', price: 0,
-        city: '', area: '', address: '',
-        location: { lat: -6.2088, lng: 106.8456 }, // Jakarta (Central) as neutral default
-        imageUrls: [], videoUrls: [], instagramUrl: '', tiktokUrl: '', facilities: [], rules: [], roomTypes: [],
-        additionalFeePrice: 0, additionalFeeName: '', campuses: [], publicFacilities: [],
-        omnichannelContactName: '', omnichannelContactPhone: '', omnichannelContactType: 'owner'
-    };
-    const [formData, setFormData] = useState<Partial<Kost>>(initialFormState);
-
-    // File Upload State (Property)
-    const [newImageFiles, setNewImageFiles] = useState<File[]>([]);
-    const [newVideoFiles, setNewVideoFiles] = useState<File[]>([]);
-
-    const [tempRuleInput, setTempRuleInput] = useState('');
-    const [tempFacilityInput, setTempFacilityInput] = useState('');
 
     const sections = [
         { id: 'info', label: 'Informasi Dasar' },
@@ -480,7 +390,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
 
     // --- SURVEY REQUESTS STATE ---
     const [surveyRequests, setSurveyRequests] = useState<SurveyRequest[]>([]);
-    const [surveyAgents, setSurveyAgents] = useState<{id: string, name: string, phone: string, rating?: string}[]>([]);
+    const [adminSurveyTab, setAdminSurveyTab] = useState<'all' | 'pending' | 'active' | 'completed'>('all');
+    const [surveyAgents, setSurveyAgents] = useState<{id: string, name: string, phone: string, photo_url?: string, rating?: string}[]>([]);
     const [isEditingSurvey, setIsEditingSurvey] = useState<SurveyRequest | null>(null);
     const [isReschedulingSurvey, setIsReschedulingSurvey] = useState<SurveyRequest | null>(null);
     const [newSurveyDate, setNewSurveyDate] = useState('');
@@ -576,22 +487,21 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
         }
     };
 
-    const loadSurveyRequests = async () => {
-        setLoading(true);
+    const loadSurveyRequests = async (silent: boolean = false) => {
+        if (!silent) setLoading(true);
         try {
             const realData = await getAdminSurveyRequests() || [];
             
-            // Selalu sertakan data dummy untuk kebutuhan evaluasi agar tidak kosong bagi Admin maupun Agen
-            const dummyData = getDummySurveyData(uid || 'Arif-UID');
-            
-            // Gabungkan real data dan dummy data
-            setSurveyRequests([...realData, ...dummyData]);
+            // IF real data exists, only show real data to avoid confusion
+            // We no longer show dummy data even if empty
+            setSurveyRequests(realData);
+            setSelectedSurveyIds([]); // Reset selection on load
 
             if (isAdmin) {
                 const agents = await getSurveyAgents();
-                // Calculate ratings for each agent from surveyRequests
+                // Calculate ratings for each agent from realData being displayed
                 const agentsWithRatings = agents.map(agent => {
-                    const agentSurveys = [...realData, ...dummyData].filter(r => r.assigned_agent_id === agent.id);
+                    const agentSurveys = realData.filter(r => r.assigned_agent_id === agent.id);
                     const ratings = agentSurveys.map(r => r.user_rating || 0).filter(r => r > 0);
                     const avgRating = ratings.length > 0 
                         ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1) 
@@ -602,10 +512,25 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
             }
         } catch (error) {
             console.error("Gagal memuat survey requests", error);
-            // Fallback ke dummy data jika fail
-            setSurveyRequests(getDummySurveyData(uid || 'Arif-UID'));
+            // Nonaktifkan fallback ke dummy data
+            setSurveyRequests([]);
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
+        }
+    };
+
+    const handleDeleteSurvey = async (id: string, name: string) => {
+        if (!window.confirm(`Apakah Anda yakin ingin menghapus permohonan survey "${name}"? Data yang dihapus tidak dapat dikembalikan.`)) return;
+        setIsSubmitting(true);
+        try {
+            await deleteSurveyRequest(id);
+            alert('Survey berhasil dihapus');
+            loadSurveyRequests();
+        } catch (error) {
+            console.error("Gagal menghapus survey", error);
+            alert('Gagal menghapus survey');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -616,40 +541,33 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
         try {
             const oldStatus = isEditingSurvey.status;
             const finalData = { ...surveyForm };
-            if (isAgent && finalData.status === 'SURVEYING') {
-                finalData.status = 'COMPLETED';
-            }
-            await updateSurveyRequest(isEditingSurvey.id, finalData);
+            
+            // WHITELIST ONLY ACTUAL DATABASE COLUMNS
+            // This prevents Supabase 400 error (Unknown Column) from relation fields like 'user' & 'transaction'
+            const SURVEY_DB_COLUMNS = [
+                'status', 'kost_name', 'kost_address', 'owner_phone', 
+                'survey_date', 'survey_time', 'notes', 
+                'agent_name', 'agent_phone', 'agent_photo_url', 'assigned_agent_id',
+                'result_drive_link', 'evaluation_summary', 
+                'user_rating', 'user_comment'
+            ];
 
-            // Automated internal notifications
-            if (finalData.status !== oldStatus) {
-                if (finalData.status === 'AGENT_ASSIGNED' && finalData.assigned_agent_id) {
-                    await sendNotification(
-                        finalData.assigned_agent_id,
-                        'Tugas Survey Baru 📋',
-                        `Anda ditugaskan untuk survey ${finalData.kost_name}. Segera cek jadwal!`,
-                        'assignment',
-                        { survey_id: isEditingSurvey.id },
-                        '/dashboard-agent'
-                    );
-                    await sendNotification(
-                        isEditingSurvey.user_id,
-                        'Survey Sedang Diproses 🏠',
-                        `Agent ${finalData.agent_name} telah ditugaskan untuk survey ${finalData.kost_name}.`,
-                        'info',
-                        { survey_id: isEditingSurvey.id },
-                        '/my-bookings'
-                    );
-                } else if (finalData.status === 'COMPLETED') {
-                    await sendNotification(
-                        isEditingSurvey.user_id,
-                        'Survey Selesai! ✅',
-                        `Survey untuk ${finalData.kost_name} telah selesai. Silakan cek hasilnya di dashboard!`,
-                        'success',
-                        { survey_id: isEditingSurvey.id },
-                        '/my-bookings'
-                    );
+            const updates: any = {};
+            SURVEY_DB_COLUMNS.forEach(col => {
+                if (finalData.hasOwnProperty(col)) {
+                    updates[col] = (finalData as any)[col];
                 }
+            });
+
+            if (isAgent && updates.status === 'SURVEYING') {
+                updates.status = 'COMPLETED';
+            }
+
+            await updateSurveyRequest(isEditingSurvey.id, updates);
+
+            // Automated internal notifications via Service
+            if (updates.status !== oldStatus) {
+                await notifySurveyStatusUpdate(isEditingSurvey.id, updates.status);
             }
 
             alert('Survey berhasil diperbarui');
@@ -703,6 +621,22 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
             setUserComment('');
         } catch (error) {
             alert('Gagal menyimpan feedback');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleGenerateDriveFolder = async () => {
+        if (!isEditingSurvey) return;
+        setIsSubmitting(true);
+        try {
+            const driveLink = await generateManualDriveFolder(isEditingSurvey.id);
+            setSurveyForm(prev => ({ ...prev, result_drive_link: driveLink }));
+            alert('Folder Drive berhasil dibuat!');
+            loadSurveyRequests();
+        } catch (error: any) {
+            console.error("Gagal generate folder", error);
+            alert(error.message || 'Gagal generate folder Drive');
         } finally {
             setIsSubmitting(false);
         }
@@ -766,6 +700,24 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
             alert('Gagal menghapus transaksi: ' + (error.message || 'Terjadi kesalahan'));
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleBulkDeleteSurveys = async () => {
+        if (selectedSurveyIds.length === 0) return;
+        if (!window.confirm(`Apakah Anda yakin ingin menghapus ${selectedSurveyIds.length} permohonan survey terpilih? Data yang dihapus tidak dapat dikembalikan.`)) return;
+
+        setIsSubmitting(true);
+        try {
+            await deleteSurveyRequests(selectedSurveyIds);
+            alert(`${selectedSurveyIds.length} permohonan survey berhasil dihapus`);
+            setSelectedSurveyIds([]);
+            loadSurveyRequests();
+        } catch (error: any) {
+            console.error("Gagal menghapus survey massal", error);
+            alert('Gagal menghapus survey massal: ' + (error.message || 'Terjadi kesalahan'));
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -1823,6 +1775,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
     ]);
     const [dbTransactions, setDbTransactions] = useState<AdminTransaction[]>([]);
     const [selectedDbTrxIds, setSelectedDbTrxIds] = useState<string[]>([]);
+    const [selectedSurveyIds, setSelectedSurveyIds] = useState<string[]>([]);
 
     // MANUAL ADDITION MODALS STATE
     const [isAddingManualRent, setIsAddingManualRent] = useState(false);
@@ -1876,31 +1829,38 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
         setIsAddingManualDb(false);
     };
 
-    const handleManualVerifSubmit = (e: React.FormEvent) => {
+    const handleManualVerifSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const newOrder = {
-            id: `SRV-MAN-${Math.floor(Math.random() * 1000)}`,
-            name: manualVerifForm.name || '-',
-            phone: manualVerifForm.phone || '-',
-            email: manualVerifForm.email || '-',
-            kostName: manualVerifForm.kostName || '-',
-            ownerPhone: manualVerifForm.ownerPhone || '-',
-            kostAddress: manualVerifForm.kostAddress || '-',
-            source: 'Manual Input',
-            surveyDate: manualVerifForm.surveyDate || '-',
-            surveyTime: manualVerifForm.surveyTime || '-',
-            notes: manualVerifForm.notes || '-',
-            paymentType: 'transfer',
-            paymentMethod: 'Manual Input',
-            date: manualVerifForm.date || new Date().toISOString().split('T')[0],
-            status: manualVerifForm.status || 'Selesai',
-            amount: Number(manualVerifForm.amount) || 0,
-            platformFee: 0,
-            invoiceId: `INV-SRV-MAN-${Math.floor(Math.random() * 1000)}`,
-        };
-        setDummyVerifications([newOrder, ...dummyVerifications]);
-        setIsAddingManualVerif(false);
-        setManualVerifForm({});
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            const newOrder = {
+                id: `SRV-MAN-${Math.floor(Math.random() * 1000)}`,
+                name: manualVerifForm.name || '-',
+                phone: manualVerifForm.phone || '-',
+                email: manualVerifForm.email || '-',
+                kostName: manualVerifForm.kostName || '-',
+                ownerPhone: manualVerifForm.ownerPhone || '-',
+                kostAddress: manualVerifForm.kostAddress || '-',
+                source: 'Manual Input',
+                surveyDate: manualVerifForm.surveyDate || '-',
+                surveyTime: manualVerifForm.surveyTime || '-',
+                notes: manualVerifForm.notes || '-',
+                paymentType: 'transfer',
+                paymentMethod: 'Manual Input',
+                date: manualVerifForm.date || new Date().toISOString().split('T')[0],
+                status: manualVerifForm.status || 'Selesai',
+                amount: Number(manualVerifForm.amount) || 0,
+                platformFee: 0,
+                invoiceId: `INV-SRV-MAN-${Math.floor(Math.random() * 1000)}`,
+            };
+            setDummyVerifications([newOrder, ...dummyVerifications]);
+            setIsAddingManualVerif(false);
+            setManualVerifForm({});
+            alert('Data survey manual ditambahkan ke list dummy (hanya sesi ini)');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleSurveyPhotoUpload = async (fieldId: string, files: FileList | null) => {
@@ -1954,23 +1914,18 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
             console.error('Gagal menghapus foto:', error);
         }
     };
-
-    const handleManualMitraSubmit = (e: React.FormEvent) => {
+    const handleManualMitraSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const newOrder = {
-            id: `MTR-MAN-${Math.floor(Math.random() * 1000)}`,
-            name: manualMitraForm.name || '-',
-            phone: manualMitraForm.phone || '-',
-            email: manualMitraForm.email || '-',
-            city: manualMitraForm.city || '-',
-            businessType: manualMitraForm.businessType || 'Kos-kosan',
-            propertyCount: Number(manualMitraForm.propertyCount) || 1,
-            date: manualMitraForm.date || new Date().toISOString().split('T')[0],
-            status: manualMitraForm.status || 'Diterima',
-        };
-        setDummyMitra([newOrder, ...dummyMitra]);
-        setIsAddingManualMitra(false);
-        setManualMitraForm({});
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            // Analogous to Verif, update dummy state
+            alert('Fitur tambah mitra manual akan segera dihubungkan ke database. Saat ini data hanya tersimpan di sesi browser.');
+            setIsAddingManualMitra(false);
+            setManualMitraForm({});
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const renderSidebar = () => (
@@ -3513,7 +3468,15 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
                 if (agentTab === 'history') return ['COMPLETED', 'CANCELLED'].includes(s);
                 return false;
             })
-            : surveyRequests;
+            : isAdmin 
+                ? surveyRequests.filter(req => {
+                    if (adminSurveyTab === 'all') return true;
+                    if (adminSurveyTab === 'pending') return req.status === 'PENDING_ASSIGNMENT';
+                    if (adminSurveyTab === 'active') return ['AGENT_ASSIGNED', 'SURVEYING', 'RESCHEDULED'].includes(req.status);
+                    if (adminSurveyTab === 'completed') return req.status === 'COMPLETED';
+                    return true;
+                })
+                : surveyRequests;
 
         const stats = {
             total: surveyRequests.length,
@@ -3552,14 +3515,81 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
                     </div>
                 )}
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-2">
-                    <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Permohonan Jasa Survey Kost</h2>
+                    <div className="flex flex-col gap-1">
+                        <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Permohonan Jasa Survey Kost</h2>
+                        {isAdmin && filteredRequests.length > 0 && (
+                            <div className="flex items-center gap-4 mt-2">
+                                <label className="flex items-center gap-2 cursor-pointer group">
+                                    <div className="relative flex items-center justify-center">
+                                        <input
+                                            type="checkbox"
+                                            className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-gray-300 checked:bg-orange-500 checked:border-orange-500 transition-all"
+                                            checked={selectedSurveyIds.length === filteredRequests.length && filteredRequests.length > 0}
+                                            onChange={(e) => {
+                                                if (e.target.checked) setSelectedSurveyIds(filteredRequests.map(r => r.id));
+                                                else setSelectedSurveyIds([]);
+                                            }}
+                                        />
+                                        <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
+                                    </div>
+                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest group-hover:text-orange-600 transition-colors">Pilih Semua ({filteredRequests.length})</span>
+                                </label>
+
+                                {selectedSurveyIds.length > 0 && (
+                                    <button 
+                                        onClick={handleBulkDeleteSurveys}
+                                        className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all animate-in fade-in slide-in-from-left-2"
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        Hapus Terpilih ({selectedSurveyIds.length})
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
                     {isAdmin && (
-                        <button onClick={() => setIsAddingManualVerif(true)} className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 shrink-0">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                            Tambah Manual
-                        </button>
+                        <div className="flex gap-2">
+                            <button onClick={() => setIsAddingManualVerif(true)} className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 shrink-0">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                                Tambah Manual
+                            </button>
+                        </div>
                     )}
                 </div>
+
+                {/* ADMIN TABS */}
+                {isAdmin && (
+                    <div className="bg-white/80 backdrop-blur-md p-1.5 rounded-2xl border border-gray-100 flex gap-1 shadow-sm sticky top-0 z-10 transition-all overflow-x-auto no-scrollbar">
+                        {[
+                            { id: 'all', label: 'Semua', icon: '📋' },
+                            { id: 'pending', label: 'Butuh Agen', icon: '⏳' },
+                            { id: 'active', label: 'Proses', icon: '⚡' },
+                            { id: 'completed', label: 'Selesai', icon: '✅' }
+                        ].map((t) => (
+                            <button
+                                key={t.id}
+                                onClick={() => setAdminSurveyTab(t.id as any)}
+                                className={`flex-1 min-w-[100px] py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+                                    adminSurveyTab === t.id 
+                                    ? 'bg-orange-600 text-white shadow-md scale-[1.02]' 
+                                    : 'text-gray-500 hover:bg-gray-100'
+                                }`}
+                            >
+                                <span>{t.icon}</span>
+                                {t.label}
+                                {surveyRequests.filter(r => {
+                                    if (t.id === 'all') return true;
+                                    if (t.id === 'pending') return r.status === 'PENDING_ASSIGNMENT';
+                                    if (t.id === 'active') return ['AGENT_ASSIGNED', 'SURVEYING', 'RESCHEDULED'].includes(r.status);
+                                    if (t.id === 'completed') return r.status === 'COMPLETED';
+                                    return false;
+                                }).length > 0 && (
+                                    <span className={`w-2 h-2 rounded-full ${adminSurveyTab === t.id ? 'bg-white' : 'bg-red-500'}`} />
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                )}
 
                 {/* AGENT TABS */}
                 {isAgent && (
@@ -3605,9 +3635,25 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
 
                 <div className="grid grid-cols-1 gap-6">
                     {filteredRequests.map((req: SurveyRequest) => (
-                    <div key={req.id} className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row gap-6 hover:shadow-md transition-shadow relative overflow-hidden">
+                    <div key={req.id} className={`bg-white border rounded-2xl p-6 shadow-sm flex flex-col md:flex-row gap-6 hover:shadow-md transition-all relative overflow-hidden ${selectedSurveyIds.includes(req.id) ? 'border-orange-500 ring-1 ring-orange-500 bg-orange-50/10' : 'border-gray-100'}`}>
+                        {isAdmin && (
+                            <div className="absolute top-4 left-4 z-20">
+                                <label className="relative flex items-center justify-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        className="peer h-5 w-5 appearance-none rounded-md border border-gray-300 bg-white checked:bg-orange-500 checked:border-orange-500 transition-all shadow-sm"
+                                        checked={selectedSurveyIds.includes(req.id)}
+                                        onChange={(e) => {
+                                            if (e.target.checked) setSelectedSurveyIds([...selectedSurveyIds, req.id]);
+                                            else setSelectedSurveyIds(selectedSurveyIds.filter(id => id !== req.id));
+                                        }}
+                                    />
+                                    <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
+                                </label>
+                            </div>
+                        )}
                         {(req.status === 'AGENT_ASSIGNED' || req.status === 'SURVEYING') && <div className="absolute top-0 right-0 w-20 h-20 bg-orange-500/10 rounded-bl-full"></div>}
-                        <div className="flex-1 space-y-4 relative z-10">
+                        <div className={`flex-1 space-y-4 relative z-10 ${isAdmin ? 'pl-8' : ''}`}>
                             <div className="flex flex-col sm:flex-row justify-between items-start border-b border-gray-50 pb-4 gap-3">
                                 <div>
                                     <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -3665,6 +3711,24 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
                                     </div>
                                     <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Kontak Pemilik</p><p className="font-bold text-gray-900 text-xs sm:text-sm">{req.owner_phone}</p></div>
                                 </div>
+                                <div className="flex items-start gap-3">
+                                    <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-500 shrink-0 border border-orange-100 mt-1">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Harga Transaksi</p>
+                                        <p className="font-bold text-orange-700 text-xs sm:text-sm">
+                                            {req.transaction?.amount ? `Rp ${req.transaction.amount.toLocaleString('id-ID')}` : 'Rp 150.000'}
+                                        </p>
+                                        <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter ${
+                                            req.transaction?.status?.toLowerCase() === 'paid' 
+                                            ? 'bg-green-100 text-green-700' 
+                                            : 'bg-yellow-100 text-yellow-700'
+                                        }`}>
+                                            {req.transaction?.status || 'PENDING'}
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
                             {req.notes && (
                                 <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
@@ -3719,9 +3783,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
                                                 setIsEditingSurvey(req);
                                                 setSurveyForm({
                                                     status: req.status,
+                                                    kost_name: req.kost_name,
+                                                    kost_address: req.kost_address,
+                                                    owner_phone: req.owner_phone,
                                                     assigned_agent_id: req.assigned_agent_id,
                                                     agent_name: req.agent_name,
                                                     agent_phone: req.agent_phone,
+                                                    agent_photo_url: req.agent_photo_url,
                                                     result_drive_link: req.result_drive_link,
                                                     evaluation_summary: req.evaluation_summary || {},
                                                     user_rating: req.user_rating,
@@ -3739,9 +3807,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
                                                 setIsEditingSurvey(req);
                                                 setSurveyForm({
                                                     status: req.status,
+                                                    kost_name: req.kost_name,
+                                                    kost_address: req.kost_address,
+                                                    owner_phone: req.owner_phone,
                                                     assigned_agent_id: req.assigned_agent_id,
                                                     agent_name: req.agent_name,
                                                     agent_phone: req.agent_phone,
+                                                    agent_photo_url: req.agent_photo_url,
                                                     result_drive_link: req.result_drive_link,
                                                     evaluation_summary: req.evaluation_summary || {},
                                                     user_rating: req.user_rating,
@@ -3765,6 +3837,14 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
                                             Chat Agen
                                         </button>
                                     )}
+
+                                    <button 
+                                        onClick={() => handleDeleteSurvey(req.id, req.kost_name)}
+                                        className="w-full bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-100 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex justify-center items-center gap-1.5 mt-2"
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        Hapus Permintaan
+                                    </button>
                                 </>
                             ) : isAgent ? (
                                 <div className="flex flex-col gap-2.5">
@@ -3815,9 +3895,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
                                                     setIsEditingSurvey(req);
                                                     setSurveyForm({
                                                         status: 'COMPLETED',
+                                                        kost_name: req.kost_name,
+                                                        kost_address: req.kost_address,
+                                                        owner_phone: req.owner_phone,
                                                         assigned_agent_id: req.assigned_agent_id,
                                                         agent_name: req.agent_name,
                                                         agent_phone: req.agent_phone,
+                                                        agent_photo_url: req.agent_photo_url,
                                                         result_drive_link: req.result_drive_link,
                                                         evaluation_summary: req.evaluation_summary || {},
                                                         user_rating: req.user_rating,
@@ -3837,11 +3921,17 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
                                                  setIsEditingSurvey(req);
                                                  setSurveyForm({
                                                      status: req.status,
+                                                     kost_name: req.kost_name,
+                                                     kost_address: req.kost_address,
+                                                     owner_phone: req.owner_phone,
                                                      assigned_agent_id: req.assigned_agent_id,
                                                      agent_name: req.agent_name,
                                                      agent_phone: req.agent_phone,
+                                                     agent_photo_url: req.agent_photo_url,
                                                      result_drive_link: req.result_drive_link,
-                                                     evaluation_summary: req.evaluation_summary || {}
+                                                     evaluation_summary: req.evaluation_summary || {},
+                                                     user_rating: req.user_rating,
+                                                     user_comment: req.user_comment
                                                  });
                                              }} 
                                              className="w-full bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex justify-center items-center gap-2"
@@ -3859,11 +3949,17 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
                                                      setIsEditingSurvey(req);
                                                      setSurveyForm({
                                                          status: req.status,
+                                                         kost_name: req.kost_name,
+                                                         kost_address: req.kost_address,
+                                                         owner_phone: req.owner_phone,
                                                          assigned_agent_id: req.assigned_agent_id,
                                                          agent_name: req.agent_name,
                                                          agent_phone: req.agent_phone,
+                                                         agent_photo_url: req.agent_photo_url,
                                                          result_drive_link: req.result_drive_link,
-                                                         evaluation_summary: req.evaluation_summary || {}
+                                                         evaluation_summary: req.evaluation_summary || {},
+                                                         user_rating: req.user_rating,
+                                                         user_comment: req.user_comment
                                                      });
                                                  }} 
                                                  className="w-full bg-orange-600 hover:bg-orange-700 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-md transition-all flex justify-center items-center gap-2"
@@ -3974,8 +4070,26 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
                                     <button 
                                         onClick={async () => {
                                             if (window.confirm('Verifikasi identitas agen ini?')) {
-                                                await updateAgentVerificationStatus(agent.id, 'verified');
-                                                loadAgentVerifications();
+                                                try {
+                                                    await updateAgentVerificationStatus(agent.id, 'verified');
+                                                    try {
+                                                        await sendNotification(
+                                                            agent.id,
+                                                            'Akun Terverifikasi! 🛡️',
+                                                            'Selamat! Identitas Anda telah diverifikasi. Anda sekarang bisa menerima orderan survey.',
+                                                            'success',
+                                                            {},
+                                                            '/dashboard-agent'
+                                                        );
+                                                    } catch (notifErr) {
+                                                        console.error('Notification failed:', notifErr);
+                                                        alert('Verifikasi berhasil, namun gagal mengirim notifikasi ke agen. Harap periksa kebijakan RLS notifications Anda.');
+                                                    }
+                                                    loadAgentVerifications();
+                                                } catch (err: any) {
+                                                    console.error('Verification failed:', err);
+                                                    alert('Gagal memproses verifikasi: ' + err.message);
+                                                }
                                             }
                                         }}
                                         className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all flex items-center gap-2"
@@ -3987,8 +4101,26 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
                                         onClick={async () => {
                                             const reason = window.prompt('Alasan penolakan (opsional):');
                                             if (reason !== null) {
-                                                await updateAgentVerificationStatus(agent.id, 'unverified', reason);
-                                                loadAgentVerifications();
+                                                try {
+                                                    await updateAgentVerificationStatus(agent.id, 'rejected', reason);
+                                                    try {
+                                                        await sendNotification(
+                                                            agent.id,
+                                                            'Verifikasi Identitas Ditolak ⚠️',
+                                                            `Maaf, pengajuan verifikasi Anda ditolak. Alasan: ${reason || 'Data tidak sesuai.'}. Silakan ajukan ulang dengan data yang benar.`,
+                                                            'error',
+                                                            {},
+                                                            '/dashboard-agent'
+                                                        );
+                                                    } catch (notifErr) {
+                                                        console.error('Notification failed:', notifErr);
+                                                        alert('Status ditolak berhasil diperbarui, namun gagal mengirim notifikasi. Harap periksa kebijakan RLS notifications Anda.');
+                                                    }
+                                                    loadAgentVerifications();
+                                                } catch (err: any) {
+                                                    console.error('Rejection failed:', err);
+                                                    alert('Gagal memproses penolakan: ' + err.message);
+                                                }
                                             }
                                         }}
                                         className="bg-red-50 hover:bg-red-500 text-red-600 hover:text-white border border-red-200 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95"
@@ -4821,10 +4953,18 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
                                                         const agentId = e.target.value;
                                                         const agent = surveyAgents.find(a => a.id === agentId);
                                                         if (agent) {
-                                                            const newStatus = surveyForm.status === 'PENDING_ASSIGNMENT' || surveyForm.status === 'AWAITING_PAYMENT' ? 'AGENT_ASSIGNED' : surveyForm.status;
-                                                            setSurveyForm({ ...surveyForm, assigned_agent_id: agent.id, agent_name: agent.name, agent_phone: agent.phone, status: newStatus });
+                                                            // Keep status PENDING_ASSIGNMENT even if agent is selected (Confirmation Flow)
+                                                            const newStatus = surveyForm.status === 'AWAITING_PAYMENT' ? 'PENDING_ASSIGNMENT' : surveyForm.status;
+                                                            setSurveyForm({ 
+                                                                ...surveyForm, 
+                                                                assigned_agent_id: agent.id, 
+                                                                agent_name: agent.name, 
+                                                                agent_phone: agent.phone,
+                                                                agent_photo_url: agent.photo_url, 
+                                                                status: newStatus 
+                                                            });
                                                         } else {
-                                                            setSurveyForm({ ...surveyForm, assigned_agent_id: null, agent_name: '', agent_phone: '' });
+                                                            setSurveyForm({ ...surveyForm, assigned_agent_id: null, agent_name: '', agent_phone: '', agent_photo_url: '' });
                                                         }
                                                     }}
                                                 >
@@ -4852,47 +4992,44 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
                                         </div>
                                     )}
 
-                                    <div>
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Link Hasil Survey (Google Drive)</label>
+                                    <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <label className="text-[10px] font-black text-blue-900 uppercase tracking-widest">Link Hasil Survey (Automated Drive)</label>
+                                            {!surveyForm.result_drive_link && isAdmin && !isAgent && (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleGenerateDriveFolder}
+                                                    className="text-[10px] font-black text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-lg shadow-sm transition-all active:scale-95 flex items-center gap-1.5"
+                                                    disabled={isSubmitting}
+                                                >
+                                                    {isSubmitting ? (
+                                                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                    ) : '📂 Buat Folder Manual'}
+                                                </button>
+                                            )}
+                                            {surveyForm.result_drive_link && (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => window.open(surveyForm.result_drive_link, '_blank')}
+                                                    className="text-[10px] font-black text-blue-600 hover:text-blue-700 flex items-center gap-1 uppercase tracking-widest bg-white px-2 py-1 rounded-md border border-blue-200 shadow-sm transition-all active:scale-95"
+                                                >
+                                                    <span>📁</span> Buka Folder
+                                                </button>
+                                            )}
+                                        </div>
                                         <input 
-                                            className="w-full mt-1.5 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-orange-500 transition-all outline-none text-orange-600"
-                                             value={surveyForm.result_drive_link || ''}
-                                             onChange={e => setSurveyForm({ ...surveyForm, result_drive_link: e.target.value })}
-                                             disabled={!isAdmin && !isAgent}
-                                            placeholder="https://drive.google.com/..."
+                                            readOnly
+                                            className="w-full bg-white/80 border border-blue-200 rounded-xl px-4 py-3 text-xs font-bold text-blue-600 cursor-not-allowed outline-none"
+                                            value={surveyForm.result_drive_link || ''}
+                                            placeholder="Menunggu pembayaran/sistem menjana folder..."
                                         />
-                                        <p className="text-[10px] text-gray-400 mt-1.5 font-medium italic">* Link ini akan tampil di dashboard pengguna setelah survey selesai.</p>
+                                        <p className="text-[9px] text-blue-500 mt-2 font-medium italic">
+                                            {surveyForm.result_drive_link 
+                                                ? "✓ Folder Drive berhasil dibuat otomatis oleh sistem." 
+                                                : "ℹ Folder akan dibuat otomatis segera setelah pembayaran terverifikasi."}
+                                        </p>
                                     </div>
 
-                                    {/* ADMIN FEEDBACK EDITING */}
-                                    {isAdmin && (
-                                        <div className="bg-yellow-50/50 p-4 rounded-2xl border border-yellow-100 space-y-4">
-                                            <div className="flex justify-between items-center">
-                                                <label className="text-[10px] font-black text-yellow-700 uppercase tracking-widest">Rating & Feedback Pengguna</label>
-                                                <div className="flex gap-1">
-                                                    {[1, 2, 3, 4, 5].map(num => (
-                                                        <button 
-                                                            key={num}
-                                                            type="button"
-                                                            onClick={() => setSurveyForm({ ...surveyForm, user_rating: num })}
-                                                            className={`w-6 h-6 rounded flex items-center justify-center text-xs transition-all ${
-                                                                (surveyForm as any).user_rating >= num ? 'bg-yellow-400 text-white' : 'bg-white text-gray-300 border border-gray-200'
-                                                            }`}
-                                                        >
-                                                            ★
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                            <textarea 
-                                                className="w-full bg-white border border-yellow-200 rounded-xl px-4 py-2 text-xs font-medium focus:ring-1 focus:ring-yellow-400 outline-none"
-                                                rows={2}
-                                                placeholder="Tanggapan/Kesan dari user..."
-                                                value={(surveyForm as any).user_comment || ''}
-                                                onChange={e => setSurveyForm({ ...surveyForm, user_comment: e.target.value })}
-                                            />
-                                        </div>
-                                    )}
 
                                     {isAgent && (
                                         <div className="pt-4 border-t border-gray-100">
@@ -5081,7 +5218,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
                                         </select>
                                     </div>
                                 </div>
-                                <button type="submit" className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-black uppercase tracking-wider shadow-lg active:scale-95 transition-all mt-6">Simpan Data Survey</button>
+                                <button 
+                                    type="submit" 
+                                    disabled={isSubmitting}
+                                    className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white rounded-xl text-sm font-black uppercase tracking-wider shadow-lg active:scale-95 transition-all mt-6"
+                                >
+                                    {isSubmitting ? 'Menyimpan...' : 'Simpan Data Survey'}
+                                </button>
                             </form>
                         </div>
                     </div>
@@ -5117,7 +5260,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, onPageChange, listings
                                         </select>
                                     </div>
                                 </div>
-                                <button type="submit" className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-black uppercase tracking-wider shadow-lg active:scale-95 transition-all mt-6">Simpan Data Mitra</button>
+                                <button 
+                                    type="submit" 
+                                    disabled={isSubmitting}
+                                    className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-xl text-sm font-black uppercase tracking-wider shadow-lg active:scale-95 transition-all mt-6"
+                                >
+                                    {isSubmitting ? 'Menyimpan...' : 'Simpan Data Mitra'}
+                                </button>
                             </form>
                         </div>
                     </div>

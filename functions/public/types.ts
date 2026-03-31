@@ -93,6 +93,9 @@ export interface Kost {
   reviews: Review[];
   virtualTourUrl?: string;
 
+  // Analytics
+  views?: number;
+
   // Additional Fees
   additionalFeePrice?: number;
   additionalFeeName?: string;
@@ -159,10 +162,60 @@ export enum Page {
   LOGIN = '/login',
   DETAIL = '/detail',
   DASHBOARD_OWNER = '/dashboard-owner',
+  DASHBOARD_MITRA = '/dashboard-mitra',
   DASHBOARD_ADMIN = '/dashboard-admin',
   CHAT = '/chat',
   MY_BOOKINGS = '/my-bookings',
   PROFILE = '/profile',
+  MITRA_PROFILE = '/mitra-profile',
   SURVEY_SERVICE = '/survey-service',
   DASHBOARD_AGENT = '/dashboard-agent'
+}
+
+export interface SurveyRequest {
+  id: string;
+  user_id: string;
+  kost_id: string;
+  transaction_id: string;
+  status: string;
+  kost_name: string;
+  kost_address: string;
+  owner_phone: string;
+  survey_date: string;
+  survey_time: string;
+  notes: string;
+  agent_name?: string;
+  agent_phone?: string;
+  agent_photo_url?: string;
+  assigned_agent_id?: string;
+  result_drive_link?: string;
+  evaluation_summary?: {
+    room_facilities?: string;
+    room_facilities_photos?: string[];
+    bathroom_facilities?: string;
+    bathroom_facilities_photos?: string[];
+    water_check?: string;
+    water_check_photos?: string[];
+    wifi_check?: string;
+    wifi_check_photos?: string[];
+    security_check?: string;
+    security_check_photos?: string[];
+    access_check?: string;
+    access_check_photos?: string[];
+    resident_testimonial?: string;
+    resident_testimonial_photos?: string[];
+  };
+  user_rating?: number;
+  user_comment?: string;
+  created_at: string;
+  transaction?: {
+    amount: number;
+    status: string;
+  };
+  user?: {
+    name: string;
+    email: string;
+    phone: string;
+    photo_url?: string;
+  };
 }

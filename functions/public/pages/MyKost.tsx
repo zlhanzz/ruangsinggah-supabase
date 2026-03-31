@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle, Zap } from 'lucide-react';
 import { Page } from '../types';
 import { addPropertyReview, getExtraBills } from '../userService';
 import { getOrCreateChatSession } from '../chatService';
-import { getReviews } from '../costService';
+import { getReviews } from '../kostService';
 import { cancelBookingRequest } from '../userService';
 import PaymentGateway from '../components/PaymentGateway';
 import ChatWindow from '../components/ChatWindow';
@@ -323,17 +323,30 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                 }
                 return { ...prop, displayImage: firstImage };
             });
-            // Fetch surveys
+            // Fetch surveys with agent details join
             const { data: surveysData, error: surveysError } = await supabase
                 .from('survey_requests')
-                .select('*')
+                .select(`
+                    *,
+                    agent:assigned_agent_id (
+                        name,
+                        phone,
+                        photo_url
+                    )
+                `)
                 .eq('user_id', user.uid);
             
             if (surveysError) {
                 console.error('fetchSurveys error:', surveysError);
             } else {
-                // Actual data from Supabase
-                setSurveyRequests(surveysData || []);
+                // Map the joined data to ensure fallback if snapshot is empty
+                const processedSurveys = (surveysData || []).map((s: any) => ({
+                    ...s,
+                    agent_name: s.agent_name || s.agent?.name,
+                    agent_phone: s.agent_phone || s.agent?.phone,
+                    agent_photo_url: s.agent_photo_url || s.agent?.photo_url
+                }));
+                setSurveyRequests(processedSurveys);
             }
 
             setRecommendations(processedRecs);
@@ -549,34 +562,63 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
             setIsSubmitting(false);
         }
     };
+    
+    const handleConfirmSurvey = async (surveyId: string) => {
+        if (!window.confirm('Apakah Anda puas dengan hasil survey ini dan ingin mengonfirmasi selesai?')) return;
+        
+        try {
+            setIsSubmitting(true);
+            const { error } = await supabase
+                .from('survey_requests')
+                .update({ status: 'COMPLETED', updated_at: new Date().toISOString() })
+                .eq('id', surveyId);
+                
+            if (error) throw error;
+            
+            alert('Survey berhasil dikonfirmasi! Terima kasih telah menggunakan layanan RuangSinggah.');
+            // Refresh surveys
+            const { data } = await supabase
+                .from('survey_requests')
+                .select('*, user:user_id(name, phone)')
+                .eq('user_id', user.id);
+            if (data) setSurveyRequests(data);
+        } catch (err) {
+            console.error(err);
+            alert('Gagal mengonfirmasi survey.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     const filteredKosts = activeKosts.filter(kost => {
-        const isPaid = ['paid', 'approved', 'selesai', 'success', 'berhasil'].includes((kost.status || '').toLowerCase());
+        const statusLower = (kost.status || '').toLowerCase();
+        const isPaid = ['paid', 'approved', 'selesai', 'success', 'berhasil'].includes(statusLower);
         const isPastStay = kost.daysRemaining !== null && kost.daysRemaining < 0;
         
-        if (activeTab === 'diajukan') return ['pending_approval', 'awaiting_payment'].includes((kost.status || '').toLowerCase());
+        if (activeTab === 'diajukan') return ['pending_approval', 'awaiting_payment'].includes(statusLower);
         if (activeTab === 'aktif') return isPaid && !isPastStay;
-        if (activeTab === 'riwayat') return isPastStay || ['rejected', 'cancelled'].includes((kost.status || '').toLowerCase());
+        if (activeTab === 'riwayat') return isPastStay || ['rejected', 'cancelled'].includes(statusLower);
         return false;
     });
 
     const filteredSurveys = surveyRequests.filter(survey => {
-        const status = survey.status;
-        // Logic: Surveys can appear in multiple tabs as "history" (minimized)
-        if (activeTab === 'diajukan') return true; // Show all in Diajukan
-        if (activeTab === 'aktif') return ['AGENT_ASSIGNED', 'SURVEYING', 'COMPLETED'].includes(status);
-        if (activeTab === 'riwayat') return ['COMPLETED', 'CANCELLED'].includes(status);
+        const s = survey.status;
+        if (activeTab === 'diajukan') return ['PENDING_ASSIGNMENT', 'AWAITING_PAYMENT'].includes(s);
+        if (activeTab === 'aktif') return ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING', 'SUBMITTED'].includes(s);
+        if (activeTab === 'riwayat') return ['COMPLETED', 'CANCELLED'].includes(s);
         return false;
     });
 
-    const renderSurveyCard = (survey: any, compact: boolean = false) => {
+    const renderSurveyCard = (survey: any) => {
         const status = survey.status;
         const statusColors: any = {
             'AWAITING_PAYMENT': 'bg-orange-50 text-orange-600 border-orange-100',
             'PENDING_ASSIGNMENT': 'bg-orange-50 text-orange-600 border-orange-100',
-            'AGENT_ASSIGNED': 'bg-orange-50 text-orange-600 border-orange-100',
-            'SURVEYING': 'bg-orange-50 text-orange-600 border-orange-100',
-            'COMPLETED': 'bg-orange-900 text-white border-transparent',
+            'AGENT_ASSIGNED': 'bg-orange-900 text-white border-transparent',
+            'HEADING_TO_LOCATION': 'bg-blue-600 text-white border-transparent',
+            'SURVEYING': 'bg-blue-500 text-white border-transparent',
+            'SUBMITTED': 'bg-emerald-600 text-white border-transparent animate-pulse',
+            'COMPLETED': 'bg-green-600 text-white border-transparent',
             'CANCELLED': 'bg-gray-100 text-gray-400 border-gray-200'
         };
 
@@ -584,69 +626,15 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
             'AWAITING_PAYMENT': 'Menunggu Pembayaran',
             'PENDING_ASSIGNMENT': 'Mencari Agen Surveyor',
             'AGENT_ASSIGNED': 'Agen Surveyor Ditetapkan',
+            'HEADING_TO_LOCATION': 'Surveyor Menuju Lokasi',
             'SURVEYING': 'Sedang Proses Survey',
+            'SUBMITTED': 'Laporan Terkirim (Menunggu Konfirmasi)',
             'COMPLETED': 'Survey Selesai',
             'CANCELLED': 'Survey Dibatalkan'
         };
 
         const currentStatusColor = statusColors[status] || 'bg-gray-50 text-gray-500 border-gray-100';
         const currentLabel = statusLabels[status] || status;
-
-        if (compact) {
-            return (
-                <div key={survey.id} className="group flex items-center gap-4 sm:gap-6 bg-white/40 backdrop-blur-md rounded-[2.5rem] p-4 sm:p-5 border border-white shadow-lg hover:shadow-xl transition-all duration-300">
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-gray-50 shrink-0 transform group-hover:rotate-3 transition-transform">
-                        <Search className="w-8 h-8 text-blue-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-0.5">Layanan Jasa Survey</p>
-                        <h4 className="text-lg sm:text-xl font-black text-gray-800 truncate">{survey.kost_name || 'Survey Lokasi Kost'}</h4>
-                        <div className="flex items-center gap-2 mt-1">
-                            <div className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${currentStatusColor}`}>
-                                {currentLabel}
-                            </div>
-                            {survey.agent_name && (
-                                <span className="text-[10px] font-bold text-gray-400 italic">• Surveyor: {survey.agent_name}</span>
-                            )}
-                        </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 pr-2">
-                        {status === 'AWAITING_PAYMENT' ? (
-                            <button
-                                onClick={() => {
-                                    setPaymentAmount(70000);
-                                    setPaymentOrderId(survey.transaction_id);
-                                    setPaymentProductId('5ea7b4e9-6f8d-4a11-b845-8c7a726359e1');
-                                    setPaymentProductType('survey');
-                                    setPaymentMetadata({
-                                        kostName: survey.kost_name,
-                                        kostAddress: survey.kost_address
-                                    });
-                                    setShowPaymentGateway(true);
-                                }}
-                                className="bg-orange-500 hover:bg-orange-600 text-white p-3 rounded-xl shadow-lg shadow-orange-100 active:scale-90 transition-all flex items-center gap-2"
-                                title="Bayar Sekarang"
-                            >
-                                <Receipt className="w-4 h-4" />
-                                <span className="text-[10px] font-black uppercase">Bayar</span>
-                            </button>
-                        ) : survey.agent_phone ? (
-                            <button
-                                onClick={() => window.open(`https://wa.me/${survey.agent_phone.replace(/\D/g, '')}`, '_blank')}
-                                className="bg-emerald-500 hover:bg-emerald-600 text-white p-3 rounded-xl shadow-lg shadow-emerald-100 active:scale-90 transition-all"
-                                title="Hubungi Surveyor"
-                            >
-                                <Smartphone className="w-4 h-4" />
-                            </button>
-                        ) : (
-                            <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center border border-gray-100">
-                                <span className="text-sm">⚡</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        }
 
         return (
             <div key={survey.id} className="group relative bg-white/70 backdrop-blur-2xl rounded-[3.5rem] p-8 sm:p-12 border border-white shadow-2xl shadow-gray-200/50 flex flex-col lg:flex-row gap-10 lg:gap-14 hover:scale-[1.01] transition-all duration-500 overflow-hidden">
@@ -680,9 +668,9 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                     </div>
                                 )}
                                 {(survey.survey_date || survey.survey_time) && (
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-3 font-bold italic">
                                         <div className="p-2 bg-orange-50 rounded-lg"><Calendar className="w-4 h-4 text-orange-500" /></div>
-                                        <span className="text-gray-600 font-bold italic bg-orange-50/50 px-3 py-1 rounded-xl border border-orange-100/50">
+                                        <span className="text-gray-600">
                                             Jadwal: {survey.survey_date ? new Date(survey.survey_date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '-'} @ {survey.survey_time || '-'}
                                         </span>
                                     </div>
@@ -696,20 +684,55 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                         {currentLabel}
                     </div>
 
-                    {survey.agent_name && (
-                        <div className="mt-8 bg-white/50 backdrop-blur-sm p-6 rounded-[2rem] border border-gray-100 flex items-center gap-4">
-                            <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center text-xl font-black text-gray-400">
-                                {survey.agent_name.charAt(0)}
+                    {survey.agent_name ? (
+                        <div className="mt-8 bg-white/50 backdrop-blur-sm p-6 rounded-[2rem] border border-gray-100 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                            <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center text-xl font-black text-gray-400 overflow-hidden shrink-0 border-2 border-white shadow-sm">
+                                {survey.agent_photo_url ? (
+                                    <img src={survey.agent_photo_url} alt={survey.agent_name} className="w-full h-full object-cover" />
+                                ) : (
+                                    <span className="text-gray-300">{survey.agent_name.charAt(0)}</span>
+                                )}
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Surveyor Anda</p>
+                                <p className="text-base font-black text-gray-900 leading-none mb-1">{survey.agent_name}</p>
+                                <div className="flex items-center gap-1.5">
+                                    <div className={`w-1.5 h-1.5 rounded-full ${['COMPLETED', 'SUBMITTED'].includes(status) ? 'bg-emerald-500' : 'bg-blue-500'} animate-pulse`} />
+                                    <p className={`text-[10px] font-bold ${['COMPLETED', 'SUBMITTED'].includes(status) ? 'text-emerald-600' : 'text-blue-600'} uppercase tracking-wider`}>
+                                        {status === 'SUBMITTED' ? 'Laporan Telah Dikirim' : status === 'COMPLETED' ? 'Survey Selesai' : 'Sedang Bertugas'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    ) : ( 
+                        ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING'].includes(status) && (
+                            <div className="mt-8 bg-white/50 backdrop-blur-sm p-6 rounded-[2rem] border border-gray-100 flex items-center gap-4 animate-pulse">
+                                <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center text-xl font-black text-gray-200 border-2 border-white">
+                                    S
+                                </div>
+                                <div className="space-y-2">
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Surveyor Anda</p>
+                                    <div className="h-4 bg-gray-100 rounded-md w-32" />
+                                </div>
+                            </div>
+                        )
+                    )}
+
+                    {['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING'].includes(status) && (
+                        <div className="mt-4 bg-orange-50/50 border border-orange-100 p-4 rounded-3xl flex items-center gap-4 transition-all hover:bg-orange-50 animate-in fade-in slide-in-from-top-4 duration-500">
+                            <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-orange-50 shrink-0">
+                                <AlertCircle className="w-5 h-5 text-orange-600" />
                             </div>
                             <div>
-                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Surveyor Anda</p>
-                                <p className="text-base font-black text-gray-900">{survey.agent_name}</p>
-                                <p className="text-xs font-bold text-emerald-600">{survey.agent_phone || 'Nomor tersedia'}</p>
+                                <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-1">Informasi Penting</p>
+                                <p className="text-[11px] font-bold text-gray-700 leading-tight">
+                                    Mohon standby! Agen kami mungkin akan menghubungi Anda via Chat atau Video Call untuk verifikasi lokasi secara langsung.
+                                </p>
                             </div>
                         </div>
                     )}
 
-                    {status === 'COMPLETED' && survey.evaluation_summary && (
+                    {['COMPLETED', 'SUBMITTED'].includes(status) && survey.evaluation_summary && (
                         <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
                             {[
                                 { id: 'room_facilities', icon: '🛏️', label: 'Kamar' },
@@ -752,6 +775,17 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                             </div>
                             <span className="text-[10px] opacity-80 font-bold uppercase tracking-widest">Rp 70.000 (Satu kali bayar)</span>
                         </button>
+                    ) : status === 'SUBMITTED' ? (
+                        <button
+                            onClick={() => handleConfirmSurvey(survey.id)}
+                            disabled={isSubmitting}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-6 rounded-[2rem] font-black flex flex-col items-center justify-center gap-1 transition-all text-sm shadow-2xl shadow-emerald-200 active:scale-95 animate-pulse"
+                        >
+                            <div className="flex items-center gap-3">
+                                <CheckCircle className="w-6 h-6" /> KONFIRMASI SELESAI
+                            </div>
+                            <span className="text-[10px] opacity-80 font-bold uppercase tracking-widest">Klik jika hasil survey sudah sesuai</span>
+                        </button>
                     ) : status === 'COMPLETED' && survey.result_drive_link ? (
                         <button
                             onClick={() => {
@@ -777,19 +811,29 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                             <span className="text-2xl block mb-3">⚡</span>
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-relaxed">
                                 {status === 'PENDING_ASSIGNMENT' ? 'Pesanan Sedang Diproses Admin' : 
-                                 status === 'AGENT_ASSIGNED' ? 'Surveyor Sedang Menuju Lokasi' :
+                                 status === 'AGENT_ASSIGNED' ? 'Surveyor Sedang Mempersiapkan' :
+                                 status === 'HEADING_TO_LOCATION' ? 'Surveyor Sedang Menuju Lokasi' :
                                  status === 'SURVEYING' ? 'Surveyor Sedang Mengambil Foto & Video' :
                                  'Mohon Tunggu Sebentar'}
                             </p>
                         </div>
                     )}
 
-                    {survey.agent_phone && (
+                    {['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING'].includes(status) && (
                         <button
-                            onClick={() => window.open(`https://wa.me/${survey.agent_phone.replace(/\D/g, '')}`, '_blank')}
-                            className="w-full bg-emerald-50 text-emerald-600 border-2 border-emerald-100 hover:bg-emerald-100 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[11px]"
+                            onClick={() => {
+                                if (survey.agent_phone) {
+                                    const cleanPhone = survey.agent_phone.replace(/\D/g, '');
+                                    const finalPhone = cleanPhone.startsWith('0') ? '62' + cleanPhone.substring(1) : cleanPhone;
+                                    window.open(`https://wa.me/${finalPhone}`, '_blank');
+                                } else {
+                                    alert('Mohon tunggu, nomor WhatsApp agen sedang disiapkan oleh sistem.');
+                                }
+                            }}
+                            className={`w-full ${survey.agent_phone ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-100 hover:-translate-y-1' : 'bg-gray-100 text-gray-400 cursor-not-allowed'} px-4 py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-3 transition-all text-sm uppercase tracking-widest active:scale-95`}
                         >
-                            <Smartphone className="w-4 h-4" /> HUBUNGI SURVEYOR
+                            <Smartphone className="w-5 h-5" />
+                            {survey.agent_phone ? 'Chat Surveyor via WA' : 'WA Belum Tersedia'}
                         </button>
                     )}
                 </div>
@@ -879,12 +923,12 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                             { id: 'diajukan', label: 'Diajukan', count: activeKosts.filter(k => {
                                 const s = (k.status || '').toLowerCase();
                                 return ['pending_approval', 'awaiting_payment'].includes(s);
-                            }).length + surveyRequests.length },
+                            }).length + surveyRequests.filter(s => ['PENDING_ASSIGNMENT', 'AWAITING_PAYMENT'].includes(s.status)).length },
                             { id: 'aktif', label: 'Aktif', count: activeKosts.filter(k => {
                                 const s = (k.status || '').toLowerCase();
                                 const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(s);
                                 return isPaid && (!k.endDate || new Date() <= new Date(k.endDate));
-                            }).length + surveyRequests.filter(s => ['AGENT_ASSIGNED', 'SURVEYING', 'COMPLETED'].includes(s.status)).length },
+                            }).length + surveyRequests.filter(s => ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING'].includes(s.status)).length },
                             { id: 'riwayat', label: 'Riwayat', count: activeKosts.filter(k => {
                                 const s = (k.status || '').toLowerCase();
                                 const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(s);
@@ -950,54 +994,11 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                 {(filteredKosts.length > 0 || filteredSurveys.length > 0) ? (
                     <div className="space-y-6 sm:space-y-8">
                         {/* Render Surveys First in Diajukan/Aktif */}
-                        {filteredSurveys.map(survey => {
-                            let isCompact = true;
-                            const s = survey.status;
-                            if (activeTab === 'diajukan' && ['AWAITING_PAYMENT', 'PENDING_ASSIGNMENT'].includes(s)) isCompact = false;
-                            if (activeTab === 'aktif' && ['AGENT_ASSIGNED', 'SURVEYING'].includes(s)) isCompact = false;
-                            if (activeTab === 'riwayat' && s === 'COMPLETED') isCompact = false;
-                            return renderSurveyCard(survey, isCompact);
-                        })}
+                        {filteredSurveys.map(survey => renderSurveyCard(survey))}
                         
                         {filteredKosts.map((kost) => {
                             const statusLower = (kost.status || '').toLowerCase();
                             const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(statusLower);
-                            const isCompact = ['cancelled', 'rejected'].includes(statusLower) || (activeTab === 'diajukan' && isPaid);
-                            
-                            if (isCompact) {
-                                return (
-                                    <div key={kost.id} className="group flex items-center gap-4 sm:gap-6 bg-white/40 backdrop-blur-md rounded-[2rem] p-4 sm:p-5 border border-white shadow-lg hover:shadow-xl transition-all duration-300">
-                                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-white shadow-sm shrink-0">
-                                            {kost.displayImage ? (
-                                                <img src={kost.displayImage} className="w-full h-full object-cover opacity-60 grayscale-[50%]" alt={kost.kostName} />
-                                            ) : (
-                                                <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                                                    <MapPin className="w-6 h-6 text-gray-300" />
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h4 className="text-lg sm:text-xl font-black text-gray-500 truncate">{kost.kostName || 'Kost Tersembunyi'}</h4>
-                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{kost.roomType || 'Standard Room'}</p>
-                                        </div>
-                                        <div className="flex flex-col items-end gap-2 pr-2">
-                                            {statusLower === 'cancelled' ? (
-                                                <span className="flex items-center gap-1.5 text-gray-400 bg-gray-50 px-4 py-2 rounded-xl text-[10px] font-black uppercase border border-gray-100 italic">
-                                                    <XCircle className="w-3.5 h-3.5" /> DIBATALKAN
-                                                </span>
-                                            ) : statusLower === 'rejected' ? (
-                                                <span className="flex items-center gap-1.5 text-red-400 bg-red-50/50 px-4 py-2 rounded-xl text-[10px] font-black uppercase border border-red-100 italic">
-                                                    <XCircle className="w-3.5 h-3.5" /> DITOLAK
-                                                </span>
-                                            ) : (
-                                                <span className="flex items-center gap-1.5 text-emerald-500 bg-emerald-50 px-4 py-2 rounded-xl text-[10px] font-black uppercase border border-emerald-100 italic">
-                                                    <CheckCircle className="w-3.5 h-3.5" /> LUNAS
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            }
 
                             return (
                                 <div key={kost.id} className="group relative bg-white/70 backdrop-blur-2xl rounded-[3.5rem] p-8 sm:p-12 border border-white shadow-2xl shadow-gray-200/50 flex flex-col lg:flex-row gap-10 lg:gap-14 hover:scale-[1.01] transition-all duration-500 overflow-hidden">

@@ -36,10 +36,15 @@ export const sendNotification = async (
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Notification insertion failed:', error.message);
+      // Still return null instead of throwing to prevent crashing the whole flow, 
+      // but log it clearly as an error now.
+      return null;
+    }
     return data;
   } catch (error) {
-    console.error('Error sending notification:', error);
+    console.error('Error in sendNotification (non-fatal):', error);
     return null;
   }
 };

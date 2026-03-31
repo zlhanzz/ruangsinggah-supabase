@@ -181,8 +181,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
       // 1. Update users table in Supabase
       const { error: dbError } = await supabase
         .from('users')
-        .update({
+        .upsert({
+          id: user.uid,
+          email: user.email,
           name: formData.displayName,
+          full_name: formData.displayName,
           phone: finalPhone,
           occupation: formData.occupation,
           institution: formData.institution,
@@ -193,12 +196,9 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
           photo_url: formData.photoURL,
           ktp_number: isAgent ? formData.ktp_number : undefined,
           ktp_photo_url: isAgent ? formData.ktp_photo_url : undefined,
-          // Set to pending if they just uploaded or changed KTP number
           verification_status: isAgent && (formData.ktp_number !== user.ktp_number || formData.ktp_photo_url !== user.ktp_photo_url) ? 'pending' : formData.verification_status,
           updated_at: new Date().toISOString()
-        })
-
-        .eq('id', user.uid);
+        }, { onConflict: 'id' });
 
       if (dbError) throw dbError;
 

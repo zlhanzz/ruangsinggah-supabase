@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FORMAT_CURRENCY } from '../constants';
 import { supabase } from '../supabase';
 import { notificationService } from '../notificationService';
@@ -28,6 +28,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
   onPaymentSuccess, 
   onCancel 
 }) => {
+  const hasInitialized = useRef(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [timeLeft, setTimeLeft] = useState(10800);
   const [currentOrder, setCurrentOrder] = useState<Transaction | null>(null);
@@ -115,28 +116,25 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
 
   // Auto-initialize order on mount
   useEffect(() => {
-    if (existingOrderId && !currentOrder) {
+    if (hasInitialized.current) return;
+
+    if (existingOrderId) {
       const fetchExisting = async () => {
         setIsProcessing(true);
         try {
-          const { data, error: fetchErr } = await supabase
+          const { data: order, error } = await supabase
             .from('transactions')
             .select('*')
             .eq('id', existingOrderId)
             .single();
-          if (fetchErr) throw fetchErr;
-          const order = data as Transaction;
-          setCurrentOrder(order);
 
-          // Restore payment method state so user doesn't have to re-select
-          const savedMethod = (order as any).payment_method || (order as any).metadata?.selected_method;
-          if (savedMethod) {
-            setSelectedMethod(savedMethod);
-            // If the payment was already created via Pakasir, restore the direct data from metadata
-            const savedDirectData = (order as any).metadata?.pakasir_response;
-            if (savedDirectData) {
-              setDirectData(savedDirectData);
-              setShowCheckout(true);
+          if (error) throw error;
+          
+          if (order) {
+            setCurrentOrder(order);
+            // If already has method, use it
+            if (order.payment_method) {
+               setSelectedMethod(order.payment_method);
             }
             // If no direct data but method was set, we re-call the backend to re-create Pakasir payment
           }
@@ -144,11 +142,13 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
           setError('Gagal memuat detail tagihan: ' + err.message);
         } finally {
           setIsProcessing(false);
+          hasInitialized.current = true;
         }
       };
       fetchExisting();
     } else if (!existingOrderId && !currentOrder && !isProcessing && !error) {
        handlePay();
+       hasInitialized.current = true;
     }
   }, [existingOrderId]);
 
@@ -189,7 +189,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
             : '/my-bookings'
         ).catch(err => console.error("Failed to create payment notification:", err));
 
-        onPaymentSuccess();
+        onPaymentSuccess(currentOrder.id);
         if (productType === 'survey') {
              // For survey, we might need the same WA redirection logic here if the user just paid from email.
              alert('Pesanan Survey Berhasil! Silakan hubungi admin via WhatsApp untuk jadwal survey.');
@@ -304,7 +304,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
       
       console.log("[DEBUG] Backend Simulation Success:", result);
       alert("Simulasi BERHASIL! Database terupdate & Email Konfirmasi telah dipicu (Cek Console/Log jika email belum sampai).");
-      onPaymentSuccess();
+      onPaymentSuccess(currentOrder.id);
     } catch (err: any) {
       console.error("[DEBUG] Simulation error:", err);
       alert("Simulasi Gagal: " + err.message);

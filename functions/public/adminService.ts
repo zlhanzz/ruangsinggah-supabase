@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject } from './types';
+import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest } from './types';
 
 // ---- TYPE DEF ----
 export interface BasicPropertyInfo extends Partial<Kost> {
@@ -117,16 +117,16 @@ async function deleteFileFromStorage(fileUrl: string): Promise<void> {
 export async function uploadSurveyPhoto(file: File, surveyId: string): Promise<string> {
   try {
     const webpFile = await convertToWebP(file);
-    const fileName = `${surveyId}/${Date.now()}_${Math.random().toString(36).substring(7)}.webp`;
+    const fileName = `evidence/${surveyId}/${Date.now()}_${Math.random().toString(36).substring(7)}.webp`;
     
     const { error } = await supabase.storage
-      .from('surveys')
+      .from('survey-photos')
       .upload(fileName, webpFile);
 
     if (error) throw error;
 
     const { data: { publicUrl } } = supabase.storage
-      .from('surveys')
+      .from('survey-photos')
       .getPublicUrl(fileName);
 
     return publicUrl;
@@ -1132,50 +1132,24 @@ export async function getAnalyticsSummary(
 
   return result;
 }
-
 // ---- SURVEY REQUEST FUNCTIONS ----
 
-export interface SurveyRequest {
-  id: string;
-  user_id: string;
-  kost_id: string;
-  transaction_id: string;
-  status: string;
-  kost_name: string;
-  kost_address: string;
-  owner_phone: string;
-  survey_date: string;
-  survey_time: string;
-  notes: string;
-  agent_name?: string;
-  agent_phone?: string;
-  assigned_agent_id?: string;
-  result_drive_link?: string;
-  evaluation_summary?: {
-    room_facilities?: string;
-    room_facilities_photos?: string[];
-    bathroom_facilities?: string;
-    bathroom_facilities_photos?: string[];
-    water_check?: string;
-    water_check_photos?: string[];
-    wifi_check?: string;
-    wifi_check_photos?: string[];
-    security_check?: string;
-    security_check_photos?: string[];
-    access_check?: string;
-    access_check_photos?: string[];
-    resident_testimonial?: string;
-    resident_testimonial_photos?: string[];
-  };
-  user_rating?: number;
-  user_comment?: string;
-  created_at: string;
-  user?: {
-    name: string;
-    email: string;
-    phone: string;
-    photo_url?: string;
-  };
+// interface SurveyRequest was here, now in types.ts
+
+export async function generateManualDriveFolder(surveyId: string): Promise<string> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Unauthorized.');
+
+    const response = await fetch('https://us-central1-ruangsinggahid-3afb2.cloudfunctions.net/manualCreateSurveyFolder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ surveyId, adminUserId: user.id })
+    });
+
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || 'Gagal membuat folder Drive.');
+    
+    return result.driveLink;
 }
 
 export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
@@ -1197,6 +1171,10 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
         email,
         phone,
         photo_url
+      ),
+      transaction:transaction_id (
+        amount,
+        status
       )
     `);
 
@@ -1242,7 +1220,43 @@ export async function updateSurveyRequest(
   if (error) throw error;
 }
 
-export async function getSurveyAgents(): Promise<{id: string, name: string, phone: string}[]> {
+export async function deleteSurveyRequest(id: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const role = await getUserRole(user.id);
+  const isAdmin = role === 'admin';
+  const isOwner = role === 'owner';
+
+  if (!isAdmin && !isOwner) throw new Error('Access Denied');
+
+  const { error } = await supabase
+    .from('survey_requests')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function deleteSurveyRequests(ids: string[]): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const role = await getUserRole(user.id);
+  const isAdmin = role === 'admin';
+  const isOwner = role === 'owner';
+
+  if (!isAdmin && !isOwner) throw new Error('Access Denied');
+
+  const { error } = await supabase
+    .from('survey_requests')
+    .delete()
+    .in('id', ids);
+
+  if (error) throw error;
+}
+
+export async function getSurveyAgents(): Promise<{id: string, name: string, phone: string, photo_url?: string}[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
   
@@ -1251,7 +1265,7 @@ export async function getSurveyAgents(): Promise<{id: string, name: string, phon
 
   const { data, error } = await supabase
     .from('users')
-    .select('id, name, phone')
+    .select('id, name, phone, photo_url')
     .eq('role', 'survey_agent');
 
   if (error) throw error;
@@ -1276,7 +1290,7 @@ export async function getAgentVerificationRequests(): Promise<any[]> {
   return data || [];
 }
 
-export async function updateAgentVerificationStatus(agentId: string, status: 'verified' | 'unverified', reason?: string): Promise<void> {
+export async function updateAgentVerificationStatus(agentId: string, status: 'verified' | 'unverified' | 'rejected', reason?: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 
