@@ -554,11 +554,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
               )}
 
 
-              {/* Read Only Fields */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">User ID (Tidak dapat diubah)</label>
-                <div className="p-4 bg-gray-100 rounded-2xl border border-gray-200 font-mono text-xs text-gray-500">{user.uid}</div>
-              </div>
 
               {/* Account Status */}
               <div className="space-y-2">

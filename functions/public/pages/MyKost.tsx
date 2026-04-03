@@ -590,24 +590,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
         }
     };
 
-    const filteredKosts = activeKosts.filter(kost => {
-        const statusLower = (kost.status || '').toLowerCase();
-        const isPaid = ['paid', 'approved', 'selesai', 'success', 'berhasil'].includes(statusLower);
-        const isPastStay = kost.daysRemaining !== null && kost.daysRemaining < 0;
-        
-        if (activeTab === 'diajukan') return ['pending_approval', 'awaiting_payment'].includes(statusLower);
-        if (activeTab === 'aktif') return isPaid && !isPastStay;
-        if (activeTab === 'riwayat') return isPastStay || ['rejected', 'cancelled'].includes(statusLower);
-        return false;
-    });
 
-    const filteredSurveys = surveyRequests.filter(survey => {
-        const s = survey.status;
-        if (activeTab === 'diajukan') return ['PENDING_ASSIGNMENT', 'AWAITING_PAYMENT'].includes(s);
-        if (activeTab === 'aktif') return ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING', 'SUBMITTED'].includes(s);
-        if (activeTab === 'riwayat') return ['COMPLETED', 'CANCELLED'].includes(s);
-        return false;
-    });
 
     const renderSurveyCard = (survey: any) => {
         const status = survey.status;
@@ -890,6 +873,25 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
         );
     }
 
+    const filteredKosts = activeKosts.filter(kost => {
+        const s = (kost.status || '').toLowerCase();
+        const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(s);
+        const isPending = ['pending_approval', 'awaiting_payment'].includes(s);
+        
+        if (activeTab === 'diajukan') return isPending;
+        if (activeTab === 'aktif') return isPaid && (!kost.endDate || new Date() <= new Date(kost.endDate));
+        if (activeTab === 'riwayat') return isPaid && kost.endDate && new Date() > new Date(kost.endDate);
+        return false;
+    });
+
+    const filteredSurveys = surveyRequests.filter(survey => {
+        const s = survey.status;
+        if (activeTab === 'diajukan') return ['PENDING_ASSIGNMENT', 'AWAITING_PAYMENT'].includes(s);
+        if (activeTab === 'aktif') return ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING', 'SUBMITTED'].includes(s);
+        if (activeTab === 'riwayat') return ['COMPLETED', 'CANCELLED'].includes(s);
+        return false;
+    });
+
     return (
         <div className="min-h-screen bg-[#F8FAFC] pt-20 pb-12 font-outfitSelection">
             {/* Background Decorations */}
@@ -898,7 +900,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                 <div className="absolute top-[20%] -left-[10%] w-[30%] h-[30%] bg-blue-100/20 rounded-full blur-[100px]" />
             </div>
 
-            <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
 
                 {/* Header Section */}
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
@@ -1001,96 +1003,59 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                             const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(statusLower);
 
                             return (
-                                <div key={kost.id} className="group relative bg-white/70 backdrop-blur-2xl rounded-[3.5rem] p-8 sm:p-12 border border-white shadow-2xl shadow-gray-200/50 flex flex-col lg:flex-row gap-10 lg:gap-14 hover:scale-[1.01] transition-all duration-500 overflow-hidden">
-                                {/* Animated Background Glow */}
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-orange-400/10 to-transparent rounded-full blur-3xl -mr-32 -mt-32 group-hover:from-orange-400/20 transition-all duration-700" />
+                                <div key={kost.id} className="group relative bg-white rounded-[4rem] p-8 sm:p-12 border border-gray-100 shadow-2xl shadow-orange-900/5 hover:shadow-orange-900/10 transition-all duration-700 overflow-hidden flex flex-col lg:grid lg:grid-cols-12 gap-12 sm:gap-16">
+                                {/* Decorative Gradient Overlay */}
+                                <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-br from-orange-400/5 to-transparent rounded-full blur-3xl -mr-40 -mt-40 group-hover:from-orange-400/10 transition-all duration-700 pointer-events-none" />
                                 
-                                {/* Visual / Info Left */}
-                                <div className="flex-1 relative z-10">
-                                    <div className="flex items-start gap-8 mb-10">
-                                        <div className="relative">
-                                            <div className="w-24 h-24 sm:w-28 sm:h-28 bg-white rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-orange-200 border-4 border-white transform -rotate-3 group-hover:rotate-0 transition-all duration-500 overflow-hidden">
+                                <div className="lg:col-span-8 flex flex-col gap-10">
+                                    <div className="flex flex-col md:flex-row items-center md:items-start gap-10 sm:gap-14 w-full">
+                                        <div className="relative shrink-0">
+                                            <div className="w-32 h-32 sm:w-44 sm:h-44 bg-white rounded-[3.5rem] flex items-center justify-center shadow-2xl shadow-orange-100 border-4 border-white transform hover:rotate-3 transition-all duration-700 overflow-hidden">
                                                 {kost.displayImage ? (
-                                                    <img src={kost.displayImage} className="w-full h-full object-cover" alt={kost.kostName} />
+                                                    <img src={kost.displayImage} className="w-full h-full object-cover scale-110 group-hover:scale-100 transition-transform duration-700" alt={kost.kostName} />
                                                 ) : (
-                                                    <MapPin className="w-12 h-12 text-orange-500" />
+                                                    <MapPin className="w-16 h-16 text-orange-500" />
                                                 )}
                                             </div>
-                                            <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-2xl shadow-lg flex items-center justify-center border-2 border-orange-50">
-                                                <span className="text-base">⚡</span>
+                                            <div className="absolute -bottom-3 -right-3 w-14 h-14 bg-white rounded-2xl shadow-xl flex items-center justify-center border-2 border-orange-50 animate-pulse">
+                                                <span className="text-2xl">⚡</span>
                                             </div>
                                         </div>
-                                    </div>
-                                    
-                                    <div className="flex-1">
-                                                <div className="flex flex-col gap-2">
-                                                    <button 
-                                                        onClick={() => onPageChange(`${Page.DETAIL}?kostId=${kost.kostId}` as any)}
-                                                        className="text-3xl sm:text-4xl font-black text-gray-900 leading-tight tracking-tight text-left hover:text-orange-500 transition-colors group/title flex items-center gap-3"
-                                                    >
-                                                        {kost.kostName || 'Kost Tersembunyi'}
-                                                        <ChevronRight className="w-8 h-8 opacity-0 -translate-x-4 group-hover/title:opacity-100 group-hover/title:translate-x-0 transition-all text-orange-500" />
-                                                    </button>
-                                                    {/* Quick Rating Stars */}
-                                                    {['approved', 'paid', 'Selesai', 'success', 'Berhasil'].includes(kost.status) && (
-                                                        <div className="flex items-center gap-1.5 bg-white/50 backdrop-blur-sm self-start px-3 py-1.5 rounded-xl border border-gray-100 shadow-sm">
-                                                            {[1, 2, 3, 4, 5].map((s) => (
-                                                                <button
-                                                                    key={s}
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setRatingValue(s);
-                                                                        setRatingComment('');
-                                                                        setSelectedKost(kost);
-                                                                        setShowRatingModal(true);
-                                                                    }}
-                                                                    className="transition-all hover:scale-125 hover:-translate-y-0.5"
-                                                                >
-                                                                    <Star className={`w-4 h-4 ${s <= 0 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`} />
-                                                                </button>
-                                                            ))}
-                                                            <span className="text-[10px] font-black text-gray-400 ml-2 uppercase tracking-widest">Beri Rating</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                {kost.daysRemaining !== null && ['approved', 'paid', 'Selesai', 'success', 'Berhasil'].includes(kost.status) && (
-                                                    <div className={`group/badge relative px-6 py-3.5 rounded-[1.5rem] text-[11px] font-black uppercase tracking-[0.15em] flex items-center gap-3 shadow-2xl border transition-all duration-500 self-start ${
-                                                        kost.daysRemaining <= 7 
-                                                        ? 'bg-red-600 text-white border-red-500 shadow-red-200 z-20' 
-                                                        : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                                                    }`}>
-                                                        <div className={`w-3 h-3 rounded-full flex items-center justify-center ${kost.daysRemaining <= 7 ? 'bg-white shadow-[0_0_15px_rgba(255,255,255,0.8)]' : 'bg-emerald-500'}`}>
-                                                            {kost.daysRemaining <= 7 && <div className="w-full h-full bg-white rounded-full animate-ping opacity-75" />}
-                                                        </div>
-                                                        <span className="relative">
-                                                            {kost.daysRemaining < 0 ? 'Masa Sewa Habis' : `${kost.daysRemaining} Hari Tersisa`}
-                                                        </span>
-                                                        {kost.daysRemaining <= 7 && (
-                                                             <Zap className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300 animate-bounce" />
-                                                        )}
+                                        
+                                        <div className="flex-1 min-w-0 flex flex-col items-center md:items-start w-full">
+                                            <button 
+                                                onClick={() => onPageChange(`${Page.DETAIL}?kostId=${kost.kostId}` as any)}
+                                                className="text-4xl sm:text-5xl font-black text-gray-900 leading-[1.1] tracking-tight text-center md:text-left hover:text-orange-500 transition-colors group/title flex items-start gap-4 mb-6"
+                                            >
+                                                {kost.kostName || 'Kost Tersembunyi'}
+                                                <ChevronRight className="w-10 h-10 -mt-1 opacity-0 -translate-x-4 group-hover/title:opacity-100 group-hover/title:translate-x-0 transition-all text-orange-500" shrink-0 />
+                                            </button>
+
+                                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 w-full">
+                                                {isPaid && (
+                                                    <div className="flex items-center gap-1.5 bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm">
+                                                        {[1, 2, 3, 4, 5].map((s) => (
+                                                            <Star key={s} className="w-4 h-4 text-gray-300" />
+                                                        ))}
+                                                        <span className="text-[10px] font-black text-gray-400 ml-2 uppercase tracking-widest">Rating</span>
                                                     </div>
                                                 )}
-                                            <div className="flex flex-wrap items-center gap-3 mt-6">
-                                                <span className="bg-gray-100/80 backdrop-blur-sm px-5 py-2.5 rounded-2xl text-[11px] font-black text-gray-700 uppercase tracking-wider">
+                                                
+                                                {kost.daysRemaining !== null && isPaid && (
+                                                    <div className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 border ${
+                                                        kost.daysRemaining <= 7 ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                                    }`}>
+                                                        <div className={`w-2.5 h-2.5 rounded-full ${kost.daysRemaining <= 7 ? 'bg-red-500 animate-ping' : 'bg-emerald-500'}`} />
+                                                        {kost.daysRemaining < 0 ? 'Masa Sewa Habis' : `${kost.daysRemaining} Hari Tersisa`}
+                                                    </div>
+                                                )}
+
+                                                <span className="bg-gray-50 px-5 py-2.5 rounded-xl text-[10px] font-black text-gray-600 uppercase tracking-widest border border-gray-100">
                                                     {kost.roomType || 'Standard Room'}
                                                 </span>
-                                                {statusLower === 'pending_approval' && (
-                                                    <span className="flex items-center gap-2.5 text-orange-600 bg-orange-50/80 backdrop-blur-sm px-5 py-2.5 rounded-2xl border border-orange-100 text-[11px] font-black uppercase tracking-wider">
-                                                        <Clock className="w-4 h-4" /> MENUNGGU PERSETUJUAN
-                                                    </span>
-                                                )}
-                                                {statusLower === 'awaiting_payment' && (
-                                                    <span className="flex items-center gap-2.5 text-blue-600 bg-blue-50/80 backdrop-blur-sm px-5 py-2.5 rounded-2xl border border-blue-100 text-[11px] font-black uppercase tracking-wider">
-                                                        <Zap className="w-4 h-4 fill-blue-600" /> DISETUJUI, SILAKAN BAYAR
-                                                    </span>
-                                                )}
-                                                {statusLower === 'rejected' && (
-                                                    <span className="flex items-center gap-2.5 text-red-600 bg-red-50/80 backdrop-blur-sm px-5 py-2.5 rounded-2xl border border-red-100 text-[11px] font-black uppercase tracking-wider">
-                                                        <XCircle className="w-4 h-4" /> PENGAJUAN DITOLAK
-                                                    </span>
-                                                )}
+
                                                 {isPaid && (
-                                                    <span className="flex items-center gap-2.5 text-emerald-600 bg-emerald-50/80 backdrop-blur-sm px-5 py-2.5 rounded-2xl border border-emerald-100 text-[11px] font-black uppercase tracking-wider">
+                                                    <span className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-5 py-2.5 rounded-xl border border-emerald-100 text-[10px] font-black uppercase tracking-widest">
                                                         <CheckCircle className="w-4 h-4" /> SEDANG DISEWA
                                                     </span>
                                                 )}
@@ -1098,117 +1063,97 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                         </div>
                                     </div>
 
-                                    {/* Stats Grid - Only show if approved/paid */}
-                                    {['approved', 'paid', 'Selesai', 'success', 'Berhasil', 'AWAITING_PAYMENT'].includes(kost.status) && (
-                                        <div className="bg-[#FBFCFE]/80 backdrop-blur-sm rounded-[2.5rem] p-6 sm:p-10 border border-gray-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 hover:border-orange-200 group-hover:bg-white transition-all duration-500">
-                                            <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:gap-2">
-                                                <div className="p-3 bg-orange-100 rounded-2xl"><Clock className="w-5 h-5 text-orange-600" /></div>
-                                                <div>
-                                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Durasi</p>
-                                                    <p className="text-base sm:text-lg font-black text-gray-900">{kost.duration || 1} {kost.period || 'Bulan'}</p>
+                                    {/* Stats Grid - Large 2x2 Layout for Clarity */}
+                                    {isPaid && (
+                                        <div className="bg-gradient-to-br from-gray-50/50 to-white/50 p-8 sm:p-10 rounded-[3rem] border border-gray-100 shadow-inner grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-12 items-start w-full">
+                                            <div className="flex items-center gap-6">
+                                                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg shrink-0">
+                                                    <Clock className="w-7 h-7 text-orange-600" />
+                                                </div>
+                                                <div className="flex flex-col gap-1.5">
+                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Durasi Sewa</span>
+                                                    <span className="text-xl font-black text-gray-900 whitespace-nowrap">{kost.duration || 1} {kost.period || 'Bulan'}</span>
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:gap-2">
-                                                <div className="p-3 bg-blue-100 rounded-2xl"><FileText className="w-5 h-5 text-blue-600" /></div>
-                                                <div>
-                                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Mulai</p>
-                                                    <p className="text-base sm:text-lg font-black text-gray-900">
-                                                        {kost.moveInDate ? new Date(kost.moveInDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
-                                                    </p>
+                                            <div className="flex items-center gap-6">
+                                                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg shrink-0">
+                                                    <FileText className="w-7 h-7 text-blue-600" />
+                                                </div>
+                                                <div className="flex flex-col gap-1.5">
+                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Tanggal Mulai</span>
+                                                    <span className="text-xl font-black text-gray-900 whitespace-nowrap">
+                                                        {kost.moveInDate ? new Date(kost.moveInDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '-'}
+                                                    </span>
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:gap-2">
-                                                <div className="p-3 bg-rose-100 rounded-2xl"><Calendar className="w-5 h-5 text-rose-600" /></div>
-                                                <div>
-                                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Selesai</p>
-                                                    <p className="text-base sm:text-lg font-black text-gray-900">
-                                                        {kost.endDate ? new Date(kost.endDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
-                                                    </p>
+                                            <div className="flex items-center gap-6">
+                                                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg shrink-0">
+                                                    <Calendar className="w-7 h-7 text-rose-600" />
+                                                </div>
+                                                <div className="flex flex-col gap-1.5">
+                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Masa Selesai</span>
+                                                    <span className="text-xl font-black text-gray-900 whitespace-nowrap">
+                                                        {kost.endDate ? new Date(kost.endDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '-'}
+                                                    </span>
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center gap-4 lg:flex-col lg:items-start lg:gap-2">
-                                                <div className="p-3 bg-emerald-100 rounded-2xl"><Receipt className="w-5 h-5 text-emerald-600" /></div>
-                                                <div>
-                                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Tagihan</p>
-                                                    <p className="text-base sm:text-lg font-black text-emerald-600">
+                                            <div className="flex items-center gap-6">
+                                                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg shrink-0">
+                                                    <Receipt className="w-7 h-7 text-emerald-600" />
+                                                </div>
+                                                <div className="flex flex-col gap-1.5">
+                                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Total Tagihan</span>
+                                                    <span className="text-xl font-black text-emerald-600 whitespace-nowrap">
                                                         {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(kost.totalPrice || 0)}
-                                                    </p>
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
 
-                                {/* Actions Column */}
-                                 <div className="flex flex-col gap-6 lg:w-80 shrink-0 justify-start relative z-10 pt-4">
-                                    <div className="grid grid-cols-1 gap-6">
-                                        <button
-                                            onClick={() => {
-                                                const query = `${kost.kostName} ${kost.location || ''} ${kost.city || ''}`.trim();
-                                                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
-                                            }}
-                                            className="bg-gray-900 hover:bg-emerald-600 text-white px-8 py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-3 transition-all text-[13px] shadow-2xl shadow-gray-300 active:scale-95 group/loc"
+                                <div className="lg:col-span-4 flex flex-col gap-4 justify-center relative z-10">
+                                    <button 
+                                        onClick={() => kost.locationUrl ? window.open(kost.locationUrl, '_blank') : alert('Lokasi belum tersedia')}
+                                        className="w-full bg-gray-900 hover:bg-black text-white px-8 py-5 rounded-3xl font-black flex items-center justify-center gap-4 transition-all text-xs uppercase tracking-[0.2em] shadow-xl active:scale-95 group/btn"
+                                    >
+                                        <MapPin className="w-5 h-5 group-hover:scale-110 transition-transform" /> LIHAT LOKASI KOST
+                                    </button>
+
+                                    {isPaid && (
+                                        <button 
+                                            onClick={() => handleOpenExtension(kost)}
+                                            className="w-full bg-orange-500 hover:bg-orange-600 text-white px-8 py-7 rounded-3xl font-black flex items-center justify-center gap-4 transition-all text-sm uppercase tracking-[0.2em] shadow-2xl shadow-orange-200 active:scale-95 group/btn"
                                         >
-                                            <MapPin className="w-5 h-5 group-hover/loc:-translate-y-0.5 transition-transform" /> LIHAT LOKASI KOST
-                                        </button>
-
-                                         {kost.status === 'AWAITING_PAYMENT' && (
-                                            <button
-                                                onClick={() => handleOpenPayment(kost)}
-                                                className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-7 rounded-[2.2rem] font-black flex flex-col items-center justify-center gap-1 transition-all text-[15px] shadow-2xl shadow-orange-200 active:scale-95 animate-subtle-bounce relative"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <Receipt className="w-6 h-6" /> BAYAR SEWA SEKARANG
-                                                </div>
-                                                <span className="text-[10px] opacity-80 font-bold uppercase tracking-widest text-white">Klik untuk buka link pembayaran</span>
-                                            </button>
-                                        )}
-
-                                        {['approved', 'paid', 'Selesai', 'success', 'Berhasil'].includes(kost.status) && (
-                                            <>
-                                                <button
-                                                    onClick={() => handleOpenExtension(kost)}
-                                                    className="group/btn bg-orange-500 hover:bg-orange-600 text-white px-8 py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-3 transition-all text-[13px] shadow-2xl shadow-orange-200 active:scale-95"
-                                                >
-                                                    <Plus className="w-5 h-5 group-hover/btn:rotate-90 transition-transform" /> PERPANJANG SEWA
-                                                </button>
-
-                                                <button
-                                                    onClick={() => handleOpenBill(kost)}
-                                                    className="bg-gray-900 hover:bg-emerald-600 text-white px-8 py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-3 transition-all text-[13px] shadow-2xl shadow-gray-300 active:scale-95 group/bill"
-                                                >
-                                                    <Receipt className="w-5 h-5 group-hover/bill:-translate-y-0.5 transition-transform" /> LIHAT TAGIHAN
-                                                </button>
-                                            </>
-                                        )}
-
-                                        <button
-                                            onClick={() => handleOpenChat(kost)}
-                                            className="bg-white border-2 border-gray-100 hover:border-emerald-500 hover:text-emerald-600 text-gray-700 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[11px] group/item"
-                                        >
-                                            <Smartphone className="w-4 h-4 group-hover/item:-translate-y-0.5 transition-transform" /> HUBUNGI PEMILIK
-                                        </button>
-                                    </div>
-
-                                    {['approved', 'paid', 'Selesai', 'success', 'Berhasil'].includes(kost.status) && (
-                                        <button
-                                            onClick={() => handleOpenComplaint(kost)}
-                                            className="w-full bg-white border-2 border-gray-100 hover:border-red-500 hover:bg-red-50 hover:text-red-600 text-gray-500 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[11px] mt-2 group/comp"
-                                        >
-                                            <MessageSquare className="w-4 h-4 group-hover/comp:-translate-y-0.5 transition-transform" /> AJUKAN KOMPLAIN
+                                            <Plus className="w-6 h-6 group-hover:rotate-90 transition-transform" /> PERPANJANG SEWA
                                         </button>
                                     )}
 
-                                    {activeTab === 'riwayat' && (
-                                        <button
+                                    {isPaid && (
+                                        <button 
+                                            onClick={() => handleOpenBill(kost)}
+                                            className="w-full bg-[#1a1a1a] hover:bg-gray-800 text-white px-8 py-5 rounded-3xl font-black flex items-center justify-center gap-4 transition-all text-xs uppercase tracking-[0.2em] shadow-xl active:scale-95 group/btn"
+                                        >
+                                            <Receipt className="w-5 h-5 group-hover:-rotate-12 transition-transform" /> LIHAT TAGIHAN
+                                        </button>
+                                    )}
+
+                                    <div className="grid grid-cols-1 gap-4 mt-4">
+                                        <button 
+                                            onClick={() => handleOpenChat(kost)}
+                                            className="w-full bg-white hover:bg-gray-50 text-gray-900 border-2 border-gray-100 px-8 py-5 rounded-3xl font-black flex items-center justify-center gap-4 transition-all text-[11px] uppercase tracking-widest active:scale-95"
+                                        >
+                                            <Smartphone className="w-5 h-5" /> HUBUNGI PEMILIK
+                                        </button>
+                                        <button 
                                             onClick={() => onPageChange(`${Page.DETAIL}?kostId=${kost.kostId}` as any)}
                                             className="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[11px] mt-4 shadow-xl shadow-orange-100 active:scale-95"
                                         >
                                             <Search className="w-4 h-4" /> AJUKAN SEWA LAGI
                                         </button>
-                                    )}
 
                                     {/* Cancellation Button for Pending/Awaiting States */}
                                     {(kost.status === 'PENDING_APPROVAL' || kost.status === 'AWAITING_PAYMENT') && (
@@ -1226,6 +1171,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                             <XCircle className="w-4 h-4" /> PENGAJUAN DIBATALKAN
                                         </div>
                                     )}
+                                </div>
                                 </div>
                             </div>
                             );

@@ -21,6 +21,36 @@ import MitraDashboard from './pages/MitraDashboard';
 import OrderPaymentStatus from './pages/OrderPaymentStatus';
 import { getPublishedProperties } from './userService';
 
+// Improved Protected Route Wrapper for strict access control
+const ProtectedRoute: React.FC<{ 
+  user: any, 
+  loadingAuth: boolean, 
+  requiredRole?: string | string[], 
+  children: React.ReactElement 
+}> = ({ user, loadingAuth, requiredRole, children }) => {
+  if (loadingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+      </div>
+    );
+  }
+  
+  if (!user) {
+    return <Navigate to={Page.HOME} replace />;
+  }
+  
+  if (requiredRole) {
+    const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+    if (!roles.includes(user.role)) {
+      console.warn(`Access denied for role: ${user.role}. Required: ${roles.join(', ')}`);
+      return <Navigate to={Page.HOME} replace />;
+    }
+  }
+  
+  return children;
+};
+
 const App: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -323,8 +353,16 @@ const App: React.FC = () => {
             <Route path={Page.ABOUT} element={<About />} />
             <Route path={Page.CONTACT} element={<Contact />} />
             <Route path={Page.SURVEY_SERVICE} element={<SurveyService user={user} onPageChange={(p: Page) => navigate(p)} />} />
-            <Route path={Page.MY_BOOKINGS} element={<MyKost user={user} onPageChange={(p: Page) => navigate(p)} />} />
-            <Route path={Page.CHAT} element={<Chat user={user} onPageChange={(p: Page) => navigate(p)} />} />
+            <Route path={Page.MY_BOOKINGS} element={
+              <ProtectedRoute user={user} loadingAuth={loadingAuth}>
+                <MyKost user={user} onPageChange={(p: Page) => navigate(p)} />
+              </ProtectedRoute>
+            } />
+            <Route path={Page.CHAT} element={
+              <ProtectedRoute user={user} loadingAuth={loadingAuth}>
+                <Chat user={user} onPageChange={(p: Page) => navigate(p)} />
+              </ProtectedRoute>
+            } />
             
             <Route path={Page.LOGIN} element={
               (user && !location.search.includes('mode=recovery')) ? (
@@ -346,39 +384,45 @@ const App: React.FC = () => {
             } />
             
             <Route path={Page.PROFILE} element={
-              <Profile
-                user={user}
-                onLogout={handleLogout}
-                onSaveSuccess={handleProfileSaveSuccess}
-                forceEdit={!!pendingTransaction}
-                onBack={handleBackNavigation}
-              />
+              <ProtectedRoute user={user} loadingAuth={loadingAuth}>
+                <Profile
+                  user={user}
+                  onLogout={handleLogout}
+                  onSaveSuccess={handleProfileSaveSuccess}
+                  forceEdit={!!pendingTransaction}
+                  onBack={handleBackNavigation}
+                />
+              </ProtectedRoute>
             } />
             
             <Route path={Page.DASHBOARD_ADMIN} element={
-              <Dashboard 
-                role={user?.role || ''} 
-                user={user}
-                uid={user?.id} 
-                verificationStatus={user?.verification_status}
-                onPageChange={(p: Page) => navigate(p)} 
-                listings={listings} 
-                onAdd={handleAddKost} 
-                onEdit={handleEditKost} 
-                onDelete={handleDeleteKost} 
-                onRefreshListings={fetchListings} 
-              />
+              <ProtectedRoute user={user} loadingAuth={loadingAuth} requiredRole="admin">
+                <Dashboard 
+                  role={user?.role || ''} 
+                  user={user}
+                  uid={user?.id} 
+                  verificationStatus={user?.verification_status}
+                  onPageChange={(p: Page) => navigate(p)} 
+                  listings={listings} 
+                  onAdd={handleAddKost} 
+                  onEdit={handleEditKost} 
+                  onDelete={handleDeleteKost} 
+                  onRefreshListings={fetchListings} 
+                />
+              </ProtectedRoute>
             } />
             
             <Route path={Page.DASHBOARD_MITRA} element={
-              <MitraDashboard 
-                user={user}
-                uid={user?.id}
-                onPageChange={(p: Page) => navigate(p)}
-                onAddKost={handleAddKost}
-                onEditKost={handleEditKost}
-                onDeleteKost={handleDeleteKost}
-              />
+              <ProtectedRoute user={user} loadingAuth={loadingAuth} requiredRole="owner">
+                <MitraDashboard 
+                  user={user}
+                  uid={user?.id}
+                  onPageChange={(p: Page) => navigate(p)}
+                  onAddKost={handleAddKost}
+                  onEditKost={handleEditKost}
+                  onDeleteKost={handleDeleteKost}
+                />
+              </ProtectedRoute>
             } />
             
             <Route path={Page.DASHBOARD_OWNER} element={
@@ -386,18 +430,20 @@ const App: React.FC = () => {
             } />
             
             <Route path={Page.DASHBOARD_AGENT} element={
-              <Dashboard 
-                role={user?.role || 'survey_agent'} 
-                user={user}
-                uid={user?.id} 
-                verificationStatus={user?.verification_status}
-                onPageChange={(p: Page) => navigate(p)} 
-                listings={listings} 
-                onAdd={handleAddKost} 
-                onEdit={handleEditKost} 
-                onDelete={handleDeleteKost} 
-                onRefreshListings={fetchListings} 
-              />
+              <ProtectedRoute user={user} loadingAuth={loadingAuth} requiredRole="survey_agent">
+                <Dashboard 
+                  role={user?.role || 'survey_agent'} 
+                  user={user}
+                  uid={user?.id} 
+                  verificationStatus={user?.verification_status}
+                  onPageChange={(p: Page) => navigate(p)} 
+                  listings={listings} 
+                  onAdd={handleAddKost} 
+                  onEdit={handleEditKost} 
+                  onDelete={handleDeleteKost} 
+                  onRefreshListings={fetchListings} 
+                />
+              </ProtectedRoute>
             } />
             
             <Route path={Page.DETAIL} element={
