@@ -1,8 +1,9 @@
-
 import React from 'react';
-import { Page, Kost } from '../types';
+import { Page, Kost, Banner } from '../types';
 import KostCard from '../components/KostCard';
-import { ClipboardCheck, Home as HomeIcon, Search } from 'lucide-react';
+import PromoCarousel from '../components/PromoCarousel';
+import QuickActionMenu from '../components/QuickActionMenu';
+import { supabase } from '../supabase';
 
 interface HomeProps {
   onPageChange: (page: Page) => void;
@@ -13,93 +14,93 @@ interface HomeProps {
 }
 
 const Home: React.FC<HomeProps> = ({ onPageChange, onKostSelect, user, listings = [], loading = false }) => {
+  const [banners, setBanners] = React.useState<Banner[]>([]);
   const featuredKosts = listings.filter(k => k.isVerified).slice(0, 3);
 
+  React.useEffect(() => {
+    const fetchBanners = async () => {
+      const { data, error } = await supabase
+        .from('banners')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+        
+      if (!error && data) {
+        setBanners(data);
+      }
+    };
+    fetchBanners();
+  }, []);
+
   return (
-    <div className="flex flex-col">
-      {/* Hero Section */}
-      <section className="relative bg-white pt-8 sm:pt-12 lg:pt-24 pb-12 sm:pb-20 lg:pb-32 overflow-hidden border-b border-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="text-center max-w-4xl mx-auto">
-            <span className="inline-block bg-orange-50 text-orange-500 text-[9px] sm:text-[10px] font-black px-3 py-1.5 sm:px-4 sm:py-2 rounded-full mb-6 sm:mb-8 tracking-widest uppercase border border-orange-100 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-700">
-              Kost Mahasiswa Terverifikasi
-            </span>
-            <h1 className="text-4xl sm:text-6xl lg:text-9xl font-black text-gray-900 leading-[1.1] md:leading-[0.85] mb-6 lg:mb-10 uppercase tracking-tighter animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
-              <span className="text-orange-500">Ruang Singgah:</span> <br className="hidden md:block" /> Solusi Kost Terpercaya di Makassar.
-            </h1>
-            <p className="text-base sm:text-xl text-gray-500 mb-10 lg:mb-12 max-w-2xl mx-auto font-medium leading-relaxed animate-in fade-in slide-in-from-bottom-6 duration-700 delay-200">
-              Platform pencarian kost mahasiswa berbasis kepercayaan. Semua unit sudah dicek langsung oleh tim lapangan kami untuk menjamin kenyamanan Anda.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center items-center animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
-              <button
-                onClick={() => onPageChange(Page.LISTINGS)}
-                className="w-full sm:w-auto bg-orange-500 text-white px-6 py-4 sm:px-10 sm:py-5 rounded-2xl sm:rounded-[2rem] font-black text-xs sm:text-sm uppercase tracking-widest hover:bg-orange-600 transition-all shadow-2xl shadow-orange-100 active:scale-95 flex items-center justify-center gap-2 sm:gap-3 group"
-              >
-                <Search className="w-4 h-4 sm:w-5 sm:h-5 text-orange-200 group-hover:text-white transition-colors" />
-                Cari Kost Sekarang
-              </button>
-              <button
-                onClick={() => onPageChange(Page.PRODUCTS)}
-                className="w-full sm:w-auto bg-black text-white px-6 py-4 sm:px-10 sm:py-5 rounded-2xl sm:rounded-[2rem] font-black text-xs sm:text-sm uppercase tracking-widest hover:bg-gray-900 transition-all shadow-xl hover:shadow-2xl active:scale-95 flex items-center justify-center gap-2 sm:gap-3 group border-2 border-gray-900 hover:border-black"
-              >
-                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                Download Database
-              </button>
-            </div>
+    <div className="flex flex-col bg-gray-50 pb-20">
+      {/* Hidden SEO Heading for Googlebot */}
+      <h1 className="sr-only">Ruang Singgah: Solusi Kost Terpercaya di Makassar - Cari Kost Mahasiswa Terverifikasi</h1>
 
-            {/* Link Ekstra Layanan Bawah CTA */}
-            <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center items-center animate-in fade-in slide-in-from-bottom-10 duration-700 delay-500">
-              <button
-                onClick={() => onPageChange(Page.SURVEY_SERVICE)}
-                className="w-full sm:w-auto bg-black text-white border-2 border-gray-900 hover:border-black px-6 py-4 sm:px-10 sm:py-5 rounded-2xl sm:rounded-[2rem] font-black text-xs sm:text-sm uppercase tracking-widest hover:bg-gray-900 transition-all shadow-xl hover:shadow-2xl active:scale-95 flex items-center justify-center gap-2 sm:gap-3 group"
-              >
-                <ClipboardCheck className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-white transition-colors" />
-                Jasa Survey Kost
-              </button>
-              <button
-                onClick={() => onPageChange(Page.OWNER)}
-                className="w-full sm:w-auto bg-black text-white border-2 border-gray-900 hover:border-black px-6 py-4 sm:px-10 sm:py-5 rounded-2xl sm:rounded-[2rem] font-black text-xs sm:text-sm uppercase tracking-widest hover:bg-gray-900 transition-all shadow-xl hover:shadow-2xl active:scale-95 flex items-center justify-center gap-2 sm:gap-3 group"
-              >
-                <HomeIcon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-white transition-colors" />
-                Daftar Mitra Kost
-              </button>
-            </div>
+      {/* Top Section / Branding - Professional & Minimal */}
+      <div className="bg-white pt-6 pb-2 border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-500 mb-1">Explore</span>
+            <h2 className="text-xl sm:text-2xl font-black text-gray-900 leading-tight">Beranda Utama</h2>
           </div>
+          {/* Subtle welcome for user if logged in */}
+          {user && (
+            <div className="text-right hidden sm:block">
+              <span className="text-xs text-gray-400 block font-bold uppercase tracking-widest">Selamat Datang</span>
+              <span className="text-sm font-black text-gray-800">{user.displayName || 'Pengguna'}</span>
+            </div>
+          )}
         </div>
+      </div>
 
-        {/* Background Elements */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-orange-50/50 rounded-full mix-blend-multiply filter blur-[120px] opacity-40 pointer-events-none -z-10"></div>
-        <div className="absolute -bottom-24 left-0 w-64 h-64 bg-orange-100 rounded-full mix-blend-multiply filter blur-3xl opacity-20 pointer-events-none"></div>
-      </section>
+      {/* Hero / Promo Section */}
+      <PromoCarousel 
+        banners={banners} 
+        onBannerClick={(link) => {
+          if (link.startsWith('http')) window.open(link, '_blank');
+          else onPageChange(link as Page);
+        }} 
+      />
 
-      {/* Featured Listings */}
-      <section className="py-12 sm:py-16 md:py-24 bg-white">
+      {/* Quick Action Navigation (App Menu) */}
+      <QuickActionMenu onAction={(page) => onPageChange(page)} />
+
+      {/* Recommendations Section */}
+      <section className="bg-white py-12 sm:py-16 rounded-t-[3rem] sm:rounded-t-[4rem] -mt-6 relative z-30 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)] border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 sm:mb-12 md:mb-16">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 sm:mb-12">
             <div>
-              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-900 mb-3 sm:mb-4 tracking-tighter uppercase">Kost Pilihan Hari Ini</h2>
-              <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] sm:text-xs">Unit terbaik yang baru saja diverifikasi ulang oleh tim lapangan.</p>
+              <div className="flex items-center gap-3 mb-4">
+                <span className="h-[2px] w-8 bg-orange-500"></span>
+                <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Rekomendasi Utama</span>
+              </div>
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-900 tracking-tighter uppercase leading-tight">
+                Kost Pilihan <br className="sm:hidden" /> <span className="text-gray-400">Hari Ini</span>
+              </h2>
             </div>
             <button
               onClick={() => onPageChange(Page.LISTINGS)}
-              className="mt-6 sm:mt-8 md:mt-0 bg-gray-900 text-white px-6 py-3.5 sm:px-8 sm:py-4 rounded-xl sm:rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-widest hover:bg-orange-500 transition-all shadow-xl active:scale-95"
+              className="mt-6 md:mt-0 flex items-center gap-4 bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 group"
             >
-              Lihat Semua Kost
+              Lihat Katalog Lengkap
+              <span className="h-2 w-2 rounded-full bg-orange-500 group-hover:bg-white animate-pulse"></span>
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-8 lg:gap-12">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 lg:gap-12">
             {loading ? (
-              // Loading Skeleton
+              // Enhanced Loading Skeleton
               [1, 2, 3].map((n) => (
-                <div key={n} className="bg-white rounded-2xl border border-gray-100 overflow-hidden h-full flex flex-col animate-pulse">
-                  <div className="bg-gray-200 aspect-[4/3] w-full"></div>
-                  <div className="p-5 space-y-3">
-                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                    <div className="h-8 bg-gray-200 rounded w-full mt-4"></div>
+                <div key={n} className="bg-white rounded-3xl border border-gray-50 overflow-hidden h-full flex flex-col animate-pulse shadow-sm">
+                  <div className="bg-gray-100 aspect-[4/3] w-full"></div>
+                  <div className="p-6 space-y-4">
+                    <div className="h-5 bg-gray-100 rounded-lg w-3/4"></div>
+                    <div className="h-4 bg-gray-100 rounded-lg w-1/2"></div>
+                    <div className="pt-2 flex gap-2">
+                       <div className="h-8 bg-gray-50 rounded-xl w-1/4"></div>
+                       <div className="h-8 bg-gray-50 rounded-xl w-1/4"></div>
+                    </div>
                   </div>
                 </div>
               ))
@@ -110,11 +111,23 @@ const Home: React.FC<HomeProps> = ({ onPageChange, onKostSelect, user, listings 
             )}
 
             {!loading && featuredKosts.length === 0 && (
-              <div className="col-span-full text-center py-10 bg-gray-50 rounded-2xl">
-                <p className="text-gray-400 font-bold">Belum ada kost terverifikasi.</p>
+              <div className="col-span-full text-center py-20 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-100">
+                <div className="inline-flex p-6 rounded-full bg-white mb-4 shadow-sm">
+                  <span className="text-3xl">🏠</span>
+                </div>
+                <p className="text-gray-400 font-black uppercase tracking-widest text-sm">Belum ada kost terverifikasi untuk wilayah ini.</p>
               </div>
             )}
           </div>
+        </div>
+      </section>
+
+      {/* Trust Quote / Branding subtle */}
+      <section className="bg-white pt-10 pb-20 px-4 text-center">
+        <div className="max-w-2xl mx-auto">
+          <p className="text-gray-300 text-[10px] sm:text-xs font-bold uppercase tracking-[0.3em] leading-loose">
+            RuangSinggah.id adalah platform pencarian kost mahasiswa terverifikasi. <br /> Beroperasi utama di Makassar untuh kemudahan hunian akademisi.
+          </p>
         </div>
       </section>
     </div>

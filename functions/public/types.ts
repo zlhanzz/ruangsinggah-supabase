@@ -219,3 +219,13 @@ export interface SurveyRequest {
     photo_url?: string;
   };
 }
+
+export interface Banner {
+  id: string;
+  title: string;
+  image_url: string;
+  link_url?: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+}

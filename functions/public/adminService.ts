@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest } from './types';
+import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner } from './types';
 import { notifyAdminStatusUpdate } from './emailService';
 
 // ---- TYPE DEF ----
@@ -1374,4 +1374,104 @@ export async function updateMitraRequestStatus(
       console.warn('Failed to update user role, but request was accepted:', userError);
     }
   }
+}
+
+// ---- BANNER MANAGEMENT FUNCTIONS ----
+
+export async function getAdminBanners(): Promise<Banner[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  const { data, error } = await supabase
+    .from('banners')
+    .select('*')
+    .order('sort_order', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addBanner(bannerData: Partial<Banner>, imageFile: File): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  // 1. Upload Image
+  const imageUrl = await uploadFileToStorage(imageFile, 'banners', 'promo');
+
+  // 2. Insert Record
+  const { data, error } = await supabase
+    .from('banners')
+    .insert({
+      title: bannerData.title,
+      image_url: imageUrl,
+      link_url: bannerData.link_url || '',
+      is_active: bannerData.is_active ?? true,
+      sort_order: bannerData.sort_order || 0
+    })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return data.id;
+}
+
+export async function updateBanner(bannerId: string, updates: Partial<Banner>, newImageFile?: File): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  let imageUrl = updates.image_url;
+
+  // 1. If new image provided, upload and delete old one
+  if (newImageFile) {
+    // Get old image URL to delete later
+    const { data: oldData } = await supabase.from('banners').select('image_url').eq('id', bannerId).single();
+    
+    imageUrl = await uploadFileToStorage(newImageFile, 'banners', 'promo');
+    
+    if (oldData?.image_url) {
+      await deleteFileFromStorage(oldData.image_url);
+    }
+  }
+
+  // 2. Update Record
+  const { error } = await supabase
+    .from('banners')
+    .update({
+      title: updates.title,
+      image_url: imageUrl,
+      link_url: updates.link_url,
+      is_active: updates.is_active,
+      sort_order: updates.sort_order,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', bannerId);
+
+  if (error) throw error;
+}
+
+export async function deleteBanner(bannerId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  // 1. Get image URL to delete from storage
+  const { data } = await supabase.from('banners').select('image_url').eq('id', bannerId).single();
+  if (data?.image_url) {
+    await deleteFileFromStorage(data.image_url);
+  }
+
+  // 2. Delete record
+  const { error } = await supabase.from('banners').delete().eq('id', bannerId);
+  if (error) throw error;
 }
