@@ -9,9 +9,10 @@ interface NavbarProps {
   onPageChange: (page: Page) => void;
   user?: any; // Added user prop
   onLogout?: () => void; // Added logout prop
+  hideBottomNav?: boolean;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogout }) => {
+const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogout, hideBottomNav }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -357,7 +358,7 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
       </nav>
 
       {/* Edge-to-Edge Mobile Bottom Navigation */}
-      {[Page.HOME, Page.LISTINGS, Page.PRODUCTS, Page.MY_BOOKINGS, Page.CHAT].includes(activePage) && (
+      {[Page.HOME, Page.LISTINGS, Page.PRODUCTS, Page.MY_BOOKINGS, Page.CHAT].includes(activePage) && !hideBottomNav && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 w-full z-[100] bg-white border-t border-gray-100 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.05)]">
           <div className="flex items-center justify-around pb-1 pt-2">
             <button

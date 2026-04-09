@@ -63,6 +63,7 @@ const App: React.FC = () => {
     type: 'kost' | 'product';
     id: string;
   } | null>(null);
+  const [hideNavbar, setHideNavbar] = useState(false);
 
   const handleBackNavigation = () => {
     if (window.history.length > 2) {
@@ -320,6 +321,7 @@ const App: React.FC = () => {
           }}
           user={user}
           onLogout={handleLogout}
+          hideBottomNav={hideNavbar}
         />
       )}
 
@@ -331,8 +333,8 @@ const App: React.FC = () => {
         ) : (
            <Routes>
              <Route path="/payment-status/:orderId" element={<OrderPaymentStatus user={user} />} />
-             <Route path={Page.HOME} element={<Home onPageChange={(p: Page) => navigate(p)} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />} />
-            <Route path={Page.LISTINGS} element={<Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} />} />
+              <Route path={Page.HOME} element={<Home onPageChange={(p: Page | string) => navigate(p)} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />} />
+              <Route path={Page.LISTINGS} element={<Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} onFilterToggle={setHideNavbar} />} />
             <Route path="/products/*" element={
               <Products
                 user={user}

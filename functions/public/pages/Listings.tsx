@@ -1,8 +1,11 @@
 
-import React, { useState, useMemo } from 'react';
-import { FORMAT_CURRENCY } from '../constants';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Kost } from '../types';
 import KostCard from '../components/KostCard';
+import { getRoomEffectivePrice } from '../userService';
+import FilterDrawer from '../components/FilterDrawer';
+import FilterControls, { FilterState } from '../components/FilterControls';
 
 interface ListingsProps {
   onKostClick?: (id: string) => void;
@@ -10,15 +13,51 @@ interface ListingsProps {
   loading?: boolean;
   onDelete?: (id: string, type: 'kost' | 'database', name: string) => void;
   user?: any;
+  onFilterToggle?: (isOpen: boolean) => void;
 }
 
-const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading = false, onDelete, user }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState<string>('Semua');
-  const [selectedCity, setSelectedCity] = useState('Semua');
-  const [selectedCampus, setSelectedCampus] = useState('Semua');
-  const [maxPrice, setMaxPrice] = useState(5000000);
+const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading = false, onDelete, user, onFilterToggle }) => {
+  const { search } = useLocation();
+  const queryParams = useMemo(() => new URLSearchParams(search), [search]);
+
+  const [filters, setFilters] = useState<FilterState>({
+    searchTerm: '',
+    typeFilter: 'Semua',
+    selectedCity: 'Semua',
+    selectedCampus: 'Semua',
+    maxPrice: 5000000,
+  });
+  
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+  
+  // Initialize and sync with URL query parameters
+  useEffect(() => {
+    const qSearch = queryParams.get('search');
+    const qCity = queryParams.get('city');
+    const qCampus = queryParams.get('campus');
+    const qType = queryParams.get('type');
+    const qMaxPrice = queryParams.get('maxPrice');
+
+    setFilters(prev => ({
+      ...prev,
+      searchTerm: qSearch || prev.searchTerm,
+      selectedCity: qCity || prev.selectedCity,
+      selectedCampus: qCampus || prev.selectedCampus,
+      typeFilter: qType || prev.typeFilter,
+      maxPrice: qMaxPrice ? parseInt(qMaxPrice) : prev.maxPrice,
+    }));
+  }, [queryParams]);
+
+  useEffect(() => {
+    if (onFilterToggle) onFilterToggle(isMobileFilterOpen);
+    return () => {
+      if (onFilterToggle) onFilterToggle(false);
+    };
+  }, [isMobileFilterOpen, onFilterToggle]);
+
+  const updateFilters = (newFilters: Partial<FilterState>) => {
+    setFilters(prev => ({ ...prev, ...newFilters }));
+  };
 
   // Dynamically extract available cities from listings
   const availableCities = useMemo(() => {
@@ -29,180 +68,74 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
   // Dynamically extract available campuses based on selected city
   const availableCampuses = useMemo(() => {
     let relevantListings = listings;
-    
-    // If a specific city is selected, only show campuses in that city
-    if (selectedCity !== 'Semua') {
-      relevantListings = listings.filter(k => k.city === selectedCity);
+    if (filters.selectedCity !== 'Semua') {
+      relevantListings = listings.filter(k => k.city === filters.selectedCity);
     }
-
     const campuses = new Set(relevantListings.map(k => k.campus).filter(c => c && c.trim() !== ''));
     return Array.from(campuses).sort();
-  }, [listings, selectedCity]);
+  }, [listings, filters.selectedCity]);
 
   const filteredKosts = useMemo(() => {
     let result = [...listings];
 
-    if (searchTerm) {
+    if (filters.searchTerm) {
       result = result.filter(k => 
-        k.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        k.address.toLowerCase().includes(searchTerm.toLowerCase())
+        k.title.toLowerCase().includes(filters.searchTerm.toLowerCase()) || 
+        k.address.toLowerCase().includes(filters.searchTerm.toLowerCase())
       );
     }
 
-    if (typeFilter !== 'Semua') {
-      result = result.filter(k => k.type === typeFilter);
+    if (filters.typeFilter !== 'Semua') {
+      result = result.filter(k => k.type === filters.typeFilter);
     }
 
-    if (selectedCity !== 'Semua') {
-      result = result.filter(k => k.city === selectedCity);
+    if (filters.selectedCity !== 'Semua') {
+      result = result.filter(k => k.city === filters.selectedCity);
     }
 
-    if (selectedCampus !== 'Semua') {
-      result = result.filter(k => k.campus === selectedCampus);
+    if (filters.selectedCampus !== 'Semua') {
+      result = result.filter(k => k.campus === filters.selectedCampus);
     }
 
-    // Filter by Price
     result = result.filter(k => {
-      const prices = k.roomTypes?.length > 0 ? k.roomTypes.map(r => r.price) : [k.price];
+      let prices: number[] = [];
+      if (k.roomTypes && k.roomTypes.length > 0) {
+        const effectivePrices = k.roomTypes.map(getRoomEffectivePrice);
+        const monthlyBased = effectivePrices.filter(p => p.priority <= 4);
+        if (monthlyBased.length > 0) {
+          prices = monthlyBased.map(p => p.price);
+        } else {
+          prices = effectivePrices.map(p => p.price);
+        }
+      } else {
+        prices = [Number(k.price) || 0];
+      }
       const minVariantPrice = Math.min(...prices);
-      return minVariantPrice <= maxPrice;
+      return minVariantPrice <= filters.maxPrice;
     });
 
     return result;
-  }, [searchTerm, typeFilter, selectedCity, selectedCampus, maxPrice, listings]);
+  }, [filters, listings]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
-    if (searchTerm) count++;
-    if (typeFilter !== 'Semua') count++;
-    if (selectedCity !== 'Semua') count++;
-    if (selectedCampus !== 'Semua') count++;
-    if (maxPrice < 5000000) count++;
+    if (filters.searchTerm) count++;
+    if (filters.typeFilter !== 'Semua') count++;
+    if (filters.selectedCity !== 'Semua') count++;
+    if (filters.selectedCampus !== 'Semua') count++;
+    if (filters.maxPrice < 5000000) count++;
     return count;
-  }, [searchTerm, typeFilter, selectedCity, selectedCampus, maxPrice]);
+  }, [filters]);
 
   const resetFilters = () => {
-    setSearchTerm('');
-    setTypeFilter('Semua');
-    setSelectedCity('Semua');
-    setSelectedCampus('Semua');
-    setMaxPrice(5000000);
+    setFilters({
+      searchTerm: '',
+      typeFilter: 'Semua',
+      selectedCity: 'Semua',
+      selectedCampus: 'Semua',
+      maxPrice: 5000000,
+    });
   };
-
-  const handleCityChange = (city: string) => {
-    setSelectedCity(city);
-    setSelectedCampus('Semua');
-  };
-
-  const handleCampusChange = (campus: string) => {
-    setSelectedCampus(campus);
-    // Auto-select city if a campus is chosen and city is not already set (or set it anyway to ensure consistency)
-    if (campus !== 'Semua') {
-      const listingWithCampus = listings.find(k => k.campus === campus);
-      if (listingWithCampus && listingWithCampus.city) {
-         setSelectedCity(listingWithCampus.city);
-      }
-    }
-  };
-
-  // Render fields as a function called within the component
-  const renderFilterControls = () => (
-    <div className="space-y-5 lg:space-y-6">
-      {/* Pencarian */}
-      <div className="space-y-1.5">
-        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest">Pencarian</label>
-        <input 
-          type="text" 
-          placeholder="Nama kost atau daerah..." 
-          className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-gray-900 placeholder:text-gray-400" 
-          value={searchTerm} 
-          onChange={(e) => setSearchTerm(e.target.value)} 
-        />
-      </div>
-
-      {/* Tipe Kost */}
-      <div className="space-y-1.5">
-        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest">Tipe Kost</label>
-        <select 
-          className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 appearance-none text-gray-900 cursor-pointer"
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-        >
-          <option value="Semua">Semua Tipe</option>
-          <option value="Putra">Kost Putra</option>
-          <option value="Putri">Kost Putri</option>
-          <option value="Campur">Kost Campur</option>
-        </select>
-      </div>
-
-      {/* Pilih Kota */}
-      <div className="space-y-1.5">
-        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest">Pilih Kota</label>
-        <select 
-          className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 appearance-none text-gray-900 cursor-pointer" 
-          value={selectedCity} 
-          onChange={(e) => handleCityChange(e.target.value)}
-        >
-          <option value="Semua">Semua Kota</option>
-          {availableCities.map(city => (
-            <option key={city} value={city}>{city}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Pilih Kampus */}
-      <div className="space-y-1.5">
-        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest">Pilih Kampus</label>
-        <select 
-          className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 appearance-none text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 cursor-pointer"
-          value={selectedCampus}
-          onChange={(e) => handleCampusChange(e.target.value)}
-          disabled={availableCampuses.length === 0}
-        >
-          <option value="Semua">Semua Kampus</option>
-          {availableCampuses.map(campus => (
-            <option key={campus} value={campus}>{campus}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Harga Maksimal Slider */}
-      <div className="space-y-3">
-        <div className="flex justify-between items-center">
-          <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest">Harga Maksimal</label>
-          <span className="text-orange-600 font-black text-[10px] uppercase">{FORMAT_CURRENCY(maxPrice)}</span>
-        </div>
-        <input 
-          type="range" 
-          min="500000" 
-          max="5000000" 
-          step="100000" 
-          className="w-full h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-orange-500" 
-          value={maxPrice} 
-          onChange={(e) => setMaxPrice(parseInt(e.target.value))} 
-        />
-        <div className="flex justify-between text-[8px] font-bold text-gray-400 uppercase tracking-widest">
-          <span>500rb</span>
-          <span>5jt</span>
-        </div>
-      </div>
-
-      <div className="pt-4 flex gap-3">
-        <button 
-          onClick={resetFilters} 
-          className="flex-1 py-3 text-[9px] font-black text-gray-500 uppercase tracking-widest hover:text-orange-500 border border-gray-200 bg-white rounded-xl transition-colors shadow-sm"
-        >
-          Reset
-        </button>
-        <button 
-          onClick={() => setIsMobileFilterOpen(false)}
-          className="flex-[2] lg:hidden bg-gray-900 text-white py-3 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl active:scale-95"
-        >
-          Terapkan
-        </button>
-      </div>
-    </div>
-  );
 
   return (
     <div className="min-h-screen bg-white">
@@ -240,34 +173,28 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
                     <div className="mb-6 pb-6 border-b border-gray-100">
                         <h3 className="text-lg font-black uppercase tracking-tight text-gray-900">Filter</h3>
                     </div>
-                    {renderFilterControls()}
+                    <FilterControls 
+                      filters={filters}
+                      setFilters={updateFilters}
+                      availableCities={availableCities}
+                      availableCampuses={availableCampuses}
+                      onReset={resetFilters}
+                      showApplyButton={false}
+                    />
                 </div>
             </aside>
 
             {/* MOBILE FILTER DRAWER */}
-            {isMobileFilterOpen && (
-                <div className="lg:hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
-                    <div 
-                    className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300" 
-                    onClick={() => setIsMobileFilterOpen(false)}
-                    ></div>
-                    <div className="relative bg-white w-full sm:max-w-lg rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl p-6 pb-8 animate-in slide-in-from-bottom duration-500 max-h-[85vh] overflow-y-auto">
-                        <div className="w-12 h-1.5 bg-gray-100 rounded-full mx-auto mb-6 sm:hidden"></div>
-                        
-                        <div className="flex justify-between items-center mb-8">
-                            <div>
-                                <h2 className="text-xl font-black uppercase tracking-tight text-gray-900">Filter Pencarian</h2>
-                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Temukan kost impianmu</p>
-                            </div>
-                            <button onClick={() => setIsMobileFilterOpen(false)} className="p-2 hover:bg-gray-50 rounded-full text-gray-400 transition-colors">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12"/></svg>
-                            </button>
-                        </div>
-
-                        {renderFilterControls()}
-                    </div>
-                </div>
-            )}
+            <FilterDrawer 
+               isOpen={isMobileFilterOpen}
+               onClose={() => setIsMobileFilterOpen(false)}
+               onApply={() => setIsMobileFilterOpen(false)}
+               filters={filters}
+               setFilters={updateFilters}
+               onReset={resetFilters}
+               availableCities={availableCities}
+               availableCampuses={availableCampuses}
+            />
 
             {/* RESULTS GRID */}
             <main className="w-full lg:w-3/4">
@@ -275,8 +202,8 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
                    <div>
                       <h2 className="text-xl lg:text-3xl font-black text-gray-900 uppercase tracking-tight">Hasil Pencarian</h2>
                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
-                          {selectedCity !== 'Semua' ? selectedCity : 'Semua Kota'} 
-                          {selectedCampus !== 'Semua' ? ` • ${selectedCampus}` : ''}
+                          {filters.selectedCity !== 'Semua' ? filters.selectedCity : 'Semua Kota'} 
+                          {filters.selectedCampus !== 'Semua' ? ` • ${filters.selectedCampus}` : ''}
                       </p>
                    </div>
                    <span className="bg-gray-900 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg">

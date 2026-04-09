@@ -2,6 +2,7 @@
 import React from 'react';
 import { Kost } from '../types';
 import { FORMAT_CURRENCY } from '../constants';
+import { getRoomEffectivePrice } from '../userService';
 
 interface KostCardProps {
   kost: Kost;
@@ -11,38 +12,6 @@ interface KostCardProps {
 
 const KostCard: React.FC<KostCardProps> = ({ kost, onClick, onDelete }) => {
   const variantCount = kost.roomTypes?.length || 1;
-
-  // Helper to calculate the best "Effective Monthly Price" for a room
-  const getRoomEffectivePrice = (room: any) => {
-    const pricing = room.pricing || [];
-    
-    // 1. Try explicit Monthly
-    const monthly = pricing.find((p: any) => p.period === 'bulanan');
-    if (monthly) return { price: monthly.price, unit: '/bln', priority: 1 };
-
-    // 2. Try Yearly (divided by 12)
-    const yearly = pricing.find((p: any) => p.period === 'tahunan');
-    if (yearly) return { price: yearly.price / 12, unit: '/bln', priority: 2 };
-
-    // 3. Try 6 Months (divided by 6)
-    const sixMonth = pricing.find((p: any) => p.period === '6bulanan');
-    if (sixMonth) return { price: sixMonth.price / 6, unit: '/bln', priority: 3 };
-
-    // 4. Try 3 Months (divided by 3)
-    const threeMonth = pricing.find((p: any) => p.period === '3bulanan');
-    if (threeMonth) return { price: threeMonth.price / 3, unit: '/bln', priority: 4 };
-
-    // 5. Fallback: Weekly
-    const weekly = pricing.find((p: any) => p.period === 'mingguan');
-    if (weekly) return { price: weekly.price, unit: '/minggu', priority: 5 };
-
-    // 6. Fallback: Daily
-    const daily = pricing.find((p: any) => p.period === 'harian');
-    if (daily) return { price: daily.price, unit: '/hari', priority: 6 };
-
-    // 7. Absolute Fallback (Legacy data structure or base price)
-    return { price: room.price, unit: '/bln', priority: 7 };
-  };
 
   // Calculate prices across all room types
   let displayPrices: number[] = [];
