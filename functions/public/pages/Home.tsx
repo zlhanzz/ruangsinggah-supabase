@@ -25,7 +25,7 @@ const Home: React.FC<HomeProps> = ({ onPageChange, onKostSelect, user, listings 
               Kost Mahasiswa Terverifikasi
             </span>
             <h1 className="text-4xl sm:text-6xl lg:text-9xl font-black text-gray-900 leading-[1.1] md:leading-[0.85] mb-6 lg:mb-10 uppercase tracking-tighter animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
-              Cari Kost <br className="hidden md:block" /> <span className="text-orange-500">Tanpa</span> Ribet.
+              <span className="text-orange-500">Ruang Singgah:</span> <br className="hidden md:block" /> Solusi Kost Terpercaya di Makassar.
             </h1>
             <p className="text-base sm:text-xl text-gray-500 mb-10 lg:mb-12 max-w-2xl mx-auto font-medium leading-relaxed animate-in fade-in slide-in-from-bottom-6 duration-700 delay-200">
               Platform pencarian kost mahasiswa berbasis kepercayaan. Semua unit sudah dicek langsung oleh tim lapangan kami untuk menjamin kenyamanan Anda.
