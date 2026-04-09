@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { Kost, DatabaseProduct } from './types';
+import { notifyAdminTransaction } from './emailService';
 
 // Helper to safely convert timestamps
 const convertTimestamp = (ts: any): string => {
@@ -267,6 +268,14 @@ export async function createBookingRequest(bookingData: {
       .single();
 
     if (error) throw error;
+    
+    // Notify admin
+    notifyAdminTransaction("Pemesanan Kost (Booking)", {
+      "User ID": bookingData.userId,
+      "Tipe Produk": bookingData.productType,
+      "Total Bayar": `Rp ${bookingData.amount.toLocaleString('id-ID')}`,
+    });
+
     return data;
   } catch (error) {
     console.error('Error creating booking request:', error);

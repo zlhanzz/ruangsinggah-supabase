@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest } from './types';
+import { notifyAdminStatusUpdate } from './emailService';
 
 // ---- TYPE DEF ----
 export interface BasicPropertyInfo extends Partial<Kost> {
@@ -366,6 +367,8 @@ export async function updateTransactionStatus(
   if (error) {
     console.error('Error updating transaction status:', error);
     throw new Error(error.message);
+  } else {
+    notifyAdminStatusUpdate("Transaksi", transactionId, newStatus);
   }
 }
 
@@ -382,6 +385,11 @@ export async function processBookingApproval(
     console.error('Edge Function Error:', error);
     throw new Error(error.message || 'Gagal memproses persetujuan booking.');
   }
+
+  notifyAdminStatusUpdate("Pemesanan Kost", transactionId, data.status, { 
+    "Aksi": decision,
+    "Alasan": reason || '-'
+  });
 
   return data;
 }
@@ -1218,6 +1226,9 @@ export async function updateSurveyRequest(
     .eq('id', id);
 
   if (error) throw error;
+  else if (updates.status) {
+    notifyAdminStatusUpdate("Permintaan Survey", id, updates.status);
+  }
 }
 
 export async function deleteSurveyRequest(id: string): Promise<void> {

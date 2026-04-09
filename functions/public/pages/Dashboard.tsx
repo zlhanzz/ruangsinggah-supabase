@@ -19,6 +19,7 @@ import {
 import AgentDashboard from './AgentDashboard';
 import { getUserTransactions } from '../userService';
 import { sendNotification } from '../notificationService';
+import { notifyAdminTransaction } from '../emailService';
 import Listings from './Listings';
 
 import {
@@ -1829,6 +1830,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                     endDate: manualRentForm.endDate || '-'
                 }
             });
+            
+            notifyAdminTransaction("Penambahan Transaksi Manual (Dashboard Admin)", {
+                "Nama User": manualRentForm.name || '-',
+                "Item": manualRentForm.item || '-',
+                "Total Bayar": `Rp ${Number(manualRentForm.amount || 0).toLocaleString('id-ID')}`
+            });
+            
             alert('Transaksi manual ditambahkan!');
         } catch(e) {
             console.error(e);

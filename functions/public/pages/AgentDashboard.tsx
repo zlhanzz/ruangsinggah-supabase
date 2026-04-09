@@ -155,14 +155,25 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 const url = await uploadSurveyPhoto(files[i], isEditingSurvey.id);
                 uploadedUrls.push(url);
             }
-            const currentPhotos = (surveyForm.evaluation_summary as any)?.[`${sectionId}_photos`] || [];
-            setSurveyForm({
-                ...surveyForm,
-                evaluation_summary: {
-                    ...(surveyForm.evaluation_summary || {}),
-                    [`${sectionId}_photos`]: [...currentPhotos, ...uploadedUrls]
-                }
-            });
+            
+            if (sectionId === 'whatsapp_evidence_url') {
+                setSurveyForm({
+                    ...surveyForm,
+                    evaluation_summary: {
+                        ...(surveyForm.evaluation_summary || {}),
+                        whatsapp_evidence_url: uploadedUrls[0]
+                    }
+                });
+            } else {
+                const currentPhotos = (surveyForm.evaluation_summary as any)?.[`${sectionId}_photos`] || [];
+                setSurveyForm({
+                    ...surveyForm,
+                    evaluation_summary: {
+                        ...(surveyForm.evaluation_summary || {}),
+                        [`${sectionId}_photos`]: [...currentPhotos, ...uploadedUrls]
+                    }
+                });
+            }
         } catch (error) {
             console.error('Error uploading photo:', error);
             alert('Gagal upload foto');
@@ -1025,6 +1036,180 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         />
                     ))}
                 </nav>
+
+                {/* ── MODAL SURVEY REPORT (AGENT) ────────────────────────────── */}
+                {isEditingSurvey && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsEditingSurvey(null)}></div>
+                        <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95">
+                            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-orange-50/50">
+                                <div><h2 className="text-xl font-black uppercase text-orange-900">Form Laporan Survey</h2><p className="text-xs font-bold text-orange-500 uppercase tracking-widest mt-1">Lengkapi data pengecekan</p></div>
+                                <button onClick={() => setIsEditingSurvey(null)} className="w-8 h-8 flex items-center justify-center border rounded-full hover:bg-white transition-colors">&times;</button>
+                            </div>
+                            <form onSubmit={handleUpdateSurvey} className="flex-grow overflow-y-auto p-0 m-0">
+                                <div className="p-6 space-y-5">
+                                    <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <label className="text-[10px] font-black text-blue-900 uppercase tracking-widest">Link Hasil Survey (Automated Drive)</label>
+                                            {surveyForm.result_drive_link && (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => window.open(surveyForm.result_drive_link, '_blank')}
+                                                    className="text-[10px] font-black text-blue-600 hover:text-blue-700 flex items-center gap-1 uppercase tracking-widest bg-white px-2 py-1 rounded-md border border-blue-200 shadow-sm transition-all active:scale-95"
+                                                >
+                                                    <span>📁</span> Buka Folder
+                                                </button>
+                                            )}
+                                        </div>
+                                        <input 
+                                            readOnly
+                                            className="w-full bg-white/80 border border-blue-200 rounded-xl px-4 py-3 text-xs font-bold text-blue-600 cursor-not-allowed outline-none"
+                                            value={surveyForm.result_drive_link || ''}
+                                            placeholder="Sistem belum membuat folder drive..."
+                                        />
+                                        <p className="text-[9px] text-blue-500 mt-2 font-medium italic">
+                                            {surveyForm.result_drive_link 
+                                                ? "✓ Folder Drive otomatis telah berhasil dibuat. Upload video pengecekan ke dalam folder tersebut." 
+                                                : "ℹ Folder akan dibuat otomatis oleh sistem saat survey berhasil."}
+                                        </p>
+                                    </div>
+
+                                    <div className="pt-4 border-t border-gray-100">
+                                        <h3 className="text-xs font-black text-orange-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                                            Summary Penilaian Surveyor
+                                        </h3>
+                                        
+                                        <div className="space-y-4">
+                                            {/* WA Evidence Section */}
+                                            <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 mb-6">
+                                                <label className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Bukti Screenshot WhatsApp Video Call / Chat dengan user</label>
+                                                <div className="mt-1.5 flex items-center gap-3">
+                                                    {(isEditingSurvey?.status !== 'COMPLETED' && isEditingSurvey?.status !== 'SUBMITTED') && (
+                                                        <label className="flex-1 bg-white border border-dashed border-orange-200 rounded-xl px-4 py-3 text-[10px] font-bold text-orange-400 cursor-pointer hover:border-orange-400 hover:text-orange-600 transition-all flex items-center justify-center gap-2">
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                                            {(surveyForm.evaluation_summary as any)?.whatsapp_evidence_url ? 'Ganti Bukti WA' : 'Upload Bukti WA'}
+                                                            <input 
+                                                                type="file" 
+                                                                accept="image/*" 
+                                                                className="hidden" 
+                                                                onChange={(e) => handleSurveyPhotoUpload('whatsapp_evidence_url', e.target.files)} 
+                                                            />
+                                                        </label>
+                                                    )}
+                                                    {(surveyForm.evaluation_summary as any)?.whatsapp_evidence_url && (
+                                                        <div className="w-16 h-16 bg-white rounded-xl overflow-hidden border border-orange-200 flex-shrink-0 cursor-zoom-in" onClick={() => window.open((surveyForm.evaluation_summary as any).whatsapp_evidence_url, '_blank')}>
+                                                            <img src={(surveyForm.evaluation_summary as any).whatsapp_evidence_url[0] || (surveyForm.evaluation_summary as any).whatsapp_evidence_url} className="w-full h-full object-cover" alt="WA Evidence" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {[
+                                                { id: 'room_facilities', label: 'Fasilitas Kamar', icon: '🛏️' },
+                                                { id: 'bathroom_facilities', label: 'Fasilitas WC', icon: '🚿' },
+                                                { id: 'water_check', label: 'Pengecekan Air', icon: '💧' },
+                                                { id: 'wifi_check', label: 'Pengecekan WiFi', icon: '📶' },
+                                                { id: 'security_check', label: 'Pengecekan Keamanan', icon: '🛡️' },
+                                                { id: 'access_check', label: 'Akses Umum/Toko/Kampus', icon: '📍' },
+                                                { id: 'resident_testimonial', label: 'Testimoni Penghuni', icon: '💬' },
+                                            ].map((field) => (
+                                                <div key={field.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm transition-all hover:border-orange-200">
+                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
+                                                        <span>{field.icon}</span> {field.label}
+                                                    </label>
+                                                    <textarea 
+                                                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-orange-500 transition-all outline-none mb-3 disabled:bg-gray-100 disabled:opacity-80"
+                                                        rows={2}
+                                                        value={(surveyForm.evaluation_summary as any)?.[field.id] || ''}
+                                                        onChange={e => {
+                                                            setSurveyForm({ 
+                                                                ...surveyForm, 
+                                                                evaluation_summary: { 
+                                                                    ...(surveyForm.evaluation_summary || {}), 
+                                                                    [field.id]: e.target.value 
+                                                                } 
+                                                            });
+                                                        }}
+                                                        disabled={isEditingSurvey?.status === 'COMPLETED' || isEditingSurvey?.status === 'SUBMITTED'}
+                                                        placeholder={`Tulis hasil pengecekan ${field.label.toLowerCase()}...`}
+                                                    />
+                                                    
+                                                    {/* Photo Upload Section */}
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Bukti Foto</span>
+                                                            {(isEditingSurvey?.status !== 'COMPLETED' && isEditingSurvey?.status !== 'SUBMITTED') && (
+                                                                <label className={`text-[9px] font-black uppercase px-2.5 py-1.5 rounded-lg bg-orange-50 text-orange-600 transition-colors flex items-center gap-1.5 cursor-pointer hover:bg-orange-100 ${isUploadingSurveyPhoto === field.id ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                                                    {isUploadingSurveyPhoto === field.id ? (
+                                                                        <>
+                                                                            <div className="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                                                                            Uploading...
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                                                                            Tambah Foto
+                                                                        </>
+                                                                    )}
+                                                                    <input 
+                                                                        type="file" 
+                                                                        multiple 
+                                                                        accept="image/*" 
+                                                                        className="hidden" 
+                                                                        disabled={isUploadingSurveyPhoto === field.id}
+                                                                        onChange={(e) => handleSurveyPhotoUpload(field.id, e.target.files)} 
+                                                                    />
+                                                                </label>
+                                                            )}
+                                                        </div>
+                                                        
+                                                        {/* Photo Preview Grid */}
+                                                        <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                                                            {((surveyForm.evaluation_summary as any)?.[`${field.id}_photos`] || []).map((url: string, idx: number) => (
+                                                                <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-gray-100 group shadow-sm bg-gray-50">
+                                                                    <img src={url} alt="Proof" className="w-full h-full object-cover cursor-zoom-in" onClick={() => window.open(url, '_blank')} />
+                                                                    {(isEditingSurvey?.status !== 'COMPLETED' && isEditingSurvey?.status !== 'SUBMITTED') && (
+                                                                        <button 
+                                                                            type="button"
+                                                                            onClick={() => handleRemoveSurveyPhoto(field.id, url)}
+                                                                            className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all backdrop-blur-[2px]"
+                                                                        >
+                                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-3 pt-4 p-6 border-t border-gray-100 sticky bottom-0 bg-white shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
+                                    <button 
+                                        type="button"
+                                        onClick={() => setIsEditingSurvey(null)}
+                                        className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                                    >
+                                        Batal/Tutup
+                                    </button>
+                                    {(isEditingSurvey?.status !== 'COMPLETED' && isEditingSurvey?.status !== 'SUBMITTED') && (
+                                        <button 
+                                            type="submit" 
+                                            disabled={isSubmitting}
+                                            className="flex-[2] py-3.5 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+                                        >
+                                            {isSubmitting ? 'Mengirim...' : 'Kirim Laporan'}
+                                        </button>
+                                    )}
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

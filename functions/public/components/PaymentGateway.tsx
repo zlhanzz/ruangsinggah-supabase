@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { FORMAT_CURRENCY } from '../constants';
 import { supabase } from '../supabase';
 import { notificationService } from '../notificationService';
+import { notifyAdminStatusUpdate } from '../emailService';
 import { Transaction } from '../types';
 
 interface PaymentGatewayProps {
@@ -167,6 +168,11 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
         clearInterval(pollInterval);
         setCurrentOrder(data as Transaction);
         
+        notifyAdminStatusUpdate("Pembayaran Gateway", currentOrder.id, "paid", {
+          "Tipe Produk": productType,
+          "User ID": userId
+        });
+
         const m = metadata as any;
         const isDatabase = productType === 'database' || productType === 'available_database';
         

@@ -8,6 +8,7 @@ import { getReviews } from '../kostService';
 import { cancelBookingRequest } from '../userService';
 import PaymentGateway from '../components/PaymentGateway';
 import ChatWindow from '../components/ChatWindow';
+import { notifyAdminTransaction } from '../emailService';
 
 interface MyKostProps {
     user: any;
@@ -455,6 +456,13 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
             const { error: dbError } = await supabase.from('transactions').insert([payload]);
             if (dbError) throw dbError;
             
+            notifyAdminTransaction("Perpanjangan Sewa Kost", {
+                "Nama Penyewa": payload.tenant_name,
+                "Nama Kost": payload.kost_name,
+                "Durasi": payload.duration,
+                "Total Bayar": `Rp ${payload.total_price.toLocaleString('id-ID')}`
+            });
+            
             alert('Pengajuan perpanjangan sewa berhasil dikirim dan menunggu verifikasi Admin.');
             setShowExtensionModal(false);
             setExtensionProof(null);
@@ -499,6 +507,13 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
 
             const { error: dbError } = await supabase.from('transactions').insert([payload]);
             if (dbError) throw dbError;
+            
+            notifyAdminTransaction("Pembayaran Tagihan Ekstra", {
+                "Nama Penyewa": payload.tenant_name,
+                "Nama Kost": payload.kost_name,
+                "Tagihan": payload.bill_name,
+                "Total Harga": `Rp ${payload.total_price.toLocaleString('id-ID')}`
+            });
             
             alert('Pembayaran tagihan ekstra berhasil dikirim dan menunggu verifikasi.');
             setShowExtraBillModal(false);
