@@ -50,16 +50,16 @@ const QuickActionMenu: React.FC<QuickActionMenuProps> = ({ onAction }) => {
             <button
               key={action.id}
               onClick={() => onAction(action.page)}
-              className="flex flex-col lg:flex-row items-center group gap-2 lg:gap-3 transition-all active:scale-95 lg:bg-gray-50/50 lg:hover:bg-white p-2 lg:px-3 lg:py-2 rounded-2xl lg:rounded-2xl border border-transparent lg:hover:border-orange-500/30 lg:hover:shadow-lg lg:hover:shadow-orange-500/5 lg:w-full"
+              className="flex flex-col lg:flex-row items-center group gap-2 lg:gap-3 transition-all active:scale-[0.97] bg-white lg:bg-gray-50/40 hover:bg-white p-2.5 lg:px-4 lg:py-3 rounded-2xl lg:rounded-2xl border border-gray-100 hover:border-orange-500/40 hover:shadow-xl hover:shadow-orange-500/10 lg:w-full"
             >
               <div className={`p-3 lg:p-2.5 rounded-xl lg:rounded-xl ${action.color} shadow-sm group-hover:shadow-md group-hover:scale-110 transition-all duration-300`}>
-                {React.cloneElement(action.icon as React.ReactElement, { className: "w-5 h-5 sm:w-6 sm:h-6 lg:w-4 lg:h-4" })}
+                {React.cloneElement(action.icon as React.ReactElement, { className: "w-5 h-5 sm:w-6 sm:h-6 lg:w-4.5 lg:h-4.5" })}
               </div>
               <div className="flex flex-col text-center lg:text-left">
-                <span className="text-[10px] lg:text-[11px] font-black text-gray-800 uppercase tracking-tighter lg:tracking-normal group-hover:text-orange-500 transition-colors leading-tight">
+                <span className="text-[10px] lg:text-[12px] font-black text-gray-800 uppercase tracking-tight group-hover:text-orange-500 transition-colors leading-tight">
                   {action.label}
                 </span>
-                <span className="hidden lg:block text-[7px] text-gray-400 font-bold uppercase tracking-widest mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                <span className="hidden lg:block text-[8px] text-gray-400 font-bold uppercase tracking-widest mt-1 opacity-60 group-hover:opacity-100 transition-opacity">
                   Klik Disini &rsaquo;
                 </span>
               </div>
