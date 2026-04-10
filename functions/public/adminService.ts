@@ -198,7 +198,13 @@ async function uploadFileToStorage(
   // Convert to WebP if image
   const processedFile = await convertToWebP(file);
 
-  const sanitizedFileName = processedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+  let sanitizedFileName = processedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+  
+  // Ensure .webp extension if it was converted but somehow lost its name extension
+  if (processedFile.type === 'image/webp' && !sanitizedFileName.toLowerCase().endsWith('.webp')) {
+    sanitizedFileName += '.webp';
+  }
+
   const fileName = `${Date.now()}_${sanitizedFileName}`;
   const fullPath = `${pathPrefix}/${fileName}`;
 

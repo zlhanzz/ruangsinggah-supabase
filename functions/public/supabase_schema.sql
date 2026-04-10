@@ -474,7 +474,12 @@ ON CONFLICT DO NOTHING;
 
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('survey-photos', 'survey-photos', TRUE)
-ON CONFLICT DO NOTHING;
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('banners', 'banners', TRUE)
+ON CONFLICT (id) DO NOTHING;
+
 
 
 -- ============================================================
@@ -545,6 +550,17 @@ CREATE POLICY "storage_photos_select"
 CREATE POLICY "storage_photos_update"
   ON storage.objects FOR UPDATE
   USING (bucket_id = 'profile-photos' AND auth.uid() IS NOT NULL);
+
+-- Bucket: banners
+CREATE POLICY "storage_banners_select"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'banners');
+
+CREATE POLICY "storage_banners_all_admin"
+  ON storage.objects FOR ALL
+  USING (bucket_id = 'banners' AND public.is_admin())
+  WITH CHECK (bucket_id = 'banners' AND public.is_admin());
+
 
 -- ============================================================
 -- STEP 11: TRANSACTIONS TABLE & POLICIES (Unified for All Products)

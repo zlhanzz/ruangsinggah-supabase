@@ -71,7 +71,16 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
     if (filters.selectedCity !== 'Semua') {
       relevantListings = listings.filter(k => k.city === filters.selectedCity);
     }
-    const campuses = new Set(relevantListings.map(k => k.campus).filter(c => c && c.trim() !== ''));
+    const campuses = new Set<string>();
+    relevantListings.forEach(k => {
+      if (k.campuses) {
+        k.campuses.forEach(c => {
+          if (c.name && c.name.trim() !== '') {
+            campuses.add(c.name);
+          }
+        });
+      }
+    });
     return Array.from(campuses).sort();
   }, [listings, filters.selectedCity]);
 
@@ -94,7 +103,9 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
     }
 
     if (filters.selectedCampus !== 'Semua') {
-      result = result.filter(k => k.campus === filters.selectedCampus);
+      result = result.filter(k => 
+        k.campuses && k.campuses.some(c => c.name === filters.selectedCampus)
+      );
     }
 
     result = result.filter(k => {

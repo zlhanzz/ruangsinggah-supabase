@@ -39,24 +39,30 @@ const QuickActionMenu: React.FC<QuickActionMenuProps> = ({ onAction }) => {
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 mb-12">
-      <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100">
-        <h2 className="text-xs sm:text-sm font-black uppercase tracking-widest text-gray-400 mb-6 sm:mb-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-5 mb-10">
+      <div className="bg-white rounded-3xl lg:rounded-[2.5rem] p-4 lg:p-3 shadow-md border border-gray-100/50">
+        <h2 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4 lg:mb-3 lg:ml-4 flex items-center gap-2">
+          <span className="h-1 w-1 bg-orange-500 rounded-full"></span>
           Menu Utama & Fitur
         </h2>
-        <div className="grid grid-cols-4 gap-4 sm:gap-8 lg:gap-12">
+        <div className="grid grid-cols-4 gap-3 lg:gap-4 px-1">
           {actions.map((action) => (
             <button
               key={action.id}
               onClick={() => onAction(action.page)}
-              className="flex flex-col items-center group gap-3 sm:gap-4 transition-all active:scale-90"
+              className="flex flex-col lg:flex-row items-center group gap-2 lg:gap-3 transition-all active:scale-95 lg:bg-gray-50/50 lg:hover:bg-white p-2 lg:px-3 lg:py-2 rounded-2xl lg:rounded-2xl border border-transparent lg:hover:border-orange-500/30 lg:hover:shadow-lg lg:hover:shadow-orange-500/5 lg:w-full"
             >
-              <div className={`p-4 sm:p-6 rounded-2xl sm:rounded-3xl ${action.color} group-hover:shadow-lg transition-all group-hover:-translate-y-1`}>
-                {action.icon}
+              <div className={`p-3 lg:p-2.5 rounded-xl lg:rounded-xl ${action.color} shadow-sm group-hover:shadow-md group-hover:scale-110 transition-all duration-300`}>
+                {React.cloneElement(action.icon as React.ReactElement, { className: "w-5 h-5 sm:w-6 sm:h-6 lg:w-4 lg:h-4" })}
               </div>
-              <span className="text-[10px] sm:text-sm font-black text-gray-700 uppercase tracking-tight sm:tracking-normal group-hover:text-orange-500 transition-colors text-center leading-tight">
-                {action.label}
-              </span>
+              <div className="flex flex-col text-center lg:text-left">
+                <span className="text-[10px] lg:text-[11px] font-black text-gray-800 uppercase tracking-tighter lg:tracking-normal group-hover:text-orange-500 transition-colors leading-tight">
+                  {action.label}
+                </span>
+                <span className="hidden lg:block text-[7px] text-gray-400 font-bold uppercase tracking-widest mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                  Klik Disini &rsaquo;
+                </span>
+              </div>
             </button>
           ))}
         </div>

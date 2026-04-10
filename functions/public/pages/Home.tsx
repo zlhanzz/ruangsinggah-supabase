@@ -54,7 +54,16 @@ const Home: React.FC<HomeProps> = ({ onPageChange, onKostSelect, user, listings 
     if (filters.selectedCity !== 'Semua') {
       relevantListings = listings.filter(k => k.city === filters.selectedCity);
     }
-    const campuses = new Set(relevantListings.map(k => k.campus).filter(c => c && c.trim() !== ''));
+    const campuses = new Set<string>();
+    relevantListings.forEach(k => {
+      if (k.campuses) {
+        k.campuses.forEach(c => {
+          if (c.name && c.name.trim() !== '') {
+            campuses.add(c.name);
+          }
+        });
+      }
+    });
     return Array.from(campuses).sort();
   }, [listings, filters.selectedCity]);
 
@@ -94,16 +103,11 @@ const Home: React.FC<HomeProps> = ({ onPageChange, onKostSelect, user, listings 
         </div>
       </div>
 
-      <PromoCarousel 
-        banners={banners} 
-        onBannerClick={(link) => {
-          if (link.startsWith('http')) window.open(link, '_blank');
-          else onPageChange(link as Page);
-        }} 
-      />
 
-      {/* Search Bar Trigger - Integrated naturally into the layout */}
-      <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 mt-6 -mb-4">
+
+
+      {/* Mobile Search Bar Trigger - Hidden on PC */}
+      <div className="lg:hidden max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 mt-6 -mb-4">
         <button 
           onClick={() => setIsFilterOpen(true)}
           className="w-full bg-white border border-gray-100 rounded-2xl py-3 px-5 shadow-sm hover:shadow-md transition-all flex items-center gap-3 group active:scale-[0.98]"
@@ -119,11 +123,99 @@ const Home: React.FC<HomeProps> = ({ onPageChange, onKostSelect, user, listings 
                Beragam Wilayah & Dekat Kampus Idola...
             </p>
           </div>
-          <div className="hidden sm:flex items-center gap-2 text-gray-200">
+          <div className="flex items-center gap-2 text-gray-200">
             <div className="h-3 w-[1px] bg-gray-100"></div>
             <span className="text-[9px] font-black uppercase tracking-widest px-2">Filter</span>
           </div>
         </button>
+      </div>
+
+      {/* Desktop Search Bar - Persistent Horizontal Bar for PC */}
+      <div className="hidden lg:flex max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 mt-6 -mb-4">
+        <div className="w-full bg-white border border-gray-100 rounded-[3rem] p-3 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.1)] flex items-center gap-2">
+          {/* Section: Search */}
+          <div className="flex-[1.5] flex items-center gap-4 px-6 py-2 hover:bg-gray-50 rounded-[2rem] transition-all cursor-text group">
+            <div className="text-orange-500 bg-orange-50 p-2.5 rounded-xl group-hover:bg-orange-500 group-hover:text-white transition-colors">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+            </div>
+            <div className="flex flex-col flex-1 min-w-0">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1.5">Lokasi / Nama</label>
+              <input 
+                type="text" 
+                placeholder="Cari area atau kost..." 
+                className="bg-transparent text-sm font-black text-gray-900 placeholder:text-gray-300 outline-none w-full"
+                value={filters.searchTerm}
+                onChange={(e) => updateFilters({ searchTerm: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleApplyFilters();
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="h-10 w-[1px] bg-gray-100 shrink-0"></div>
+
+          {/* Section: City */}
+          <div className="flex-1 flex flex-col px-6 py-2 hover:bg-gray-50 rounded-[2rem] transition-all cursor-pointer">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1.5">Kota</label>
+            <select 
+              className="bg-transparent text-sm font-black text-gray-900 outline-none cursor-pointer appearance-none w-full"
+              value={filters.selectedCity}
+              onChange={(e) => updateFilters({ selectedCity: e.target.value, selectedCampus: 'Semua' })}
+            >
+              <option value="Semua">Semua Kota</option>
+              {availableCities.map(city => (
+                <option key={city} value={city}>{city}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="h-10 w-[1px] bg-gray-100 shrink-0"></div>
+
+          {/* Section: Campus */}
+          <div className="flex-1 flex flex-col px-6 py-2 hover:bg-gray-50 rounded-[2rem] transition-all cursor-pointer">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1.5">Kampus</label>
+            <select 
+              className="bg-transparent text-sm font-black text-gray-900 outline-none cursor-pointer appearance-none w-full"
+              value={filters.selectedCampus}
+              onChange={(e) => updateFilters({ selectedCampus: e.target.value })}
+            >
+              <option value="Semua">Semua Kampus</option>
+              {availableCampusesList.map(campus => (
+                <option key={campus} value={campus}>{campus}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="h-10 w-[1px] bg-gray-100 shrink-0"></div>
+
+          {/* Section: Type (Jenis Kost) */}
+          <div className="flex-1 flex flex-col px-6 py-2 hover:bg-gray-50 rounded-[2rem] transition-all cursor-pointer">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1.5">Jenis Kost</label>
+            <select 
+              className="bg-transparent text-sm font-black text-gray-900 outline-none cursor-pointer appearance-none w-full"
+              value={filters.typeFilter}
+              onChange={(e) => updateFilters({ typeFilter: e.target.value })}
+            >
+              <option value="Semua">Semua Jenis</option>
+              <option value="Putra">Putra</option>
+              <option value="Putri">Putri</option>
+              <option value="Campur">Campur</option>
+            </select>
+          </div>
+
+          {/* Search Button */}
+          <button 
+            onClick={handleApplyFilters}
+            className="bg-gray-900 hover:bg-orange-500 text-white w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-lg active:scale-95 shrink-0 ml-2"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <FilterDrawer 
@@ -142,6 +234,15 @@ const Home: React.FC<HomeProps> = ({ onPageChange, onKostSelect, user, listings 
         availableCities={availableCities}
         availableCampuses={availableCampusesList}
       />
+
+      <PromoCarousel 
+        banners={banners} 
+        onBannerClick={(link) => {
+          if (link.startsWith('http')) window.open(link, '_blank');
+          else onPageChange(link as Page);
+        }} 
+      />
+
 
       <QuickActionMenu onAction={(page) => onPageChange(page)} />
 

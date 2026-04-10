@@ -29,8 +29,9 @@ const PromoCarousel: React.FC<PromoCarouselProps> = ({ banners, onBannerClick })
   const prevSlide = () => setCurrentIndex((prev) => (prev - 1 + banners.length) % banners.length);
 
   return (
-    <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-      <div className="relative h-40 sm:h-64 lg:h-80 w-full overflow-hidden rounded-2xl sm:rounded-3xl shadow-lg border border-gray-100 bg-gray-50">
+    <div className="relative w-full lg:max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 mt-5 transition-all duration-500">
+      <div className="relative aspect-video w-full overflow-hidden rounded-2xl sm:rounded-3xl shadow-lg border border-gray-100 bg-gray-50">
+
         {banners.map((banner, index) => (
           <div
             key={banner.id}
