@@ -706,6 +706,11 @@ CREATE POLICY "Users can start a chat session"
 ON public.chat_sessions FOR INSERT
 WITH CHECK (auth.uid() = user_id);
 
+CREATE POLICY "Users can update their own chat sessions"
+ON public.chat_sessions FOR UPDATE
+USING (auth.uid() = user_id OR auth.uid() = owner_id)
+WITH CHECK (auth.uid() = user_id OR auth.uid() = owner_id);
+
 -- 5. Policies for chat_messages
 CREATE POLICY "Users can view messages in their sessions"
 ON public.chat_messages FOR SELECT

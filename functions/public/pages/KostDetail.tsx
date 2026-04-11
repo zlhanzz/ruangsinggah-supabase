@@ -6,7 +6,7 @@ import BookingModal from '../components/BookingModal';
 import PaymentGateway from '../components/PaymentGateway';
 import ChatWindow from '../components/ChatWindow';
 import { incrementPropertyView } from '../userService';
-import { getOrCreateChatSession } from '../chatService';
+import { getOrCreateChatSession, SYSTEM_ADMIN_ID } from '../chatService';
 import { createBookingRequest } from '../userService';
 
 interface KostDetailProps {
@@ -193,7 +193,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     try {
       setIsSubmittingChat(true);
       // owner_uid is available in the kost object
-      const ownerId = kost.ownerUid || 'admin-system-id';
+      const ownerId = kost.ownerUid || SYSTEM_ADMIN_ID;
       const session = await getOrCreateChatSession(user.uid, ownerId, kost.id);
       setActiveChatSession(session);
       setShowChatWindow(true);

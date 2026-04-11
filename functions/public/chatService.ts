@@ -1,6 +1,14 @@
 import { supabase } from './supabase';
 import { sendNotification } from './notificationService';
 
+// Fallback UUID for properties without owners. Change this to your real Admin UUID.
+export const SYSTEM_ADMIN_ID = '00000000-0000-0000-0000-000000000000';
+
+function isValidUUID(uuid: string) {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
+}
+
 export interface ChatSession {
   id: string;
   user_id: string;
@@ -29,12 +37,17 @@ export interface ChatMessage {
  * Mendapatkan atau membuat sesi chat antara user dan owner
  */
 export async function getOrCreateChatSession(userId: string, ownerId: string, propertyId?: string): Promise<ChatSession> {
+  // Normalize ownerId if it matches legacy placeholder
+  const finalOwnerId = (ownerId === 'admin-system-id' || !isValidUUID(ownerId)) 
+    ? SYSTEM_ADMIN_ID 
+    : ownerId;
+
   // Cek apakah sudah ada sesi untuk kombinasi ini
   let query = supabase
     .from('chat_sessions')
     .select('*')
     .eq('user_id', userId)
-    .eq('owner_id', ownerId);
+    .eq('owner_id', finalOwnerId);
     
   if (propertyId) {
     query = query.eq('property_id', propertyId);
@@ -56,7 +69,7 @@ export async function getOrCreateChatSession(userId: string, ownerId: string, pr
     .from('chat_sessions')
     .insert({
       user_id: userId,
-      owner_id: ownerId,
+      owner_id: finalOwnerId,
       property_id: propertyId
     })
     .select()

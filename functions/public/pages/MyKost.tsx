@@ -3,7 +3,7 @@ import { supabase } from '../supabase';
 import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle, Zap } from 'lucide-react';
 import { Page } from '../types';
 import { addPropertyReview, getExtraBills } from '../userService';
-import { getOrCreateChatSession } from '../chatService';
+import { getOrCreateChatSession, SYSTEM_ADMIN_ID } from '../chatService';
 import { getReviews } from '../kostService';
 import { cancelBookingRequest } from '../userService';
 import PaymentGateway from '../components/PaymentGateway';
@@ -108,7 +108,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
             if (propError) {
                 console.warn('Property not found in Supabase for chat:', propError);
                 // Fallback jika properti tidak ditemukan di Supabase (misal data legacy)
-                const ownerId = 'admin-system-id'; // Tetap fallback admin, tapi akan gagal di DB jika bukan UUID
+                const ownerId = SYSTEM_ADMIN_ID; 
                 const session = await getOrCreateChatSession(user.uid, ownerId, null);
                 
                 setActiveChatSession({

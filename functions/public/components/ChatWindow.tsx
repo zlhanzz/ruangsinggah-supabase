@@ -59,7 +59,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || isSending) return;
+    if (!newMessage.trim() || sendingMessages.size > 0) return;
 
     const tempId = Date.now().toString();
     setSendingMessages(prev => new Set(prev).add(tempId));
