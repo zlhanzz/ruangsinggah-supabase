@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, MessageSquare, Zap, Clock } from 'lucide-react';
+import { X, Send, MessageSquare, Zap, Clock, Check } from 'lucide-react';
 import { ChatSession, ChatMessage, getChatMessages, sendMessage, subscribeToMessages } from '../chatService';
 
 interface ChatWindowProps {
@@ -15,7 +15,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
-  const [isSending, setIsSending] = useState(false);
+  const [sendingMessages, setSendingMessages] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -61,15 +61,41 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
     e.preventDefault();
     if (!newMessage.trim() || isSending) return;
 
-    setIsSending(true);
+    const tempId = Date.now().toString();
+    setSendingMessages(prev => new Set(prev).add(tempId));
+    
+    // Add optimistic message
+    const currentId = currentUser.uid || currentUser.id;
+    const optimisticMsg: ChatMessage = {
+      id: tempId,
+      session_id: session.id,
+      sender_id: currentId,
+      sender_type: currentId === session.user_id ? 'user' : 'owner',
+      message: newMessage.trim(),
+      is_read: false,
+      created_at: new Date().toISOString()
+    };
+    setMessages(prev => [...prev, optimisticMsg]);
+    setNewMessage('');
+
     try {
-      const senderType = currentUser.uid === session.user_id ? 'user' : 'owner';
-      await sendMessage(session.id, currentUser.uid, senderType, newMessage.trim());
-      setNewMessage('');
-    } catch (err) {
+      if (!currentId) throw new Error("ID User tidak ditemukan. Silakan login ulang.");
+      const senderType = optimisticMsg.sender_type;
+      
+      console.log("[Ultra-Log] Sending message:", { sessionId: session.id, senderId: currentId, senderType });
+      
+      await sendMessage(session.id, currentId, senderType, optimisticMsg.message);
+    } catch (err: any) {
       console.error('Failed to send message:', err);
+      // Remove failed message or mark as error
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      alert(`Gagal mengirim pesan: ${err.message || 'Coba lagi nanti'}`);
     } finally {
-      setIsSending(false);
+      setSendingMessages(prev => {
+        const next = new Set(prev);
+        next.delete(tempId);
+        return next;
+      });
     }
   };
 
@@ -122,7 +148,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
             </div>
           ) : (
             messages.map((msg, idx) => {
-              const isMe = msg.sender_id === currentUser.uid;
+              const currentId = currentUser.uid || currentUser.id;
+              const isMe = msg.sender_id === currentId;
               return (
                 <div 
                   key={msg.id || idx}
@@ -133,12 +160,25 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
                       ? 'bg-orange-500 text-white rounded-tr-none' 
                       : 'bg-white border border-gray-100 text-gray-800 rounded-tl-none'
                   }`}>
-                    <p className="text-[13px] font-medium leading-relaxed">{msg.content}</p>
+                    <p className="text-[13px] font-medium leading-relaxed">{msg.message}</p>
                     <div className={`flex items-center gap-1.5 mt-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                      <Clock className={`w-3 h-3 ${isMe ? 'text-white/60' : 'text-gray-400'}`} />
                       <span className={`text-[9px] font-bold uppercase ${isMe ? 'text-white/60' : 'text-gray-400'}`}>
                         {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                       </span>
+                      {isMe && (
+                        <div className="flex items-center ml-1">
+                          {sendingMessages.has(msg.id) ? (
+                            <Clock className="w-3 h-3 text-white/60 animate-pulse" />
+                          ) : msg.is_read ? (
+                            <div className="flex -space-x-2">
+                              <Check className="w-3.2 h-3.2 text-blue-200" />
+                              <Check className="w-3.2 h-3.2 text-blue-200" />
+                            </div>
+                          ) : (
+                            <Check className="w-3.5 h-3.5 text-white/80" />
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -169,18 +209,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
           </div>
           <button
             type="submit"
-            disabled={!newMessage.trim() || isSending}
+            disabled={!newMessage.trim() || sendingMessages.size > 0}
             className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-xl active:scale-90 ${
-              !newMessage.trim() || isSending
+              !newMessage.trim() || sendingMessages.size > 0
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 : 'bg-orange-500 text-white hover:bg-orange-600 shadow-orange-100'
             }`}
           >
-            {isSending ? (
-              <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full" />
-            ) : (
-              <Send className="w-6 h-6" />
-            )}
+            <Send className="w-6 h-6" />
           </button>
         </form>
       </div>

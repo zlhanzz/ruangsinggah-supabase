@@ -15,13 +15,24 @@ import {
     getAgentVerificationRequests, updateAgentVerificationStatus,
     uploadSurveyPhoto, deleteSurveyPhoto,
     getAdminMitraRequests, updateMitraRequestStatus,
-    getAdminBanners, addBanner, updateBanner, deleteBanner
+    getAdminBanners, addBanner, updateBanner, deleteBanner,
+    getUsersByRole, getActiveMitra, deleteUserAccount
 } from '../adminService';
 import AgentDashboard from './AgentDashboard';
 import { getUserTransactions } from '../userService';
 import { sendNotification, notifySurveyStatusUpdate } from '../notificationService';
 import { notifyAdminTransaction } from '../emailService';
 import Listings from './Listings';
+import AnalyticsView from '../components/admin/AnalyticsView';
+import AgentManagement from '../components/admin/AgentManagement';
+import MitraManagement from '../components/admin/MitraManagement';
+import UserManagement from '../components/admin/UserManagement';
+import SurveyManagement from '../components/admin/SurveyManagement';
+import BannerManagement from '../components/admin/BannerManagement';
+import ComplaintManagement from '../components/admin/ComplaintManagement';
+import CatalogManagement from '../components/admin/CatalogManagement';
+import RentTransactionManagement from '../components/admin/RentTransactionManagement';
+import DbTransactionManagement from '../components/admin/DbTransactionManagement';
 
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -167,8 +178,8 @@ type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'tr
 
 const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, listings = [], onAdd, onEdit, onDelete, onRefreshListings, verificationStatus }) => {
     const isAdmin = role === 'admin';
-    const isAgent = role === 'survey_agent';
-    const isOwner = role === 'owner';
+    const isAgent = role === 'survey_agent' || role === 'agen';
+    const isOwner = role === 'owner' || role === 'mitra';
 
     const [activeMenu, setActiveMenu] = useState<DashboardMenu>(
         isAgent ? 'overview' : (isOwner ? 'properties' : 'analytics')
@@ -201,19 +212,23 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
     // File Upload State (Property)
     const [newImageFiles, setNewImageFiles] = useState<File[]>([]);
     const [newVideoFiles, setNewVideoFiles] = useState<File[]>([]);
-    const [mitraRequests, setMitraRequests] = useState<any[]>([]);
+
+
 
     const [tempRuleInput, setTempRuleInput] = useState('');
     const [tempFacilityInput, setTempFacilityInput] = useState('');
 
-    // PROPERTIES STATE
-    const [adminListings, setAdminListings] = useState<BasicPropertyInfo[]>([]);
+    // --- NEW MANAGEMENT STATE ---
+    // Minimal states for orchestration
     const [loading, setLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<string>('info');
     const [mapAddress, setMapAddress] = useState<string>("");
+
+    // DATA STATE
+    const [adminListings, setAdminListings] = useState<BasicPropertyInfo[]>([]);
 
 
     // --- SEARCH LOCATION STATE ---
@@ -265,11 +280,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         setSearchLocationText(address); // Set input pencarian dengan alamat lengkap
         setSearchLocationResults([]); // Kosongkan hasil pencarian
     };
-
-    // DATABASES STATE
-    const [dbProducts, setDbProducts] = useState<DatabaseProduct[]>([]);
-    const [analyticsSummary, setAnalyticsSummary] = useState<AnalyticsSummary | null>(null);
-
     const loadAnalyticsData = async () => {
         if (!isAdmin) return;
         setLoading(true);
@@ -287,39 +297,24 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
             setLoading(false);
         }
     };
-    const [isDbModalOpen, setIsDbModalOpen] = useState(false);
-    const [editingDbId, setEditingDbId] = useState<string | null>(null);
-    const initialDbForm: any = { campus: '', city: '', area: '', description: '', price: 0, totalData: 0, fileType: 'link', fileUrl: '' };
-    const [dbForm, setDbForm] = useState<Partial<DatabaseProduct>>(initialDbForm);
-    const [dbCoverFile, setDbCoverFile] = useState<File | null>(null);
-    const [dbDocFile, setDbDocFile] = useState<File | null>(null);
 
-    // VERIFIKASI KOST STATE (Catalog)
-    const [verifikasiPrice, setVerifikasiPrice] = useState<number>(70000);
-    const [verifikasiDiscount, setVerifikasiDiscount] = useState<number>(0);
-    const [verifikasiDescription, setVerifikasiDescription] = useState<string>("Layanan Cek Lokasi Langsung secara live videocall dengan dokumentasi lengkap dan jujur. Sangat cocok bagi Anda yang berada di luar kota dan ingin memastikan kondisi kost yang sebenarnya sebelum melakukan booking.");
-    const [isSavingVerifikasi, setIsSavingVerifikasi] = useState<boolean>(false);
+    const [dbProducts, setDbProducts] = useState<DatabaseProduct[]>([]);
+    const [analyticsSummary, setAnalyticsSummary] = useState<AnalyticsSummary | null>(null);
+    const [mitraRequests, setMitraRequests] = useState<any[]>([]);
+    const [activeMitra, setActiveMitra] = useState<any[]>([]);
+    const [agentVerifications, setAgentVerifications] = useState<any[]>([]);
+    const [surveyRequests, setSurveyRequests] = useState<SurveyRequest[]>([]);
+    const [surveyAgents, setSurveyAgents] = useState<{id: string, name: string, phone: string, photo_url?: string, rating?: string}[]>([]);
+    const [activeUsers, setActiveUsers] = useState<any[]>([]);
+    const [banners, setBanners] = useState<Banner[]>([]);
+    const [dbTransactions, setDbTransactions] = useState<AdminTransaction[]>([]);
+    const [rentTransactions, setRentTransactions] = useState<any[]>([]);
+    const [complaints, setComplaints] = useState<any[]>([]);
 
-    // RENT TRANSACTION MODALS
-    const [viewingProof, setViewingProof] = useState<{ id: string, name: string, proofUrl: string } | null>(null);
-    const [viewingInvoice, setViewingInvoice] = useState<any | null>(null);
-    const [viewingProfile, setViewingProfile] = useState<any | null>(null);
-
-    // DB ORDER MODALS
-    const [viewingDbProof, setViewingDbProof] = useState<{ id: string, name: string, proofUrl: string } | null>(null);
-    const [viewingDbInvoice, setViewingDbInvoice] = useState<any | null>(null);
-    const [viewingDbProfile, setViewingDbProfile] = useState<any | null>(null);
-
-    // VERIFIKASI KOST MODALS
-    const [viewingVerifProof, setViewingVerifProof] = useState<{ id: string, name: string, proofUrl: string } | null>(null);
-    const [viewingVerifInvoice, setViewingVerifInvoice] = useState<any | null>(null);
-    const [viewingVerifProfile, setViewingVerifProfile] = useState<any | null>(null);
-
-    // Temporary state for adding tags inside room types
-    const [tempTagInput, setTempTagInput] = useState<{ [key: string]: string }>({});
-
-    // --- RENT TRANSACTION FILTER ---
-    const [rentFilter, setRentFilter] = useState<'all' | 'pengajuan' | 'realisasi' | 'perpanjangan'>('all');
+    // Selection states
+    const [selectedRentTrxIds, setSelectedRentTrxIds] = useState<string[]>([]);
+    const [selectedDbTrxIds, setSelectedDbTrxIds] = useState<string[]>([]);
+    const [selectedSurveyIds, setSelectedSurveyIds] = useState<string[]>([]);
 
 
     const sections = [
@@ -357,8 +352,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         }
     };
 
-    // COMPLAINTS STATE
-    const [complaints, setComplaints] = useState<any[]>([]);
+
 
     const loadComplaints = async () => {
         if (!isAdmin) return;
@@ -376,8 +370,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         }
     };
 
-    // --- AGENT VERIFICATIONS STATE ---
-    const [agentVerifications, setAgentVerifications] = useState<any[]>([]);
+
 
     const loadAgentVerifications = async () => {
         if (!isAdmin) return;
@@ -392,18 +385,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         }
     };
 
-    // --- SURVEY REQUESTS STATE ---
-    const [surveyRequests, setSurveyRequests] = useState<SurveyRequest[]>([]);
-    const [adminSurveyTab, setAdminSurveyTab] = useState<'all' | 'pending' | 'active' | 'completed'>('all');
-    const [surveyAgents, setSurveyAgents] = useState<{id: string, name: string, phone: string, photo_url?: string, rating?: string}[]>([]);
-    const [isEditingSurvey, setIsEditingSurvey] = useState<SurveyRequest | null>(null);
-    const [isReschedulingSurvey, setIsReschedulingSurvey] = useState<SurveyRequest | null>(null);
-    const [newSurveyDate, setNewSurveyDate] = useState('');
-    const [newSurveyTime, setNewSurveyTime] = useState('');
-    const [userRating, setUserRating] = useState<number>(0);
-    const [userComment, setUserComment] = useState('');
-    const [isUploadingSurveyPhoto, setIsUploadingSurveyPhoto] = useState<string | null>(null);
-    const [surveyForm, setSurveyForm] = useState<Partial<SurveyRequest>>({});
+
 
     // --- AGENT WALLET PROFILE STATE ---
     const [agentBankName, setAgentBankName] = useState('BCA');
@@ -523,99 +505,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         }
     };
 
-    const handleDeleteSurvey = async (id: string, name: string) => {
-        if (!window.confirm(`Apakah Anda yakin ingin menghapus permohonan survey "${name}"? Data yang dihapus tidak dapat dikembalikan.`)) return;
-        setIsSubmitting(true);
-        try {
-            await deleteSurveyRequest(id);
-            alert('Survey berhasil dihapus');
-            loadSurveyRequests();
-        } catch (error) {
-            console.error("Gagal menghapus survey", error);
-            alert('Gagal menghapus survey');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
+    // REMOVED: handleUpdateSurvey, handleDeleteSurvey, handleRequestReschedule (Localized to SurveyManagement)
 
-    const handleUpdateSurvey = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!isEditingSurvey) return;
-        setIsSubmitting(true);
-        try {
-            const oldStatus = isEditingSurvey.status;
-            const finalData = { ...surveyForm };
-            
-            // WHITELIST ONLY ACTUAL DATABASE COLUMNS
-            // This prevents Supabase 400 error (Unknown Column) from relation fields like 'user' & 'transaction'
-            const SURVEY_DB_COLUMNS = [
-                'status', 'kost_name', 'kost_address', 'owner_phone', 
-                'survey_date', 'survey_time', 'notes', 
-                'agent_name', 'agent_phone', 'agent_photo_url', 'assigned_agent_id',
-                'result_drive_link', 'evaluation_summary', 
-                'user_rating', 'user_comment'
-            ];
 
-            const updates: any = {};
-            SURVEY_DB_COLUMNS.forEach(col => {
-                if (finalData.hasOwnProperty(col)) {
-                    updates[col] = (finalData as any)[col];
-                }
-            });
-
-            if (isAgent && updates.status === 'SURVEYING') {
-                updates.status = 'COMPLETED';
-            }
-
-            await updateSurveyRequest(isEditingSurvey.id, updates);
-
-            // Automated internal notifications via Service
-            if (updates.status !== oldStatus) {
-                await notifySurveyStatusUpdate(isEditingSurvey.id, updates.status);
-            }
-
-            alert('Survey berhasil diperbarui');
-            loadSurveyRequests();
-            setIsEditingSurvey(null);
-        } catch (error) {
-            console.error("Gagal update survey", error);
-            alert('Gagal update survey');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleRequestReschedule = async () => {
-        if (!isReschedulingSurvey) return;
-        setIsSubmitting(true);
-        try {
-            const updates = {
-                survey_date: newSurveyDate,
-                survey_time: newSurveyTime,
-                notes: `(Reschedule Requested) ${isReschedulingSurvey.notes || ''}`.trim()
-            };
-            await updateSurveyRequest(isReschedulingSurvey.id, updates);
-            
-            // Notify User via WA
-            const waText = `Halo ${isReschedulingSurvey.user?.name}, agen survey kami mengajukan perubahan jadwal survey untuk kost ${isReschedulingSurvey.kost_name} menjadi tanggal ${newSurveyDate} jam ${newSurveyTime}. Mohon konfirmasinya.`;
-            window.open(`https://wa.me/${isReschedulingSurvey.user?.phone}?text=${encodeURIComponent(waText)}`, '_blank');
-            
-            alert('Permintaan Jadwal Ulang Terkirim');
-            loadSurveyRequests();
-            setIsReschedulingSurvey(null);
-        } catch (error) {
-            alert('Gagal mengirim permintaan jadwal ulang');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    // --- BANNER MANAGEMENT STATE ---
-    const [banners, setBanners] = useState<Banner[]>([]);
-    const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
-    const [editingBannerId, setEditingBannerId] = useState<string | null>(null);
-    const [bannerForm, setBannerForm] = useState<Partial<Banner>>({ title: '', link_url: '', is_active: true, sort_order: 0 });
-    const [bannerImageFile, setBannerImageFile] = useState<File | null>(null);
 
     const loadBanners = async () => {
         if (!isAdmin) return;
@@ -630,205 +522,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         }
     };
 
-    const handleBannerSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-        try {
-            if (editingBannerId) {
-                await updateBanner(editingBannerId, bannerForm, bannerImageFile || undefined);
-                alert('Banner berhasil diperbarui');
-            } else {
-                if (!bannerImageFile) {
-                    alert('Mohon pilih gambar banner.');
-                    setIsSubmitting(false);
-                    return;
-                }
-                await addBanner(bannerForm, bannerImageFile);
-                alert('Banner berhasil ditambahkan');
-            }
-            setIsBannerModalOpen(false);
-            setEditingBannerId(null);
-            setBannerForm({ title: '', link_url: '', is_active: true, sort_order: 0 });
-            setBannerImageFile(null);
-            loadBanners();
-        } catch (error) {
-            console.error("Gagal menyimpan banner:", error);
-            alert('Gagal menyimpan banner');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
 
-    const handleDeleteBanner = async (id: string) => {
-        if (!window.confirm('Hapus banner ini?')) return;
-        setIsSubmitting(true);
-        try {
-            await deleteBanner(id);
-            alert('Banner dihapus');
-            loadBanners();
-        } catch (error) {
-            console.error("Gagal menghapus banner:", error);
-            alert('Gagal menghapus banner');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const openAddBannerModal = () => {
-        setEditingBannerId(null);
-        setBannerForm({ title: '', link_url: '', is_active: true, sort_order: 0 });
-        setBannerImageFile(null);
-        setIsBannerModalOpen(true);
-    };
-
-    const openEditBannerModal = (banner: Banner) => {
-        setEditingBannerId(banner.id);
-        const { id, created_at, ...rest } = banner;
-        setBannerForm(rest);
-        setBannerImageFile(null);
-        setIsBannerModalOpen(true);
-    };
-
-    const renderBannersManagement = () => (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center mb-2">
-                <div>
-                    <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Manajemen Banner Promo</h2>
-                    <p className="text-gray-500 text-sm mt-1">Total {banners.length} banner terdaftar.</p>
-                </div>
-                <button 
-                    onClick={openAddBannerModal}
-                    className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center gap-2"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                    Tambah Banner
-                </button>
-            </div>
-
-            <div className="bg-orange-50/50 border border-orange-100 rounded-xl p-4 flex gap-3 mb-2">
-                <span className="text-orange-500 shrink-0">🖼️</span>
-                <p className="text-sm font-medium text-orange-900">Kelola banner promosi yang muncul di carousel halaman utama. Gunakan gambar berasio 16:9 untuk hasil terbaik.</p>
-            </div>
-
-            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-gray-500">
-                        <thead className="bg-gray-50/50 text-xs font-black text-gray-500 uppercase tracking-widest">
-                            <tr>
-                                <th className="px-6 py-4">Preview</th>
-                                <th className="px-6 py-4">Judul & Link</th>
-                                <th className="px-6 py-4 text-center">Urutan</th>
-                                <th className="px-6 py-4 text-center">Status</th>
-                                <th className="px-6 py-4 text-right">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {banners.map(banner => (
-                                <tr key={banner.id} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <img 
-                                            src={banner.image_url} 
-                                            alt={banner.title} 
-                                            className="w-32 aspect-video rounded-lg object-cover bg-gray-100 border border-gray-100"
-                                        />
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <p className="font-black text-gray-900 leading-tight">{banner.title || '(Tanpa Judul)'}</p>
-                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1.5 truncate max-w-[200px]">
-                                            {banner.link_url || 'Tidak ada link'}
-                                        </p>
-                                    </td>
-                                    <td className="px-6 py-4 text-center font-bold text-gray-900">
-                                        {banner.sort_order}
-                                    </td>
-                                    <td className="px-6 py-4 text-center">
-                                        <span className={`inline-flex px-2 py-1 text-[10px] font-black uppercase tracking-wider rounded-md ${banner.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                                            {banner.is_active ? 'Aktif' : 'Nonaktif'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex justify-end gap-2">
-                                            <button 
-                                                onClick={() => openEditBannerModal(banner)}
-                                                className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-orange-600 bg-orange-50 hover:bg-orange-100 transition-colors"
-                                            >
-                                                Edit
-                                            </button>
-                                            <button 
-                                                onClick={() => handleDeleteBanner(banner.id)}
-                                                className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
-                                            >
-                                                Hapus
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                            {banners.length === 0 && (
-                                <tr>
-                                    <td colSpan={5} className="px-6 py-12 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">
-                                        Belum ada banner promo.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    );
-
-    const handleSubmitFeedback = async () => {
-        if (!isEditingSurvey) return;
-        setIsSubmitting(true);
-        try {
-            const updates = {
-                user_rating: userRating,
-                user_comment: userComment
-            };
-            await updateSurveyRequest(isEditingSurvey.id, updates);
-            alert('Terima kasih atas feedback Anda!');
-            loadSurveyRequests();
-            setUserRating(0); // Close modal
-            setUserComment('');
-        } catch (error) {
-            alert('Gagal menyimpan feedback');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleGenerateDriveFolder = async () => {
-        if (!isEditingSurvey) return;
-        setIsSubmitting(true);
-        try {
-            const driveLink = await generateManualDriveFolder(isEditingSurvey.id);
-            setSurveyForm(prev => ({ ...prev, result_drive_link: driveLink }));
-            alert('Folder Drive berhasil dibuat!');
-            loadSurveyRequests();
-        } catch (error: any) {
-            console.error("Gagal generate folder", error);
-            alert(error.message || 'Gagal generate folder Drive');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleUpdateComplaintStatus = async (id: string, newStatus: string) => {
-        try {
-            const { error } = await supabase
-                .from('complaints')
-                .update({ status: newStatus })
-                .eq('id', id);
-                
-            if (error) throw error;
-            
-            setComplaints((prev: any[]) => prev.map(c => c.id === id ? { ...c, status: newStatus } : c));
-            alert('Status Komplain diperbarui ke ' + newStatus);
-        } catch (e) {
-            alert('Gagal mengupdate komplain');
-        }
-    };
+    // REMOVED: handleDeleteBanner (Localized to BannerManagement)
+    // REMOVED: handleUpdateComplaintStatus (Localized to ComplaintManagement)
 
     const loadDbTransactions = async () => {
         setLoading(true);
@@ -859,39 +555,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         }
     };
 
-    const handleBulkDeleteTransactions = async () => {
-        if (selectedDbTrxIds.length === 0) return;
-        if (!window.confirm(`Apakah Anda yakin ingin menghapus ${selectedDbTrxIds.length} transaksi terpilih? Data yang dihapus tidak dapat dikembalikan.`)) return;
-
-        setLoading(true);
-        try {
-            await deleteTransactions(selectedDbTrxIds);
-            alert(`${selectedDbTrxIds.length} transaksi berhasil dihapus`);
-            loadDbTransactions();
-        } catch (error: any) {
-            alert('Gagal menghapus transaksi: ' + (error.message || 'Terjadi kesalahan'));
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleBulkDeleteSurveys = async () => {
-        if (selectedSurveyIds.length === 0) return;
-        if (!window.confirm(`Apakah Anda yakin ingin menghapus ${selectedSurveyIds.length} permohonan survey terpilih? Data yang dihapus tidak dapat dikembalikan.`)) return;
-
-        setIsSubmitting(true);
-        try {
-            await deleteSurveyRequests(selectedSurveyIds);
-            alert(`${selectedSurveyIds.length} permohonan survey berhasil dihapus`);
-            setSelectedSurveyIds([]);
-            loadSurveyRequests();
-        } catch (error: any) {
-            console.error("Gagal menghapus survey massal", error);
-            alert('Gagal menghapus survey massal: ' + (error.message || 'Terjadi kesalahan'));
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
+    // REMOVED: Bulk deletion handlers (Localized to respective components)
 
     useEffect(() => {
         if (activeMenu === 'properties') loadProperties();
@@ -906,7 +570,57 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
             loadAgentWalletProfile();
         }
         if (activeMenu === 'banners') loadBanners();
+        if (activeMenu === 'tenants') loadActiveUsers();
+        if (activeMenu === 'mitra') {
+            loadMitraRequests(); // Pendaftar
+            loadActiveMitra();   // Mitra Aktif
+        }
+        if (activeMenu === 'agent_verification') {
+            loadAgentVerifications(); // Requests
+            loadActiveAgents();      // Active Agents
+        }
     }, [isAdmin, activeMenu, dateFilter, customStartDate, customEndDate, dashboardViewMode]);
+
+    const loadActiveUsers = async () => {
+        if (!isAdmin) return;
+        setLoading(true);
+        try {
+            const data = await getUsersByRole('user');
+            setActiveUsers(data);
+        } catch (e) { console.error(e); }
+        finally { setLoading(false); }
+    };
+
+    const loadActiveMitra = async () => {
+        if (!isAdmin) return;
+        setLoading(true);
+        try {
+            const data = await getActiveMitra();
+            setActiveMitra(data);
+        } catch (e) { console.error(e); }
+        finally { setLoading(false); }
+    };
+
+    const loadActiveAgents = async () => {
+        if (!isAdmin) return;
+        setLoading(true);
+        try {
+            const data = await getUsersByRole('survey_agent');
+            // Re-use surveyAgents state or separate? Let's keep separate for clarity in management
+            setSurveyAgents(data);
+        } catch (e) { console.error(e); }
+        finally { setLoading(false); }
+    };
+
+    const handleDeleteUser = async (uId: string, name: string) => {
+        if (!window.confirm(`Hapus akun "${name}" secara permanen? Tindakan ini tidak dapat dibatalkan.`)) return;
+        try {
+            await deleteUserAccount(uId);
+            alert('User berhasil dihapus');
+            loadActiveUsers();
+            loadActiveMitra();
+        } catch (e) { alert('Gagal menghapus user'); }
+    };
 
     // --- PROPERTY HANDLERS ---
 
@@ -1054,44 +768,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         setDbDocFile(null);
         setIsDbModalOpen(true);
     };
-
-    const openEditDbModal = (dbItem: DatabaseProduct) => {
-        setEditingDbId(dbItem.id);
-        const fileUrls = dbItem.fileUrls || (dbItem as any).file_urls || {};
-        const fileUrlValue = fileUrls.link || fileUrls.googleDrive || (dbItem as any).fileUrl || '';
-        
-        setDbForm({ ...dbItem, fileUrl: fileUrlValue });
-        setDbCoverFile(null);
-        setDbDocFile(null);
-        setIsDbModalOpen(true);
-    };
-
-    const handleDbSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-        try {
-            if (editingDbId) {
-                await updateDatabaseProduct(editingDbId, dbForm, dbCoverFile, dbDocFile);
-            } else {
-                if (dbForm.fileType === 'upload' && !dbDocFile) {
-                    alert("Mohon upload file dokumen.");
-                    setIsSubmitting(false);
-                    return;
-                }
-                await addDatabaseProduct(dbForm, dbCoverFile, dbDocFile);
-            }
-            await loadDatabases();
-            if (onRefreshListings) onRefreshListings(); // Refresh public listings
-            setIsDbModalOpen(false);
-            alert("Data database berhasil disimpan!");
-        } catch (e) {
-            console.error(e);
-            alert("Gagal menyimpan data database.");
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
 
     // Generic Helpers
     const addArrayItem = (field: keyof Kost, defaultValue: string = '') => {
@@ -1815,8 +1491,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
     };
 
     // --- REALTIME TRANSACTIONS STATE ---
-    const [rentTransactions, setRentTransactions] = useState<any[]>([]);
-    const [selectedRentTrxIds, setSelectedRentTrxIds] = useState<string[]>([]);
+
+
 
     const loadRentTransactions = async () => {
         setLoading(true);
@@ -1958,102 +1634,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
             transferProofUrl: null,
         },
     ]);
-    const [dbTransactions, setDbTransactions] = useState<AdminTransaction[]>([]);
-    const [selectedDbTrxIds, setSelectedDbTrxIds] = useState<string[]>([]);
-    const [selectedSurveyIds, setSelectedSurveyIds] = useState<string[]>([]);
 
-    // MANUAL ADDITION MODALS STATE
-    const [isAddingManualRent, setIsAddingManualRent] = useState(false);
-    const [manualRentForm, setManualRentForm] = useState<any>({});
-
-    const [isAddingManualDb, setIsAddingManualDb] = useState(false);
-    const [manualDbForm, setManualDbForm] = useState<any>({});
-
-    const [isAddingManualVerif, setIsAddingManualVerif] = useState(false);
-    const [manualVerifForm, setManualVerifForm] = useState<any>({});
-
-    const [isAddingManualMitra, setIsAddingManualMitra] = useState(false);
-    const [manualMitraForm, setManualMitraForm] = useState<any>({});
-    const handleManualRentSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsAddingManualRent(false);
-        if (!isAdmin) {
-            alert('Akses ditolak.');
-            return;
-        }
-        try {
-            await supabase.from('transactions').insert({
-                user_id: uid, 
-                product_id: '00000000-0000-0000-0000-000000000000', 
-                product_type: 'kost_booking',
-                amount: Number(manualRentForm.amount) || 0,
-                status: manualRentForm.status === 'Selesai' ? 'paid' : 'pending',
-                payment_method: manualRentForm.paymentMethod || 'Manual Input',
-                metadata: {
-                    name: manualRentForm.name || '-',
-                    phone: manualRentForm.phone || '-',
-                    email: manualRentForm.email || '-',
-                    kostName: manualRentForm.item || '-',
-                    roomType: manualRentForm.roomType || '-',
-                    period: manualRentForm.periodLabel || 'Bulanan',
-                    startDate: manualRentForm.startDate || '-',
-                    endDate: manualRentForm.endDate || '-'
-                }
-            });
-            
-            notifyAdminTransaction("Penambahan Transaksi Manual (Dashboard Admin)", {
-                "Nama User": manualRentForm.name || '-',
-                "Item": manualRentForm.item || '-',
-                "Total Bayar": `Rp ${Number(manualRentForm.amount || 0).toLocaleString('id-ID')}`
-            });
-            
-            alert('Transaksi manual ditambahkan!');
-        } catch(e) {
-            console.error(e);
-            alert('Gagal menambah transaksi manual');
-        }
-        setManualRentForm({});
-    };
-
-    const handleManualDbSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        alert('Fitur tambah manual dinonaktifkan sementara. Transaksi akan muncul otomatis saat ada pembelian.');
-        setIsAddingManualDb(false);
-    };
-
-    const handleManualVerifSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (isSubmitting) return;
-        setIsSubmitting(true);
-        try {
-            const newOrder = {
-                id: `SRV-MAN-${Math.floor(Math.random() * 1000)}`,
-                name: manualVerifForm.name || '-',
-                phone: manualVerifForm.phone || '-',
-                email: manualVerifForm.email || '-',
-                kostName: manualVerifForm.kostName || '-',
-                ownerPhone: manualVerifForm.ownerPhone || '-',
-                kostAddress: manualVerifForm.kostAddress || '-',
-                source: 'Manual Input',
-                surveyDate: manualVerifForm.surveyDate || '-',
-                surveyTime: manualVerifForm.surveyTime || '-',
-                notes: manualVerifForm.notes || '-',
-                paymentType: 'transfer',
-                paymentMethod: 'Manual Input',
-                date: manualVerifForm.date || new Date().toISOString().split('T')[0],
-                status: manualVerifForm.status || 'Selesai',
-                amount: Number(manualVerifForm.amount) || 0,
-                platformFee: 0,
-                invoiceId: `INV-SRV-MAN-${Math.floor(Math.random() * 1000)}`,
-            };
-            setDummyVerifications([newOrder, ...dummyVerifications]);
-            setIsAddingManualVerif(false);
-            setManualVerifForm({});
-            alert('Data survey manual ditambahkan ke list dummy (hanya sesi ini)');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
 
     const handleSurveyPhotoUpload = async (fieldId: string, files: FileList | null) => {
         if (!files || files.length === 0 || !isEditingSurvey) return;
@@ -2106,19 +1687,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
             console.error('Gagal menghapus foto:', error);
         }
     };
-    const handleManualMitraSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (isSubmitting) return;
-        setIsSubmitting(true);
-        try {
-            // Analogous to Verif, update dummy state
-            alert('Fitur tambah mitra manual akan segera dihubungkan ke database. Saat ini data hanya tersimpan di sesi browser.');
-            setIsAddingManualMitra(false);
-            setManualMitraForm({});
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
 
     const renderSidebar = () => (
         <aside className="w-64 bg-white border-r border-gray-200 min-h-[calc(100vh-80px)] hidden md:flex flex-col sticky top-20 z-10">
@@ -2164,8 +1732,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                     <>
                         <SidebarItem icon="📦" label="Pembelian DB" isActive={activeMenu === 'transactions_db'} onClick={() => setActiveMenu('transactions_db')} />
                         <SidebarItem icon="✅" label="Verifikasi Kost" isActive={activeMenu === 'verifikasi'} onClick={() => setActiveMenu('verifikasi')} />
-                        <SidebarItem icon="🤝" label="Pendaftar Mitra" isActive={activeMenu === 'mitra'} onClick={() => setActiveMenu('mitra')} />
-                        <SidebarItem icon="🛡️" label="Verifikasi Agen" isActive={activeMenu === 'agent_verification'} onClick={() => setActiveMenu('agent_verification')} />
+                        <SidebarItem icon="👥" label="Kelola User" isActive={activeMenu === 'tenants'} onClick={() => setActiveMenu('tenants')} />
+                        <SidebarItem icon="🤝" label="Kelola Mitra" isActive={activeMenu === 'mitra'} onClick={() => setActiveMenu('mitra')} />
+                        <SidebarItem icon="🛡️" label="Kelola Agen" isActive={activeMenu === 'agent_verification'} onClick={() => setActiveMenu('agent_verification')} />
                         <SidebarItem icon="🖼️" label="Banner Promo" isActive={activeMenu === 'banners'} onClick={() => setActiveMenu('banners')} />
                     </>
                 )}
@@ -2432,252 +2001,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         );
     };
 
-    const renderAnalytics = () => {
-        // Use real data from analyticsSummary
-        const statsGeneral = {
-            users: analyticsSummary?.totalUsers || 0,
-            revenue: analyticsSummary?.totalRevenue || 0,
-            mitra: analyticsSummary?.totalMitra || 0,
-            dbActive: analyticsSummary?.totalDatabases || 0
-        };
 
-        const statsKost = analyticsSummary?.kostStats || { users: 0, active: 0, revenue: 0 };
-        const statsDb = analyticsSummary?.dbStats || { buyers: 0, active: 0, revenue: 0 };
-        const statsVerif = analyticsSummary?.verifStats || { orders: 0, revenue: 0 };
-
-        // Use real trend data from analyticsSummary
-        const trendData = analyticsSummary?.trendData || [];
-
-        return (
-            <div className="space-y-6 animate-in fade-in duration-500">
-                {/* Header Analisis & Filter */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                    <div>
-                        <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Ringkasan Analisis</h2>
-                        <p className="text-gray-500 text-sm mt-1">Pantau performa bisnis dan pertumbuhan pengguna RuangSinggah.</p>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-3 items-center w-full md:w-auto">
-                        {dateFilter === 'custom' && (
-                            <div className="flex gap-2 items-center bg-gray-50 p-1.5 rounded-lg border border-gray-200">
-                                <input
-                                    type="date"
-                                    value={customStartDate}
-                                    onChange={(e) => {
-                                        setCustomStartDate(e.target.value);
-                                        // Validasi: Kosongkan End Date jika melampaui batas max 3 bulan dari start date yang baru
-                                        if (customEndDate) {
-                                            const start = new Date(e.target.value);
-                                            const end = new Date(customEndDate);
-                                            const maxEnd = new Date(start);
-                                            maxEnd.setMonth(start.getMonth() + 3);
-                                            if (end < start || end > maxEnd) setCustomEndDate('');
-                                        }
-                                    }}
-                                    className="text-xs bg-white border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                />
-                                <span className="text-gray-400 text-xs font-bold">-</span>
-                                <input
-                                    type="date"
-                                    min={customStartDate}
-                                    max={getMaxEndDate()}
-                                    value={customEndDate}
-                                    onChange={(e) => setCustomEndDate(e.target.value)}
-                                    className="text-xs bg-white border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                />
-                            </div>
-                        )}
-                        {dateFilter === 'tahunan' && (
-                            <select
-                                value={selectedYear}
-                                onChange={(e) => setSelectedYear(e.target.value)}
-                                className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-xl focus:ring-orange-500 focus:border-orange-500 block p-2.5 font-bold outline-none"
-                            >
-                                {Array.from({ length: Math.max(1, currentYear - 2025 + 1) }, (_, i) => 2025 + i).map(year => (
-                                    <option key={year} value={year.toString()}>{year}</option>
-                                ))}
-                            </select>
-                        )}
-                        <select
-                            value={dateFilter}
-                            onChange={(e) => setDateFilter(e.target.value)}
-                            className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-xl focus:ring-orange-500 focus:border-orange-500 block w-full md:w-auto p-2.5 font-bold uppercase tracking-wider outline-none"
-                        >
-                            <option value="all">Semua Waktu</option>
-                            <option value="hari_ini">Hari Ini</option>
-                            <option value="minggu_ini">Minggu Ini</option>
-                            <option value="bulan_ini">Bulan Ini</option>
-                            <option value="tahunan">Tahunan</option>
-                            <option value="custom">Rentang Kustom</option>
-                        </select>
-                    </div>
-                </div>
-
-                {/* GENERAL SUMMARY SECTION */}
-                <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 shadow-inner">
-                    <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest mb-4 flex items-center gap-2">
-                        <span className="text-xl">🌐</span> Ringkasan Umum
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                        <StatCard title="Total Pengguna" value={statsGeneral.users.toString()} icon="👥" color="bg-blue-100 text-blue-700" />
-                        <StatCard title="Total Pendapatan" value={FORMAT_CURRENCY(statsGeneral.revenue)} icon="💰" color="bg-orange-100 text-orange-700" />
-                        <StatCard title="Total Mitra Aktif" value={statsGeneral.mitra.toString()} icon="🤝" color="bg-emerald-100 text-emerald-700" />
-                        <StatCard title="Total Database Aktif" value={statsGeneral.dbActive.toString()} icon="🗄️" color="bg-purple-100 text-purple-700" />
-                    </div>
-
-                    {/* Chart Tren Ringkasan Umum */}
-                    <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Tren Pengguna vs Pendapatan</h4>
-                        <div className="h-64 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={trendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                    <defs>
-                                        <linearGradient id="colorPendapatan" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#f97316" stopOpacity={0.8} />
-                                            <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
-                                        </linearGradient>
-                                        <linearGradient id="colorPengguna" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
-                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} dy={10} />
-                                    <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} tickFormatter={(value) => `${value / 1000000}M`} />
-                                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
-                                    <RechartsTooltip content={<CustomTooltip />} />
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                                    <Area yAxisId="left" type="monotone" dataKey="pendapatan" stroke="#f97316" strokeWidth={3} fillOpacity={1} fill="url(#colorPendapatan)" name="Pendapatan" />
-                                    <Area yAxisId="right" type="monotone" dataKey="pengguna" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorPengguna)" name="Pengguna Aktif" />
-                                    <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-                </div>
-
-                {/* KOST SECTION */}
-                <div>
-                    <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                        <span className="text-xl">🏠</span> Performa Berlangganan / Sewa Kost
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <StatCard title="Total Penyewa Baru" value={statsKost.users.toString()} icon="👥" color="bg-blue-50 text-blue-600" />
-                        <StatCard title="Total Kost Tersewa" value={statsKost.active.toString()} icon="🔑" color="bg-green-50 text-green-600" />
-                        <StatCard title="Pendapatan Sewa (Est)" value={FORMAT_CURRENCY(statsKost.revenue)} icon="💰" color="bg-orange-50 text-orange-600" />
-                    </div>
-
-                    {/* Chart Tren Sewa Kost */}
-                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Grafik Tren Sewa Baru</h4>
-                        <div className="h-56 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={trendData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                                    <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} dy={10} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
-                                    <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
-                                    <Bar dataKey="sewa" fill="#22c55e" radius={[4, 4, 0, 0]} name="Sewa Baru" maxBarSize={40} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-                </div>
-
-                {/* DB SECTION */}
-                <div>
-                    <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2 mt-8">
-                        <span className="text-xl">🗄️</span> Performa Penjualan Database
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <StatCard title="Total Pembeli Baru" value={statsDb.buyers.toString()} icon="🛒" color="bg-indigo-50 text-indigo-600" />
-                        <StatCard title="Total File Terjual" value={statsDb.active.toString()} icon="📦" color="bg-purple-50 text-purple-600" />
-                        <StatCard title="Pendapatan Penjualan DB" value={FORMAT_CURRENCY(statsDb.revenue)} icon="💳" color="bg-pink-50 text-pink-600" />
-                    </div>
-
-                    {/* Chart Tren Penjualan Database */}
-                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Grafik Tren Penjualan DB</h4>
-                        <div className="h-56 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={trendData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-                                    <defs>
-                                        <linearGradient id="colorDb" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.8} />
-                                            <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} dy={10} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
-                                    <RechartsTooltip content={<CustomTooltip />} />
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                                    <Area type="monotone" dataKey="db" stroke="#a855f7" strokeWidth={3} fillOpacity={1} fill="url(#colorDb)" name="Pembelian DB" />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-                </div>
-
-                {/* VERIFIKASI SECTION */}
-                <div>
-                    <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2 mt-8">
-                        <span className="text-xl">✅</span> Performa Layanan Verifikasi Kost
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <StatCard title="Total Pesanan" value={statsVerif.orders.toString()} icon="📝" color="bg-orange-50 text-orange-600" />
-                        <StatCard title="Pendapatan Verifikasi" value={FORMAT_CURRENCY(statsVerif.revenue)} icon="💰" color="bg-pink-50 text-pink-600" />
-                        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between">
-                            <div>
-                                <h4 className="font-bold text-gray-900 text-sm">Target vs Pencapaian Verifikasi Kost</h4>
-                                <div className="mt-4">
-                                    <div className="flex justify-between items-end mb-2">
-                                        <p className="text-4xl font-black text-gray-900">{statsVerif.orders} <span className="text-sm text-gray-400 font-medium">pesanan {dateFilter !== 'all' ? 'periode ini' : ''}</span></p>
-                                        <p className="text-sm font-bold text-orange-500">{FORMAT_CURRENCY(statsVerif.revenue)}</p>
-                                    </div>
-                                    <div className="w-full bg-gray-100 rounded-full h-2 mb-1">
-                                        <div className="bg-orange-500 h-2 rounded-full" style={{ width: `${Math.min(100, (statsVerif.orders / 100) * 100)}%` }}></div>
-                                    </div>
-                                    <p className="text-xs text-gray-500 flex justify-between">
-                                        <span>Target Bulanan: 100</span>
-                                        <span className="font-bold">{(statsVerif.orders / 100 * 100).toFixed(0)}%</span>
-                                    </p>
-                                </div>
-                            </div>
-
-                        </div>
-                    </div>
-
-                    {/* NEW GRAPH FOR VERIFIKASI KOST */}
-                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mt-6">
-                        <div className="flex justify-between items-start mb-6">
-                            <div>
-                                <h3 className="text-lg font-black text-gray-900">Performa Layanan Verifikasi Kost</h3>
-                                <p className="text-xs text-gray-500 font-medium mt-1">Tren pesanan bulanan berdasarkan layanan video call langsung eksklusif.</p>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Pesanan Aktual</p>
-                                <p className="text-xl font-bold text-gray-900">{statsVerif.orders}</p>
-                            </div>
-                        </div>
-                        <div className="w-full h-[300px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={trendData}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
-                                    <YAxis yAxisId="left" orientation="left" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dx={-10} />
-                                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dx={10} tickFormatter={(val) => `Rp ${val / 1000000}M`} />
-                                    <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
-                                    <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
-                                    <Bar yAxisId="left" dataKey="verifikasi" name="Jumlah Verifikasi" stroke="#8b5cf6" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                                    {/* Menganimasikan tren pendapatan verifikasi berdasar harga dinamis menggunakan mapping in-place (simulasi) */}
-                                    <Bar yAxisId="right" dataKey={(data) => data.verifikasi * (verifikasiPrice || 70000)} name="Pendapatan (Hrg Config)" stroke="#f59e0b" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-        );
-    };
 
     const StatCard = ({ title, value, icon, color }: { title: string, value: string, icon: string, color: string }) => (
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
@@ -2720,1721 +2044,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                         </tbody>
                     </table>
                 </div>
-            </div>
-        </div>
-    );
-
-    const renderComplaints = () => (
-        <div className="space-y-6 animate-in fade-in duration-500 max-w-6xl mx-auto pb-10">
-            <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Daftar Komplain Penghuni</h2>
-            <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm overflow-hidden">
-                {complaints.length === 0 ? (
-                    <div className="text-center py-10 text-gray-400">Belum ada komplain yang masuk.</div>
-                ) : (
-                    <table className="w-full text-left text-sm text-gray-500">
-                        <thead className="bg-gray-50/50 text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-100">
-                            <tr>
-                                <th className="px-6 py-4">Laporan</th>
-                                <th className="px-6 py-4">Info User</th>
-                                <th className="px-6 py-4">Problem</th>
-                                <th className="px-6 py-4 text-right">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {complaints.map(c => (
-                                <tr key={c.id}>
-                                    <td className="px-6 py-4">
-                                        <p className="font-bold text-gray-900">{c.createdAt ? new Date(c.createdAt.seconds * 1000).toLocaleDateString('id-ID') : '-'}</p>
-                                        <p className="text-[10px] text-gray-400 uppercase">{c.id.slice(0, 8)}</p>
-                                        <span className={`inline-flex px-3 py-1 text-[10px] font-black uppercase mt-2 tracking-wider rounded-lg border ${c.status === 'open' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
-                                            {c.status === 'open' ? 'TERBUKA' : 'SELESAI'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <p className="font-bold text-gray-700">{c.userName || '-'}</p>
-                                        <p className="text-xs text-blue-500 cursor-pointer hover:underline" onClick={() => window.open('https://wa.me/' + (c.userPhone || ''))}>{c.userPhone || '-'}</p>
-                                        <p className="text-xs text-gray-500 mt-1 font-bold">{c.kostName || '-'}</p>
-                                    </td>
-                                    <td className="px-6 py-4 max-w-xs">
-                                        <p className="font-bold text-red-600 truncate">{c.title || '-'}</p>
-                                        <p className="text-xs text-gray-500 line-clamp-2 mt-1">{c.description || '-'}</p>
-                                        {c.photoUrl && (
-                                            <button onClick={() => window.open(c.photoUrl, '_blank')} className="mt-2 text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                                                📸 Lihat Foto Lampiran
-                                            </button>
-                                        )}
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        {c.status === 'open' ? (
-                                            <button onClick={() => handleUpdateComplaintStatus(c.id, 'closed')} className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-xl text-xs font-bold active:scale-95 shadow-sm transition-colors">
-                                                Tandai Selesai
-                                            </button>
-                                        ) : (
-                                            <span className="text-gray-400 text-xs font-bold">Teratasi ✔️</span>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
-        </div>
-    );
-
-    const renderVerifikasi = () => (
-        <div className="animate-in fade-in duration-500 max-w-4xl mx-auto space-y-8 pb-10">
-            <div className="bg-gradient-to-br from-violet-600 to-fuchsia-700 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-10 -mt-20"></div>
-                <div className="relative z-10">
-                    <div className="inline-flex py-1 px-3 bg-white/20 rounded-full text-[10px] font-black tracking-widest uppercase mb-4 shadow-sm backdrop-blur-md">
-                        ★ Katalog Jasa RuangSinggah
-                    </div>
-                    <h2 className="text-3xl lg:text-4xl font-black tracking-tight drop-shadow-sm leading-tight max-w-2xl">
-                        Kelola Layanan Verifikasi Kost
-                    </h2>
-                    <p className="text-violet-100 font-medium mt-3 text-sm lg:text-base max-w-xl leading-relaxed opacity-90">
-                        Atur informasi harga, diskon, dan manfaat layanan Live Video Call Cek Lokasi yang terintegrasi langsung dengan Cart Pembayaran.
-                    </p>
-                </div>
-            </div>
-
-            <div className="bg-white border border-gray-100 rounded-2xl p-8 shadow-sm">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Pengaturan Harga Layanan</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-3">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                            Harga Normal (Biaya Dasar)
-                        </label>
-                        <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">Rp</span>
-                            <input
-                                type="number"
-                                value={verifikasiPrice}
-                                onChange={(e) => setVerifikasiPrice(Number(e.target.value))}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-12 pr-4 py-4 text-gray-900 font-bold text-lg outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:bg-white transition-all"
-                                placeholder="Misal: 70000"
-                            />
-                        </div>
-                        <p className="text-xs text-gray-400 font-medium">Harga aktual yang tercermin di seluruh analitik Dashboard.</p>
-                    </div>
-                    <div className="space-y-3">
-                        <label className="text-[10px] font-black text-orange-400 uppercase tracking-widest flex items-center gap-1">
-                            Harga Diskon (Opsional)
-                        </label>
-                        <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">Rp</span>
-                            <input
-                                type="number"
-                                value={verifikasiDiscount}
-                                onChange={(e) => setVerifikasiDiscount(Number(e.target.value))}
-                                className="w-full bg-orange-50/30 border border-orange-100 rounded-xl pl-12 pr-4 py-4 text-orange-900 font-bold text-lg outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:bg-white transition-all"
-                                placeholder="Harga setelah potongan, contoh: 50000"
-                            />
-                        </div>
-                        <p className="text-xs text-gray-400 font-medium">Jika diisi, harga normal akan dicoret pada antarmuka Klien.</p>
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-white border border-gray-100 rounded-2xl p-8 shadow-sm space-y-6">
-                <div className="flex justify-between items-center">
-                    <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">KONTROL DESKRIPSI (LANDING PAGE)</h3>
-                </div>
-                <div className="space-y-3">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                        Teks Benefit Layanan Ekstra
-                    </label>
-                    <textarea
-                        rows={5}
-                        value={verifikasiDescription}
-                        onChange={(e) => setVerifikasiDescription(e.target.value)}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-gray-700 font-medium text-sm leading-relaxed outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:bg-white transition-all"
-                        placeholder="Berikan deskripsi profesional untuk diiklankan kepada pengguna..."
-                    />
-                </div>
-
-                <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 flex gap-3">
-                    <div className="text-blue-500 shrink-0">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    </div>
-                    <p className="text-sm font-medium text-blue-900 leading-relaxed">
-                        <strong>Efek Analitik:</strong> Nilai harga "<strong>{FORMAT_CURRENCY(verifikasiPrice)}</strong>" saat ini langsung dihubungkan dengan Grafik Performa Verifikasi pada Tab <span className="underline cursor-pointer" onClick={() => setActiveMenu('analytics')}>Ringkasan Analisis</span>. Perubahan Anda akan instan merevisi seluruh peta pendapatan layanan!
-                    </p>
-                </div>
-            </div>
-
-            <div className="flex justify-end pt-4">
-                <button
-                    onClick={() => {
-                        setIsSavingVerifikasi(true);
-                        setTimeout(() => setIsSavingVerifikasi(false), 800);
-                        alert("Katalog Layanan Verifikasi berhasil diperbarui secara global!");
-                    }}
-                    className={`px-8 py-3.5 rounded-xl font-bold text-white transition-all shadow-lg active:scale-95 flex items-center gap-2 ${isSavingVerifikasi ? 'bg-gray-400 cursor-not-allowed' : 'bg-orange-600 hover:bg-orange-700'}`}
-                    disabled={isSavingVerifikasi}
-                >
-                    {isSavingVerifikasi ? (
-                        <><div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin"></div> Menyimpan...</>
-                    ) : (
-                        <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Simpan Perubahan Jasa</>
-                    )}
-                </button>
-            </div>
-        </div>
-    );
-
-    const formatRentTrx = (t: any) => {
-        return {
-            id: t.id,
-            rawDate: t.created_at,
-            date: new Date(t.created_at).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' WIB',
-            name: t.user?.name || t.metadata?.name || 'Penyewa',
-            email: t.user?.email || t.metadata?.email,
-            phone: t.user?.phone || t.metadata?.phone,
-            photoURL: t.user?.photo_url || t.metadata?.photoURL,
-            gender: t.user?.gender || t.metadata?.gender,
-            occupation: t.user?.occupation || t.metadata?.occupation,
-            institution: t.user?.institution || t.metadata?.institution,
-            religion: t.user?.religion || t.metadata?.religion,
-            relationshipStatus: t.user?.relationship_status || t.metadata?.relationshipStatus,
-            profileAddress: t.user?.address || t.metadata?.profileAddress,
-            paymentType: (t.payment_method || '').toLowerCase().includes('transfer') ? 'transfer' : 'gateway',
-            item: t.metadata?.kostName || t.product_type,
-            roomType: t.metadata?.roomType || '-',
-            periodLabel: t.metadata?.period || '-',
-            paymentMethod: t.payment_method || '-',
-            amount: t.amount,
-            status: (t.status === 'pending' || t.status === 'PENDING_APPROVAL') ? 'Menunggu' : (t.status === 'paid' ? 'Selesai' : (t.status === 'cancelled' || t.status === 'REJECTED' ? 'Ditolak' : t.status)),
-            rawStatus: t.status,
-            startDate: t.metadata?.startDate || '-',
-            endDate: t.metadata?.endDate || '-',
-            transferProofUrl: t.metadata?.transferProofUrl || null,
-            platformFee: Number(t.metadata?.platformFee) || 0,
-            invoiceId: t.pakasir_order_id || `INV-${t.id.substring(0,8).toUpperCase()}`,
-            type: t.type || t.product_type || 'rent'
-        };
-    };
-
-    const renderRentTransactions = () => (
-        <div className="space-y-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
-                <div className="flex flex-col gap-1">
-                    <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Manajemen Transaksi Sewa Kost</h2>
-                    {isAdmin && rentTransactions.length > 0 && (
-                        <div className="flex items-center gap-4 mt-2">
-                            <label className="flex items-center gap-2 cursor-pointer group">
-                                <div className="relative flex items-center justify-center">
-                                    <input
-                                        type="checkbox"
-                                        className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-gray-300 checked:bg-orange-500 checked:border-orange-500 transition-all"
-                                        checked={selectedRentTrxIds.length === rentTransactions.length && rentTransactions.length > 0}
-                                        onChange={(e) => {
-                                            if (e.target.checked) setSelectedRentTrxIds(rentTransactions.map(t => t.id));
-                                            else setSelectedRentTrxIds([]);
-                                        }}
-                                    />
-                                    <svg className="absolute h-3.5 w-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
-                                </div>
-                                <span className="text-sm font-bold text-gray-600 group-hover:text-orange-600 transition-colors">Pilih Semua ({rentTransactions.length})</span>
-                            </label>
-                            
-                            {selectedRentTrxIds.length > 0 && (
-                                <button
-                                    onClick={handleBulkDeleteRentTransactions}
-                                    className="flex items-center gap-2 bg-red-50 hover:bg-red-500 text-red-600 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-red-100 transition-all shadow-sm active:scale-95"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                    Hapus {selectedRentTrxIds.length} Terpilih
-                                </button>
-                            )}
-                        </div>
-                    )}
-                </div>
-                {isAdmin && (
-                    <button onClick={() => setIsAddingManualRent(true)} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 shrink-0">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                        Tambah Manual
-                    </button>
-                )}
-            </div>
-            <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 flex gap-3 mb-6">
-                <div className="text-blue-500 shrink-0">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                </div>
-                <p className="text-sm font-medium text-blue-900 leading-relaxed">
-                    Transaksi via <strong>Transfer Bank</strong> memerlukan verifikasi bukti mutasi manual sebelum dikonfirmasi. Transaksi via <strong>Payment Gateway</strong> terkonfirmasi otomatis oleh sistem.
-                </p>
-            </div>
-
-            {/* Rent Filter Tabs */}
-            <div className="flex flex-wrap gap-2 mb-6">
-                {[
-                    { id: 'all', label: 'Semua Transaksi', icon: '📋' },
-                    { id: 'pengajuan', label: 'Pengajuan Sewa', icon: '⏳' },
-                    { id: 'realisasi', label: 'Penyewaan Terealisasi', icon: '✅' },
-                    { id: 'perpanjangan', label: 'Perpanjangan Sewa', icon: '➕' }
-                ].map((tab) => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setRentFilter(tab.id as any)}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${rentFilter === tab.id
-                            ? 'bg-orange-500 text-white shadow-md'
-                            : 'bg-white text-gray-500 border border-gray-100 hover:bg-gray-50'
-                            }`}
-                    >
-                        <span>{tab.icon}</span>
-                        {tab.label}
-                    </button>
-                ))}
-            </div>
-
-            <div className="grid grid-cols-1 gap-6">
-                {(() => {
-                    const filtered = rentTransactions.filter(t => {
-                        if (rentFilter === 'all') return true;
-                        
-                        // Status and Type logic for filtering
-                        const isPending = t.status === 'pending' || t.status === 'PENDING_APPROVAL';
-                        const isPaid = ['paid', 'Selesai', 'success', 'Berhasil'].includes(t.status);
-                        const isExtension = t.type === 'perpanjangan_sewa' || t.product_type === 'perpanjangan_sewa' || t.metadata?.extensionType === 'manual_extension';
-
-                        if (rentFilter === 'pengajuan') return isPending && !isExtension;
-                        if (rentFilter === 'realisasi') return isPaid;
-                        if (rentFilter === 'perpanjangan') return isExtension;
-                        
-                        return true;
-                    });
-
-                    if (filtered.length === 0) {
-                        return (
-                            <div className="bg-white border text-center border-gray-100 rounded-2xl p-12 shadow-sm">
-                                <p className="text-gray-500 font-medium">Belum ada data transaksi untuk kategori ini.</p>
-                            </div>
-                        );
-                    }
-
-                    return filtered.map((rawTrx) => {
-                    const trx = formatRentTrx(rawTrx);
-                    return (
-                    <div key={trx.id} className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row gap-6 hover:shadow-md transition-shadow relative overflow-hidden group/card">
-                        {isAdmin && (
-                            <div className="absolute top-4 left-4 z-[20]">
-                                <div className="relative flex items-center justify-center">
-                                    <input
-                                        type="checkbox"
-                                        className="peer h-6 w-6 cursor-pointer appearance-none rounded-lg border-2 border-gray-200 bg-white/80 backdrop-blur-sm checked:bg-orange-500 checked:border-orange-500 transition-all shadow-sm"
-                                        checked={selectedRentTrxIds.includes(trx.id)}
-                                        onChange={() => {
-                                            setSelectedRentTrxIds(prev =>
-                                                prev.includes(trx.id) ? prev.filter(id => id !== trx.id) : [...prev, trx.id]
-                                            );
-                                        }}
-                                    />
-                                    <svg className="absolute h-4 w-4 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
-                                </div>
-                            </div>
-                        )}
-                        {trx.status === 'Selesai' && <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/10 rounded-bl-full -z-0"></div>}
-
-                        <div className="flex-1 space-y-4 relative z-10">
-                            <div className="flex flex-wrap justify-between items-start border-b border-gray-50 pb-4 gap-2">
-                                <div className={isAdmin ? 'pl-8' : ''}>
-                                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                        <span className="bg-orange-100 text-orange-700 font-bold px-2 py-1 rounded text-[10px] uppercase tracking-wider">{trx.id.substring(0,8)}</span>
-                                        <span className="text-xs text-gray-400 font-medium">Order: {trx.date}</span>
-                                        <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${(trx as any).paymentType === 'gateway' ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-700'}`}>
-                                            {(trx as any).paymentType === 'gateway' ? '⚡ Gateway' : '🏦 Transfer Manual'}
-                                        </span>
-                                    </div>
-                                    <p className="font-medium text-gray-500 text-sm mt-1">Penyewa: <button onClick={() => setViewingProfile(trx)} className="font-black text-orange-600 hover:text-orange-700 hover:underline underline-offset-2 transition-colors cursor-pointer text-base">{trx.name}</button></p>
-                                </div>
-                                <span className={`inline-flex px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-lg border ${trx.status === 'Menunggu' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                                    trx.status === 'Selesai' ? 'bg-green-50 text-green-700 border-green-200' :
-                                        'bg-red-50 text-red-700 border-red-200'
-                                    }`}>
-                                    {trx.status === 'Menunggu' ? 'Menunggu Konfirmasi' : trx.status}
-                                </span>
-                            </div>
-
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Properti</p>
-                                    <p className="text-sm font-bold text-gray-900">{trx.item}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Tipe Kamar</p>
-                                    <p className="text-sm font-bold text-orange-600">{trx.roomType}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Durasi Sewa</p>
-                                    <p className="text-sm font-bold text-blue-600">{trx.periodLabel}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Mulai Tinggal</p>
-                                    <p className="text-sm font-bold text-gray-900">{trx.startDate}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Sampai</p>
-                                    <p className="text-sm font-bold text-gray-900">{(trx as any).endDate}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Metode Bayar</p>
-                                    <p className={`text-sm font-bold ${(trx as any).paymentType === 'gateway' ? 'text-blue-600' : 'text-amber-600'}`}>{trx.paymentMethod}</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col gap-2.5 md:w-52 shrink-0 border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-6 relative z-10">
-                            <div className="mb-1">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Total Tagihan</p>
-                                <p className="text-xl font-black text-orange-500 text-right">{FORMAT_CURRENCY(trx.amount)}</p>
-                                <p className="text-[11px] text-gray-400 text-right">{(trx as any).invoiceId}</p>
-                            </div>
-
-                            {(trx as any).paymentType === 'transfer' && (trx as any).transferProofUrl && (
-                                <button
-                                    onClick={() => setViewingProof({ id: trx.id, name: trx.name, proofUrl: (trx as any).transferProofUrl })}
-                                    className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                    Lihat Bukti Transfer
-                                </button>
-                            )}
-
-                            {trx.status === 'Menunggu' && isAdmin && (
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                        onClick={async () => {
-                                            const isPendingApproval = trx.rawStatus === 'PENDING_APPROVAL';
-                                            
-                                            if (isPendingApproval) {
-                                                if (window.confirm('Setujui pengajuan ini? System akan membuat link pembayaran dan menyiapkan pesan WhatsApp.')) {
-                                                    try {
-                                                        const result = await processBookingApproval(trx.id, 'accept');
-                                                        if (result.success) {
-                                                            alert('Booking disetujui! Membuka WhatsApp untuk kirim link pembayaran...');
-                                                            if (result.whatsappUrl) window.open(result.whatsappUrl, '_blank');
-                                                            loadRentTransactions();
-                                                        }
-                                                    } catch (err: any) {
-                                                        alert('Error: ' + err.message);
-                                                    }
-                                                }
-                                            } else {
-                                                // Manual transfer verification
-                                                if (window.confirm('Konfirmasi pembayaran manual ini? Status akan berubah menjadi "Selesai".')) {
-                                                    await updateTransactionStatus(trx.id, 'paid');
-                                                    alert('Pembayaran berhasil dikonfirmasi!');
-                                                    loadRentTransactions();
-                                                }
-                                            }
-                                        }}
-                                        className="w-full bg-green-500 hover:bg-green-600 text-white py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 flex justify-center items-center gap-1"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                        {trx.rawStatus === 'PENDING_APPROVAL' ? 'Setujui' : 'Terima'}
-                                    </button>
-                                    <button
-                                        onClick={async () => {
-                                            const isPendingApproval = trx.rawStatus === 'PENDING_APPROVAL';
-                                            const confirmMsg = isPendingApproval ? 'Tolak pengajuan booking ini?' : 'Batalkan transaksi ini?';
-                                            
-                                            if (window.confirm(confirmMsg)) {
-                                                try {
-                                                    if (isPendingApproval) {
-                                                        const reason = window.prompt('Alasan penolakan (opsional):') || '';
-                                                        const result = await processBookingApproval(trx.id, 'reject', reason);
-                                                        if (result.success) {
-                                                            alert('Booking ditolak.');
-                                                            if (result.whatsappUrl) window.open(result.whatsappUrl, '_blank');
-                                                        }
-                                                    } else {
-                                                        await updateTransactionStatus(trx.id, 'cancelled');
-                                                        alert('Transaksi dibatalkan.');
-                                                    }
-                                                    loadRentTransactions();
-                                                } catch (err: any) {
-                                                    alert('Error: ' + err.message);
-                                                }
-                                            }
-                                        }}
-                                        className="w-full bg-red-50 hover:bg-red-100 text-red-600 py-2.5 rounded-xl text-xs font-bold transition-all border border-red-200 active:scale-95 flex justify-center items-center gap-1"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                        Tolak
-                                    </button>
-                                </div>
-                            )}
-
-                            <button
-                                onClick={() => setViewingInvoice(trx)}
-                                className="w-full bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                Lihat Invoice
-                            </button>
-
-                            {isAdmin && (
-                                <button
-                                    onClick={() => window.open(`https://wa.me/${trx.phone}?text=${encodeURIComponent(`Halo ${trx.name}, saya Admin RuangSinggah.id. Kami ingin melakukan konfirmasi terkait transaksi sewa kost Anda (${trx.id}) untuk properti ${trx.item}. Mohon bantuannya. Terima kasih.`)}`, '_blank')}
-                                    className="w-full bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5 group"
-                                >
-                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.711.956 2.873.956 3.182 0 5.768-2.585 5.77-5.765.001-3.181-2.586-5.768-5.768-5.768zm3.333 8.33c-.15.424-.877.817-1.229.845-.306.024-.652.128-2.146-.464-1.801-.715-2.956-2.548-3.047-2.671-.09-.122-.727-.968-.727-1.844 0-.875.452-1.304.613-1.472.161-.168.351-.21.468-.21.117 0 .234.004.336.008.109.006.255-.044.398.303.151.365.518 1.264.565 1.356.046.091.077.198.016.321-.061.121-.092.197-.184.304-.092.107-.193.226-.275.319-.092.105-.188.22-.083.402.105.183.468.775 1.002 1.25.688.614 1.27.8 1.455.892.183.092.29.077.397-.038.106-.115.46-.537.583-.721.122-.184.244-.154.409-.092.165.061 1.042.492 1.221.583.179.092.298.138.341.214.043.076.043.447-.107.871z" /></svg>
-                                    Follow Up WA
-                                </button>
-                            )}
-                            {isAdmin && (
-                                <button
-                                    onClick={() => handleDeleteRentTransaction(trx.id)}
-                                    className="w-full bg-white hover:bg-red-50 text-gray-400 hover:text-red-500 border border-gray-100 hover:border-red-100 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5 opacity-0 group-hover/card:opacity-100"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                    Hapus Transaksi
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                    );
-                })
-            })()}
-            </div>
-
-            {/* ── MODAL: PROFIL PENYEWA ─────────────────────── */}
-
-            {viewingProfile && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setViewingProfile(null)}>
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                        {/* Header Profil */}
-                        <div className="bg-gradient-to-r from-gray-800 to-gray-900 p-5 text-white relative shrink-0">
-                            <div className="flex items-center gap-4">
-                                {viewingProfile.photoURL ? (
-                                    <img src={viewingProfile.photoURL} alt={viewingProfile.name} className="w-16 h-16 rounded-full border-2 border-white/30 object-cover shrink-0" />
-                                ) : (
-                                    <div className="w-16 h-16 rounded-full bg-orange-500 flex items-center justify-center text-white text-xl font-black shrink-0">
-                                        {viewingProfile.name?.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
-                                    </div>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-[10px] font-black tracking-widest uppercase opacity-60">Profil Penyewa</p>
-                                    <h3 className="text-lg font-black truncate">{viewingProfile.name}</h3>
-                                    <p className="text-xs opacity-70 truncate">{viewingProfile.email}</p>
-                                </div>
-                                <button onClick={() => setViewingProfile(null)} className="p-2 rounded-xl hover:bg-white/10 transition-colors shrink-0">
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Body Profil */}
-                        <div className="overflow-y-auto p-5 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">No. WhatsApp</p>
-                                    <p className="font-bold text-gray-900 mt-0.5">{viewingProfile.phone}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jenis Kelamin</p>
-                                    <p className="font-bold text-gray-900 mt-0.5">{viewingProfile.gender || '-'}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pekerjaan</p>
-                                    <p className="font-bold text-gray-900 mt-0.5">{viewingProfile.occupation || '-'}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Institusi / Kampus</p>
-                                    <p className="font-bold text-gray-900 mt-0.5">{viewingProfile.institution || '-'}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Agama</p>
-                                    <p className="font-bold text-gray-900 mt-0.5">{viewingProfile.religion || '-'}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status Hubungan</p>
-                                    <p className="font-bold text-gray-900 mt-0.5">{viewingProfile.relationshipStatus || '-'}</p>
-                                </div>
-                                <div className="col-span-2">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alamat Domisili</p>
-                                    <p className="font-bold text-gray-900 mt-0.5 leading-relaxed">{viewingProfile.profileAddress || '-'}</p>
-                                </div>
-                            </div>
-
-                            {/* Transaksi Terkait */}
-                            <div className="border-t border-gray-100 pt-4">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Transaksi Terkait</p>
-                                <div className="bg-gray-50 rounded-xl p-3 flex justify-between items-center">
-                                    <div>
-                                        <p className="text-xs font-black text-gray-500">{viewingProfile.id} · {viewingProfile.item}</p>
-                                        <p className="text-xs text-gray-400 mt-0.5">{viewingProfile.roomType} · {viewingProfile.periodLabel}</p>
-                                    </div>
-                                    <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${viewingProfile.status === 'Selesai' ? 'bg-green-100 text-green-700' : viewingProfile.status === 'Menunggu' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
-                                        {viewingProfile.status}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Footer: Follow Up WA */}
-                        <div className="p-4 border-t border-gray-100 shrink-0">
-                            <button
-                                onClick={() => window.open(`https://wa.me/${viewingProfile.phone}?text=${encodeURIComponent(`Halo ${viewingProfile.name}, saya Admin RuangSinggah.id. Kami ingin melakukan konfirmasi terkait transaksi Anda (${viewingProfile.id}) untuk properti ${viewingProfile.item}. Mohon bantuannya. Terima kasih.`)}`, '_blank')}
-                                className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl text-sm font-bold transition-all flex justify-center items-center gap-2 shadow-sm"
-                            >
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.711.956 2.873.956 3.182 0 5.768-2.585 5.77-5.765.001-3.181-2.586-5.768-5.768-5.768zm3.333 8.33c-.15.424-.877.817-1.229.845-.306.024-.652.128-2.146-.464-1.801-.715-2.956-2.548-3.047-2.671-.09-.122-.727-.968-.727-1.844 0-.875.452-1.304.613-1.472.161-.168.351-.21.468-.21.117 0 .234.004.336.008.109.006.255-.044.398.303.151.365.518 1.264.565 1.356.046.091.077.198.016.321-.061.121-.092.197-.184.304-.092.107-.193.226-.275.319-.092.105-.188.22-.083.402.105.183.468.775 1.002 1.25.688.614 1.27.8 1.455.892.183.092.29.077.397-.038.106-.115.46-.537.583-.721.122-.184.244-.154.409-.092.165.061 1.042.492 1.221.583.179.092.298.138.341.214.043.076.043.447-.107.871z" /></svg>
-                                Hubungi via WhatsApp
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* ── MODAL: BUKTI TRANSFER ─────────────────────── */}
-            {viewingProof && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setViewingProof(null)}>
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-                            <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Bukti Transfer</p>
-                                <h3 className="text-base font-black text-gray-900 mt-0.5">{viewingProof.id} — {viewingProof.name}</h3>
-                            </div>
-                            <button onClick={() => setViewingProof(null)} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
-                                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                        </div>
-                        <div className="p-4">
-                            <img src={viewingProof.proofUrl} alt="Bukti Transfer" className="w-full rounded-xl border border-gray-100 object-cover max-h-80" />
-                        </div>
-                        <div className="bg-yellow-50 border-t border-yellow-100 px-5 py-3 flex items-center gap-2">
-                            <span className="text-yellow-500 text-sm">⚠️</span>
-                            <p className="text-xs text-yellow-800 font-medium">Verifikasi kesesuaian jumlah dan rekening tujuan sebelum menekan "Terima".</p>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* ── MODAL: INVOICE ────────────────────────────── */}
-            {viewingInvoice && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setViewingInvoice(null)}>
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-orange-500 to-orange-400 p-5 text-white">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="text-xs font-black tracking-widest uppercase opacity-80">RuangSinggah.id</p>
-                                    <h3 className="text-xl font-black mt-1">{viewingInvoice.invoiceId}</h3>
-                                    <p className="text-xs mt-1 opacity-70">Diterbitkan: {viewingInvoice.date}</p>
-                                </div>
-                                <span className={`px-3 py-1 rounded-full text-xs font-black uppercase ${viewingInvoice.status === 'Selesai' ? 'bg-white/30 text-white' : viewingInvoice.status === 'Menunggu' ? 'bg-yellow-300/30 text-yellow-100' : 'bg-red-300/30 text-red-100'}`}>
-                                    {viewingInvoice.status}
-                                </span>
-                            </div>
-                        </div>
-
-                        <div className="p-5 space-y-4">
-                            <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Penyewa</p>
-                                    <p className="font-bold text-gray-900">{viewingInvoice.name}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Properti</p>
-                                    <p className="font-bold text-gray-900">{viewingInvoice.item}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tipe Kamar</p>
-                                    <p className="font-bold text-orange-600">{viewingInvoice.roomType}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Durasi</p>
-                                    <p className="font-bold text-blue-600">{viewingInvoice.periodLabel}</p>
-                                </div>
-                                <div className="col-span-2">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Masa Sewa</p>
-                                    <p className="font-bold text-gray-900">{viewingInvoice.startDate} — {viewingInvoice.endDate}</p>
-                                </div>
-                            </div>
-
-                            <div className="border-t border-dashed border-gray-200 pt-4 space-y-2">
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-gray-600">Biaya Sewa ({viewingInvoice.periodLabel})</span>
-                                    <span className="font-bold">{FORMAT_CURRENCY(viewingInvoice.amount - viewingInvoice.platformFee)}</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-gray-600">Biaya Platform</span>
-                                    <span className="font-bold">{FORMAT_CURRENCY(viewingInvoice.platformFee)}</span>
-                                </div>
-                                <div className="flex justify-between text-sm font-black text-gray-900 border-t border-gray-100 pt-2">
-                                    <span>Total Dibayar</span>
-                                    <span className="text-orange-500 text-base">{FORMAT_CURRENCY(viewingInvoice.amount)}</span>
-                                </div>
-                            </div>
-
-                            <div className={`rounded-xl p-3 flex gap-3 items-center ${viewingInvoice.paymentType === 'gateway' ? 'bg-blue-50 border border-blue-100' : 'bg-amber-50 border border-amber-100'}`}>
-                                <span className="text-xl shrink-0">{viewingInvoice.paymentType === 'gateway' ? '⚡' : '🏦'}</span>
-                                <div>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Metode Pembayaran</p>
-                                    <p className="font-bold text-gray-900 text-sm">{viewingInvoice.paymentMethod}</p>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-2 pt-1">
-                                <button onClick={() => setViewingInvoice(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl text-xs font-bold transition-all">
-                                    Tutup
-                                </button>
-                                <button onClick={() => window.print()} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5 shadow-sm">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                                    Cetak Invoice
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-
-    const renderDbTransactions = () => (
-        <div className="space-y-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
-                <div>
-                    <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Manajemen Pembelian Database</h2>
-                    <p className="text-gray-500 text-sm mt-1">Total {dbTransactions.length} transaksi tercatat.</p>
-                </div>
-                <div className="flex gap-2 w-full md:w-auto">
-                    {selectedDbTrxIds.length > 0 && (
-                        <button 
-                            onClick={handleBulkDeleteTransactions}
-                            className="bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2.5 rounded-xl text-sm font-bold border border-red-200 shadow-sm transition-all active:scale-95 flex items-center gap-2"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            Hapus Terpilih ({selectedDbTrxIds.length})
-                        </button>
-                    )}
-                    <button onClick={() => setIsAddingManualDb(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 shrink-0">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                        Tambah Manual
-                    </button>
-                </div>
-            </div>
-
-            {dbTransactions.length > 0 && (
-                <div className="flex items-center gap-2 px-1 py-2">
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                        <input 
-                            type="checkbox" 
-                            className="w-5 h-5 text-blue-600 rounded-lg border-gray-300 focus:ring-blue-500 transition-all cursor-pointer"
-                            checked={dbTransactions.length > 0 && selectedDbTrxIds.length === dbTransactions.length}
-                            onChange={(e) => {
-                                if (e.target.checked) {
-                                    setSelectedDbTrxIds(dbTransactions.map(t => t.id));
-                                } else {
-                                    setSelectedDbTrxIds([]);
-                                }
-                            }}
-                        />
-                        <span className="text-sm font-black text-gray-500 uppercase tracking-widest group-hover:text-blue-600 transition-colors">Pilih Semua</span>
-                    </label>
-                </div>
-            )}
-
-            <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 flex gap-3 mb-2">
-                <span className="text-blue-500 shrink-0">📦</span>
-                <p className="text-sm font-medium text-blue-900">Transaksi via <strong>Transfer Bank</strong> perlu verifikasi bukti pembayaran sebelum akses database diberikan kepada pembeli.</p>
-            </div>
-            
-            <div className="grid grid-cols-1 gap-6">
-                {dbTransactions.length === 0 ? (
-                    <div className="bg-white border-2 border-dashed border-gray-100 rounded-3xl p-12 text-center">
-                        <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">📭</div>
-                        <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2">Belum Ada Transaksi</h3>
-                        <p className="text-gray-500 max-w-sm mx-auto font-medium">Semua pembelian database melalui website akan otomatis muncul di sini secara real-time.</p>
-                    </div>
-                ) : dbTransactions.map((trx: AdminTransaction) => {
-                    const metadata = trx.metadata || {};
-                    const buyer = trx.user || { name: 'Unknown', email: '-', phone: '-' };
-                    const dbInfo = trx.database || { campus: '', city: '', area: '', file_type: '', price: 0 };
-                    const createdAtDate = new Date(trx.created_at);
-                    const createdAt = createdAtDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-                    // Map fields based on user feedback
-                    const dbName = metadata.dbName || (dbInfo.campus ? `${dbInfo.campus} - ${dbInfo.city}` : '-');
-                    const dbType = metadata.dbType || (dbInfo.file_type === 'link' ? 'Link Drive/Excel' : dbInfo.file_type === 'upload' ? 'File PDF/Original' : '-');
-                    const dbCity = metadata.dbCity || dbInfo.city || '-';
-                    const dbYear = metadata.dbYear || createdAtDate.getFullYear().toString();
-                    const paymentMethod = trx.payment_method || (trx.payment_method === null ? 'Belum dipilih' : '-');
-
-                    // Status mapping
-                    const displayStatus = trx.status === 'paid' ? 'Selesai' : trx.status === 'pending' ? 'Menunggu' : 'Dibatalkan';
-                    const isManual = (paymentMethod || '').toLowerCase().includes('manual') || (paymentMethod || '').toLowerCase().includes('transfer');
-                    
-                    const isSelected = selectedDbTrxIds.includes(trx.id);
-
-                    // Invoice data
-                    const invoiceData = {
-                        ...trx,
-                        ...metadata,
-                        ...buyer,
-                        dbName,
-                        dbType,
-                        dbCity,
-                        dbYear,
-                        paymentMethod,
-                        date: createdAt,
-                        invoiceId: trx.pakasir_order_id || trx.id.substring(0, 12).toUpperCase(),
-                        amount: Number(trx.amount) || 0,
-                        platformFee: Number(metadata.platformFee) || 0
-                    };
-
-                    return (
-                        <div key={trx.id} className={`bg-white border ${isSelected ? 'border-blue-400 ring-2 ring-blue-50 shadow-md' : 'border-gray-100 shadow-sm'} rounded-2xl p-6 flex flex-col md:flex-row gap-6 hover:shadow-md transition-all relative overflow-hidden group`}>
-                            {trx.status === 'paid' && <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/10 rounded-bl-full -z-0"></div>}
-                            
-                            {/* Checkbox Overlay/Side */}
-                            <div className="absolute top-6 left-6 z-20">
-                                <input 
-                                    type="checkbox" 
-                                    className="w-6 h-6 text-blue-600 rounded-lg border-gray-300 focus:ring-blue-500 transition-all cursor-pointer shadow-sm"
-                                    checked={isSelected}
-                                    onChange={(e) => {
-                                        if (e.target.checked) {
-                                            setSelectedDbTrxIds([...selectedDbTrxIds, trx.id]);
-                                        } else {
-                                            setSelectedDbTrxIds(selectedDbTrxIds.filter(id => id !== trx.id));
-                                        }
-                                    }}
-                                />
-                            </div>
-
-                            <div className="flex-1 space-y-4 relative z-10 pl-10">
-                                <div className="flex flex-wrap justify-between items-start border-b border-gray-50 pb-4 gap-2">
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                            <span className="bg-blue-100 text-blue-700 font-bold px-2 py-1 rounded text-[10px] uppercase tracking-wider">{trx.id.substring(0, 8)}</span>
-                                            <span className="text-xs text-gray-400 font-medium">Dipesan: {createdAt}</span>
-                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${!isManual ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-700'}`}>{!isManual ? '⚡ Gateway' : '🏦 Transfer Manual'}</span>
-                                        </div>
-                                        <p className="font-medium text-gray-500 text-sm">Pembeli: <button onClick={() => setViewingDbProfile({ ...buyer, ...metadata, dbName, dbType, dbCity, dbYear, status: displayStatus, id: trx.id, date: createdAt })} className="font-black text-orange-600 hover:text-orange-700 hover:underline underline-offset-2 transition-colors text-base">{buyer.name}</button></p>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <span className={`inline-flex px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-lg border ${trx.status === 'pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : trx.status === 'paid' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{displayStatus}</span>
-                                        <button 
-                                            onClick={() => handleDeleteTransaction(trx.id)}
-                                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95"
-                                            title="Hapus Transaksi"
-                                        >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nama Database</p><p className="text-sm font-bold text-gray-900 mt-0.5">{dbName}</p></div>
-                                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jenis Data</p><p className="text-sm font-bold text-blue-600 mt-0.5">{dbType}</p></div>
-                                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Kota / Tahun</p><p className="text-sm font-bold text-gray-900 mt-0.5">{dbCity} · {dbYear}</p></div>
-                                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Order ID</p><p className="text-sm font-bold text-gray-900 mt-0.5">{trx.pakasir_order_id || trx.id.substring(0, 12)}</p></div>
-                                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Metode Bayar</p><p className={`text-sm font-bold mt-0.5 ${!isManual ? 'text-blue-600' : 'text-amber-600'}`}>{paymentMethod}</p></div>
-                                </div>
-                            </div>
-                            <div className="flex flex-col gap-2.5 md:w-52 shrink-0 border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-6 relative z-10">
-                                <div className="mb-1">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Total Tagihan</p>
-                                    <p className="text-xl font-black text-orange-500 text-right">{FORMAT_CURRENCY(trx.amount)}</p>
-                                </div>
-                                {isManual && metadata.transferProofUrl && (
-                                    <button onClick={() => setViewingDbProof({ id: trx.id, name: buyer.name, proofUrl: metadata.transferProofUrl })} className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                        Lihat Bukti Transfer
-                                    </button>
-                                )}
-                                {trx.status === 'pending' && (
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button onClick={async () => {
-                                            if (window.confirm('Warnai transaksi ini sebagai Selesai/Paid?')) {
-                                                await updateTransactionStatus(trx.id, 'paid');
-                                                loadDbTransactions();
-                                            }
-                                        }} className="w-full bg-green-500 hover:bg-green-600 text-white py-2.5 rounded-xl text-xs font-bold active:scale-95 flex justify-center items-center gap-1">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Terima
-                                        </button>
-                                        <button onClick={async () => {
-                                            if (window.confirm('Batalkan transaksi ini?')) {
-                                                await updateTransactionStatus(trx.id, 'cancelled');
-                                                loadDbTransactions();
-                                            }
-                                        }} className="w-full bg-red-50 hover:bg-red-100 text-red-600 py-2.5 rounded-xl text-xs font-bold border border-red-200 active:scale-95 flex justify-center items-center gap-1">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>Tolak
-                                        </button>
-                                    </div>
-                                )}
-                                <button onClick={() => setViewingDbInvoice(invoiceData)} className="w-full bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                    Invoice Details
-                                </button>
-                                <button onClick={() => window.open(`https://wa.me/${buyer.phone}?text=${encodeURIComponent(`Halo ${buyer.name}, Admin RuangSinggah. Konfirmasi pesanan database (${trx.id.substring(0, 8)}) - ${dbName}. Mohon bantuannya.`)}`, '_blank')} className="w-full bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
-                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.711.956 2.873.956 3.182 0 5.768-2.585 5.77-5.765.001-3.181-2.586-5.768-5.768-5.768zm3.333 8.33c-.15.424-.877.817-1.229.845-.306.024-.652.128-2.146-.464-1.801-.715-2.956-2.548-3.047-2.671-.09-.122-.727-.968-.727-1.844 0-.875.452-1.304.613-1.472.161-.168.351-.21.468-.21.117 0 .234.004.336.008.109.006.255-.044.398.303.151.365.518 1.264.565 1.356.046.091.077.198.016.321-.061.121-.092.197-.184.304-.092.107-.193.226-.275.319-.092.105-.188.22-.083.402.105.183.468.775 1.002 1.25.688.614 1.27.8 1.455.892.183.092.29.077.397-.038.106-.115.46-.537.583-.721.122-.184.244-.154.409-.092.165.061 1.042.492 1.221.583.179.092.298.138.341.214.043.076.043.447-.107.871z" /></svg>
-                                    Follow Up WA
-                                </button>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-            {viewingDbProfile && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setViewingDbProfile(null)}>
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-gray-800 to-gray-900 p-5 text-white shrink-0">
-                            <div className="flex items-center gap-4">
-                                {viewingDbProfile.photoURL ? <img src={viewingDbProfile.photoURL} alt="" className="w-16 h-16 rounded-full border-2 border-white/30 object-cover shrink-0" /> : <div className="w-16 h-16 rounded-full bg-orange-500 flex items-center justify-center text-xl font-black shrink-0">{viewingDbProfile.name?.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}</div>}
-                                <div className="flex-1 min-w-0"><p className="text-[10px] font-black tracking-widest uppercase opacity-60">Profil Pembeli</p><h3 className="text-lg font-black truncate">{viewingDbProfile.name}</h3><p className="text-xs opacity-70 truncate">{viewingDbProfile.email}</p></div>
-                                <button onClick={() => setViewingDbProfile(null)} className="p-2 rounded-xl hover:bg-white/10 shrink-0"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
-                            </div>
-                        </div>
-                        <div className="overflow-y-auto p-5 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">No. WhatsApp</p><p className="font-bold text-gray-900 mt-0.5">{viewingDbProfile.phone}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jenis Kelamin</p><p className="font-bold text-gray-900 mt-0.5">{viewingDbProfile.gender || '-'}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pekerjaan</p><p className="font-bold text-gray-900 mt-0.5">{viewingDbProfile.occupation || '-'}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Institusi</p><p className="font-bold text-gray-900 mt-0.5">{viewingDbProfile.institution || '-'}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Agama</p><p className="font-bold text-gray-900 mt-0.5">{viewingDbProfile.religion || '-'}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</p><p className="font-bold text-gray-900 mt-0.5">{viewingDbProfile.relationshipStatus || '-'}</p></div>
-                                <div className="col-span-2"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Database Dibeli</p><p className="font-bold text-blue-600 mt-0.5">{viewingDbProfile.dbName}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jenis</p><p className="font-bold text-gray-900 mt-0.5">{viewingDbProfile.dbType}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status Pesanan</p><span className={`px-2 py-1 rounded-lg text-xs font-black inline-block mt-0.5 ${viewingDbProfile.status === 'Selesai' ? 'bg-green-100 text-green-700' : viewingDbProfile.status === 'Menunggu' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{viewingDbProfile.status}</span></div>
-                            </div>
-                        </div>
-                        <div className="p-4 border-t border-gray-100 shrink-0">
-                            <button onClick={() => window.open(`https://wa.me/${viewingDbProfile.phone}?text=${encodeURIComponent(`Halo ${viewingDbProfile.name}, Admin RuangSinggah. Konfirmasi pesanan database (${viewingDbProfile.id}) - ${viewingDbProfile.dbName}.`)}`, '_blank')} className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl text-sm font-bold transition-all flex justify-center items-center gap-2 shadow-sm">
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.711.956 2.873.956 3.182 0 5.768-2.585 5.77-5.765.001-3.181-2.586-5.768-5.768-5.768zm3.333 8.33c-.15.424-.877.817-1.229.845-.306.024-.652.128-2.146-.464-1.801-.715-2.956-2.548-3.047-2.671-.09-.122-.727-.968-.727-1.844 0-.875.452-1.304.613-1.472.161-.168.351-.21.468-.21.117 0 .234.004.336.008.109.006.255-.044.398.303.151.365.518 1.264.565 1.356.046.091.077.198.016.321-.061.121-.092.197-.184.304-.092.107-.193.226-.275.319-.092.105-.188.22-.083.402.105.183.468.775 1.002 1.25.688.614 1.27.8 1.455.892.183.092.29.077.397-.038.106-.115.46-.537.583-.721.122-.184.244-.154.409-.092.165.061 1.042.492 1.221.583.179.092.298.138.341.214.043.076.043.447-.107.871z" /></svg>
-                                Hubungi via WhatsApp
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            {viewingDbProof && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setViewingDbProof(null)}>
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between p-5 border-b border-gray-100"><div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Bukti Transfer</p><h3 className="text-base font-black text-gray-900 mt-0.5">{viewingDbProof.id} — {viewingDbProof.name}</h3></div><button onClick={() => setViewingDbProof(null)} className="p-2 rounded-xl hover:bg-gray-100"><svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button></div>
-                        <div className="p-4"><img src={viewingDbProof.proofUrl} alt="Bukti Transfer" className="w-full rounded-xl border border-gray-100 object-cover max-h-80" /></div>
-                        <div className="bg-yellow-50 border-t border-yellow-100 px-5 py-3 flex items-center gap-2"><span>⚠️</span><p className="text-xs text-yellow-800 font-medium">Verifikasi nominal sebelum menekan "Terima".</p></div>
-                    </div>
-                </div>
-            )}
-            {viewingDbInvoice && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setViewingDbInvoice(null)}>
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-blue-700 to-blue-600 p-5 text-white">
-                            <div className="flex justify-between items-start"><div><p className="text-xs font-black tracking-widest uppercase opacity-80">RuangSinggah.id — Database</p><h3 className="text-xl font-black mt-1">{viewingDbInvoice.invoiceId}</h3><p className="text-xs mt-1 opacity-70">Diterbitkan: {viewingDbInvoice.date}</p></div><span className="px-3 py-1 rounded-full text-xs font-black uppercase bg-white/20">{viewingDbInvoice.status}</span></div>
-                        </div>
-                        <div className="p-5 space-y-4">
-                            <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pembeli</p><p className="font-bold text-gray-900">{viewingDbInvoice.name}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jenis Database</p><p className="font-bold text-gray-900">{viewingDbInvoice.dbType}</p></div>
-                                <div className="col-span-2"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nama Database</p><p className="font-bold text-gray-900">{viewingDbInvoice.dbName}</p></div>
-                            </div>
-                            <div className="border-t border-dashed border-gray-200 pt-4 space-y-2">
-                                <div className="flex justify-between text-sm"><span className="text-gray-600">Harga Database</span><span className="font-bold">{FORMAT_CURRENCY(viewingDbInvoice.amount || 0)}</span></div>
-                                <div className="flex justify-between text-sm"><span className="text-gray-600">Biaya Platform</span><span className="font-bold">{FORMAT_CURRENCY(viewingDbInvoice.platformFee || 0)}</span></div>
-                                <div className="flex justify-between text-sm font-black text-gray-900 border-t border-gray-100 pt-2"><span>Total Dibayar</span><span className="text-blue-600 text-base">{FORMAT_CURRENCY((viewingDbInvoice.amount || 0) + (viewingDbInvoice.platformFee || 0))}</span></div>
-                            </div>
-                            <div className={`rounded-xl p-3 flex gap-3 items-center ${viewingDbInvoice.paymentType === 'gateway' ? 'bg-blue-50 border border-blue-100' : 'bg-amber-50 border border-amber-100'}`}><span className="text-xl">{viewingDbInvoice.paymentType === 'gateway' ? '⚡' : '🏦'}</span><div><p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Metode</p><p className="font-bold text-gray-900 text-sm">{viewingDbInvoice.paymentMethod}</p></div></div>
-                            <div className="flex gap-2 pt-1">
-                                <button onClick={() => setViewingDbInvoice(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl text-xs font-bold">Tutup</button>
-                                <button onClick={() => window.print()} className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2.5 rounded-xl text-xs font-bold flex justify-center items-center gap-1.5 shadow-sm"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>Cetak</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-
-    const renderVerifikasiRequests = () => {
-        const filteredRequests = isAgent 
-            ? surveyRequests.filter(req => {
-                const s = req.status;
-                if (agentTab === 'pending') return s === 'PENDING_ASSIGNMENT';
-                if (agentTab === 'active') return ['AGENT_ASSIGNED', 'SURVEYING', 'RESCHEDULED'].includes(s);
-                if (agentTab === 'history') return ['COMPLETED', 'CANCELLED'].includes(s);
-                return false;
-            })
-            : isAdmin 
-                ? surveyRequests.filter(req => {
-                    if (adminSurveyTab === 'all') return true;
-                    if (adminSurveyTab === 'pending') return req.status === 'PENDING_ASSIGNMENT';
-                    if (adminSurveyTab === 'active') return ['AGENT_ASSIGNED', 'SURVEYING', 'RESCHEDULED'].includes(req.status);
-                    if (adminSurveyTab === 'completed') return req.status === 'COMPLETED';
-                    return true;
-                })
-                : surveyRequests;
-
-        const stats = {
-            total: surveyRequests.length,
-            pending: surveyRequests.filter(r => r.status === 'PENDING_ASSIGNMENT').length,
-            active: surveyRequests.filter(r => ['AGENT_ASSIGNED', 'SURVEYING', 'RESCHEDULED'].includes(r.status)).length,
-            completed: surveyRequests.filter(r => r.status === 'COMPLETED').length,
-            totalRevenue: surveyRequests.filter(r => r.status === 'COMPLETED').length * 150000 // Sample revenue per survey
-        };
-
-        return (
-            <div className={`space-y-6 ${isAgent ? 'pb-32' : ''}`}>
-                {/* ADMIN SUMMARY STATS */}
-                {isAdmin && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-2">
-                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Transaksi</p>
-                            <div className="flex items-baseline gap-2">
-                                <p className="text-xl font-black text-gray-900">{stats.total}</p>
-                                <span className="text-[10px] font-bold text-gray-400">Order</span>
-                            </div>
-                        </div>
-                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                            <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Menunggu Agen</p>
-                            <p className="text-xl font-black text-amber-600">{stats.pending}</p>
-                        </div>
-                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                            <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-1">Sedang Berjalan</p>
-                            <p className="text-xl font-black text-orange-600">{stats.active}</p>
-                        </div>
-                        <div className="bg-white p-5 rounded-2xl border border-orange-100 shadow-sm">
-                            <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-1">Total Pendapatan (Est)</p>
-                            <div className="flex items-baseline gap-1">
-                                <p className="text-xl font-black text-orange-600">Rp {(stats.completed * 150000).toLocaleString('id-ID')}</p>
-                            </div>
-                        </div>
-                    </div>
-                )}
-                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-2">
-                    <div className="flex flex-col gap-1">
-                        <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Permohonan Jasa Survey Kost</h2>
-                        {isAdmin && filteredRequests.length > 0 && (
-                            <div className="flex items-center gap-4 mt-2">
-                                <label className="flex items-center gap-2 cursor-pointer group">
-                                    <div className="relative flex items-center justify-center">
-                                        <input
-                                            type="checkbox"
-                                            className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-gray-300 checked:bg-orange-500 checked:border-orange-500 transition-all"
-                                            checked={selectedSurveyIds.length === filteredRequests.length && filteredRequests.length > 0}
-                                            onChange={(e) => {
-                                                if (e.target.checked) setSelectedSurveyIds(filteredRequests.map(r => r.id));
-                                                else setSelectedSurveyIds([]);
-                                            }}
-                                        />
-                                        <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
-                                    </div>
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest group-hover:text-orange-600 transition-colors">Pilih Semua ({filteredRequests.length})</span>
-                                </label>
-
-                                {selectedSurveyIds.length > 0 && (
-                                    <button 
-                                        onClick={handleBulkDeleteSurveys}
-                                        className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all animate-in fade-in slide-in-from-left-2"
-                                    >
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                        Hapus Terpilih ({selectedSurveyIds.length})
-                                    </button>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                    {isAdmin && (
-                        <div className="flex gap-2">
-                            <button onClick={() => setIsAddingManualVerif(true)} className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 shrink-0">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                                Tambah Manual
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                {/* ADMIN TABS */}
-                {isAdmin && (
-                    <div className="bg-white/80 backdrop-blur-md p-1.5 rounded-2xl border border-gray-100 flex gap-1 shadow-sm sticky top-0 z-10 transition-all overflow-x-auto no-scrollbar">
-                        {[
-                            { id: 'all', label: 'Semua', icon: '📋' },
-                            { id: 'pending', label: 'Butuh Agen', icon: '⏳' },
-                            { id: 'active', label: 'Proses', icon: '⚡' },
-                            { id: 'completed', label: 'Selesai', icon: '✅' }
-                        ].map((t) => (
-                            <button
-                                key={t.id}
-                                onClick={() => setAdminSurveyTab(t.id as any)}
-                                className={`flex-1 min-w-[100px] py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
-                                    adminSurveyTab === t.id 
-                                    ? 'bg-orange-600 text-white shadow-md scale-[1.02]' 
-                                    : 'text-gray-500 hover:bg-gray-100'
-                                }`}
-                            >
-                                <span>{t.icon}</span>
-                                {t.label}
-                                {surveyRequests.filter(r => {
-                                    if (t.id === 'all') return true;
-                                    if (t.id === 'pending') return r.status === 'PENDING_ASSIGNMENT';
-                                    if (t.id === 'active') return ['AGENT_ASSIGNED', 'SURVEYING', 'RESCHEDULED'].includes(r.status);
-                                    if (t.id === 'completed') return r.status === 'COMPLETED';
-                                    return false;
-                                }).length > 0 && (
-                                    <span className={`w-2 h-2 rounded-full ${adminSurveyTab === t.id ? 'bg-white' : 'bg-red-500'}`} />
-                                )}
-                            </button>
-                        ))}
-                    </div>
-                )}
-
-                {/* AGENT TABS */}
-                {isAgent && (
-                    <div className="bg-white/80 backdrop-blur-md p-1.5 rounded-2xl border border-gray-100 flex gap-1 shadow-sm sticky top-0 z-10 transition-all">
-                        {[
-                            { id: 'pending', label: 'Permintaan', icon: '📥' },
-                            { id: 'active', label: 'Aktif', icon: '⚡' },
-                            { id: 'history', label: 'Riwayat', icon: '📜' }
-                        ].map((t) => (
-                            <button
-                                key={t.id}
-                                onClick={() => setAgentTab(t.id as any)}
-                                className={`flex-1 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
-                                    agentTab === t.id 
-                                    ? 'bg-orange-600 text-white shadow-md scale-[1.02]' 
-                                    : 'text-gray-500 hover:bg-gray-100'
-                                }`}
-                            >
-                                <span>{t.icon}</span>
-                                {t.label}
-                                {surveyRequests.filter(r => {
-                                    if (t.id === 'pending') return r.status === 'PENDING_ASSIGNMENT';
-                                    if (t.id === 'active') return ['AGENT_ASSIGNED', 'SURVEYING', 'RESCHEDULED'].includes(r.status);
-                                    if (t.id === 'history') return ['COMPLETED', 'CANCELLED'].includes(r.status);
-                                    return false;
-                                }).length > 0 && (
-                                    <span className={`w-2 h-2 rounded-full ${agentTab === t.id ? 'bg-white' : 'bg-red-500'}`} />
-                                )}
-                            </button>
-                        ))}
-                    </div>
-                )}
-
-                <div className="bg-orange-50/50 border border-orange-100 rounded-xl p-4 flex gap-3 mb-2">
-                    <span className="text-orange-500 shrink-0">🔍</span>
-                    <p className="text-xs text-orange-800 leading-relaxed font-medium">
-                        {isAgent 
-                            ? `Menampilkan ${filteredRequests.length} pesanan di tab ${agentTab === 'pending' ? 'Permintaan' : agentTab === 'active' ? 'Aktif' : 'Riwayat'}.` 
-                            : 'Kelola seluruh permohonan jasa verifikasi lapangan yang diajukan oleh pengguna.'
-                        }
-                    </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6">
-                    {filteredRequests.map((req: SurveyRequest) => (
-                    <div key={req.id} className={`bg-white border rounded-2xl p-6 shadow-sm flex flex-col md:flex-row gap-6 hover:shadow-md transition-all relative overflow-hidden ${selectedSurveyIds.includes(req.id) ? 'border-orange-500 ring-1 ring-orange-500 bg-orange-50/10' : 'border-gray-100'}`}>
-                        {isAdmin && (
-                            <div className="absolute top-4 left-4 z-20">
-                                <label className="relative flex items-center justify-center cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        className="peer h-5 w-5 appearance-none rounded-md border border-gray-300 bg-white checked:bg-orange-500 checked:border-orange-500 transition-all shadow-sm"
-                                        checked={selectedSurveyIds.includes(req.id)}
-                                        onChange={(e) => {
-                                            if (e.target.checked) setSelectedSurveyIds([...selectedSurveyIds, req.id]);
-                                            else setSelectedSurveyIds(selectedSurveyIds.filter(id => id !== req.id));
-                                        }}
-                                    />
-                                    <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
-                                </label>
-                            </div>
-                        )}
-                        {(req.status === 'AGENT_ASSIGNED' || req.status === 'SURVEYING') && <div className="absolute top-0 right-0 w-20 h-20 bg-orange-500/10 rounded-bl-full"></div>}
-                        <div className={`flex-1 space-y-4 relative z-10 ${isAdmin ? 'pl-8' : ''}`}>
-                            <div className="flex flex-col sm:flex-row justify-between items-start border-b border-gray-50 pb-4 gap-3">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                        <span className="bg-orange-100 text-orange-700 font-bold px-2.5 py-1 rounded-lg text-[10px] uppercase tracking-wider">#{req.id.slice(0,8)}</span>
-                                        <span className="text-xs text-gray-400 font-medium">{new Date(req.created_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'short'})}</span>
-                                        <div className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-orange-50 text-orange-600 border border-orange-100 italic">Survey Live</div>
-                                    </div>
-                                    <p className="font-bold text-gray-900 text-lg leading-tight mb-1">{req.kost_name}</p>
-                                    <p className="text-xs text-gray-500 font-medium flex items-center gap-1.5">
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                                        {req.user?.name || 'User'}
-                                    </p>
-                                </div>
-                                <div className="w-full sm:w-auto">
-                                    <span className={`inline-flex w-full sm:w-auto justify-center px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl border shadow-sm
-                                        ${req.status === 'AWAITING_PAYMENT' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
-                                          req.status === 'PENDING_ASSIGNMENT' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
-                                          req.status === 'AGENT_ASSIGNED' ? 'bg-orange-50 text-orange-700 border-orange-200' : 
-                                          req.status === 'SURVEYING' ? 'bg-orange-600 text-white border-orange-600 animate-pulse' : 
-                                          req.status === 'COMPLETED' ? 'bg-green-600 text-white border-green-600' : 
-                                          req.status === 'RESCHEDULED' ? 'bg-amber-500 text-white border-amber-600 shadow-amber-100' : 
-                                          'bg-red-50 text-red-700 border-red-200'}`}>
-                                        {req.status === 'AWAITING_PAYMENT' ? 'Menunggu Bayar' : 
-                                         req.status === 'PENDING_ASSIGNMENT' ? 'Menunggu Agen' : 
-                                         req.status === 'AGENT_ASSIGNED' ? 'Tugas Baru' : 
-                                         req.status === 'SURVEYING' ? 'Sedang Survey' : 
-                                         req.status === 'COMPLETED' ? 'Selesai' : 
-                                         req.status === 'RESCHEDULED' ? 'Jadwal Ulang' : 
-                                         req.status}
-                                    </span>
-                                    {req.status === 'RESCHEDULED' && (
-                                        <div className="mt-1 flex items-center justify-end gap-1 px-1">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
-                                            <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest">Update Jadwal</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                                <div className="flex items-start gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 mt-1">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                    </div>
-                                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Lokasi Kost</p><p className="font-bold text-gray-900 text-xs sm:text-sm leading-relaxed">{req.kost_address}</p></div>
-                                </div>
-                                <div className="flex items-start gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 mt-1">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                    </div>
-                                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Jadwal Survey</p><p className="font-bold text-orange-700 text-xs sm:text-sm">{req.survey_date} · {req.survey_time}</p></div>
-                                </div>
-                                <div className="flex items-start gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 mt-1">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                                    </div>
-                                    <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Kontak Pemilik</p><p className="font-bold text-gray-900 text-xs sm:text-sm">{req.owner_phone}</p></div>
-                                </div>
-                                <div className="flex items-start gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-500 shrink-0 border border-orange-100 mt-1">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Harga Transaksi</p>
-                                        <p className="font-bold text-orange-700 text-xs sm:text-sm">
-                                            {req.transaction?.amount ? `Rp ${req.transaction.amount.toLocaleString('id-ID')}` : 'Rp 150.000'}
-                                        </p>
-                                        <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter ${
-                                            req.transaction?.status?.toLowerCase() === 'paid' 
-                                            ? 'bg-green-100 text-green-700' 
-                                            : 'bg-yellow-100 text-yellow-700'
-                                        }`}>
-                                            {req.transaction?.status || 'PENDING'}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                            {req.notes && (
-                                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Catatan Pemesan</p>
-                                    <p className="text-sm text-gray-700 italic">"{req.notes}"</p>
-                                </div>
-                            )}
-
-                            {req.result_drive_link && (
-                                <div className="bg-orange-50 rounded-xl p-3 border border-orange-100 flex items-center justify-between gap-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-lg shadow-sm">📂</div>
-                                        <div>
-                                            <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest leading-none mb-1">Hasil Survey (Google Drive)</p>
-                                            <p className="text-xs font-bold text-orange-700 truncate max-w-[200px]">{req.result_drive_link}</p>
-                                        </div>
-                                    </div>
-                                    <button onClick={() => window.open(req.result_drive_link, '_blank')} className="px-3 py-1.5 bg-orange-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-orange-700 transition-all">Buka Link</button>
-                                </div>
-                            )}
-
-                            {req.status === 'RESCHEDULED' && (
-                                <div className="bg-amber-50 rounded-xl p-3 border border-amber-100 flex items-start gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-amber-500 shadow-sm shrink-0 mt-0.5">🗓️</div>
-                                    <div className="flex-1">
-                                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest leading-none mb-1">Permintaan Jadwal Ulang</p>
-                                        <p className="text-xs text-amber-800 font-medium leading-relaxed italic">"{req.notes || 'User meminta perubahan jadwal survey sesuai kesepakatan baru.'}"</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {req.status === 'COMPLETED' && (req.user_rating || req.user_comment) && (
-                                <div className="bg-yellow-50/50 rounded-xl p-3 border border-yellow-100 mt-2">
-                                    <div className="flex justify-between items-center mb-1.5">
-                                        <p className="text-[10px] font-black text-yellow-700 uppercase tracking-widest">Feedback & Rating User</p>
-                                        <div className="flex text-yellow-500 text-[10px]">
-                                            {[...Array(5)].map((_, i) => (
-                                                <span key={i}>{i < (req.user_rating || 0) ? '★' : '☆'}</span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <p className="text-sm text-gray-700 italic font-medium px-1">"{req.user_comment || 'Tidak ada komentar.'}"</p>
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex flex-col gap-2.5 md:w-52 shrink-0 border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-6 relative z-10">
-                            {isAdmin ? (
-                                <>
-                                    {req.status === 'PENDING_ASSIGNMENT' ? (
-                                        <button 
-                                            onClick={() => {
-                                                setIsEditingSurvey(req);
-                                                setSurveyForm({
-                                                    status: req.status,
-                                                    kost_name: req.kost_name,
-                                                    kost_address: req.kost_address,
-                                                    owner_phone: req.owner_phone,
-                                                    assigned_agent_id: req.assigned_agent_id,
-                                                    agent_name: req.agent_name,
-                                                    agent_phone: req.agent_phone,
-                                                    agent_photo_url: req.agent_photo_url,
-                                                    result_drive_link: req.result_drive_link,
-                                                    evaluation_summary: req.evaluation_summary || {},
-                                                    user_rating: req.user_rating,
-                                                    user_comment: req.user_comment
-                                                });
-                                            }} 
-                                            className="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all flex justify-center items-center gap-2"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m-3-3v3m6-3v3M9 13h4M9 17h4m-7-8h14a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2v-8a2 2 0 012-2z" /></svg>
-                                            Tetapkan Agen
-                                        </button>
-                                    ) : (
-                                        <button 
-                                            onClick={() => {
-                                                setIsEditingSurvey(req);
-                                                setSurveyForm({
-                                                    status: req.status,
-                                                    kost_name: req.kost_name,
-                                                    kost_address: req.kost_address,
-                                                    owner_phone: req.owner_phone,
-                                                    assigned_agent_id: req.assigned_agent_id,
-                                                    agent_name: req.agent_name,
-                                                    agent_phone: req.agent_phone,
-                                                    agent_photo_url: req.agent_photo_url,
-                                                    result_drive_link: req.result_drive_link,
-                                                    evaluation_summary: req.evaluation_summary || {},
-                                                    user_rating: req.user_rating,
-                                                    user_comment: req.user_comment
-                                                });
-                                            }} 
-                                            className="w-full bg-orange-600 hover:bg-orange-700 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all flex justify-center items-center gap-2"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2.25 2.25 0 113.182 3.182L12.75 20.25 9 21l.75-3.75 11.25-11.25z" /></svg>
-                                            Kelola Survey
-                                        </button>
-                                    )}
-                                    
-                                    <button onClick={() => window.open(`https://wa.me/${req.user?.phone}?text=${encodeURIComponent(`Halo ${req.user?.name}, Admin RuangSinggah. Konfirmasi pesanan Jasa Survey untuk kost ${req.kost_name}.`)}`, '_blank')} className="w-full bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
-                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.711.956 2.873.956 3.182 0 5.768-2.585 5.77-5.765.001-3.181-2.586-5.768-5.768-5.768zm3.333 8.33c-.15.424-.877.817-1.229.845-.306.024-.652.128-2.146-.464-1.801-.715-2.956-2.548-3.047-2.671-.09-.122-.727-.968-.727-1.844 0-.875.452-1.304.613-1.472.161-.168.351-.21.468-.21.117 0 .234.004.336.008.109.006.255-.044.398.303.151.365.518 1.264.565 1.356.046.091.077.198.016.321-.061.121-.092.197-.184.304-.092.107-.193.226-.275.319-.092.105-.188.22-.083.402.105.183.468.775 1.002 1.25.688.614 1.27.8 1.455.892.183.092.29.077.397-.038.106-.115.46-.537.583-.721.122-.184.244-.154.409-.092.165.061 1.042.492 1.221.583.179.092.298.138.341.214.043.076.043.447-.107.871z" /></svg>
-                                        Chat User
-                                    </button>
-
-                                    {req.agent_phone && (
-                                        <button onClick={() => window.open(`https://wa.me/${req.agent_phone}?text=${encodeURIComponent(`Halo ${req.agent_name}, Admin RuangSinggah. Update untuk survey kost ${req.kost_name}.`)}`, '_blank')} className="w-full bg-orange-50 hover:bg-orange-500 text-orange-600 hover:text-white border border-orange-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
-                                            Chat Agen
-                                        </button>
-                                    )}
-
-                                    <button 
-                                        onClick={() => handleDeleteSurvey(req.id, req.kost_name)}
-                                        className="w-full bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-100 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex justify-center items-center gap-1.5 mt-2"
-                                    >
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                        Hapus Permintaan
-                                    </button>
-                                </>
-                            ) : isAgent ? (
-                                <div className="flex flex-col gap-2.5">
-                                     {agentTab === 'pending' && (
-                                         <div className="flex gap-2">
-                                             <button onClick={() => alert('Pesanan Diterima!')} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all">
-                                                 Terima Kost
-                                             </button>
-                                             <button onClick={() => alert('Pesanan Ditolak')} className="flex-1 bg-red-50 hover:bg-red-500 text-red-600 hover:text-white border border-red-200 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all">
-                                                 Tolak
-                                             </button>
-                                         </div>
-                                     )}
-                                     
-                                     {agentTab === 'active' && (
-                                         <>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <button onClick={() => alert('Status: Menuju Lokasi')} className="bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-tight shadow-sm transition-all border-b-4 border-orange-700 active:border-b-0 active:translate-y-1">
-                                                    🚗 Menuju Lokasi
-                                                </button>
-                                                <button onClick={() => alert('Status: Sedang Survey')} className="bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-tight shadow-sm transition-all border-b-4 border-orange-700 active:border-b-0 active:translate-y-1">
-                                                    📷 Sedang Survey
-                                                </button>
-                                            </div>
-                                            
-                                            <div className="grid grid-cols-2 gap-2 mt-1">
-                                                <button onClick={() => window.open(`https://wa.me/${req.user?.phone}?text=${encodeURIComponent(`Halo ${req.user?.name}, saya Arif agen survey RuangSinggah.`)}`, '_blank')} className="bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2.5 rounded-xl text-[10px] font-bold transition-all flex justify-center items-center gap-1">
-                                                    💬 Chat User
-                                                </button>
-                                                <button onClick={() => window.open(`https://wa.me/${req.owner_phone}?text=${encodeURIComponent(`Halo Pemilik Kost, saya Arif agen survey RuangSinggah.`)}`, '_blank')} className="bg-orange-50 hover:bg-orange-500 text-orange-600 hover:text-white border border-orange-200 py-2.5 rounded-xl text-[10px] font-bold transition-all flex justify-center items-center gap-1">
-                                                    🏢 Chat Pemilik
-                                                </button>
-                                            </div>
-
-                                            <button 
-                                                onClick={() => {
-                                                    setIsReschedulingSurvey(req);
-                                                    setNewSurveyDate(req.survey_date || '');
-                                                    setNewSurveyTime(req.survey_time || '');
-                                                }} 
-                                                className="w-full bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-xl text-[10px] font-black uppercase tracking-tight shadow-sm transition-all"
-                                            >
-                                                🗓️ Reschedule Survey
-                                            </button>
-
-                                            <button 
-                                                onClick={() => {
-                                                    setIsEditingSurvey(req);
-                                                    setSurveyForm({
-                                                        status: 'COMPLETED',
-                                                        kost_name: req.kost_name,
-                                                        kost_address: req.kost_address,
-                                                        owner_phone: req.owner_phone,
-                                                        assigned_agent_id: req.assigned_agent_id,
-                                                        agent_name: req.agent_name,
-                                                        agent_phone: req.agent_phone,
-                                                        agent_photo_url: req.agent_photo_url,
-                                                        result_drive_link: req.result_drive_link,
-                                                        evaluation_summary: req.evaluation_summary || {},
-                                                        user_rating: req.user_rating,
-                                                        user_comment: req.user_comment
-                                                    });
-                                                }} 
-                                                className="w-full bg-orange-600 hover:bg-orange-700 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-md animate-pulse active:scale-95 transition-all flex justify-center items-center gap-2"
-                                            >
-                                                🏁 Selesaikan Survey
-                                            </button>
-                                          </>
-                                      )}
-                                      
-                                      {agentTab === 'history' && (
-                                          <button 
-                                             onClick={() => {
-                                                 setIsEditingSurvey(req);
-                                                 setSurveyForm({
-                                                     status: req.status,
-                                                     kost_name: req.kost_name,
-                                                     kost_address: req.kost_address,
-                                                     owner_phone: req.owner_phone,
-                                                     assigned_agent_id: req.assigned_agent_id,
-                                                     agent_name: req.agent_name,
-                                                     agent_phone: req.agent_phone,
-                                                     agent_photo_url: req.agent_photo_url,
-                                                     result_drive_link: req.result_drive_link,
-                                                     evaluation_summary: req.evaluation_summary || {},
-                                                     user_rating: req.user_rating,
-                                                     user_comment: req.user_comment
-                                                 });
-                                             }} 
-                                             className="w-full bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex justify-center items-center gap-2"
-                                         >
-                                             {req.evaluation_summary?.room_facilities ? '✅ Lihat Laporan' : '📝 Input Progress Survey'}
-                                         </button>
-                                     )}
-                                </div>
-                             ) : (
-                                 <div className="flex flex-col gap-2.5">
-                                     {req.status === 'COMPLETED' && (
-                                         <>
-                                             <button 
-                                                 onClick={() => {
-                                                     setIsEditingSurvey(req);
-                                                     setSurveyForm({
-                                                         status: req.status,
-                                                         kost_name: req.kost_name,
-                                                         kost_address: req.kost_address,
-                                                         owner_phone: req.owner_phone,
-                                                         assigned_agent_id: req.assigned_agent_id,
-                                                         agent_name: req.agent_name,
-                                                         agent_phone: req.agent_phone,
-                                                         agent_photo_url: req.agent_photo_url,
-                                                         result_drive_link: req.result_drive_link,
-                                                         evaluation_summary: req.evaluation_summary || {},
-                                                         user_rating: req.user_rating,
-                                                         user_comment: req.user_comment
-                                                     });
-                                                 }} 
-                                                 className="w-full bg-orange-600 hover:bg-orange-700 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-md transition-all flex justify-center items-center gap-2"
-                                             >
-                                                 ✅ Lihat Laporan Survey
-                                             </button>
-                                             <button 
-                                                 onClick={() => setUserRating(1)} // Trigger rating modal
-                                                 className="w-full bg-yellow-50 hover:bg-yellow-400 text-yellow-700 hover:text-white border border-yellow-200 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-                                             >
-                                                 ⭐ Beri Rating Layanan
-                                             </button>
-                                         </>
-                                     )}
-
-                                     {(req.status === 'AGENT_ASSIGNED' || req.status === 'SURVEYING') && (
-                                         <div className="bg-orange-50 p-3 rounded-xl border border-orange-100 mb-1">
-                                             <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-1">Status Saat Ini</p>
-                                             <p className="text-xs font-bold text-gray-700">
-                                                 {req.status === 'AGENT_ASSIGNED' ? 'Agen telah ditugaskan & akan segera menghubungi Anda.' : 'Agen sedang melakukan pengecekan di lokasi.'}
-                                             </p>
-                                         </div>
-                                     )}
-
-                                     {req.agent_phone && (
-                                         <button 
-                                             onClick={() => window.open(`https://wa.me/${req.agent_phone}?text=${encodeURIComponent(`Halo ${req.agent_name}, saya User RuangSinggah yang pesan survey untuk kost ${req.kost_name}.`)}`, '_blank')} 
-                                             className="w-full bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2.5 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5"
-                                         >
-                                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.711.956 2.873.956 3.182 0 5.768-2.585 5.77-5.765.001-3.181-2.586-5.768-5.768-5.768zm3.333 8.33c-.15.424-.877.817-1.229.845-.306.024-.652.128-2.146-.464-1.801-.715-2.956-2.548-3.047-2.671-.09-.122-.727-.968-.727-1.844 0-.875.452-1.304.613-1.472.161-.168.351-.21.468-.21.117 0 .234.004.336.008.109.006.255-.044.398.303.151.365.518 1.264.565 1.356.046.091.077.198.016.321-.061.121-.092.197-.184.304-.092.107-.193.226-.275.319-.092.105-.188.22-.083.402.105.183.468.775 1.002 1.25.688.614 1.27.8 1.455.892.183.092.29.077.397-.038.106-.115.46-.537.583-.721.122-.184.244-.154.409-.092.165.061 1.042.492 1.221.583.179.092.298.138.341.214.043.076.043.447-.107.871z" /></svg>
-                                             Hubungi Agen Survey
-                                         </button>
-                                     )}
-                                 </div>
-                             )}
-                        </div>
-                    </div>
-                ))}
-                {filteredRequests.length === 0 && (
-                    <div className="bg-gray-50 rounded-2xl p-12 text-center border-2 border-dashed border-gray-200">
-                        <p className="text-gray-500 font-bold">Belum ada permohonan survey di tab ini.</p>
-                    </div>
-                )}
-                </div>
-            </div>
-        );
-    };
-
-
-    const renderAgentVerifications = () => (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center mb-2">
-                <div>
-                    <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Verifikasi Identitas Agen</h2>
-                    <p className="text-gray-500 text-sm mt-1">Total {agentVerifications.length} permintaan pending.</p>
-                </div>
-            </div>
-
-            <div className="bg-orange-50/50 border border-orange-100 rounded-xl p-4 flex gap-3 mb-2">
-                <span className="text-orange-500 shrink-0">🛡️</span>
-                <p className="text-sm font-medium text-orange-900">Periksa kecocokan data NIK dan Nama dengan Foto KTP sebelum memberikan persetujuan.</p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6">
-                {agentVerifications.length === 0 ? (
-                    <div className="bg-white border-2 border-dashed border-gray-100 rounded-3xl p-12 text-center">
-                        <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">🏜️</div>
-                        <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2">Tidak Ada Antrian</h3>
-                        <p className="text-gray-500 max-w-sm mx-auto font-medium">Semua pengajuan verifikasi agen telah diproses.</p>
-                    </div>
-                ) : agentVerifications.map((agent: any) => (
-                    <div key={agent.id} className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col lg:flex-row gap-8">
-                        {/* KTP Photo Section */}
-                        <div className="lg:w-72 shrink-0">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Foto KTP</p>
-                            <div 
-                                className="aspect-[3/2] rounded-xl border border-gray-100 overflow-hidden bg-gray-50 cursor-zoom-in group relative"
-                                onClick={() => window.open(agent.ktp_photo_url, '_blank')}
-                            >
-                                {agent.ktp_photo_url ? (
-                                    <>
-                                        <img src={agent.ktp_photo_url} alt="KTP" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                            <span className="text-white text-xs font-bold uppercase tracking-widest">Klik Perbesar</span>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-300">
-                                        <svg className="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                        <span className="text-[10px] uppercase font-black">Tanpa Foto</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Details Section */}
-                        <div className="flex-1 space-y-6">
-                            <div className="flex justify-between items-start gap-4">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="bg-orange-100 text-orange-700 font-bold px-2.5 py-1 rounded-lg text-[10px] uppercase tracking-wider">#{agent.id.slice(0,8)}</span>
-                                        <span className="text-xs text-gray-400 font-medium">Diajukan: {new Date(agent.updated_at || agent.created_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'})}</span>
-                                    </div>
-                                    <h3 className="text-xl font-black text-gray-900">{agent.display_name || agent.name}</h3>
-                                    <p className="text-sm font-medium text-gray-500 mt-1">E-mail: <span className="text-orange-600">{agent.email}</span></p>
-                                </div>
-                                <div className="flex gap-2">
-                                    <button 
-                                        onClick={async () => {
-                                            if (window.confirm('Verifikasi identitas agen ini?')) {
-                                                try {
-                                                    await updateAgentVerificationStatus(agent.id, 'verified');
-                                                    try {
-                                                        await sendNotification(
-                                                            agent.id,
-                                                            'Akun Terverifikasi! 🛡️',
-                                                            'Selamat! Identitas Anda telah diverifikasi. Anda sekarang bisa menerima orderan survey.',
-                                                            'success',
-                                                            {},
-                                                            '/dashboard-agent'
-                                                        );
-                                                    } catch (notifErr) {
-                                                        console.error('Notification failed:', notifErr);
-                                                        alert('Verifikasi berhasil, namun gagal mengirim notifikasi ke agen. Harap periksa kebijakan RLS notifications Anda.');
-                                                    }
-                                                    loadAgentVerifications();
-                                                } catch (err: any) {
-                                                    console.error('Verification failed:', err);
-                                                    alert('Gagal memproses verifikasi: ' + err.message);
-                                                }
-                                            }
-                                        }}
-                                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all flex items-center gap-2"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                        Terima
-                                    </button>
-                                    <button 
-                                        onClick={async () => {
-                                            const reason = window.prompt('Alasan penolakan (opsional):');
-                                            if (reason !== null) {
-                                                try {
-                                                    await updateAgentVerificationStatus(agent.id, 'rejected', reason);
-                                                    try {
-                                                        await sendNotification(
-                                                            agent.id,
-                                                            'Verifikasi Identitas Ditolak ⚠️',
-                                                            `Maaf, pengajuan verifikasi Anda ditolak. Alasan: ${reason || 'Data tidak sesuai.'}. Silakan ajukan ulang dengan data yang benar.`,
-                                                            'error',
-                                                            {},
-                                                            '/dashboard-agent'
-                                                        );
-                                                    } catch (notifErr) {
-                                                        console.error('Notification failed:', notifErr);
-                                                        alert('Status ditolak berhasil diperbarui, namun gagal mengirim notifikasi. Harap periksa kebijakan RLS notifications Anda.');
-                                                    }
-                                                    loadAgentVerifications();
-                                                } catch (err: any) {
-                                                    console.error('Rejection failed:', err);
-                                                    alert('Gagal memproses penolakan: ' + err.message);
-                                                }
-                                            }
-                                        }}
-                                        className="bg-red-50 hover:bg-red-500 text-red-600 hover:text-white border border-red-200 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95"
-                                    >
-                                        Tolak
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-50">
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">No. NIK (KTP)</p>
-                                    <p className="font-bold text-gray-900 bg-gray-50 px-4 py-2 rounded-lg border border-gray-100">{agent.ktp_number || 'TIDAK ADA'}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">No. WhatsApp</p>
-                                    <p className="font-bold text-gray-900 bg-gray-50 px-4 py-2 rounded-lg border border-gray-100">{agent.phone || 'TIDAK ADA'}</p>
-                                </div>
-                                <div className="col-span-2">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Alamat Sesuai KTP</p>
-                                    <p className="font-bold text-gray-900 bg-gray-50 px-4 py-2 rounded-lg border border-gray-100 leading-relaxed text-sm">{agent.ktp_address || 'TIDAK ADA'}</p>
-                                </div>
-                                <div className="col-span-2">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Alamat Domisili Saat Ini</p>
-                                    <p className="font-bold text-gray-900 bg-gray-50 px-4 py-2 rounded-lg border border-gray-100 leading-relaxed text-sm">{agent.address || 'TIDAK ADA'}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-
-    const renderMitraRequests = () => (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center mb-2">
-                <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Pendaftar Mitra</h2>
-                <button onClick={() => setIsAddingManualMitra(true)} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 shrink-0">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                    Tambah Manual
-                </button>
-            </div>
-            <div className="bg-orange-50/50 border border-orange-100 rounded-xl p-4 flex gap-3 mb-2">
-                <span className="text-orange-500 shrink-0">🤝</span>
-                <p className="text-sm font-medium text-orange-900">Daftar pendaftar yang ingin bergabung sebagai <strong>Mitra Pemilik Kost</strong>. Hubungi via WA untuk verifikasi dan onboarding.</p>
-            </div>
-            <div className="grid grid-cols-1 gap-4">
-                {mitraRequests.length === 0 ? (
-                    <div className="text-center py-20 bg-white border border-gray-100 rounded-2xl">
-                        <div className="text-4xl mb-4">📭</div>
-                        <h3 className="text-gray-900 font-bold mb-1">Belum Ada Pendaftar</h3>
-                        <p className="text-gray-500 text-sm">Pendaftaran mitra yang masuk akan muncul di sini.</p>
-                    </div>
-                ) : mitraRequests.map((mitra: any) => (
-                    <div key={mitra.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row gap-4 hover:shadow-md transition-shadow">
-                        <div className="flex-1">
-                            <div className="flex flex-wrap justify-between items-start gap-2 mb-3">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className="bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">{mitra.id.substring(0, 8)}</span>
-                                        <span className="text-xs text-gray-400">{new Date(mitra.timestamp).toLocaleDateString('id-ID')}</span>
-                                    </div>
-                                    <p className="font-medium text-gray-500 text-sm">Nama: <span className="font-black text-gray-900 text-base">{mitra.name}</span></p>
-                                </div>
-                                <span className={`inline-flex px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg border ${
-                                    mitra.status === 'accepted' ? 'bg-green-50 text-green-700 border-green-100' : 
-                                    mitra.status === 'rejected' ? 'bg-red-50 text-red-700 border-red-100' : 
-                                    'bg-yellow-50 text-yellow-700 border-yellow-100'
-                                }`}>
-                                    {mitra.status === 'accepted' ? 'Diterima' : mitra.status === 'rejected' ? 'Ditolak' : 'Menunggu'}
-                                </span>
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">No. WA</p><p className="font-bold text-gray-900 text-sm mt-0.5">{mitra.phone}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Kost</p><p className="font-bold text-gray-900 text-sm mt-0.5">{mitra.property_name || '-'}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</p><p className="font-bold text-gray-900 text-[11px] break-all leading-tight mt-1">{mitra.email || '-'}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alamat</p><p className="font-bold text-orange-600 text-[11px] leading-tight mt-1 line-clamp-1">{mitra.property_address || '-'}</p></div>
-                            </div>
-                        </div>
-                        <div className="flex flex-col gap-2 sm:w-44 shrink-0 border-t sm:border-t-0 sm:border-l border-gray-100 pt-3 sm:pt-0 sm:pl-5 justify-center">
-                            {mitra.status !== 'accepted' && mitra.status !== 'rejected' && (
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button 
-                                        onClick={async () => {
-                                            if (window.confirm(`Terima pendaftaran ${mitra.name} sebagai Mitra Pemilik? Ini akan memperbarui role akun mereka.`)) {
-                                                try {
-                                                    await updateMitraRequestStatus(mitra.id, 'accepted', mitra.user_id);
-                                                    alert('Mitra diterima dan role akun diperbarui!');
-                                                    loadMitraRequests();
-                                                } catch (err) {
-                                                    alert('Gagal menerima mitra: ' + (err instanceof Error ? err.message : 'Unknown error'));
-                                                }
-                                            }
-                                        }} 
-                                        className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-xl text-xs font-bold active:scale-95 flex justify-center items-center gap-1 shadow-sm"
-                                    >
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Terima
-                                    </button>
-                                    <button 
-                                        onClick={async () => {
-                                            if (window.confirm(`Tolak pendaftaran ${mitra.name}?`)) {
-                                                try {
-                                                    await updateMitraRequestStatus(mitra.id, 'rejected');
-                                                    alert('Pendaftaran ditolak.');
-                                                    loadMitraRequests();
-                                                } catch (err) {
-                                                    alert('Gagal menolak mitra: ' + (err instanceof Error ? err.message : 'Unknown error'));
-                                                }
-                                            }
-                                        }} 
-                                        className="w-full bg-red-50 hover:bg-red-100 text-red-600 py-2 rounded-xl text-xs font-bold border border-red-200 active:scale-95 flex justify-center items-center gap-1"
-                                    >
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>Tolak
-                                    </button>
-                                </div>
-                            )}
-                            <button onClick={() => window.open(`https://wa.me/${mitra.phone}?text=${encodeURIComponent(`Halo ${mitra.name}, kami dari Admin RuangSinggah.id. Terima kasih sudah mendaftar sebagai Mitra. Kami ingin melanjutkan proses verifikasi Anda. Apakah ada waktu untuk berdiskusi?`)}`, '_blank')} className="w-full bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.711.956 2.873.956 3.182 0 5.768-2.585 5.77-5.765.001-3.181-2.586-5.768-5.768-5.768zm3.333 8.33c-.15.424-.877.817-1.229.845-.306.024-.652.128-2.146-.464-1.801-.715-2.956-2.548-3.047-2.671-.09-.122-.727-.968-.727-1.844 0-.875.452-1.304.613-1.472.161-.168.351-.21.468-.21.117 0 .234.004.336.008.109.006.255-.044.398.303.151.365.518 1.264.565 1.356.046.091.077.198.016.321-.061.121-.092.197-.184.304-.092.107-.193.226-.275.319-.092.105-.188.22-.083.402.105.183.468.775 1.002 1.25.688.614 1.27.8 1.455.892.183.092.29.077.397-.038.106-.115.46-.537.583-.721.122-.184.244-.154.409-.092.165.061 1.042.492 1.221.583.179.092.298.138.341.214.043.076.043.447-.107.871z" /></svg>
-                                Follow Up WA
-                            </button>
-                        </div>
-                    </div>
-                ))}
             </div>
         </div>
     );
@@ -4716,8 +2325,32 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                 />
                             ) : (
                                 <div className="admin-content-area">
-                                    {activeMenu === 'analytics' && (isAdmin || isOwner) && renderAnalytics()}
-                                    {activeMenu === 'agent_verification' && isAdmin && renderAgentVerifications()}
+                                    {activeMenu === 'analytics' && (isAdmin || isOwner) && (
+                                        <AnalyticsView
+                                            analyticsSummary={analyticsSummary}
+                                            dateFilter={dateFilter}
+                                            setDateFilter={setDateFilter}
+                                            customStartDate={customStartDate}
+                                            setCustomStartDate={setCustomStartDate}
+                                            customEndDate={customEndDate}
+                                            setCustomEndDate={setCustomEndDate}
+                                            selectedYear={selectedYear}
+                                            setSelectedYear={setSelectedYear}
+                                            dashboardViewMode={dashboardViewMode}
+                                            setDashboardViewMode={setDashboardViewMode}
+                                            currentYear={currentYear}
+                                            getMaxEndDate={getMaxEndDate}
+                                        />
+                                    )}
+                                    {activeMenu === 'agent_verification' && isAdmin && (
+                                        <AgentManagement
+                                            agentVerifications={agentVerifications}
+                                            surveyAgents={surveyAgents}
+                                            loadAgentVerifications={loadAgentVerifications}
+                                            loadActiveAgents={loadActiveAgents}
+                                            loading={loading}
+                                        />
+                                    )}
                                     
                                     {activeMenu === 'properties' && (
                                         <>
@@ -4852,13 +2485,99 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                         </>
                                     )}
 
-                                    {activeMenu === 'verification' && isAdmin && renderVerifikasi()}
-                                    {activeMenu === 'transactions_rent' && renderRentTransactions()}
-                                    {activeMenu === 'transactions_db' && isAdmin && renderDbTransactions()}
-                                    {activeMenu === 'verifikasi' && isAdmin && renderVerifikasiRequests()}
-                                    {activeMenu === 'mitra' && isAdmin && renderMitraRequests()}
-                                    {activeMenu === 'banners' && isAdmin && renderBannersManagement()}
-                                    {activeMenu === 'complaints' && (isAdmin || isOwner) && renderComplaints()}
+                                    {activeMenu === 'verification' && isAdmin && (
+                                        <CatalogManagement 
+                                            verifikasiPrice={verifikasiPrice}
+                                            setVerifikasiPrice={setVerifikasiPrice}
+                                            verifikasiDiscount={verifikasiDiscount}
+                                            setVerifikasiDiscount={setVerifikasiDiscount}
+                                            verifikasiDescription={verifikasiDescription}
+                                            setVerifikasiDescription={setVerifikasiDescription}
+                                            isSavingVerifikasi={isSavingVerifikasi}
+                                            setIsSavingVerifikasi={setIsSavingVerifikasi}
+                                            FORMAT_CURRENCY={FORMAT_CURRENCY}
+                                            setActiveMenu={setActiveMenu}
+                                        />
+                                    )}
+                                    {activeMenu === 'transactions_rent' && (
+                                        <RentTransactionManagement 
+                                            isAdmin={isAdmin}
+                                            uid={uid}
+                                            rentTransactions={rentTransactions}
+                                            refreshData={loadRentTransactions}
+                                        />
+                                    )}
+
+                                    {activeMenu === 'transactions_db' && (
+                                        <DbTransactionManagement 
+                                            isAdmin={isAdmin}
+                                            dbTransactions={dbTransactions}
+                                            refreshData={loadDbTransactions}
+                                        />
+                                    )}
+
+                                    {activeMenu === 'databases' && isAdmin && (
+                                        <CatalogManagement 
+                                            activeTab="database"
+                                            dbProducts={dbProducts}
+                                            loadDatabases={loadDatabases}
+                                            FORMAT_CURRENCY={FORMAT_CURRENCY}
+                                            setActiveMenu={setActiveMenu}
+                                            verifikasiPrice={0} // Not used for DB tab
+                                            setVerifikasiPrice={() => {}} 
+                                            verifikasiDiscount={0}
+                                            setVerifikasiDiscount={() => {}}
+                                            verifikasiDescription=""
+                                            setVerifikasiDescription={() => {}}
+                                            isSavingVerifikasi={false}
+                                            setIsSavingVerifikasi={() => {}}
+                                        />
+                                    )}
+
+                                    {activeMenu === 'verifikasi' && isAdmin && (
+                                        <SurveyManagement
+                                            isAdmin={isAdmin}
+                                            isAgent={isAgent}
+                                            surveyRequests={surveyRequests}
+                                            adminSurveyTab={adminSurveyTab}
+                                            setAdminSurveyTab={setAdminSurveyTab}
+                                            agentTab={agentTab}
+                                            setAgentTab={setAgentTab}
+                                            selectedSurveyIds={selectedSurveyIds}
+                                            setSelectedSurveyIds={setSelectedSurveyIds}
+                                            setIsEditingSurvey={setIsEditingSurvey}
+                                            setSurveyForm={setSurveyForm}
+                                            handleDeleteSurvey={handleDeleteSurvey}
+                                        />
+                                    )}
+                                    {activeMenu === 'mitra' && isAdmin && (
+                                        <MitraManagement
+                                            mitraRequests={mitraRequests}
+                                            activeMitra={activeMitra}
+                                            loadMitraRequests={loadMitraRequests}
+                                            loadActiveMitra={loadActiveMitra}
+                                            loading={loading}
+                                        />
+                                    )}
+                                    {activeMenu === 'tenants' && isAdmin && (
+                                        <UserManagement
+                                            activeUsers={activeUsers}
+                                            loadActiveUsers={loadActiveUsers}
+                                            loading={loading}
+                                        />
+                                    )}
+                                    {activeMenu === 'banners' && isAdmin && (
+                                        <BannerManagement
+                                            banners={banners}
+                                            refreshData={loadBanners}
+                                        />
+                                    )}
+                                    {activeMenu === 'complaints' && (isAdmin || isOwner) && (
+                                        <ComplaintManagement 
+                                            complaints={complaints}
+                                            refreshData={loadComplaints}
+                                        />
+                                    )}
                                 </div>
                             )}
                         </>
@@ -4955,551 +2674,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                     </div>
                 )}
 
-                {/* MODAL DATABASE FORM */}
-                {isDbModalOpen && activeMenu === 'databases' && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsDbModalOpen(false)}></div>
-                        <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95">
-                            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                                <h2 className="text-xl font-black uppercase">{editingDbId ? 'Edit Database' : 'Tambah Database'}</h2>
-                                <button onClick={() => setIsDbModalOpen(false)}>&times;</button>
-                            </div>
-                            <form onSubmit={handleDbSubmit} className="flex-grow overflow-y-auto p-6 space-y-6">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-gray-400 uppercase">Nama Kampus</label>
-                                        <input required className="w-full border rounded-xl px-4 py-3 font-bold" value={dbForm.campus} onChange={e => setDbForm({ ...dbForm, campus: e.target.value })} />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-gray-400 uppercase">Estimasi Jumlah Data</label>
-                                        <input required type="number" className="w-full border rounded-xl px-4 py-3 font-bold" value={dbForm.totalData} onChange={e => setDbForm({ ...dbForm, totalData: Number(e.target.value) })} />
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-gray-400 uppercase">Kota</label>
-                                        <input required className="w-full border rounded-xl px-4 py-3 font-bold" value={dbForm.city} onChange={e => setDbForm({ ...dbForm, city: e.target.value })} />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-gray-400 uppercase">Area (Kecamatan/Daerah)</label>
-                                        <input required className="w-full border rounded-xl px-4 py-3 font-bold" value={dbForm.area} onChange={e => setDbForm({ ...dbForm, area: e.target.value })} />
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-400 uppercase">Deskripsi</label>
-                                    <textarea required className="w-full border rounded-xl px-4 py-3 font-medium" rows={3} value={dbForm.description} onChange={e => setDbForm({ ...dbForm, description: e.target.value })} />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-400 uppercase">Harga (IDR)</label>
-                                    <input required type="number" className="w-full border rounded-xl px-4 py-3 font-bold" value={dbForm.price} onChange={e => setDbForm({ ...dbForm, price: Number(e.target.value) })} />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-400 uppercase">Cover Image</label>
-                                    <input type="file" accept="image/*" onChange={e => setDbCoverFile(e.target.files ? e.target.files[0] : null)} className="w-full text-sm" />
-                                    {dbForm.fileUrls?.coverImage?.original && <p className="text-xs text-green-500">Current: {dbForm.fileUrls.coverImage.original.substring(0, 30)}...</p>}
-                                </div>
-
-                                <div className="space-y-4 border-t pt-4">
-                                    <label className="text-xs font-bold text-gray-400 uppercase">File Database</label>
-                                    <div className="flex gap-4">
-                                        <label className="flex items-center gap-2">
-                                            <input type="radio" name="fileType" checked={dbForm.fileType === 'link'} onChange={() => setDbForm({ ...dbForm, fileType: 'link' })} />
-                                            <span className="text-sm font-bold">Link Google Drive</span>
-                                        </label>
-                                        <label className="flex items-center gap-2">
-                                            <input type="radio" name="fileType" checked={dbForm.fileType === 'upload'} onChange={() => setDbForm({ ...dbForm, fileType: 'upload' })} />
-                                            <span className="text-sm font-bold">Upload File (Excel/PDF)</span>
-                                        </label>
-                                    </div>
-
-                                    {dbForm.fileType === 'link' ? (
-                                        <input
-                                            type="url"
-                                            placeholder="https://drive.google.com/..."
-                                            className="w-full border rounded-xl px-4 py-3 font-medium"
-                                            value={dbForm.fileUrl}
-                                            onChange={e => setDbForm({ ...dbForm, fileUrl: e.target.value })}
-                                        />
-                                    ) : (
-                                        <div>
-                                            <input type="file" accept=".xlsx,.xls,.pdf" onChange={e => setDbDocFile(e.target.files ? e.target.files[0] : null)} className="w-full text-sm" />
-                                            {dbForm.fileName && <p className="text-xs text-green-500 mt-1">Current File: {dbForm.fileName}</p>}
-                                        </div>
-                                    )}
-                                </div>
-                            </form>
-                            <div className="p-6 border-t bg-gray-50 flex justify-end gap-3">
-                                <button onClick={() => setIsDbModalOpen(false)} className="px-6 py-3 rounded-xl font-bold text-gray-500 hover:bg-white">Batal</button>
-                                <button onClick={handleDbSubmit} disabled={isSubmitting} className="px-6 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600">
-                                    {isSubmitting ? 'Menyimpan...' : 'Simpan Database'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* MODAL MANUAL ADD RENT */}
-                {isAddingManualRent && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsAddingManualRent(false)}></div>
-                        <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95">
-                            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                                <div>
-                                    <h2 className="text-xl font-black uppercase text-gray-900">Tambah Sewa Manual</h2>
-                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Catat transaksi di luar sistem</p>
-                                </div>
-                                <button onClick={() => setIsAddingManualRent(false)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 rounded-full text-gray-400 hover:text-gray-900 hover:border-gray-900 transition-colors">&times;</button>
-                            </div>
-                            <form onSubmit={handleManualRentSubmit} className="flex-grow overflow-y-auto p-6 space-y-5">
-                                <div className="space-y-4">
-                                    <h3 className="text-[10px] font-black tracking-widest text-orange-500 uppercase border-b border-orange-100 pb-2">Informasi Penyewa</h3>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-xs font-bold text-gray-500 uppercase">Nama Penyewa</label><input required className="w-full mt-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold focus:bg-white focus:ring-2 focus:ring-orange-500/20 outline-none" value={manualRentForm.name || ''} onChange={e => setManualRentForm({ ...manualRentForm, name: e.target.value })} placeholder="Cth: Budi" /></div>
-                                        <div><label className="text-xs font-bold text-gray-500 uppercase">WhatsApp</label><input required className="w-full mt-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold focus:bg-white focus:ring-2 focus:ring-orange-500/20 outline-none" value={manualRentForm.phone || ''} onChange={e => setManualRentForm({ ...manualRentForm, phone: e.target.value })} placeholder="628..." /></div>
-                                    </div>
-
-                                    <h3 className="text-[10px] font-black tracking-widest text-orange-500 uppercase border-b border-orange-100 pb-2 pt-2">Detail Pemesanan Kost</h3>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-xs font-bold text-gray-500 uppercase">Nama Kost</label><input required className="w-full mt-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold focus:bg-white outline-none" value={manualRentForm.item || ''} onChange={e => setManualRentForm({ ...manualRentForm, item: e.target.value })} /></div>
-                                        <div><label className="text-xs font-bold text-gray-500 uppercase">Tipe Kamar</label><input required className="w-full mt-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold focus:bg-white outline-none" value={manualRentForm.roomType || ''} onChange={e => setManualRentForm({ ...manualRentForm, roomType: e.target.value })} /></div>
-                                        <div>
-                                            <label className="text-xs font-bold text-gray-500 uppercase">Durasi</label>
-                                            <select className="w-full mt-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold focus:bg-white outline-none" value={manualRentForm.periodLabel || 'Bulanan'} onChange={e => setManualRentForm({ ...manualRentForm, periodLabel: e.target.value })}>
-                                                <option value="Harian">Harian</option><option value="Mingguan">Mingguan</option><option value="Bulanan">Bulanan</option><option value="Tahunan">Tahunan</option>
-                                            </select>
-                                        </div>
-                                        <div><label className="text-xs font-bold text-gray-500 uppercase">Harga Total (Rp)</label><input required type="number" className="w-full mt-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold focus:bg-white outline-none" value={manualRentForm.amount || ''} onChange={e => setManualRentForm({ ...manualRentForm, amount: e.target.value })} /></div>
-                                        <div><label className="text-xs font-bold text-gray-500 uppercase">Tgl Masuk</label><input type="date" required className="w-full mt-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold focus:bg-white outline-none" value={manualRentForm.startDate || ''} onChange={e => setManualRentForm({ ...manualRentForm, startDate: e.target.value })} /></div>
-                                        <div><label className="text-xs font-bold text-gray-500 uppercase">Tgl Keluar</label><input type="date" required className="w-full mt-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold focus:bg-white outline-none" value={manualRentForm.endDate || ''} onChange={e => setManualRentForm({ ...manualRentForm, endDate: e.target.value })} /></div>
-                                        <div className="col-span-2">
-                                            <label className="text-xs font-bold text-gray-500 uppercase">Status</label>
-                                            <select className="w-full mt-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold focus:bg-white outline-none" value={manualRentForm.status || 'Selesai'} onChange={e => setManualRentForm({ ...manualRentForm, status: e.target.value })}>
-                                                <option value="Selesai">Selesai (Sudah Bayar & Masuk)</option>
-                                                <option value="Menunggu">Menunggu Konfirmasi & Bayar</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-                                <button type="submit" className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-black uppercase tracking-wider shadow-lg active:scale-95 transition-all mt-6">Simpan Transaksi Sewa</button>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                {/* MODAL MANUAL ADD DB PEMEBLIAN */}
-                {isAddingManualDb && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsAddingManualDb(false)}></div>
-                        <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95">
-                            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                                <div><h2 className="text-xl font-black uppercase text-gray-900">Tambah Beli DB Manual</h2><p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Catat transaksi di luar sistem</p></div>
-                                <button onClick={() => setIsAddingManualDb(false)} className="w-8 h-8 border rounded-full">&times;</button>
-                            </div>
-                            <form onSubmit={handleManualDbSubmit} className="flex-grow overflow-y-auto p-6 space-y-5">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Nama Pembeli</label><input required className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualDbForm.name || ''} onChange={e => setManualDbForm({ ...manualDbForm, name: e.target.value })} /></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">WhatsApp</label><input required className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualDbForm.phone || ''} onChange={e => setManualDbForm({ ...manualDbForm, phone: e.target.value })} /></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Email</label><input required type="email" className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualDbForm.email || ''} onChange={e => setManualDbForm({ ...manualDbForm, email: e.target.value })} /></div>
-                                    <div className="col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Judul Database</label><input required className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualDbForm.dbName || ''} onChange={e => setManualDbForm({ ...manualDbForm, dbName: e.target.value })} /></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Kategori / Tipe</label><input required className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualDbForm.dbType || ''} onChange={e => setManualDbForm({ ...manualDbForm, dbType: e.target.value })} placeholder="Data Mahasiswa" /></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Tahun</label><input required className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualDbForm.dbYear || ''} onChange={e => setManualDbForm({ ...manualDbForm, dbYear: e.target.value })} placeholder="2025" /></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Harga (Rp)</label><input required type="number" className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualDbForm.amount || ''} onChange={e => setManualDbForm({ ...manualDbForm, amount: e.target.value })} /></div>
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-500 uppercase">Status</label>
-                                        <select className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualDbForm.status || 'Selesai'} onChange={e => setManualDbForm({ ...manualDbForm, status: e.target.value })}>
-                                            <option value="Selesai">Selesai (Sudah Dikasih Akses)</option>
-                                            <option value="Menunggu">Menunggu</option>
-                                        </select>                                    </div>
-                                </div>
-                                <button type="submit" className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-black uppercase tracking-wider shadow-lg active:scale-95 transition-all mt-6">Simpan Transaksi DB</button>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                {/* MODAL EDIT SURVEY */}
-                {isEditingSurvey && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsEditingSurvey(null)}></div>
-                        <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95">
-                            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-orange-50/50">
-                                <div><h2 className="text-xl font-black uppercase text-orange-900">Kelola Survey</h2><p className="text-xs font-bold text-orange-500 uppercase tracking-widest mt-1">Update Status & Agen Surveyor</p></div>
-                                <button onClick={() => setIsEditingSurvey(null)} className="w-8 h-8 flex items-center justify-center border rounded-full hover:bg-white transition-colors">&times;</button>
-                            </div>
-                            <form onSubmit={handleUpdateSurvey} className="flex-grow overflow-y-auto p-6 space-y-5">
-                                <div className="space-y-4">
-                                    {!isAgent && (
-                                        <div>
-                                            <div className="flex justify-between items-center">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status Pesanan</label>
-                                                {isAdmin && isEditingSurvey && (
-                                                    <button 
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const phone = isEditingSurvey.user?.phone?.startsWith('+62') ? isEditingSurvey.user.phone.replace('+62', '62') : (isEditingSurvey.user?.phone?.startsWith('0') ? '62' + isEditingSurvey.user.phone.substring(1) : isEditingSurvey.user?.phone);
-                                                            const msg = surveyForm.status === 'AGENT_ASSIGNED' 
-                                                                ? `Halo%20${encodeURIComponent(isEditingSurvey.user?.name || '')},%20tim%20kami%20telah%20menugaskan%20agent%20untuk%20survey%20kost%20${encodeURIComponent(surveyForm.kost_name || '')}.%20Mohon%20tunggu%20update%20selanjutnya.`
-                                                                : `Halo%20${encodeURIComponent(isEditingSurvey.user?.name || '')},%20update%20terbaru%20untuk%20survey%20kost%20${encodeURIComponent(surveyForm.kost_name || '')}:%20${surveyForm.status}.`;
-                                                            window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');
-                                                        }}
-                                                        className="text-[10px] font-black text-orange-600 hover:text-orange-700 flex items-center gap-1 uppercase tracking-widest"
-                                                    >
-                                                        <span>📱</span> Hubungi User
-                                                    </button>
-                                                )}
-                                            </div>
-                                            <div className="mt-1.5 p-4 bg-orange-50 border border-orange-100 rounded-xl flex items-center justify-between">
-                                                <span className={`text-xs font-black uppercase tracking-widest ${
-                                                    surveyForm.status === 'COMPLETED' ? 'text-green-600' : 
-                                                    surveyForm.status === 'SURVEYING' ? 'text-orange-600 font-bold' :
-                                                    surveyForm.status === 'RESCHEDULED' ? 'text-amber-600' :
-                                                    'text-orange-600'
-                                                }`}>
-                                                    {surveyForm.status === 'PENDING_ASSIGNMENT' ? 'Menunggu Agen (Paid)' : 
-                                                     surveyForm.status === 'AGENT_ASSIGNED' ? 'Agen Ditetapkan' :
-                                                     surveyForm.status === 'SURVEYING' ? 'Sedang Survey' :
-                                                     surveyForm.status === 'COMPLETED' ? 'Survey Selesai' :
-                                                     surveyForm.status === 'AWAITING_PAYMENT' ? 'Menunggu Pembayaran' :
-                                                     surveyForm.status === 'CANCELLED' ? 'Dibatalkan' :
-                                                     surveyForm.status === 'RESCHEDULED' ? 'Penjadwalan Ulang' :
-                                                     surveyForm.status}
-                                                </span>
-                                                <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></div>
-                                            </div>
-                                            <p className="text-[10px] text-gray-400 mt-1 font-medium italic">* Status berubah otomatis saat agen ditetapkan atau survey selesai.</p>
-                                        </div>
-                                    )}
-
-                                    {isAdmin && (
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="col-span-2">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pilih Agen Surveyor</label>
-                                                <select 
-                                                    className="w-full mt-1.5 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-orange-500 transition-all outline-none"
-                                                    value={surveyForm.assigned_agent_id || ''}
-                                                    onChange={e => {
-                                                        const agentId = e.target.value;
-                                                        const agent = surveyAgents.find(a => a.id === agentId);
-                                                        if (agent) {
-                                                            // Keep status PENDING_ASSIGNMENT even if agent is selected (Confirmation Flow)
-                                                            const newStatus = surveyForm.status === 'AWAITING_PAYMENT' ? 'PENDING_ASSIGNMENT' : surveyForm.status;
-                                                            setSurveyForm({ 
-                                                                ...surveyForm, 
-                                                                assigned_agent_id: agent.id, 
-                                                                agent_name: agent.name, 
-                                                                agent_phone: agent.phone,
-                                                                agent_photo_url: agent.photo_url, 
-                                                                status: newStatus 
-                                                            });
-                                                        } else {
-                                                            setSurveyForm({ ...surveyForm, assigned_agent_id: null, agent_name: '', agent_phone: '', agent_photo_url: '' });
-                                                        }
-                                                    }}
-                                                >
-                                                    <option value="">-- Belum Ada Agen --</option>
-                                                    {surveyAgents.map(a => (
-                                                        <option key={a.id} value={a.id}>{a.name} (⭐ {a.rating || '0.0'}) - {a.phone}</option>
-                                                    ))}
-                                                </select>
-                                                {surveyForm.assigned_agent_id && (
-                                                    <div className="flex items-center justify-between mt-2">
-                                                        <p className="text-[10px] text-gray-400 font-medium italic">Tugas ini akan muncul di dashboard agen <strong>{surveyForm.agent_name}</strong>.</p>
-                                                        <button 
-                                                            type="button"
-                                                            onClick={() => {
-                                                                const phone = surveyForm.agent_phone?.startsWith('+62') ? surveyForm.agent_phone.replace('+62', '62') : (surveyForm.agent_phone?.startsWith('0') ? '62' + surveyForm.agent_phone.substring(1) : surveyForm.agent_phone);
-                                                                window.open(`https://wa.me/${phone}?text=Halo%20${encodeURIComponent(surveyForm.agent_name || '')},%20Anda%20mendapat%20tugas%20survey%20baru%20di%20${encodeURIComponent(surveyForm.kost_name || '')}.%20Mohon%20segera%20cek%20dashboard%20agen.%20Terima%20kasih.`, '_blank');
-                                                            }}
-                                                            className="text-[10px] font-black text-green-600 hover:text-green-700 flex items-center gap-1 uppercase tracking-widest"
-                                                        >
-                                                            <span>📱</span> Hubungi Agen
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
-                                        <div className="flex justify-between items-center mb-1.5">
-                                            <label className="text-[10px] font-black text-blue-900 uppercase tracking-widest">Link Hasil Survey (Automated Drive)</label>
-                                            {!surveyForm.result_drive_link && isAdmin && !isAgent && (
-                                                <button 
-                                                    type="button" 
-                                                    onClick={handleGenerateDriveFolder}
-                                                    className="text-[10px] font-black text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-lg shadow-sm transition-all active:scale-95 flex items-center gap-1.5"
-                                                    disabled={isSubmitting}
-                                                >
-                                                    {isSubmitting ? (
-                                                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                                    ) : '📂 Buat Folder Manual'}
-                                                </button>
-                                            )}
-                                            {surveyForm.result_drive_link && (
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => window.open(surveyForm.result_drive_link, '_blank')}
-                                                    className="text-[10px] font-black text-blue-600 hover:text-blue-700 flex items-center gap-1 uppercase tracking-widest bg-white px-2 py-1 rounded-md border border-blue-200 shadow-sm transition-all active:scale-95"
-                                                >
-                                                    <span>📁</span> Buka Folder
-                                                </button>
-                                            )}
-                                        </div>
-                                        <input 
-                                            readOnly
-                                            className="w-full bg-white/80 border border-blue-200 rounded-xl px-4 py-3 text-xs font-bold text-blue-600 cursor-not-allowed outline-none"
-                                            value={surveyForm.result_drive_link || ''}
-                                            placeholder="Menunggu pembayaran/sistem menjana folder..."
-                                        />
-                                        <p className="text-[9px] text-blue-500 mt-2 font-medium italic">
-                                            {surveyForm.result_drive_link 
-                                                ? "✓ Folder Drive berhasil dibuat otomatis oleh sistem." 
-                                                : "ℹ Folder akan dibuat otomatis segera setelah pembayaran terverifikasi."}
-                                        </p>
-                                    </div>
 
 
-                                    {isAgent && (
-                                        <div className="pt-4 border-t border-gray-100">
-                                            <h3 className="text-xs font-black text-orange-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-                                                Summary Penilaian Surveyor
-                                            </h3>
-                                        
-                                        <div className="space-y-4">
-                                             {/* WA Evidence Section */}
-                                             <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 mb-6">
-                                                 <label className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Bukti Screenshot WhatsApp (Evidence Video Call/Chat)</label>
-                                                 <div className="mt-1.5 flex items-center gap-3">
-                                                     <label className="flex-1 bg-white border border-dashed border-orange-200 rounded-xl px-4 py-3 text-[10px] font-bold text-orange-400 cursor-pointer hover:border-orange-400 hover:text-orange-600 transition-all flex items-center justify-center gap-2">
-                                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                                         {(surveyForm.evaluation_summary as any)?.whatsapp_evidence_url ? 'Ganti SS WhatsApp' : 'Upload Screenshot WA'}
-                                                         <input 
-                                                             type="file" 
-                                                             accept="image/*" 
-                                                             className="hidden" 
-                                                             onChange={(e) => {
-                                                              if (!isAdmin && !isAgent) return;
-                                                              alert('Upload SS WA (Dummy Mode)');
-                                                           }} 
-                                                           disabled={!isAdmin && !isAgent}
-                                                         />
-                                                     </label>
-                                                     {(surveyForm.evaluation_summary as any)?.whatsapp_evidence_url && (
-                                                         <div className="w-12 h-12 bg-white rounded-xl overflow-hidden border border-orange-200 flex-shrink-0">
-                                                             <img src={(surveyForm.evaluation_summary as any).whatsapp_evidence_url} className="w-full h-full object-cover" alt="WA Evidence" />
-                                                         </div>
-                                                     )}
-                                                 </div>
-                                             </div>
-
-                                             {[
-                                                 { id: 'room_facilities', label: 'Fasilitas Kamar', icon: '🛏️' },
-                                                 { id: 'bathroom_facilities', label: 'Fasilitas WC', icon: '🚿' },
-                                                 { id: 'water_check', label: 'Pengecekan Air', icon: '💧' },
-                                                 { id: 'wifi_check', label: 'Pengecekan WiFi', icon: '📶' },
-                                                 { id: 'security_check', label: 'Pengecekan Keamanan', icon: '🛡️' },
-                                                 { id: 'access_check', label: 'Akses Umum/Toko/Kampus', icon: '📍' },
-                                                 { id: 'resident_testimonial', label: 'Testimoni Penghuni', icon: '💬' },
-                                             ].map((field) => (
-                                                 <div key={field.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm transition-all hover:border-orange-200">
-                                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
-                                                         <span>{field.icon}</span> {field.label}
-                                                     </label>
-                                                      <textarea 
-                                                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-orange-500 transition-all outline-none mb-3"
-                                                          rows={2}
-                                                          value={(surveyForm.evaluation_summary as any)?.[field.id] || ''}
-                                                          onChange={e => {
-                                                              if (!isAdmin && !isAgent) return;
-                                                              setSurveyForm({ 
-                                                                  ...surveyForm, 
-                                                                  evaluation_summary: { 
-                                                                      ...(surveyForm.evaluation_summary || {}), 
-                                                                      [field.id]: e.target.value 
-                                                                  } 
-                                                              });
-                                                          }}
-                                                          disabled={!isAdmin && !isAgent}
-                                                          placeholder={(!isAdmin && !isAgent) ? 'Belum ada data' : `Tulis hasil pengecekan ${field.label.toLowerCase()}...`}
-                                                      />
-                                                     
-                                                     {/* Photo Upload Section */}
-                                                     <div className="space-y-2">
-                                                         <div className="flex items-center justify-between">
-                                                             <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Bukti Foto</span>
-                                                              <label className={`text-[9px] font-black uppercase px-2.5 py-1.5 rounded-lg bg-orange-50 text-orange-600 transition-colors flex items-center gap-1.5 ${(!isAdmin && !isAgent) ? 'opacity-50 cursor-default' : 'cursor-pointer hover:bg-orange-100'} ${isUploadingSurveyPhoto === field.id ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                                                 {isUploadingSurveyPhoto === field.id ? (
-                                                                     <>
-                                                                         <div className="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-                                                                         Uploading...
-                                                                     </>
-                                                                 ) : (
-                                                                     <>
-                                                                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                                                                         Tambah Foto
-                                                                     </>
-                                                                 )}
-                                                                 <input 
-                                                                     type="file" 
-                                                                     multiple 
-                                                                     accept="image/*" 
-                                                                     className="hidden" 
-                                                                     disabled={isUploadingSurveyPhoto === field.id}
-                                                                     onChange={(e) => handleSurveyPhotoUpload(field.id, e.target.files)} 
-                                                                 />
-                                                             </label>
-                                                         </div>
-                                                         
-                                                         {/* Photo Preview Grid */}
-                                                         <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
-                                                             {((surveyForm.evaluation_summary as any)?.[`${field.id}_photos`] || []).map((url: string, idx: number) => (
-                                                                 <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-gray-100 group shadow-sm bg-gray-50">
-                                                                     <img src={url} alt="Proof" className="w-full h-full object-cover" />
-                                                                     <button 
-                                                                         type="button"
-                                                                         onClick={() => handleRemoveSurveyPhoto(field.id, url)}
-                                                                         className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all backdrop-blur-[2px]"
-                                                                     >
-                                                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                                     </button>
-                                                                 </div>
-                                                             ))}
-                                                         </div>
-                                                     </div>
-                                                 </div>
-                                             ))}
-                                         </div>
-                                     </div>
-                                 )}
-
-                                 {isAdmin && surveyForm.status === 'COMPLETED' && (
-                                     <div className="pt-4 border-t border-orange-100">
-                                          <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100">
-                                             <div className="flex items-center gap-3 mb-4">
-                                                 <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-lg">📝</div>
-                                                 <div>
-                                                     <h3 className="text-sm font-black text-orange-900 uppercase tracking-tight">Hasil Survey Selesai</h3>
-                                                     <p className="text-[10px] text-orange-500 font-bold uppercase tracking-widest">Laporan Lengkap Agen</p>
-                                                 </div>
-                                             </div>
-                                             <p className="text-xs text-orange-800 leading-relaxed mb-4 italic">"Survey telah diselesaikan oleh agen. Semua data fasilitas dan link dokumentasi telah terlampir."</p>
-                                             <button 
-                                                 type="button"
-                                                 onClick={() => window.open(surveyForm.result_drive_link, '_blank')}
-                                                 className="w-full bg-orange-500 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-md hover:bg-orange-600 transition-all flex items-center justify-center gap-2"
-                                             >
-                                                 📂 Buka Folder Dokumentasi
-                                             </button>
-                                          </div>
-                                     </div>
-                                 )}
-                             </div>
-
-                             <div className="flex gap-3 pt-4 p-6 border-t border-gray-100">
-                                 <button 
-                                     type="button"
-                                     onClick={() => setIsEditingSurvey(null)}
-                                     className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-                                 >
-                                     {(!isAdmin && !isAgent) ? 'Tutup' : 'Batal'}
-                                 </button>
-                                 {(isAdmin || isAgent) && (
-                                     <button 
-                                         type="submit" 
-                                         disabled={isSubmitting}
-                                         className="flex-[2] py-3.5 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
-                                     >
-                                         {isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}
-                                     </button>
-                                 )}
-                             </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                {/* MODAL MANUAL ADD VERIFIKASI KOST */}
-                {isAddingManualVerif && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsAddingManualVerif(false)}></div>
-                        <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95">
-                            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                                <div><h2 className="text-xl font-black uppercase text-gray-900">Tambah Verifikasi Manual</h2><p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Catat jasa layanan surveyor</p></div>
-                                <button onClick={() => setIsAddingManualVerif(false)} className="w-8 h-8 border rounded-full">&times;</button>
-                            </div>
-                            <form onSubmit={handleManualVerifSubmit} className="flex-grow overflow-y-auto p-6 space-y-5">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Nama Pemesan</label><input required className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualVerifForm.name || ''} onChange={e => setManualVerifForm({ ...manualVerifForm, name: e.target.value })} /></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">WhatsApp</label><input required className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualVerifForm.phone || ''} onChange={e => setManualVerifForm({ ...manualVerifForm, phone: e.target.value })} /></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Email</label><input required type="email" className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualVerifForm.email || ''} onChange={e => setManualVerifForm({ ...manualVerifForm, email: e.target.value })} /></div>
-                                    <div className="col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Nama Kost Dituju</label><input required className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualVerifForm.kostName || ''} onChange={e => setManualVerifForm({ ...manualVerifForm, kostName: e.target.value })} /></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Jadwal Survey</label><input type="date" required className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualVerifForm.surveyDate || ''} onChange={e => setManualVerifForm({ ...manualVerifForm, surveyDate: e.target.value })} /></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Jam (WIB)</label><input type="time" required className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualVerifForm.surveyTime || ''} onChange={e => setManualVerifForm({ ...manualVerifForm, surveyTime: e.target.value })} /></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Harga (Rp)</label><input required type="number" className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualVerifForm.amount || ''} onChange={e => setManualVerifForm({ ...manualVerifForm, amount: e.target.value })} /></div>
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-500 uppercase">Status</label>
-                                        <select className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualVerifForm.status || 'Selesai'} onChange={e => setManualVerifForm({ ...manualVerifForm, status: e.target.value })}>
-                                            <option value="Selesai">Selesai (Sudah Disurvey)</option>
-                                            <option value="Dijadwalkan">Dijadwalkan</option>
-                                            <option value="Menunggu">Menunggu</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <button 
-                                    type="submit" 
-                                    disabled={isSubmitting}
-                                    className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white rounded-xl text-sm font-black uppercase tracking-wider shadow-lg active:scale-95 transition-all mt-6"
-                                >
-                                    {isSubmitting ? 'Menyimpan...' : 'Simpan Data Survey'}
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                {/* MODAL MANUAL ADD MITRA */}
-                {isAddingManualMitra && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsAddingManualMitra(false)}></div>
-                        <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95">
-                            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                                <div><h2 className="text-xl font-black uppercase text-gray-900">Tambah Mitra Manual</h2><p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Catat pendaftaran mitra via offline/WA</p></div>
-                                <button onClick={() => setIsAddingManualMitra(false)} className="w-8 h-8 border rounded-full">&times;</button>
-                            </div>
-                            <form onSubmit={handleManualMitraSubmit} className="flex-grow overflow-y-auto p-6 space-y-5">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Nama Mitra Pemilik</label><input required className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualMitraForm.name || ''} onChange={e => setManualMitraForm({ ...manualMitraForm, name: e.target.value })} /></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">WhatsApp</label><input required className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualMitraForm.phone || ''} onChange={e => setManualMitraForm({ ...manualMitraForm, phone: e.target.value })} /></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Kota Domisili</label><input required className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualMitraForm.city || ''} onChange={e => setManualMitraForm({ ...manualMitraForm, city: e.target.value })} /></div>
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-500 uppercase">Kategori Bisnis</label>
-                                        <select className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualMitraForm.businessType || 'Kos-kosan'} onChange={e => setManualMitraForm({ ...manualMitraForm, businessType: e.target.value })}>
-                                            <option value="Kos-kosan">Kos-kosan</option><option value="Apartemen">Apartemen</option><option value="Kontrakan">Kontrakan</option>
-                                        </select>
-                                    </div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase">Jml. Properti</label><input required type="number" className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualMitraForm.propertyCount || ''} onChange={e => setManualMitraForm({ ...manualMitraForm, propertyCount: e.target.value })} /></div>
-                                    <div className="col-span-2">
-                                        <label className="text-xs font-bold text-gray-500 uppercase">Status Mitra</label>
-                                        <select className="w-full mt-1 bg-gray-50 border rounded-xl px-4 py-2 text-sm font-bold" value={manualMitraForm.status || 'Diterima'} onChange={e => setManualMitraForm({ ...manualMitraForm, status: e.target.value })}>
-                                            <option value="Diterima">Diterima (Aktif)</option>
-                                            <option value="Menunggu">Menunggu</option>
-                                            <option value="Diproses">Diproses Hubungi WA</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <button 
-                                    type="submit" 
-                                    disabled={isSubmitting}
-                                    className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-xl text-sm font-black uppercase tracking-wider shadow-lg active:scale-95 transition-all mt-6"
-                                >
-                                    {isSubmitting ? 'Menyimpan...' : 'Simpan Data Mitra'}
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                )}
 
                 {/* CUSTOM CONFIRM DELETE MODAL */}
                 {showConfirmDeleteModal && itemToDelete && (
@@ -5520,191 +2696,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                     </div>
                 )}
 
-                {/* MODAL RESCHEDULE SURVEY */}
-                {isReschedulingSurvey && (
-                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsReschedulingSurvey(null)}></div>
-                        <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl relative z-10 p-8 animate-in zoom-in-95">
-                            <div className="text-center mb-6">
-                                <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                </div>
-                                <h3 className="text-xl font-black uppercase text-gray-900">Jadwal Ulang</h3>
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Ajukan Waktu Baru ke User</p>
-                            </div>
 
-                            <div className="space-y-4 mb-8">
-                                <div>
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Tanggal Baru</label>
-                                    <input 
-                                        type="date" 
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3.5 text-sm font-bold focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-                                        value={newSurveyDate}
-                                        onChange={e => setNewSurveyDate(e.target.value)}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Jam Baru (WIB)</label>
-                                    <input 
-                                        type="time" 
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3.5 text-sm font-bold focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-                                        value={newSurveyTime}
-                                        onChange={e => setNewSurveyTime(e.target.value)}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col gap-3">
-                                <button 
-                                    onClick={handleRequestReschedule}
-                                    disabled={isSubmitting}
-                                    className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-orange-100 active:scale-95 transition-all disabled:opacity-50"
-                                >
-                                    {isSubmitting ? 'Mengirim...' : 'Kirim Permintaan'}
-                                </button>
-                                <button 
-                                    onClick={() => setIsReschedulingSurvey(null)}
-                                    className="w-full py-3 text-gray-400 hover:text-gray-600 text-[10px] font-black uppercase tracking-widest transition-all"
-                                >
-                                    Batalkan
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* MODAL BANNER MANAGEMENT */}
-                {isBannerModalOpen && (
-                    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsBannerModalOpen(false)}></div>
-                        <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl relative z-10 p-8 animate-in zoom-in-95 overflow-y-auto max-h-[90vh]">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-xl font-black uppercase text-gray-900">{editingBannerId ? 'Edit Banner' : 'Tambah Banner Promo'}</h3>
-                                <button onClick={() => setIsBannerModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                </button>
-                            </div>
-
-                            <form onSubmit={handleBannerSubmit} className="space-y-5">
-                                <div>
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Nama / Judul Promo</label>
-                                    <input 
-                                        type="text" 
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3.5 text-sm font-bold focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-                                        placeholder="Contoh: Promo Ramadhan"
-                                        value={bannerForm.title}
-                                        onChange={e => setBannerForm({...bannerForm, title: e.target.value})}
-                                        required
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">
-                                        Gambar Banner (Format 16:9 disarankan)
-                                    </label>
-                                    <input 
-                                        type="file" 
-                                        accept="image/*"
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3.5 text-sm font-bold focus:ring-2 focus:ring-orange-500 outline-none transition-all file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200"
-                                        onChange={e => setBannerImageFile(e.target.files?.[0] || null)}
-                                        required={!editingBannerId}
-                                    />
-                                    {editingBannerId && !bannerImageFile && bannerForm.image_url && (
-                                        <p className="text-[9px] text-gray-400 mt-2 ml-1 italic">* Biarkan kosong jika tidak ingin mengubah gambar</p>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Link URL (Opsional)</label>
-                                    <input 
-                                        type="text" 
-                                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3.5 text-sm font-bold focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-                                        placeholder="https://..."
-                                        value={bannerForm.link_url}
-                                        onChange={e => setBannerForm({...bannerForm, link_url: e.target.value})}
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Urutan (Sort)</label>
-                                        <input 
-                                            type="number" 
-                                            className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3.5 text-sm font-bold focus:ring-2 focus:ring-orange-500 outline-none transition-all"
-                                            value={bannerForm.sort_order}
-                                            onChange={e => setBannerForm({...bannerForm, sort_order: parseInt(e.target.value)})}
-                                        />
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Status Keaktifan</label>
-                                        <div className="flex items-center gap-3 mt-2">
-                                            <button 
-                                                type="button"
-                                                onClick={() => setBannerForm({...bannerForm, is_active: !bannerForm.is_active})}
-                                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${bannerForm.is_active ? 'bg-green-500' : 'bg-gray-200'}`}
-                                            >
-                                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${bannerForm.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
-                                            </button>
-                                            <span className="text-xs font-bold text-gray-600">{bannerForm.is_active ? 'AKTIF' : 'NONAKTIF'}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="pt-4">
-                                    <button 
-                                        type="submit"
-                                        disabled={isSubmitting}
-                                        className="w-full py-4 bg-gray-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all disabled:opacity-50"
-                                    >
-                                        {isSubmitting ? 'Menyimpan...' : 'Simpan Banner'}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                {/* MODAL RATING USER (Feedback) */}
-                {userRating > -1 && userRating !== 0 && (
-                    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setUserRating(0)}></div>
-                        <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl relative z-10 p-8 animate-in zoom-in-95 text-center">
-                            <div className="w-20 h-20 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                                <svg className="w-10 h-10" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
-                            </div>
-                            <h3 className="text-xl font-black uppercase text-gray-900 mb-2">Beri Nilai Survey</h3>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">Bagaimana kualitas layanan agen kami?</p>
-
-                            <div className="flex justify-center gap-2 mb-8">
-                                {[1, 2, 3, 4, 5].map(star => (
-                                    <button 
-                                        key={star} 
-                                        onClick={() => setUserRating(star)}
-                                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${userRating >= star ? 'bg-yellow-400 text-white' : 'bg-gray-100 text-gray-300'}`}
-                                    >
-                                        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
-                                    </button>
-                                ))}
-                            </div>
-
-                            <textarea 
-                                className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 text-sm font-medium focus:ring-2 focus:ring-yellow-400 outline-none transition-all mb-6"
-                                rows={3}
-                                placeholder="Tulis masukan Anda (Opsional)..."
-                                value={userComment}
-                                onChange={e => setUserComment(e.target.value)}
-                            />
-
-                             <button 
-                                 onClick={handleSubmitFeedback}
-                                 disabled={isSubmitting || userRating === 0}
-                                 className="w-full py-4 bg-gray-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all disabled:opacity-50"
-                             >
-                                 {isSubmitting ? 'Mengirim...' : 'Simpan Feedback'}
-                             </button>
-                        </div>
-                    </div>
-                )}
 
             </div>
         </div>

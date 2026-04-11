@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import MitraProfile from './MitraProfile';
 import ChatWindow from '../components/ChatWindow';
+import { sendWhatsAppTemplate } from '../whatsappService';
 
 interface MitraDashboardProps {
     uid: string;
@@ -123,6 +124,31 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [isEditingBank, setIsEditingBank] = useState(false);
     const [isSavingBank, setIsSavingBank] = useState(false);
     const [editForm, setEditForm] = useState({...withdrawalAccount});
+    const [isTestingWa, setIsTestingWa] = useState(false);
+    const [testWaPhone, setTestWaPhone] = useState('');
+
+    const handleTestWhatsApp = async () => {
+        if (!testWaPhone) {
+            alert('Masukkan nomor WhatsApp (format 628xxx)');
+            return;
+        }
+        setIsTestingWa(true);
+        try {
+            const res = await sendWhatsAppTemplate({
+                to: testWaPhone,
+                templateName: 'hello_world'
+            });
+            if (res.success) {
+                alert('Berhasil! Silakan cek WhatsApp Anda.');
+            } else {
+                alert('Gagal: ' + (res.error?.error?.message || 'Error tidak diketahui'));
+            }
+        } catch (err: any) {
+            alert('Error: ' + err.message);
+        } finally {
+            setIsTestingWa(false);
+        }
+    };
 
     const saveWithdrawalAccount = async () => {
         setIsSavingBank(true);

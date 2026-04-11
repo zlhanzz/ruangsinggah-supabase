@@ -1481,3 +1481,104 @@ export async function deleteBanner(bannerId: string): Promise<void> {
   const { error } = await supabase.from('banners').delete().eq('id', bannerId);
   if (error) throw error;
 }
+
+// ---- USER MANAGEMENT FUNCTIONS ----
+
+/**
+ * Get users filtered by their role
+ * @param role 'user' | 'owner' | 'survey_agent' | 'admin'
+ */
+export async function getUsersByRole(role: string): Promise<any[]> {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(authUser.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  if (role === 'survey_agent') {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .or(`role.eq.survey_agent,role.eq.agen`)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  }
+
+  if (role === 'owner') {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .or(`role.eq.owner,role.eq.mitra`)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  }
+
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('role', role)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Get active mitra (owners) with their property count
+ */
+export async function getActiveMitra(): Promise<any[]> {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(authUser.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  // Fetch users with role 'owner' or 'mitra'
+  const { data: users, error: userError } = await supabase
+    .from('users')
+    .select('*')
+    .or(`role.eq.owner,role.eq.mitra`)
+    .order('created_at', { ascending: false });
+
+  if (userError) throw userError;
+  if (!users) return [];
+
+  // Fetch property counts for each owner
+  const { data: props, error: propsError } = await supabase
+    .from('properties')
+    .select('owner_uid');
+
+  if (propsError) throw propsError;
+
+  const countMap = new Map<string, number>();
+  props?.forEach(p => {
+    countMap.set(p.owner_uid, (countMap.get(p.owner_uid) || 0) + 1);
+  });
+
+  return users.map(u => ({
+    ...u,
+    propertyCount: countMap.get(u.id) || 0
+  }));
+}
+
+/**
+ * Delete a user account (Warning: Permanent)
+ */
+export async function deleteUserAccount(userId: string): Promise<void> {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(authUser.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  // Note: Only deleting from the 'users' table. 
+  // Auth delete usually requires Service Role which should be careful.
+  const { error } = await supabase
+    .from('users')
+    .delete()
+    .eq('id', userId);
+
+  if (error) throw error;
+}

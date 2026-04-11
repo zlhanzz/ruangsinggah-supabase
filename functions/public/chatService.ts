@@ -104,8 +104,8 @@ export async function sendMessage(sessionId: string, senderId: string, senderTyp
     .single();
 
   if (error) {
-    console.error('Error sending message:', error);
-    throw error;
+    console.error('[Ultra-Log] Error sending message to DB:', error);
+    throw new Error(`Gagal mengirim ke DB: ${error.message}`);
   }
 
   // Update last_message di sesi untuk preview di daftar chat
