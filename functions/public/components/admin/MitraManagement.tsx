@@ -8,6 +8,7 @@ interface MitraManagementProps {
     loadMitraRequests: () => void;
     loadActiveMitra: () => void;
     loading: boolean;
+    onTransferProperty?: (mitra: any) => void;
 }
 
 const MitraManagement: React.FC<MitraManagementProps> = ({
@@ -183,18 +184,29 @@ const MitraManagement: React.FC<MitraManagementProps> = ({
                                 <span className="text-gray-900 font-black">{new Date(mitra.created_at).toLocaleDateString('id-ID')}</span>
                             </div>
                         </div>
-                        <div className="flex gap-2">
-                             <button 
-                                onClick={() => window.open(`https://wa.me/${mitra.phone}`, '_blank')}
-                                className="flex-1 py-2.5 bg-green-50 text-green-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-green-600 hover:text-white transition-all border border-green-100"
-                            >
-                                Chat
-                            </button>
-                            <button 
-                                className="flex-1 py-2.5 bg-gray-50 text-gray-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-100 transition-all border border-gray-100"
-                            >
-                                Detail
-                            </button>
+                        <div className="flex flex-col gap-2">
+                             <div className="flex gap-2">
+                                <button 
+                                    onClick={() => window.open(`https://wa.me/${mitra.phone}`, '_blank')}
+                                    className="flex-1 py-2.5 bg-green-50 text-green-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-green-600 hover:text-white transition-all border border-green-100"
+                                >
+                                    Chat
+                                </button>
+                                <button 
+                                    className="flex-1 py-2.5 bg-gray-50 text-gray-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-100 transition-all border border-gray-100"
+                                >
+                                    Detail
+                                </button>
+                            </div>
+                            {onTransferProperty && (
+                                <button 
+                                    onClick={() => onTransferProperty(mitra)}
+                                    className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-md shadow-emerald-100 active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4-4m-4 4l4 4" /></svg>
+                                    Transfer Properti Baru
+                                </button>
+                            )}
                         </div>
                     </div>
                 ))}

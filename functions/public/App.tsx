@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, Navigate, useParams } from 'react-router-dom';
 import { supabase } from './supabase';
 import { Page, Kost } from './types';
 import Navbar from './components/Navbar';
@@ -19,7 +19,7 @@ import MyKost from './pages/MyKost';
 import Chat from './pages/Chat';
 import MitraDashboard from './pages/MitraDashboard';
 import OrderPaymentStatus from './pages/OrderPaymentStatus';
-import { getPublishedProperties } from './userService';
+import { getPublishedProperties, getPublishedPropertyDetails } from './userService';
 
 // Improved Protected Route Wrapper for strict access control
 const ProtectedRoute: React.FC<{ 
@@ -237,12 +237,8 @@ const App: React.FC = () => {
   };
 
   const handleKostSelect = (id: string) => {
-    if (!user) {
-      alert('Login terlebih dahulu untuk akses selengkapnya.');
-      navigate(Page.LOGIN);
-      return;
-    }
-    navigate(`${Page.DETAIL}?kostId=${id}`);
+    // We removed the strict login block to allow unauthenticated users to view details (professional public SEO)
+    navigate(`/kost/${id}`);
   };
 
   const handleLogout = async () => {
@@ -280,7 +276,7 @@ const App: React.FC = () => {
     alert('Data Tersimpan');
     if (pendingTransaction) {
       if (pendingTransaction.type === 'kost') {
-        navigate(`${Page.DETAIL}?kostId=${pendingTransaction.id}`);
+        navigate(`/kost/${pendingTransaction.id}`);
       } else if (pendingTransaction.type === 'product') {
         navigate(Page.PRODUCTS);
       }
@@ -302,13 +298,63 @@ const App: React.FC = () => {
   const selectedKostId = query.get('kostId');
   const selectedKost = selectedKostId ? listings.find(k => k.id === selectedKostId) : null;
 
-  // Pages that manage their own navigation & header
   const isDashboardPage = [
     Page.DASHBOARD_MITRA,
     Page.DASHBOARD_ADMIN,
     Page.DASHBOARD_AGENT,
     Page.DASHBOARD_OWNER,
-  ].includes(location.pathname as Page);
+  ].some(p => location.pathname.startsWith(p));
+
+  // --- WRAPPER FOR DEEP LINK DETAIL ---
+  const KostDetailWrapper = ({ listings, user, isProfileComplete, setPendingTransaction }: any) => {
+    const { id } = useParams();
+    const [kost, setKost] = useState<Kost | null>(listings.find((k: any) => k.id === id) || null);
+    const [loading, setLoading] = useState(!kost);
+
+    useEffect(() => {
+      async function loadKost() {
+        if (!id) return;
+        if (!kost) {
+          setLoading(true);
+          try {
+            const data = await getPublishedPropertyDetails(id);
+            setKost(data);
+          } catch (e) {
+            console.error(e);
+          } finally {
+            setLoading(false);
+          }
+        }
+      }
+      loadKost();
+    }, [id]);
+
+    if (loading) return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+      </div>
+    );
+
+    if (!kost) return <Navigate to={Page.LISTINGS} replace />;
+
+    return (
+      <KostDetail
+        kost={kost}
+        onBack={() => navigate(Page.LISTINGS)}
+        user={user}
+        onLoginRedirect={() => navigate(Page.LOGIN)}
+        validateProfile={() => {
+          if (!isProfileComplete(user)) {
+            setPendingTransaction({ type: 'kost', id: kost.id });
+            alert('Silahkan lengkapi profile sebelum transaksi.');
+            navigate(Page.PROFILE);
+            return false;
+          }
+          return true;
+        }}
+      />
+    );
+  };
 
   return (
     <div className="min-h-screen flex flex-col font-sans selection:bg-orange-100 selection:text-orange-900">
@@ -397,7 +443,7 @@ const App: React.FC = () => {
               </ProtectedRoute>
             } />
             
-            <Route path={Page.DASHBOARD_ADMIN} element={
+            <Route path={`${Page.DASHBOARD_ADMIN}/*`} element={
               <ProtectedRoute user={user} loadingAuth={loadingAuth} requiredRole="admin">
                 <Dashboard 
                   role={user?.role || ''} 
@@ -414,7 +460,7 @@ const App: React.FC = () => {
               </ProtectedRoute>
             } />
             
-            <Route path={Page.DASHBOARD_MITRA} element={
+            <Route path={`${Page.DASHBOARD_MITRA}/*`} element={
               <ProtectedRoute user={user} loadingAuth={loadingAuth} requiredRole="owner">
                 <MitraDashboard 
                   user={user}
@@ -431,7 +477,7 @@ const App: React.FC = () => {
               <Navigate to={Page.DASHBOARD_MITRA} replace />
             } />
             
-            <Route path={Page.DASHBOARD_AGENT} element={
+            <Route path={`${Page.DASHBOARD_AGENT}/*`} element={
               <ProtectedRoute user={user} loadingAuth={loadingAuth} requiredRole="survey_agent">
                 <Dashboard 
                   role={user?.role || 'survey_agent'} 
@@ -448,27 +494,17 @@ const App: React.FC = () => {
               </ProtectedRoute>
             } />
             
-            <Route path={Page.DETAIL} element={
-              selectedKost ? (
-                <KostDetail
-                  kost={selectedKost}
-                  onBack={() => navigate(Page.LISTINGS)}
-                  user={user}
-                  onLoginRedirect={() => navigate(Page.LOGIN)}
-                  validateProfile={() => {
-                    if (!isProfileComplete(user)) {
-                      setPendingTransaction({ type: 'kost', id: selectedKost.id });
-                      alert('Silahkan lengkapi profile sebelum transaksi.');
-                      navigate(Page.PROFILE);
-                      return false;
-                    }
-                    return true;
-                  }}
-                />
-              ) : (
-                <Navigate to={Page.LISTINGS} replace />
-              )
+            <Route path={Page.DETAIL_PATH} element={
+              <KostDetailWrapper 
+                listings={listings} 
+                user={user} 
+                isProfileComplete={isProfileComplete} 
+                setPendingTransaction={setPendingTransaction} 
+              />
             } />
+
+            {/* Legacy redirect */}
+            <Route path={Page.DETAIL} element={<Navigate to={selectedKostId ? `/kost/${selectedKostId}` : Page.LISTINGS} replace />} />
 
             <Route path="*" element={<Navigate to={Page.HOME} replace />} />
           </Routes>

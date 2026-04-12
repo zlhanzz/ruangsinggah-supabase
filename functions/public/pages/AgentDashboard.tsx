@@ -42,7 +42,8 @@ interface AgentDashboardProps {
     uid: string;
     surveyRequests: SurveyRequest[];
     loadSurveyRequests: (silent?: boolean) => Promise<void>;
-    onPageChange?: (page: any) => void;
+    activeMenu: 'overview' | 'tasks' | 'wallet' | 'profile';
+    onMenuChange: (menu: 'overview' | 'tasks' | 'wallet' | 'profile') => void;
     verificationStatus?: string;
     user?: any;
 }
@@ -52,10 +53,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     user,
     surveyRequests, 
     loadSurveyRequests,
-    onPageChange,
+    activeMenu,
+    onMenuChange,
     verificationStatus
 }) => {
-    const [activeMenu, setActiveMenu] = useState<'overview' | 'tasks' | 'wallet' | 'profile'>('overview');
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [agentTab, setAgentTab] = useState<'pending' | 'active' | 'history'>('pending');
     
@@ -275,7 +276,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         </div>
                     </div>
                     <button 
-                        onClick={() => setActiveMenu('profile')}
+                        onClick={() => onMenuChange('profile')}
                         className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-200"
                     >
                         Verifikasi Sekarang
@@ -480,7 +481,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                             onClick={async () => {
                                                 if (verificationStatus !== 'verified') {
                                                     alert('Akun Anda belum terverifikasi. Silahkan lengkapi identitas di menu Profil.');
-                                                    setActiveMenu('profile');
+                                                    onMenuChange('profile');
                                                     return;
                                                 }
                                                 if (window.confirm('Terima tugas survey ini?')) {
@@ -875,7 +876,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             icon={item.icon}
                             label={item.label}
                             badge={item.badge}
-                            onClick={() => setActiveMenu(item.key)}
+                            onClick={() => onMenuChange(item.key as any)}
                         />
                     ))}
                 </nav>
@@ -962,7 +963,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             {surveyRequests.filter(r => r.status === 'PENDING_ASSIGNMENT').length > 0 && <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border border-white" />}
                         </button>
                         <button 
-                            onClick={() => setActiveMenu('profile')}
+                            onClick={() => onMenuChange('profile')}
                             className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-black text-xs overflow-hidden"
                         >
                             {user?.photoURL || user?.photo_url ? (
@@ -997,7 +998,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             {surveyRequests.filter(r => r.status === 'PENDING_ASSIGNMENT').length > 0 && <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border border-white" />}
                         </button>
                         <button 
-                            onClick={() => setActiveMenu('profile')}
+                            onClick={() => onMenuChange('profile')}
                             className="flex items-center gap-3 pl-2 pr-1 py-1 rounded-2xl hover:bg-gray-50 transition-all group"
                         >
                             <div className="text-right hidden xl:block">
@@ -1032,7 +1033,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             icon={item.icon}
                             label={item.label}
                             badge={item.badge}
-                            onClick={() => setActiveMenu(item.key)}
+                            onClick={() => onMenuChange(item.key as any)}
                         />
                     ))}
                 </nav>

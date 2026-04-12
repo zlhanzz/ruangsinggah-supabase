@@ -46,8 +46,11 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
     const [isUploadingSurveyPhoto, setIsUploadingSurveyPhoto] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const [isAddingManualVerif, setIsAddingManualVerif] = useState(false);
-    const [manualVerifForm, setManualVerifForm] = useState<any>({});
+    const [isAddingManualSurvey, setIsAddingManualSurvey] = useState(false);
+    const [manualSurveyForm, setManualSurveyForm] = useState<any>({});
+
+    const [viewingSurveyProof, setViewingSurveyProof] = useState<any>(null);
+    const [viewingSurveyInvoice, setViewingSurveyInvoice] = useState<any>(null);
 
     // --- HANDLERS ---
     const handleDeleteSurveyLocal = async (id: string, name: string) => {
@@ -98,51 +101,50 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                 await notifySurveyStatusUpdate(isEditingSurvey.id, updates.status);
             }
 
-            alert('Survey berhasil diperbarui');
-            refreshData();
+            alert('Data survey berhasil diperbarui');
             setIsEditingSurvey(null);
+            refreshData();
         } catch (error) {
             console.error(error);
-            alert('Gagal update survey');
+            alert('Gagal mengupdate survey');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const handleRequestReschedule = async () => {
+    const handleRescheduleLocal = async (e: React.FormEvent) => {
+        e.preventDefault();
         if (!isReschedulingSurvey) return;
         setIsSubmitting(true);
         try {
-            const updates = {
+            await updateSurveyRequest(isReschedulingSurvey.id, {
                 survey_date: newSurveyDate,
                 survey_time: newSurveyTime,
-                notes: `(Reschedule Requested) ${isReschedulingSurvey.notes || ''}`.trim()
-            };
-            await updateSurveyRequest(isReschedulingSurvey.id, updates);
-            
-            const waText = `Halo ${isReschedulingSurvey.user?.name}, agen survey kami mengajukan perubahan jadwal survey untuk kost ${isReschedulingSurvey.kost_name} menjadi tanggal ${newSurveyDate} jam ${newSurveyTime}. Mohon konfirmasinya.`;
-            window.open(`https://wa.me/${isReschedulingSurvey.user?.phone}?text=${encodeURIComponent(waText)}`, '_blank');
-            
-            alert('Permintaan Jadwal Ulang Terkirim');
-            refreshData();
+                status: 'RESCHEDULED'
+            });
+            alert('Jadwal survey berhasil diubah');
             setIsReschedulingSurvey(null);
+            refreshData();
         } catch (error) {
-            alert('Gagal mengirim permintaan jadwal ulang');
+            alert('Gagal mengubah jadwal');
         } finally {
             setIsSubmitting(false);
         }
     };
 
     const handleSubmitFeedback = async () => {
-        if (!isEditingSurvey) return;
+        if (!isEditingSurvey || userRating === 0) return;
         setIsSubmitting(true);
         try {
-            const updates = { user_rating: userRating, user_comment: userComment };
-            await updateSurveyRequest(isEditingSurvey.id, updates);
-            alert('Terima kasih atas feedback Anda!');
-            refreshData();
+            await updateSurveyRequest(isEditingSurvey.id, {
+                user_rating: userRating,
+                user_comment: userComment
+            });
+            alert('Terima kasih atas penilaian Anda!');
+            setIsEditingSurvey(null);
             setUserRating(0);
             setUserComment('');
+            refreshData();
         } catch (error) {
             alert('Gagal menyimpan feedback');
         } finally {
@@ -166,25 +168,26 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
     };
 
     const handleSurveyPhotoUploadLocal = async (fieldId: string, files: FileList | null) => {
-        if (!files || files.length === 0 || !isEditingSurvey) return;
+        if (!isEditingSurvey || !files || files.length === 0) return;
         setIsUploadingSurveyPhoto(fieldId);
         try {
-            const uploadPromises = Array.from(files).map(file => uploadSurveyPhoto(isEditingSurvey.id, fieldId, file));
-            const newUrls = await Promise.all(uploadPromises);
+            const uploads = Array.from(files).map(file => uploadSurveyPhoto(isEditingSurvey.id, fieldId, file));
+            const urls = await Promise.all(uploads);
             
+            const photoField = `${fieldId}_photos`;
             const currentSummary = (surveyForm.evaluation_summary as any) || {};
-            const currentPhotos = currentSummary[`${fieldId}_photos`] || [];
-            
+            const existingPhotos = currentSummary[photoField] || [];
+
             setSurveyForm({
                 ...surveyForm,
                 evaluation_summary: {
                     ...currentSummary,
-                    [`${fieldId}_photos`]: [...currentPhotos, ...newUrls]
+                    [photoField]: [...existingPhotos, ...urls]
                 }
             });
         } catch (error) {
+            alert('Gagal mengupload foto survey');
             console.error(error);
-            alert('Gagal upload foto');
         } finally {
             setIsUploadingSurveyPhoto(null);
         }
@@ -194,14 +197,15 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
         if (!isEditingSurvey || !window.confirm('Hapus foto ini?')) return;
         try {
             await deleteSurveyPhoto(url);
+            const photoField = `${fieldId}_photos`;
             const currentSummary = (surveyForm.evaluation_summary as any) || {};
-            const currentPhotos = currentSummary[`${fieldId}_photos`] || [];
-            
+            const existingPhotos = currentSummary[photoField] || [];
+
             setSurveyForm({
                 ...surveyForm,
                 evaluation_summary: {
                     ...currentSummary,
-                    [`${fieldId}_photos`]: currentPhotos.filter((p: string) => p !== url)
+                    [photoField]: existingPhotos.filter((p: string) => p !== url)
                 }
             });
         } catch (error) {
@@ -209,17 +213,13 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
         }
     };
 
-    const handleOpenEdit = (req: SurveyRequest) => {
-        setIsEditingSurvey(req);
-        setSurveyForm(req);
-    };
-
     const handleBulkDelete = async () => {
         if (selectedSurveyIds.length === 0) return;
-        if (!window.confirm(`Hapus ${selectedSurveyIds.length} survey?`)) return;
+        if (!window.confirm(`Hapus ${selectedSurveyIds.length} survey terpilih secara permanen?`)) return;
         setIsSubmitting(true);
         try {
-            await Promise.all(selectedSurveyIds.map(id => deleteSurveyRequest(id)));
+            const deletes = selectedSurveyIds.map(id => deleteSurveyRequest(id));
+            await Promise.all(deletes);
             alert('Survey terpilih berhasil dihapus');
             setSelectedSurveyIds([]);
             refreshData();
@@ -230,20 +230,21 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
         }
     };
 
-    const handleManualVerifSubmit = async (e: React.FormEvent) => {
+    const handleManualSurveySubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (isSubmitting) return;
         setIsSubmitting(true);
         try {
-            // Analogous to Dashboard.tsx logic (Dummy implementation for now)
-            alert('Data survey manual disimulasikan (Sesi Browser). Untuk implementasi database permanen, hubungkan ke API verifikasi.');
-            setIsAddingManualVerif(false);
-            setManualVerifForm({});
-            if (refreshData) refreshData();
+            // Simulasi penambahan manual ke DB
+            alert('Data survey manual disimulasikan (Sesi Browser).');
+            setIsAddingManualSurvey(false);
+            setManualSurveyForm({});
+            refreshData();
         } finally {
             setIsSubmitting(false);
         }
     };
+
     const filteredRequests = surveyRequests.filter(r => {
         if (isAdmin) {
             if (adminSurveyTab === 'all') return true;
@@ -258,11 +259,11 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
         <div className="space-y-6 animate-in fade-in duration-500 pb-20">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Verifikasi Kost (Survey)</h2>
+                    <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Layanan Jasa Survey</h2>
                     <p className="text-gray-500 text-sm mt-1">Kelola seluruh permintaan survey lapangan dari pengguna.</p>
                 </div>
                 {isAdmin && (
-                    <button onClick={() => setIsAddingManualVerif(true)} className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 shrink-0">
+                    <button onClick={() => setIsAddingManualSurvey(true)} className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 shrink-0">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
                         Tambah Manual
                     </button>
@@ -270,109 +271,132 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
             </div>
 
             {isAdmin && (
-                <div className="bg-white/80 backdrop-blur-md p-1.5 rounded-2xl border border-gray-100 flex gap-1 shadow-sm sticky top-0 z-10 transition-all overflow-x-auto no-scrollbar">
+                <div className="flex flex-wrap gap-2 mb-2">
                     {[
-                        { id: 'all', label: 'Semua', icon: '📋' },
-                        { id: 'pending', label: 'Butuh Agen', icon: '⏳' },
-                        { id: 'active', label: 'Proses', icon: '⚡' },
+                        { id: 'all', label: 'Semua Survey', icon: '📋' },
+                        { id: 'pending', label: 'Menunggu Agen', icon: '⏳' },
+                        { id: 'active', label: 'Sedang Berjalan', icon: '🚀' },
                         { id: 'completed', label: 'Selesai', icon: '✅' }
-                    ].map((t) => (
+                    ].map((tab) => (
                         <button
-                            key={t.id}
-                            onClick={() => setAdminSurveyTab(t.id as any)}
-                            className={`flex-1 min-w-[100px] py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
-                                adminSurveyTab === t.id 
-                                ? 'bg-orange-600 text-white shadow-md scale-[1.02]' 
-                                : 'text-gray-500 hover:bg-gray-100'
-                            }`}
+                            key={tab.id}
+                            onClick={() => setAdminSurveyTab(tab.id as any)}
+                            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${adminSurveyTab === tab.id
+                                ? 'bg-orange-600 text-white shadow-lg shadow-orange-100'
+                                : 'bg-white text-gray-500 border border-gray-100 hover:bg-gray-50'
+                                }`}
                         >
-                            <span>{t.icon}</span>
-                            {t.label}
+                            <span>{tab.icon}</span>
+                            {tab.label}
                         </button>
                     ))}
                 </div>
             )}
 
             <div className="grid grid-cols-1 gap-6">
-                {filteredRequests.map((req: SurveyRequest) => (
-                    <div key={req.id} className={`bg-white border rounded-2xl p-6 shadow-sm flex flex-col md:flex-row gap-6 hover:shadow-md transition-all relative overflow-hidden ${selectedSurveyIds.includes(req.id) ? 'border-orange-500 ring-1 ring-orange-500 bg-orange-50/10' : 'border-gray-100'}`}>
-                        {isAdmin && (
-                            <div className="absolute top-4 left-4 z-20">
-                                <label className="relative flex items-center justify-center cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        className="peer h-5 w-5 appearance-none rounded-md border border-gray-300 bg-white checked:bg-orange-500 checked:border-orange-500 transition-all shadow-sm"
-                                        checked={selectedSurveyIds.includes(req.id)}
-                                        onChange={(e) => {
-                                            if (e.target.checked) setSelectedSurveyIds([...selectedSurveyIds, req.id]);
-                                            else setSelectedSurveyIds(selectedSurveyIds.filter(id => id !== req.id));
-                                        }}
-                                    />
-                                    <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
-                                </label>
-                            </div>
-                        )}
-                        <div className={`flex-1 space-y-4 relative z-10 ${isAdmin ? 'pl-8' : ''}`}>
-                             <div className="flex flex-col sm:flex-row justify-between items-start border-b border-gray-50 pb-4 gap-3">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                        <span className="bg-orange-100 text-orange-700 font-bold px-2.5 py-1 rounded-lg text-[10px] uppercase tracking-wider">#{req.id.slice(0,8)}</span>
-                                        <span className="text-xs text-gray-400 font-medium">{new Date(req.created_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'short'})}</span>
-                                    </div>
-                                    <p className="font-bold text-gray-900 text-lg leading-tight mb-1">{req.kost_name}</p>
-                                    <p className="text-xs text-gray-500 font-medium flex items-center gap-1.5">
-                                        {req.user?.name || 'User'}
-                                    </p>
-                                </div>
-                                <div className="w-full sm:w-auto">
-                                    <span className={`inline-flex w-full sm:w-auto justify-center px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl border shadow-sm
-                                        ${req.status === 'AWAITING_PAYMENT' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
-                                          req.status === 'PENDING_ASSIGNMENT' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
-                                          req.status === 'AGENT_ASSIGNED' ? 'bg-orange-50 text-orange-700 border-orange-200' : 
-                                          req.status === 'SURVEYING' ? 'bg-orange-600 text-white border-orange-600 animate-pulse' : 
-                                          req.status === 'COMPLETED' ? 'bg-green-600 text-white border-green-600' : 
-                                          req.status === 'RESCHEDULED' ? 'bg-amber-500 text-white border-amber-600 shadow-amber-100' : 
-                                          'bg-red-50 text-red-700 border-red-200'}`}>
-                                        {req.status === 'AWAITING_PAYMENT' ? 'Menunggu Bayar' : 
-                                         req.status === 'PENDING_ASSIGNMENT' ? 'Menunggu Agen' : 
-                                         req.status === 'AGENT_ASSIGNED' ? 'Tugas Baru' : 
-                                         req.status === 'SURVEYING' ? 'Sedang Survey' : 
-                                         req.status === 'COMPLETED' ? 'Selesai' : 
-                                         req.status === 'RESCHEDULED' ? 'Jadwal Ulang' : 
-                                         req.status}
+                {filteredRequests.map((req) => (
+                    <div key={req.id} className="bg-white border border-gray-100 rounded-[2rem] p-8 hover:shadow-xl transition-all relative group overflow-hidden">
+                        <div className="flex flex-col lg:flex-row justify-between gap-8">
+                            <div className="flex-grow space-y-6">
+                                <div className="flex items-center gap-4 flex-wrap">
+                                    <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${req.status === 'COMPLETED' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>
+                                        {req.status}
                                     </span>
+                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{new Date(req.created_at).toLocaleDateString()}</span>
+                                    {isAdmin && (
+                                        <div className="flex items-center gap-2">
+                                            <input 
+                                                type="checkbox" 
+                                                className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500" 
+                                                checked={selectedSurveyIds.includes(req.id)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) setSelectedSurveyIds([...selectedSurveyIds, req.id]);
+                                                    else setSelectedSurveyIds(selectedSurveyIds.filter(id => id !== req.id));
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tight mb-2">{req.kost_name}</h3>
+                                    <p className="text-sm text-gray-500 font-medium max-w-xl">{req.kost_address}</p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-gray-50">
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-xl">👤</div>
+                                            <div>
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pemesan</p>
+                                                <p className="text-sm font-bold text-gray-900">{req.user?.name || 'User'}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-xl">📅</div>
+                                            <div>
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jadwal Survey</p>
+                                                <p className="text-sm font-bold text-gray-900">{req.survey_date} @ {req.survey_time}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-xl">🕵️</div>
+                                            <div>
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Agen Surveyor</p>
+                                                <p className="text-sm font-bold text-gray-900">{req.agent_name || 'Menunggu Penugasan'}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-xl">📁</div>
+                                            <div>
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Link Hasil</p>
+                                                {req.result_drive_link ? (
+                                                    <a href={req.result_drive_link} target="_blank" rel="noreferrer" className="text-sm font-bold text-blue-600 hover:underline">Buka Folder Drive</a>
+                                                ) : (
+                                                    <p className="text-sm font-bold text-gray-400 italic">Belum tersedia</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            {/* ... more details ... */}
-                            <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-50">
+
+                            <div className="lg:w-72 flex flex-col gap-3 justify-center">
+                                <button
+                                    onClick={() => {
+                                        setIsEditingSurvey(req);
+                                        setSurveyForm(req);
+                                    }}
+                                    className="w-full py-4 bg-gray-900 hover:bg-black text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-xl active:scale-95"
+                                >
+                                    {isAdmin ? '📝 Kelola Survey' : '📋 Lihat Detail'}
+                                </button>
+                                
+                                <button
+                                    onClick={() => setIsReschedulingSurvey(req)}
+                                    className="w-full py-4 bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
+                                >
+                                    🗓️ Reschedule
+                                </button>
+                                
                                 {isAdmin && (
-                                    <>
-                                        <button 
-                                            onClick={() => handleOpenEdit(req)}
-                                            className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
-                                        >
-                                            <span>⚙️</span> Kelola Survey
-                                        </button>
-                                        <button 
-                                            onClick={() => handleDeleteSurveyLocal(req.id, req.kost_name)}
-                                            className="py-3 px-4 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-[10px] font-black uppercase transition-all"
-                                        >
-                                            Hapus
-                                        </button>
-                                    </>
-                                )}
-                                {isAgent && (
-                                    <button 
-                                        onClick={() => handleOpenEdit(req)}
-                                        className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
+                                    <button
+                                        onClick={() => handleDeleteSurveyLocal(req.id, req.kost_name)}
+                                        className="w-full py-4 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
                                     >
-                                        <span>📝</span> Update Laporan
+                                        🗑️ Hapus
                                     </button>
                                 )}
-                                {!isAdmin && !isAgent && req.status === 'COMPLETED' && !req.user_rating && (
+
+                                {req.status === 'COMPLETED' && isAdmin && !req.user_rating && (
                                     <button 
-                                        onClick={() => { setIsEditingSurvey(req); setUserRating(5); }}
-                                        className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                                        onClick={() => {
+                                            setIsEditingSurvey(req);
+                                            setUserRating(1);
+                                        }}
+                                        className="w-full py-4 bg-orange-50 text-orange-600 rounded-2xl text-[10px] font-black uppercase tracking-widest"
                                     >
                                         Beri Penilaian
                                     </button>
@@ -402,9 +426,9 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
 
             {/* --- MODALS SECTION --- */}
 
-            {/* MODAL: MANUAL ADD VERIF */}
-            {isAddingManualVerif && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setIsAddingManualVerif(false)}>
+            {/* MODAL: MANUAL ADD SURVEY */}
+            {isAddingManualSurvey && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setIsAddingManualSurvey(false)}>
                     <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"></div>
                     <div className="bg-white w-full max-w-xl rounded-[3rem] shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
                         <div className="p-10 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center group">
@@ -412,26 +436,26 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                                 <h2 className="text-2xl font-black uppercase text-gray-900 tracking-tight">Input Survey Manual</h2>
                                 <p className="text-[10px] font-black text-orange-500 uppercase tracking-[0.2em] mt-2">Permintaan Luar Aplikasi</p>
                             </div>
-                            <button onClick={() => setIsAddingManualVerif(false)} className="w-12 h-12 flex items-center justify-center bg-white border-2 border-gray-100 rounded-2xl text-gray-300 hover:text-red-500 hover:border-red-500 transition-all active:scale-90 shadow-sm">&times;</button>
+                            <button onClick={() => setIsAddingManualSurvey(false)} className="w-12 h-12 flex items-center justify-center bg-white border-2 border-gray-100 rounded-2xl text-gray-300 hover:text-red-500 hover:border-red-500 transition-all active:scale-90 shadow-sm">&times;</button>
                         </div>
                         
-                        <form onSubmit={handleManualVerifSubmit} className="flex-grow overflow-y-auto p-10 space-y-10">
+                        <form onSubmit={handleManualSurveySubmit} className="flex-grow overflow-y-auto p-10 space-y-10">
                              <div className="grid grid-cols-2 gap-6">
-                                <FormField label="Nama Pemesan" placeholder="Cth: Ahmad" value={manualVerifForm.name || ''} onChange={val => setManualVerifForm({...manualVerifForm, name: val})} />
-                                <FormField label="No. WhatsApp" placeholder="62..." value={manualVerifForm.phone || ''} onChange={val => setManualVerifForm({...manualVerifForm, phone: val})} />
+                                <FormField label="Nama Pemesan" placeholder="Cth: Ahmad" value={manualSurveyForm.name || ''} onChange={val => setManualSurveyForm({...manualSurveyForm, name: val})} />
+                                <FormField label="No. WhatsApp" placeholder="62..." value={manualSurveyForm.phone || ''} onChange={val => setManualSurveyForm({...manualSurveyForm, phone: val})} />
                                 <div className="col-span-2">
-                                    <FormField label="Nama Kost" placeholder="Cth: Kost Mawar" value={manualVerifForm.kostName || ''} onChange={val => setManualVerifForm({...manualVerifForm, kostName: val})} />
+                                    <FormField label="Nama Kost" placeholder="Cth: Kost Mawar" value={manualSurveyForm.kostName || ''} onChange={val => setManualSurveyForm({...manualSurveyForm, kostName: val})} />
                                 </div>
                                 <div className="col-span-2">
-                                    <FormField label="Alamat Kost" placeholder="Alamat lengkap..." value={manualVerifForm.kostAddress || ''} onChange={val => setManualVerifForm({...manualVerifForm, kostAddress: val})} />
+                                    <FormField label="Alamat Kost" placeholder="Alamat lengkap..." value={manualSurveyForm.kostAddress || ''} onChange={val => setManualSurveyForm({...manualSurveyForm, kostAddress: val})} />
                                 </div>
-                                <FormField label="Tgl Survey" type="date" value={manualVerifForm.surveyDate || ''} onChange={val => setManualVerifForm({...manualVerifForm, surveyDate: val})} />
-                                <FormField label="Jam Survey" placeholder="Cth: 10:00 WIB" value={manualVerifForm.surveyTime || ''} onChange={val => setManualVerifForm({...manualVerifForm, surveyTime: val})} />
+                                <FormField label="Tgl Survey" type="date" value={manualSurveyForm.surveyDate || ''} onChange={val => setManualSurveyForm({...manualSurveyForm, surveyDate: val})} />
+                                <FormField label="Jam Survey" placeholder="Cth: 10:00 WIB" value={manualSurveyForm.surveyTime || ''} onChange={val => setManualSurveyForm({...manualSurveyForm, surveyTime: val})} />
                                 <div className="col-span-2">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Status Pembayaran</label>
-                                    <select className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3.5 text-sm font-bold outline-none focus:ring-2 focus:ring-orange-500/20 transition-all" value={manualVerifForm.status || 'Selesai'} onChange={e => setManualVerifForm({...manualVerifForm, status: e.target.value})}>
+                                    <select className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3.5 text-sm font-bold outline-none focus:ring-2 focus:ring-orange-500/20 transition-all" value={manualSurveyForm.status || 'Selesai'} onChange={e => setManualSurveyForm({...manualSurveyForm, status: e.target.value})}>
                                         <option value="Selesai">LUNAS</option>
-                                        <option value="Menunggu">DITENDA</option>
+                                        <option value="Menunggu">DIPENDING</option>
                                     </select>
                                 </div>
                             </div>
@@ -441,41 +465,41 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                 </div>
             )}
 
-            {/* MODAL: BUKTI BAYAR VERIF */}
-            {viewingVerifProof && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setViewingVerifProof(null)}>
+            {/* MODAL: BUKTI BAYAR SURVEY (REFACTORED) */}
+            {viewingSurveyProof && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setViewingSurveyProof(null)}>
                     <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between p-8 border-b border-gray-50">
                             <div>
                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">Bukti Transfer Survey</p>
-                                <h3 className="text-xl font-black text-gray-900 leading-tight uppercase">{viewingVerifProof.name}</h3>
+                                <h3 className="text-xl font-black text-gray-900 leading-tight uppercase">{viewingSurveyProof.name}</h3>
                             </div>
-                            <button onClick={() => setViewingVerifProof(null)} className="w-10 h-10 rounded-full bg-gray-50 hover:bg-gray-100 transition-all flex items-center justify-center">&times;</button>
+                            <button onClick={() => setViewingSurveyProof(null)} className="w-10 h-10 rounded-full bg-gray-50 hover:bg-gray-100 transition-all flex items-center justify-center">&times;</button>
                         </div>
-                        <div className="p-8">
-                            <img src={viewingVerifProof.proofUrl} alt="Bukti" className="w-full h-auto rounded-2xl shadow-inner bg-gray-50" />
+                        <div className="p-8 text-center">
+                            <img src={viewingSurveyProof.proofUrl} alt="Bukti" className="w-full h-auto rounded-2xl shadow-inner bg-gray-50 max-h-[60vh] object-contain mx-auto" />
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* MODAL: INVOICE VERIF */}
-            {viewingVerifInvoice && (
-                <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setViewingVerifInvoice(null)}>
+            {/* MODAL: INVOICE SURVEY (REFACTORED) */}
+            {viewingSurveyInvoice && (
+                <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setViewingSurveyInvoice(null)}>
                     <div className="bg-white rounded-[3rem] shadow-2xl max-w-xl w-full overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
                         <div className="bg-orange-600 p-10 text-white relative overflow-hidden">
-                            <p className="text-[10px] font-black tracking-widest uppercase opacity-60">Verification Invoice</p>
-                            <h3 className="text-3xl font-black mt-2">{viewingVerifInvoice.invoiceId}</h3>
+                            <p className="text-[10px] font-black tracking-widest uppercase opacity-60">Survey Invoice</p>
+                            <h3 className="text-3xl font-black mt-2">{viewingSurveyInvoice.invoiceId}</h3>
                         </div>
                         <div className="p-10 flex-1 overflow-y-auto space-y-8">
-                             <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Kost Target</p><p className="font-black text-gray-900 text-lg">{viewingVerifInvoice.kostName}</p></div>
+                             <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Kost Target</p><p className="font-black text-gray-900 text-lg">{viewingSurveyInvoice.kostName}</p></div>
                              <div className="grid grid-cols-2 gap-8 text-sm">
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">User</p><p className="font-bold">{viewingVerifInvoice.name}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total</p><p className="font-black text-orange-600">{FORMAT_CURRENCY(viewingVerifInvoice.amount)}</p></div>
+                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">User</p><p className="font-bold">{viewingSurveyInvoice.name}</p></div>
+                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total</p><p className="font-black text-orange-600">{FORMAT_CURRENCY(viewingSurveyInvoice.amount)}</p></div>
                              </div>
                         </div>
                         <div className="p-10 border-t border-gray-50 bg-gray-50/50 flex gap-4 shrink-0">
-                            <button onClick={() => setViewingVerifInvoice(null)} className="flex-1 py-4 bg-white border border-gray-200 text-gray-500 rounded-2xl text-[10px] font-black uppercase tracking-widest">Tutup</button>
+                            <button onClick={() => setViewingSurveyInvoice(null)} className="flex-1 py-4 bg-white border border-gray-200 text-gray-500 rounded-2xl text-[10px] font-black uppercase tracking-widest">Tutup</button>
                             <button onClick={() => window.print()} className="flex-1 py-4 bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl">Cetak</button>
                         </div>
                     </div>
@@ -520,7 +544,7 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                                                 surveyForm.status === 'RESCHEDULED' ? 'text-amber-600' :
                                                 'text-orange-600'
                                             }`}>
-                                                {surveyForm.status === 'PENDING_ASSIGNMENT' ? 'Menunggu Agen (Paid)' : 
+                                                {surveyForm.status === 'PENDING_ASSIGNMENT' ? 'Menunggu Agen' : 
                                                  surveyForm.status === 'AGENT_ASSIGNED' ? 'Agen Ditetapkan' :
                                                  surveyForm.status === 'SURVEYING' ? 'Sedang Survey' :
                                                  surveyForm.status === 'COMPLETED' ? 'Survey Selesai' :
@@ -644,7 +668,7 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                                                                      <img src={url} alt="Proof" className="w-full h-full object-cover" />
                                                                      <button 
                                                                          type="button"
-                                                                         onClick={() => handleRemoveSurveyPhotoLocal(fieldId, url)}
+                                                                         onClick={() => handleRemoveSurveyPhotoLocal(field.id, url)}
                                                                          className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
                                                                      >
                                                                          &times;

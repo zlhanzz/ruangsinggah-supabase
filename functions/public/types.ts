@@ -160,16 +160,17 @@ export enum Page {
   ABOUT = '/about',
   CONTACT = '/contact',
   LOGIN = '/login',
-  DETAIL = '/detail',
+  DETAIL = '/detail', // Backward compatibility / old base
+  DETAIL_PATH = '/kost/:id',
   DASHBOARD_OWNER = '/dashboard-owner',
   DASHBOARD_MITRA = '/dashboard-mitra',
   DASHBOARD_ADMIN = '/dashboard-admin',
+  DASHBOARD_AGENT = '/dashboard-agent',
   CHAT = '/chat',
   MY_BOOKINGS = '/my-bookings',
   PROFILE = '/profile',
   MITRA_PROFILE = '/mitra-profile',
-  SURVEY_SERVICE = '/survey-service',
-  DASHBOARD_AGENT = '/dashboard-agent'
+  SURVEY_SERVICE = '/survey-service'
 }
 
 export interface SurveyRequest {

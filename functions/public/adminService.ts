@@ -281,11 +281,33 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
       isVerified: row.is_verified,
       omnichannelContactName: row.omnichannel_contact_name,
       omnichannelContactPhone: row.omnichannel_contact_phone,
-      omnichannelContactType: row.omnichannel_contact_type,
-    } as BasicPropertyInfo;
+      } as BasicPropertyInfo;
   });
 }
 
+/**
+ * Memindahkan kepemilikan properti ke Mitra baru
+ */
+export async function transferPropertyOwnership(propertyId: string, newOwnerId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Hanya Super Admin yang dapat mentransfer properti.');
+
+  const { error } = await supabase
+    .from('properties')
+    .update({ 
+      owner_uid: newOwnerId,
+      mitra_id: newOwnerId 
+    })
+    .eq('id', propertyId);
+
+  if (error) {
+    console.error('Error transferring property:', error);
+    throw new Error(`Gagal mentransfer properti: ${error.message}`);
+  }
+}
 export async function getAdminTransactions(limitOrType?: number | string, ownerUid?: string): Promise<AdminTransaction[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');

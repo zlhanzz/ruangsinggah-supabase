@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../supabase';
 import KostFormMitra from '../components/KostFormMitra';
 import { Kost, Page } from '../types';
@@ -103,7 +104,21 @@ const BottomNavItem: React.FC<{ active: boolean; icon: React.ReactNode; label: s
 
 // ── Main Component ────────────────────────────────────────────────────────────
 const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange }) => {
-    const [activeMenu, setActiveMenu] = useState<MenuKey>('overview');
+    const navigate = useNavigate();
+    const { "*": tab } = useParams();
+
+    const [activeMenu, setActiveMenu] = useState<MenuKey>((tab as MenuKey) || 'overview');
+
+    // Sync state with URL
+    useEffect(() => {
+        if (tab && tab !== activeMenu) {
+            setActiveMenu(tab as MenuKey);
+        }
+    }, [tab]);
+
+    const handleMenuChange = (menu: MenuKey) => {
+        navigate(`${Page.DASHBOARD_MITRA}/${menu}`);
+    };
     const [bookingTab, setBookingTab] = useState<'pending' | 'awaiting_payment' | 'completed'>('pending');
     const [loading, setLoading] = useState(true);
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -175,7 +190,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const checkVerification = () => {
         if (!isVerified) {
             alert('Akses Dibatasi! Anda harus memverifikasi identitas terlebih dahulu sebelum dapat menambah atau mengelola unit kost.');
-            setActiveMenu('profile');
+            handleMenuChange('profile');
             return false;
         }
         return true;
@@ -307,7 +322,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             icon={item.icon}
                             label={item.label}
                             badge={item.badge}
-                            onClick={() => setActiveMenu(item.key)}
+                            onClick={() => handleMenuChange(item.key)}
                         />
                     ))}
                 </nav>
@@ -357,7 +372,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     icon={item.icon}
                                     label={item.label}
                                     badge={item.badge}
-                                    onClick={() => { setActiveMenu(item.key); setMobileSidebarOpen(false); }}
+                                    onClick={() => { handleMenuChange(item.key); setMobileSidebarOpen(false); }}
                                 />
                             ))}
                         </nav>
@@ -561,7 +576,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             <p className="text-xs text-gray-500 font-bold mt-0.5">Segera setujui atau tolak permintaan sewa</p>
                                         </div>
                                     </div>
-                                    <button onClick={() => setActiveMenu('bookings')} className="h-10 px-5 bg-orange-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 flex items-center gap-2 shrink-0">
+                                    <button onClick={() => handleMenuChange('bookings')} className="h-10 px-5 bg-orange-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 flex items-center gap-2 shrink-0">
                                         Lihat <ChevronRight size={14} />
                                     </button>
                                 </div>
@@ -901,7 +916,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             icon={item.icon}
                             label={item.label}
                             badge={item.badge}
-                            onClick={() => setActiveMenu(item.key)}
+                            onClick={() => handleMenuChange(item.key)}
                         />
                     ))}
                 </nav>

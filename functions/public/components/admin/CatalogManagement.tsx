@@ -98,7 +98,7 @@ const CatalogManagement: React.FC<CatalogManagementProps> = ({
                     onClick={() => setCurrentTab('verification')}
                     className={`flex-1 sm:flex-none px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${currentTab === 'verification' ? 'bg-orange-600 text-white shadow-lg shadow-orange-100' : 'text-gray-400 hover:text-gray-600'}`}
                 >
-                    Layanan Verifikasi
+                    Jasa Survey
                 </button>
                 <button
                     onClick={() => setCurrentTab('database')}
@@ -117,7 +117,7 @@ const CatalogManagement: React.FC<CatalogManagementProps> = ({
                                 ★ Katalog Jasa RuangSinggah
                             </div>
                             <h2 className="text-3xl lg:text-4xl font-black tracking-tight drop-shadow-sm leading-tight max-w-2xl">
-                                Kelola Layanan Verifikasi Kost
+                                Kelola Layanan Jasa Survey
                             </h2>
                             <p className="text-violet-100 font-medium mt-3 text-sm lg:text-base max-w-xl leading-relaxed opacity-90">
                                 Atur informasi harga, diskon, dan manfaat layanan Live Video Call Cek Lokasi yang terintegrasi langsung dengan Cart Pembayaran.

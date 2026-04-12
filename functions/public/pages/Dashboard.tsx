@@ -1,5 +1,5 @@
-
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Kost, RoomType, RoomPricing, PricingPeriod, DatabaseProduct, Page, SurveyRequest, Banner } from '../types';
 import { FORMAT_CURRENCY } from '../constants';
 import { supabase } from '../supabase';
@@ -16,7 +16,8 @@ import {
     uploadSurveyPhoto, deleteSurveyPhoto,
     getAdminMitraRequests, updateMitraRequestStatus,
     getAdminBanners, addBanner, updateBanner, deleteBanner,
-    getUsersByRole, getActiveMitra, deleteUserAccount
+    getUsersByRole, getActiveMitra, deleteUserAccount,
+    transferPropertyOwnership
 } from '../adminService';
 import AgentDashboard from './AgentDashboard';
 import { getUserTransactions } from '../userService';
@@ -181,9 +182,25 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
     const isAgent = role === 'survey_agent' || role === 'agen';
     const isOwner = role === 'owner' || role === 'mitra';
 
+    const navigate = useNavigate();
+    const { "*": tab } = useParams();
+
     const [activeMenu, setActiveMenu] = useState<DashboardMenu>(
-        isAgent ? 'overview' : (isOwner ? 'properties' : 'analytics')
+        (tab as DashboardMenu) || (isAgent ? 'overview' : (isOwner ? 'properties' : 'analytics'))
     );
+
+    // Sync state with URL
+    useEffect(() => {
+        if (tab && tab !== activeMenu) {
+            setActiveMenu(tab as DashboardMenu);
+        }
+    }, [tab]);
+
+    const handleMenuChange = (menu: DashboardMenu) => {
+        const basePath = isAdmin ? Page.DASHBOARD_ADMIN : (isAgent ? Page.DASHBOARD_AGENT : Page.DASHBOARD_MITRA);
+        navigate(`${basePath}/${menu}`);
+    };
+
     const [agentTab, setAgentTab] = useState<'pending' | 'active' | 'history'>('pending');
 
     // --- STATE FILTER ANALITIK ---
@@ -196,7 +213,12 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
     // --- STATE BARU UNTUK KONFIRMASI DELETE ---
     const [showConfirmDeleteModal, setShowConfirmDeleteModal] = useState(false);
     const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string; type: 'kost' | 'database' } | null>(null);
-    // --- AKHIR STATE BARU ---
+    // --- STATE UNTUK TRANSFER PROPERTI ---
+    const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+    const [transferMode, setTransferMode] = useState<'property' | 'mitra'>('property');
+    const [selectedTransferItem, setSelectedTransferItem] = useState<any>(null);
+    const [transferSearchQuery, setTransferSearchQuery] = useState('');
+    // --- AKHIR STATE UNTUK TRANSFER PROPERTI ---
 
     // Form State (Property)
     const initialFormState: Partial<Kost> = {
@@ -620,6 +642,33 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
             loadActiveUsers();
             loadActiveMitra();
         } catch (e) { alert('Gagal menghapus user'); }
+    };
+
+    // --- TRANSFER PROPERTY HANDLERS ---
+    const handleOpenTransferModal = (mode: 'property' | 'mitra', item: any) => {
+        setTransferMode(mode);
+        setSelectedTransferItem(item);
+        setTransferSearchQuery('');
+        setIsTransferModalOpen(true);
+    };
+
+    const handleConfirmTransfer = async (propertyId: string, newOwnerId: string) => {
+        if (!window.confirm("Apakah Anda yakin ingin memindahkan kepemilikan properti ini? Kepemilikan akan berubah sepenuhnya.")) return;
+        
+        setLoading(true);
+        try {
+            await transferPropertyOwnership(propertyId, newOwnerId);
+            alert("Properti berhasil dipindahkan ke pemilik baru!");
+            setIsTransferModalOpen(false);
+            
+            // Refresh data
+            loadProperties();
+            loadActiveMitra();
+        } catch (error: any) {
+            alert(error.message || "Gagal memindahkan properti.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     // --- PROPERTY HANDLERS ---
@@ -1697,50 +1746,66 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Sistem Manajemen</p>
             </div>
             <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+                {/* --- KATALOG UTAMA --- */}
+                <div className="pb-2">
+                    <p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Katalog Utama</p>
+                </div>
+                
                 {(isAdmin || isOwner) && (
-                    <>
-                        <SidebarItem icon="📊" label="Ringkasan Analisis" isActive={activeMenu === 'analytics'} onClick={() => setActiveMenu('analytics')} />
-                        <div className="pt-4 pb-2">
-                            <p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Katalog Utama</p>
-                        </div>
-                        <SidebarItem icon="🏠" label="Kelola Kost" isActive={activeMenu === 'properties'} onClick={() => setActiveMenu('properties')} />
-                    </>
+                    <SidebarItem icon="📊" label="Ringkasan Analisis" isActive={activeMenu === 'analytics'} onClick={() => handleMenuChange('analytics')} />
+                )}
+                
+                {(isAdmin || isOwner) && (
+                    <SidebarItem icon="🏠" label="Kelola Kost" isActive={activeMenu === 'properties'} onClick={() => handleMenuChange('properties')} />
                 )}
 
                 {isAdmin && (
-                    <SidebarItem icon="🗄️" label="Kelola Database" isActive={activeMenu === 'databases'} onClick={() => setActiveMenu('databases')} />
+                    <SidebarItem icon="🗄️" label="Kelola Database" isActive={activeMenu === 'databases'} onClick={() => handleMenuChange('databases')} />
                 )}
 
-                <div className="pt-4 pb-2">
+                {/* --- TRANSAKSI --- */}
+                <div className="pt-6 pb-2">
                     <p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                        {isAgent ? 'Tugas Survey' : 'Transaksi & Klien'}
+                        {isAgent ? 'Tugas Survey' : 'Transaksi'}
                     </p>
                 </div>
 
                 {isAgent && (
                     <>
-                        <SidebarItem icon="✅" label="Survey Saya" isActive={activeMenu === 'my_surveys'} onClick={() => setActiveMenu('my_surveys')} />
-                        <SidebarItem icon="💰" label="Penghasilan" isActive={activeMenu === 'agent_wallet'} onClick={() => setActiveMenu('agent_wallet')} />
+                        <SidebarItem icon="✅" label="Survey Saya" isActive={activeMenu === 'my_surveys'} onClick={() => handleMenuChange('my_surveys')} />
+                        <SidebarItem icon="💰" label="Penghasilan" isActive={activeMenu === 'agent_wallet'} onClick={() => handleMenuChange('agent_wallet')} />
                     </>
                 )}
 
                 {(isAdmin || isOwner) && (
-                    <SidebarItem icon="🛒" label="Sewa Kost" isActive={activeMenu === 'transactions_rent'} onClick={() => setActiveMenu('transactions_rent')} />
+                    <SidebarItem icon="🛒" label="Sewa Kost" isActive={activeMenu === 'transactions_rent'} onClick={() => handleMenuChange('transactions_rent')} />
                 )}
 
                 {isAdmin && (
                     <>
-                        <SidebarItem icon="📦" label="Pembelian DB" isActive={activeMenu === 'transactions_db'} onClick={() => setActiveMenu('transactions_db')} />
-                        <SidebarItem icon="✅" label="Verifikasi Kost" isActive={activeMenu === 'verifikasi'} onClick={() => setActiveMenu('verifikasi')} />
-                        <SidebarItem icon="👥" label="Kelola User" isActive={activeMenu === 'tenants'} onClick={() => setActiveMenu('tenants')} />
-                        <SidebarItem icon="🤝" label="Kelola Mitra" isActive={activeMenu === 'mitra'} onClick={() => setActiveMenu('mitra')} />
-                        <SidebarItem icon="🛡️" label="Kelola Agen" isActive={activeMenu === 'agent_verification'} onClick={() => setActiveMenu('agent_verification')} />
-                        <SidebarItem icon="🖼️" label="Banner Promo" isActive={activeMenu === 'banners'} onClick={() => setActiveMenu('banners')} />
+                        <SidebarItem icon="📦" label="Pembelian DB" isActive={activeMenu === 'transactions_db'} onClick={() => handleMenuChange('transactions_db')} />
+                        <SidebarItem icon="✅" label="Jasa Survey" isActive={activeMenu === 'verifikasi'} onClick={() => handleMenuChange('verifikasi')} />
+                    </>
+                )}
+
+                {/* --- MANAJEMEN --- */}
+                {!isAgent && (
+                    <div className="pt-6 pb-2">
+                        <p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Manajemen</p>
+                    </div>
+                )}
+
+                {isAdmin && (
+                    <>
+                        <SidebarItem icon="👥" label="Kelola User" isActive={activeMenu === 'tenants'} onClick={() => handleMenuChange('tenants')} />
+                        <SidebarItem icon="🤝" label="Kelola Mitra" isActive={activeMenu === 'mitra'} onClick={() => handleMenuChange('mitra')} />
+                        <SidebarItem icon="🛡️" label="Kelola Agen" isActive={activeMenu === 'agent_verification'} onClick={() => handleMenuChange('agent_verification')} />
+                        <SidebarItem icon="🖼️" label="Banner Promo" isActive={activeMenu === 'banners'} onClick={() => handleMenuChange('banners')} />
                     </>
                 )}
 
                 {(isAdmin || isOwner) && (
-                    <SidebarItem icon="🛠️" label="Komplain" isActive={activeMenu === 'complaints'} onClick={() => setActiveMenu('complaints')} />
+                    <SidebarItem icon="🛠️" label="Komplain" isActive={activeMenu === 'complaints'} onClick={() => handleMenuChange('complaints')} />
                 )}
             </nav>
         </aside>
@@ -2295,14 +2360,15 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                             <select
                                 className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold uppercase tracking-widest focus:ring-2 focus:ring-orange-500/20"
                                 value={activeMenu}
-                                onChange={(e) => setActiveMenu(e.target.value as DashboardMenu)}
+                                onChange={(e) => handleMenuChange(e.target.value as DashboardMenu)}
                             >
                                 <option value="analytics">📊 Ringkasan Analisis</option>
                                 <option value="properties">🏠 Kelola Kost</option>
+                                {isAdmin && <option value="databases">🗄️ Kelola Database</option>}
                                 {isAdmin && <option value="verification">⚙️ Katalog Verifikasi</option>}
                                 <option value="transactions_rent">🛒 Sewa Kost</option>
                                 {isAdmin && <option value="transactions_db">📦 Pembelian DB</option>}
-                                {isAdmin && <option value="verifikasi">✅ Verifikasi Kost (Order)</option>}
+                                {isAdmin && <option value="verifikasi">✅ Jasa Survey</option>}
                                 {isAdmin && <option value="mitra">🤝 Pendaftar Mitra</option>}
                                 <option value="complaints">🛠️ Komplain</option>
                             </select>
@@ -2318,10 +2384,12 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                             {isAgent ? (
                                 <AgentDashboard 
                                     uid={uid || ''}
+                                    user={user}
                                     verificationStatus={verificationStatus}
                                     surveyRequests={surveyRequests}
                                     loadSurveyRequests={loadSurveyRequests}
-                                    onPageChange={onPageChange}
+                                    activeMenu={activeMenu as any}
+                                    onMenuChange={handleMenuChange as any}
                                 />
                             ) : (
                                 <div className="admin-content-area">
@@ -2408,6 +2476,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                                                     <td className="px-6 py-4">
                                                                         <div className="flex justify-end gap-2">
                                                                             <button onClick={() => window.open(`/?kostId=${item.id}`, '_blank')} className="px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors">Kunjungi</button>
+                                                                            {isAdmin && (
+                                                                                <button onClick={() => handleOpenTransferModal('property', item)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 transition-colors">Transfer</button>
+                                                                            )}
                                                                             <button onClick={() => openEditModal(item)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 transition-colors">Edit</button>
                                                                             <button onClick={() => handleDelete(item.id, 'kost', item.title)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 transition-colors">Hapus</button>
                                                                         </div>
@@ -2539,15 +2610,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                             isAdmin={isAdmin}
                                             isAgent={isAgent}
                                             surveyRequests={surveyRequests}
-                                            adminSurveyTab={adminSurveyTab}
-                                            setAdminSurveyTab={setAdminSurveyTab}
-                                            agentTab={agentTab}
-                                            setAgentTab={setAgentTab}
-                                            selectedSurveyIds={selectedSurveyIds}
-                                            setSelectedSurveyIds={setSelectedSurveyIds}
-                                            setIsEditingSurvey={setIsEditingSurvey}
-                                            setSurveyForm={setSurveyForm}
-                                            handleDeleteSurvey={handleDeleteSurvey}
+                                            surveyAgents={surveyAgents}
+                                            refreshData={loadSurveyRequests}
                                         />
                                     )}
                                     {activeMenu === 'mitra' && isAdmin && (
@@ -2557,6 +2621,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                             loadMitraRequests={loadMitraRequests}
                                             loadActiveMitra={loadActiveMitra}
                                             loading={loading}
+                                            onTransferProperty={(mitra) => handleOpenTransferModal('mitra', mitra)}
                                         />
                                     )}
                                     {activeMenu === 'tenants' && isAdmin && (
@@ -2698,6 +2763,109 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
 
 
 
+
+                {/* MODAL: TRANSFER PROPERTI */}
+                {isTransferModalOpen && (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm shadow-2xl" onClick={() => setIsTransferModalOpen(false)}></div>
+                        <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-300">
+                            {/* Header */}
+                            <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 sticky top-0 z-10">
+                                <div className="pr-4">
+                                    <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight leading-none">
+                                        {transferMode === 'property' ? 'Transfer Properti' : 'Pilih Properti'}
+                                    </h3>
+                                    <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mt-2 leading-none">
+                                        {transferMode === 'property' 
+                                            ? `Properti: ${selectedTransferItem?.title}` 
+                                            : `Penerima: ${selectedTransferItem?.name || selectedTransferItem?.display_name}`}
+                                    </p>
+                                </div>
+                                <button onClick={() => setIsTransferModalOpen(false)} className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 rounded-xl text-gray-400 hover:text-red-500 transition-all active:scale-95 shadow-sm">&times;</button>
+                            </div>
+
+                            {/* Search */}
+                            <div className="p-6 border-b border-gray-100 bg-white sticky top-[89px] z-10">
+                                <div className="relative group">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors">🔍</span>
+                                    <input 
+                                        type="text" 
+                                        placeholder={transferMode === 'property' ? "Cari Mitra penerima..." : "Cari properti Anda..."}
+                                        className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-transparent rounded-[1.25rem] text-sm font-bold outline-none focus:bg-white focus:border-orange-500/30 focus:ring-4 focus:ring-orange-500/5 transition-all"
+                                        value={transferSearchQuery}
+                                        onChange={(e) => setTransferSearchQuery(e.target.value)}
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+
+                            {/* List Content */}
+                            <div className="flex-grow overflow-y-auto p-4 space-y-2 bg-gray-50/30">
+                                {transferMode === 'property' ? (
+                                    // Flow 1: Pilih Properti -> Pilih Mitra
+                                    activeMitra.filter(m => 
+                                        m.id !== selectedTransferItem?.owner_uid && 
+                                        ((m.name || '').toLowerCase().includes(transferSearchQuery.toLowerCase()) || (m.email || '').toLowerCase().includes(transferSearchQuery.toLowerCase()))
+                                    ).map(mitra => (
+                                        <button 
+                                            key={mitra.id}
+                                            onClick={() => handleConfirmTransfer(selectedTransferItem.id, mitra.id)}
+                                            className="w-full flex items-center gap-4 p-4 rounded-3xl bg-white hover:bg-orange-50 transition-all border border-transparent hover:border-orange-100 text-left group shadow-sm hover:shadow-md"
+                                        >
+                                            <div className="w-11 h-11 rounded-full bg-emerald-100 flex items-center justify-center text-xl overflow-hidden shrink-0 border-2 border-white shadow-sm ring-4 ring-gray-50 group-hover:ring-orange-100/50 transition-all">
+                                                {mitra.photo_url ? <img src={mitra.photo_url} className="w-full h-full object-cover" /> : <span>👤</span>}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-bold text-gray-900 truncate text-[13px]">{mitra.name || mitra.display_name}</p>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase truncate tracking-tight">{mitra.email}</p>
+                                            </div>
+                                            <div className="opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+                                                <span className="text-[9px] font-black text-white bg-orange-600 px-3 py-1.5 rounded-full uppercase shadow-lg shadow-orange-200">Pilih</span>
+                                            </div>
+                                        </button>
+                                    ))
+                                ) : (
+                                    // Flow 2: Pilih Mitra -> Pilih Properti Super Admin
+                                    adminListings.filter(p => 
+                                        (p.ownerUid === uid || p.ownerUid?.toLowerCase() === 'admin-system-id') && // Properti milik admin/sistem
+                                        (p.title.toLowerCase().includes(transferSearchQuery.toLowerCase()) || (p.city || '').toLowerCase().includes(transferSearchQuery.toLowerCase()))
+                                    ).map(prop => (
+                                        <button 
+                                            key={prop.id}
+                                            onClick={() => handleConfirmTransfer(prop.id, selectedTransferItem.id)}
+                                            className="w-full flex items-center gap-4 p-4 rounded-3xl bg-white hover:bg-orange-50 transition-all border border-transparent hover:border-orange-100 text-left group shadow-sm hover:shadow-md"
+                                        >
+                                            <div className="w-14 h-14 rounded-2xl bg-gray-100 overflow-hidden shrink-0 border-2 border-white shadow-sm ring-4 ring-gray-50 group-hover:ring-orange-100/50 transition-all">
+                                                <img src={prop.imageUrls?.[0] || 'https://via.placeholder.com/100'} className="w-full h-full object-cover" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-bold text-gray-900 truncate text-[13px]">{prop.title}</p>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase truncate tracking-tight">{prop.city}, {prop.area}</p>
+                                            </div>
+                                            <div className="opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+                                                <span className="text-[9px] font-black text-white bg-orange-600 px-3 py-1.5 rounded-full uppercase shadow-lg shadow-orange-200">Transfer</span>
+                                            </div>
+                                        </button>
+                                    ))
+                                )}
+                                
+                                {((transferMode === 'property' ? activeMitra : adminListings).length === 0) && (
+                                    <div className="py-20 text-center space-y-4">
+                                        <div className="text-4xl">🔎</div>
+                                        <div className="text-gray-400 font-black uppercase text-[10px] tracking-[0.2em]">Data Tidak Ditemukan</div>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* Footer Hint */}
+                            <div className="p-4 bg-orange-50/50 border-t border-orange-100 border-dashed">
+                                <p className="text-[9px] text-orange-700 font-bold leading-relaxed text-center italic">
+                                    * Tindakan ini akan memindahkan akses pengelolaan properti secara permanen ke akun Mitra tujuan.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
