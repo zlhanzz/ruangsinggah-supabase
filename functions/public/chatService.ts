@@ -101,6 +101,8 @@ export async function getChatMessages(sessionId: string): Promise<ChatMessage[]>
   return data || [];
 }
 
+import { notifyMitra } from './notificationBridge';
+
 /**
  * Mengirim pesan baru
  */
@@ -139,18 +141,36 @@ export async function sendMessage(sessionId: string, senderId: string, senderTyp
   try {
     const { data: session } = await supabase
       .from('chat_sessions')
-      .select('user_id, owner_id')
+      .select(`
+        user_id, 
+        owner_id, 
+        property_id,
+        property:property_id (title),
+        sender:user_id (name, displayName)
+      `)
       .eq('id', sessionId)
       .single();
 
-    if (session) {
-      const recipientId = senderType === 'user' ? session.owner_id : session.user_id;
-      // We don't have sender name here easily, so we use a generic title
+    if (session && senderType === 'user') {
+      // User -> Owner: Notify Mitra via WhatsApp
+      await notifyMitra({
+        ownerId: session.owner_id,
+        propertyId: (session as any).property_id,
+        type: 'chat',
+        details: {
+          propertyTitle: (session as any).property?.title || 'Kost Anda',
+          senderName: (session as any).sender?.displayName || (session as any).sender?.name || 'Calon Penghuni',
+          messageSnippet: content.length > 50 ? content.substring(0, 50) + '...' : content,
+          sessionId: sessionId
+        }
+      });
+    } else if (session && senderType === 'owner') {
+      // Owner -> User: Site notification only for now
       sendNotification(
-        recipientId,
+        session.user_id,
         'Pesan Baru',
         content.length > 60 ? content.substring(0, 60) + '...' : content,
-        'info', // We didn't define 'chat' as a valid type in notificationService
+        'info',
         { sessionId, link: '/my-bookings' }
       ).catch(err => console.error("Failed to create chat notification:", err));
     }

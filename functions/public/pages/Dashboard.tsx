@@ -321,6 +321,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
     };
 
     const [dbProducts, setDbProducts] = useState<DatabaseProduct[]>([]);
+    
+    // --- SURVEY CATALOG STATE ---
+    const [verifikasiPrice, setVerifikasiPrice] = useState(70000);
+    const [verifikasiDiscount, setVerifikasiDiscount] = useState(150000);
+    const [verifikasiDescription, setVerifikasiDescription] = useState("Dapatkan bantuan profesional untuk mengecek kondisi kost impian Anda secara langsung via Video Call. Hemat waktu, tenaga, dan hindari penipuan ZONK!");
+    const [isSavingVerifikasi, setIsSavingVerifikasi] = useState(false);
+
     const [analyticsSummary, setAnalyticsSummary] = useState<AnalyticsSummary | null>(null);
     const [mitraRequests, setMitraRequests] = useState<any[]>([]);
     const [activeMitra, setActiveMitra] = useState<any[]>([]);
@@ -585,7 +592,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         if (activeMenu === 'complaints') loadComplaints();
         if (activeMenu === 'transactions_db') loadDbTransactions();
         if (activeMenu === 'analytics' || activeMenu === 'overview') loadAnalyticsData();
-        if (activeMenu === 'agent_verification') loadAgentVerifications();
         if (activeMenu === 'verifikasi' || activeMenu === 'my_surveys' || activeMenu === 'overview') loadSurveyRequests();
         if (activeMenu === 'agent_wallet') {
             loadSurveyRequests();
@@ -1760,7 +1766,10 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                 )}
 
                 {isAdmin && (
-                    <SidebarItem icon="🗄️" label="Kelola Database" isActive={activeMenu === 'databases'} onClick={() => handleMenuChange('databases')} />
+                    <>
+                        <SidebarItem icon="🗄️" label="Kelola Database" isActive={activeMenu === 'databases'} onClick={() => handleMenuChange('databases')} />
+                        <SidebarItem icon="🗒️" label="Katalog Survey" isActive={activeMenu === 'verification'} onClick={() => handleMenuChange('verification')} />
+                    </>
                 )}
 
                 {/* --- TRANSAKSI --- */}
@@ -2410,15 +2419,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                             getMaxEndDate={getMaxEndDate}
                                         />
                                     )}
-                                    {activeMenu === 'agent_verification' && isAdmin && (
-                                        <AgentManagement
-                                            agentVerifications={agentVerifications}
-                                            surveyAgents={surveyAgents}
-                                            loadAgentVerifications={loadAgentVerifications}
-                                            loadActiveAgents={loadActiveAgents}
-                                            loading={loading}
-                                        />
-                                    )}
                                     
                                     {activeMenu === 'properties' && (
                                         <>
@@ -2438,6 +2438,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                                             <tr>
                                                                 <th className="px-6 py-4">Info Kost</th>
                                                                 <th className="px-6 py-4">Lokasi</th>
+                                                                <th className="px-6 py-4">Pemilik</th>
                                                                 <th className="px-6 py-4">Harga /Bulan</th>
                                                                 <th className="px-6 py-4">Status</th>
                                                                 <th className="px-6 py-4 text-right">Aksi</th>
@@ -2463,6 +2464,14 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                                                         <p className="font-medium text-gray-900">{item.city}</p>
                                                                         <p className="text-xs text-gray-400 mt-0.5">{item.area}</p>
                                                                     </td>
+                                                                    <td className="px-6 py-4">
+                                                                        <div className="flex flex-col">
+                                                                            <p className="font-bold text-gray-900">{item.ownerName || 'Admin'}</p>
+                                                                            {item.ownerRole && ['owner', 'mitra'].includes(item.ownerRole.toLowerCase()) && (
+                                                                                <span className="inline-flex mt-1 text-[8px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded w-fit border border-emerald-100">Mitra Dashboard</span>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
                                                                     <td className="px-6 py-4 font-bold text-gray-900">
                                                                         {FORMAT_CURRENCY(item.price)}
                                                                     </td>
@@ -2486,68 +2495,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                                                 </tr>
                                                             ))}
                                                             {displayListings.length === 0 && (
-                                                                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 font-medium">Belum ada data kost.</td></tr>
-                                                            )}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        </>
-                                    )}
-
-                                    {activeMenu === 'databases' && isAdmin && (
-                                        <>
-                                            <div className="flex justify-end mb-4">
-                                                <button
-                                                    onClick={openAddDbModal}
-                                                    className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 transition-all shadow-lg active:scale-95 flex items-center gap-2"
-                                                >
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                                                    Tambah Database
-                                                </button>
-                                            </div>
-                                            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                                                <div className="overflow-x-auto">
-                                                    <table className="w-full text-left text-sm text-gray-500">
-                                                        <thead className="bg-gray-50/50 text-xs font-black text-gray-500 uppercase tracking-widest">
-                                                            <tr>
-                                                                <th className="px-6 py-4">Info Database</th>
-                                                                <th className="px-6 py-4">Kota/Area</th>
-                                                                <th className="px-6 py-4">Harga</th>
-                                                                <th className="px-6 py-4 text-right">Aksi</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-gray-50">
-                                                            {dbProducts.map(db => (
-                                                                <tr key={db.id} className="hover:bg-gray-50/50 transition-colors">
-                                                                    <td className="px-6 py-4">
-                                                                        <div className="flex items-center gap-3">
-                                                                            <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center text-blue-500 shrink-0">
-                                                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>
-                                                                            </div>
-                                                                            <div>
-                                                                                <p className="font-bold text-gray-900">{db.campus}</p>
-                                                                                <p className="text-xs text-gray-400 mt-0.5">{db.totalData || '-'} Data</p>
-                                                                            </div>
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-6 py-4">
-                                                                        <p className="font-medium text-gray-900">{db.city}</p>
-                                                                        <p className="text-xs text-gray-400 mt-0.5">{db.area}</p>
-                                                                    </td>
-                                                                    <td className="px-6 py-4 font-bold text-gray-900">
-                                                                        {FORMAT_CURRENCY(db.price)}
-                                                                    </td>
-                                                                    <td className="px-6 py-4">
-                                                                        <div className="flex justify-end gap-2">
-                                                                            <button onClick={() => openEditDbModal(db)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 transition-colors">Edit</button>
-                                                                            <button onClick={() => handleDelete(db.id, 'database', db.campus)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 transition-colors">Hapus</button>
-                                                                        </div>
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                            {dbProducts.length === 0 && (
-                                                                <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 font-medium">Belum ada data database.</td></tr>
+                                                                <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-medium">Belum ada data kost.</td></tr>
                                                             )}
                                                         </tbody>
                                                     </table>
@@ -2566,8 +2514,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                             setVerifikasiDescription={setVerifikasiDescription}
                                             isSavingVerifikasi={isSavingVerifikasi}
                                             setIsSavingVerifikasi={setIsSavingVerifikasi}
+                                            dbProducts={[]} // Not used for verification tab
+                                            loadDatabases={() => {}}
                                             FORMAT_CURRENCY={FORMAT_CURRENCY}
                                             setActiveMenu={setActiveMenu}
+                                            activeTab="verification"
                                         />
                                     )}
                                     {activeMenu === 'transactions_rent' && (
@@ -2624,6 +2575,15 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                             onTransferProperty={(mitra) => handleOpenTransferModal('mitra', mitra)}
                                         />
                                     )}
+                                     {activeMenu === 'agent_verification' && isAdmin && (
+                                         <AgentManagement 
+                                             agentVerifications={agentVerifications}
+                                             surveyAgents={surveyAgents}
+                                             loadAgentVerifications={loadAgentVerifications}
+                                             loadActiveAgents={loadActiveAgents}
+                                             loading={loading}
+                                         />
+                                     )}
                                     {activeMenu === 'tenants' && isAdmin && (
                                         <UserManagement
                                             activeUsers={activeUsers}

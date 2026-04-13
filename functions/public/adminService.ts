@@ -13,6 +13,8 @@ export interface BasicPropertyInfo extends Partial<Kost> {
   videoUrls?: string[];
   instagramUrl?: string;
   tiktokUrl?: string;
+  ownerName?: string;
+  ownerRole?: string;
 }
 
 export interface AdminTransaction {
@@ -234,7 +236,7 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
 
   const isAdmin = await checkIfUserIsAdmin(user.id);
 
-  let query = supabase.from('properties').select('*');
+  let query = supabase.from('properties').select('*, users!owner_uid(name, role)');
   if (ownerUid) {
     query = query.eq('owner_uid', ownerUid);
   } else if (!isAdmin) {
@@ -281,6 +283,8 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
       isVerified: row.is_verified,
       omnichannelContactName: row.omnichannel_contact_name,
       omnichannelContactPhone: row.omnichannel_contact_phone,
+      ownerName: row.users?.name || (row.owner_uid === 'super_admin_id' ? 'Super Admin' : 'Tanpa Pemilik'),
+      ownerRole: row.users?.role || 'admin',
       } as BasicPropertyInfo;
   });
 }
@@ -1304,11 +1308,20 @@ export async function getSurveyAgents(): Promise<{id: string, name: string, phon
 
   const { data, error } = await supabase
     .from('users')
-    .select('id, name, phone, photo_url')
-    .eq('role', 'survey_agent');
+    .select('id, name, phone, photo_url, role, verification_status');
 
   if (error) throw error;
-  return data || [];
+  
+  // Filter in memory for maximum reliability
+  return (data || []).filter(u => 
+    ['survey_agent', 'agen', 'agent'].includes(u.role?.toLowerCase()) || 
+    u.verification_status === 'verified'
+  ).map(u => ({
+    id: u.id,
+    name: u.name,
+    phone: u.phone,
+    photo_url: u.photo_url
+  }));
 }
 
 export async function getAgentVerificationRequests(): Promise<any[]> {
@@ -1321,8 +1334,8 @@ export async function getAgentVerificationRequests(): Promise<any[]> {
   const { data, error } = await supabase
     .from('users')
     .select('*')
-    .eq('role', 'survey_agent')
     .eq('verification_status', 'pending')
+    .in('role', ['survey_agent', 'agen', 'agent'])
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -1341,6 +1354,7 @@ export async function updateAgentVerificationStatus(agentId: string, status: 've
     .update({ 
       verification_status: status,
       verification_notes: reason || null,
+      role: status === 'verified' ? 'survey_agent' : undefined,
       updated_at: new Date().toISOString()
     })
     .eq('id', agentId);
@@ -1357,19 +1371,52 @@ export async function getAdminMitraRequests(): Promise<any[]> {
   const isAdmin = await checkIfUserIsAdmin(user.id);
   if (!isAdmin) throw new Error('Access Denied');
 
-  const { data, error } = await supabase
+  // 1. Fetch from mitra_requests (Registration requests)
+  const { data: regRequests, error: regError } = await supabase
     .from('mitra_requests')
     .select('*')
     .order('timestamp', { ascending: false });
 
-  if (error) throw error;
-  return data || [];
+  if (regError) throw regError;
+
+  // 2. Fetch from users who are already 'owner' but verification is pending
+  const { data: verRequests, error: verError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('verification_status', 'pending')
+    .in('role', ['owner', 'mitra'])
+    .order('created_at', { ascending: false });
+
+  if (verError) throw verError;
+
+  // 3. Map verifications to match registration request format for UI compatibility
+  const mappedVerifications = (verRequests || []).map(u => ({
+    id: u.id,
+    user_id: u.id,
+    name: u.full_name || u.name,
+    phone: u.phone,
+    email: u.email,
+    timestamp: u.updated_at || u.created_at,
+    status: 'pending',
+    type: 'verification', // Special flag for UI
+    ktp_photo: u.ktp_photo_url,
+    ktp_number: u.ktp_number,
+    address: u.ktp_address
+  }));
+
+  const mappedRegistrations = (regRequests || []).map(r => ({
+    ...r,
+    type: 'registration' // Regular flag
+  }));
+
+  return [...mappedVerifications, ...mappedRegistrations];
 }
 
 export async function updateMitraRequestStatus(
   requestId: string, 
   status: 'accepted' | 'rejected' | 'pending', 
-  userId?: string
+  userId?: string,
+  type: 'registration' | 'verification' = 'registration'
 ): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
@@ -1377,30 +1424,44 @@ export async function updateMitraRequestStatus(
   const isAdmin = await checkIfUserIsAdmin(user.id);
   if (!isAdmin) throw new Error('Access Denied');
 
-  // 1. Update the request status
-  const { error: requestError } = await supabase
-    .from('mitra_requests')
-    .update({ 
-      status, 
-      updated_at: new Date().toISOString() 
-    })
-    .eq('id', requestId);
+  if (type === 'registration') {
+    // 1. Update the request status in mitra_requests table
+    const { error: requestError } = await supabase
+      .from('mitra_requests')
+      .update({ 
+        status, 
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', requestId);
 
-  if (requestError) throw requestError;
+    if (requestError) throw requestError;
 
-  // 2. If accepted and userId is provided, update the user's role in the users table
-  if (status === 'accepted' && userId) {
+    // 2. If accepted and userId is provided, update the user's role in the users table
+    if (status === 'accepted' && (userId || requestId)) {
+      const targetId = userId || requestId;
+      const { error: userError } = await supabase
+        .from('users')
+        .update({ 
+          role: 'owner', 
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', targetId);
+
+      if (userError) {
+        console.warn('Failed to update user role, but request was accepted:', userError);
+      }
+    }
+  } else {
+    // Handle Identity Verification (updating users table directly)
     const { error: userError } = await supabase
       .from('users')
       .update({ 
-        role: 'owner', // Use 'owner' as the internal dashboard role
+        verification_status: status === 'accepted' ? 'verified' : (status === 'rejected' ? 'rejected' : 'pending'),
         updated_at: new Date().toISOString()
       })
-      .eq('id', userId);
+      .eq('id', requestId); // For verification, requestId is the userId
 
-    if (userError) {
-      console.warn('Failed to update user role, but request was accepted:', userError);
-    }
+    if (userError) throw userError;
   }
 }
 
@@ -1517,34 +1578,98 @@ export async function getUsersByRole(role: string): Promise<any[]> {
   const isAdmin = await checkIfUserIsAdmin(authUser.id);
   if (!isAdmin) throw new Error('Access Denied');
 
+  // Fetch users for categorization
+  let query = supabase.from('users').select('*');
+  const { data: allUsers, error: userError } = await query.order('created_at', { ascending: false });
+  
+  if (userError) throw userError;
+  if (!allUsers) return [];
+
+  let filteredUsers = [];
   if (role === 'survey_agent') {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .or(`role.eq.survey_agent,role.eq.agen`)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return data || [];
+    filteredUsers = allUsers.filter(u => 
+      ['survey_agent', 'agen', 'agent'].includes(u.role?.toLowerCase()) || 
+      u.verification_status === 'verified'
+    );
+  } else if (role === 'owner') {
+    filteredUsers = allUsers.filter(u => ['owner', 'mitra'].includes(u.role?.toLowerCase()));
+  } else if (role === 'user') {
+    // 1. Identify active renters first (regardless of role)
+    const { data: rentTransactions } = await supabase
+      .from('transactions')
+      .select('user_id, product_type, status, metadata, product_id, amount');
+
+    const activeRenterMap = new Map<string, any>();
+    if (rentTransactions) {
+      rentTransactions.forEach(t => {
+        const type = (t.product_type || '').toLowerCase();
+        const status = (t.status || t.metadata?.status || '').toLowerCase();
+        const isRentType = ['rent', 'kost_booking', 'sewa_kost'].includes(type) || !type;
+        const isActiveStatus = ['paid', 'selesai', 'success', 'berhasil', 'approved', 'pending_approval', 'success'].includes(status);
+        
+        if (isRentType && isActiveStatus) {
+            const metadata = t.metadata || {};
+            const endDateString = metadata.endDate || t.end_date;
+            let daysRem = null;
+            if (endDateString) {
+                const end = new Date(endDateString);
+                if (!isNaN(end.getTime())) {
+                    const diff = end.getTime() - new Date().getTime();
+                    daysRem = Math.ceil(diff / (1000 * 60 * 60 * 24));
+                }
+            }
+
+            const currentInfo = {
+                kostName: t.kost_name || metadata.kostName || 'Kost Terdaftar',
+                roomType: metadata.roomType || '-',
+                duration: t.duration || metadata.duration || '-',
+                period: t.period || metadata.periodLabel || 'bulan',
+                startDate: t.move_in_date || metadata.startDate,
+                endDate: endDateString,
+                daysRemaining: daysRem,
+                status: t.status
+            };
+
+            // Priority: keep the one with latest end date if multiple
+            const existing = activeRenterMap.get(t.user_id);
+            if (!existing || (new Date(currentInfo.endDate || 0) > new Date(existing.endDate || 0))) {
+                activeRenterMap.set(t.user_id, currentInfo);
+            }
+        }
+      });
+    }
+
+    // 2. Identify users: either they are general users/tenants, OR they have an active rental
+    filteredUsers = allUsers.filter(u => 
+      !u.role || 
+      ['user', 'tenant'].includes(u.role?.toLowerCase()) ||
+      activeRenterMap.has(u.id)
+    );
+
+    const result = filteredUsers.map(u => ({
+      ...u,
+      name: u.name || u.full_name || 'No Name',
+      full_name: u.full_name || u.name || 'No Name',
+      is_renting: u.role === 'tenant' || activeRenterMap.has(u.id),
+      active_rental: activeRenterMap.get(u.id) || null
+    }));
+
+    // DEEP DIAGNOSTICS
+    console.log('[DEBUG:UserManagement] allUsers total:', allUsers.length);
+    console.log('[DEBUG:UserManagement] filtered results (inclusive):', result.length);
+    if (result.length > 0) console.log('[DEBUG:UserManagement] Sample:', result[0]);
+
+    return result;
+  } else {
+    filteredUsers = allUsers.filter(u => u.role === role);
   }
 
-  if (role === 'owner') {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .or(`role.eq.owner,role.eq.mitra`)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return data || [];
-  }
-
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('role', role)
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-  return data || [];
+  // Common mapping for other categories
+  return filteredUsers.map(u => ({
+    ...u,
+    name: u.name || u.full_name || 'No Name',
+    full_name: u.full_name || u.name || 'No Name'
+  }));
 }
 
 /**

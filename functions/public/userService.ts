@@ -281,6 +281,9 @@ export async function getExtraBills(userId: string): Promise<any[]> {
     return [];
   }
 }
+import { notifyMitra } from './notificationBridge';
+import { FORMAT_CURRENCY } from './constants';
+
 export async function createBookingRequest(bookingData: {
   userId: string;
   productId: string;
@@ -304,7 +307,38 @@ export async function createBookingRequest(bookingData: {
 
     if (error) throw error;
     
-    // Notify admin
+    // Notify Mitra (Owner) via WhatsApp & App
+    try {
+        const { data: prop } = await supabase
+            .from('properties')
+            .select('owner_uid, title')
+            .eq('id', bookingData.productId)
+            .single();
+
+        const { data: sender } = await supabase
+            .from('users')
+            .select('name, displayName')
+            .eq('id', bookingData.userId)
+            .single();
+
+        if (prop) {
+            await notifyMitra({
+                ownerId: prop.owner_uid,
+                propertyId: bookingData.productId,
+                type: 'booking',
+                details: {
+                    propertyTitle: prop.title,
+                    senderName: sender?.displayName || sender?.name || 'Calon Penghuni',
+                    period: bookingData.metadata?.periodLabel || 'Per Bulan',
+                    bookingId: data.id
+                }
+            });
+        }
+    } catch (err) {
+        console.error('Failed to notify mitra of new booking:', err);
+    }
+
+    // Notify admin (Email)
     notifyAdminTransaction("Pemesanan Kost (Booking)", {
       "User ID": bookingData.userId,
       "Tipe Produk": bookingData.productType,
@@ -318,13 +352,135 @@ export async function createBookingRequest(bookingData: {
   }
 }
 
+export async function updateBookingStatus(transactionId: string, status: 'PAID' | 'REJECTED' | 'CANCELLED' | string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('transactions')
+      .update({ 
+        status, 
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', transactionId);
+
+    if (error) throw error;
+
+    // If Payment is PAID (Verified), notify Owner
+    if (status === 'PAID') {
+        try {
+            const { data: trx } = await supabase
+                .from('transactions')
+                .select('product_id, amount, id')
+                .eq('id', transactionId)
+                .single();
+
+            if (trx) {
+                const { data: prop } = await supabase
+                    .from('properties')
+                    .select('owner_uid, title')
+                    .eq('id', trx.product_id)
+                    .single();
+
+                if (prop) {
+                    await notifyMitra({
+                        ownerId: prop.owner_uid,
+                        propertyId: trx.product_id,
+                        type: 'payment',
+                        details: {
+                            propertyTitle: prop.title,
+                            amount: FORMAT_CURRENCY(trx.amount),
+                            bookingId: trx.id
+                        }
+                    });
+                }
+            }
+        } catch (err) {
+            console.error('Failed to notify mitra of successful payment:', err);
+        }
+    }
+  } catch (error) {
+    console.error('Error updating booking status:', error);
+    throw error;
+  }
+}
+
+export async function cancelBookingRequest(transactionId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .update({ 
+        status: 'CANCELLED', 
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', transactionId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error cancelling booking request:', error);
+    throw error;
+  }
+}
+
+export async function getOwnerTenancyData(ownerUid: string): Promise<any[]> {
+  try {
+    // 1. Get all property IDs owned by this Mitra
+    const { data: properties, error: propError } = await supabase
+      .from('properties')
+      .select('id')
+      .eq('owner_uid', ownerUid);
+
+    if (propError) throw propError;
+    if (!properties || properties.length === 0) return [];
+
+    const propertyIds = properties.map(p => p.id);
+
+    // 2. Fetch all transactions related to these properties
+    // We fetch bookings (kost_booking), extensions (perpanjangan_sewa), and bills (tagihan_ekstra)
+    const { data, error } = await supabase
+      .from('transactions')
+      .select(`
+        *,
+        user:user_id (
+          name,
+          email,
+          phone,
+          photo_url,
+          gender,
+          occupation,
+          institution,
+          religion,
+          relationship_status,
+          address
+        )
+      `)
+      .or(`product_id.in.(${propertyIds.join(',')}),kost_id.in.(${propertyIds.join(',')})`)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    
+    // Filter to only successful or pending processing transactions that are rent-related
+    const rentTypes = ['kost_booking', 'perpanjangan_sewa', 'tagihan_ekstra'];
+    const filtered = (data || []).filter(t => 
+      rentTypes.includes(t.product_type || t.type) &&
+      ['paid', 'PENDING_APPROVAL', 'AWAITING_PAYMENT', 'success', 'approved'].includes(t.status)
+    );
+
+    return filtered;
+  } catch (error) {
+    console.error('Error fetching owner tenancy data:', error);
+    return [];
+  }
+}
+
 export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
   try {
     const { data, error } = await supabase
       .from('properties')
       .select('*')
       .eq('owner_uid', ownerUid)
-      .order('updated_at', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
     if (!data) return [];
@@ -332,6 +488,7 @@ export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
     return data.map((row) => {
       const rawImages = row.image_urls || [];
       const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
+
       const rawVideos = row.video_urls || [];
       const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');
 
@@ -358,45 +515,32 @@ export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
         rules: row.rules || [],
         campuses: row.campuses || [],
         publicFacilities: row.public_facilities || [],
-        views: row.views || 0,
         createdAt: convertTimestamp(row.created_at),
         updatedAt: convertTimestamp(row.updated_at),
+        views: row.views || 0,
+        omnichannelContactName: row.omnichannel_contact_name,
+        omnichannelContactPhone: row.omnichannel_contact_phone,
+        omnichannelContactType: row.omnichannel_contact_type,
       } as Kost;
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching owner properties:', error);
     return [];
   }
 }
 
-export async function incrementPropertyView(propertyId: string) {
+export async function getOwnerBookings(ownerId: string): Promise<any[]> {
   try {
-    const { error } = await supabase.rpc('increment_property_view', { prop_id: propertyId });
-    // If RPC fails (e.g. not created yet), fallback to regular increment
-    if (error) {
-      const { data: prop } = await supabase.from('properties').select('views').eq('id', propertyId).single();
-      const newViews = (prop?.views || 0) + 1;
-      await supabase.from('properties').update({ views: newViews }).eq('id', propertyId);
-    }
-  } catch (error) {
-    console.error('Error incrementing view:', error);
-  }
-}
-
-export async function getOwnerBookings(ownerUid: string): Promise<any[]> {
-  try {
-    // First, get all property IDs owned by this Mitra
-    const { data: properties, error: propError } = await supabase
+    // 1. Get properties owned by this Mitra
+    const { data: props } = await supabase
       .from('properties')
       .select('id')
-      .eq('owner_uid', ownerUid);
+      .eq('owner_uid', ownerId);
+    
+    if (!props || props.length === 0) return [];
+    const propIds = props.map(p => p.id);
 
-    if (propError) throw propError;
-    if (!properties || properties.length === 0) return [];
-
-    const propertyIds = properties.map(p => p.id);
-
-    // Then, fetch transactions related to these properties
+    // 2. Fetch all transactions for these properties
     const { data, error } = await supabase
       .from('transactions')
       .select(`
@@ -405,57 +549,41 @@ export async function getOwnerBookings(ownerUid: string): Promise<any[]> {
           name,
           email,
           phone,
-          photo_url,
-          gender,
-          occupation,
-          institution
+          photo_url
         )
       `)
-      .in('product_id', propertyIds)
-      .eq('product_type', 'kost_booking')
+      .in('product_id', propIds)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
     return data || [];
-  } catch (error) {
-    console.error('Error fetching owner bookings:', error);
+  } catch (err) {
+    console.error('Error fetching owner bookings:', err);
     return [];
   }
 }
 
-export async function updateBookingStatus(transactionId: string, status: 'PAID' | 'REJECTED' | 'CANCELLED' | string): Promise<void> {
+export async function incrementPropertyView(propertyId: string) {
   try {
-    const { error } = await supabase
-      .from('transactions')
-      .update({ 
-        status, 
-        updated_at: new Date().toISOString() 
-      })
-      .eq('id', transactionId);
-
-    if (error) throw error;
+    const { error } = await supabase.rpc('increment_property_view', { 
+      prop_id: propertyId 
+    });
+    if (error) {
+      // If RPC fails, try generic update as fallback
+      const { data: prop } = await supabase
+        .from('properties')
+        .select('views')
+        .eq('id', propertyId)
+        .single();
+        
+      if (prop) {
+        await supabase
+          .from('properties')
+          .update({ views: (prop.views || 0) + 1 })
+          .eq('id', propertyId);
+      }
+    }
   } catch (error) {
-    console.error('Error updating booking status:', error);
-    throw error;
-  }
-}
-
-export async function cancelBookingRequest(transactionId: string) {
-  try {
-    const { data, error } = await supabase
-      .from('transactions')
-      .update({ 
-        status: 'CANCELLED', 
-        updated_at: new Date().toISOString() 
-      })
-      .eq('id', transactionId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error('Error cancelling booking request:', error);
-    throw error;
+    console.warn('Failed to increment view:', error);
   }
 }

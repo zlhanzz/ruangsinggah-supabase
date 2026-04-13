@@ -37,6 +37,12 @@ const CatalogManagement: React.FC<CatalogManagementProps> = ({
     activeTab: initialTab = 'verification'
 }) => {
     const [currentTab, setCurrentTab] = useState<'verification' | 'database'>(initialTab);
+
+    // Sync state with prop if it changes
+    React.useEffect(() => {
+        setCurrentTab(initialTab);
+    }, [initialTab]);
+
     const [isDbModalOpen, setIsDbModalOpen] = useState(false);
     const [editingDbId, setEditingDbId] = useState<string | null>(null);
     const [dbForm, setDbForm] = useState<Partial<DatabaseProduct>>({
@@ -92,23 +98,26 @@ const CatalogManagement: React.FC<CatalogManagementProps> = ({
 
     return (
         <div className="animate-in fade-in duration-500 max-w-5xl mx-auto space-y-6 pb-20 px-4 sm:px-0">
-            {/* TAB SWITCHER */}
-            <div className="bg-white/50 backdrop-blur-md p-1.5 rounded-2xl border border-gray-100 flex gap-1 w-full sm:w-fit mx-auto shadow-sm">
-                <button
-                    onClick={() => setCurrentTab('verification')}
-                    className={`flex-1 sm:flex-none px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${currentTab === 'verification' ? 'bg-orange-600 text-white shadow-lg shadow-orange-100' : 'text-gray-400 hover:text-gray-600'}`}
-                >
-                    Jasa Survey
-                </button>
-                <button
-                    onClick={() => setCurrentTab('database')}
-                    className={`flex-1 sm:flex-none px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${currentTab === 'database' ? 'bg-orange-600 text-white shadow-lg shadow-orange-100' : 'text-gray-400 hover:text-gray-600'}`}
-                >
-                    Produk Database
-                </button>
-            </div>
+            {/* TAB SWITCHER - Only show if not specifically forced by prop or keep hidden for separate menu feel */}
+            {/* The user requested separate sidebar items, so we can hide this for a cleaner experience */}
+            {false && (
+                <div className="bg-white/50 backdrop-blur-md p-1.5 rounded-2xl border border-gray-100 flex gap-1 w-full sm:w-fit mx-auto shadow-sm">
+                    <button
+                        onClick={() => setCurrentTab('verification')}
+                        className={`flex-1 sm:flex-none px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${currentTab === 'verification' ? 'bg-orange-600 text-white shadow-lg shadow-orange-100' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Jasa Survey
+                    </button>
+                    <button
+                        onClick={() => setCurrentTab('database')}
+                        className={`flex-1 sm:flex-none px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${currentTab === 'database' ? 'bg-orange-600 text-white shadow-lg shadow-orange-100' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Produk Database
+                    </button>
+                </div>
+            )}
 
-            {currentTab === 'verification' ? (
+            {(currentTab === 'verification') ? (
                 <div className="space-y-8 animate-in slide-in-from-left-4 duration-500">
                     <div className="bg-gradient-to-br from-violet-600 to-fuchsia-700 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-10 -mt-20"></div>
@@ -231,7 +240,8 @@ const CatalogManagement: React.FC<CatalogManagementProps> = ({
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {dbProducts.map((db) => (
+                        {dbProducts && Array.isArray(dbProducts) && dbProducts.length > 0 ? (
+                            dbProducts.map((db) => (
                             <div key={db.id} className="bg-white border border-gray-100 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all group">
                                 <div className="h-40 bg-gray-100 relative overflow-hidden">
                                     {db.fileUrls?.coverImage?.original ? (
@@ -266,7 +276,15 @@ const CatalogManagement: React.FC<CatalogManagementProps> = ({
                                     </div>
                                 </div>
                             </div>
-                        ))}
+                            ))
+                        ) : (
+                            <div className="col-span-full py-20 text-center bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-100">
+                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
+                                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
+                                </div>
+                                <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Belum ada data kost kampus</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

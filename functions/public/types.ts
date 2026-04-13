@@ -104,6 +104,12 @@ export interface Kost {
   omnichannelContactName?: string;
   omnichannelContactPhone?: string;
   omnichannelContactType?: 'owner' | 'caretaker';
+  
+  // New Caretaker Fields
+  contactSelection?: 'profile' | 'caretaker';
+  caretakerName?: string;
+  caretakerGender?: 'Pria' | 'Wanita';
+  caretakerPhone?: string;
 }
 
 export interface ImageUrlObject {

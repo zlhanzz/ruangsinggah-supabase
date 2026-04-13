@@ -4,19 +4,20 @@ import { supabase } from '../supabase';
 import KostFormMitra from '../components/KostFormMitra';
 import { Kost, Page } from '../types';
 import { FORMAT_CURRENCY, INDONESIAN_BANKS } from '../constants';
-import { getOwnerProperties, getOwnerBookings, updateBookingStatus } from '../userService';
+import { getOwnerProperties, getOwnerBookings, updateBookingStatus, getOwnerTenancyData } from '../userService';
 import { getMyChatSessions, ChatSession } from '../chatService';
 import { 
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer
 } from 'recharts';
 import { 
-    Zap, Home, ClipboardList, Wallet, User, 
+    Zap, Home, ClipboardList, Wallet, User, Users,
     Plus, Edit, Eye, Check, MessageSquare, Search, Filter, MoreHorizontal, ArrowUpRight,
     Clock, LogOut, Bell, ChevronRight, TrendingUp, Menu, X, Landmark, CreditCard, Save
 } from 'lucide-react';
 import MitraProfile from './MitraProfile';
 import ChatWindow from '../components/ChatWindow';
 import { sendWhatsAppTemplate } from '../whatsappService';
+import MitraTenantManagement from '../components/mitra/MitraTenantManagement';
 
 interface MitraDashboardProps {
     uid: string;
@@ -65,7 +66,7 @@ const CHART_DATA = [
     { day: 'Kam', views: 500 }, { day: 'Jum', views: 800 }, { day: 'Sab', views: 1200 }, { day: 'Min', views: 950 }
 ];
 
-type MenuKey = 'overview' | 'properties' | 'bookings' | 'chat' | 'wallet' | 'profile';
+type MenuKey = 'overview' | 'properties' | 'bookings' | 'tenants' | 'chat' | 'wallet' | 'profile';
 
 // ── Sidebar Nav Item ──────────────────────────────────────────────────────────
 const SideNavItem: React.FC<{ active: boolean; icon: React.ReactNode; label: string; badge?: number; onClick: () => void }> = ({ active, icon, label, badge, onClick }) => (
@@ -89,16 +90,16 @@ const SideNavItem: React.FC<{ active: boolean; icon: React.ReactNode; label: str
 
 // ── Bottom Nav (Mobile) ───────────────────────────────────────────────────────
 const BottomNavItem: React.FC<{ active: boolean; icon: React.ReactNode; label: string; badge?: number; onClick: () => void }> = ({ active, icon, label, badge, onClick }) => (
-    <button onClick={onClick} className={`flex flex-col items-center gap-1 flex-1 py-2 transition-all ${active ? 'text-orange-500' : 'text-gray-300'}`}>
-        <div className={`relative w-11 h-11 rounded-2xl flex items-center justify-center transition-all ${active ? 'bg-orange-50 shadow-md shadow-orange-100 scale-105' : ''}`}>
-            {icon}
+    <button onClick={onClick} className={`flex flex-col items-center gap-1 flex-1 py-3 transition-all ${active ? 'text-orange-600' : 'text-gray-600'}`}>
+        <div className={`relative w-12 h-12 rounded-[1.25rem] flex items-center justify-center transition-all ${active ? 'bg-orange-500 text-white shadow-lg shadow-orange-200 scale-105' : 'bg-gray-50'}`}>
+            {React.cloneElement(icon as React.ReactElement, { size: active ? 22 : 20 })}
             {badge !== undefined && badge > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-rose-500 text-white text-[8px] font-black rounded-full flex items-center justify-center px-0.5 border-2 border-white">
+                <span className="absolute -top-1 -right-1 min-w-[20px] h-5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1 border-2 border-white shadow-sm">
                     {badge > 9 ? '9+' : badge}
                 </span>
             )}
         </div>
-        <span className={`text-[9px] font-black uppercase tracking-wider ${active ? 'opacity-100' : 'opacity-50'}`}>{label}</span>
+        <span className={`text-[10px] font-black uppercase tracking-widest mt-0.5 ${active ? 'text-orange-600' : 'text-gray-500'}`}>{label}</span>
     </button>
 );
 
@@ -124,8 +125,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [properties, setProperties] = useState<Kost[]>([]);
     const [bookings, setBookings] = useState<any[]>([]);
+    const [tenancyData, setTenancyData] = useState<any[]>([]);
     const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
     const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
     const [stats, setStats] = useState({ totalRevenue: 0, pendingApprovals: 0, totalViews: 1240, ctr: 4.2 });
     const [showKostForm, setShowKostForm] = useState(false);
     const [editingKost, setEditingKost] = useState<Partial<Kost> | null>(null);
@@ -200,26 +203,25 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         if (!uid) return;
         setLoading(true);
         try {
-            const [propsData, bookingsData, chatData] = await Promise.all([
+            const [propsData, bookingsData, tenancyRecords, chatData] = await Promise.all([
                 getOwnerProperties(uid),
                 getOwnerBookings(uid),
+                getOwnerTenancyData(uid),
                 getMyChatSessions(uid)
             ]);
-            const finalProps = propsData.length > 0 ? propsData : DUMMY_PROPERTIES;
-            const finalBookings = bookingsData.length > 0 ? bookingsData : DUMMY_BOOKINGS;
-            const finalChats = chatData.length > 0 ? chatData : DUMMY_CHATS;
 
-            setProperties(finalProps);
-            setBookings(finalBookings);
-            setChatSessions(finalChats);
+            setProperties(propsData);
+            setBookings(bookingsData);
+            setTenancyData(tenancyRecords);
+            setChatSessions(chatData);
 
-            const revenue = finalBookings.filter(b => b.status === 'PAID').reduce((a, b) => a + (b.amount || 0), 0);
-            const totalViews = finalProps.reduce((a, p) => a + (p.views || 0), 0);
+            const revenue = bookingsData.filter(b => b.status === 'PAID').reduce((a, b) => a + (b.amount || 0), 0);
+            const totalViews = propsData.reduce((a, p) => a + (p.views || 0), 0);
             setStats({
-                totalRevenue: revenue || 1800000,
-                pendingApprovals: finalBookings.filter(b => b.status === 'PENDING_APPROVAL').length,
-                totalViews: totalViews || 1240,
-                ctr: totalViews > 0 ? parseFloat(((finalBookings.length * 5 / totalViews) * 100).toFixed(1)) : 4.2
+                totalRevenue: revenue,
+                pendingApprovals: bookingsData.filter(b => b.status === 'PENDING_APPROVAL').length,
+                totalViews: totalViews,
+                ctr: totalViews > 0 ? parseFloat(((bookingsData.length * 5 / totalViews) * 100).toFixed(1)) : 0
             });
         } catch (e) {
             console.error(e);
@@ -241,7 +243,23 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 bank_account_name: user.bank_account_name || user.displayName || user.name || '-'
             });
         }
-        loadData(); 
+        loadData();
+
+        // Real-time Chat Subscription for new sessions
+        if (uid) {
+            const sessionsChannel = supabase
+                .channel('mitra-chat-sessions')
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'chat_sessions',
+                    filter: `owner_id=eq.${uid}`
+                }, () => {
+                   loadData();
+                })
+                .subscribe();
+            return () => { supabase.removeChannel(sessionsChannel); };
+        }
     }, [uid, user]);
 
     const handleApprove = async (id: string) => {
@@ -266,6 +284,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         { key: 'overview', icon: <Zap size={20} />, label: 'Beranda' },
         { key: 'properties', icon: <Home size={20} />, label: 'Kost Saya' },
         { key: 'bookings', icon: <ClipboardList size={20} />, label: 'Pesanan', badge: pendingCount },
+        { key: 'tenants', icon: <Users size={20} />, label: 'Penghuni Aktif' },
         { key: 'chat', icon: <MessageSquare size={20} />, label: 'Pesan', badge: chatCount },
         { key: 'wallet', icon: <Wallet size={20} />, label: 'Dompet' },
         { key: 'profile', icon: <User size={20} />, label: 'Profil' },
@@ -283,20 +302,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         <div className="min-h-screen bg-gray-50 font-sans flex">
 
             {/* ── DESKTOP SIDEBAR ───────────────────────────────────────────── */}
-            <aside className="hidden lg:flex w-64 xl:w-72 shrink-0 flex-col bg-white border-r border-gray-100 fixed top-0 left-0 h-full z-30 shadow-sm">
-                {/* Logo */}
-                <div className="p-6 border-b border-gray-50">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-[1.2rem] bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
-                            <Zap size={20} className="text-white" fill="currentColor" />
-                        </div>
-                        <div>
-                            <h1 className="text-[15px] font-black text-gray-900 leading-none tracking-tight">ruangsinggah.id</h1>
-                            <p className="text-[10px] text-orange-500 font-black uppercase tracking-[0.2em] mt-1 whitespace-nowrap">MITRA DASHBOARD</p>
-                        </div>
-                    </div>
-                </div>
-
+            <aside className="hidden lg:flex w-64 xl:w-72 shrink-0 flex-col bg-white border-r border-gray-100 fixed top-20 left-0 h-[calc(100vh-5rem)] z-30">
                 {/* User Info */}
                 <div className="px-4 py-5 border-b border-gray-50">
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl">
@@ -346,8 +352,15 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     <aside className="relative w-72 bg-white h-full flex flex-col shadow-2xl z-10">
                         <div className="p-5 border-b border-gray-50 flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center text-white font-black text-sm">RS</div>
-                                <p className="text-sm font-black text-gray-900">Mitra Dashboard</p>
+                                <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center text-white font-black text-sm">
+                                    <Home size={18} fill="currentColor" />
+                                </div>
+                                <div className="flex flex-col">
+                                    <p className="text-xs font-black text-gray-900 leading-none tracking-tight uppercase">
+                                        <span className="text-orange-500">RuangSinggah</span>.id
+                                    </p>
+                                    <p className="text-[8px] font-black text-orange-500 uppercase tracking-widest mt-0.5">Mitra Dashboard</p>
+                                </div>
                             </div>
                             <button onClick={() => setMobileSidebarOpen(false)} className="p-2 rounded-xl hover:bg-gray-50">
                                 <X size={20} className="text-gray-400" />
@@ -389,65 +402,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 </div>
             )}
 
-            {/* ── MAIN CONTENT ─────────────────────────────────────────────── */}
             <div className="flex-1 lg:ml-64 xl:ml-72 flex flex-col min-h-screen">
-
-                {/* ── MOBILE TOP BAR ──────────────────────────────────────── */}
-                <header className="lg:hidden sticky top-0 z-20 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between shadow-sm">
-                    <button
-                        onClick={() => setMobileSidebarOpen(true)}
-                        className="w-10 h-10 rounded-xl flex items-center justify-center hover:bg-gray-50 transition-colors"
-                    >
-                        <Menu size={22} className="text-gray-700" />
-                    </button>
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-[1.1rem] bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
-                            <Zap size={18} className="text-white" fill="currentColor" />
-                        </div>
-                        <div className="flex flex-col">
-                            <h1 className="text-[15px] font-black text-gray-900 leading-tight tracking-tight">ruangsinggah.id</h1>
-                            <p className="text-[10px] text-orange-500 font-black uppercase tracking-widest leading-none mt-0.5">MITRA DASHBOARD</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button className="w-10 h-10 rounded-xl flex items-center justify-center hover:bg-gray-50 relative">
-                            <Bell size={20} className="text-gray-500" />
-                            {pendingCount > 0 && <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full" />}
-                        </button>
-                        <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-black text-xs">
-                            {user?.displayName?.charAt(0) || 'M'}
-                        </div>
-                    </div>
-                </header>
-
-                {/* ── DESKTOP TOP BAR ─────────────────────────────────────── */}
-                <header className="hidden lg:flex sticky top-0 z-20 bg-white border-b border-gray-100 px-8 py-4 items-center justify-between">
-                    <div>
-                        <h2 className="text-xl font-black text-gray-900">
-                            { activeMenu === 'overview' ? 'Selamat Datang 👋' :
-                              activeMenu === 'properties' ? 'Kost Saya' :
-                              activeMenu === 'bookings' ? 'Manajemen Pesanan' :
-                              activeMenu === 'chat' ? 'Pesan & Diskusi' :
-                              activeMenu === 'wallet' ? 'Dompet & Keuangan' : 'Profil Mitra' }
-                        </h2>
-                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-0.5">
-                            { new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <button className="relative w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center hover:bg-orange-50 transition-colors">
-                            <Bell size={18} className="text-gray-500" />
-                            {pendingCount > 0 && <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-rose-500 rounded-full" />}
-                        </button>
-                        <button
-                            onClick={() => onPageChange?.(Page.HOME)}
-                            className="h-9 px-4 rounded-xl bg-gray-50 text-gray-600 font-bold text-xs hover:bg-gray-100 transition-colors flex items-center gap-2"
-                        >
-                            <LogOut size={14} />
-                            Keluar Dashboard
-                        </button>
-                    </div>
-                </header>
 
                 {/* ── PAGE CONTENT ─────────────────────────────────────────── */}
                 <main className="flex-1 p-4 lg:p-8 pb-28 lg:pb-8 overflow-y-auto">
@@ -463,6 +418,34 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
                                     <p className="text-xs font-bold text-white/60">{pendingCount} pesanan menunggu persetujuan</p>
                                 </div>
+                            </div>
+
+                            {/* ── MOBILE QUICK MENU (PINTAS MENU) ─────────────────── */}
+                            <div className="lg:hidden grid grid-cols-2 gap-4">
+                                <button 
+                                    onClick={() => handleMenuChange('properties')}
+                                    className="bg-white border-2 border-orange-100 rounded-3xl p-5 flex flex-col items-center text-center gap-3 active:scale-95 transition-all shadow-sm group hover:border-orange-500"
+                                >
+                                    <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 group-hover:bg-orange-500 group-hover:text-white transition-colors shadow-sm">
+                                        <Home size={28} />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-black text-gray-900 uppercase tracking-tight">Kelola Kost</p>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Atur Iklan</p>
+                                    </div>
+                                </button>
+                                <button 
+                                    onClick={() => handleMenuChange('wallet')}
+                                    className="bg-white border-2 border-blue-100 rounded-3xl p-5 flex flex-col items-center text-center gap-3 active:scale-95 transition-all shadow-sm group hover:border-blue-500"
+                                >
+                                    <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-colors shadow-sm">
+                                        <Wallet size={28} />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-black text-gray-900 uppercase tracking-tight">Cek Dompet</p>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Tarik Dana</p>
+                                    </div>
+                                </button>
                             </div>
 
                             {/* Verification Banner — Imitated from Agent Dashboard */}
@@ -749,6 +732,17 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                         </div>
                     )}
 
+                    {/* PENGHUNI AKTIF */}
+                    {activeMenu === 'tenants' && (
+                        <div className="animate-in fade-in duration-300">
+                            <MitraTenantManagement 
+                                tenancyData={tenancyData}
+                                properties={properties}
+                                refreshData={loadData}
+                            />
+                        </div>
+                    )}
+
                     {/* CHAT */}
                     {activeMenu === 'chat' && (
                         <div className="animate-in fade-in duration-300 h-[calc(100vh-12rem)] flex flex-col">
@@ -807,6 +801,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                     currentUser={user}
                                                     onClose={() => setActiveChat(null)}
                                                     propertyName={(activeChat as any).property?.title}
+                                                    isEmbedded={true}
                                                 />
                                             </div>
                                         </>
@@ -908,8 +903,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 </main>
 
                 {/* ── MOBILE BOTTOM NAV ────────────────────────────────────── */}
-                <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 z-20 flex items-center px-2 pt-1 pb-safe-or-2 shadow-[0_-8px_30px_rgba(0,0,0,0.05)]" style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
-                    {NAV_ITEMS.map(item => (
+                <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-50 flex items-center px-3 pt-2 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.08)]">
+                    {NAV_ITEMS.filter(item => ['overview', 'bookings', 'tenants', 'chat', 'profile'].includes(item.key)).map(item => (
                         <BottomNavItem
                             key={item.key}
                             active={activeMenu === item.key}
@@ -929,6 +924,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             {render}
             {showKostForm && (
                 <KostFormMitra
+                    user={user}
                     editingKost={editingKost}
                     onClose={() => { setShowKostForm(false); setEditingKost(null); }}
                     onSuccess={() => { setShowKostForm(false); setEditingKost(null); loadData(); }}

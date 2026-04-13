@@ -10,9 +10,10 @@ interface NavbarProps {
   user?: any; // Added user prop
   onLogout?: () => void; // Added logout prop
   hideBottomNav?: boolean;
+  hideNavLinks?: boolean;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogout, hideBottomNav }) => {
+const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogout, hideBottomNav, hideNavLinks }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -95,7 +96,7 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
             </div>
 
             <div className="hidden md:flex items-center space-x-6">
-              {navItems.map((item, index) => (
+              {!hideNavLinks && navItems.map((item, index) => (
                 <button
                   key={`${item.id}-${index}`}
                   onClick={() => handleNavClick(item.id)}
@@ -108,7 +109,7 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                 </button>
               ))}
 
-              <div className="h-6 w-px bg-gray-200 mx-2"></div>
+              {!hideNavLinks && <div className="h-6 w-px bg-gray-200 mx-2"></div>}
 
               {user ? (
                 <div className="flex items-center gap-4">

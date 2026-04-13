@@ -4,10 +4,11 @@ import { addPropertyWithMedia, updatePropertyWithMedia } from '../adminService';
 import {
     X, ChevronRight, ChevronLeft, Camera, Video, MapPin, Home, Wifi,
     Plus, Trash2, Check, AlertCircle, Loader2, Upload, Image as ImageIcon,
-    Phone, BookOpen, DollarSign, Search, Navigation
+    Phone, BookOpen, DollarSign, Search, Navigation, ShieldCheck, User
 } from 'lucide-react';
 
 interface KostFormMitraProps {
+    user?: any;
     editingKost?: Partial<Kost> | null;
     onClose: () => void;
     onSuccess: () => void;
@@ -48,6 +49,7 @@ const initialForm: Partial<Kost> = {
     additionalFeePrice: 0, additionalFeeName: '',
     campuses: [], publicFacilities: [],
     omnichannelContactName: '', omnichannelContactPhone: '', omnichannelContactType: 'owner',
+    contactSelection: 'profile', caretakerName: '', caretakerGender: 'Pria', caretakerPhone: '',
 };
 
 // ── helpers ────────────────────────────────────────────────────────────────────
@@ -324,7 +326,7 @@ const FacilityInput: React.FC<{
 };
 
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
-const KostFormMitra: React.FC<KostFormMitraProps> = ({ editingKost, onClose, onSuccess }) => {
+const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClose, onSuccess }) => {
     const isEditing = !!editingKost?.id;
     const [step, setStep] = useState(0);
     const [form, setForm] = useState<Partial<Kost>>(editingKost ? { ...initialForm, ...editingKost } : initialForm);
@@ -336,6 +338,19 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ editingKost, onClose, onS
     const [tempRule, setTempRule] = useState('');
     const imageInputRef = useRef<HTMLInputElement>(null);
     const videoInputRef = useRef<HTMLInputElement>(null);
+    
+    // Auto-populate profile data if it's a new listing and source is profile
+    useEffect(() => {
+        if (!isEditing && user) {
+            setForm(prev => ({
+                ...prev,
+                omnichannelContactName: user.displayName || user.name || prev.omnichannelContactName,
+                omnichannelContactPhone: (user.phone || '').replace(/\D/g, '') || prev.omnichannelContactPhone,
+                omnichannelContactType: 'owner',
+                contactSelection: 'profile'
+            }));
+        }
+    }, [user, isEditing]);
 
     const upd = (key: keyof Kost, val: any) => setForm(prev => ({ ...prev, [key]: val }));
 
@@ -760,80 +775,128 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ editingKost, onClose, onS
             );
 
             // ── STEP 4: Kontak ─────────────────────────────────────────────────
-            case 4: return (
-                <div className="space-y-5">
-                    <div className="bg-orange-50 border border-orange-100 rounded-3xl p-4 text-sm text-orange-700 font-medium">
-                        <p className="font-black text-orange-800 mb-1">🎉 Hampir selesai!</p>
-                        Isi informasi kontak agar calon penyewa bisa langsung menghubungi Anda melalui WhatsApp.
-                    </div>
-
-                    <Field label="Nama PIC / Pengelola" required>
-                        <Input placeholder="Nama pemilik atau pengelola kost"
-                            value={form.omnichannelContactName||''} onChange={e => upd('omnichannelContactName',e.target.value)} icon={<Phone size={16} />} />
-                    </Field>
-
-                    <Field label="Nomor WhatsApp" required hint="Format: 6281234567890 (tanpa + atau spasi)">
-                        <Input type="tel" placeholder="6281234567890"
-                            value={form.omnichannelContactPhone||''} onChange={e => upd('omnichannelContactPhone',e.target.value.replace(/\D/g,''))} icon={<Phone size={16} />} />
-                    </Field>
-
-                    <Field label="Tipe Kontak">
-                        <div className="flex gap-2">
-                            {(['owner','caretaker'] as const).map(t => (
-                                <button key={t} type="button" onClick={() => upd('omnichannelContactType', t)}
-                                    className={`flex-1 h-11 rounded-2xl text-xs font-bold border-2 transition-all ${form.omnichannelContactType===t ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-200'}`}>
-                                    {t === 'owner' ? '🏠 Pemilik Langsung' : '👤 Pengelola / Caretaker'}
-                                </button>
-                            ))}
+            case 4: {
+                const isProfile = (form.contactSelection || 'profile') === 'profile';
+                
+                return (
+                    <div className="space-y-6">
+                        <div className="bg-orange-50 border border-orange-100 rounded-3xl p-5 text-sm text-orange-700">
+                            <p className="font-black text-orange-800 mb-1 leading-tight">Integrasi Kontak AI ✨</p>
+                            <p className="text-[11px] font-medium leading-relaxed">
+                                Pilih kontak yang akan dihubungi oleh pencari kost. Nomor ini akan terintegrasi dengan sistem AI RuangSinggah.
+                            </p>
                         </div>
-                    </Field>
 
-                    <div className="bg-gray-50 rounded-3xl border border-gray-100 p-5 space-y-3">
-                        <p className="text-xs font-black text-gray-700 uppercase tracking-widest">Ringkasan Listing</p>
-                        <div className="grid grid-cols-2 gap-3 text-xs">
-                            <div><p className="text-gray-400 font-bold">Nama Kost</p><p className="font-black text-gray-900 truncate">{form.title || '-'}</p></div>
-                            <div><p className="text-gray-400 font-bold">Tipe</p><p className="font-black text-gray-900">{form.type || '-'}</p></div>
-                            <div><p className="text-gray-400 font-bold">Kota</p><p className="font-black text-gray-900">{form.city || '-'}</p></div>
-                            <div><p className="text-gray-400 font-bold">Tipe Kamar</p><p className="font-black text-gray-900">{(form.roomTypes||[]).length} kamar</p></div>
-                            <div><p className="text-gray-400 font-bold">Foto</p><p className="font-black text-gray-900">{(form.imageUrls||[]).length + newImageFiles.length} foto</p></div>
-                            <div><p className="text-gray-400 font-bold">Status</p><p className={`font-black ${form.status==='published' ? 'text-green-600' : 'text-gray-500'}`}>{form.status==='published' ? 'Dipublikasikan' : 'Draft'}</p></div>
-                        </div>
-                    </div>
-
-                    <Field label="Status Publikasi" hint="Pilih apakah ingin langsung ditayangkan atau disimpan sebagai draft dulu">
                         <div className="grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => upd('status', 'published')}
-                                className={`h-16 rounded-2xl text-sm font-bold border-2 flex flex-col items-center justify-center gap-1 transition-all ${
-                                    form.status === 'published'
-                                        ? 'bg-green-500 text-white border-green-500 shadow-lg shadow-green-100'
-                                        : 'bg-white text-gray-500 border-gray-200 hover:border-green-300'
-                                }`}>
-                                <span className="text-xl">{form.status === 'published' ? '✓' : '🚀'}</span>
-                                <span className="text-xs">Publikasikan</span>
+                            <button 
+                                type="button" 
+                                onClick={() => {
+                                    setForm(prev => ({
+                                        ...prev,
+                                        contactSelection: 'profile',
+                                        omnichannelContactName: user?.displayName || user?.name || '',
+                                        omnichannelContactPhone: (user?.phone || '').replace(/\D/g, ''),
+                                        omnichannelContactType: 'owner'
+                                    }));
+                                }}
+                                className={`h-24 rounded-3xl border-2 p-4 flex flex-col items-center justify-center gap-2 transition-all ${
+                                    isProfile 
+                                        ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-100' 
+                                        : 'bg-white border-gray-100 text-gray-500 hover:border-gray-200'
+                                }`}
+                            >
+                                <User size={20} />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Profil Saya</span>
                             </button>
-                            <button type="button" onClick={() => upd('status', 'draft')}
-                                className={`h-16 rounded-2xl text-sm font-bold border-2 flex flex-col items-center justify-center gap-1 transition-all ${
-                                    form.status === 'draft'
-                                        ? 'bg-gray-700 text-white border-gray-700 shadow-lg shadow-gray-100'
-                                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
-                                }`}>
-                                <span className="text-xl">{form.status === 'draft' ? '✓' : '📝'}</span>
-                                <span className="text-xs">Simpan Draft</span>
+                            <button 
+                                type="button"
+                                onClick={() => upd('contactSelection', 'caretaker')}
+                                className={`h-24 rounded-3xl border-2 p-4 flex flex-col items-center justify-center gap-2 transition-all ${
+                                    !isProfile 
+                                        ? 'bg-gray-900 border-gray-900 text-white shadow-lg shadow-gray-100' 
+                                        : 'bg-white border-gray-100 text-gray-500 hover:border-gray-200'
+                                }`}
+                            >
+                                <ShieldCheck size={20} />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Penjaga Kost</span>
                             </button>
                         </div>
-                        {form.status === 'published' && (
-                            <p className="text-[10px] text-green-600 font-bold mt-1.5 flex items-center gap-1">
-                                ✓ Listing akan ditinjau admin sebelum muncul di halaman publik
-                            </p>
+
+                        {isProfile ? (
+                            <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <div>
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Nama Di Profile</p>
+                                    <p className="text-sm font-black text-gray-900">{user?.displayName || user?.name || 'Belum diatur'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Nomor WhatsApp</p>
+                                    <p className="text-sm font-black text-gray-900">{user?.phone || 'Belum diatur'}</p>
+                                </div>
+                                <div className="pt-2">
+                                    <p className="text-[10px] font-medium text-orange-600 italic">
+                                        * Ingin mengubah? Silakan perbarui di halaman Profil utama.
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-5 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <Field label="Nama Penjaga" required>
+                                    <Input 
+                                        placeholder="Contoh: Pak Budi"
+                                        value={form.caretakerName || ''}
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            setForm(prev => ({
+                                                ...prev,
+                                                caretakerName: val,
+                                                omnichannelContactName: val,
+                                                omnichannelContactType: 'caretaker'
+                                            }));
+                                        }}
+                                        icon={<User size={16} />}
+                                    />
+                                </Field>
+
+                                <Field label="Jenis Kelamin Penjaga" required>
+                                    <div className="flex gap-2">
+                                        {(['Pria', 'Wanita'] as const).map(g => (
+                                            <button 
+                                                key={g} 
+                                                type="button" 
+                                                onClick={() => upd('caretakerGender', g)}
+                                                className={`flex-1 h-12 rounded-2xl text-xs font-bold border-2 transition-all ${
+                                                    form.caretakerGender === g 
+                                                        ? 'bg-gray-900 text-white border-gray-900' 
+                                                        : 'bg-white text-gray-500 border-gray-200'
+                                                }`}
+                                            >
+                                                {g}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </Field>
+
+                                <Field label="WhatsApp Penjaga" required hint="Gunakan format 62812xxx">
+                                    <Input 
+                                        type="tel"
+                                        placeholder="628..."
+                                        value={form.caretakerPhone || ''}
+                                        onChange={e => {
+                                            const val = e.target.value.replace(/\D/g, '');
+                                            setForm(prev => ({
+                                                ...prev,
+                                                caretakerPhone: val,
+                                                omnichannelContactPhone: val
+                                            }));
+                                        }}
+                                        icon={<Phone size={16} />}
+                                    />
+                                </Field>
+                            </div>
                         )}
-                        {form.status === 'draft' && (
-                            <p className="text-[10px] text-gray-400 font-bold mt-1.5">
-                                Listing hanya tersimpan, belum ditayangkan ke publik
-                            </p>
-                        )}
-                    </Field>
-                </div>
-            );
+                    </div>
+                );
+            }
 
             default: return null;
         }

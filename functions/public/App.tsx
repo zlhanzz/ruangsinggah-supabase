@@ -299,10 +299,8 @@ const App: React.FC = () => {
   const selectedKost = selectedKostId ? listings.find(k => k.id === selectedKostId) : null;
 
   const isDashboardPage = [
-    Page.DASHBOARD_MITRA,
     Page.DASHBOARD_ADMIN,
     Page.DASHBOARD_AGENT,
-    Page.DASHBOARD_OWNER,
   ].some(p => location.pathname.startsWith(p));
 
   // --- WRAPPER FOR DEEP LINK DETAIL ---
@@ -368,6 +366,7 @@ const App: React.FC = () => {
           user={user}
           onLogout={handleLogout}
           hideBottomNav={hideNavbar}
+          hideNavLinks={location.pathname.startsWith(Page.DASHBOARD_MITRA)}
         />
       )}
 

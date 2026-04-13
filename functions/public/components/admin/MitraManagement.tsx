@@ -11,13 +11,15 @@ interface MitraManagementProps {
     onTransferProperty?: (mitra: any) => void;
 }
 
-const MitraManagement: React.FC<MitraManagementProps> = ({
-    mitraRequests,
-    activeMitra,
-    loadMitraRequests,
-    loadActiveMitra,
-    loading
-}) => {
+const MitraManagement: React.FC<MitraManagementProps> = (props) => {
+    const {
+        mitraRequests,
+        activeMitra,
+        loadMitraRequests,
+        loadActiveMitra,
+        loading,
+        onTransferProperty
+    } = props;
     // --- LOCAL UI STATE ---
     const [isAddingManualMitra, setIsAddingManualMitra] = useState(false);
     const [manualMitraForm, setManualMitraForm] = useState<any>({});
@@ -39,10 +41,12 @@ const MitraManagement: React.FC<MitraManagementProps> = ({
         }
     };
 
-    const filteredMitra = activeMitra.filter(mitra => 
-        (mitra.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (mitra.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (mitra.phone || '').toLowerCase().includes(searchQuery.toLowerCase())
+    const filteredMitra = (activeMitra || []).filter(mitra => 
+        mitra && (
+            (mitra.name || mitra.display_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (mitra.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (mitra.phone || '').toLowerCase().includes(searchQuery.toLowerCase())
+        )
     );
 
     const renderRequests = () => (
@@ -65,76 +69,125 @@ const MitraManagement: React.FC<MitraManagementProps> = ({
                         <h3 className="text-gray-900 font-bold mb-1">Belum Ada Pendaftar</h3>
                         <p className="text-gray-500 text-sm">Pendaftaran mitra yang masuk akan muncul di sini.</p>
                     </div>
-                ) : mitraRequests.map((mitra: any) => (
-                    <div key={mitra.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row gap-4 hover:shadow-md transition-shadow">
-                        <div className="flex-1">
-                            <div className="flex flex-wrap justify-between items-start gap-2 mb-3">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className="bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">{mitra.id.substring(0, 8)}</span>
-                                        <span className="text-xs text-gray-400">{new Date(mitra.timestamp || mitra.created_at).toLocaleDateString('id-ID')}</span>
+                ) : (
+                    mitraRequests.map((mitra: any) => (
+                        <div key={mitra.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm flex flex-col lg:flex-row gap-6 hover:shadow-md transition-shadow">
+                            
+                            {/* If Verification type, show KTP photo */}
+                            {mitra.type === 'verification' && mitra.ktp_photo && (
+                                <div className="w-full lg:w-60 shrink-0">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Dokumen KTP</p>
+                                    <div 
+                                        className="aspect-[3/2] rounded-xl border border-gray-100 overflow-hidden bg-gray-50 cursor-pointer group relative shadow-inner"
+                                        onClick={() => window.open(mitra.ktp_photo, '_blank')}
+                                    >
+                                        <img src={mitra.ktp_photo} alt="KTP" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                            <span className="text-white text-[10px] font-black uppercase tracking-widest">Lihat KTP</span>
+                                        </div>
                                     </div>
-                                    <p className="font-medium text-gray-500 text-sm">Nama: <span className="font-black text-gray-900 text-base">{mitra.name}</span></p>
-                                </div>
-                                <span className={`inline-flex px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg border ${
-                                    mitra.status === 'accepted' ? 'bg-green-50 text-green-700 border-green-100' : 
-                                    mitra.status === 'rejected' ? 'bg-red-50 text-red-700 border-red-100' : 
-                                    'bg-yellow-50 text-yellow-700 border-yellow-100'
-                                }`}>
-                                    {mitra.status === 'accepted' ? 'Diterima' : mitra.status === 'rejected' ? 'Ditolak' : 'Menunggu'}
-                                </span>
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">No. WA</p><p className="font-bold text-gray-900 text-sm mt-0.5">{mitra.phone}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Kost</p><p className="font-bold text-gray-900 text-sm mt-0.5">{mitra.property_name || '-'}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</p><p className="font-bold text-gray-900 text-[11px] break-all leading-tight mt-1">{mitra.email || '-'}</p></div>
-                                <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alamat</p><p className="font-bold text-orange-600 text-[11px] leading-tight mt-1 line-clamp-1">{mitra.property_address || '-'}</p></div>
-                            </div>
-                        </div>
-                        <div className="flex flex-col gap-2 sm:w-44 shrink-0 border-t sm:border-t-0 sm:border-l border-gray-100 pt-3 sm:pt-0 sm:pl-5 justify-center">
-                            {mitra.status !== 'accepted' && mitra.status !== 'rejected' && (
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button 
-                                        onClick={async () => {
-                                            if (window.confirm(`Terima pendaftaran ${mitra.name} sebagai Mitra Pemilik? Ini akan memperbarui role akun mereka.`)) {
-                                                try {
-                                                    await updateMitraRequestStatus(mitra.id, 'accepted', mitra.user_id);
-                                                    alert('Mitra diterima dan role akun diperbarui!');
-                                                    loadMitraRequests();
-                                                    loadActiveMitra();
-                                                } catch (err) {
-                                                    alert('Gagal menerima mitra: ' + (err instanceof Error ? err.message : 'Unknown error'));
-                                                }
-                                            }
-                                        }} 
-                                        className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-xl text-xs font-bold active:scale-95 flex justify-center items-center gap-1 shadow-sm"
-                                    >
-                                        Terima
-                                    </button>
-                                    <button 
-                                        onClick={async () => {
-                                            if (window.confirm(`Tolak pendaftaran ${mitra.name}?`)) {
-                                                try {
-                                                    await updateMitraRequestStatus(mitra.id, 'rejected');
-                                                    alert('Pendaftaran ditolak.');
-                                                    loadMitraRequests();
-                                                } catch (err) {
-                                                    alert('Gagal menolak mitra: ' + (err instanceof Error ? err.message : 'Unknown error'));
-                                                }
-                                            }
-                                        }} 
-                                        className="w-full bg-red-50 hover:bg-red-100 text-red-600 py-2 rounded-xl text-xs font-bold border border-red-200 active:scale-95 flex justify-center items-center gap-1"
-                                    >
-                                        Tolak
-                                    </button>
                                 </div>
                             )}
-                            <button onClick={() => window.open(`https://wa.me/${mitra.phone}?text=${encodeURIComponent(`Halo ${mitra.name}, kami dari Admin RuangSinggah.id. Terima kasih sudah mendaftar sebagai Mitra. Kami ingin melanjutkan proses verifikasi Anda.`)}`, '_blank')} className="w-full bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
-                                Follow Up WA
-                            </button>
+
+                            <div className="flex-1">
+                                <div className="flex flex-wrap justify-between items-start gap-2 mb-3">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className={`font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wider ${mitra.type === 'verification' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                                                {mitra.type === 'verification' ? 'Verifikasi Identitas' : 'Pendaftar Baru'}
+                                            </span>
+                                            <span className="text-xs text-gray-400 font-medium">{new Date(mitra.timestamp || mitra.created_at).toLocaleDateString('id-ID')}</span>
+                                        </div>
+                                        <p className="font-medium text-gray-500 text-sm">Nama: <span className="font-black text-gray-900 text-base">{mitra.name}</span></p>
+                                    </div>
+                                    <span className={`inline-flex px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg border ${
+                                        mitra.status === 'accepted' ? 'bg-green-50 text-green-700 border-green-100' : 
+                                        mitra.status === 'rejected' ? 'bg-red-50 text-red-700 border-red-100' : 
+                                        'bg-yellow-50 text-yellow-700 border-yellow-100'
+                                    }`}>
+                                        {mitra.status === 'accepted' ? 'Diterima' : mitra.status === 'rejected' ? 'Ditolak' : 'Menunggu'}
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div>
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">No. WA</p>
+                                        <p className="font-bold text-gray-900 text-sm mt-0.5">{mitra.phone || '-'}</p>
+                                    </div>
+                                    
+                                    {mitra.type === 'registration' ? (
+                                        <>
+                                            <div className="col-span-1">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Kost</p>
+                                                <p className="font-bold text-gray-900 text-sm mt-0.5">{mitra.property_name || '-'}</p>
+                                            </div>
+                                            <div className="col-span-2">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alamat Kost</p>
+                                                <p className="font-bold text-orange-600 text-[11px] leading-tight mt-1 line-clamp-1">{mitra.property_address || '-'}</p>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="col-span-1">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">No. KTP</p>
+                                                <p className="font-bold text-gray-900 text-sm mt-0.5">{mitra.ktp_number || '-'}</p>
+                                            </div>
+                                            <div className="col-span-2">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alamat KTP</p>
+                                                <p className="font-bold text-blue-600 text-[11px] leading-tight mt-1 line-clamp-1">{mitra.address || '-'}</p>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-2 sm:w-44 shrink-0 border-t lg:border-t-0 lg:border-l border-gray-100 pt-3 lg:pt-0 lg:pl-5 justify-center">
+                                {mitra.status !== 'accepted' && mitra.status !== 'rejected' && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button 
+                                            onClick={async () => {
+                                                const label = mitra.type === 'verification' ? 'verifikasi identitas' : 'pendaftaran';
+                                                if (window.confirm(`Terima ${label} ${mitra.name}?`)) {
+                                                    try {
+                                                        await updateMitraRequestStatus(mitra.id, 'accepted', mitra.user_id, mitra.type);
+                                                        alert('Berhasil diproses!');
+                                                        loadMitraRequests();
+                                                        loadActiveMitra();
+                                                    } catch (err) {
+                                                        alert('Gagal memproses: ' + (err instanceof Error ? err.message : 'Unknown error'));
+                                                    }
+                                                }
+                                            }} 
+                                            className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-xl text-xs font-bold active:scale-95 flex justify-center items-center gap-1 shadow-sm"
+                                        >
+                                            Terima
+                                        </button>
+                                        <button 
+                                            onClick={async () => {
+                                                const label = mitra.type === 'verification' ? 'verifikasi' : 'pendaftaran';
+                                                if (window.confirm(`Tolak ${label} ${mitra.name}?`)) {
+                                                    try {
+                                                        await updateMitraRequestStatus(mitra.id, 'rejected', undefined, mitra.type);
+                                                        alert('Ditolak.');
+                                                        loadMitraRequests();
+                                                    } catch (err) {
+                                                        alert('Gagal memproses: ' + (err instanceof Error ? err.message : 'Unknown error'));
+                                                    }
+                                                }
+                                            }} 
+                                            className="w-full bg-red-50 hover:bg-red-100 text-red-600 py-2 rounded-xl text-xs font-bold border border-red-200 active:scale-95 flex justify-center items-center gap-1"
+                                        >
+                                            Tolak
+                                        </button>
+                                    </div>
+                                )}
+                                <button onClick={() => window.open(`https://wa.me/${mitra.phone}?text=${encodeURIComponent(`Halo ${mitra.name}, kami dari Admin RuangSinggah.id. Terima kasih sudah mengajukan ${mitra.type === 'verification' ? 'verifikasi identitas' : 'pendaftaran mitra'}. Kami ingin melanjutkan proses konfirmasi Anda.`)}`, '_blank')} className="w-full bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2 rounded-xl text-xs font-bold transition-all flex justify-center items-center gap-1.5">
+                                    Follow Up WA
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    ))
+                )}
             </div>
         </div>
     );
@@ -181,7 +234,9 @@ const MitraManagement: React.FC<MitraManagementProps> = ({
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-400 font-bold">TERDAFTAR</span>
-                                <span className="text-gray-900 font-black">{new Date(mitra.created_at).toLocaleDateString('id-ID')}</span>
+                                <span className="text-gray-900 font-black">
+                                    {mitra.created_at ? new Date(mitra.created_at).toLocaleDateString('id-ID') : '-'}
+                                </span>
                             </div>
                         </div>
                         <div className="flex flex-col gap-2">
