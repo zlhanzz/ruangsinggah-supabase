@@ -317,9 +317,9 @@ export async function createBookingRequest(bookingData: {
 
         const { data: sender } = await supabase
             .from('users')
-            .select('name, displayName')
+            .select('name')
             .eq('id', bookingData.userId)
-            .single();
+            .maybeSingle();
 
         if (prop) {
             await notifyMitra({
@@ -328,7 +328,7 @@ export async function createBookingRequest(bookingData: {
                 type: 'booking',
                 details: {
                     propertyTitle: prop.title,
-                    senderName: sender?.displayName || sender?.name || 'Calon Penghuni',
+                    senderName: sender?.name || 'Calon Penghuni',
                     period: bookingData.metadata?.periodLabel || 'Per Bulan',
                     bookingId: data.id
                 }

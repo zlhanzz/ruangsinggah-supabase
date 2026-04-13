@@ -34,9 +34,68 @@ export interface ChatMessage {
 }
 
 /**
+ * Memastikan profil user ada di tabel public.users sebelum melakukan operasi yang memerlukan foreign key
+ */
+async function ensureUserProfileExists(userId: string): Promise<void> {
+  // Ambil data auth terlebih dahulu untuk mendapatkan data terbaru
+  const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+  
+  if (authError || !authUser || authUser.id !== userId) {
+    throw new Error('Gagal memverifikasi identitas Anda. Silakan login ulang.');
+  }
+
+  const metadata = authUser.user_metadata || {};
+  const userName = metadata.full_name || metadata.name || metadata.displayName || authUser.email?.split('@')[0] || 'User Baru';
+  const photoUrl = metadata.avatar_url || metadata.picture || '';
+
+  // 1. Cek apakah email ini sudah digunakan oleh ID LAIN (Conflict Prevention)
+  if (authUser.email) {
+    const { data: conflictingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', authUser.email)
+      .neq('id', userId) // Cari yang ID-nya bukan ID saya
+      .maybeSingle();
+
+    if (conflictingUser) {
+      console.warn(`Email conflict detected: ${authUser.email} is already owned by user ${conflictingUser.id}. Skipping automatic profile update.`);
+      // Kita skip upsert untuk menghindari Error 23505
+      return; 
+    }
+  }
+
+  // 2. Gunakan UPSERT: Masukkan data jika belum ada, abaikan jika sudah ada (id sebagai kunci utama)
+  const { error: upsertError } = await supabase
+    .from('users')
+    .upsert({
+      id: userId,
+      email: authUser.email,
+      name: userName,
+      full_name: userName, // Synchronize both name fields to satisfy NOT NULL constraint
+      photo_url: photoUrl,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+
+  if (upsertError) {
+    console.error('CRITICAL: Failed to sync user profile:', upsertError);
+    // Jika error karena RLS (403/Policy), kita harus memberitahu user
+    throw new Error(`Sistem gagal mendaftarkan profil Anda (Error: ${upsertError.code}). Silakan hubungi Admin RS.`);
+  }
+}
+
+/**
  * Mendapatkan atau membuat sesi chat antara user dan owner
  */
-export async function getOrCreateChatSession(userId: string, ownerId: string, propertyId?: string): Promise<ChatSession> {
+export async function getOrCreateChatSession(
+  userId: string, 
+  ownerId: string, 
+  propertyId?: string,
+  requesterName?: string,
+  requesterPhoto?: string
+): Promise<ChatSession> {
+  // 0. Ensure user profile exists in public.users to avoid FK violations
+  await ensureUserProfileExists(userId);
+
   // Normalize ownerId if it matches legacy placeholder
   const finalOwnerId = (ownerId === 'admin-system-id' || !isValidUUID(ownerId)) 
     ? SYSTEM_ADMIN_ID 
@@ -65,12 +124,21 @@ export async function getOrCreateChatSession(userId: string, ownerId: string, pr
   if (existing) return existing;
 
   // Buat sesi baru jika belum ada
+  // RLS BYPASS: Proactively tunnel the requester's name/photo so the Mitra can see it immediately
+  let initialMetadata = '';
+  
+  // Use provided name/photo first (Frontend Injection)
+  const name = requesterName || 'Calon Penghuni';
+  const photo = requesterPhoto || '';
+  initialMetadata = `${name}|||${photo}|||Mulai percakapan...`;
+
   const { data: newSession, error: createError } = await supabase
     .from('chat_sessions')
     .insert({
       user_id: userId,
       owner_id: finalOwnerId,
-      property_id: propertyId
+      property_id: propertyId,
+      last_message: initialMetadata
     })
     .select()
     .single();
@@ -106,7 +174,14 @@ import { notifyMitra } from './notificationBridge';
 /**
  * Mengirim pesan baru
  */
-export async function sendMessage(sessionId: string, senderId: string, senderType: 'user' | 'owner', content: string) {
+export async function sendMessage(
+  sessionId: string, 
+  senderId: string, 
+  senderType: 'user' | 'owner', 
+  content: string,
+  optName?: string,
+  optPhoto?: string
+) {
   const { data, error } = await supabase
     .from('chat_messages')
     .insert({
@@ -124,10 +199,39 @@ export async function sendMessage(sessionId: string, senderId: string, senderTyp
   }
 
   // Update last_message di sesi untuk preview di daftar chat
+  // RLS BYPASS: Store sender metadata in last_message so the recipient can read it
+  let tunneledMessage = content;
+  
+  if (senderType === 'user') {
+    const name = optName || 'Calon Penghuni';
+    const photo = optPhoto || '';
+    tunneledMessage = `${name}|||${photo}|||${content}`;
+  } else {
+    // If sender is OWNER, we must PRESERVE the existing tenant metadata from the previous last_message
+    try {
+      const { data: currentSession } = await supabase
+        .from('chat_sessions')
+        .select('last_message')
+        .eq('id', sessionId)
+        .single();
+      
+      if (currentSession?.last_message?.includes('|||')) {
+        const parts = currentSession.last_message.split('|||');
+        if (parts.length >= 3) {
+          const tenantName = parts[0];
+          const tenantPhoto = parts[1];
+          tunneledMessage = `${tenantName}|||${tenantPhoto}|||${content}`;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to preserve metadata during owner reply:', e);
+    }
+  }
+
   const { error: sessionError } = await supabase
     .from('chat_sessions')
     .update({
-      last_message: content,
+      last_message: tunneledMessage,
       last_message_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     })
@@ -145,13 +249,25 @@ export async function sendMessage(sessionId: string, senderId: string, senderTyp
         user_id, 
         owner_id, 
         property_id,
-        property:property_id (title),
-        sender:user_id (name, displayName)
+        property:property_id (title)
       `)
       .eq('id', sessionId)
       .single();
 
     if (session && senderType === 'user') {
+      // RLS RESILIENT NAME LOOKUP: 
+      // 1. Try optName (frontend injection)
+      // 2. Try direct lookup from users table (bypasses join restrictions)
+      let senderName = optName;
+      if (!senderName) {
+        const { data: senderProfile } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', senderId)
+          .maybeSingle();
+        senderName = senderProfile?.name;
+      }
+
       // User -> Owner: Notify Mitra via WhatsApp
       await notifyMitra({
         ownerId: session.owner_id,
@@ -159,7 +275,7 @@ export async function sendMessage(sessionId: string, senderId: string, senderTyp
         type: 'chat',
         details: {
           propertyTitle: (session as any).property?.title || 'Kost Anda',
-          senderName: (session as any).sender?.displayName || (session as any).sender?.name || 'Calon Penghuni',
+          senderName: senderName || 'Calon Penghuni',
           messageSnippet: content.length > 50 ? content.substring(0, 50) + '...' : content,
           sessionId: sessionId
         }
@@ -206,12 +322,11 @@ export function subscribeToMessages(sessionId: string, onMessage: (message: Chat
  * Mendapatkan daftar semua sesi chat milik user
  */
 export async function getMyChatSessions(userId: string): Promise<ChatSession[]> {
-  const { data, error } = await supabase
+  // 1. Fetch raw sessions with property details
+  const { data: sessions, error } = await supabase
     .from('chat_sessions')
     .select(`
       *,
-      owner:owner_id (name, photo_url),
-      user:user_id (name, photo_url),
       property:property_id (title)
     `)
     .or(`user_id.eq.${userId},owner_id.eq.${userId}`)
@@ -222,5 +337,79 @@ export async function getMyChatSessions(userId: string): Promise<ChatSession[]> 
     return [];
   }
 
-  return data || [];
+  if (!sessions || sessions.length === 0) return [];
+
+  // 2. Fetch Profiles separately to prevent join issues
+  const uniqueUserIds = [...new Set([
+    ...sessions.map(s => s.user_id),
+    ...sessions.map(s => s.owner_id)
+  ])].filter(Boolean);
+
+  const { data: profiles } = await supabase
+    .from('users')
+    .select('id, name, full_name, displayName, photo_url, avatar_url')
+    .in('id', uniqueUserIds);
+
+  const profileMap = new Map();
+  profiles?.forEach(p => {
+    profileMap.set(p.id, {
+      name: p.full_name || p.name || p.displayName,
+      photo_url: p.photo_url || p.avatar_url || ''
+    });
+  });
+
+  // 3. RLS BYPASS: If names are still missing (due to Supabase restrictions),
+  // try to find them via 'transactions' table which usually allows owner-to-tenant joins.
+  const missingIds = uniqueUserIds.filter(id => !profileMap.get(id)?.name);
+  if (missingIds.length > 0) {
+    const { data: transProfiles } = await supabase
+      .from('transactions')
+      .select(`
+        user_id,
+        user:user_id (name, full_name, photo_url)
+      `)
+      .in('user_id', missingIds);
+
+    transProfiles?.forEach(tp => {
+      const u = (tp as any).user;
+      if (u && !profileMap.get(tp.user_id)?.name) {
+        profileMap.set(tp.user_id, {
+          name: u.full_name || u.name || 'Calon Penghuni',
+          photo_url: u.photo_url || ''
+        });
+      }
+    });
+  }
+
+  // 4. Map back to sessions and parse tunneled metadata
+  return sessions.map(s => {
+    let ownerInfo = profileMap.get(s.owner_id) || { name: 'Pemilik', photo_url: '' };
+    let userInfo = profileMap.get(s.user_id) || { name: 'Calon Penghuni', photo_url: '' };
+    let cleanMessage = s.last_message || '';
+
+    // PARSE TUNNELED METADATA: NAME|||PHOTO|||MESSAGE
+    if (s.last_message?.includes('|||')) {
+      const parts = s.last_message.split('|||');
+      if (parts.length >= 3) {
+        const tunneledName = parts[0];
+        const tunneledPhoto = parts[1];
+        cleanMessage = parts.slice(2).join('|||');
+
+        // Update userInfo if it's currently generic
+        if (userInfo.name === 'Calon Penghuni' || !userInfo.name) {
+          userInfo = {
+            name: tunneledName,
+            photo_url: tunneledPhoto || userInfo.photo_url
+          };
+        }
+      }
+    }
+    
+    return {
+      ...s,
+      last_message: cleanMessage,
+      user: userInfo,
+      owner: ownerInfo
+    };
+  }) as ChatSession[];
 }
