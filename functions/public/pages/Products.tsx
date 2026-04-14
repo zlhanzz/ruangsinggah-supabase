@@ -466,16 +466,15 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
                       {detailItem.description}
                     </p>
                     <p className="text-[10px] sm:text-xs font-medium text-gray-500 leading-relaxed mb-6 italic">
-                      Database kost dikumpulkan dengan keliling langsung di sekitar kampus untuk melakukan pendataan oleh tim ruang singgah, kost yang terdata adalah kost terdekat sekitar kampus radius 0 sampai 3 km. Database akan dikirim dalam bentuk link drive ataupun excel yang berisi terkait nama kost, jenis kost (putra/putri/campur) area posisi kost dari kampus, info fasilitas, serta nomor pemilik yang bisa dihubungi.
+                      Database kost dikumpulkan dengan keliling langsung di sekitar kampus untuk melakukan pendataan oleh tim ruang singgah. Kost yang terdata adalah kost terdekat sekitar kampus dengan radius 0 sampai 3 km.
                     </p>
                     <div className="grid grid-cols-1 gap-y-2.5 sm:gap-y-3">
-                      {[
-                        'Kontak Pemilik (WhatsApp)',
-                        'Titik Koordinat Google Maps',
-                        'Info Harga Kost Terakhir',
-                        'Tipe Kost (Putra/Putri/Campur)',
-                        'Fasilitas Utama (AC/WiFi)',
-                        'Ketersediaan Kamar Terakhir'
+                       {[
+                        'Nama Kost',
+                        'Jenis Kost (Putra/Putri/Campur)',
+                        'Area Posisi Kost dari Kampus',
+                        'Info Fasilitas',
+                        'Nomor Pemilik yang bisa dihubungi'
                       ].map((info, i) => (
                         <div key={i} className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs font-bold text-gray-600">
                           <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
@@ -485,7 +484,16 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
                     </div>
                   </div>
 
-                  <div className="p-4 sm:p-6 border-2 border-dashed border-gray-100 rounded-[1.5rem] sm:rounded-[2rem] space-y-3">
+                  <div className="p-4 sm:p-6 border-2 border-dashed border-gray-100 rounded-[1.5rem] sm:rounded-[2rem] space-y-4">
+                    <div className="bg-red-50 p-3 rounded-xl border border-red-100">
+                      <p className="text-[9px] sm:text-[10px] font-black text-red-600 uppercase tracking-widest flex items-center gap-2 mb-1">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                        Keamanan Transaksi
+                      </p>
+                      <p className="text-[9px] sm:text-[10px] font-bold text-red-500 leading-relaxed">
+                        Meskipun kost sudah disurvey secara langsung dan bisa dipastikan bahwa kost yang tercatat memiliki bangunan asli, tetap JANGAN melakukan transaksi apapun sebelum cek lokasi demi keamanan Anda.
+                      </p>
+                    </div>
                     <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed">
                       Catatan: Database dalam format <span className="text-gray-900">{detailItem.fileType === 'upload' ? 'Excel/PDF' : 'Google Drive'}</span> yang dikirim otomatis setelah verifikasi.
                     </p>
