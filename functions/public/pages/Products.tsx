@@ -495,10 +495,7 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
                       </p>
                     </div>
                     <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed">
-                      Catatan: Database dalam format <span className="text-gray-900">{detailItem.fileType === 'upload' ? 'Excel/PDF' : 'Google Drive'}</span> yang dikirim otomatis setelah verifikasi.
-                    </p>
-                    <p className="text-[9px] sm:text-[10px] font-bold text-orange-500 uppercase tracking-widest leading-relaxed">
-                      Info: Untuk kost area unhas beberapa kost sudah terdata lebih lanjut dengan menampilkan lengkap foto dan juga harga. Data kost akan terus ditingkatkan sehingga bisa menampilkan informasi dengan lebih lengkap.
+                      Catatan: Akses terhadap database kost akan otomatis terkirim by sistem setelah payment sukses dilakukan.
                     </p>
                   </div>
                 </div>
