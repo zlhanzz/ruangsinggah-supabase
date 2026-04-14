@@ -25,7 +25,7 @@ const Footer: React.FC<FooterProps> = ({ onPageChange }) => {
             <h4 className="text-gray-900 font-bold mb-6">Layanan</h4>
             <ul className="space-y-4 text-sm text-gray-600">
               <li><button onClick={() => onPageChange(Page.LISTINGS)} className="hover:text-orange-500">Pencarian Kost Mitra</button></li>
-              <li><button onClick={() => onPageChange(Page.PRODUCTS)} className="hover:text-orange-500">Database Kost Kampus (Excel)</button></li>
+              <li><button onClick={() => onPageChange(Page.PRODUCTS)} className="hover:text-orange-500">Database Kost Kampus</button></li>
               <li><button onClick={() => onPageChange(Page.SURVEY_SERVICE)} className="hover:text-orange-500">Jasa Survey Kost</button></li>
               <li><button onClick={() => onPageChange(Page.OWNER)} className="hover:text-orange-500">Gabung Jadi Mitra</button></li>
             </ul>
