@@ -365,7 +365,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               {mode === 'PASSWORD_UPDATE' && 'Setel Sandi Baru'}
             </h2>
             <p className="mt-2 text-sm text-gray-500">
-              {mode === 'LOGIN' && 'Masuk untuk mengelola kost favoritmu'}
+              {mode === 'LOGIN' && 'Masuk dan temukan kost favoritmu'}
               {mode === 'REGISTER' && 'Daftar & Verifikasi untuk akses penuh'}
               {mode === 'FORGOT_PASSWORD' && 'Masukkan email yang terdaftar'}
               {mode === 'PASSWORD_UPDATE' && 'Masukkan kata sandi baru Anda'}
