@@ -286,13 +286,6 @@ const Home: React.FC<HomeProps> = ({ onPageChange, onKostSelect, user, listings 
         </div>
       </section>
 
-      <section className="bg-white pt-10 pb-20 px-4 text-center">
-        <div className="max-w-2xl mx-auto">
-          <p className="text-gray-300 text-[10px] sm:text-xs font-bold uppercase tracking-[0.3em] leading-loose">
-            RuangSinggah.id adalah platform pencarian kost mahasiswa terverifikasi. <br /> Beroperasi utama di Makassar untuh kemudahan hunian akademisi.
-          </p>
-        </div>
-      </section>
     </div>
   );
 };
