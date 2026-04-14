@@ -452,7 +452,7 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
                   </div>
                   <div className="p-3 sm:p-4 bg-gray-50 rounded-xl sm:rounded-2xl border border-gray-100">
                     <p className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Metode Data</p>
-                    <p className="text-base sm:text-lg font-black text-gray-900 leading-none">Survey Tim</p>
+                    <p className="text-base sm:text-lg font-black text-gray-900 leading-none">Survey Lapangan</p>
                   </div>
                 </div>
 
@@ -462,8 +462,11 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
                       <div className="w-3 sm:w-4 h-px bg-orange-500"></div>
                       Deskripsi:
                     </h4>
-                    <p className="text-xs sm:text-sm font-medium text-gray-600 leading-relaxed mb-4">
+                    <p className="text-[10px] sm:text-xs font-bold text-gray-900 leading-relaxed mb-4">
                       {detailItem.description}
+                    </p>
+                    <p className="text-[10px] sm:text-xs font-medium text-gray-500 leading-relaxed mb-6 italic">
+                      Database kost dikumpulkan dengan keliling langsung di sekitar kampus untuk melakukan pendataan oleh tim ruang singgah, kost yang terdata adalah kost terdekat sekitar kampus radius 0 sampai 3 km. Database akan dikirim dalam bentuk link drive ataupun excel yang berisi terkait nama kost, jenis kost (putra/putri/campur) area posisi kost dari kampus, info fasilitas, serta nomor pemilik yang bisa dihubungi.
                     </p>
                     <div className="grid grid-cols-1 gap-y-2.5 sm:gap-y-3">
                       {[
@@ -482,9 +485,12 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
                     </div>
                   </div>
 
-                  <div className="p-4 sm:p-6 border-2 border-dashed border-gray-100 rounded-[1.5rem] sm:rounded-[2rem]">
+                  <div className="p-4 sm:p-6 border-2 border-dashed border-gray-100 rounded-[1.5rem] sm:rounded-[2rem] space-y-3">
                     <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed">
                       Catatan: Database dalam format <span className="text-gray-900">{detailItem.fileType === 'upload' ? 'Excel/PDF' : 'Google Drive'}</span> yang dikirim otomatis setelah verifikasi.
+                    </p>
+                    <p className="text-[9px] sm:text-[10px] font-bold text-orange-500 uppercase tracking-widest leading-relaxed">
+                      Info: Untuk kost area unhas beberapa kost sudah terdata lebih lanjut dengan menampilkan lengkap foto dan juga harga. Data kost akan terus ditingkatkan sehingga bisa menampilkan informasi dengan lebih lengkap.
                     </p>
                   </div>
                 </div>
