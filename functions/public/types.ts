@@ -90,8 +90,8 @@ export interface Kost {
   rules: string[];
 
   // Arrays for locations and facilities
-  campuses?: { name: string; distance: string; transportMode?: 'walk' | 'motorcycle' | 'car' | 'transit' }[];
-  publicFacilities?: { name: string; distance: string; transportMode?: 'walk' | 'motorcycle' | 'car' | 'transit' }[];
+  campuses?: { name: string; distance: string; transportMode?: 'walk' | 'motorcycle' | 'car' | 'transit'; lat?: number; lng?: number }[];
+  publicFacilities?: { name: string; distance: string; transportMode?: 'walk' | 'motorcycle' | 'car' | 'transit'; lat?: number; lng?: number }[];
   roomTypes: RoomType[];
   reviews: Review[];
   virtualTourUrl?: string;

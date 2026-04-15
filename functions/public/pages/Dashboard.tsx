@@ -86,7 +86,7 @@ declare global {
 
 // Helper Component for Leaflet Map
 // Helper Component for Leaflet Map
-const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (lat: number, lng: number, address: string) => void }> = ({ lat, lng, onLocationChange }) => {
+const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (lat: number, lng: number, address: string, city?: string, area?: string) => void }> = ({ lat, lng, onLocationChange }) => {
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const mapInstance = useRef<any>(null);
     const markerInstance = useRef<any>(null);
@@ -118,15 +118,19 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
         const updatePositionAndAddress = async (lat: number, lng: number) => {
             // Reverse Geocoding using Nominatim
             try {
-                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, {
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`, {
                     headers: {
                         'User-Agent': 'RuangSinggah/1.0'
                     }
                 });
                 const data = await response.json();
-                const address = data.display_name || "Alamat tidak ditemukan";
-                onLocationChange(lat, lng, address);
-                setSearchQuery(address);
+                const addressStr = data.display_name || "Alamat tidak ditemukan";
+                const addressObj = data.address || {};
+                const city = addressObj.city || addressObj.town || addressObj.municipality || addressObj.county || addressObj.state || '';
+                const area = addressObj.suburb || addressObj.village || addressObj.district || addressObj.neighbourhood || '';
+                
+                onLocationChange(lat, lng, addressStr, city, area);
+                setSearchQuery(addressStr);
             } catch (error) {
                 console.error("Geocoding failed:", error);
                 onLocationChange(lat, lng, "Gagal memuat alamat");
@@ -277,7 +281,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
             setIsSearchingLocation(true);
             try {
                 // Geocoding menggunakan Nominatim (OpenStreetMap)
-                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text)}&limit=5`, {
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text)}&countrycodes=id&limit=5`, {
                     headers: { 'User-Agent': 'RuangSinggah.id/1.0' }
                 });
                 const data = await response.json();
@@ -838,15 +842,81 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
     const addObjectArrayItem = (field: 'campuses' | 'publicFacilities') => {
         setFormData({ ...formData, [field]: [...(formData[field] || []), { name: '', distance: '', transportMode: 'walk' }] });
     };
-    const updateObjectArrayItem = (field: 'campuses' | 'publicFacilities', index: number, key: 'name' | 'distance' | 'transportMode', value: string) => {
+    const updateObjectArrayItem = (field: 'campuses' | 'publicFacilities', index: number, key: keyof typeof formData[typeof field][0], value: any) => {
         const arr = [...(formData[field] || [])];
-        arr[index] = { ...arr[index], [key]: value };
+        const item = { ...arr[index], [key]: value };
+        arr[index] = item;
         setFormData({ ...formData, [field]: arr });
     };
     const removeObjectArrayItem = (field: 'campuses' | 'publicFacilities', index: number) => {
         const arr = [...(formData[field] || [])];
         arr.splice(index, 1);
         setFormData({ ...formData, [field]: arr });
+    };
+
+    const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+        const R = 6371; // Radius of the Earth in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const d = R * c;
+        return parseFloat(d.toFixed(1));
+    };
+
+    const [isSearchingFacilityMap, setIsSearchingFacilityMap] = useState<Record<string, boolean>>({});
+
+    const searchFacilityCoordinates = async (field: 'campuses' | 'publicFacilities', index: number, name: string) => {
+        if (!name) return;
+        const stateKey = `${field}-${index}`;
+        setIsSearchingFacilityMap(prev => ({ ...prev, [stateKey]: true }));
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(name)}&countrycodes=id&limit=1`, {
+                headers: { 'User-Agent': 'RuangSinggah.id/1.0' }
+            });
+            const data = await response.json();
+            if (data && data.length > 0) {
+                const lat = parseFloat(data[0].lat);
+                const lng = parseFloat(data[0].lon);
+                const arr = [...(formData[field] || [])];
+                
+                let distString = arr[index].distance;
+                if (formData.location && formData.location.lat) {
+                    const km = calculateDistance(formData.location.lat, formData.location.lng, lat, lng);
+                    distString = `± ${km} KM`;
+                }
+
+                arr[index] = { ...arr[index], lat, lng, distance: distString };
+                setFormData({ ...formData, [field]: arr });
+            } else {
+                alert('Lokasi tidak ditemukan di peta. Coba setel nama yang lebih spesifik.');
+            }
+        } catch (error) {
+            console.error('Error fetching facility location:', error);
+            alert('Gagal mencari kordinat.');
+        } finally {
+            setIsSearchingFacilityMap(prev => ({ ...prev, [stateKey]: false }));
+        }
+    };
+
+    const [activeMapPicker, setActiveMapPicker] = useState<{ field: 'campuses' | 'publicFacilities', index: number } | null>(null);
+
+    const handleMapPickerSave = (lat: number, lng: number) => {
+        if (!activeMapPicker) return;
+        const { field, index } = activeMapPicker;
+        const arr = [...(formData[field] || [])];
+        
+        let distString = arr[index].distance;
+        if (formData.location && formData.location.lat) {
+            const km = calculateDistance(formData.location.lat, formData.location.lng, lat, lng);
+            distString = `± ${km} KM`;
+        }
+
+        arr[index] = { ...arr[index], lat, lng, distance: distString };
+        setFormData({ ...formData, [field]: arr });
+        setActiveMapPicker(null);
     };
 
     // File Helpers
@@ -1093,8 +1163,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                 <LocationPicker
                                     lat={formData.location?.lat ?? -6.2088}
                                     lng={formData.location?.lng ?? 106.8456}
-                                    onLocationChange={(lat, lng, address) => {
-                                        setFormData(prev => ({ ...prev, location: { lat, lng } }));
+                                    onLocationChange={(lat, lng, address, city, area) => {
+                                        setFormData(prev => {
+                                            const updates: Partial<Kost> = { location: { lat, lng } };
+                                            if (city) updates.city = city.replace('Kota ', '').replace('Kabupaten ', '');
+                                            if (area) updates.area = area.replace('Kecamatan ', '');
+                                            return { ...prev, ...updates };
+                                        });
                                         setMapAddress(address);
                                     }}
                                 />
@@ -1168,50 +1243,67 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                             <div className="space-y-3">
                                 {formData.campuses?.map((campus, idx) => (
                                     <div key={idx} className="flex flex-col gap-3 items-start bg-orange-50 p-4 rounded-xl border border-orange-100">
-                                        <div className="flex gap-4 w-full items-center">
-                                            <input
-                                                type="text"
-                                                value={campus.name}
-                                                onChange={(e) => updateObjectArrayItem('campuses', idx, 'name', e.target.value)}
-                                                className="w-1/2 bg-white border border-orange-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-orange-500"
-                                                placeholder="Nama Kampus (Misal: IPB Dramaga)"
-                                            />
-                                            <input
-                                                type="text"
-                                                value={campus.distance}
-                                                onChange={(e) => updateObjectArrayItem('campuses', idx, 'distance', e.target.value)}
-                                                className="w-1/2 bg-white border border-orange-200 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500"
-                                                placeholder="Jarak Waktu (Misal: 5 Menit)"
-                                            />
-                                            <button type="button" onClick={() => removeObjectArrayItem('campuses', idx)} className="text-red-400 hover:text-red-600 bg-white p-2 border border-red-100 rounded-lg transition-colors shrink-0">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                            </button>
-                                        </div>
-                                        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-orange-100">
-                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Kendaraan:</span>
-                                            <div className="flex gap-1">
-                                                {['walk', 'motorcycle', 'car', 'transit'].map(mode => {
-                                                    const icons: Record<string, React.ReactNode> = {
-                                                        'walk': <svg className="w-5 h-5 text-current drop-shadow-sm" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M12 10a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" /><path d="m7 21 3-8 1.5 3" /><path d="m16 21-2-6-1.5-3.5L9.5 10l-1.5 1.5" /><path d="M12 11.5 14 15l2-1.5" /></svg>,
-                                                        'motorcycle': <svg className="w-5 h-5 text-current drop-shadow-sm" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M5 16A3 3 0 1 0 5 22A3 3 0 1 0 5 16Z" /><path d="M19 16A3 3 0 1 0 19 22A3 3 0 1 0 19 16Z" /><path d="M5 19H19" /><path d="M6 16L9.673 8.653A2 2 0 0 1 11.458 7.5H16" /><path d="M16 7.5L18.428 12.356A2 2 0 0 0 20.214 13.5H22" /><path d="M11.5 7.5L13.5 3H16" /></svg>,
-                                                        'car': <svg className="w-5 h-5 text-current drop-shadow-sm" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" /><circle cx="7" cy="17" r="2" /><path d="M9 17h6" /><circle cx="17" cy="17" r="2" /></svg>,
-                                                        'transit': <svg className="w-5 h-5 text-current drop-shadow-sm" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M8 6v6" /><path d="M15 6v6" /><path d="M2 12h19.6" /><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3" /><circle cx="7" cy="18" r="2" /><path d="M9 18h5" /><circle cx="16" cy="18" r="2" /></svg>
-                                                    };
-                                                    const isSelected = campus.transportMode === mode || (!campus.transportMode && mode === 'walk');
-                                                    return (
-                                                        <button
-                                                            key={mode}
-                                                            type="button"
-                                                            onClick={() => updateObjectArrayItem('campuses', idx, 'transportMode', mode)}
-                                                            className={`p-1.5 rounded-md transition-all ${isSelected ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-400 hover:bg-gray-100'}`}
-                                                            title={mode}
-                                                        >
-                                                            {icons[mode]}
-                                                        </button>
-                                                    );
-                                                })}
+                                        <div className="flex flex-col sm:flex-row gap-4 w-full items-start sm:items-center">
+                                            <div className="flex-1 flex gap-2 w-full">
+                                                <input
+                                                    type="text"
+                                                    value={campus.name}
+                                                    onChange={(e) => updateObjectArrayItem('campuses', idx, 'name', e.target.value)}
+                                                    className="w-full bg-white border border-orange-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-orange-500"
+                                                    placeholder="Nama Kampus (Misal: IPB Dramaga)"
+                                                />
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => searchFacilityCoordinates('campuses', idx, campus.name)}
+                                                    disabled={isSearchingFacilityMap[`campuses-${idx}`]}
+                                                    className="bg-orange-500 text-white px-3 py-2 rounded-lg text-xs font-bold shrink-0 hover:bg-orange-600 disabled:opacity-50"
+                                                >
+                                                    {isSearchingFacilityMap[`campuses-${idx}`] ? 'Mencari...' : 'Cari Koordinat'}
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setActiveMapPicker({ field: 'campuses', index: idx })}
+                                                    className="bg-white border text-gray-500 border-gray-200 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 hover:bg-gray-50 hover:text-orange-500 transition-colors"
+                                                    title="Pilih Manual di Peta"
+                                                >
+                                                    📍 Peta
+                                                </button>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={campus.distance}
+                                                    onChange={(e) => updateObjectArrayItem('campuses', idx, 'distance', e.target.value)}
+                                                    className="w-32 bg-white border border-orange-200 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-orange-500"
+                                                    placeholder="Jarak"
+                                                />
+                                                <button type="button" onClick={() => removeObjectArrayItem('campuses', idx)} className="text-red-400 hover:text-red-600 bg-white p-2 border border-red-100 rounded-lg transition-colors shrink-0">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                </button>
                                             </div>
                                         </div>
+                                        {campus.distance && (() => {
+                                            const kmMatch = campus.distance.match(/[\d.]+/);
+                                            if (kmMatch) {
+                                                const km = parseFloat(kmMatch[0]);
+                                                const walk = Math.ceil((km / 5) * 60);
+                                                const moto = Math.ceil((km / 30) * 60) + 2;
+                                                const car = Math.ceil((km / 20) * 60) + 5;
+                                                return (
+                                                    <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-2 rounded-lg border border-orange-100 w-full mt-2">
+                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-2">Estimasi Waktu:</span>
+                                                        <div className="flex items-center gap-3 text-xs font-bold text-gray-600">
+                                                            <span className="flex items-center gap-1">🚶 {walk} Mnt</span>
+                                                            <span className="text-gray-300">•</span>
+                                                            <span className="flex items-center gap-1">🏍️ {moto} Mnt</span>
+                                                            <span className="text-gray-300">•</span>
+                                                            <span className="flex items-center gap-1">🚗 {car} Mnt</span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
                                     </div>
                                 ))}
                                 <button type="button" onClick={() => addObjectArrayItem('campuses')} className="text-xs font-bold text-orange-600 hover:bg-orange-50 px-3 py-2 border border-orange-200 rounded-lg transition-colors">
@@ -1226,50 +1318,67 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                             <div className="space-y-3">
                                 {formData.publicFacilities?.map((fac, idx) => (
                                     <div key={idx} className="flex flex-col gap-3 items-start bg-blue-50 p-4 rounded-xl border border-blue-100">
-                                        <div className="flex gap-4 w-full items-center">
-                                            <input
-                                                type="text"
-                                                value={fac.name}
-                                                onChange={(e) => updateObjectArrayItem('publicFacilities', idx, 'name', e.target.value)}
-                                                className="w-1/2 bg-white border border-blue-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-blue-500"
-                                                placeholder="Nama Tempat (Misal: Halte Busway)"
-                                            />
-                                            <input
-                                                type="text"
-                                                value={fac.distance}
-                                                onChange={(e) => updateObjectArrayItem('publicFacilities', idx, 'distance', e.target.value)}
-                                                className="w-1/2 bg-white border border-blue-200 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-blue-500"
-                                                placeholder="Jarak Waktu (Misal: 3 Menit)"
-                                            />
-                                            <button type="button" onClick={() => removeObjectArrayItem('publicFacilities', idx)} className="text-red-400 hover:text-red-600 bg-white p-2 border border-red-100 rounded-lg transition-colors shrink-0">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                            </button>
-                                        </div>
-                                        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-blue-100">
-                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Kendaraan:</span>
-                                            <div className="flex gap-1">
-                                                {['walk', 'motorcycle', 'car', 'transit'].map(mode => {
-                                                    const icons: Record<string, React.ReactNode> = {
-                                                        'walk': <svg className="w-5 h-5 text-current drop-shadow-sm" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M12 10a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" /><path d="m7 21 3-8 1.5 3" /><path d="m16 21-2-6-1.5-3.5L9.5 10l-1.5 1.5" /><path d="M12 11.5 14 15l2-1.5" /></svg>,
-                                                        'motorcycle': <svg className="w-5 h-5 text-current drop-shadow-sm" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M5 16A3 3 0 1 0 5 22A3 3 0 1 0 5 16Z" /><path d="M19 16A3 3 0 1 0 19 22A3 3 0 1 0 19 16Z" /><path d="M5 19H19" /><path d="M6 16L9.673 8.653A2 2 0 0 1 11.458 7.5H16" /><path d="M16 7.5L18.428 12.356A2 2 0 0 0 20.214 13.5H22" /><path d="M11.5 7.5L13.5 3H16" /></svg>,
-                                                        'car': <svg className="w-5 h-5 text-current drop-shadow-sm" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" /><circle cx="7" cy="17" r="2" /><path d="M9 17h6" /><circle cx="17" cy="17" r="2" /></svg>,
-                                                        'transit': <svg className="w-5 h-5 text-current drop-shadow-sm" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M8 6v6" /><path d="M15 6v6" /><path d="M2 12h19.6" /><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3" /><circle cx="7" cy="18" r="2" /><path d="M9 18h5" /><circle cx="16" cy="18" r="2" /></svg>
-                                                    };
-                                                    const isSelected = fac.transportMode === mode || (!fac.transportMode && mode === 'walk');
-                                                    return (
-                                                        <button
-                                                            key={mode}
-                                                            type="button"
-                                                            onClick={() => updateObjectArrayItem('publicFacilities', idx, 'transportMode', mode)}
-                                                            className={`p-1.5 rounded-md transition-all ${isSelected ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-400 hover:bg-gray-100'}`}
-                                                            title={mode}
-                                                        >
-                                                            {icons[mode]}
-                                                        </button>
-                                                    );
-                                                })}
+                                        <div className="flex flex-col sm:flex-row gap-4 w-full items-start sm:items-center">
+                                            <div className="flex-1 flex gap-2 w-full">
+                                                <input
+                                                    type="text"
+                                                    value={fac.name}
+                                                    onChange={(e) => updateObjectArrayItem('publicFacilities', idx, 'name', e.target.value)}
+                                                    className="w-full bg-white border border-blue-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-blue-500"
+                                                    placeholder="Nama Tempat (Misal: Halte Busway)"
+                                                />
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => searchFacilityCoordinates('publicFacilities', idx, fac.name)}
+                                                    disabled={isSearchingFacilityMap[`publicFacilities-${idx}`]}
+                                                    className="bg-blue-500 text-white px-3 py-2 rounded-lg text-xs font-bold shrink-0 hover:bg-blue-600 disabled:opacity-50"
+                                                >
+                                                    {isSearchingFacilityMap[`publicFacilities-${idx}`] ? 'Mencari...' : 'Cari Koordinat'}
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setActiveMapPicker({ field: 'publicFacilities', index: idx })}
+                                                    className="bg-white border text-gray-500 border-gray-200 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 hover:bg-gray-50 hover:text-blue-500 transition-colors"
+                                                    title="Pilih Manual di Peta"
+                                                >
+                                                    📍 Peta
+                                                </button>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={fac.distance}
+                                                    onChange={(e) => updateObjectArrayItem('publicFacilities', idx, 'distance', e.target.value)}
+                                                    className="w-32 bg-white border border-blue-200 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:border-blue-500"
+                                                    placeholder="Jarak"
+                                                />
+                                                <button type="button" onClick={() => removeObjectArrayItem('publicFacilities', idx)} className="text-red-400 hover:text-red-600 bg-white p-2 border border-red-100 rounded-lg transition-colors shrink-0">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                </button>
                                             </div>
                                         </div>
+                                        {fac.distance && (() => {
+                                            const kmMatch = fac.distance.match(/[\d.]+/);
+                                            if (kmMatch) {
+                                                const km = parseFloat(kmMatch[0]);
+                                                const walk = Math.ceil((km / 5) * 60);
+                                                const moto = Math.ceil((km / 30) * 60) + 2;
+                                                const car = Math.ceil((km / 20) * 60) + 5;
+                                                return (
+                                                    <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-2 rounded-lg border border-blue-100 w-full mt-2">
+                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-2">Estimasi Waktu:</span>
+                                                        <div className="flex items-center gap-3 text-xs font-bold text-gray-600">
+                                                            <span className="flex items-center gap-1">🚶 {walk} Mnt</span>
+                                                            <span className="text-gray-300">•</span>
+                                                            <span className="flex items-center gap-1">🏍️ {moto} Mnt</span>
+                                                            <span className="text-gray-300">•</span>
+                                                            <span className="flex items-center gap-1">🚗 {car} Mnt</span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
                                     </div>
                                 ))}
                                 <button type="button" onClick={() => addObjectArrayItem('publicFacilities')} className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-3 py-2 border border-blue-200 rounded-lg transition-colors">
@@ -2552,7 +2661,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                                                     </td>
                                                                     <td className="px-6 py-4">
                                                                         <div className="flex justify-end gap-2">
-                                                                            <button onClick={() => window.open(`/?kostId=${item.id}`, '_blank')} className="px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors">Kunjungi</button>
+                                                                            <button onClick={() => window.open(`/kost/${item.id}`, '_blank')} className="px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors">Kunjungi</button>
                                                                             {isAdmin && (
                                                                                 <button onClick={() => handleOpenTransferModal('property', item)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 transition-colors">Transfer</button>
                                                                             )}
@@ -2791,6 +2900,47 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
 
 
 
+
+                {/* MODAL: MANUAL MAP PICKER FOR FACILITIES */}
+                {activeMapPicker && (
+                    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setActiveMapPicker(null)}></div>
+                        <div className="bg-white max-w-lg w-full rounded-3xl overflow-hidden shadow-2xl relative z-10 animate-in zoom-in-95 duration-300 flex flex-col">
+                            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                                <div>
+                                    <h3 className="font-black text-gray-900 uppercase tracking-tight">Pilih Titik di Peta</h3>
+                                    <p className="text-[10px] text-gray-500 font-bold uppercase mt-1">Geser peta untuk memilih lokasi presisi</p>
+                                </div>
+                                <button type="button" onClick={() => setActiveMapPicker(null)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 rounded-xl text-gray-400 hover:text-red-500 transition-colors">&times;</button>
+                            </div>
+                            <div className="relative h-[400px] w-full">
+                                <LocationPicker
+                                    lat={
+                                        (formData[activeMapPicker.field] || [])[activeMapPicker.index]?.lat 
+                                        || formData.location?.lat 
+                                        || -6.2088
+                                    }
+                                    lng={
+                                        (formData[activeMapPicker.field] || [])[activeMapPicker.index]?.lng 
+                                        || formData.location?.lng 
+                                        || 106.8456
+                                    }
+                                    onLocationChange={(lat, lng) => {
+                                        // We temporarily store the picked value here if we want to save it on manual map save click
+                                        // Or we can auto save. We'd better just save the activeMapLocation in a temp state to confirm.
+                                        // But LocationPicker is stateful enough. Wait, actually we don't have a ref.
+                                        // Let's create an inline wrapper component to handle the confirm, or just save immediately on pan.
+                                        // Saving immediately is easier:
+                                        handleMapPickerSave(lat, lng);
+                                    }}
+                                />
+                            </div>
+                            <div className="p-4 bg-orange-50 border-t border-orange-100 flex justify-end">
+                              <p className="text-[10px] text-orange-600 font-bold italic">Lokasi otomatis disimpan saat penanda digeser.</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* MODAL: TRANSFER PROPERTI */}
                 {isTransferModalOpen && (

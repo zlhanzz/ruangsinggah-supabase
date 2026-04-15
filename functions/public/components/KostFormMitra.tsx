@@ -94,7 +94,7 @@ const ChipToggle: React.FC<{ label: string; active: boolean; onClick: () => void
 const MapPicker: React.FC<{
     lat: number;
     lng: number;
-    onLocationChange: (lat: number, lng: number, address: string) => void;
+    onLocationChange: (lat: number, lng: number, address: string, city?: string, area?: string) => void;
 }> = ({ lat, lng, onLocationChange }) => {
     const mapRef = useRef<HTMLDivElement>(null);
     const mapInstance = useRef<any>(null);
@@ -107,12 +107,16 @@ const MapPicker: React.FC<{
     const reverseGeocode = useCallback(async (lat: number, lng: number) => {
         try {
             const res = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`,
                 { headers: { 'User-Agent': 'RuangSinggah.id/1.0' } }
             );
             const data = await res.json();
             const addr = data.display_name || 'Alamat tidak ditemukan';
-            onLocationChange(lat, lng, addr);
+            const address = data.address || {};
+            const city = address.city || address.town || address.municipality || address.county || address.state || '';
+            const area = address.suburb || address.village || address.district || address.neighbourhood || '';
+            
+            onLocationChange(lat, lng, addr, city, area);
             setSearchQuery(addr);
         } catch {
             onLocationChange(lat, lng, 'Gagal memuat alamat');
@@ -162,7 +166,7 @@ const MapPicker: React.FC<{
             setIsSearching(true);
             try {
                 const res = await fetch(
-                    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text)}&limit=5`,
+                    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text)}&countrycodes=id&limit=5`,
                     { headers: { 'User-Agent': 'RuangSinggah.id/1.0' } }
                 );
                 setSearchResults(await res.json());
@@ -171,11 +175,23 @@ const MapPicker: React.FC<{
         }, 500);
     };
 
-    const selectResult = (r: any) => {
+    const selectResult = async (r: any) => {
         const plat = parseFloat(r.lat), plng = parseFloat(r.lon);
         setSearchQuery(r.display_name);
         setSearchResults([]);
-        onLocationChange(plat, plng, r.display_name);
+        
+        // Reverse geocode explicitly to get the detailed address object for city and area
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${plat}&lon=${plng}&addressdetails=1`, { headers: { 'User-Agent': 'RuangSinggah.id/1.0' } });
+            const data = await res.json();
+            const address = data.address || {};
+            const city = address.city || address.town || address.municipality || address.county || address.state || '';
+            const area = address.suburb || address.village || address.district || address.neighbourhood || '';
+            onLocationChange(plat, plng, r.display_name, city, area);
+        } catch {
+            onLocationChange(plat, plng, r.display_name);
+        }
+
         if (markerInstance.current && mapInstance.current) {
             markerInstance.current.setLatLng([plat, plng]);
             mapInstance.current.setView([plat, plng], 16);
@@ -354,13 +370,93 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
     const upd = (key: keyof Kost, val: any) => setForm(prev => ({ ...prev, [key]: val }));
 
+    const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+        const R = 6371; // Radius of the Earth in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const d = R * c;
+        return parseFloat(d.toFixed(1));
+    };
+
+    const updateFacilityMode = (field: 'campuses' | 'publicFacilities', index: number, value: string) => {
+        const arr = [...(form[field] || [])];
+        const item = { ...arr[index], transportMode: value };
+        if (item.lat && item.lng && form.location?.lat) {
+            const km = calculateDistance(form.location.lat, form.location.lng, item.lat, item.lng);
+            item.distance = `± ${km} KM`;
+        }
+        arr[index] = item;
+        upd(field, arr);
+    };
+
+    const [activeMapPicker, setActiveMapPicker] = useState<{ field: 'campuses' | 'publicFacilities', index: number } | null>(null);
+
+    const handleMapPickerSave = (lat: number, lng: number) => {
+        if (!activeMapPicker) return;
+        const { field, index } = activeMapPicker;
+        const arr = [...(form[field] || [])];
+        
+        let distString = arr[index].distance;
+        if (form.location && form.location.lat) {
+            const km = calculateDistance(form.location.lat, form.location.lng, lat, lng);
+            distString = `± ${km} KM`;
+        }
+
+        arr[index] = { ...arr[index], lat, lng, distance: distString };
+        upd(field, arr);
+        setActiveMapPicker(null);
+    };
+
+    const [isSearchingFacility, setIsSearchingFacility] = useState<Record<string, boolean>>({});
+
+    const searchFacilityCoordinates = async (field: 'campuses' | 'publicFacilities', index: number, name: string) => {
+        if (!name) return;
+        const stateKey = `${field}-${index}`;
+        setIsSearchingFacility(prev => ({ ...prev, [stateKey]: true }));
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(name)}&countrycodes=id&limit=1`, {
+                headers: { 'User-Agent': 'RuangSinggah.id/1.0' }
+            });
+            const data = await res.json();
+            if (data && data.length > 0) {
+                const lat = parseFloat(data[0].lat);
+                const lng = parseFloat(data[0].lon);
+                const arr = [...(form[field] || [])];
+                
+                let distString = arr[index].distance;
+                if (form.location && form.location.lat) {
+                    const km = calculateDistance(form.location.lat, form.location.lng, lat, lng);
+                    distString = `± ${km} KM`;
+                }
+
+                arr[index] = { ...arr[index], lat, lng, distance: distString };
+                upd(field, arr);
+            } else {
+                alert('Lokasi tidak ditemukan di peta. Coba setel nama yang lebih spesifik.');
+            }
+        } catch (error) {
+            console.error('Error fetching facility location:', error);
+            alert('Gagal mencari kordinat.');
+        } finally {
+            setIsSearchingFacility(prev => ({ ...prev, [stateKey]: false }));
+        }
+    };
+
     // ── location ───────────────────────────────────────────────────────────────
-    const handleLocationChange = useCallback((lat: number, lng: number, address: string) => {
-        setForm(prev => ({
-            ...prev,
-            location: { lat, lng },
-            address: address,
-        }));
+    const handleLocationChange = useCallback((lat: number, lng: number, address: string, city?: string, area?: string) => {
+        setForm(prev => {
+            const updates: Partial<Kost> = { location: { lat, lng }, address };
+            if (city && !prev.city) updates.city = city.replace('Kota ', '').replace('Kabupaten ', '');
+            if (area && !prev.area) updates.area = area.replace('Kecamatan ', '');
+            // Auto overwrite city and area anyway to keep it synced with map if map moved
+            if (city) updates.city = city.replace('Kota ', '').replace('Kabupaten ', '');
+            if (area) updates.area = area.replace('Kecamatan ', '');
+            return { ...prev, ...updates };
+        });
     }, []);
 
     // ── image handling ─────────────────────────────────────────────────────────
@@ -561,14 +657,63 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     <Field label="Dekat Kampus / Fasilitas Umum" hint="Tambahkan lokasi penting di sekitar kost">
                         <div className="space-y-2">
                             {(form.campuses || []).map((c, i) => (
-                                <div key={i} className="flex gap-2 items-center">
-                                    <Input placeholder="Nama kampus/fasilitas" value={c.name}
-                                        onChange={e => { const a = [...(form.campuses||[])]; a[i]={...a[i],name:e.target.value}; upd('campuses',a); }} />
-                                    <Input placeholder="Jarak (mis. 500m)" value={c.distance}
-                                        onChange={e => { const a=[...(form.campuses||[])]; a[i]={...a[i],distance:e.target.value}; upd('campuses',a); }}
-                                        className="!w-32 shrink-0" />
-                                    <button type="button" onClick={() => upd('campuses',(form.campuses||[]).filter((_,idx)=>idx!==i))}
-                                        className="p-2 text-rose-400 hover:bg-rose-50 rounded-xl shrink-0"><Trash2 size={16}/></button>
+                                <div key={i} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-gray-50 p-2 rounded-xl border border-gray-100">
+                                    <div className="flex-1 space-y-2 w-full">
+                                        <div className="flex gap-2 w-full">
+                                            <Input placeholder="Nama kampus/fasilitas (Cth: IPB)" value={c.name}
+                                                onChange={e => { const a = [...(form.campuses||[])]; a[i]={...a[i],name:e.target.value}; upd('campuses',a); }} 
+                                                className="w-full"
+                                            />
+                                            <button 
+                                                type="button" 
+                                                onClick={() => searchFacilityCoordinates('campuses', i, c.name)}
+                                                disabled={isSearchingFacility[`campuses-${i}`]}
+                                                className="bg-orange-500 text-white px-3 py-2 rounded-xl text-[10px] sm:text-xs font-bold shrink-0 hover:bg-orange-600 disabled:opacity-50"
+                                            >
+                                                {isSearchingFacility[`campuses-${i}`] ? 'Mencari...' : 'Cari Koordinat'}
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setActiveMapPicker({ field: 'campuses', index: i })}
+                                                className="bg-white border text-gray-500 border-gray-200 px-3 py-2 rounded-xl text-[10px] sm:text-xs font-bold flex items-center justify-center shrink-0 hover:bg-gray-50 hover:text-orange-500 transition-colors"
+                                                title="Pilih Manual di Peta"
+                                            >
+                                                📍 Peta
+                                            </button>
+                                        </div>
+                                        {c.distance && (() => {
+                                            const kmMatch = c.distance.match(/[\d.]+/);
+                                            if (kmMatch) {
+                                                const km = parseFloat(kmMatch[0]);
+                                                const walk = Math.ceil((km / 5) * 60);
+                                                const moto = Math.ceil((km / 30) * 60) + 2;
+                                                const car = Math.ceil((km / 20) * 60) + 5;
+                                                return (
+                                                    <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-100 w-full mt-2">
+                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-2">Estimasi Waktu:</span>
+                                                        <div className="flex items-center gap-3 text-xs font-bold text-gray-600">
+                                                            <span className="flex items-center gap-1">🚶 {walk} Mnt</span>
+                                                            <span className="text-gray-300">•</span>
+                                                            <span className="flex items-center gap-1">🏍️ {moto} Mnt</span>
+                                                            <span className="text-gray-300">•</span>
+                                                            <span className="flex items-center gap-1">🚗 {car} Mnt</span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Input placeholder="Jarak" value={c.distance}
+                                            onChange={e => { const a=[...(form.campuses||[])]; a[i]={...a[i],distance:e.target.value}; upd('campuses',a); }}
+                                            className="!w-24 sm:!w-32 shrink-0" 
+                                        />
+                                        <button type="button" onClick={() => upd('campuses',(form.campuses||[]).filter((_,idx)=>idx!==i))}
+                                            className="p-3 text-rose-400 hover:bg-rose-100 bg-white rounded-xl shrink-0">
+                                            <Trash2 size={16}/>
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                             <button type="button"
@@ -578,6 +723,40 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             </button>
                         </div>
                     </Field>
+
+                    {/* MODAL: MANUAL MAP PICKER FOR FACILITIES */}
+                    {activeMapPicker && (
+                        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setActiveMapPicker(null)}></div>
+                            <div className="bg-white max-w-lg w-full rounded-3xl overflow-hidden shadow-2xl relative z-10 animate-in zoom-in-95 duration-300 flex flex-col">
+                                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                                    <div>
+                                        <h3 className="font-black text-gray-900 uppercase tracking-tight">Pilih Titik di Peta</h3>
+                                        <p className="text-[10px] text-gray-500 font-bold uppercase mt-1">Geser peta untuk memilih lokasi presisi</p>
+                                    </div>
+                                    <button type="button" onClick={() => setActiveMapPicker(null)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 rounded-xl text-gray-400 hover:text-red-500 transition-colors">&times;</button>
+                                </div>
+                                <div className="relative h-[400px] w-full">
+                                    <MapPicker
+                                        lat={
+                                            (form[activeMapPicker.field] || [])[activeMapPicker.index]?.lat 
+                                            || form.location?.lat 
+                                            || -6.2088
+                                        }
+                                        lng={
+                                            (form[activeMapPicker.field] || [])[activeMapPicker.index]?.lng 
+                                            || form.location?.lng 
+                                            || 106.8456
+                                        }
+                                        onLocationChange={(lat, lng) => handleMapPickerSave(lat, lng)}
+                                    />
+                                </div>
+                                <div className="p-4 bg-orange-50 border-t border-orange-100 flex justify-end">
+                                  <p className="text-[10px] text-orange-600 font-bold italic">Lokasi otomatis disimpan saat penanda digeser.</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
 
