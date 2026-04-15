@@ -236,7 +236,7 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
 
   const isAdmin = await checkIfUserIsAdmin(user.id);
 
-  let query = supabase.from('properties').select('*, users!owner_uid(name, role)');
+  let query = supabase.from('properties').select('*, users(name, role)');
   if (ownerUid) {
     query = query.eq('owner_uid', ownerUid);
   } else if (!isAdmin) {

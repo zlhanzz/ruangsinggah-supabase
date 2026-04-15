@@ -43,6 +43,9 @@ export interface RoomType {
   roomFacilities: string[]; // Specific room items (e.g. "Kasur", "Lemari")
   bathroomFacilities: string[]; // Bathroom specifics
   isAvailable?: boolean; // Availability status
+  availableRoomCount?: number; // Number of available rooms for this type
+  maxOccupants?: number; // Maximum number of occupants allowed
+  additionalCostPerPerson?: number; // Additional cost per extra person
 }
 
 export interface Review {

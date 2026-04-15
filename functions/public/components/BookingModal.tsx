@@ -12,12 +12,35 @@ interface BookingModalProps {
 }
 
 const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPeriod, onClose, onConfirm }) => {
-  // If variant has pricing schemes, use them. Otherwise fallback to monthly logic.
+  const maxOccupants = variant.maxOccupants || 1;
+  const additionalCostPerPerson = variant.additionalCostPerPerson || 0;
   const hasFlexiblePricing = variant.pricing && variant.pricing.length > 0;
+  
+  const [occupants, setOccupants] = useState<number>(1);
   
   const [selectedPeriod, setSelectedPeriod] = useState<PricingPeriod>(initialPeriod || (hasFlexiblePricing ? variant.pricing![0].period : 'bulanan'));
   const [startDate, setStartDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const periodWeights: Record<string, number> = {
+      'harian': 1,
+      'mingguan': 7,
+      'bulanan': 30,
+      '3bulanan': 90,
+      '6bulanan': 180,
+      'tahunan': 360,
+  };
+
+  // Determine available options
+  const availableOptions = hasFlexiblePricing 
+    ? variant.pricing!.map(p => p.period)
+    : ['bulanan', '3bulanan', '6bulanan', 'tahunan'];
+
+  // Find lowest active period
+  const lowestPeriod = availableOptions.reduce((min, p) => 
+      periodWeights[p] < periodWeights[min] ? p : min
+  , availableOptions[0]);
+
 
   // Helper to map backend periods to display logic
   const periodMapping: Record<string, { label: string, months: number }> = {
@@ -29,21 +52,32 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
       'tahunan': { label: 'Tahunan', months: 12 },
   };
 
-  const getPrice = (period: PricingPeriod) => {
+  const getPrice = (period: PricingPeriod, occupantsCount: number) => {
+      let basePrice = 0;
       if (hasFlexiblePricing) {
           const scheme = variant.pricing?.find(p => p.period === period);
-          return scheme ? scheme.price : 0;
+          basePrice = scheme ? scheme.price : 0;
+      } else {
+          // Fallback legacy calculation
+          const base = variant.price;
+          if (period === 'bulanan') basePrice = base;
+          else if (period === '3bulanan') basePrice = base * 3 * 0.95;
+          else if (period === '6bulanan') basePrice = base * 6 * 0.90;
+          else if (period === 'tahunan') basePrice = base * 12 * 0.85;
       }
-      // Fallback legacy calculation if pricing array is missing but we want to simulate standard periods
-      const base = variant.price;
-      if (period === 'bulanan') return base;
-      if (period === '3bulanan') return base * 3 * 0.95; // 5% discount
-      if (period === '6bulanan') return base * 6 * 0.90; // 10% discount
-      if (period === 'tahunan') return base * 12 * 0.85; // 15% discount
-      return 0;
+      
+      const extraCostBase = additionalCostPerPerson;
+      
+      const selectedWeight = periodWeights[period] || 30;
+      const lowestWeight = periodWeights[lowestPeriod] || 30;
+      const proportion = selectedWeight / lowestWeight;
+      
+      const totalExtraCost = Math.max(0, occupantsCount - 1) * Math.round(extraCostBase * proportion);
+      
+      return basePrice + totalExtraCost;
   };
 
-  const currentPrice = getPrice(selectedPeriod);
+  const currentPrice = getPrice(selectedPeriod, occupants);
 
   const handleBooking = () => {
     if (!startDate) {
@@ -56,16 +90,14 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
         period: selectedPeriod,
         startDate,
         total: currentPrice,
-        variantName: variant.name
+        variantName: variant.name,
+        occupants: occupants
       });
       setIsSubmitting(false);
     }, 1500);
   };
 
-  // Determine which options to show
-  const availableOptions = hasFlexiblePricing 
-    ? variant.pricing!.map(p => p.period)
-    : ['bulanan', '3bulanan', '6bulanan', 'tahunan']; // Default legacy options
+  // Move to top to be used earlier, removed from here
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6">
@@ -89,7 +121,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
             <div className="grid grid-cols-2 gap-3">
               {availableOptions.map((periodKey) => {
                   const pKey = periodKey as PricingPeriod;
-                  const price = getPrice(pKey);
+                  const price = getPrice(pKey, occupants);
                   return (
                     <button
                     key={pKey}
@@ -109,6 +141,32 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
               })}
             </div>
           </div>
+
+          {/* Jumlah Penghuni */}
+          {maxOccupants > 1 && (
+            <div className="space-y-4">
+              <label className="block text-xs font-black text-gray-400 uppercase tracking-widest">Jumlah Penghuni</label>
+              <div className="relative">
+                <select
+                  value={occupants}
+                  onChange={(e) => setOccupants(parseInt(e.target.value))}
+                  className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all appearance-none cursor-pointer"
+                >
+                  {Array.from({ length: maxOccupants }).map((_, idx) => {
+                    const proportionalCostPerPerson = Math.round(additionalCostPerPerson * (periodWeights[selectedPeriod] / (periodWeights[lowestPeriod] || 30)));
+                    return (
+                        <option key={idx + 1} value={idx + 1}>
+                        {idx + 1} Orang {idx > 0 && additionalCostPerPerson > 0 ? `(+${FORMAT_CURRENCY(proportionalCostPerPerson)} untuk ${periodMapping[selectedPeriod]?.label})` : ''}
+                        </option>
+                    );
+                  })}
+                </select>
+                <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Tanggal Masuk */}
           <div className="space-y-4">
@@ -139,6 +197,9 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
               <div>
                 <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Total Pembayaran</p>
                 <p className="text-2xl font-black text-gray-900 tracking-tighter">{FORMAT_CURRENCY(currentPrice)}</p>
+                {occupants > 1 && additionalCostPerPerson > 0 && (
+                  <p className="text-[9px] text-orange-500 font-bold mt-1">Termasuk biaya tambahan untuk {occupants} orang</p>
+                )}
               </div>
               <div className="text-right">
                 <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest leading-none">Status</p>

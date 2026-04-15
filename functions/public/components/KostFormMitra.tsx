@@ -403,13 +403,32 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         const newRoom: RoomType = {
             name: 'Kamar Baru', size: '', price: 0,
             pricing: [{ period: 'bulanan', price: 0 }],
-            features: [], roomFacilities: [], bathroomFacilities: [], isAvailable: true
+            features: [], roomFacilities: [], bathroomFacilities: [], isAvailable: true,
+            availableRoomCount: 1,
+            maxOccupants: 1, additionalCostPerPerson: 0
         };
         upd('roomTypes', [...(form.roomTypes || []), newRoom]);
     };
     const updRoom = (i: number, key: keyof RoomType, val: any) => {
         const rooms = [...(form.roomTypes || [])];
-        rooms[i] = { ...rooms[i], [key]: val };
+        let newVal = val;
+        
+        // Dynamic correlation
+        if (key === 'availableRoomCount') {
+            const count = parseInt(val) || 0;
+            rooms[i].isAvailable = count > 0;
+            newVal = count;
+        } else if (key === 'isAvailable') {
+            // If manually toggled to Available, ensure count is at least 1 if it was 0
+            if (val === true && (rooms[i].availableRoomCount || 0) <= 0) {
+                rooms[i].availableRoomCount = 1;
+            } else if (val === false) {
+                rooms[i].availableRoomCount = 0;
+            }
+        }
+
+        rooms[i] = { ...rooms[i], [key]: newVal };
+        
         if (key === 'pricing') {
             const monthly = (val as any[]).find((p: any) => p.period === 'bulanan');
             if (monthly) rooms[i].price = monthly.price;
@@ -694,17 +713,10 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         </button>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-1 gap-2">
                                         <div>
                                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Ukuran Kamar</p>
                                             <Input placeholder="Contoh: 3x4m" value={room.size || ''} onChange={e => updRoom(ri,'size',e.target.value)} className="bg-white" />
-                                        </div>
-                                        <div>
-                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Ketersediaan</p>
-                                            <button type="button" onClick={() => updRoom(ri,'isAvailable',!room.isAvailable)}
-                                                className={`w-full h-12 rounded-2xl text-xs font-bold border transition-all ${room.isAvailable ? 'bg-green-50 text-green-600 border-green-200' : 'bg-rose-50 text-rose-500 border-rose-200'}`}>
-                                                {room.isAvailable ? '✓ Tersedia' : '✗ Penuh'}
-                                            </button>
                                         </div>
                                     </div>
 
@@ -729,6 +741,35 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         </div>
                                     </div>
 
+                                    {/* Maks Penghuni & Charge Pindah Ke Sini */}
+                                    {(() => {
+                                        // Cari skema terendah yang diaktifkan (ada harga > 0)
+                                        const activePeriods = room.pricing?.filter(p => p.price > 0).map(p => p.period) || [];
+                                        const lowestPeriod = activePeriods.length > 0 
+                                            ? activePeriods.reduce((min, p) => periodWeights[p] < periodWeights[min] ? p : min, activePeriods[0]) 
+                                            : 'bulanan'; // default fallback
+                                        
+                                        const lowestPeriodLabel = PRICING_PERIODS.find(p => p.key === lowestPeriod)?.label || 'Bulanan';
+
+                                        return (
+                                            <div className="grid grid-cols-2 gap-4 mt-2 py-4 border-t border-gray-100">
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Maks. Penghuni</p>
+                                                    <input type="number" min="1" placeholder="1" value={room.maxOccupants || ''} onChange={e => updRoom(ri,'maxOccupants',parseInt(e.target.value) || 1)} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-orange-500" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                                                        {'Biaya Tambahan (> 1 Penghuni)'} (Per {lowestPeriodLabel})
+                                                    </p>
+                                                    <div className="relative">
+                                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-bold">Rp</span>
+                                                        <input type="number" min="0" placeholder="0" value={room.additionalCostPerPerson || ''} onChange={e => updRoom(ri,'additionalCostPerPerson',parseInt(e.target.value) || 0)} className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-3 text-sm font-bold outline-none focus:border-orange-500" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
                                     <div>
                                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Fasilitas Kamar</p>
                                         <FacilityInput
@@ -749,8 +790,30 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                             onToggle={f => toggleRoomFeature(ri,'bathroomFacilities',f)}
                                             onAdd={f => addCustomRoomFeature(ri,'bathroomFacilities',f)}
                                             onRemove={f => toggleRoomFeature(ri,'bathroomFacilities',f)}
-                                            placeholder="Contoh: Jacuzzi, Sauna..."
                                         />
+                                    </div>
+
+                                    <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={room.isAvailable !== false} 
+                                                onChange={e => updRoom(ri, 'isAvailable', e.target.checked)} 
+                                                className="w-4 h-4 text-orange-500 rounded focus:ring-orange-500" 
+                                            />
+                                            <span className="text-sm font-bold text-gray-700">Kamar Tersedia</span>
+                                        </label>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Sisa Kamar:</span>
+                                            <input 
+                                                type="number" 
+                                                min="0" 
+                                                className="w-14 border-b border-gray-200 py-1 text-center font-bold focus:border-orange-500 outline-none text-xs" 
+                                                placeholder="0" 
+                                                value={room.availableRoomCount || 0} 
+                                                onChange={e => updRoom(ri, 'availableRoomCount', e.target.value)} 
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             ))}

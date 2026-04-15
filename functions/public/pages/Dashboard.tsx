@@ -239,6 +239,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
 
     const [tempRuleInput, setTempRuleInput] = useState('');
     const [tempFacilityInput, setTempFacilityInput] = useState('');
+    const [tempTagInput, setTempTagInput] = useState<{ [key: string]: string }>({});
 
     // --- NEW MANAGEMENT STATE ---
     // Minimal states for orchestration
@@ -917,12 +918,33 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
 
     // Room Helpers
     const addRoomType = () => {
-        const newRoom: RoomType = { name: 'New Room', size: '', price: 0, pricing: [{ period: 'bulanan', price: 0 }], features: [], roomFacilities: [], bathroomFacilities: [], isAvailable: true };
+        const newRoom: RoomType = { 
+            name: 'New Room', size: '', price: 0, 
+            pricing: [{ period: 'bulanan', price: 0 }], 
+            features: [], roomFacilities: [], bathroomFacilities: [], isAvailable: true,
+            availableRoomCount: 1,
+            maxOccupants: 1, additionalCostPerPerson: 0 
+        };
         setFormData({ ...formData, roomTypes: [...(formData.roomTypes || []), newRoom] });
     };
     const updateRoomType = (index: number, field: keyof RoomType, value: any) => {
         const rooms = [...(formData.roomTypes || [])];
-        rooms[index] = { ...rooms[index], [field]: value };
+        let newVal = value;
+
+        // Correlation Logic
+        if (field === 'availableRoomCount') {
+            const count = parseInt(value) || 0;
+            rooms[index].isAvailable = count > 0;
+            newVal = count;
+        } else if (field === 'isAvailable') {
+            if (value === true && (rooms[index].availableRoomCount || 0) <= 0) {
+                rooms[index].availableRoomCount = 1;
+            } else if (value === false) {
+                rooms[index].availableRoomCount = 0;
+            }
+        }
+
+        rooms[index] = { ...rooms[index], [field]: newVal };
         setFormData({ ...formData, roomTypes: rooms });
     };
 
@@ -1461,6 +1483,41 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                     </div>
                                 </div>
 
+                                {/* Maks Penghuni & Charge Logic */}
+                                {(() => {
+                                    const periodWeights: Record<string, number> = {
+                                        'harian': 1, 'mingguan': 7, 'bulanan': 30, '3bulanan': 90, '6bulanan': 180, 'tahunan': 360
+                                    };
+                                    const periodLabels: Record<string, string> = {
+                                        'harian': 'Harian', 'mingguan': 'Mingguan', 'bulanan': 'Bulanan', '3bulanan': '3 Bulan', '6bulanan': '6 Bulan', 'tahunan': 'Tahunan'
+                                    };
+
+                                    const activePeriods = room.pricing?.filter(p => p.price > 0).map(p => p.period) || [];
+                                    const lowestPeriod = activePeriods.length > 0 
+                                        ? activePeriods.reduce((min, p) => periodWeights[p] < periodWeights[min] ? p : min, activePeriods[0]) 
+                                        : 'bulanan';
+                                    
+                                    const lowestPeriodLabel = periodLabels[lowestPeriod] || 'Bulanan';
+
+                                    return (
+                                        <div className="grid grid-cols-2 gap-4 mt-4 py-4 border-t border-gray-100">
+                                            <div>
+                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Maks. Penghuni</p>
+                                                <input type="number" min="1" placeholder="Maks. 1" value={room.maxOccupants || ''} onChange={e => updateRoomType(idx,'maxOccupants',parseInt(e.target.value) || 1)} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                                                    {'Biaya Tambahan (> 1 Penghuni)'} (Per {lowestPeriodLabel})
+                                                </p>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-bold">Rp</span>
+                                                    <input type="number" min="0" placeholder="0" value={room.additionalCostPerPerson || ''} onChange={e => updateRoomType(idx,'additionalCostPerPerson',parseInt(e.target.value) || 0)} className="w-full bg-white border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm font-bold outline-none focus:border-orange-500" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
                                 {/* FEATURES TAGS */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
@@ -1508,11 +1565,22 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                     </div>
                                 </div>
 
-                                <div>
+                                <div className="pt-4 border-t border-gray-50 flex items-center justify-between">
                                     <label className="flex items-center gap-2 cursor-pointer">
                                         <input type="checkbox" checked={room.isAvailable !== false} onChange={e => updateRoomType(idx, 'isAvailable', e.target.checked)} className="w-4 h-4 text-orange-500 rounded focus:ring-orange-500" />
                                         <span className="text-sm font-bold text-gray-700">Kamar Tersedia</span>
                                     </label>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jumlah Sisa Kamar:</span>
+                                        <input 
+                                            type="number" 
+                                            min="0" 
+                                            className="w-16 border-b-2 border-gray-100 py-1 text-center font-bold focus:border-orange-500 outline-none text-sm" 
+                                            placeholder="0" 
+                                            value={room.availableRoomCount || 0} 
+                                            onChange={e => updateRoomType(idx, 'availableRoomCount', e.target.value)} 
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         ))}
