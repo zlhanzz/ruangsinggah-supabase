@@ -16,7 +16,7 @@ function cleanJson(text: string) {
   return text.replace(/```json/g, "").replace(/```/g, "").trim();
 }
 
-async function analyzeWithAI(text: string, context: { properties: any[], stats: any, userName: string }) {
+async function analyzeWithAI(text: string, context: { properties: any[], stats: any, userName: string, pendingBookingsList: any[] }) {
   const firstPropTitle = context.properties[0]?.title || "kost";
   const prompt = `
     IDENTITAS: Anda adalah "Dashboard Mitra Simpel" untuk RuangSinggah.id. 
@@ -34,7 +34,15 @@ async function analyzeWithAI(text: string, context: { properties: any[], stats: 
     - Pengajuan Sewa Menunggu: ${context.stats.pendingBookings}
     - Permintaan Cek Lokasi: ${context.stats.pendingSurveys}
 
-    TEMPLATE SAPAAN WAJIB (Gunakan format ini jika user menyapa atau bertanya menu):
+    DAFTAR PENGAJUAN SEWA MENUNGGU:
+    ${context.pendingBookingsList.length === 0 ? "Tidak ada" : context.pendingBookingsList.map((tx: any) => `- ID Transaksi: ${tx.id}`).join('\n')}
+
+    ATURAN JIKA USER MENJAWAB "TERIMA" ATAU "TOLAK":
+    - Jika user merespon "Terima" atau "Tolak" (atau sinonimnya), Anda HARUS mengecek Daftar Pengajuan Sewa Menunggu di atas.
+    - Jika ada minimal 1 pengajuan, set intent menjadi "ACCEPT_BOOKING" atau "REJECT_BOOKING", dan set "transaction_id" dengan ID Transaksi dari daftar tersebut (ambil yang paling pertama jika user tidak menyebut spesifik).
+    - Jika kosong, beri tahu user dengan sopan bahwa tidak ada pengajuan sewa baru yang menunggu.
+
+    TEMPLATE SAPAAN WAJIB (Gunakan format ini HANYA jika pesan awal user tidak jelas atau sekadar menyapa):
     "*Halo Pak/Ibu ${context.userName},* ada yang bisa dibantu hari ini terkait kost *${firstPropTitle}*?
 
     Berikut daftar layanan yang tersedia:
@@ -43,18 +51,19 @@ async function analyzeWithAI(text: string, context: { properties: any[], stats: 
     📄 *Pengajuan Sewa* (Ada ${context.stats.pendingBookings} menunggu)
     🔍 *Cek Lokasi* (Ada ${context.stats.pendingSurveys} permintaan)"
 
-    ATURAN FORMATTING:
-    - Gunakan baris baru (newline) secara eksplisit agar teks tidak menumpuk.
+    ATURAN FORMATTING & PENTING:
+    - Gunakan baris baru (newline) secara eksplisit agar teks rapi.
     - Gunakan *text* untuk menebalkan kata kunci.
-    - Gunakan emoji seperti di atas agar mudah di-scan mata.
+    - JANGAN BERIKAN TEMPLATE SAPAAN jika user hanya mencoba membalas "Terima". Langsung saja respon keberhasilan/kegagalan memproses konfirmasi.
 
     FORMAT OUTPUT (JSON SAJA):
     {
-      "intent": "UPDATE_PRICE" | "GET_STATS" | "GET_MESSAGES" | "GET_APPLICATIONS" | "CHATTING",
+      "intent": "UPDATE_PRICE" | "GET_STATS" | "GET_MESSAGES" | "GET_APPLICATIONS" | "ACCEPT_BOOKING" | "REJECT_BOOKING" | "CHATTING",
       "property_id": "UUID (jika relevan)",
+      "transaction_id": "UUID transaksi (Wajib ada Khusus ACCEPT/REJECT BOOKING)",
       "room_type_name": "Nama tipe kamar (khusus update harga)",
       "new_value": 1500000 (khusus update harga),
-      "reply_text": "Balasan Anda (Wajib gunakan format list di atas jika memberikan sapaan/menu)"
+      "reply_text": "Balasan Anda"
     }
 
     PESAN USER: "${text}"
@@ -295,15 +304,14 @@ serve(async (req) => {
             console.log(`[Mega-Debug] SUCCESS: Proceeding with ${aggregatedProperties.length} property(s) for owner ${userName}.`);
             const propIds = aggregatedProperties.map(p => p.id);
 
-            // Fetch Comprehensive Dashboard Stats
-            const [unreadMsg, pendingBookings, pendingSurveys, sessions] = await Promise.all([
+            // Fetch Comprehensive Dashboard Stats including pending transaction records
+            const { data: pendingTxData } = await supabase.from('transactions').select('*, user:user_id(name, phone)').eq('product_type', 'kost_booking').eq('status', 'PENDING_APPROVAL').in('product_id', propIds).order('created_at', { ascending: false });
+            const pendingBookingsList = pendingTxData || [];
+
+            const [unreadMsg, pendingSurveys, sessions] = await Promise.all([
               supabase.from('chat_messages').select('id', { count: 'exact' }).eq('is_read', false).in('session_id', 
                 (await supabase.from('chat_sessions').select('id').eq('owner_id', ownerId)).data?.map(s => s.id) || []
               ),
-              supabase.from('transactions').select('id', { count: 'exact' })
-                .eq('product_type', 'kost_booking')
-                .eq('status', 'PENDING_APPROVAL')
-                .in('product_id', propIds),
               supabase.from('transactions').select('id', { count: 'exact' })
                 .eq('product_type', 'survey')
                 .eq('status', 'PENDING_APPROVAL')
@@ -313,12 +321,12 @@ serve(async (req) => {
 
             const stats = {
               unreadMessages: unreadMsg.count || 0,
-              pendingBookings: pendingBookings.count || 0,
+              pendingBookings: pendingBookingsList.length,
               pendingSurveys: pendingSurveys.count || 0
             };
 
             try {
-              const aiResult = await analyzeWithAI(text, { properties: aggregatedProperties, stats, userName })
+              const aiResult = await analyzeWithAI(text, { properties: aggregatedProperties, stats, userName, pendingBookingsList })
 
               if (aiResult.intent === "UPDATE_PRICE" && aiResult.property_id && aiResult.room_type_name) {
                 const targetProp = aggregatedProperties.find(p => p.id === aiResult.property_id);
@@ -336,8 +344,61 @@ serve(async (req) => {
                   if (updateError) {
                     aiResult.reply_text = `Mohon maaf ${userName}, terjadi kendala saat mengupdate harga. Silakan coba lagi sebentar lagi.`;
                   } else {
-                    aiResult.reply_text = `Selesai Bapak/Ibu! Harga kontribusi untuk ${aiResult.room_type_name} di ${targetProp.title} telah berhasil saya update menjadi ${formatIDR(aiResult.new_value)}. Apakah ada hal lain yang bisa saya bantu?`;
+                    aiResult.reply_text = `Selesai Bapak/Ibu! Harga kontribusi untuk ${aiResult.room_type_name} di ${targetProp.title} telah berhasil saya update menjadi ${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(aiResult.new_value)}. Apakah ada hal lain yang bisa saya bantu?`;
                   }
+                }
+              } else if (aiResult.intent === "ACCEPT_BOOKING" || aiResult.intent === "REJECT_BOOKING") {
+                if (!aiResult.transaction_id) {
+                    aiResult.reply_text = "Mohon maaf, saya tidak dapat menemukan data pengajuan sewa yang aktif saat ini.";
+                } else {
+                    const txToUpdate = pendingBookingsList.find(t => t.id === aiResult.transaction_id);
+                    if (txToUpdate) {
+                       const isAccept = aiResult.intent === "ACCEPT_BOOKING";
+                       const newStatus = isAccept ? "AWAITING_PAYMENT" : "REJECTED";
+                       const amount = txToUpdate.amount;
+                       let paymentLink = null;
+                       
+                       const updates: any = { status: newStatus, updated_at: new Date().toISOString() };
+                       
+                       // Tenant Details
+                       const tenantId = txToUpdate.user_id;
+                       const tenantName = Array.isArray(txToUpdate.user) ? txToUpdate.user[0]?.name : txToUpdate.user?.name || "Penyewa";
+                       const itemName = txToUpdate.metadata?.kostName || txToUpdate.metadata?.item || "Kost";
+                       
+                       let notifTitle = "";
+                       let notifMessage = "";
+
+                       if (isAccept) {
+                           paymentLink = `https://app.pakasir.com/pay/ruangsinggah-id/${amount}?order_id=${txToUpdate.id}`;
+                           updates.pakasir_link = paymentLink;
+                           
+                           notifTitle = "Pengajuan Disetujui!";
+                           notifMessage = `Pengajuan sewa ${itemName} telah disetujui. Silakan cek menu tagihan untuk melakukan pembayaran.`;
+                           
+                           aiResult.reply_text = `Siap Bapak/Ibu ${userName}! Pengajuan sewa dari ${tenantName} telah saya "Terima" dan disetujui.\n\nTagihan pembayaran (Pakasir) telah diterbitkan ke dashboard penyewa secara otomatis. Ada pesan atau layanan lain yang bisa saya bantu?`;
+                       } else {
+                           notifTitle = "Pengajuan Ditolak";
+                           notifMessage = `Mohon maaf, pengajuan sewa ${itemName} Anda belum dapat disetujui oleh pemilik.`;
+                           
+                           aiResult.reply_text = `Baik Bapak/Ibu ${userName}. Pengajuan tersebut telah saya "Tolak" dan penyewa bersangkutan telah menerima notifikasi permohonan maaf di akunnya. Apakah ada tugas lain?`;
+                       }
+
+                       // Execute Update Transaction
+                       await supabase.from('transactions').update(updates).eq('id', txToUpdate.id);
+
+                       // Execute Insert In-App Notification (Matching Manual Process)
+                       if (tenantId) {
+                           await supabase.from("notifications").insert([{
+                               user_id: tenantId,
+                               title: notifTitle,
+                               message: notifMessage,
+                               type: "rental",
+                               link: "/my-bookings"
+                           }]);
+                       }
+                    } else {
+                        aiResult.reply_text = "Mohon maaf, ID Booking/transaksi sudah tidak valid atau sudah kadaluwarsa.";
+                    }
                 }
               }
 

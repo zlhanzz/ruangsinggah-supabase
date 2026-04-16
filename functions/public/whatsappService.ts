@@ -27,7 +27,10 @@ export async function sendWhatsAppTemplate({
   }
 
   // Bersihkan nomor telepon (hanya angka)
-  const cleanTo = to.replace(/\D/g, '');
+  let cleanTo = to.replace(/\D/g, '');
+  if (cleanTo.startsWith('0')) {
+    cleanTo = '62' + cleanTo.substring(1);
+  }
 
   try {
     const response = await fetch(
@@ -71,7 +74,10 @@ export async function sendWhatsAppTemplate({
  * Mengirim pesan teks biasa (Hanya bisa dikirim jika session chat sudah terbuka)
  */
 export async function sendWhatsAppText(to: string, message: string) {
-  const cleanTo = to.replace(/\D/g, '');
+  let cleanTo = to.replace(/\D/g, '');
+  if (cleanTo.startsWith('0')) {
+    cleanTo = '62' + cleanTo.substring(1);
+  }
 
   try {
     const response = await fetch(

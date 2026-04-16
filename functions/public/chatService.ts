@@ -347,13 +347,13 @@ export async function getMyChatSessions(userId: string): Promise<ChatSession[]> 
 
   const { data: profiles } = await supabase
     .from('users')
-    .select('id, name, full_name, displayName, photo_url, avatar_url')
+    .select('id, name, photo_url')
     .in('id', uniqueUserIds);
 
   const profileMap = new Map();
   profiles?.forEach(p => {
     profileMap.set(p.id, {
-      name: p.full_name || p.name || p.displayName,
+      name: p.name,
       photo_url: p.photo_url || p.avatar_url || ''
     });
   });
@@ -366,7 +366,7 @@ export async function getMyChatSessions(userId: string): Promise<ChatSession[]> 
       .from('transactions')
       .select(`
         user_id,
-        user:user_id (name, full_name, photo_url)
+        user:user_id (name, photo_url)
       `)
       .in('user_id', missingIds);
 
@@ -374,7 +374,7 @@ export async function getMyChatSessions(userId: string): Promise<ChatSession[]> 
       const u = (tp as any).user;
       if (u && !profileMap.get(tp.user_id)?.name) {
         profileMap.set(tp.user_id, {
-          name: u.full_name || u.name || 'Calon Penghuni',
+          name: u.name || 'Calon Penghuni',
           photo_url: u.photo_url || ''
         });
       }

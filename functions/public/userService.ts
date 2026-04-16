@@ -282,8 +282,6 @@ export async function getExtraBills(userId: string): Promise<any[]> {
   }
 }
 import { notifyMitra } from './notificationBridge';
-import { FORMAT_CURRENCY } from './constants';
-
 export async function createBookingRequest(bookingData: {
   userId: string;
   productId: string;
@@ -330,11 +328,15 @@ export async function createBookingRequest(bookingData: {
                     propertyTitle: prop.title,
                     senderName: sender?.name || 'Calon Penghuni',
                     period: bookingData.metadata?.periodLabel || 'Per Bulan',
-                    bookingId: data.id
+                    bookingId: data.id,
+                    roomType: bookingData.metadata?.roomType || '-',
+                    occupants: bookingData.metadata?.occupantCount || 1,
+                    startDate: bookingData.metadata?.startDate || '-',
+                    amount: "Rp " + (bookingData.amount || 0).toLocaleString('id-ID')
                 }
             });
         }
-    } catch (err) {
+    } catch (err: any) {
         console.error('Failed to notify mitra of new booking:', err);
     }
 
@@ -369,7 +371,7 @@ export async function updateBookingStatus(transactionId: string, status: 'PAID' 
         try {
             const { data: trx } = await supabase
                 .from('transactions')
-                .select('product_id, amount, id')
+                .select('*, user:user_id(name)')
                 .eq('id', transactionId)
                 .single();
 
@@ -387,8 +389,13 @@ export async function updateBookingStatus(transactionId: string, status: 'PAID' 
                         type: 'payment',
                         details: {
                             propertyTitle: prop.title,
-                            amount: FORMAT_CURRENCY(trx.amount),
-                            bookingId: trx.id
+                            amount: "Rp " + (trx.amount || 0).toLocaleString('id-ID'),
+                            bookingId: trx.id,
+                            senderName: trx.user?.name || trx.metadata?.tenantName || 'Penyewa',
+                            roomType: trx.metadata?.roomType || '-',
+                            period: trx.metadata?.periodLabel || trx.metadata?.period || '-',
+                            startDate: trx.metadata?.startDate || '-',
+                            endDate: trx.metadata?.endDate || '-'
                         }
                     });
                 }
