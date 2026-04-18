@@ -18,7 +18,7 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
     refreshData
 }) => {
     // --- LOCAL UI STATE ---
-    const [rentFilter, setRentFilter] = useState<'all' | 'pengajuan' | 'realisasi' | 'perpanjangan'>('all');
+    const [rentFilter, setRentFilter] = useState<'all' | 'pengajuan' | 'menunggu_pembayaran' | 'realisasi' | 'perpanjangan'>('all');
     const [selectedRentTrxIds, setSelectedRentTrxIds] = useState<string[]>([]);
     
     const [isAddingManualRent, setIsAddingManualRent] = useState(false);
@@ -27,17 +27,21 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
     const [viewingProof, setViewingProof] = useState<{ id: string, name: string, proofUrl: string } | null>(null);
     const [viewingInvoice, setViewingInvoice] = useState<any | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [rejectingTrxId, setRejectingTrxId] = useState<string | null>(null);
+    const [rejectionReason, setRejectionReason] = useState('');
 
     // --- HANDLERS ---
-    const handleUpdateStatus = async (id: string, newStatus: string) => {
-        if (!window.confirm(`Ubah status transaksi ke ${newStatus}?`)) return;
+    const handleUpdateStatus = async (id: string, newStatus: string, metadata: any = {}) => {
+        if (newStatus !== 'REJECTED' && !window.confirm(`Ubah status transaksi ke ${newStatus}?`)) return;
         setIsSubmitting(true);
         try {
-            await updateTransactionStatus(id, newStatus);
+            await updateTransactionStatus(id, newStatus, { metadata });
             alert('Status transaksi berhasil diperbarui');
             refreshData();
+            setRejectingTrxId(null);
+            setRejectionReason('');
         } catch (error) {
-            alert('Gagal memperbarui status');
+            alert('Gagal memperbarui status: ' + (error as any).message);
         } finally {
             setIsSubmitting(false);
         }
@@ -88,32 +92,34 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
         }
     };
     const formatRentTrx = (t: any) => {
+        const meta = t.metadata || {};
         return {
             id: t.id,
             rawDate: t.created_at,
             date: new Date(t.created_at).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' WIB',
-            name: t.user?.name || t.metadata?.name || 'Penyewa',
-            email: t.user?.email || t.metadata?.email,
-            phone: t.user?.phone || t.metadata?.phone,
-            photoURL: t.user?.photo_url || t.metadata?.photoURL,
-            gender: t.user?.gender || t.metadata?.gender,
-            occupation: t.user?.occupation || t.metadata?.occupation,
-            institution: t.user?.institution || t.metadata?.institution,
-            religion: t.user?.religion || t.metadata?.religion,
-            relationshipStatus: t.user?.relationship_status || t.metadata?.relationshipStatus,
-            profileAddress: t.user?.address || t.metadata?.profileAddress,
+            name: t.user?.name || meta.name || meta.tenantName || 'Penyewa',
+            email: t.user?.email || meta.email,
+            phone: t.user?.phone || meta.phone,
+            photoURL: t.user?.photo_url || meta.photoURL,
+            gender: t.user?.gender || meta.gender,
+            occupation: t.user?.occupation || meta.occupation,
+            institution: t.user?.institution || meta.institution,
+            religion: t.user?.religion || meta.religion,
+            relationshipStatus: t.user?.relationship_status || meta.relationshipStatus,
+            profileAddress: t.user?.address || meta.profileAddress,
             paymentType: (t.payment_method || '').toLowerCase().includes('transfer') ? 'transfer' : 'gateway',
-            item: t.metadata?.kostName || t.product_type,
-            roomType: t.metadata?.roomType || '-',
-            periodLabel: t.metadata?.period || '-',
+            item: meta.kostName || meta.item || t.product_type || 'Sewa Kost',
+            roomType: t.room_type || meta.roomType || meta.item || '-',
+            periodLabel: meta.period || meta.periodLabel || '-',
             paymentMethod: t.payment_method || '-',
             amount: t.amount,
-            status: (t.status === 'pending' || t.status === 'PENDING_APPROVAL') ? 'Menunggu' : (t.status === 'paid' ? 'Selesai' : (t.status === 'cancelled' || t.status === 'REJECTED' ? 'Ditolak' : t.status)),
+            status: (t.status === 'pending' || t.status === 'PENDING_APPROVAL' || t.status === 'AWAITING_PAYMENT') ? 'Menunggu Pembayaran' : (t.status === 'paid' || ['paid', 'Selesai', 'success', 'Berhasil'].includes(t.status) ? 'Selesai/Diproses' : (t.status === 'cancelled' || t.status === 'REJECTED' ? 'Ditolak' : t.status)),
+            rejectionReason: meta.rejection_reason || meta.rejectionReason,
             rawStatus: t.status,
-            startDate: t.metadata?.startDate || '-',
-            endDate: t.metadata?.endDate || '-',
-            transferProofUrl: t.metadata?.transferProofUrl || null,
-            platformFee: Number(t.metadata?.platformFee) || 0,
+            startDate: t.move_in_date || meta.startDate || meta.checkInDate || '-',
+            endDate: t.end_date || meta.endDate || '-',
+            transferProofUrl: meta.transferProofUrl || null,
+            platformFee: Number(meta.platformFee) || 0,
             invoiceId: t.pakasir_order_id || `INV-${t.id.substring(0,8).toUpperCase()}`,
             type: t.type || t.product_type || 'rent'
         };
@@ -121,11 +127,13 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
 
     const filtered = rentTransactions.filter(t => {
         if (rentFilter === 'all') return true;
-        const isPending = t.status === 'pending' || t.status === 'PENDING_APPROVAL';
+        const isNewSubmission = t.status === 'pending' || t.status === 'PENDING_APPROVAL';
+        const isAwaitingPayment = t.status === 'AWAITING_PAYMENT';
         const isPaid = ['paid', 'Selesai', 'success', 'Berhasil'].includes(t.status);
         const isExtension = t.type === 'perpanjangan_sewa' || t.product_type === 'perpanjangan_sewa' || t.metadata?.extensionType === 'manual_extension';
 
-        if (rentFilter === 'pengajuan') return isPending && !isExtension;
+        if (rentFilter === 'pengajuan') return isNewSubmission && !isExtension;
+        if (rentFilter === 'menunggu_pembayaran') return isAwaitingPayment;
         if (rentFilter === 'realisasi') return isPaid;
         if (rentFilter === 'perpanjangan') return isExtension;
         
@@ -187,7 +195,8 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
             <div className="flex flex-wrap gap-2 mb-6">
                 {[
                     { id: 'all', label: 'Semua Transaksi', icon: '📋' },
-                    { id: 'pengajuan', label: 'Pengajuan Sewa', icon: '⏳' },
+                    { id: 'pengajuan', label: 'Pengajuan Baru', icon: '📩' },
+                    { id: 'menunggu_pembayaran', label: 'Menunggu Pembayaran', icon: '⏳' },
                     { id: 'realisasi', label: 'Penyewaan Terealisasi', icon: '✅' },
                     { id: 'perpanjangan', label: 'Perpanjangan Sewa', icon: '➕' }
                 ].map((tab) => (
@@ -246,7 +255,11 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
                                                 )}
                                             </div>
                                             <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">{trx.item}</h3>
-                                            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Status: <span className={`ml-1 ${trx.status === 'Selesai' ? 'text-green-600' : trx.status === 'Menunggu' ? 'text-amber-500' : 'text-red-500'}`}>{trx.status}</span></p>
+                                            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Status: <span className={`ml-1 ${['Selesai/Diproses', 'Selesai', 'paid'].includes(trx.status) ? 'text-green-600' : trx.status.includes('Menunggu') ? 'text-amber-500' : 'text-red-500'}`}>{trx.status}</span></p>
+                                            {trx.rawStatus === 'REJECTED' && trx.rejectionReason && (
+                                                <p className="text-[10px] text-red-400 font-bold italic mt-1 leading-relaxed">Alasan: {trx.rejectionReason}</p>
+                                            )}
+
                                         </div>
                                         <div className="flex flex-col gap-2 items-end">
                                             <div className="text-right">
@@ -262,21 +275,36 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-50">
+                                    <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-50 items-center justify-between">
                                         {isAdmin && trx.rawStatus === 'PENDING_APPROVAL' && (
-                                            <button 
-                                                onClick={() => handleUpdateStatus(trx.id, 'paid')}
-                                                className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md active:scale-95 transition-all"
-                                            >
-                                                Konfirmasi Bayar
-                                            </button>
+                                            <div className="flex flex-col gap-2">
+                                                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-tight flex items-center gap-1.5">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                                    Menunggu persetujuan pemilik kost
+                                                </p>
+                                                <div className="flex gap-2">
+                                                    <button 
+                                                        onClick={() => handleUpdateStatus(trx.id, 'paid')}
+                                                        className="px-3 py-1.5 bg-gray-50 hover:bg-green-50 text-green-600 border border-green-100 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all"
+                                                        title="Terima Paksa (Admin)"
+                                                    >
+                                                        Terima
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => setRejectingTrxId(trx.id)}
+                                                        className="px-3 py-1.5 bg-gray-50 hover:bg-red-50 text-red-600 border border-red-100 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all"
+                                                    >
+                                                        Tolak
+                                                    </button>
+                                                </div>
+                                            </div>
                                         )}
                                         {isAdmin && (
                                             <button 
                                                 onClick={() => handleDeleteTrx(trx.id)}
-                                                className="py-3 px-4 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-[10px] font-black uppercase transition-all"
+                                                className="py-1.5 px-3 bg-red-50/50 hover:bg-red-50 text-red-400 hover:text-red-600 rounded-lg text-[9px] font-black uppercase transition-all"
                                             >
-                                                Hapus
+                                                Hapus Trx
                                             </button>
                                         )}
                                     </div>
@@ -287,7 +315,38 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
                 )}
             </div>
 
-            {/* --- MODALS SECTION --- */}
+            {/* MODAL: ALASAN PENOLAKAN */}
+            {rejectingTrxId && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2rem] shadow-2xl max-w-md w-full p-8 animate-in zoom-in-95">
+                        <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-4 text-center">Alasan Penolakan</h3>
+                        <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-6 text-center italic">Berikan alasan agar penyewa memahami mengapa pengajuan ini tidak disetujui.</p>
+                        
+                        <textarea
+                            className="w-full h-32 p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-red-500 outline-none transition-all placeholder:text-gray-300"
+                            placeholder="Contoh: Maaf, kamar yang Anda pilih baru saja dipesan di platform lain secara manual..."
+                            value={rejectionReason}
+                            onChange={(e) => setRejectionReason(e.target.value)}
+                        />
+                        
+                        <div className="flex gap-4 mt-8">
+                            <button 
+                                onClick={() => { setRejectingTrxId(null); setRejectionReason(''); }}
+                                className="flex-1 py-4 text-gray-400 font-black uppercase text-[10px] tracking-widest hover:bg-gray-50 rounded-xl transition-all"
+                            >
+                                Batal
+                            </button>
+                            <button 
+                                onClick={() => handleUpdateStatus(rejectingTrxId, 'REJECTED', { rejection_reason: rejectionReason })}
+                                disabled={!rejectionReason || isSubmitting}
+                                className="flex-[2] py-4 bg-red-600 hover:bg-red-700 text-white font-black uppercase text-[10px] tracking-widest rounded-xl shadow-lg shadow-red-100 transition-all active:scale-95 disabled:opacity-50"
+                            >
+                                {isSubmitting ? 'Memproses...' : 'Tolak Sekarang'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             
             {/* MODAL: PROFIL PENYEWA */}
             {viewingProfile && (

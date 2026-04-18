@@ -599,7 +599,7 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
               .single();
             if (dbError || !dbProd) throw new Error('Produk database tidak ditemukan.');
             finalAmount = Number(dbProd.price);
-        } else if (productType === 'kost_booking' || productType === 'property') {
+        } else if (productType === 'kost_booking' || productType === 'property' || productType === 'kost') {
             const { data: prop, error: propError } = await supabase
               .from('properties')
               .select('price')

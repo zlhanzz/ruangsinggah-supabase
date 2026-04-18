@@ -385,14 +385,36 @@ export async function updateTransactionStatus(
   if (!user) throw new Error('Unauthorized: User not logged in.');
 
   const isAdmin = await checkIfUserIsAdmin(user.id);
-  if (!isAdmin) throw new Error('Unauthorized: User is not an admin.');
+  
+  // Fetch transaction to check ownership
+  const { data: trx, error: fetchErr } = await supabase
+    .from('transactions')
+    .select('user_id, product_id, properties(owner_uid)')
+    .eq('id', transactionId)
+    .single();
+
+  if (fetchErr || !trx) throw new Error('Transaksi tidak ditemukan.');
+
+  const isOwner = (trx.properties as any)?.owner_uid === user.id;
+
+  if (!isAdmin && !isOwner) {
+    throw new Error('Unauthorized: Anda tidak memiliki izin untuk mengupdate transaksi ini.');
+  }
+
+  // Handle metadata updates if not provided
+  let finalUpdates = { ...additionalUpdates };
+  if (additionalUpdates.metadata) {
+    // Merge metadata if needed
+    const { data: currentTrx } = await supabase.from('transactions').select('metadata').eq('id', transactionId).single();
+    finalUpdates.metadata = { ...(currentTrx?.metadata || {}), ...additionalUpdates.metadata };
+  }
 
   const { error } = await supabase
     .from('transactions')
     .update({ 
         status: newStatus, 
         updated_at: new Date().toISOString(),
-        ...additionalUpdates
+        ...finalUpdates
     })
     .eq('id', transactionId);
 
@@ -400,7 +422,7 @@ export async function updateTransactionStatus(
     console.error('Error updating transaction status:', error);
     throw new Error(error.message);
   } else {
-    notifyAdminStatusUpdate("Transaksi", transactionId, newStatus);
+    notifyAdminStatusUpdate("Transaksi", transactionId, newStatus, additionalUpdates.metadata);
   }
 }
 

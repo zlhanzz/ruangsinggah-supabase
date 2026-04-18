@@ -412,18 +412,16 @@ export async function updateBookingStatus(transactionId: string, status: 'PAID' 
 
 export async function cancelBookingRequest(transactionId: string) {
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('transactions')
       .update({ 
-        status: 'CANCELLED', 
+        status: 'CANCELLED',
         updated_at: new Date().toISOString() 
       })
-      .eq('id', transactionId)
-      .select()
-      .single();
+      .eq('id', transactionId);
 
     if (error) throw error;
-    return data;
+    return { success: true };
   } catch (error) {
     console.error('Error cancelling booking request:', error);
     throw error;
@@ -468,11 +466,13 @@ export async function getOwnerTenancyData(ownerUid: string): Promise<any[]> {
     if (error) throw error;
     
     // Filter to only successful or pending processing transactions that are rent-related
-    const rentTypes = ['kost_booking', 'perpanjangan_sewa', 'tagihan_ekstra'];
-    const filtered = (data || []).filter(t => 
-      rentTypes.includes(t.product_type || t.type) &&
-      ['paid', 'PENDING_APPROVAL', 'AWAITING_PAYMENT', 'success', 'approved'].includes(t.status)
-    );
+    const rentTypes = ['kost_booking', 'perpanjangan_sewa', 'tagihan_ekstra', 'kost'];
+    const filtered = (data || []).filter(t => {
+      const type = t.product_type || t.type;
+      const status = t.status?.toUpperCase();
+      const validStatuses = ['PAID', 'PENDING_APPROVAL', 'AWAITING_PAYMENT', 'SUCCESS', 'APPROVED', 'PENDING'];
+      return rentTypes.includes(type) && validStatuses.includes(status);
+    });
 
     return filtered;
   } catch (error) {
@@ -547,7 +547,7 @@ export async function getOwnerBookings(ownerId: string): Promise<any[]> {
     if (!props || props.length === 0) return [];
     const propIds = props.map(p => p.id);
 
-    // 2. Fetch all transactions for these properties
+    // 2. Fetch all transactions for these properties (checking both product_id and kost_id)
     const { data, error } = await supabase
       .from('transactions')
       .select(`
@@ -559,7 +559,7 @@ export async function getOwnerBookings(ownerId: string): Promise<any[]> {
           photo_url
         )
       `)
-      .in('product_id', propIds)
+      .or(`product_id.in.(${propIds.join(',')}),kost_id.in.(${propIds.join(',')})`)
       .order('created_at', { ascending: false });
 
     if (error) throw error;

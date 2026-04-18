@@ -261,6 +261,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                       daysRemaining: daysRem,
                       totalPrice: doc.amount || doc.total_price,
                       displayImage: displayImg,
+                      rejection_reason: metadata.rejection_reason || metadata.rejectionReason,
                       ...doc 
                     });
                 }
@@ -891,12 +892,23 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
     const filteredKosts = activeKosts.filter(kost => {
         const s = (kost.status || '').toLowerCase();
         const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(s);
-        const isPending = ['pending_approval', 'awaiting_payment'].includes(s);
+        const isPending = ['pending_approval', 'awaiting_payment', 'pending'].includes(s);
         
-        if (activeTab === 'diajukan') return isPending;
+        if (activeTab === 'diajukan') return isPending || s === 'rejected' || s === 'cancelled';
         if (activeTab === 'aktif') return isPaid && (!kost.endDate || new Date() <= new Date(kost.endDate));
-        if (activeTab === 'riwayat') return isPaid && kost.endDate && new Date() > new Date(kost.endDate);
+        if (activeTab === 'riwayat') return (isPaid && kost.endDate && new Date() > new Date(kost.endDate));
         return false;
+    }).sort((a, b) => {
+        const statusOrder: Record<string, number> = {
+            'awaiting_payment': 1,
+            'pending_approval': 2,
+            'pending': 2,
+            'rejected': 3,
+            'cancelled': 4
+        };
+        const sA = (a.status || '').toLowerCase();
+        const sB = (b.status || '').toLowerCase();
+        return (statusOrder[sA] || 99) - (statusOrder[sB] || 99);
     });
 
     const filteredSurveys = surveyRequests.filter(survey => {
@@ -949,7 +961,8 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                             { id: 'riwayat', label: 'Riwayat', count: activeKosts.filter(k => {
                                 const s = (k.status || '').toLowerCase();
                                 const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(s);
-                                return isPaid && k.endDate && new Date() > new Date(k.endDate);
+                                const isInactive = ['rejected', 'cancelled'].includes(s);
+                                return (isPaid && k.endDate && new Date() > new Date(k.endDate)) || isInactive;
                             }).length + surveyRequests.filter(s => ['COMPLETED', 'CANCELLED'].includes(s.status)).length }
                         ].map((tab) => (
                             <button
@@ -1016,6 +1029,49 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                         {filteredKosts.map((kost) => {
                             const statusLower = (kost.status || '').toLowerCase();
                             const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(statusLower);
+                            if (statusLower === 'rejected') {
+                                return (
+                                    <div key={kost.id} className="bg-white rounded-[2.5rem] p-6 sm:p-8 border border-red-50 shadow-xl shadow-red-900/5 animate-in slide-in-from-bottom-4 duration-500">
+                                        <div className="flex items-center gap-6 sm:gap-8">
+                                            {/* Minimalist Preview */}
+                                            <div className="w-20 h-20 sm:w-28 sm:h-28 bg-gray-50 rounded-2xl overflow-hidden shadow-sm shrink-0">
+                                                {kost.displayImage ? (
+                                                    <img src={kost.displayImage} className="w-full h-full object-cover opacity-60 grayscale-[50%]" alt={kost.kostName} />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                                                        <MapPin className="w-8 h-8 text-gray-300" />
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="flex-1 min-w-0 flex flex-col gap-2">
+                                                <div className="flex flex-wrap items-center gap-3">
+                                                    <h3 className="text-xl sm:text-2xl font-black text-gray-400 uppercase tracking-tight truncate">{kost.kostName || 'Kost Tersembunyi'}</h3>
+                                                    <span className="flex items-center gap-1.5 text-red-400 bg-red-50/50 px-3 py-1 rounded-full border border-red-100/50 text-[9px] font-black uppercase tracking-widest">
+                                                        <XCircle className="w-3.5 h-3.5" /> DITOLAK PEMILIK
+                                                    </span>
+                                                </div>
+
+                                                {kost.rejection_reason && (
+                                                    <div className="flex items-start gap-2 mt-1">
+                                                        <AlertCircle className="w-4 h-4 text-red-200 shrink-0 mt-0.5" />
+                                                        <p className="text-xs font-medium text-gray-400 leading-relaxed italic">
+                                                            "{kost.rejection_reason}"
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                
+                                                <button 
+                                                    onClick={() => onPageChange(`${Page.DETAIL}?kostId=${kost.kostId}` as any)}
+                                                    className="w-fit text-[9px] font-black text-orange-500 hover:text-orange-600 uppercase tracking-widest flex items-center gap-1 mt-1 transition-colors"
+                                                >
+                                                    <Search className="w-3 h-3" /> CARI KOST LAIN
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            }
 
                             return (
                                 <div key={kost.id} className="group relative bg-white rounded-[4rem] p-8 sm:p-12 border border-gray-100 shadow-2xl shadow-orange-900/5 hover:shadow-orange-900/10 transition-all duration-700 overflow-hidden flex flex-col lg:grid lg:grid-cols-12 gap-12 sm:gap-16">
@@ -1072,6 +1128,24 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                                 {isPaid && (
                                                     <span className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-5 py-2.5 rounded-xl border border-emerald-100 text-[10px] font-black uppercase tracking-widest">
                                                         <CheckCircle className="w-4 h-4" /> SEDANG DISEWA
+                                                    </span>
+                                                )}
+
+                                                {statusLower === 'cancelled' && (
+                                                    <span className="flex items-center gap-2 text-gray-400 bg-gray-50 px-5 py-2.5 rounded-xl border border-gray-100 text-[10px] font-black uppercase tracking-widest">
+                                                        <XCircle className="w-4 h-4" /> PENGAJUAN DIBATALKAN
+                                                    </span>
+                                                )}
+
+                                                {statusLower === 'pending_approval' && (
+                                                    <span className="flex items-center gap-2 text-amber-600 bg-amber-50 px-5 py-2.5 rounded-xl border border-amber-100 text-[10px] font-black uppercase tracking-widest">
+                                                        <Clock className="w-4 h-4 animate-pulse" /> MENUNGGU PERSETUJUAN PEMILIK
+                                                    </span>
+                                                )}
+
+                                                {statusLower === 'awaiting_payment' && (
+                                                    <span className="flex items-center gap-2 text-orange-600 bg-orange-50 px-5 py-2.5 rounded-xl border border-orange-100 text-[10px] font-black uppercase tracking-widest">
+                                                        <Zap className="w-4 h-4" /> MENUNGGU PEMBAYARAN
                                                     </span>
                                                 )}
                                             </div>
@@ -1163,15 +1237,27 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                         >
                                             <Smartphone className="w-5 h-5" /> HUBUNGI PEMILIK
                                         </button>
-                                        <button 
-                                            onClick={() => onPageChange(`${Page.DETAIL}?kostId=${kost.kostId}` as any)}
-                                            className="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[11px] mt-4 shadow-xl shadow-orange-100 active:scale-95"
-                                        >
-                                            <Search className="w-4 h-4" /> AJUKAN SEWA LAGI
-                                        </button>
 
-                                    {/* Cancellation Button for Pending/Awaiting States */}
-                                    {(kost.status === 'PENDING_APPROVAL' || kost.status === 'AWAITING_PAYMENT') && (
+                                    {/* Action Buttons for Pending/Awaiting States */}
+                                    {kost.status === 'AWAITING_PAYMENT' && (
+                                        <button 
+                                            onClick={() => {
+                                                setPaymentAmount(kost.totalPrice);
+                                                setPaymentOrderId(kost.id);
+                                                setPaymentProductId(kost.kostId);
+                                                setPaymentProductType('kost');
+                                                setPaymentMetadata({
+                                                    kostName: kost.kostName
+                                                });
+                                                setShowPaymentGateway(true);
+                                            }}
+                                            className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[11px] mt-4 shadow-xl shadow-orange-200 active:scale-95 animate-pulse"
+                                        >
+                                            <Receipt className="w-4 h-4" /> BAYAR SEKARANG
+                                        </button>
+                                    )}
+
+                                    {kost.status === 'PENDING_APPROVAL' && (
                                         <button
                                             onClick={() => handleCancelBooking(kost)}
                                             className="w-full bg-white border-2 border-gray-100 hover:border-red-500 hover:bg-red-50 hover:text-red-600 text-gray-500 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[11px] mt-4 group/cancel"
@@ -1179,18 +1265,11 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                             <XCircle className="w-4 h-4 group-hover/cancel:rotate-90 transition-transform" /> BATALKAN PENGAJUAN
                                         </button>
                                     )}
-
-                                    {/* Cancelled Status Placeholder */}
-                                    {kost.status === 'CANCELLED' && (
-                                        <div className="w-full bg-gray-50 border-2 border-gray-100 text-gray-400 px-4 py-4 rounded-2xl font-black flex items-center justify-center gap-3 text-[11px] mt-4 opacity-75 cursor-not-allowed italic">
-                                            <XCircle className="w-4 h-4" /> PENGAJUAN DIBATALKAN
-                                        </div>
-                                    )}
-                                </div>
                                 </div>
                             </div>
-                            );
-                        })}
+                        </div>
+                    );
+                })}
                     </div>
                 ) : (
                     <div className="bg-white rounded-[3.5rem] p-12 sm:p-24 shadow-2xl shadow-gray-100 border border-gray-50 text-center animate-in fade-in slide-in-from-bottom-8 duration-700">
@@ -1207,7 +1286,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                         </h2>
                         <p className="text-gray-500 font-medium max-w-sm mx-auto mb-10 leading-relaxed">
                             {activeTab === 'diajukan' 
-                                ? 'Sepertinya Anda belum mengajukan sewa kost apa pun. Yuk cari hunian impianmu sekarang!' 
+                                ? 'Sepertinya Anda belum mengajukan sewa kost apa pun. Yuk cari hunian impianmu sekarang!'
                                 : activeTab === 'aktif' 
                                 ? 'Anda belum memiliki hunian yang aktif. Jangan khawatir, kost incaranmu hanya berjarak satu klik!' 
                                 : 'Belum ada riwayat penyewaan kost di akun Anda.'}

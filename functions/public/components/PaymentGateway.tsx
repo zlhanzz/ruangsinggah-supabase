@@ -10,7 +10,7 @@ interface PaymentGatewayProps {
   amount: number;
   orderId: string;
   productId: string;
-  productType: 'database' | 'kost_booking' | 'survey'; // Support for different products
+  productType: 'database' | 'kost_booking' | 'survey' | 'kost' | 'property'; // Support for different products
   userId: string;
   metadata?: any;
   existingOrderId?: string;
