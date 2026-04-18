@@ -3,15 +3,19 @@ import React, { useState } from 'react';
 import { deleteUserAccount } from '../../adminService';
 
 interface UserManagementProps {
-    activeUsers: any[];
-    loadActiveUsers: () => void;
     loading: boolean;
+    onBlockUser?: (userId: string, name: string, isBlocked: boolean) => void;
+    onDeleteUser?: (userId: string, name: string) => void;
+    onViewProfile?: (userId: string) => void;
 }
 
 const UserManagement: React.FC<UserManagementProps> = ({
     activeUsers,
     loadActiveUsers,
-    loading
+    loading,
+    onBlockUser,
+    onDeleteUser,
+    onViewProfile
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [tab, setTab] = useState<'all' | 'renting'>('all');
@@ -29,16 +33,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
         return matchesSearch;
     });
 
-    const handleDelete = async (uId: string, name: string) => {
-        if (!window.confirm(`Hapus akun "${name}" secara permanen? Tindakan ini tidak dapat dibatalkan.`)) return;
-        try {
-            await deleteUserAccount(uId);
-            alert('User berhasil dihapus');
-            loadActiveUsers();
-        } catch (e) {
-            alert('Gagal menghapus user');
-        }
-    };
+
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -172,7 +167,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                             </td>
 
                                             <td className="px-6 py-4 text-right">
-                                                <div className="flex justify-end gap-2 text-right">
+                                                <div className="flex justify-end gap-1 text-right">
                                                     {tab === 'renting' && (
                                                         <button 
                                                             onClick={handleFollowUp}
@@ -184,8 +179,30 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                                         </button>
                                                     )}
                                                     <button 
-                                                        onClick={() => handleDelete(user.id, user.name)}
-                                                        className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                        onClick={() => onViewProfile && onViewProfile(user.id)}
+                                                        className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
+                                                        title="Lihat Profil"
+                                                    >
+                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => onBlockUser && onBlockUser(user.id, user.name || 'User', user.status === 'blocked')}
+                                                        className={`p-2 rounded-lg transition-all ${
+                                                            user.status === 'blocked' 
+                                                            ? 'text-green-500 hover:bg-green-50' 
+                                                            : 'text-red-400 hover:text-red-600 hover:bg-red-50'
+                                                        }`}
+                                                        title={user.status === 'blocked' ? "Buka Blokir" : "Blokir Akun"}
+                                                    >
+                                                        {user.status === 'blocked' ? (
+                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                                        ) : (
+                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                                                        )}
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => onDeleteUser && onDeleteUser(user.id, user.name || 'User')}
+                                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                                                         title="Hapus Akun"
                                                     >
                                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>

@@ -236,6 +236,7 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
                 .from('users')
                 .update({
                     name: formData.display_name,
+                    full_name: formData.display_name,
                     phone: formData.phone,
                     address: formData.address,
                     ktp_number: formData.ktp_number,

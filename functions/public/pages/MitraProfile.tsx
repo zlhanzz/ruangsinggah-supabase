@@ -178,6 +178,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
         try {
             await supabase.from('users').update({
                 name: formData.display_name,
+                full_name: formData.display_name,
                 phone: formData.phone,
                 address: formData.address,
                 photo_url: formData.photo_url,
@@ -196,6 +197,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
             const updatedData = { ...formData, verification_status: 'pending' };
             await supabase.from('users').update({
                 name: formData.display_name,
+                full_name: formData.display_name,
                 phone: formData.phone,
                 address: formData.address,
                 ktp_number: formData.ktp_number,

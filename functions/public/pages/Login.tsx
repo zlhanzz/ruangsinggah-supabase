@@ -107,6 +107,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       setSuccessMsg('Email berhasil diverifikasi! Silakan login dengan email dan kata sandi Anda.');
       // Clear param from URL
       window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (params.get('error') === 'blocked') {
+      setErrorMsg('Akun Anda telah ditangguhkan. Silakan hubungi admin untuk informasi lebih lanjut.');
+      // Clear param from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 

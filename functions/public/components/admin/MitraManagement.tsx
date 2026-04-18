@@ -9,6 +9,9 @@ interface MitraManagementProps {
     loadActiveMitra: () => void;
     loading: boolean;
     onTransferProperty?: (mitra: any) => void;
+    onBlockUser?: (userId: string, name: string, isBlocked: boolean) => void;
+    onDeleteUser?: (userId: string, name: string) => void;
+    onViewProfile?: (userId: string) => void;
 }
 
 const MitraManagement: React.FC<MitraManagementProps> = (props) => {
@@ -18,7 +21,10 @@ const MitraManagement: React.FC<MitraManagementProps> = (props) => {
         loadMitraRequests,
         loadActiveMitra,
         loading,
-        onTransferProperty
+        onTransferProperty,
+        onBlockUser,
+        onDeleteUser,
+        onViewProfile
     } = props;
     // --- LOCAL UI STATE ---
     const [isAddingManualMitra, setIsAddingManualMitra] = useState(false);
@@ -262,6 +268,41 @@ const MitraManagement: React.FC<MitraManagementProps> = (props) => {
                                     Transfer Properti Baru
                                 </button>
                             )}
+
+                            <div className="grid grid-cols-3 gap-2">
+                                <button 
+                                    onClick={() => onViewProfile && onViewProfile(mitra.id)}
+                                    className="flex flex-col items-center justify-center p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all border border-blue-100 group"
+                                    title="Lihat Profil"
+                                >
+                                    <span className="text-[14px] mb-0.5 group-hover:scale-110 transition-transform">👁️</span>
+                                    <span className="text-[8px] font-black uppercase tracking-tighter">Detail</span>
+                                </button>
+                                <button 
+                                    onClick={() => onBlockUser && onBlockUser(mitra.id, mitra.name || mitra.display_name, mitra.status === 'blocked')}
+                                    className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all border group ${
+                                        mitra.status === 'blocked' 
+                                        ? 'bg-green-50 text-green-600 border-green-100 hover:bg-green-600 hover:text-white' 
+                                        : 'bg-red-50 text-red-600 border-red-100 hover:bg-red-600 hover:text-white'
+                                    }`}
+                                    title={mitra.status === 'blocked' ? 'Buka Blokir' : 'Blokir'}
+                                >
+                                    <span className="text-[14px] mb-0.5 group-hover:scale-110 transition-transform">
+                                        {mitra.status === 'blocked' ? '🔓' : '🚫'}
+                                    </span>
+                                    <span className="text-[8px] font-black uppercase tracking-tighter">
+                                        {mitra.status === 'blocked' ? 'Unblock' : 'Blokir'}
+                                    </span>
+                                </button>
+                                <button 
+                                    onClick={() => onDeleteUser && onDeleteUser(mitra.id, mitra.name || mitra.display_name)}
+                                    className="flex flex-col items-center justify-center p-2 bg-gray-50 text-gray-400 rounded-xl hover:bg-gray-900 hover:text-white transition-all border border-gray-100 group"
+                                    title="Hapus User"
+                                >
+                                    <span className="text-[14px] mb-0.5 group-hover:scale-110 transition-transform">🗑️</span>
+                                    <span className="text-[8px] font-black uppercase tracking-tighter">Hapus</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 ))}

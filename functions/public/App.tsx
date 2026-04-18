@@ -123,6 +123,17 @@ const App: React.FC = () => {
       console.log("dbData received:", dbData);
 
       const profile = dbData || {};
+      
+      // --- PENANGANAN AKUN DIBLOKIR ---
+      if (profile.status === 'blocked') {
+        console.warn("User is blocked. Signing out...");
+        await supabase.auth.signOut();
+        setUser(null);
+        setLoadingAuth(false);
+        navigate(`${Page.LOGIN}?error=blocked`, { replace: true });
+        return;
+      }
+
       let role = profile.role || 'user';
       if (profile.is_admin === true && (role === 'user' || role === 'mitra' || role === 'owner')) role = 'admin'; // Admin override
       

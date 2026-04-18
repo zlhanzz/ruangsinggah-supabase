@@ -9,6 +9,9 @@ interface AgentManagementProps {
     loadAgentVerifications: () => void;
     loadActiveAgents: () => void;
     loading: boolean;
+    onBlockUser?: (userId: string, name: string, isBlocked: boolean) => void;
+    onDeleteUser?: (userId: string, name: string) => void;
+    onViewProfile?: (userId: string) => void;
 }
 
 const AgentManagement: React.FC<AgentManagementProps> = ({
@@ -16,7 +19,10 @@ const AgentManagement: React.FC<AgentManagementProps> = ({
     surveyAgents,
     loadAgentVerifications,
     loadActiveAgents,
-    loading
+    loading,
+    onBlockUser,
+    onDeleteUser,
+    onViewProfile
 }) => {
     const [tab, setTab] = useState<'requests' | 'active'>('requests');
     const [searchQuery, setSearchQuery] = useState('');
@@ -203,6 +209,41 @@ const AgentManagement: React.FC<AgentManagementProps> = ({
                         >
                             Hubungi Agen
                         </button>
+
+                        <div className="grid grid-cols-3 gap-2 mt-2">
+                            <button 
+                                onClick={() => onViewProfile && onViewProfile(agent.id)}
+                                className="flex flex-col items-center justify-center p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all border border-blue-100 group"
+                                title="Lihat Profil"
+                            >
+                                <span className="text-[14px] mb-0.5 group-hover:scale-110 transition-transform">👁️</span>
+                                <span className="text-[8px] font-black uppercase tracking-tighter">Detail</span>
+                            </button>
+                            <button 
+                                onClick={() => onBlockUser && onBlockUser(agent.id, agent.name || agent.display_name, agent.status === 'blocked')}
+                                className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all border group ${
+                                    agent.status === 'blocked' 
+                                    ? 'bg-green-50 text-green-600 border-green-100 hover:bg-green-600 hover:text-white' 
+                                    : 'bg-red-50 text-red-600 border-red-100 hover:bg-red-600 hover:text-white'
+                                }`}
+                                title={agent.status === 'blocked' ? 'Buka Blokir' : 'Blokir'}
+                            >
+                                <span className="text-[14px] mb-0.5 group-hover:scale-110 transition-transform">
+                                    {agent.status === 'blocked' ? '🔓' : '🚫'}
+                                </span>
+                                <span className="text-[8px] font-black uppercase tracking-tighter">
+                                    {agent.status === 'blocked' ? 'Unblock' : 'Blokir'}
+                                </span>
+                            </button>
+                            <button 
+                                onClick={() => onDeleteUser && onDeleteUser(agent.id, agent.name || agent.display_name)}
+                                className="flex flex-col items-center justify-center p-2 bg-gray-50 text-gray-400 rounded-xl hover:bg-gray-900 hover:text-white transition-all border border-gray-100 group"
+                                title="Hapus User"
+                            >
+                                <span className="text-[14px] mb-0.5 group-hover:scale-110 transition-transform">🗑️</span>
+                                <span className="text-[8px] font-black uppercase tracking-tighter">Hapus</span>
+                            </button>
+                        </div>
                     </div>
                 ))}
                 {filteredAgents.length === 0 && (

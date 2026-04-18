@@ -236,7 +236,7 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
 
   const isAdmin = await checkIfUserIsAdmin(user.id);
 
-  let query = supabase.from('properties').select('*, users(name, role)');
+  let query = supabase.from('properties').select('*, users(name, full_name, role)');
   if (ownerUid) {
     query = query.eq('owner_uid', ownerUid);
   } else if (!isAdmin) {
@@ -257,6 +257,9 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
     const videos: string[] = rawVideos.map((vid: any) =>
       typeof vid === 'string' ? vid : (vid.original || '')
     ).filter((u: string) => u !== '');
+
+    const ownerData = Array.isArray(row.users) ? row.users[0] : row.users;
+    const isSystemId = ['super_admin_id', 'admin-system-id'].includes(row.owner_uid?.toLowerCase());
 
     return {
       id: row.id,
@@ -283,8 +286,8 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
       isVerified: row.is_verified,
       omnichannelContactName: row.omnichannel_contact_name,
       omnichannelContactPhone: row.omnichannel_contact_phone,
-      ownerName: row.users?.name || (row.owner_uid === 'super_admin_id' ? 'Super Admin' : 'Tanpa Pemilik'),
-      ownerRole: row.users?.role || 'admin',
+      ownerName: ownerData?.name || ownerData?.full_name || (isSystemId ? 'Super Admin' : `Tanpa Pemilik (${row.owner_uid?.substring(0,8)}...)`),
+      ownerRole: ownerData?.role || (isSystemId ? 'admin' : 'owner'),
       } as BasicPropertyInfo;
   });
 }
@@ -299,11 +302,25 @@ export async function transferPropertyOwnership(propertyId: string, newOwnerId: 
   const isAdmin = await checkIfUserIsAdmin(user.id);
   if (!isAdmin) throw new Error('Hanya Super Admin yang dapat mentransfer properti.');
 
+  // Check current owner to prevent transferring to the same person
+  const { data: currentProp, error: fetchError } = await supabase
+    .from('properties')
+    .select('owner_uid')
+    .eq('id', propertyId)
+    .single();
+
+  if (fetchError || !currentProp) throw new Error('Properti tidak ditemukan.');
+  
+  if (currentProp.owner_uid === newOwnerId) {
+    throw new Error('Properti ini sudah dimiliki oleh Mitra tersebut.');
+  }
+
   const { error } = await supabase
     .from('properties')
     .update({ 
       owner_uid: newOwnerId,
-      mitra_id: newOwnerId 
+      mitra_id: newOwnerId,
+      updated_at: new Date().toISOString()
     })
     .eq('id', propertyId);
 
@@ -1336,13 +1353,14 @@ export async function getSurveyAgents(): Promise<{id: string, name: string, phon
   
   // Filter in memory for maximum reliability
   return (data || []).filter(u => 
-    ['survey_agent', 'agen', 'agent'].includes(u.role?.toLowerCase()) || 
-    u.verification_status === 'verified'
+    ['survey_agent', 'agen', 'agent'].includes(u.role?.toLowerCase())
   ).map(u => ({
     id: u.id,
     name: u.name,
+    email: u.email,
     phone: u.phone,
-    photo_url: u.photo_url
+    photo_url: u.photo_url,
+    status: u.status || 'active'
   }));
 }
 
@@ -1610,8 +1628,7 @@ export async function getUsersByRole(role: string): Promise<any[]> {
   let filteredUsers = [];
   if (role === 'survey_agent') {
     filteredUsers = allUsers.filter(u => 
-      ['survey_agent', 'agen', 'agent'].includes(u.role?.toLowerCase()) || 
-      u.verification_status === 'verified'
+      ['survey_agent', 'agen', 'agent'].includes(u.role?.toLowerCase())
     );
   } else if (role === 'owner') {
     filteredUsers = allUsers.filter(u => ['owner', 'mitra'].includes(u.role?.toLowerCase()));
@@ -1728,8 +1745,50 @@ export async function getActiveMitra(): Promise<any[]> {
 
   return users.map(u => ({
     ...u,
-    propertyCount: countMap.get(u.id) || 0
+    name: u.name || u.full_name || 'No Name',
+    propertyCount: countMap.get(u.id) || 0,
+    status: u.status || 'active'
   }));
+}
+
+/**
+ * Get comprehensive user details for admin profile view
+ */
+export async function getUserFullDetails(userId: string): Promise<any> {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new Error('Unauthorized');
+
+    const isAdmin = await checkIfUserIsAdmin(authUser.id);
+    if (!isAdmin) throw new Error('Access Denied');
+
+    const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+    if (userError) throw userError;
+
+    // Optional: Get brief history/summary
+    // 1. If owner: get properties
+    let properties = [];
+    if (['owner', 'mitra'].includes(userData.role?.toLowerCase())) {
+        const { data: props } = await supabase.from('properties').select('id, title, city, status').eq('owner_uid', userId);
+        properties = props || [];
+    }
+
+    // 2. If agent: get surveys count
+    let surveysCount = 0;
+    if (['survey_agent', 'agen', 'agent'].includes(userData.role?.toLowerCase())) {
+        const { count } = await supabase.from('survey_requests').select('*', { count: 'exact', head: true }).eq('agent_id', userId);
+        surveysCount = count || 0;
+    }
+
+    return {
+        ...userData,
+        properties,
+        surveysCount
+    };
 }
 
 /**
@@ -1747,6 +1806,27 @@ export async function deleteUserAccount(userId: string): Promise<void> {
   const { error } = await supabase
     .from('users')
     .delete()
+    .eq('id', userId);
+
+  if (error) throw error;
+}
+
+/**
+ * Update user status (e.g., 'active', 'blocked')
+ */
+export async function updateUserStatus(userId: string, status: 'active' | 'blocked'): Promise<void> {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(authUser.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  const { error } = await supabase
+    .from('users')
+    .update({ 
+      status, 
+      updated_at: new Date().toISOString() 
+    })
     .eq('id', userId);
 
   if (error) throw error;

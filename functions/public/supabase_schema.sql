@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   ktp_address         TEXT,
   ktp_photo_url       TEXT,
   verification_notes  TEXT,
+  status              TEXT NOT NULL DEFAULT 'active', -- active, blocked
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -52,6 +53,7 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS ktp_number          TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS ktp_address         TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS ktp_photo_url       TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS verification_notes  TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS status              TEXT NOT NULL DEFAULT 'active';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW();
 

@@ -16,8 +16,8 @@ import {
     uploadSurveyPhoto, deleteSurveyPhoto,
     getAdminMitraRequests, updateMitraRequestStatus,
     getAdminBanners, addBanner, updateBanner, deleteBanner,
-    getUsersByRole, getActiveMitra, deleteUserAccount,
-    transferPropertyOwnership
+    getUsersByRole, getActiveMitra, deleteUserAccount, updateUserStatus,
+    transferPropertyOwnership, getUserFullDetails
 } from '../adminService';
 import AgentDashboard from './AgentDashboard';
 import { getUserTransactions } from '../userService';
@@ -222,6 +222,10 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
     const [transferMode, setTransferMode] = useState<'property' | 'mitra'>('property');
     const [selectedTransferItem, setSelectedTransferItem] = useState<any>(null);
     const [transferSearchQuery, setTransferSearchQuery] = useState('');
+
+    const [selectedUserForDetail, setSelectedUserForDetail] = useState<any>(null);
+    const [isUserDetailModalOpen, setIsUserDetailModalOpen] = useState(false);
+    const [isLoadingUserDetail, setIsLoadingUserDetail] = useState(false);
     // --- AKHIR STATE UNTUK TRANSFER PROPERTI ---
 
     // Form State (Property)
@@ -647,12 +651,45 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
 
     const handleDeleteUser = async (uId: string, name: string) => {
         if (!window.confirm(`Hapus akun "${name}" secara permanen? Tindakan ini tidak dapat dibatalkan.`)) return;
+        setLoading(true);
         try {
             await deleteUserAccount(uId);
             alert('User berhasil dihapus');
             loadActiveUsers();
             loadActiveMitra();
+            loadActiveAgents();
         } catch (e) { alert('Gagal menghapus user'); }
+        finally { setLoading(false); }
+    };
+
+    const handleBlockUser = async (uId: string, name: string, currentlyBlocked: boolean) => {
+        const action = currentlyBlocked ? 'membuka blokir' : 'memblokir';
+        if (!window.confirm(`Yakin ingin ${action} akun "${name}"?`)) return;
+
+        setLoading(true);
+        try {
+            const newStatus = currentlyBlocked ? 'active' : 'blocked';
+            await updateUserStatus(uId, newStatus);
+            alert(`Berhasil ${action} user.`);
+            loadActiveUsers();
+            loadActiveMitra();
+            loadActiveAgents();
+        } catch (e) { alert(`Gagal ${action} user`); }
+        finally { setLoading(false); }
+    };
+
+    const handleViewProfile = async (userId: string) => {
+        setIsLoadingUserDetail(true);
+        setIsUserDetailModalOpen(true);
+        try {
+            const details = await getUserFullDetails(userId);
+            setSelectedUserForDetail(details);
+        } catch (e) {
+            alert('Gagal mengambil detail user');
+            setIsUserDetailModalOpen(false);
+        } finally {
+            setIsLoadingUserDetail(false);
+        }
     };
 
     // --- TRANSFER PROPERTY HANDLERS ---
@@ -661,6 +698,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         setSelectedTransferItem(item);
         setTransferSearchQuery('');
         setIsTransferModalOpen(true);
+        
+        // Load mitras if they are not loaded yet and we are in property transfer mode
+        if (mode === 'property' && activeMitra.length === 0) {
+            loadActiveMitra();
+        }
     };
 
     const handleConfirmTransfer = async (propertyId: string, newOwnerId: string) => {
@@ -2750,6 +2792,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                             loadActiveMitra={loadActiveMitra}
                                             loading={loading}
                                             onTransferProperty={(mitra) => handleOpenTransferModal('mitra', mitra)}
+                                            onBlockUser={handleBlockUser}
+                                            onDeleteUser={handleDeleteUser}
+                                            onViewProfile={handleViewProfile}
                                         />
                                     )}
                                      {activeMenu === 'agent_verification' && isAdmin && (
@@ -2759,6 +2804,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                              loadAgentVerifications={loadAgentVerifications}
                                              loadActiveAgents={loadActiveAgents}
                                              loading={loading}
+                                             onBlockUser={handleBlockUser}
+                                             onDeleteUser={handleDeleteUser}
+                                             onViewProfile={handleViewProfile}
                                          />
                                      )}
                                     {activeMenu === 'tenants' && isAdmin && (
@@ -2766,6 +2814,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                             activeUsers={activeUsers}
                                             loadActiveUsers={loadActiveUsers}
                                             loading={loading}
+                                            onBlockUser={handleBlockUser}
+                                            onDeleteUser={handleDeleteUser}
+                                            onViewProfile={handleViewProfile}
                                         />
                                     )}
                                     {activeMenu === 'banners' && isAdmin && (
@@ -2979,59 +3030,100 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
 
                             {/* List Content */}
                             <div className="flex-grow overflow-y-auto p-4 space-y-2 bg-gray-50/30">
-                                {transferMode === 'property' ? (
-                                    // Flow 1: Pilih Properti -> Pilih Mitra
-                                    activeMitra.filter(m => 
-                                        m.id !== selectedTransferItem?.owner_uid && 
-                                        ((m.name || '').toLowerCase().includes(transferSearchQuery.toLowerCase()) || (m.email || '').toLowerCase().includes(transferSearchQuery.toLowerCase()))
-                                    ).map(mitra => (
-                                        <button 
-                                            key={mitra.id}
-                                            onClick={() => handleConfirmTransfer(selectedTransferItem.id, mitra.id)}
-                                            className="w-full flex items-center gap-4 p-4 rounded-3xl bg-white hover:bg-orange-50 transition-all border border-transparent hover:border-orange-100 text-left group shadow-sm hover:shadow-md"
-                                        >
-                                            <div className="w-11 h-11 rounded-full bg-emerald-100 flex items-center justify-center text-xl overflow-hidden shrink-0 border-2 border-white shadow-sm ring-4 ring-gray-50 group-hover:ring-orange-100/50 transition-all">
-                                                {mitra.photo_url ? <img src={mitra.photo_url} className="w-full h-full object-cover" /> : <span>👤</span>}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-bold text-gray-900 truncate text-[13px]">{mitra.name || mitra.display_name}</p>
-                                                <p className="text-[10px] text-gray-400 font-bold uppercase truncate tracking-tight">{mitra.email}</p>
-                                            </div>
-                                            <div className="opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
-                                                <span className="text-[9px] font-black text-white bg-orange-600 px-3 py-1.5 rounded-full uppercase shadow-lg shadow-orange-200">Pilih</span>
-                                            </div>
-                                        </button>
-                                    ))
-                                ) : (
-                                    // Flow 2: Pilih Mitra -> Pilih Properti Super Admin
-                                    adminListings.filter(p => 
-                                        (p.ownerUid === uid || p.ownerUid?.toLowerCase() === 'admin-system-id') && // Properti milik admin/sistem
-                                        (p.title.toLowerCase().includes(transferSearchQuery.toLowerCase()) || (p.city || '').toLowerCase().includes(transferSearchQuery.toLowerCase()))
-                                    ).map(prop => (
-                                        <button 
-                                            key={prop.id}
-                                            onClick={() => handleConfirmTransfer(prop.id, selectedTransferItem.id)}
-                                            className="w-full flex items-center gap-4 p-4 rounded-3xl bg-white hover:bg-orange-50 transition-all border border-transparent hover:border-orange-100 text-left group shadow-sm hover:shadow-md"
-                                        >
-                                            <div className="w-14 h-14 rounded-2xl bg-gray-100 overflow-hidden shrink-0 border-2 border-white shadow-sm ring-4 ring-gray-50 group-hover:ring-orange-100/50 transition-all">
-                                                <img src={prop.imageUrls?.[0] || 'https://via.placeholder.com/100'} className="w-full h-full object-cover" />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-bold text-gray-900 truncate text-[13px]">{prop.title}</p>
-                                                <p className="text-[10px] text-gray-400 font-bold uppercase truncate tracking-tight">{prop.city}, {prop.area}</p>
-                                            </div>
-                                            <div className="opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
-                                                <span className="text-[9px] font-black text-white bg-orange-600 px-3 py-1.5 rounded-full uppercase shadow-lg shadow-orange-200">Transfer</span>
-                                            </div>
-                                        </button>
-                                    ))
-                                )}
-                                
-                                {((transferMode === 'property' ? activeMitra : adminListings).length === 0) && (
-                                    <div className="py-20 text-center space-y-4">
-                                        <div className="text-4xl">🔎</div>
-                                        <div className="text-gray-400 font-black uppercase text-[10px] tracking-[0.2em]">Data Tidak Ditemukan</div>
+                                {loading && (transferMode === 'property' ? activeMitra : adminListings).length === 0 ? (
+                                    <div className="py-20 text-center">
+                                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto"></div>
+                                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-4">Memuat Data...</p>
                                     </div>
+                                ) : (
+                                    <>
+                                        {transferMode === 'property' ? (
+                                            // Flow 1: Pilih Properti -> Pilih Mitra
+                                            (() => {
+                                                const searchLower = transferSearchQuery.toLowerCase();
+                                                const filteredMitra = activeMitra.filter(m => 
+                                                    m.id !== selectedTransferItem?.ownerUid && 
+                                                    ((m.name || '').toLowerCase().includes(searchLower) || (m.email || '').toLowerCase().includes(searchLower))
+                                                );
+
+                                                // Inject Super Admin (Self) if it matches search and isn't already the owner
+                                                const showSuperAdminSelf = isAdmin && 
+                                                    selectedTransferItem?.ownerUid !== uid && 
+                                                    ("super admin (saya)".includes(searchLower) || "admin".includes(searchLower));
+
+                                                const listToShow = showSuperAdminSelf 
+                                                    ? [{ id: uid, name: 'Super Admin (Saya)', email: user?.email || 'admin@system', isSelf: true }, ...filteredMitra]
+                                                    : filteredMitra;
+
+                                                return listToShow.length > 0 ? (
+                                                    listToShow.map(mitra => (
+                                                        <button 
+                                                            key={mitra.id}
+                                                            onClick={() => handleConfirmTransfer(selectedTransferItem.id, mitra.id)}
+                                                            className={`w-full flex items-center gap-4 p-4 rounded-3xl transition-all border text-left group shadow-sm hover:shadow-md ${
+                                                                (mitra as any).isSelf 
+                                                                    ? 'bg-orange-50 border-orange-200 hover:bg-orange-100' 
+                                                                    : 'bg-white border-transparent hover:border-orange-100'
+                                                            }`}
+                                                        >
+                                                            <div className={`w-11 h-11 rounded-full flex items-center justify-center text-xl overflow-hidden shrink-0 border-2 border-white shadow-sm ring-4 transition-all ${
+                                                                (mitra as any).isSelf ? 'bg-orange-600 ring-orange-100' : 'bg-emerald-100 ring-gray-50 group-hover:ring-orange-100/50'
+                                                            }`}>
+                                                                {(mitra as any).isSelf ? <span className="text-white text-sm font-black">SA</span> : (mitra.photo_url ? <img src={mitra.photo_url} className="w-full h-full object-cover" /> : <span>👤</span>)}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-bold text-gray-900 truncate text-[13px]">{mitra.name || mitra.display_name}</p>
+                                                                <p className="text-[10px] text-gray-400 font-bold uppercase truncate tracking-tight">{mitra.email}</p>
+                                                            </div>
+                                                            <div className="opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+                                                                <span className="text-[9px] font-black text-white bg-orange-600 px-3 py-1.5 rounded-full uppercase shadow-lg shadow-orange-200">
+                                                                    {(mitra as any).isSelf ? 'Akuisisi' : 'Pilih'}
+                                                                </span>
+                                                            </div>
+                                                        </button>
+                                                    ))
+                                                ) : (
+                                                    <div className="py-20 text-center space-y-4">
+                                                        <div className="text-4xl grayscale opacity-50">🔎</div>
+                                                        <div className="text-gray-400 font-black uppercase text-[10px] tracking-[0.2em]">Mitra Tidak Ditemukan</div>
+                                                    </div>
+                                                );
+                                            })()
+                                        ) : (
+                                            // Flow 2: Pilih Mitra -> Pilih Properti Super Admin
+                                            adminListings.filter(p => 
+                                                (p.ownerUid === uid || p.ownerUid?.toLowerCase() === 'admin-system-id') && // Properti milik admin/sistem
+                                                (p.title.toLowerCase().includes(transferSearchQuery.toLowerCase()) || (p.city || '').toLowerCase().includes(transferSearchQuery.toLowerCase()))
+                                            ).length > 0 ? (
+                                                adminListings.filter(p => 
+                                                    (p.ownerUid === uid || p.ownerUid?.toLowerCase() === 'admin-system-id') && 
+                                                    (p.title.toLowerCase().includes(transferSearchQuery.toLowerCase()) || (p.city || '').toLowerCase().includes(transferSearchQuery.toLowerCase()))
+                                                ).map(prop => (
+                                                    <button 
+                                                        key={prop.id}
+                                                        onClick={() => handleConfirmTransfer(prop.id, selectedTransferItem.id)}
+                                                        className="w-full flex items-center gap-4 p-4 rounded-3xl bg-white hover:bg-orange-50 transition-all border border-transparent hover:border-orange-100 text-left group shadow-sm hover:shadow-md"
+                                                    >
+                                                        <div className="w-14 h-14 rounded-2xl bg-gray-100 overflow-hidden shrink-0 border-2 border-white shadow-sm ring-4 ring-gray-50 group-hover:ring-orange-100/50 transition-all">
+                                                            <img src={prop.imageUrls?.[0] || 'https://via.placeholder.com/100'} className="w-full h-full object-cover" />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-bold text-gray-900 truncate text-[13px]">{prop.title}</p>
+                                                            <p className="text-[10px] text-gray-400 font-bold uppercase truncate tracking-tight">{prop.city}, {prop.area}</p>
+                                                        </div>
+                                                        <div className="opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+                                                            <span className="text-[9px] font-black text-white bg-orange-600 px-3 py-1.5 rounded-full uppercase shadow-lg shadow-orange-200">Transfer</span>
+                                                        </div>
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="py-20 text-center space-y-4">
+                                                    <div className="text-4xl grayscale opacity-50">🔎</div>
+                                                    <div className="text-gray-400 font-black uppercase text-[10px] tracking-[0.2em]">Properti Tidak Ditemukan</div>
+                                                </div>
+                                            )
+                                        )}
+                                    </>
                                 )}
                             </div>
                             
@@ -3045,8 +3137,88 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                     </div>
                 )}
             </div>
+
+            {/* MODAL: DETAIL USER LENGKAP */}
+            {isUserDetailModalOpen && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsUserDetailModalOpen(false)}></div>
+                    <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-300">
+                        {/* Header */}
+                        <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                            <div>
+                                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight leading-none">Profil Lengkap User</h3>
+                                <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mt-2 leading-none">Informasi Administratif platform</p>
+                            </div>
+                            <button onClick={() => setIsUserDetailModalOpen(false)} className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 rounded-xl text-gray-400 hover:text-red-500 transition-all active:scale-95 shadow-sm">&times;</button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-grow overflow-y-auto p-8">
+                            {isLoadingUserDetail ? (
+                                <div className="py-20 text-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto"></div></div>
+                            ) : selectedUserForDetail && (
+                                <div className="space-y-8">
+                                    <div className="flex items-center gap-6">
+                                        <div className="w-24 h-24 rounded-full bg-orange-100 flex items-center justify-center text-3xl overflow-hidden border-4 border-white shadow-lg ring-1 ring-gray-100">
+                                            {selectedUserForDetail.photo_url ? <img src={selectedUserForDetail.photo_url} className="w-full h-full object-cover" /> : <span>👤</span>}
+                                        </div>
+                                        <div>
+                                            <h4 className="text-2xl font-black text-gray-900">{selectedUserForDetail.name || selectedUserForDetail.display_name}</h4>
+                                            <span className={`inline-flex px-3 py-1 mt-2 text-[10px] font-black uppercase tracking-widest rounded-full border ${
+                                                selectedUserForDetail.status === 'blocked' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-green-50 text-green-600 border-green-100'
+                                            }`}>
+                                                Status: {selectedUserForDetail.status || 'active'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <DetailItem label="User ID" value={selectedUserForDetail.id} />
+                                        <DetailItem label="Role Sistem" value={selectedUserForDetail.role || 'user'} isOrange />
+                                        <DetailItem label="Email" value={selectedUserForDetail.email || '-'} />
+                                        <DetailItem label="Nomor Telepon" value={selectedUserForDetail.phone || '-'} />
+                                        <DetailItem label="Terdaftar Sejak" value={new Date(selectedUserForDetail.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} />
+                                        <DetailItem label="NIK / KTP" value={selectedUserForDetail.ktp_number || 'Belum Terverifikasi'} />
+                                    </div>
+
+                                    {/* Additional context based on role */}
+                                    {selectedUserForDetail.properties?.length > 0 && (
+                                        <div className="pt-6 border-t border-gray-100">
+                                            <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Daftar Properti ({selectedUserForDetail.properties.length})</h5>
+                                            <div className="space-y-2">
+                                                {selectedUserForDetail.properties.map((p: any) => (
+                                                    <div key={p.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                                                        <span className="font-bold text-gray-900">{p.title}</span>
+                                                        <span className="text-[10px] font-black uppercase text-gray-400">{p.city} • {p.status}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {selectedUserForDetail.surveysCount !== undefined && selectedUserForDetail.surveysCount > 0 && (
+                                        <div className="pt-6 border-t border-gray-100">
+                                            <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Statistik Agen</h5>
+                                            <div className="p-5 bg-orange-50 rounded-3xl border border-orange-100">
+                                                <p className="text-sm font-bold text-orange-900">Total Survey Selesai: <span className="text-lg font-black">{selectedUserForDetail.surveysCount}</span></p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
+
+const DetailItem = ({ label, value, isOrange }: { label: string, value: string, isOrange?: boolean }) => (
+    <div className="space-y-1.5">
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</p>
+        <p className={`font-bold text-sm ${isOrange ? 'text-orange-600' : 'text-gray-900'} break-all`}>{value}</p>
+    </div>
+);
 
 export default Dashboard;
