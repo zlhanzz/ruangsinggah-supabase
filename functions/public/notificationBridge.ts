@@ -20,6 +20,7 @@ interface NotifyMitraParams {
     occupants?: number | string;
     startDate?: string;
     endDate?: string;
+    balance?: string | number; // Total balance in dashboard
   };
 }
 
@@ -31,7 +32,6 @@ export async function notifyMitra({ ownerId, propertyId, type, details }: Notify
   try {
     // 1. Fetch Owner Profile (Try native first)
     let owner: any = null;
-    let userError: any = null;
 
     // Attempt 1: Standard Table Fetch (Will fail for Tenants due to RLS)
     const { data: nativeOwner, error: nativeError } = await supabase
@@ -90,6 +90,9 @@ export async function notifyMitra({ ownerId, propertyId, type, details }: Notify
     let appTitle = '';
     let appMsg = '';
     let link = '/mitra-dashboard';
+    
+    let waTemplateName = '';
+    let waComponents: any[] = [];
 
     const baseUrl = window.location.origin;
 
@@ -107,7 +110,23 @@ export async function notifyMitra({ ownerId, propertyId, type, details }: Notify
         appTitle = 'Permintaan Sewa Baru';
         appMsg = `Ada pemesanan baru untuk ${details.propertyTitle} dari ${details.senderName}`;
         link = `${baseUrl}/mitra-dashboard/bookings`;
-        waMessage = `Halo pak/bu ${ownerName}, ada pengajuan sewa baru dari ${details.senderName}:\n\nNama Kost: ${details.propertyTitle}\nJenis Kamar: ${details.roomType || '-'}\nPaket Sewa: ${details.period || '-'}\nJumlah Penghuni: ${details.occupants || 1}\nTanggal Masuk: ${details.startDate || '-'}\nTotal Tagihan: ${details.amount || '-'}\n\nApakah terima atau tolak pengajuan ini?`;
+
+        // WhatsApp Template Configuration (7 Parameters)
+        waTemplateName = 'booking_notification_v1'; // SESUAIKAN DENGAN NAMA TEMPLATE DI META DASHBOARD
+        waComponents = [
+          {
+            type: 'body',
+            parameters: [
+              { type: 'text', text: details.senderName || '-' },      // {{1}} Nama Pengaju
+              { type: 'text', text: details.propertyTitle || '-' },   // {{2}} Nama Kost
+              { type: 'text', text: details.roomType || '-' },        // {{3}} Jenis Kamar
+              { type: 'text', text: details.period || '-' },          // {{4}} Paket Sewa
+              { type: 'text', text: details.occupants?.toString() || '1' }, // {{5}} Jumlah Penghuni
+              { type: 'text', text: details.startDate || '-' },       // {{6}} Tanggal Masuk
+              { type: 'text', text: details.amount || '-' }           // {{7}} Total Tagihan
+            ]
+          }
+        ];
         break;
 
       case 'payment':
@@ -115,7 +134,50 @@ export async function notifyMitra({ ownerId, propertyId, type, details }: Notify
         appTitle = 'Pembayaran Terverifikasi';
         appMsg = `Pembayaran untuk unit ${details.propertyTitle} telah diterima.`;
         link = `${baseUrl}/mitra-dashboard/bookings`;
-        waMessage = `Pembayaran dari ${details.senderName || 'Penyewa'} berhasil dilakukan, sekarang ${details.senderName || 'Penyewa'} berstatus sebagai penyewa aktif.\n\nNama Kost: ${details.propertyTitle}\nTipe Kamar: ${details.roomType || '-'}\nJenis Paket Sewa: ${details.period || '-'}\nTotal Tagihan: ${details.amount || '-'}\nTanggal Masuk: ${details.startDate || '-'}\nTanggal Berakhir/Tagihan Selanjutnya: ${details.endDate || '-'}\n\nSistem akan otomatis memberi pengingat tagihan setiap masa sewa akan berakhir.`;
+
+        // 2a. Dynamic Balance Calculation if not provided
+        let currentBalance = details.balance;
+        if (!currentBalance) {
+          try {
+            // Fetch all successful transactions for the properties owned by this Mitra
+            const { data: ownerProps } = await supabase.from('properties').select('id').eq('owner_uid', ownerId);
+            if (ownerProps && ownerProps.length > 0) {
+              const propIds = ownerProps.map(p => p.id);
+              const { data: trxs } = await supabase
+                .from('transactions')
+                .select('amount')
+                .eq('status', 'PAID')
+                .in('product_id', propIds);
+              
+              const total = trxs?.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
+              currentBalance = "Rp " + total.toLocaleString('id-ID');
+            }
+          } catch (e) {
+            console.error('[NotificationBridge] Balance calc error:', e);
+            currentBalance = details.amount || '0'; // Fallback to current transaction amount
+          }
+        }
+
+        // WhatsApp Template Configuration (11 Parameters as per User request)
+        waTemplateName = 'payment_notification_v1'; // SESUAIKAN DENGAN NAMA TEMPLATE DI META DASHBOARD
+        waComponents = [
+          {
+            type: 'body',
+            parameters: [
+              { type: 'text', text: details.senderName || 'Penyewa' }, // {{1}} Nama User
+              { type: 'text', text: details.propertyTitle || '-' },  // {{2}} Nama Kost
+              { type: 'text', text: details.senderName || '-' },      // {{3}} Nama Pengaju
+              { type: 'text', text: details.propertyTitle || '-' },   // {{4}} Nama Kost
+              { type: 'text', text: details.roomType || '-' },        // {{5}} Jenis Kamar
+              { type: 'text', text: details.occupants?.toString() || '1' }, // {{6}} Jumlah Penghuni
+              { type: 'text', text: details.period || '-' },          // {{7}} Paket Sewa
+              { type: 'text', text: details.amount || '-' },          // {{8}} Total Tagihan
+              { type: 'text', text: details.startDate || '-' },       // {{9}} Tanggal Masuk
+              { type: 'text', text: details.endDate || '-' },         // {{10}} Tanggal sewa berakhir
+              { type: 'text', text: currentBalance || '0' }           // {{11}} Total Saldo
+            ]
+          }
+        ];
         break;
     }
 
@@ -125,11 +187,24 @@ export async function notifyMitra({ ownerId, propertyId, type, details }: Notify
     // 4. Send WhatsApp Notification
     if (ownerPhone) {
       try {
-        const res = await sendWhatsAppText(ownerPhone, waMessage);
-        if (!res.success) {
+        let res;
+        if (type === 'chat') {
+          // Chat notification uses plain text
+          res = await sendWhatsAppText(ownerPhone, waMessage);
+        } else if (waTemplateName) {
+          // Use Official Template for non-chat notifications
+          res = await sendWhatsAppTemplate({
+            to: ownerPhone,
+            templateName: waTemplateName,
+            languageCode: 'id', // Default Indonesian
+            components: waComponents
+          });
+        }
+
+        if (res && !res.success) {
           console.warn(`[NotificationBridge] WhatsApp send failed for ${ownerPhone}:`, res.error || res.data);
-        } else {
-          console.log(`[NotificationBridge] WhatsApp notification sent to ${ownerPhone}`);
+        } else if (res) {
+          console.log(`[NotificationBridge] WhatsApp notification (${type}) sent to ${ownerPhone}`);
         }
       } catch (e) {
         console.error(`[NotificationBridge] Crash sending WA:`, e);

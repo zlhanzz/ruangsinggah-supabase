@@ -63,7 +63,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
       setTimeLeft(remaining > 0 ? remaining : 0);
     }
 
-    if (currentOrder && currentOrder.status !== 'paid' && currentOrder.status !== 'expired') {
+    if (currentOrder && currentOrder.status?.toUpperCase() !== 'PAID' && currentOrder.status !== 'expired') {
       timer = setInterval(() => {
         const createdMs = new Date(currentOrder.created_at).getTime();
         const diffSecs = Math.floor((new Date().getTime() - createdMs) / 1000);
@@ -155,7 +155,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
 
   // Poll for payment status
   useEffect(() => {
-    if (!currentOrder || currentOrder.status === 'paid') return;
+    if (!currentOrder || currentOrder.status?.toUpperCase() === 'PAID') return;
 
     const pollInterval = setInterval(async () => {
       const { data } = await supabase
@@ -164,11 +164,11 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
         .eq('id', currentOrder.id)
         .single();
 
-      if (data && data.status === 'paid') {
+      if (data && data.status?.toUpperCase() === 'PAID') {
         clearInterval(pollInterval);
         setCurrentOrder(data as Transaction);
         
-        notifyAdminStatusUpdate("Pembayaran Gateway", currentOrder.id, "paid", {
+        notifyAdminStatusUpdate("Pembayaran Gateway", currentOrder.id, "PAID", {
           "Tipe Produk": productType,
           "User ID": userId
         });
@@ -226,6 +226,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
           productId, 
           productType, 
           userId, 
+          amount, // Added missing amount
           metadata,
           method: method, // Send the selected method
           existingOrderId
@@ -334,7 +335,18 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
     }
   }, [isAdmin, isSandbox, directData, currentOrder]);
 
-  const showAdminSim = isAdmin && (isSandbox || true) && currentOrder?.status === 'pending'; // Force show for admin during debug
+  const currentStatus = (currentOrder?.status || '').toLowerCase();
+  const showAdminSim = isAdmin && (isSandbox || true) && 
+    ['pending', 'awaiting_payment', 'pending_approval', 'approved'].includes(currentStatus);
+
+  if (isAdmin) {
+    console.log("[DEBUG] showAdminSim calculation:", { 
+      isAdmin, 
+      isSandbox, 
+      currentStatus, 
+      showButton: showAdminSim 
+    });
+  }
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-0 sm:p-4 overflow-hidden">
@@ -400,7 +412,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
                <p className="text-sm font-medium text-gray-500 max-w-sm">Sesi pembayaran telah kadaluarsa karena melewati batas waktu 3 jam. Silakan ulangi pemesanan dari awal.</p>
                <button onClick={onCancel} className="mt-8 bg-gray-900 text-white px-8 py-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-orange-500 transition-colors">Tutup</button>
             </div>
-          ) : currentOrder?.status === 'paid' && productType === 'survey' ? (
+          ) : currentOrder?.status?.toUpperCase() === 'PAID' && productType === 'survey' ? (
             <div className="flex flex-col items-center justify-center text-center p-8 space-y-4 my-auto">
                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-green-500 mb-2">
                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>

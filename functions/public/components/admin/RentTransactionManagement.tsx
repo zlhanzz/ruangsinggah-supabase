@@ -113,7 +113,15 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
             periodLabel: meta.period || meta.periodLabel || '-',
             paymentMethod: t.payment_method || '-',
             amount: t.amount,
-            status: (t.status === 'pending' || t.status === 'PENDING_APPROVAL' || t.status === 'AWAITING_PAYMENT') ? 'Menunggu Pembayaran' : (t.status === 'paid' || ['paid', 'Selesai', 'success', 'Berhasil'].includes(t.status) ? 'Selesai/Diproses' : (t.status === 'cancelled' || t.status === 'REJECTED' ? 'Ditolak' : t.status)),
+            status: (t.status === 'pending' || t.status === 'PENDING_APPROVAL') 
+                ? 'Menunggu Konfirmasi' 
+                : (t.status === 'AWAITING_PAYMENT') 
+                    ? 'Menunggu Pembayaran' 
+                    : ((t.status || '').toUpperCase() === 'PAID' || ['Selesai', 'success', 'Berhasil', 'COMPLETED'].includes(t.status)) 
+                        ? 'Status Aktif' 
+                        : (t.status === 'expired')
+                            ? 'Status Outdated'
+                            : (t.status === 'cancelled' || t.status === 'REJECTED' ? 'Ditolak' : t.status),
             rejectionReason: meta.rejection_reason || meta.rejectionReason,
             rawStatus: t.status,
             startDate: t.move_in_date || meta.startDate || meta.checkInDate || '-',
@@ -129,7 +137,7 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
         if (rentFilter === 'all') return true;
         const isNewSubmission = t.status === 'pending' || t.status === 'PENDING_APPROVAL';
         const isAwaitingPayment = t.status === 'AWAITING_PAYMENT';
-        const isPaid = ['paid', 'Selesai', 'success', 'Berhasil'].includes(t.status);
+        const isPaid = ['PAID', 'paid', 'Selesai', 'success', 'Berhasil', 'COMPLETED', 'SUCCESS'].includes((t.status || '').toUpperCase());
         const isExtension = t.type === 'perpanjangan_sewa' || t.product_type === 'perpanjangan_sewa' || t.metadata?.extensionType === 'manual_extension';
 
         if (rentFilter === 'pengajuan') return isNewSubmission && !isExtension;
@@ -241,8 +249,44 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
                                         </div>
                                     </div>
                                 )}
+
+                                {/* Customer Info Section */}
+                                <div className="shrink-0 w-24 flex flex-col items-center gap-2 pt-4 pl-4 md:pl-0">
+                                    <div 
+                                        className="relative w-16 h-16 rounded-2xl bg-orange-500 flex items-center justify-center text-white text-xl font-black shadow-lg cursor-pointer overflow-hidden group/avatar transition-transform hover:scale-105"
+                                        onClick={() => setViewingProfile(trx)}
+                                    >
+                                        {/* Layer 1: Initials */}
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            {trx.name?.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                                        </div>
+                                        
+                                        {/* Layer 2: Photo */}
+                                        {trx.photoURL && (
+                                            <img
+                                                src={trx.photoURL}
+                                                alt=""
+                                                className="absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-300"
+                                                onError={(e) => {
+                                                    e.currentTarget.style.display = 'none';
+                                                }}
+                                            />
+                                        )}
+                                        
+                                        {/* Hover Overlay */}
+                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-[10px] text-white opacity-0 group-hover/avatar:opacity-100 transition-opacity z-20 font-black uppercase">Detail</div>
+                                    </div>
+                                    <div className="text-center">
+                                        <button 
+                                            onClick={() => setViewingProfile(trx)}
+                                            className="text-[10px] font-black text-gray-900 uppercase tracking-tight hover:text-orange-600 transition-colors line-clamp-1 px-1"
+                                        >
+                                            {trx.name}
+                                        </button>
+                                    </div>
+                                </div>
                                 
-                                <div className="flex-1 space-y-4 pl-8 md:pl-10">
+                                <div className="flex-1 space-y-4">
                                     <div className="flex flex-wrap justify-between items-start gap-2 border-b border-gray-50 pb-4">
                                         <div>
                                             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
@@ -255,7 +299,7 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
                                                 )}
                                             </div>
                                             <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">{trx.item}</h3>
-                                            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Status: <span className={`ml-1 ${['Selesai/Diproses', 'Selesai', 'paid'].includes(trx.status) ? 'text-green-600' : trx.status.includes('Menunggu') ? 'text-amber-500' : 'text-red-500'}`}>{trx.status}</span></p>
+                                            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Status: <span className={`ml-1 ${['Selesai/Diproses', 'Selesai', 'PAID'].includes((trx.rawStatus || '').toUpperCase()) ? 'text-green-600' : trx.status.includes('Menunggu') ? 'text-amber-500' : 'text-red-500'}`}>{trx.status}</span></p>
                                             {trx.rawStatus === 'REJECTED' && trx.rejectionReason && (
                                                 <p className="text-[10px] text-red-400 font-bold italic mt-1 leading-relaxed">Alasan: {trx.rejectionReason}</p>
                                             )}
@@ -284,7 +328,7 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
                                                 </p>
                                                 <div className="flex gap-2">
                                                     <button 
-                                                        onClick={() => handleUpdateStatus(trx.id, 'paid')}
+                                                        onClick={() => handleUpdateStatus(trx.id, 'PAID')}
                                                         className="px-3 py-1.5 bg-gray-50 hover:bg-green-50 text-green-600 border border-green-100 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all"
                                                         title="Terima Paksa (Admin)"
                                                     >
@@ -354,16 +398,25 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
                     <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
                         <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-8 text-white relative shrink-0">
                             <div className="flex items-center gap-6">
-                                {viewingProfile.photoURL ? (
-                                    <div className="relative">
-                                        <img src={viewingProfile.photoURL} alt={viewingProfile.name} className="w-20 h-20 rounded-2xl border-2 border-white/20 object-cover shadow-xl" />
-                                        <div className="absolute -bottom-2 -right-2 bg-green-500 w-6 h-6 rounded-full border-4 border-gray-900 flex items-center justify-center text-[8px]">✓</div>
-                                    </div>
-                                ) : (
-                                    <div className="w-20 h-20 rounded-2xl bg-orange-500 flex items-center justify-center text-white text-3xl font-black shadow-xl">
+                                <div className="relative w-20 h-20 rounded-2xl bg-orange-500 flex items-center justify-center text-white text-3xl font-black shadow-xl overflow-hidden">
+                                    {/* Layer 1: Initials */}
+                                    <div className="absolute inset-0 flex items-center justify-center">
                                         {viewingProfile.name?.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
                                     </div>
-                                )}
+                                    
+                                    {/* Layer 2: Photo */}
+                                    {viewingProfile.photoURL && (
+                                        <img 
+                                            src={viewingProfile.photoURL} 
+                                            alt="" 
+                                            className="absolute inset-0 w-full h-full object-cover z-10" 
+                                            onError={(e) => {
+                                                e.currentTarget.style.display = 'none';
+                                            }}
+                                        />
+                                    )}
+                                    <div className="absolute -bottom-2 -right-2 bg-green-500 w-6 h-6 rounded-full border-4 border-gray-900 flex items-center justify-center text-[8px] z-20">✓</div>
+                                </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-[10px] font-black tracking-[0.2em] uppercase opacity-50 mb-1">Identitas Penyewa</p>
                                     <h3 className="text-2xl font-black truncate tracking-tight">{viewingProfile.name}</h3>
@@ -384,7 +437,7 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
                                 <ProfileField label="Agama" value={viewingProfile.religion} icon="🕌" />
                                 <ProfileField label="Status" value={viewingProfile.relationshipStatus} icon="💍" />
                                 <div className="col-span-2 space-y-1.5">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><span>🏠</span> Alamat Domisili</label>
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><span>🏠</span> Alamat Asal</label>
                                     <p className="font-bold text-gray-800 text-sm leading-relaxed bg-gray-50 p-4 rounded-2xl border border-gray-100">{viewingProfile.profileAddress || '-'}</p>
                                 </div>
                             </div>
@@ -609,5 +662,35 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
         </div>
     );
 };
+
+const ProfileField: React.FC<{ icon: string; label: string; value: string }> = ({ icon, label, value }) => (
+    <div className="space-y-1.5">
+        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+            <span>{icon}</span> {label}
+        </label>
+        <p className="font-bold text-gray-800 text-sm">{value || '-'}</p>
+    </div>
+);
+
+const InvoiceField: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+    <div>
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{label}</p>
+        <p className="font-black text-gray-900">{value || '-'}</p>
+    </div>
+);
+
+const FormField: React.FC<{ label: string; placeholder?: string; value: string; onChange: (val: string) => void; type?: string }> = ({ label, placeholder, value, onChange, type = 'text' }) => (
+    <div className="space-y-4">
+        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">{label}</label>
+        <input 
+            type={type}
+            required 
+            className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 text-sm font-bold shadow-inner outline-none focus:ring-2 focus:ring-orange-500/20 transition-all" 
+            placeholder={placeholder}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+        />
+    </div>
+);
 
 export default RentTransactionManagement;

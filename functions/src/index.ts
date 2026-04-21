@@ -2,17 +2,39 @@
 
 // --- IMPOR YANG DIBUTUHKAN ---
 import * as functions from 'firebase-functions/v2';
-import * as admin from 'firebase-admin';
-import { Storage } from '@google-cloud/storage';
 import { URL } from 'url';
-// PDFDocument is lazy-loaded inside generatePDFBuffer to avoid Firebase deploy timeout
-// --- AKHIR IMPOR ---
+// Heavy imports (admin, Storage, googleDriveUtils) are lazy-loaded below to avoid deployment timeouts
 
-import { createSurveyFolder } from './googleDriveUtils';
+// --- CONFIGURATION PARAMS ---
+const { defineString } = require('firebase-functions/params');
+const supabaseUrlParam = defineString('SUPABASE_URL');
+const supabaseKeyParam = defineString('SUPABASE_SERVICE_ROLE_KEY');
+const brevoApiKeyParam = defineString('BREVO_API_KEY');
 
-admin.initializeApp();
-const gcs = new Storage();
-const db = admin.firestore();
+// Services will be initialized lazily to avoid deployment timeouts
+let adminApp: any = null;
+function getAdmin() {
+    if (!adminApp) {
+        adminApp = require('firebase-admin');
+        adminApp.initializeApp();
+    }
+    return adminApp;
+}
+
+let db: any = null;
+function getFirestore() {
+    if (!db) db = getAdmin().firestore();
+    return db;
+}
+
+let gcs: any = null;
+function getStorage() {
+    if (!gcs) {
+        const { Storage } = require('@google-cloud/storage');
+        gcs = new Storage();
+    }
+    return gcs;
+}
 
 interface ImageUrlObject {
   original: string;
@@ -54,7 +76,7 @@ export const optimizeImageAndSaveUrl = functions.storage.onObjectFinalized(async
     return;
   }
 
-  const bucket = gcs.bucket(fileBucket);
+  const bucket = getStorage().bucket(fileBucket);
   const file = bucket.file(filePath);
 
   const pathParts = filePath.split('/');
@@ -141,7 +163,7 @@ export const optimizeImageAndSaveUrl = functions.storage.onObjectFinalized(async
         console.error(`CF_LOG: Tipe entitas tidak didukung: ${entityType}. Melewatkan update Firestore.`);
         return;
     }
-    docRef = db.collection(collectionName).doc(entityId);
+    docRef = getFirestore().collection(collectionName).doc(entityId);
 
     console.log(`CF_LOG: Memulai update Firestore untuk dokumen: ${collectionName}/${entityId}`);
     try { // Try untuk update Firestore
@@ -195,7 +217,7 @@ export const optimizeImageAndSaveUrl = functions.storage.onObjectFinalized(async
 
           finalUpdatePayload = {
               imageUrls: updatedImageUrls,
-              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+              updatedAt: getAdmin().firestore.FieldValue.serverTimestamp()
           };
 
       } else if (entityType === 'databases') {
@@ -215,7 +237,7 @@ export const optimizeImageAndSaveUrl = functions.storage.onObjectFinalized(async
                   ...currentFileUrls,
                   coverImage: updatedCoverImage
               },
-              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+              updatedAt: getAdmin().firestore.FieldValue.serverTimestamp()
           };
           console.log(`CF_LOG: Memperbarui coverImage di fileUrls untuk database dengan WebP/Thumbnail.`);
       } else {
@@ -241,14 +263,6 @@ export const optimizeImageAndSaveUrl = functions.storage.onObjectFinalized(async
   }
 }); // Akhir fungsi utama
 
-// --- SUPABASE CLIENT SETUP ---
-const { createClient } = require('@supabase/supabase-js');
-
-// --- SUPABASE CONFIGURATION (v2 Params) ---
-const { defineString } = require('firebase-functions/params');
-const supabaseUrlParam = defineString('SUPABASE_URL');
-const supabaseKeyParam = defineString('SUPABASE_SERVICE_ROLE_KEY');
-
 // Helper to get supabase client securely
 let supabaseInstance: any = null;
 function getSupabase() {
@@ -258,18 +272,17 @@ function getSupabase() {
   const key = supabaseKeyParam.value();
 
   if (!url || !key) {
-    // During deployment analysis, we might not have these. 
-    // Return a proxy or handled null to prevent crash.
     console.warn("Supabase credentials missing. Client not initialized.");
     return null;
   }
   
+  // Lazy-load the library
+  const { createClient } = require('@supabase/supabase-js');
   supabaseInstance = createClient(url, key);
   return supabaseInstance;
 }
 
-// --- EMAIL CONFIGURATION ---
-const brevoApiKeyParam = defineString('BREVO_API_KEY');
+
 
 /**
  * sendSuccessEmail: Fetches user and product data, then sends notification email via Brevo API.
@@ -535,7 +548,7 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
         .select('*')
         .eq('user_id', userId)
         .eq('product_type', productType)
-        .eq('status', 'pending');
+        .in('status', ['pending', 'PENDING_APPROVAL', 'AWAITING_PAYMENT']);
 
       if (!fetchPendingErr && existingPending && existingPending.length > 0) {
         const now = new Date().getTime();
@@ -590,7 +603,9 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
         order = extOrder;
         finalAmount = Number(order.amount);
     } else if (!order) {
-        // SECURITY: Fetch authoritative price from DB based on productType
+        const reqAmount = Number(req.body.amount);
+        
+        // SECURITY/LOGIC: Fetch authoritative price from DB based on productType
         if (productType === 'database') {
             const { data: dbProd, error: dbError } = await supabase
               .from('available_databases')
@@ -598,7 +613,7 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
               .eq('id', productId)
               .single();
             if (dbError || !dbProd) throw new Error('Produk database tidak ditemukan.');
-            finalAmount = Number(dbProd.price);
+            finalAmount = reqAmount || Number(dbProd.price);
         } else if (productType === 'kost_booking' || productType === 'property' || productType === 'kost') {
             const { data: prop, error: propError } = await supabase
               .from('properties')
@@ -606,7 +621,8 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
               .eq('id', productId)
               .single();
             if (propError || !prop) throw new Error('Listings properti tidak ditemukan.');
-            finalAmount = Number(prop.price);
+            // Prioritize reqAmount for kost_booking to support additions (occupants, etc)
+            finalAmount = reqAmount || Number(prop.price);
         } else if (productType === 'survey') {
             finalAmount = 70000;
         } else {
@@ -807,17 +823,41 @@ export const simulatePaymentSuccess = functions.https.onRequest({ cors: true }, 
       return;
     }
 
-    // 3. Mark as paid
-    console.log(`SIMULATE_SUCCESS: Updating transaction ${orderId} to 'paid'`);
-    await supabase.from('transactions').update({ 
-        status: 'paid', 
+    // 3. Mark as paid & calculate missing dates
+    console.log(`SIMULATE_SUCCESS: Updating transaction ${orderId} to 'PAID'`);
+    
+    let metadata = { ...order.metadata };
+    const today = new Date().toISOString().split('T')[0];
+    
+    // 1. Determine Start Date: Priority Metadata > User Choice > Order Field > Today
+    const effectiveStart = metadata.startDate || metadata.move_in_date || order.move_in_date || today;
+    if (!metadata.startDate) metadata.startDate = effectiveStart;
+    
+    // 2. Determine Duration
+    const effectiveDuration = metadata.duration || metadata.periodLabel || metadata.period || 'bulanan';
+    
+    // 3. Calculate End Date if missing
+    if (!metadata.endDate) {
+        metadata.endDate = calculateExpiryDate(effectiveStart, effectiveDuration);
+    }
+
+    // 4. Preserve price integrity if it was correct in metadata but missing in amount
+    const finalAmount = order.amount || metadata.amountTotal || metadata.total || 0;
+
+    const { error: updateErr } = await supabase.from('transactions').update({ 
+        status: 'PAID', 
+        amount: finalAmount,
         updated_at: new Date().toISOString(),
-        metadata: { ...order.metadata, is_simulated: true }
+        metadata: { ...metadata, is_simulated: true }
     }).eq('id', orderId);
 
-    // 4. Complete Survey Process (Status Update & Drive Folder)
+    if (updateErr) throw new Error(`Status update failed: ${updateErr.message}`);
+
+    // 4. Fulfillment Process (Status Update & Side Effects)
     if (order.product_type === 'survey') {
       await completeSurveyProcess(supabase, orderId, order.product_type);
+    } else if (order.product_type === 'kost_booking' || order.product_type === 'rent' || order.product_type === 'kost') {
+      await completeBookingProcess(supabase, orderId);
     }
 
     await sendSuccessEmail(orderId);
@@ -828,6 +868,38 @@ export const simulatePaymentSuccess = functions.https.onRequest({ cors: true }, 
     res.status(500).send({ message: 'Simulation failed: ' + err.message });
   }
 });
+
+/**
+ * calculateExpiryDate: Helper to calculate end date based on duration string (e.g. "1 Bulan")
+ */
+function calculateExpiryDate(startDateStr: string, durationStr: string): string {
+  try {
+    const start = new Date(startDateStr);
+    if (isNaN(start.getTime())) return '';
+
+    const lower = durationStr.toLowerCase();
+    const durationMatch = lower.match(/(\d+)/);
+    const val = durationMatch ? parseInt(durationMatch[1]) : 1;
+    const end = new Date(start);
+
+    if (lower.includes('bulan')) {
+      end.setMonth(start.getMonth() + val);
+    } else if (lower.includes('minggu')) {
+      end.setDate(start.getDate() + (val * 7));
+    } else if (lower.includes('hari')) {
+      end.setDate(start.getDate() + val);
+    } else if (lower.includes('tahun')) {
+      end.setFullYear(start.getFullYear() + val);
+    } else {
+      // Default fallback one month if type unknown
+      end.setMonth(start.getMonth() + 1);
+    }
+    
+    return end.toISOString().split('T')[0];
+  } catch (e) {
+    return '';
+  }
+}
 
 /**
  * completeSurveyProcess: Helper to move survey from AWAITING_PAYMENT to PENDING_ASSIGNMENT.
@@ -855,6 +927,7 @@ async function completeSurveyProcess(supabase: any, orderId: string, productType
 
     const folderName = `Survey - ${srvData.kost_name || 'Kost'} - ${orderId.substring(0,8).toUpperCase()}`;
     const ROOT_FOLDER_ID = '1KS-uAMJZg7deddNCB4XxRrPpXsQjq1tk';
+    const { createSurveyFolder } = require('./googleDriveUtils');
     const driveLink = await createSurveyFolder(folderName, ROOT_FOLDER_ID);
 
     await supabase
@@ -875,6 +948,43 @@ async function completeSurveyProcess(supabase: any, orderId: string, productType
 }
 
 /**
+ * completeBookingProcess: Handle side effects for kost booking success (notifications, etc).
+ */
+async function completeBookingProcess(supabase: any, orderId: string) {
+  console.log(`COMPLETE_BOOKING: Starting for Order ${orderId}`);
+  try {
+    const { data: trx } = await supabase.from('transactions').select('user_id, product_id, metadata').eq('id', orderId).single();
+    if (!trx) return;
+
+    // Fetch Property Info
+    const { data: prop } = await supabase.from('properties').select('title, owner_uid').eq('id', trx.product_id).single();
+    
+    // Notify Tenant
+    await supabase.from('notifications').insert({
+        user_id: trx.user_id,
+        title: 'Pembayaran Kost Berhasil! ✨',
+        message: `Pembayaran sewa untuk ${prop?.title || 'Kost'} telah berhasil diverifikasi. Selamat tinggal di hunian baru Anda!`,
+        type: 'success',
+        link: '/my-kost'
+    });
+
+    // Notify Owner (Mitra)
+    if (prop?.owner_uid) {
+        await supabase.from('notifications').insert({
+            user_id: prop.owner_uid,
+            title: 'Booking Kost Baru! 🏠',
+            message: `Seorang penyewa telah melunasi pembayaran untuk ${prop.title}. Silakan cek dashboard Mitra Anda.`,
+            type: 'assignment',
+            link: '/mitra/tenants'
+        });
+    }
+    console.log(`COMPLETE_BOOKING: Success for Order ${orderId}`);
+  } catch (err) {
+    console.error("COMPLETE_BOOKING_ERROR:", err);
+  }
+}
+
+/**
  * pakasirWebhook: Receives payment confirmation from Pakasir
  */
 export const pakasirWebhook = functions.https.onRequest(async (req, res) => {
@@ -888,23 +998,44 @@ export const pakasirWebhook = functions.https.onRequest(async (req, res) => {
     const supabase = getSupabase();
     if (!supabase) throw new Error('DB Error');
 
-    const { data: order } = await supabase.from('transactions').select('amount, status').eq('id', order_id).single();
-    if (!order || order.status === 'paid') { res.status(200).send('OK'); return; }
+    const { data: order } = await supabase.from('transactions').select('id, amount, status, product_type, metadata').eq('id', order_id).single();
+    if (!order || order.status?.toUpperCase() === 'PAID') { res.status(200).send('OK'); return; }
 
     const isSuccess = status === 'completed' || status === 'success';
-    const newStatus = isSuccess ? 'paid' : (status === 'expired' ? 'expired' : 'cancelled');
+    const newStatus = isSuccess ? 'PAID' : (status === 'expired' ? 'EXPIRED' : 'CANCELLED');
+
+    // Logic for auto-filling dates on success
+    let updatePayload: any = { status: newStatus, updated_at: new Date().toISOString() };
+    
+    if (isSuccess) {
+        const metadata = { ...order.metadata };
+        const today = new Date().toISOString().split('T')[0];
+        
+        const effectiveStart = metadata.startDate || metadata.move_in_date || order.move_in_date || today;
+        if (!metadata.startDate) metadata.startDate = effectiveStart;
+
+        const effectiveDuration = metadata.duration || metadata.periodLabel || metadata.period || 'bulanan';
+        
+        if (!metadata.endDate) {
+            metadata.endDate = calculateExpiryDate(effectiveStart, effectiveDuration);
+        }
+        
+        updatePayload.metadata = metadata;
+    }
 
     const { data: updatedTx } = await supabase
       .from('transactions')
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq('id', order_id)
-      .eq('status', 'pending')
+      .or('status.eq.pending,status.eq.awaiting_payment,status.eq.AWAITING_PAYMENT,status.eq.PENDING_APPROVAL')
       .select().maybeSingle();
     
-    if (updatedTx && newStatus === 'paid') {
+    if (updatedTx && newStatus === 'PAID') {
       await sendSuccessEmail(order_id);
       if (updatedTx.product_type === 'survey') {
         await completeSurveyProcess(supabase, order_id, updatedTx.product_type);
+      } else if (['kost_booking', 'rent', 'kost'].includes(updatedTx.product_type)) {
+        await completeBookingProcess(supabase, order_id);
       }
     }
     res.status(200).send('OK');
@@ -1102,6 +1233,7 @@ export const manualCreateSurveyFolder = functions.https.onRequest({ cors: true }
     const folderName = `Survey - ${survey.kost_name || 'Kost'} - ${survey.id?.substring(0,8).toUpperCase() || surveyId.substring(0,8).toUpperCase()}`;
     
     console.log(`MANUAL_DRIVE: Creating folder: ${folderName}`);
+    const { createSurveyFolder } = require('./googleDriveUtils');
     const driveLink = await createSurveyFolder(folderName, ROOT_FOLDER_ID);
 
     // 4. Update DB

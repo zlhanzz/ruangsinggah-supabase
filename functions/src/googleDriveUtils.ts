@@ -1,5 +1,4 @@
 // functions/src/googleDriveUtils.ts
-import { google } from 'googleapis';
 
 /**
  * Creates a Google Drive folder and returns its web view link.
@@ -7,6 +6,7 @@ import { google } from 'googleapis';
  * @param parentFolderId Optional parent folder ID
  */
 export async function createSurveyFolder(folderName: string, parentFolderId?: string): Promise<string> {
+  const { google } = require('googleapis');
   const privateKey = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
 

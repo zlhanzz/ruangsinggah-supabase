@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner } from './types';
 import { notifyAdminStatusUpdate } from './emailService';
+import { ensureAbsoluteUrl } from './userService';
 
 // ---- TYPE DEF ----
 export interface BasicPropertyInfo extends Partial<Kost> {
@@ -352,7 +353,8 @@ export async function getAdminTransactions(limitOrType?: number | string, ownerU
         institution,
         gender,
         religion,
-        relationship_status
+        relationship_status,
+        address
       )
     `)
     .order('created_at', { ascending: false })
@@ -379,12 +381,19 @@ export async function getAdminTransactions(limitOrType?: number | string, ownerU
   }
 
   // 4. Map & Filter
-  const mapped = transactions.map(t => ({
-    ...t,
-    product_name: t.metadata?.item || t.product_id,
-    properties: propertyMap.get(t.product_id) || null,
-    database: dbMap.get(t.product_id) || null,
-  })) as (AdminTransaction & { properties: any })[];
+  const mapped = transactions.map(t => {
+    // Resolve user profile photo if it exists
+    if (t.user && t.user.photo_url) {
+      t.user.photo_url = ensureAbsoluteUrl(t.user.photo_url, 'profile-photos');
+    }
+    
+    return {
+      ...t,
+      product_name: t.metadata?.item || t.product_id,
+      properties: propertyMap.get(t.product_id) || null,
+      database: dbMap.get(t.product_id) || null,
+    };
+  }) as (AdminTransaction & { properties: any })[];
 
   if (ownerUid) {
     return mapped.filter(t => t.properties?.owner_uid === ownerUid) as AdminTransaction[];

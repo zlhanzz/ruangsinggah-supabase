@@ -428,7 +428,7 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
 
                                         <div className="space-y-4">
                                             <div className="flex items-center justify-between">
-                                                <label className="text-[10px] font-black opacity-60 uppercase tracking-widest block">Alamat Domisili Sekarang</label>
+                                                <label className="text-[10px] font-black opacity-60 uppercase tracking-widest block">Alamat Asal</label>
                                                 <label className="flex items-center gap-2 cursor-pointer">
                                                     <input type="checkbox" checked={sameAsKtp} onChange={(e) => {
                                                         const checked = e.target.checked;

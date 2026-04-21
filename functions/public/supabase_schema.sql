@@ -125,6 +125,9 @@ ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS additional_fee_name  TEXT
 ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
+-- Set Replica Identity to FULL
+ALTER TABLE public.properties REPLICA IDENTITY FULL;
+
 -- Tabel AVAILABLE_DATABASES
 CREATE TABLE IF NOT EXISTS public.available_databases (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -246,7 +249,7 @@ SECURITY DEFINER
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.users
-    WHERE id = auth.uid() AND (role = 'owner')
+    WHERE id = auth.uid() AND (role = 'owner' OR role = 'mitra')
   );
 $$;
 
@@ -327,6 +330,12 @@ CREATE POLICY "users_update_admin"
   ON public.users FOR UPDATE
   USING (public.is_admin());
 
+-- Izinkan semua user yang login melihat profil publik (Nama, Foto) satu sama lain
+-- Ini memastikan dashboard mitra selalu bisa menampilkan nama pelamar dengan lancar.
+CREATE POLICY "users_select_basic_profile" 
+  ON public.users FOR SELECT 
+  USING (auth.uid() IS NOT NULL);
+
 
 -- ============================================================
 -- STEP 5: POLICIES untuk tabel PROPERTIES
@@ -368,6 +377,9 @@ CREATE POLICY "properties_delete"
     auth.uid() IS NOT NULL
     AND (owner_uid = auth.uid() OR public.is_admin())
   );
+
+-- AKTIFKAN REALTIME
+ALTER PUBLICATION supabase_realtime ADD TABLE public.properties;
 
 
 -- ============================================================
@@ -583,6 +595,9 @@ CREATE TABLE IF NOT EXISTS public.transactions (
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Set Replica Identity to FULL for DELETE event reliability
+ALTER TABLE public.transactions REPLICA IDENTITY FULL;
+
 -- ENABLE RLS
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 
@@ -598,6 +613,21 @@ CREATE POLICY "transactions_insert_own"
 CREATE POLICY "transactions_admin_all" 
   ON public.transactions FOR ALL 
   USING (public.is_admin());
+
+-- Mitra melihat transaksi yang terkait dengan properti miliknya
+CREATE POLICY "transactions_select_owner" 
+  ON public.transactions FOR SELECT 
+  USING (
+    public.is_admin() OR
+    EXISTS (
+      SELECT 1 FROM public.properties 
+      WHERE properties.id = transactions.product_id 
+      AND properties.owner_uid = auth.uid()
+    )
+  );
+
+-- AKTIFKAN REALTIME
+ALTER PUBLICATION supabase_realtime ADD TABLE public.transactions;
 
 -- ============================================================
 -- STEP 12: COMPLAINTS TABLE
@@ -671,12 +701,17 @@ CREATE TABLE IF NOT EXISTS public.chat_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     owner_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    property_id UUID REFERENCES public.properties(id) ON DELETE SET NULL,
+    property_id UUID NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
     last_message TEXT,
-    last_message_at TIMESTAMPTZ DEFAULT now(),
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
+    last_message_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, owner_id, property_id)
 );
+
+-- AKTIFKAN REALTIME & REPLICA IDENTITY
+ALTER TABLE public.chat_sessions REPLICA IDENTITY FULL;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_sessions;
+ALTER TABLE public.chat_messages REPLICA IDENTITY FULL;
 
 -- 2. Create chat_messages table
 CREATE TABLE IF NOT EXISTS public.chat_messages (
@@ -781,6 +816,9 @@ CREATE TABLE IF NOT EXISTS public.survey_requests (
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Set Replica Identity to FULL
+ALTER TABLE public.survey_requests REPLICA IDENTITY FULL;
+
 -- ENABLE RLS
 ALTER TABLE public.survey_requests ENABLE ROW LEVEL SECURITY;
 
@@ -808,6 +846,9 @@ CREATE TABLE IF NOT EXISTS public.notifications (
   is_read     BOOLEAN DEFAULT false,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Set Replica Identity to FULL
+ALTER TABLE public.notifications REPLICA IDENTITY FULL;
 
 -- ENABLE RLS
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;

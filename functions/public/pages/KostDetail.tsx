@@ -741,7 +741,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                else if (p === '3bulanan') d.setMonth(d.getMonth() + 3);
                else if (p === '6bulanan') d.setMonth(d.getMonth() + 6);
                else if (p === 'tahunan') d.setFullYear(d.getFullYear() + 1);
-               return d.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+              return d.toISOString().split('T')[0];
             })(),
             ...tempBookingData 
           }}

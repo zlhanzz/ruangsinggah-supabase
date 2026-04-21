@@ -17,7 +17,7 @@
     "@google-cloud/storage": "^7.19.0",
     "@supabase/supabase-js": "^2.99.2",
     "firebase-admin": "^13.6.0",
-    "firebase-functions": "^7.0.0",
+    "firebase-functions": "^7.2.5",
     "googleapis": "^171.4.0",
     "pdfkit": "^0.18.0",
     "sharp": "^0.34.5"

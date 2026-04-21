@@ -2,25 +2,66 @@ import React, { useState, useMemo } from 'react';
 import { 
     Users, Search, Filter, Calendar, Clock, ArrowRight, User, 
     MessageCircle, MoreHorizontal, ChevronRight, MapPin, Briefcase, 
-    GraduationCap, ClipboardList, TrendingUp, AlertCircle
+    GraduationCap, ClipboardList, TrendingUp, AlertCircle, Plus, DollarSign, ExternalLink, X, Home, Zap, RefreshCw
 } from 'lucide-react';
 import { FORMAT_CURRENCY } from '../../constants';
 import { Kost } from '../../types';
+import AddBillModal from './AddBillModal';
 
 interface MitraTenantManagementProps {
     tenancyData: any[];
     properties: Kost[];
     refreshData: () => void;
+    onViewUserProfile: (userData: any) => void;
 }
+
+const BillingStatusBadge: React.FC<{ status: string }> = ({ status }) => {
+    switch(status) {
+        case 'lunas':
+            return <div className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[8px] font-black uppercase tracking-widest border border-emerald-100 flex items-center gap-1"><Zap size={10} fill="currentColor" /> Tagihan Fasilitas Lunas</div>;
+        case 'sudah_ditagih':
+            return <div className="px-2 py-1 bg-amber-50 text-amber-600 rounded-lg text-[8px] font-black uppercase tracking-widest border border-amber-100 flex items-center gap-1"><Clock size={10} /> Sudah Ditagih</div>;
+        case 'perlu_ditagih':
+            return <div className="px-2 py-1 bg-rose-50 text-rose-600 rounded-lg text-[8px] font-black uppercase tracking-widest border border-rose-100 flex items-center gap-1 animate-pulse"><AlertCircle size={10} /> Perlu Ditagih</div>;
+        default:
+            return null;
+    }
+};
 
 const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({ 
     tenancyData, 
     properties,
-    refreshData 
+    refreshData,
+    onViewUserProfile
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterProperty, setFilterProperty] = useState('all');
     const [viewingResident, setViewingResident] = useState<any | null>(null);
+    const [showAddBillModal, setShowAddBillModal] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        await refreshData();
+        // Artificial delay for feedback
+        setTimeout(() => setIsRefreshing(false), 800);
+    };
+
+    // --- HELPERS ---
+    const safeFormatDate = (dateStr: string | null | undefined, options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' }) => {
+        if (!dateStr) return '-';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '-';
+        return d.toLocaleDateString('id-ID', options);
+    };
+
+    const getRemainingDays = (end: string | null | undefined) => {
+        if (!end) return null;
+        const d = new Date(end);
+        if (isNaN(d.getTime())) return null;
+        const diff = d.getTime() - Date.now();
+        return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    };
 
     // --- DATA AGGREGATION ---
     // Group transactions by User ID to show unique residents
@@ -38,31 +79,121 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                     kostId: trx.kost_id || trx.product_id,
                     kostName: trx.metadata?.kostName || trx.kost_name || 'Kost',
                     roomType: trx.metadata?.roomType || trx.room_type || '-',
+                    occupantCount: trx.metadata?.occupantCount || 1,
+                    periodLabel: trx.metadata?.periodLabel || trx.metadata?.period || '-',
                     transactions: [],
                     startDate: null,
                     endDate: null,
-                    status: 'active'
+                    lastRenewalDate: null,
+                    initialStartDate: null,
+                    status: 'active',
+                    pendingBills: 0,
+                    lastRentAmount: 0,
+                    hasRentalTransaction: false // Flag to ensure they are real tenants
                 };
             }
 
             groups[uid].transactions.push(trx);
 
-            // Update dates based on earliest/latest
+            const isPrimaryRent = ['kost_booking', 'perpanjangan_sewa', 'kost'].includes(trx.product_type);
+            if (isPrimaryRent) {
+                groups[uid].hasRentalTransaction = true;
+            }
+
+            // Sort transactions by date (Oldest first)
+            const sortedTrx = [...groups[uid].transactions].sort((a, b) => 
+                new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            );
+
+            // Initial Rent Transaction (Oldest)
+            const initialRent = sortedTrx.find(t => t.product_type === 'kost_booking' || t.product_type === 'kost');
+            if (initialRent) {
+                groups[uid].initialStartDate = initialRent.metadata?.startDate || initialRent.startDate;
+            }
+
+            // Latest Rent Transaction (Latest perpanjangan or booking)
+            const rentTrx = [...sortedTrx].reverse().find(t => 
+                ['kost_booking', 'perpanjangan_sewa', 'kost'].includes(t.product_type) && 
+                t.status?.toUpperCase() === 'PAID'
+            );
+
+            if (rentTrx) {
+                groups[uid].lastRentAmount = rentTrx.amount;
+                groups[uid].roomType = rentTrx.metadata?.roomType || groups[uid].roomType;
+                groups[uid].periodLabel = rentTrx.metadata?.periodLabel || groups[uid].periodLabel;
+            }
+
+            // Latest Renewal
+            const lastRenewal = [...sortedTrx].reverse().find(t => t.product_type === 'perpanjangan_sewa' && t.status?.toUpperCase() === 'PAID');
+            if (lastRenewal) {
+                groups[uid].lastRenewalDate = lastRenewal.created_at;
+            }
+
+            // Calculate overall pending bills (standalone only)
+            const unpaidBills = sortedTrx.filter(t => 
+                t.product_type === 'tagihan_ekstra' && 
+                ['PENDING', 'AWAITING_PAYMENT'].includes(t.status?.toUpperCase())
+            ).reduce((acc, t) => acc + (t.amount || 0), 0);
+            
+            groups[uid].pendingBills = unpaidBills;
+
+            // Current Active Dates
             const currentStart = trx.metadata?.startDate || trx.startDate;
             const currentEnd = trx.metadata?.endDate || trx.endDate;
 
-            if (currentStart) {
+            if (currentStart && !isNaN(new Date(currentStart).getTime())) {
                 const sDate = new Date(currentStart);
                 if (!groups[uid].startDate || sDate < new Date(groups[uid].startDate)) {
                     groups[uid].startDate = currentStart;
                 }
             }
 
-            if (currentEnd) {
+            if (currentEnd && !isNaN(new Date(currentEnd).getTime())) {
                 const eDate = new Date(currentEnd);
                 if (!groups[uid].endDate || eDate > new Date(groups[uid].endDate)) {
                     groups[uid].endDate = currentEnd;
                 }
+            }
+
+            // Status Logic: Only show active if end date hasn't passed
+            const now = new Date();
+            if (groups[uid].endDate) {
+                const eDate = new Date(groups[uid].endDate);
+                groups[uid].status = eDate < now ? 'expired' : 'active';
+            }
+
+            // Calculate current month of stay
+            const startOfLease = groups[uid].initialStartDate || groups[uid].startDate;
+            if (startOfLease && !isNaN(new Date(startOfLease).getTime())) {
+                const start = new Date(startOfLease);
+                const totalMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()) + 1;
+                groups[uid].currentMonth = Math.max(1, totalMonths);
+            } else {
+                groups[uid].currentMonth = 1;
+            }
+
+            // Billing Status Logic
+            const monthBills = sortedTrx.filter(t => {
+                if (!t.created_at) return false;
+                const d = new Date(t.created_at);
+                if (isNaN(d.getTime())) return false;
+                return t.product_type === 'tagihan_ekstra' && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+            });
+
+            const property = properties.find(p => p.id === groups[uid].kostId);
+            if (property?.additionalFeePrice > 0) {
+                const isFirstMonthPromo = property.additionalFeeStartsFrom === 'month_2' && groups[uid].currentMonth === 1;
+                
+                if (isFirstMonthPromo) {
+                    groups[uid].billingStatus = 'lunas'; 
+                } else if (monthBills.length === 0) {
+                    groups[uid].billingStatus = 'perlu_ditagih';
+                } else {
+                    const isPaid = monthBills.some(b => b.status?.toUpperCase() === 'PAID');
+                    groups[uid].billingStatus = isPaid ? 'lunas' : 'sudah_ditagih';
+                }
+            } else {
+                groups[uid].billingStatus = 'not_needed';
             }
         });
 
@@ -70,7 +201,9 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
             const matchesSearch = res.profile.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                                 res.kostName?.toLowerCase().includes(searchQuery.toLowerCase());
             const matchesProperty = filterProperty === 'all' || res.kostId === filterProperty;
-            return matchesSearch && matchesProperty;
+            
+            // CRITICAL: A legitimate resident must have a rental transaction (not just bills)
+            return res.hasRentalTransaction && matchesSearch && matchesProperty;
         });
     }, [tenancyData, searchQuery, filterProperty]);
 
@@ -92,50 +225,26 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
         };
     }, [residents, tenancyData]);
 
-    const calculateProgress = (start: string | null, end: string | null) => {
+    // calculateProgress moves here
+    const calculateProgress = (start: string | null | undefined, end: string | null | undefined) => {
         if (!start || !end) return 0;
-        const total = new Date(end).getTime() - new Date(start).getTime();
-        const elapsed = Date.now() - new Date(start).getTime();
+        const sDate = new Date(start);
+        const eDate = new Date(end);
+        if (isNaN(sDate.getTime()) || isNaN(eDate.getTime())) return 0;
+        
+        const total = eDate.getTime() - sDate.getTime();
+        const elapsed = Date.now() - sDate.getTime();
+        if (total <= 0) return 100;
         return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)));
-    };
-
-    const getRemainingDays = (end: string | null) => {
-        if (!end) return null;
-        const diff = new Date(end).getTime() - Date.now();
-        return Math.ceil(diff / (1000 * 60 * 60 * 24));
     };
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             {/* Header Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-500">
-                        <Users size={24} />
-                    </div>
-                    <div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Penghuni</p>
-                        <h4 className="text-2xl font-black text-gray-900">{stats.total} Orang</h4>
-                    </div>
-                </div>
-                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-500">
-                        <Clock size={24} />
-                    </div>
-                    <div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Segera Habis (7 Hari)</p>
-                        <h4 className="text-2xl font-black text-gray-900">{stats.expiringSoon} Kamar</h4>
-                    </div>
-                </div>
-                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-purple-50 flex items-center justify-center text-purple-500">
-                        <TrendingUp size={24} />
-                    </div>
-                    <div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Riwayat Perpanjangan</p>
-                        <h4 className="text-2xl font-black text-gray-900">{stats.recentExtensions} Kali</h4>
-                    </div>
-                </div>
+                <StatCard icon={<Users size={24} />} color="orange" label="Total Penghuni" value={`${stats.total} Orang`} />
+                <StatCard icon={<Clock size={24} />} color="rose" label="Segera Habis (7 Hari)" value={`${stats.expiringSoon} Kamar`} />
+                <StatCard icon={<TrendingUp size={24} />} color="purple" label="Riwayat Perpanjangan" value={`${stats.recentExtensions} Kali`} />
             </div>
 
             {/* Filters */}
@@ -163,6 +272,14 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                         ))}
                     </select>
                 </div>
+                <button 
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    className={`w-12 h-12 flex items-center justify-center rounded-2xl bg-white border border-gray-100 text-gray-400 hover:text-orange-500 hover:border-orange-200 transition-all shadow-sm ${isRefreshing ? 'opacity-50' : 'active:scale-90'}`}
+                    title="Segarkan Data"
+                >
+                    <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+                </button>
             </div>
 
             {/* Inhabitants List */}
@@ -190,11 +307,17 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                                 {/* Header */}
                                 <div className="flex items-start justify-between mb-5">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-14 h-14 rounded-2xl bg-orange-500 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-orange-100">
-                                            {resident.profile.photo_url ? (
-                                                <img src={resident.profile.photo_url} className="w-full h-full object-cover rounded-2xl" alt="" />
-                                            ) : (
-                                                resident.profile.name?.charAt(0) || '?'
+                                        <div className="w-14 h-14 rounded-2xl bg-orange-500 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-orange-100 relative overflow-hidden">
+                                            <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                {resident.profile.name?.charAt(0) || '?'}
+                                            </span>
+                                            {resident.profile.photo_url && (
+                                                <img 
+                                                    src={resident.profile.photo_url} 
+                                                    className="absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-300" 
+                                                    alt="" 
+                                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                                />
                                             )}
                                         </div>
                                         <div>
@@ -202,27 +325,30 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{resident.roomType}</p>
                                         </div>
                                     </div>
-                                    <div className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${isExpiring ? 'bg-rose-50 text-rose-500' : 'bg-green-50 text-green-500'}`}>
-                                        {isExpiring ? 'Hampir Habis' : 'Aktif'}
+                                    <div className="flex flex-col items-end gap-1.5">
+                                        <div className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${isExpiring ? 'bg-rose-50 text-rose-500' : 'bg-green-50 text-green-500'}`}>
+                                            {isExpiring ? 'Hampir Habis' : 'Aktif'}
+                                        </div>
+                                        <BillingStatusBadge status={resident.billingStatus} />
                                     </div>
                                 </div>
 
                                 {/* Property Info */}
                                 <div className="space-y-3 mb-6">
                                     <div className="flex items-center gap-2 text-gray-500">
-                                        <MapPin size={14} />
+                                        <MapPin size={14} className="text-orange-500" />
                                         <p className="text-xs font-bold truncate">{resident.kostName}</p>
                                     </div>
                                     <div className="flex items-center gap-2 text-gray-500">
-                                        <Calendar size={14} />
-                                        <p className="text-xs font-bold">{resident.startDate} — {resident.endDate}</p>
+                                        <Calendar size={14} className="text-orange-500" />
+                                        <p className="text-xs font-bold">{safeFormatDate(resident.startDate, { day: 'numeric', month: 'short', year: 'numeric' })} — {safeFormatDate(resident.endDate, { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                                     </div>
                                 </div>
 
                                 {/* Progress */}
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-end">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Masa Sewa</p>
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sisa Sewa</p>
                                         <p className={`text-xs font-black ${isExpiring ? 'text-rose-500' : 'text-orange-500'}`}>
                                             {daysLeft !== null ? (daysLeft <= 0 ? 'Habis' : `${daysLeft} Hari Lagi`) : '-'}
                                         </p>
@@ -237,7 +363,7 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
 
                                 {/* Hover Overlay */}
                                 <div className="absolute inset-x-0 bottom-0 p-4 bg-gray-900 translate-y-full group-hover:translate-y-0 transition-transform flex items-center justify-between text-white">
-                                    <p className="text-[10px] font-black uppercase tracking-widest">Detail Penghuni</p>
+                                    <p className="text-[10px] font-black uppercase tracking-widest">Lengkap & Tagihan</p>
                                     <ChevronRight size={18} />
                                 </div>
                             </div>
@@ -249,93 +375,192 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
             {/* Resident Detail Modal */}
             {viewingResident && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setViewingResident(null)}>
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in" />
-                    <div className="relative bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-md animate-in fade-in" />
+                    <div className="relative bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
                         
                         {/* Modal Header */}
-                        <div className="bg-gray-900 p-8 text-white shrink-0">
-                            <div className="flex items-center gap-6">
-                                <div className="w-24 h-24 rounded-3xl bg-orange-500 flex items-center justify-center text-4xl font-black shadow-2xl border-4 border-white/10 shrink-0">
-                                    {viewingResident.profile.photo_url ? (
-                                        <img src={viewingResident.profile.photo_url} className="w-full h-full object-cover rounded-2xl" alt="" />
-                                    ) : (
-                                        viewingResident.profile.name?.charAt(0) || '?'
+                        <div className="bg-gray-900 p-8 lg:p-10 text-white shrink-0 relative overflow-hidden">
+                            <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '32px 32px' }} />
+                            
+                            <div className="flex items-center gap-8 relative z-10">
+                                <div className="w-28 h-28 rounded-[2.5rem] bg-orange-500 flex items-center justify-center text-5xl font-black shadow-2xl border-4 border-white/10 shrink-0 relative overflow-hidden group">
+                                    <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                        {viewingResident.profile.name?.charAt(0) || '?'}
+                                    </span>
+                                    {viewingResident.profile.photo_url && (
+                                        <img 
+                                            src={viewingResident.profile.photo_url} 
+                                            className="absolute inset-0 w-full h-full object-cover z-10" 
+                                            alt="" 
+                                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                        />
                                     )}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <span className="bg-orange-500 text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest">RESIDENT</span>
-                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest border border-white/20`}>
-                                            ID: {viewingResident.uid.substring(0, 8).toUpperCase()}
-                                        </span>
+                                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                        <span className="bg-orange-500 text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest text-white">PENGHUNI</span>
+                                        <span className="bg-blue-500 text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest text-white">Bulan ke-{viewingResident.currentMonth}</span>
+                                        <BillingStatusBadge status={viewingResident.billingStatus} />
+                                        <span className="bg-white/10 text-white text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest border border-white/10">ID: {viewingResident.uid.substring(0, 8).toUpperCase()}</span>
+                                        <button 
+                                            onClick={() => onViewUserProfile(viewingResident.profile)}
+                                            className="bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest border border-blue-500/30 transition-all flex items-center gap-1"
+                                        >
+                                            <ExternalLink size={10} /> Lihat Profil Lengkap
+                                        </button>
                                     </div>
-                                    <h3 className="text-3xl font-black tracking-tight truncate">{viewingResident.profile.name}</h3>
-                                    <p className="text-sm text-white/50 font-bold truncate mt-1">{viewingResident.profile.email}</p>
+                                    <h3 className="text-4xl font-black tracking-tight truncate">{viewingResident.profile.name}</h3>
+                                    <p className="text-sm text-white/50 font-bold truncate mt-1 flex items-center gap-2">
+                                        <MessageCircle size={14} /> {viewingResident.profile.phone} 
+                                        <span className="opacity-30">•</span>
+                                        {viewingResident.profile.email}
+                                    </p>
                                 </div>
-                                <button onClick={() => setViewingResident(null)} className="w-12 h-12 rounded-2xl bg-white/10 hover:bg-white/20 transition-all flex items-center justify-center active:scale-90">
-                                    &times;
+                                <button onClick={() => setViewingResident(null)} className="w-12 h-12 rounded-2xl bg-white/10 hover:bg-white/20 transition-all flex items-center justify-center active:scale-90 border border-white/10 shrink-0">
+                                    <X size={24} />
                                 </button>
                             </div>
                         </div>
 
                         {/* Modal Body */}
-                        <div className="flex-1 overflow-y-auto p-8 lg:p-10 space-y-10">
-                            {/* Personal Info */}
-                            <div className="grid grid-cols-2 gap-8">
-                                <InfoItem icon={<MessageCircle size={18} className="text-green-500" />} label="WhatsApp" value={viewingResident.profile.phone || '-'} />
-                                <InfoItem icon={<User size={18} className="text-blue-500" />} label="Gender" value={viewingResident.profile.gender || '-'} />
-                                <InfoItem icon={<Briefcase size={18} className="text-purple-500" />} label="Pekerjaan" value={viewingResident.profile.occupation || '-'} />
-                                <InfoItem icon={<GraduationCap size={18} className="text-amber-500" />} label="Institusi" value={viewingResident.profile.institution || '-'} />
-                            </div>
-
-                            <hr className="border-gray-50" />
-
-                            {/* Tenancy History */}
-                            <div>
-                                <div className="flex items-center justify-between mb-6">
-                                    <h4 className="font-black text-gray-900 border-l-4 border-orange-500 pl-4 uppercase text-xs tracking-widest">Riwayat Transaksi</h4>
-                                    <span className="text-[10px] font-black text-gray-400">{viewingResident.transactions.length} Records</span>
-                                </div>
-                                <div className="space-y-4">
-                                    {viewingResident.transactions.map((trx: any) => (
-                                        <div key={trx.id} className="p-5 bg-gray-50 rounded-3xl border border-gray-100 flex justify-between items-center group hover:bg-white hover:shadow-lg transition-all">
-                                            <div>
-                                                <div className="flex items-center gap-2 mb-1.5">
-                                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${
-                                                        trx.type === 'perpanjangan_sewa' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'
-                                                    }`}>
-                                                        {trx.type === 'perpanjangan_sewa' ? 'Perpanjangan' : 'Booking Awal'}
-                                                    </span>
-                                                    <span className="text-[8px] font-bold text-gray-400">{new Date(trx.created_at).toLocaleDateString('id-ID')}</span>
-                                                </div>
-                                                <p className="text-xs font-black text-gray-900 uppercase">{trx.metadata?.roomType || 'Standard'}</p>
-                                                <p className="text-[10px] text-gray-400 font-bold mt-1">{trx.metadata?.startDate} — {trx.metadata?.endDate}</p>
+                        <div className="flex-1 overflow-y-auto bg-gray-50/30">
+                            <div className="p-8 lg:p-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                
+                                {/* Col 1: Tenancy Details & Financials */}
+                                <div className="lg:col-span-2 space-y-8">
+                                    
+                                    {/* Rent Status Card */}
+                                    <div className="bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm flex flex-col md:flex-row gap-8">
+                                        <div className="flex-1 space-y-6">
+                                            <div className="flex items-center justify-between">
+                                                <h4 className="font-black text-gray-900 border-l-4 border-orange-500 pl-4 uppercase text-xs tracking-widest">Detail Hunian</h4>
+                                                <span className="px-3 py-1 bg-green-50 text-green-600 rounded-full text-[9px] font-black uppercase tracking-widest">Sewa Aktif</span>
                                             </div>
-                                            <div className="text-right">
-                                                <p className="text-sm font-black text-orange-600">{FORMAT_CURRENCY(trx.amount)}</p>
-                                                <p className="text-[9px] font-bold text-gray-400 uppercase mt-1">{trx.status}</p>
+                                            <div className="grid grid-cols-2 gap-6">
+                                                <InfoItem icon={<Home size={18} className="text-orange-500" />} label="Nama Kost" value={viewingResident.kostName} />
+                                                <InfoItem icon={<ClipboardList size={18} className="text-blue-500" />} label="Jenis Kamar" value={viewingResident.roomType} />
+                                                <InfoItem icon={<Users size={18} className="text-purple-500" />} label="Jumlah Penghuni" value={`${viewingResident.occupantCount} Orang`} />
+                                                <InfoItem icon={<TrendingUp size={18} className="text-amber-500" />} label="Paket Sewa" value={viewingResident.periodLabel} />
                                             </div>
                                         </div>
-                                    ))}
+                                        <div className="md:w-px bg-gray-100" />
+                                        <div className="md:w-64 space-y-6">
+                                            <h4 className="font-black text-gray-900 uppercase text-xs tracking-widest">Rincian Keuangan</h4>
+                                            <div className="space-y-4">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase">Sewa Kamar</span>
+                                                    <span className="text-xs font-black text-gray-900">{FORMAT_CURRENCY(viewingResident.lastRentAmount)}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase">Biaya Tambahan</span>
+                                                    <span className="text-xs font-black text-rose-500">{FORMAT_CURRENCY(viewingResident.pendingBills)}</span>
+                                                </div>
+                                                <hr className="border-dashed border-gray-200" />
+                                                <div className="flex justify-between items-center pt-1">
+                                                    <span className="text-[10px] font-black text-gray-900 uppercase">Total Tagihan</span>
+                                                    <span className="text-sm font-black text-orange-600">{FORMAT_CURRENCY(viewingResident.lastRentAmount + viewingResident.pendingBills)}</span>
+                                                </div>
+                                            </div>
+                                            <button 
+                                                onClick={() => setShowAddBillModal(true)}
+                                                className="w-full h-11 bg-orange-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-orange-100 hover:bg-orange-600 transition-all active:scale-95"
+                                            >
+                                                <Plus size={14} strokeWidth={3} /> Tagih Biaya Mandiri
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Timeline */}
+                                    <div className="bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm">
+                                        <h4 className="font-black text-gray-900 border-l-4 border-orange-500 pl-4 uppercase text-xs tracking-widest mb-8">Timeline Sewa</h4>
+                                        <div className="relative">
+                                            <div className="absolute left-6 top-0 bottom-0 w-1 bg-gray-50 rounded-full" />
+                                            <div className="space-y-10 relative">
+                                                <TimelineItem 
+                                                    active={true}
+                                                    label="Tanggal Masuk Pertama" 
+                                                    date={safeFormatDate(viewingResident.initialStartDate)}
+                                                />
+                                                {viewingResident.lastRenewalDate && (
+                                                    <TimelineItem 
+                                                        active={true}
+                                                        label="Perpanjangan Terakhir" 
+                                                        date={safeFormatDate(viewingResident.lastRenewalDate)}
+                                                    />
+                                                )}
+                                                <TimelineItem 
+                                                    label="Perpanjangan Selanjutnya" 
+                                                    date={safeFormatDate(viewingResident.endDate)} 
+                                                    isEnd={true}
+                                                    isDue={getRemainingDays(viewingResident.endDate)! <= 7}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Col 2: Transactions & Messages */}
+                                <div className="space-y-8">
+                                    <div className="bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm h-full flex flex-col">
+                                        <div className="flex items-center justify-between mb-6">
+                                            <h4 className="font-black text-gray-900 uppercase text-xs tracking-widest">Riwayat Transaksi</h4>
+                                            <span className="text-[10px] font-black text-gray-300">{viewingResident.transactions.length} Records</span>
+                                        </div>
+                                        <div className="flex-1 space-y-4 overflow-y-auto max-h-[500px] pr-2">
+                                            {viewingResident.transactions.map((trx: any) => (
+                                                <div key={trx.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:bg-white hover:shadow-md transition-all">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${
+                                                            trx.product_type === 'perpanjangan_sewa' ? 'bg-purple-100 text-purple-600' : 
+                                                            trx.product_type === 'tagihan_ekstra' ? 'bg-rose-100 text-rose-600' : 'bg-blue-100 text-blue-600'
+                                                        }`}>
+                                                            {trx.product_type === 'perpanjangan_sewa' ? 'Perpanjangan' : 
+                                                             trx.product_type === 'tagihan_ekstra' ? 'Biaya Tambahan' : 'Sewa Awal'}
+                                                        </span>
+                                                        <span className="text-[8px] font-bold text-gray-400">{safeFormatDate(trx.created_at, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                                                    </div>
+                                                    <p className="text-[10px] font-black text-gray-900 uppercase truncate">
+                                                        {trx.product_type === 'tagihan_ekstra' ? (trx.metadata?.billName || 'Biaya Lainnya') : (trx.metadata?.roomType || 'Sewa Kamar')}
+                                                    </p>
+                                                    <div className="flex justify-between items-end mt-2">
+                                                        <span className={`text-[8px] font-bold uppercase ${trx.status?.toUpperCase() === 'PAID' ? 'text-green-500' : 'text-orange-500'}`}>
+                                                            {trx.status}
+                                                        </span>
+                                                        <span className="text-xs font-black text-gray-900">{FORMAT_CURRENCY(trx.amount)}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <button 
+                                            onClick={() => {
+                                                const waLink = `https://wa.me/${viewingResident.profile.phone}?text=${encodeURIComponent(`Halo ${viewingResident.profile.name}, saya pengelola ${viewingResident.kostName}. Terkait sewa kamar anda...`)}`;
+                                                window.open(waLink, '_blank');
+                                            }}
+                                            className="mt-6 w-full bg-green-600 hover:bg-green-700 text-white h-14 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-green-100 flex items-center justify-center gap-3 transition-all active:scale-95"
+                                        >
+                                            <MessageCircle size={18} fill="currentColor" />
+                                            WhatsApp
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-
-                        {/* Modal Footer */}
-                        <div className="p-8 border-t border-gray-50 bg-gray-50/50 shrink-0">
-                            <button 
-                                onClick={() => {
-                                    const waLink = `https://wa.me/${viewingResident.profile.phone}?text=${encodeURIComponent(`Halo ${viewingResident.profile.name}, saya pengelola ${viewingResident.kostName}. Terkait sewa kamar anda...`)}`;
-                                    window.open(waLink, '_blank');
-                                }}
-                                className="w-full bg-green-600 hover:bg-green-700 text-white h-16 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-green-100 flex items-center justify-center gap-3 transition-all active:scale-95"
-                            >
-                                <MessageCircle size={20} fill="currentColor" />
-                                Hubungi via WhatsApp
-                            </button>
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Billing Modal */}
+            {showAddBillModal && viewingResident && (
+                <AddBillModal 
+                    resident={viewingResident}
+                    property={properties.find(p => p.id === viewingResident.kostId)}
+                    onClose={() => setShowAddBillModal(false)}
+                    onSuccess={() => {
+                        setShowAddBillModal(false);
+                        refreshData();
+                        alert('Tagihan tambahan berhasil dikirim ke penghuni.');
+                    }}
+                />
             )}
         </div>
     );
@@ -343,12 +568,46 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
 
 const InfoItem: React.FC<{ icon: React.ReactNode; label: string; value: string }> = ({ icon, label, value }) => (
     <div className="flex items-start gap-4">
-        <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0">{icon}</div>
-        <div>
+        <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0 border border-gray-100 shadow-sm">{icon}</div>
+        <div className="min-w-0">
             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{label}</p>
-            <p className="text-sm font-black text-gray-900 mt-0.5 break-all">{value}</p>
+            <p className="text-sm font-black text-gray-900 mt-0.5 truncate">{value}</p>
         </div>
     </div>
 );
+
+const TimelineItem: React.FC<{ label: string; date: string; active?: boolean; isEnd?: boolean; isDue?: boolean }> = ({ label, date, active, isEnd, isDue }) => (
+    <div className="flex items-center gap-6 group">
+        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 z-10 transition-all ${
+            active ? 'bg-orange-500 text-white shadow-xl shadow-orange-100' : 
+            isDue ? 'bg-rose-100 text-rose-500 border-2 border-rose-200' : 'bg-gray-100 text-gray-400'
+        }`}>
+            {isEnd ? <Clock size={20} /> : <Calendar size={20} />}
+        </div>
+        <div className="flex-1">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</p>
+            <p className={`text-sm font-black leading-none mt-1.5 ${isDue ? 'text-rose-500' : 'text-gray-900'}`}>{date}</p>
+        </div>
+    </div>
+);
+
+const StatCard: React.FC<{ label: string; value: string; icon: React.ReactNode; color: 'orange' | 'rose' | 'purple' }> = ({ label, value, icon, color }) => {
+    const colors = {
+        orange: 'bg-orange-50 text-orange-500',
+        rose: 'bg-rose-50 text-rose-500',
+        purple: 'bg-purple-50 text-purple-500'
+    };
+    return (
+        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
+            <div className={`w-12 h-12 rounded-2xl ${colors[color]} flex items-center justify-center`}>
+                {icon}
+            </div>
+            <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</p>
+                <h4 className="text-2xl font-black text-gray-900 tracking-tight">{value}</h4>
+            </div>
+        </div>
+    );
+};
 
 export default MitraTenantManagement;

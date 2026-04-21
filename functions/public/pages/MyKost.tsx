@@ -2,10 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle, Zap } from 'lucide-react';
 import { Page } from '../types';
-import { addPropertyReview, getExtraBills } from '../userService';
-import { getOrCreateChatSession, SYSTEM_ADMIN_ID } from '../chatService';
-import { getReviews } from '../kostService';
-import { cancelBookingRequest } from '../userService';
+import { addPropertyReview, getExtraBills, settlePendingBills, cancelBookingRequest } from '../userService';
 import PaymentGateway from '../components/PaymentGateway';
 import ChatWindow from '../components/ChatWindow';
 import { notifyAdminTransaction } from '../emailService';
@@ -14,6 +11,37 @@ interface MyKostProps {
     user: any;
     onPageChange: (page: Page) => void;
 }
+
+const FORMAT_DATE = (dateStr: any) => {
+    if (!dateStr) return '-';
+    
+    // Try native parsing (works for ISO strings: YYYY-MM-DD or full ISO)
+    let date = new Date(dateStr);
+    
+    // If native fails (Invalid Date), try matching Indonesian locale string format "D Month YYYY"
+    // Examples: "20 April 2026", "5 Januari 2026"
+    if (isNaN(date.getTime()) && typeof dateStr === 'string') {
+        const months: Record<string, number> = {
+            'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5,
+            'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11
+        };
+        
+        const parts = dateStr.toLowerCase().split(' ');
+        if (parts.length >= 3) {
+            const day = parseInt(parts[0]);
+            const month = months[parts[1]];
+            const year = parseInt(parts[2]);
+            
+            if (!isNaN(day) && month !== undefined && !isNaN(year)) {
+                date = new Date(year, month, day);
+            }
+        }
+    }
+    
+    if (isNaN(date.getTime())) return dateStr; // Return as-is if all parsing fails
+    
+    return date.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+};
 
 const SkeletonLoader = () => (
     <div className="space-y-6 animate-pulse">
@@ -192,6 +220,18 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                 throw error;
             }
 
+            console.log(`DEBUG_MYKOST: Fetched ${data?.length || 0} transactions for user ${user.uid}`);
+            if (data && data.length > 0) {
+                data.forEach(t => {
+                    console.log(`DEBUG_MYKOST: TrxID: ${t.id}, Status: ${t.status}, Type: ${t.product_type || t.type}`);
+                    console.log(`DEBUG_MYKOST: Metadata:`, t.metadata);
+                });
+            } else {
+                setActiveKosts([]);
+                setLoading(false);
+                return;
+            }
+
             // Batch fetch unique properties since join might fail due to FK issues
             const productIds = Array.from(new Set(data?.map(d => d.product_id || d.kost_id).filter(id => !!id)));
             const { data: propertiesData } = await supabase
@@ -206,7 +246,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
             
             const kostsData: any[] = [];
             data?.forEach((doc) => {
-                const isRent = doc.product_type === 'rent' || doc.type === 'sewa_kost' || doc.product_type === 'kost_booking' || !doc.product_type || doc.category === 'kost';
+                const isRent = doc.product_type === 'rent' || doc.type === 'sewa_kost' || doc.product_type === 'kost_booking' || doc.product_type === 'kost' || !doc.product_type || doc.category === 'kost';
                 const statusLower = (doc.status || '').toLowerCase();
                 const isApproved = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(statusLower);
                 const isPendingApproval = statusLower === 'pending_approval';
@@ -218,7 +258,26 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                     let daysRem = null;
                     const metadata = doc.metadata || {};
                     if (metadata.endDate) {
-                        const end = new Date(metadata.endDate);
+                        // Use a safe parsing logic similar to FORMAT_DATE but for calculation
+                        let end = new Date(metadata.endDate);
+                        
+                        // Fallback for Indonesian locale strings
+                        if (isNaN(end.getTime()) && typeof metadata.endDate === 'string') {
+                            const months: Record<string, number> = {
+                                'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5,
+                                'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11
+                            };
+                            const parts = metadata.endDate.toLowerCase().split(' ');
+                            if (parts.length >= 3) {
+                                const day = parseInt(parts[0]);
+                                const month = months[parts[1]];
+                                const year = parseInt(parts[2]);
+                                if (!isNaN(day) && month !== undefined && !isNaN(year)) {
+                                    end = new Date(year, month, day);
+                                }
+                            }
+                        }
+
                         if (!isNaN(end.getTime())) {
                            const diff = end.getTime() - new Date().getTime();
                            daysRem = Math.ceil(diff / (1000 * 60 * 60 * 24));
@@ -306,7 +365,10 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
 
             // Associate extra bills with real kosts
             const activeWithBills = uniqueKosts.map(k => {
-                const pendBills = (bills || []).filter(b => (b.product_id === k.kostId || b.kost_id === k.kostId) && b.status === 'pending');
+                const pendBills = (bills || []).filter(b => 
+                    (b.product_id === k.kostId || b.kost_id === k.kostId) && 
+                    ['pending', 'AWAITING_PAYMENT'].includes(b.status)
+                );
                 const totalPend = pendBills.reduce((acc, b) => acc + (b.amount || 0), 0);
                 return { ...k, pendingBills: pendBills, totalPendingBills: totalPend };
             });
@@ -360,12 +422,12 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
         }
     };
 
-    const handleStartPayment = (amount: number, prodId: string, prodType: any, metadata: any) => {
+    const handleStartPayment = (amount: number, prodId: string, prodType: any, metadata: any, existingId?: string) => {
         setPaymentAmount(amount);
         setPaymentProductId(prodId);
         setPaymentProductType(prodType);
         setPaymentMetadata(metadata);
-        setPaymentOrderId(`${prodType.toUpperCase()}-${Date.now()}`);
+        setPaymentOrderId(existingId || `${prodType.toUpperCase()}-${Date.now()}`);
         setShowPaymentGateway(true);
         setShowExtensionModal(false);
         setShowExtraBillModal(false);
@@ -440,7 +502,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
 
             const payload = {
                 type: 'perpanjangan_sewa',
-                kost_id: selectedKost.kostId,
+                product_id: selectedKost.kostId,
                 kost_name: selectedKost.kostName,
                 tenant_name: user.name || user.displayName || 'Penyewa',
                 user_id: user.uid,
@@ -495,7 +557,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
 
             const payload = {
                 type: 'tagihan_ekstra',
-                kost_id: selectedKost.kostId,
+                product_id: selectedKost.kostId,
                 kost_name: selectedKost.kostName,
                 user_id: user.uid,
                 tenant_name: user.name || user.displayName || 'Penyewa',
@@ -890,24 +952,39 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
     }
 
     const filteredKosts = activeKosts.filter(kost => {
-        const s = (kost.status || '').toLowerCase();
-        const isPaid = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(s);
-        const isPending = ['pending_approval', 'awaiting_payment', 'pending'].includes(s);
+        const s = (kost.status || '').toUpperCase();
+        const isPaid = ['APPROVED', 'PAID', 'SELESAI', 'SUCCESS', 'BERHASIL'].includes(s);
+        const isPending = ['PENDING_APPROVAL', 'AWAITING_PAYMENT', 'PENDING'].includes(s);
         
-        if (activeTab === 'diajukan') return isPending || s === 'rejected' || s === 'cancelled';
-        if (activeTab === 'aktif') return isPaid && (!kost.endDate || new Date() <= new Date(kost.endDate));
-        if (activeTab === 'riwayat') return (isPaid && kost.endDate && new Date() > new Date(kost.endDate));
+        if (activeTab === 'diajukan') return isPending || s === 'REJECTED' || s === 'CANCELLED';
+        
+        if (activeTab === 'aktif') {
+            if (!isPaid) return false;
+            if (!kost.endDate) return true; // Anggap aktif jika tidak ada tanggal selesai
+            const eDate = new Date(kost.endDate);
+            if (isNaN(eDate.getTime())) return true; // Anggap aktif jika format tanggal salah tapi sudah dibayar
+            return new Date() <= eDate;
+        }
+        
+        if (activeTab === 'riwayat') {
+            if (s === 'REJECTED' || s === 'CANCELLED') return true;
+            if (!isPaid) return false;
+            if (!kost.endDate) return false;
+            const eDate = new Date(kost.endDate);
+            if (isNaN(eDate.getTime())) return false;
+            return new Date() > eDate;
+        }
         return false;
     }).sort((a, b) => {
         const statusOrder: Record<string, number> = {
-            'awaiting_payment': 1,
-            'pending_approval': 2,
-            'pending': 2,
-            'rejected': 3,
-            'cancelled': 4
+            'AWAITING_PAYMENT': 1,
+            'PENDING_APPROVAL': 2,
+            'PENDING': 2,
+            'REJECTED': 3,
+            'CANCELLED': 4
         };
-        const sA = (a.status || '').toLowerCase();
-        const sB = (b.status || '').toLowerCase();
+        const sA = (a.status || '').toUpperCase();
+        const sB = (b.status || '').toUpperCase();
         return (statusOrder[sA] || 99) - (statusOrder[sB] || 99);
     });
 
@@ -1172,7 +1249,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                                 <div className="flex flex-col gap-1.5">
                                                     <span className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Tanggal Mulai</span>
                                                     <span className="text-xl font-black text-gray-900 whitespace-nowrap">
-                                                        {kost.moveInDate ? new Date(kost.moveInDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '-'}
+                                                        {FORMAT_DATE(kost.moveInDate)}
                                                     </span>
                                                 </div>
                                             </div>
@@ -1184,7 +1261,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                                 <div className="flex flex-col gap-1.5">
                                                     <span className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Masa Selesai</span>
                                                     <span className="text-xl font-black text-gray-900 whitespace-nowrap">
-                                                        {kost.endDate ? new Date(kost.endDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '-'}
+                                                        {FORMAT_DATE(kost.endDate)}
                                                     </span>
                                                 </div>
                                             </div>
@@ -1245,7 +1322,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                                 setPaymentAmount(kost.totalPrice);
                                                 setPaymentOrderId(kost.id);
                                                 setPaymentProductId(kost.kostId);
-                                                setPaymentProductType('kost');
+                                                setPaymentProductType('kost_booking');
                                                 setPaymentMetadata({
                                                     kostName: kost.kostName
                                                 });
@@ -1539,7 +1616,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                                     kostId: selectedKost.kostId,
                                                     kostName: selectedKost.kostName,
                                                     pendingBills: selectedKost.pendingBills
-                                                })}
+                                                }, selectedKost.id)}
                                                 className={`flex-[2] py-4 ${selectedKost.daysRemaining <= 5 ? 'bg-orange-600 hover:bg-orange-700 shadow-orange-100' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-100'} text-white font-black uppercase text-[11px] tracking-[0.2em] rounded-2xl shadow-2xl transition-all active:scale-95`}
                                             >
                                                 Bayar Sekarang
@@ -1685,6 +1762,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                     productId={paymentProductId}
                     productType={paymentProductType}
                     userId={user.uid}
+                    existingOrderId={paymentOrderId.includes('-') && !paymentOrderId.includes('BOOK') ? paymentOrderId : undefined}
                     metadata={{
                         ...paymentMetadata,
                         userName: user.name || user.displayName || 'Penyewa',
@@ -1692,9 +1770,14 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                         timestamp: new Date().toISOString(),
                         productName: selectedKost?.kostName
                     }}
-                    onPaymentSuccess={() => {
+                    onPaymentSuccess={async () => {
+                        const meta = paymentMetadata as any;
+                        if (meta?.billPayment && meta?.pendingBills) {
+                            const pendingIds = meta.pendingBills.map((b: any) => b.id);
+                            await settlePendingBills(pendingIds);
+                        }
                         setShowPaymentGateway(false);
-                        alert('Pembayaran Berhasil! Data sewa Anda sedang diperbarui.');
+                        alert('Pembayaran Berhasil! Tagihan Fasilitas Lunas.');
                         fetchMyKosts(); // Refresh data
                     }}
                     onCancel={() => setShowPaymentGateway(false)}

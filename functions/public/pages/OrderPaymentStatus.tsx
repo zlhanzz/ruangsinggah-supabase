@@ -77,7 +77,7 @@ const OrderPaymentStatus: React.FC<OrderPaymentStatusProps> = ({ user }) => {
   }
 
   // Handle case where order is already paid
-  if (order.status === 'paid') {
+  if (order.status?.toUpperCase() === 'PAID') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white px-4">
         <div className="text-center max-w-md">

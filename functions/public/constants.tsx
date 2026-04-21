@@ -161,10 +161,13 @@ export const INDONESIAN_BANKS = [
   "LINE BANK", "OVO", "GOPAY", "DANA", "SHOPEEPAY", "LAINNYA"
 ];
 
-export const FORMAT_CURRENCY = (amount: number) => {
+export const FORMAT_CURRENCY = (amount: any) => {
+  const numericAmount = typeof amount === 'number' ? amount : parseFloat(amount);
+  if (isNaN(numericAmount)) return 'Rp -';
+  
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(numericAmount);
 };

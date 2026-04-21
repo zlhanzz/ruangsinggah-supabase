@@ -132,7 +132,7 @@ const DbTransactionManagement: React.FC<DbTransactionManagementProps> = ({
                     const dbYear = metadata.dbYear || createdAtDate.getFullYear().toString();
                     const paymentMethod = trx.payment_method || (trx.payment_method === null ? 'Belum dipilih' : '-');
 
-                    const displayStatus = trx.status === 'paid' ? 'Selesai' : trx.status === 'pending' ? 'Menunggu' : 'Dibatalkan';
+                    const displayStatus = (trx.status || '').toUpperCase() === 'PAID' ? 'Selesai' : trx.status === 'pending' ? 'Menunggu' : 'Dibatalkan';
                     const isManual = (paymentMethod || '').toLowerCase().includes('manual') || (paymentMethod || '').toLowerCase().includes('transfer');
                     
                     const isSelected = selectedDbTrxIds.includes(trx.id);
@@ -154,9 +154,9 @@ const DbTransactionManagement: React.FC<DbTransactionManagementProps> = ({
 
                     return (
                         <div key={trx.id} className={`bg-white border ${isSelected ? 'border-blue-400 ring-2 ring-blue-50 shadow-md' : 'border-gray-100 shadow-sm'} rounded-2xl p-6 flex flex-col md:flex-row gap-6 hover:shadow-md transition-all relative overflow-hidden group`}>
-                            {trx.status === 'paid' && <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/10 rounded-bl-full -z-0"></div>}
+                            {(trx.status || '').toUpperCase() === 'PAID' && <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/10 rounded-bl-full -z-0"></div>}
                             
-                            <div className="absolute top-6 left-6 z-20">
+                            <div className="absolute top-6 left-6 z-20 flex flex-col gap-4">
                                 <input 
                                     type="checkbox" 
                                     className="w-6 h-6 text-blue-600 rounded-lg border-gray-300 focus:ring-blue-500 transition-all cursor-pointer shadow-sm"
@@ -169,6 +169,28 @@ const DbTransactionManagement: React.FC<DbTransactionManagementProps> = ({
                                         }
                                     }}
                                 />
+                                
+                                <div 
+                                    className="relative w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center text-white text-base font-black shadow-md cursor-pointer overflow-hidden group/avatar transition-transform hover:scale-110"
+                                    onClick={() => setViewingDbProfile({ ...buyer, ...metadata, dbName, dbType, dbCity, dbYear, status: displayStatus, id: trx.id, date: createdAt })}
+                                >
+                                    {/* Layer 1: Initials */}
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        {buyer.name?.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                                    </div>
+                                    
+                                    {/* Layer 2: Photo */}
+                                    {buyer.photo_url && (
+                                        <img
+                                            src={buyer.photo_url}
+                                            alt=""
+                                            className="absolute inset-0 w-full h-full object-cover z-10"
+                                            onError={(e) => {
+                                                e.currentTarget.style.display = 'none';
+                                            }}
+                                        />
+                                    )}
+                                </div>
                             </div>
 
                             <div className="flex-1 space-y-4 relative z-10 pl-10">
@@ -179,10 +201,10 @@ const DbTransactionManagement: React.FC<DbTransactionManagementProps> = ({
                                             <span className="text-xs text-gray-400 font-medium">Dipesan: {createdAt}</span>
                                             <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${!isManual ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-700'}`}>{!isManual ? '⚡ Gateway' : '🏦 Transfer Manual'}</span>
                                         </div>
-                                        <p className="font-medium text-gray-500 text-sm">Pembeli: <button onClick={() => setViewingDbProfile({ ...buyer, ...metadata, dbName, dbType, dbCity, dbYear, status: displayStatus, id: trx.id, date: createdAt })} className="font-black text-orange-600 hover:text-orange-700 hover:underline underline-offset-2 transition-colors text-base">{buyer.name}</button></p>
+                                        <p className="font-medium text-gray-500 text-sm">Pembeli: <button onClick={() => setViewingDbProfile({ ...buyer, ...metadata, dbName, dbType, dbCity, dbYear, status: displayStatus, id: trx.id, date: createdAt })} className="font-black text-blue-600 hover:text-blue-700 hover:underline underline-offset-2 transition-colors text-base">{buyer.name}</button></p>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        <span className={`inline-flex px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-lg border ${trx.status === 'pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : trx.status === 'paid' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{displayStatus}</span>
+                                        <span className={`inline-flex px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-lg border ${(trx.status || '').toUpperCase() === 'PENDING' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : (trx.status || '').toUpperCase() === 'PAID' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{displayStatus}</span>
                                         <button 
                                             onClick={() => handleDeleteTransactionLocal(trx.id)}
                                             className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95"
@@ -243,8 +265,23 @@ const DbTransactionManagement: React.FC<DbTransactionManagementProps> = ({
                     <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
                         <div className="bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 p-8 text-white relative shrink-0">
                             <div className="flex items-center gap-6">
-                                <div className="w-20 h-20 rounded-2xl bg-white/10 flex items-center justify-center text-white text-3xl font-black shadow-xl border border-white/20">
-                                    {viewingDbProfile.name?.charAt(0).toUpperCase()}
+                                <div className="relative w-20 h-20 rounded-2xl bg-blue-600 flex items-center justify-center text-white text-3xl font-black shadow-xl border border-white/20 overflow-hidden">
+                                    {/* Layer 1: Initials */}
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        {viewingDbProfile.name?.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                                    </div>
+                                    
+                                    {/* Layer 2: Photo */}
+                                    {viewingDbProfile.photo_url && (
+                                        <img
+                                            src={viewingDbProfile.photo_url}
+                                            alt=""
+                                            className="absolute inset-0 w-full h-full object-cover z-10"
+                                            onError={(e) => {
+                                                e.currentTarget.style.display = 'none';
+                                            }}
+                                        />
+                                    )}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-[10px] font-black tracking-[0.2em] uppercase opacity-50 mb-1">Identitas Pembeli</p>
@@ -337,8 +374,8 @@ const DbTransactionManagement: React.FC<DbTransactionManagementProps> = ({
                                         </div>
                                         <h3 className="text-3xl font-black tracking-tight">{viewingDbInvoice.invoiceId}</h3>
                                     </div>
-                                    <span className={`px-5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest ${viewingDbInvoice.status === 'paid' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
-                                        {viewingDbInvoice.status === 'paid' ? 'SUKSES' : 'PENDING'}
+                                    <span className={`px-5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest ${(viewingDbInvoice.status || '').toUpperCase() === 'PAID' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
+                                        {(viewingDbInvoice.status || '').toUpperCase() === 'PAID' ? 'SUKSES' : 'PENDING'}
                                     </span>
                                 </div>
                                 <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">Waktu Beli: <span className="text-white/80 ml-2">{viewingDbInvoice.date}</span></p>

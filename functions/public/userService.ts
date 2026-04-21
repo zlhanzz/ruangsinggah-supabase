@@ -13,8 +13,30 @@ const convertTimestamp = (ts: any): string => {
 // Prioritize WebP > Original > Thumbnail
 const getDisplayImageUrl = (img: any): string => {
   if (!img) return '';
-  if (typeof img === 'string') return img;
-  return img.webp || img.original || img.thumbnail || '';
+  if (typeof img === 'string') return ensureAbsoluteUrl(img, 'properties');
+  const path = img.webp || img.original || img.thumbnail || '';
+  return ensureAbsoluteUrl(path, 'properties');
+};
+
+// Helper to ensure URL is absolute (Supabase Storage support)
+export const ensureAbsoluteUrl = (path: string, bucket: string): string => {
+  if (!path) return '';
+  const trimmedPath = path.trim();
+  if (trimmedPath.startsWith('http') || trimmedPath.startsWith('data:')) return trimmedPath;
+  
+  // Clean leading slash for Supabase storage paths
+  let cleanPath = trimmedPath.startsWith('/') ? trimmedPath.substring(1) : trimmedPath;
+  
+  // If the path already starts with the bucket name (e.g. from a migration or folder-level path)
+  // we remove it to avoid double bucket prefixes in the final URL.
+  // Example: 'profile-photos/user123.jpg' -> 'user123.jpg'
+  if (cleanPath.startsWith(bucket + '/')) {
+    cleanPath = cleanPath.substring(bucket.length + 1);
+  }
+  
+  // Use public storage URL for relative paths
+  const { data } = supabase.storage.from(bucket).getPublicUrl(cleanPath);
+  return data.publicUrl;
 };
 
 // Helper to extract video URL
@@ -272,7 +294,7 @@ export async function getExtraBills(userId: string): Promise<any[]> {
       .select('*')
       .eq('user_id', userId)
       .eq('product_type', 'tagihan_ekstra')
-      .eq('status', 'pending');
+      .in('status', ['pending', 'AWAITING_PAYMENT']);
 
     if (error) throw error;
     return data || [];
@@ -410,6 +432,59 @@ export async function updateBookingStatus(transactionId: string, status: 'PAID' 
   }
 }
 
+export async function createStandaloneBill(billData: {
+  userId: string;
+  productId: string;
+  amount: number;
+  billName: string;
+  metadata?: any;
+}) {
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .insert([{
+        user_id: billData.userId,
+        product_id: billData.productId,
+        product_type: 'tagihan_ekstra',
+        amount: billData.amount,
+        status: 'AWAITING_PAYMENT',
+        metadata: {
+          ...billData.metadata,
+          billName: billData.billName,
+          type: 'tagihan_ekstra',
+          createdAt: new Date().toISOString()
+        }
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error creating standalone bill:', error);
+    throw error;
+  }
+}
+
+export async function settlePendingBills(billIds: string[]) {
+  try {
+    if (!billIds || billIds.length === 0) return;
+    
+    const { error } = await supabase
+      .from('transactions')
+      .update({ 
+        status: 'PAID',
+        updated_at: new Date().toISOString() 
+      })
+      .in('id', billIds);
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error settling pending bills:', error);
+    throw error;
+  }
+}
+
 export async function cancelBookingRequest(transactionId: string) {
   try {
     const { error } = await supabase
@@ -460,14 +535,20 @@ export async function getOwnerTenancyData(ownerUid: string): Promise<any[]> {
           address
         )
       `)
-      .or(`product_id.in.(${propertyIds.join(',')}),kost_id.in.(${propertyIds.join(',')})`)
+      .in('product_id', propertyIds)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
     
     // Filter to only successful or pending processing transactions that are rent-related
     const rentTypes = ['kost_booking', 'perpanjangan_sewa', 'tagihan_ekstra', 'kost'];
-    const filtered = (data || []).filter(t => {
+    // Clean paths for users
+    const filtered = (data || []).map(t => {
+      if (t.user) {
+        t.user.photo_url = ensureAbsoluteUrl(t.user.photo_url, 'profile-photos');
+      }
+      return t;
+    }).filter(t => {
       const type = t.product_type || t.type;
       const status = t.status?.toUpperCase();
       const validStatuses = ['PAID', 'PENDING_APPROVAL', 'AWAITING_PAYMENT', 'SUCCESS', 'APPROVED', 'PENDING'];
@@ -547,23 +628,78 @@ export async function getOwnerBookings(ownerId: string): Promise<any[]> {
     if (!props || props.length === 0) return [];
     const propIds = props.map(p => p.id);
 
-    // 2. Fetch all transactions for these properties (checking both product_id and kost_id)
-    const { data, error } = await supabase
+    // 2. Fetch all transactions for these properties
+    const { data: transactions, error } = await supabase
       .from('transactions')
       .select(`
         *,
         user:user_id (
           name,
-          email,
-          phone,
-          photo_url
+          photo_url,
+          occupation,
+          institution,
+          gender,
+          religion,
+          relationship_status,
+          address
         )
       `)
-      .or(`product_id.in.(${propIds.join(',')}),kost_id.in.(${propIds.join(',')})`)
+      .in('product_id', propIds)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    if (!transactions || transactions.length === 0) return [];
+
+    // 3. Manual Join for Property details (Batch fetch)
+    const uniquePropIds = [...new Set(transactions.map((t: any) => t.product_id))];
+    const { data: propertyInfos } = await supabase
+      .from('properties')
+      .select('id, title, image_urls')
+      .in('id', uniquePropIds);
+
+    // Create a map for quick lookup
+    const propMap = (propertyInfos || []).reduce((acc: any, p: any) => {
+      acc[p.id] = p;
+      return acc;
+    }, {});
+
+    // Attach property info to transactions and ensure robust fallbacks
+    return transactions.map((t: any) => {
+      const mergedProperty = propMap[t.product_id] || null;
+      
+      // Build robust user object
+      const userProfile = {
+        ...(t.user || {}),
+        name: t.user?.name || 
+              t.metadata?.userName || 
+              t.metadata?.user_name || 
+              t.metadata?.displayName || 
+              t.metadata?.fullName || 
+              t.metadata?.tenant_name || 
+              t.metadata?.name || 
+              'Calon Penghuni',
+        photo_url: ensureAbsoluteUrl(t.user?.photo_url || t.metadata?.userPhoto || t.metadata?.user_photo || t.metadata?.photoUrl, 'profile-photos') || null
+      };
+
+      // Build robust property object
+      const rawPropertyImages = mergedProperty?.image_urls || t.metadata?.imageUrls || t.metadata?.image_urls || [];
+      const resolvedPropertyImages = (Array.isArray(rawPropertyImages) ? rawPropertyImages : [])
+        .map(img => ensureAbsoluteUrl(typeof img === 'string' ? img : (img.webp || img.original || ''), 'properties'))
+        .filter(url => !!url);
+
+      const propertyInfo = {
+        ...(mergedProperty || {}),
+        title: mergedProperty?.title || t.metadata?.kostName || t.metadata?.kost_name || 'Unit Kost',
+        image_urls: resolvedPropertyImages
+      };
+
+      return {
+        ...t,
+        amount: Number(t.amount) || 0,
+        user: userProfile,
+        property: propertyInfo
+      };
+    });
   } catch (err) {
     console.error('Error fetching owner bookings:', err);
     return [];

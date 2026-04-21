@@ -154,11 +154,22 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                       onClick={() => setIsProfileOpen(!isProfileOpen)}
                       className="flex items-center gap-2 text-gray-900 hover:text-orange-500 transition-colors focus:outline-none"
                     >
-                      <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-black border border-orange-200 relative">
-                        {user.photoURL ? (
-                          <img src={user.photoURL} alt="Profile" className="w-full h-full rounded-full object-cover" />
-                        ) : (
-                          getInitials(user.displayName || user.name)
+                      <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-black border border-orange-200 relative overflow-hidden">
+                        {/* Layer 1: Initials (Always present in background) */}
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-500 z-0">
+                          {getInitials(user.displayName || user.name)}
+                        </div>
+                        
+                        {/* Layer 2: Profile Photo (Stacked on top) */}
+                        {user.photoURL && (
+                          <img 
+                            src={user.photoURL} 
+                            alt="Profile" 
+                            className="absolute inset-0 w-full h-full rounded-full object-cover z-10 transition-opacity duration-300"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
                         )}
                         {/* Admin Indicator on Avatar */}
                         {user.role === 'admin' && (
@@ -281,11 +292,22 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
               {/* Mobile User Profile (Avatar only) or Login button */}
               {user ? (
                 <div className="relative" ref={mobileProfileRef}>
-                  <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="relative w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-black border border-orange-200 focus:outline-none">
-                    {user.photoURL ? (
-                      <img src={user.photoURL} alt="Profile" className="w-full h-full rounded-full object-cover" />
-                    ) : (
-                      getInitials(user.displayName || user.name)
+                  <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="relative w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-black border border-orange-200 focus:outline-none overflow-hidden">
+                    {/* Layer 1: Initials */}
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-500 z-0">
+                      {getInitials(user.displayName || user.name)}
+                    </div>
+                    
+                    {/* Layer 2: Photo */}
+                    {user.photoURL && (
+                      <img 
+                        src={user.photoURL} 
+                        alt="Profile" 
+                        className="absolute inset-0 w-full h-full rounded-full object-cover z-10" 
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
                     )}
                     {user.role === 'admin' && (
                       <div className="absolute -bottom-1 -right-1 bg-blue-500 text-white rounded-full p-0.5 border-2 border-white">

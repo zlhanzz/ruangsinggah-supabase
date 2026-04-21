@@ -1579,8 +1579,41 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                         <input type="number" min="0" className="w-full bg-white border border-gray-200 rounded-xl pl-12 pr-4 py-3 text-sm font-bold outline-none focus:border-orange-500" value={formData.additionalFeePrice || ''} onChange={e => setFormData({ ...formData, additionalFeePrice: e.target.value ? parseInt(e.target.value) : 0 })} placeholder="Contoh: 50000" />
                                     </div>
                                 </div>
+
+                                <div className="lg:col-span-2 pt-4 border-t border-gray-100">
+                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Ketentuan Penagihan</p>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, additionalFeeStartsFrom: 'month_1' })}
+                                            className={`flex-1 h-10 rounded-xl text-[10px] font-black uppercase transition-all ${
+                                                formData.additionalFeeStartsFrom !== 'month_2' 
+                                                    ? 'bg-orange-500 text-white shadow-md' 
+                                                    : 'bg-white text-gray-500 border border-gray-200'
+                                            }`}
+                                        >
+                                            Mulai dari Bulan Awal Sewa Pertama
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, additionalFeeStartsFrom: 'month_2' })}
+                                            className={`flex-1 h-10 rounded-xl text-[10px] font-black uppercase transition-all ${
+                                                formData.additionalFeeStartsFrom === 'month_2' 
+                                                    ? 'bg-orange-500 text-white shadow-md' 
+                                                    : 'bg-white text-gray-500 border border-gray-200'
+                                            }`}
+                                        >
+                                            Promo Bebas Tagihan di Bulan Pertama
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 font-bold mt-3 leading-relaxed">
+                                        {formData.additionalFeeStartsFrom === 'month_2' 
+                                            ? 'ℹ️ Biaya tambahan akan GRATIS pada awal sewa (bulan pertama), dan baru akan ditagih mulai periode perpanjangan berikutnya.'
+                                            : 'ℹ️ Biaya tambahan akan langsung ditagih bersamaan dengan pembayaran sewa pertama kali.'}
+                                    </p>
+                                </div>
                             </div>
-                            <p className="text-xs text-gray-500 italic">Isi jika kost menetapkan tagihan wajib bulanan di luar tagihan pokok kamar.</p>
+                            <p className="text-xs text-gray-400 italic">Isi jika kost menetapkan tagihan wajib bulanan di luar tagihan pokok kamar.</p>
                         </div>
                     </div >
                 );

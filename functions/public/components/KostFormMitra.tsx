@@ -20,7 +20,8 @@ const STEPS = [
     { id: 'location',   label: 'Lokasi',    icon: <MapPin size={16} /> },
     { id: 'media',      label: 'Foto',      icon: <Camera size={16} /> },
     { id: 'facilities', label: 'Fasilitas', icon: <Wifi size={16} /> },
-    { id: 'contact',    label: 'Kontak',    icon: <Phone size={16} /> },
+    { id: 'rooms',      label: 'Kamar',     icon: <Check size={16} /> },
+    { id: 'rules',      label: 'Peraturan', icon: <BookOpen size={16} /> },
 ];
 
 const BUILDING_FACILITIES = [
@@ -39,14 +40,22 @@ const PRICING_PERIODS: { key: PricingPeriod; label: string }[] = [
     { key: 'tahunan',  label: 'Tahunan' },
 ];
 
+const periodWeights: Record<string, number> = {
+    'harian': 1, 'mingguan': 7, 'bulanan': 30, '3bulanan': 90, '6bulanan': 180, 'tahunan': 365
+};
+
+const periodLabels: Record<string, string> = {
+    'harian': 'Harian', 'mingguan': 'Mingguan', 'bulanan': 'Bulanan', '3bulanan': '3 Bulan', '6bulanan': '6 Bulan', 'tahunan': 'Tahunan'
+};
+
 const initialForm: Partial<Kost> = {
     title: '', description: '', type: 'Campur', status: 'published',
     city: '', area: '', address: '',
     location: { lat: -6.2088, lng: 106.8456 },
     imageUrls: [], videoUrls: [],
     instagramUrl: '', tiktokUrl: '',
-    facilities: [], rules: [], roomTypes: [],
     additionalFeePrice: 0, additionalFeeName: '',
+    additionalFeeStartsFrom: 'month_1',
     campuses: [], publicFacilities: [],
     omnichannelContactName: '', omnichannelContactPhone: '', omnichannelContactType: 'owner',
     contactSelection: 'profile', caretakerName: '', caretakerGender: 'Pria', caretakerPhone: '',
@@ -569,7 +578,15 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         setSubmitting(true);
         setError('');
         try {
-            const data = { ...form, price: finalPrice };
+            // Auto-populate contact from user profile since step was removed for Mitra
+            const contactUpdates = {
+                omnichannelContactName: user?.displayName || user?.name || '',
+                omnichannelContactPhone: (user?.phone || '').replace(/\D/g, ''),
+                omnichannelContactType: 'owner'
+            };
+
+            const data = { ...form, ...contactUpdates, price: finalPrice };
+            
             if (isEditing && editingKost?.id) {
                 await updatePropertyWithMedia(editingKost.id, data, newImageFiles, newVideoFiles);
             } else {
@@ -805,33 +822,16 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
                     <Field label="Video Kost" hint="Opsional — video tur singkat meningkatkan minat calon penyewa">
                         <input ref={videoInputRef} type="file" multiple accept="video/*" className="hidden" onChange={handleVideos} />
-                        {newVideoFiles.length > 0 && (
-                            <div className="space-y-2 mb-3">
-                                {newVideoFiles.map((f, i) => (
-                                    <div key={i} className="flex items-center gap-3 p-3 bg-blue-50 rounded-2xl border border-blue-100">
-                                        <Video size={16} className="text-blue-500 shrink-0" />
-                                        <p className="text-xs font-bold text-gray-700 flex-1 truncate">{f.name}</p>
-                                        <button type="button" onClick={() => setNewVideoFiles(p => p.filter((_,idx) => idx!==i))} className="text-rose-400">
-                                            <X size={16} />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
                         <button type="button" onClick={() => videoInputRef.current?.click()}
-                            className="w-full h-14 border-2 border-dashed border-blue-200 rounded-3xl flex items-center justify-center gap-2 hover:bg-blue-50 transition-all text-blue-400">
-                            <Video size={18} />
-                            <span className="text-xs font-bold">Upload Video</span>
+                            className="w-full h-20 border-2 border-dashed border-orange-200 rounded-3xl flex flex-col items-center justify-center gap-1 hover:bg-orange-50 hover:border-orange-400 transition-all text-orange-400">
+                            <Video size={22} />
+                            <span className="text-xs font-bold">Pilih Video dari Galeri</span>
                         </button>
-                    </Field>
-
-                    <Field label="Link Virtual Tour" hint="Opsional — link 360° atau Matterport">
-                        <Input placeholder="https://..." value={form.virtualTourUrl || ''} onChange={e => upd('virtualTourUrl', e.target.value)} icon={<ImageIcon size={16} />} />
                     </Field>
                 </div>
             );
 
-            // ── STEP 3: Fasilitas & Kamar ──────────────────────────────────────
+            // ── STEP 3: Fasilitas Gedung ───────────────────────────────────────
             case 3: return (
                 <div className="space-y-6">
                     <Field label="Fasilitas Gedung" hint="Pilih preset atau ketik fasilitas lain yang dimiliki">
@@ -845,7 +845,192 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         />
                     </Field>
 
-                    <Field label="Peraturan Kost" hint="Tambahkan aturan yang berlaku di kost Anda">
+                    <Field label="Biaya Tambahan (Opsional)" hint="Isi jika kost menetapkan tagihan wajib bulanan di luar tagihan pokok kamar.">
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                            <Input placeholder="Nama biaya (Listrik)" value={form.additionalFeeName||''} onChange={e => upd('additionalFeeName',e.target.value)} icon={<BookOpen size={16}/>} />
+                            <Input type="number" placeholder="Nominal (Rp)" value={form.additionalFeePrice||''} onChange={e => upd('additionalFeePrice',parseInt(e.target.value)||0)} icon={<span className="text-[10px] font-bold text-gray-400">Rp</span>} />
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Ketentuan Penagihan</p>
+                            <div className="flex gap-2">
+                                <button 
+                                    type="button"
+                                    onClick={() => upd('additionalFeeStartsFrom', 'month_1')}
+                                    className={`flex-1 h-10 rounded-xl text-[10px] font-black uppercase transition-all ${
+                                        form.additionalFeeStartsFrom !== 'month_2' 
+                                            ? 'bg-orange-500 text-white shadow-md' 
+                                            : 'bg-white text-gray-500 border border-gray-200'
+                                    }`}
+                                >
+                                    Mulai dari Bulan Awal Sewa Pertama
+                                </button>
+                                <button 
+                                    type="button"
+                                    onClick={() => upd('additionalFeeStartsFrom', 'month_2')}
+                                    className={`flex-1 h-10 rounded-xl text-[10px] font-black uppercase transition-all ${
+                                        form.additionalFeeStartsFrom === 'month_2' 
+                                            ? 'bg-orange-500 text-white shadow-md' 
+                                            : 'bg-white text-gray-500 border border-gray-200'
+                                    }`}
+                                >
+                                    Promo Bebas Tagihan di Bulan Pertama
+                                </button>
+                            </div>
+                            <p className="text-[9px] text-gray-400 font-bold mt-3 leading-relaxed">
+                                {form.additionalFeeStartsFrom === 'month_2' 
+                                    ? 'ℹ️ Biaya tambahan akan GRATIS pada awal sewa (bulan pertama), dan baru akan ditagih mulai periode perpanjangan berikutnya.'
+                                    : 'ℹ️ Biaya tambahan akan langsung ditagih bersamaan dengan pembayaran sewa pertama kali.'}
+                            </p>
+                        </div>
+                    </Field>
+                </div>
+            );
+
+            // ── STEP 4: Tipe Kamar & Harga ─────────────────────────────────────
+            case 4: return (
+                <div className="space-y-6">
+                    <div className="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 className="font-black text-gray-900 uppercase tracking-tight">Tipe Kamar & Harga</h3>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">Tambahkan minimal 1 tipe kamar</p>
+                        </div>
+                        <button type="button" onClick={addRoom}
+                            className="h-9 px-4 bg-orange-500 text-white rounded-2xl text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                            <Plus size={14}/> Tambah
+                        </button>
+                    </div>
+
+                    <div className="space-y-4">
+                        {(form.roomTypes || []).map((room, ri) => (
+                            <div key={ri} className="bg-gray-50 rounded-3xl border border-gray-100 p-4 space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <Input placeholder="Nama tipe kamar (contoh: Kamar Standard)"
+                                        value={room.name}
+                                        onChange={e => updRoom(ri, 'name', e.target.value)}
+                                        className="bg-white border-gray-200 text-sm font-black flex-1 mr-2" />
+                                    <button type="button" onClick={() => removeRoom(ri)} className="w-9 h-9 text-rose-400 bg-rose-50 rounded-xl flex items-center justify-center shrink-0">
+                                        <Trash2 size={16}/>
+                                    </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-2">
+                                    <div>
+                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Ukuran Kamar</p>
+                                        <Input placeholder="Contoh: 3x4m" value={room.size || ''} onChange={e => updRoom(ri,'size',e.target.value)} className="bg-white" />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Harga Sewa</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {PRICING_PERIODS.map(({ key, label }) => {
+                                            const val = room.pricing?.find(p => p.period === key)?.price || '';
+                                            return (
+                                                <div key={key} className="bg-white rounded-xl border border-gray-200 p-2">
+                                                    <p className="text-[9px] font-bold text-gray-400 mb-1">{label}</p>
+                                                    <div className="relative">
+                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">Rp</span>
+                                                        <input type="number" min="0" placeholder="0"
+                                                            value={val}
+                                                            onChange={e => updRoomPrice(ri, key, parseInt(e.target.value)||0)}
+                                                            className="w-full h-8 pl-7 pr-2 text-xs font-bold text-gray-900 bg-transparent focus:outline-none" />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {(() => {
+                                    const activePeriods = room.pricing?.filter(p => p.price > 0).map(p => p.period) || [];
+                                    const lowestPeriod = activePeriods.length > 0 
+                                        ? activePeriods.reduce((min, p) => periodWeights[p] < periodWeights[min] ? p : min, activePeriods[0]) 
+                                        : 'bulanan';
+                                    
+                                    const lowestPeriodLabel = periodLabels[lowestPeriod] || 'Bulanan';
+
+                                    return (
+                                        <div className="grid grid-cols-2 gap-4 mt-2 py-4 border-t border-gray-100">
+                                            <div>
+                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Maks. Penghuni</p>
+                                                <input type="number" min="1" placeholder="1" value={room.maxOccupants || ''} onChange={e => updRoom(ri,'maxOccupants',parseInt(e.target.value) || 1)} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-orange-500" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                                                    {'Biaya Tambahan (> 1 Penghuni)'} (Per {lowestPeriodLabel})
+                                                </p>
+                                                <div className="relative">
+                                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-bold">Rp</span>
+                                                    <input type="number" min="0" placeholder="0" value={room.additionalCostPerPerson || ''} onChange={e => updRoom(ri,'additionalCostPerPerson',parseInt(e.target.value) || 0)} className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-3 text-sm font-bold outline-none focus:border-orange-500" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
+                                <div>
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Fasilitas Kamar</p>
+                                    <FacilityInput
+                                        selected={room.roomFacilities || []}
+                                        presets={ROOM_AMENITIES}
+                                        onToggle={f => toggleRoomFeature(ri,'roomFacilities',f)}
+                                        onAdd={f => addCustomRoomFeature(ri,'roomFacilities',f)}
+                                        onRemove={f => toggleRoomFeature(ri,'roomFacilities',f)}
+                                        placeholder="Contoh: Sofa, Balkon..."
+                                    />
+                                </div>
+
+                                <div>
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Fasilitas Kamar Mandi</p>
+                                    <FacilityInput
+                                        selected={room.bathroomFacilities || []}
+                                        presets={BATH_AMENITIES}
+                                        onToggle={f => toggleRoomFeature(ri,'bathroomFacilities',f)}
+                                        onAdd={f => addCustomRoomFeature(ri,'bathroomFacilities',f)}
+                                        onRemove={f => toggleRoomFeature(ri,'bathroomFacilities',f)}
+                                    />
+                                </div>
+
+                                <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={room.isAvailable !== false} 
+                                            onChange={e => updRoom(ri, 'isAvailable', e.target.checked)} 
+                                            className="w-4 h-4 text-orange-500 rounded focus:ring-orange-500" 
+                                        />
+                                        <span className="text-sm font-bold text-gray-700">Kamar Tersedia</span>
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Sisa Kamar:</span>
+                                        <input 
+                                            type="number" 
+                                            min="0" 
+                                            className="w-14 border-b border-gray-200 py-1 text-center font-bold focus:border-orange-500 outline-none text-xs" 
+                                            placeholder="0" 
+                                            value={room.availableRoomCount || 0} 
+                                            onChange={e => updRoom(ri, 'availableRoomCount', e.target.value)} 
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+
+                        {(form.roomTypes||[]).length === 0 && (
+                            <button type="button" onClick={addRoom}
+                                className="w-full h-24 border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center gap-1 hover:border-orange-300 transition-colors text-gray-300">
+                                <Plus size={24}/>
+                                <span className="text-xs font-bold">Tambah tipe kamar pertama</span>
+                            </button>
+                        )}
+                    </div>
+                </div>
+            );
+
+            // ── STEP 5: Peraturan Kost ─────────────────────────────────────────
+            case 5: return (
+                <div className="space-y-6">
+                    <Field label="Peraturan Kost" hint="Tambahkan aturan yang berlaku di kost Anda untuk calon penyewa">
                         <div className="space-y-2">
                             {(form.rules || []).map((r, i) => (
                                 <div key={i} className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100">
@@ -865,282 +1050,8 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             </button>
                         </div>
                     </Field>
-
-                    {/* Room Types */}
-                    <div>
-                        <div className="flex items-center justify-between mb-3">
-                            <div>
-                                <p className="text-xs font-black text-gray-700 uppercase tracking-widest">Tipe Kamar & Harga</p>
-                                <p className="text-[10px] text-gray-400 mt-0.5">Tambahkan minimal 1 tipe kamar</p>
-                            </div>
-                            <button type="button" onClick={addRoom}
-                                className="h-9 px-4 bg-orange-500 text-white rounded-2xl text-xs font-bold flex items-center gap-1.5 shadow-sm">
-                                <Plus size={14}/> Tambah
-                            </button>
-                        </div>
-
-                        <div className="space-y-4">
-                            {(form.roomTypes || []).map((room, ri) => (
-                                <div key={ri} className="bg-gray-50 rounded-3xl border border-gray-100 p-4 space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <Input placeholder="Nama tipe kamar (contoh: Kamar Standard)"
-                                            value={room.name}
-                                            onChange={e => updRoom(ri, 'name', e.target.value)}
-                                            className="bg-white border-gray-200 text-sm font-black flex-1 mr-2" />
-                                        <button type="button" onClick={() => removeRoom(ri)} className="w-9 h-9 text-rose-400 bg-rose-50 rounded-xl flex items-center justify-center shrink-0">
-                                            <Trash2 size={16}/>
-                                        </button>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 gap-2">
-                                        <div>
-                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Ukuran Kamar</p>
-                                            <Input placeholder="Contoh: 3x4m" value={room.size || ''} onChange={e => updRoom(ri,'size',e.target.value)} className="bg-white" />
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Harga Sewa</p>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {PRICING_PERIODS.map(({ key, label }) => {
-                                                const val = room.pricing?.find(p => p.period === key)?.price || '';
-                                                return (
-                                                    <div key={key} className="bg-white rounded-xl border border-gray-200 p-2">
-                                                        <p className="text-[9px] font-bold text-gray-400 mb-1">{label}</p>
-                                                        <div className="relative">
-                                                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">Rp</span>
-                                                            <input type="number" min="0" placeholder="0"
-                                                                value={val}
-                                                                onChange={e => updRoomPrice(ri, key, parseInt(e.target.value)||0)}
-                                                                className="w-full h-8 pl-7 pr-2 text-xs font-bold text-gray-900 bg-transparent focus:outline-none" />
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-
-                                    {/* Maks Penghuni & Charge Pindah Ke Sini */}
-                                    {(() => {
-                                        // Cari skema terendah yang diaktifkan (ada harga > 0)
-                                        const activePeriods = room.pricing?.filter(p => p.price > 0).map(p => p.period) || [];
-                                        const lowestPeriod = activePeriods.length > 0 
-                                            ? activePeriods.reduce((min, p) => periodWeights[p] < periodWeights[min] ? p : min, activePeriods[0]) 
-                                            : 'bulanan'; // default fallback
-                                        
-                                        const lowestPeriodLabel = PRICING_PERIODS.find(p => p.key === lowestPeriod)?.label || 'Bulanan';
-
-                                        return (
-                                            <div className="grid grid-cols-2 gap-4 mt-2 py-4 border-t border-gray-100">
-                                                <div>
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Maks. Penghuni</p>
-                                                    <input type="number" min="1" placeholder="1" value={room.maxOccupants || ''} onChange={e => updRoom(ri,'maxOccupants',parseInt(e.target.value) || 1)} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-orange-500" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
-                                                        {'Biaya Tambahan (> 1 Penghuni)'} (Per {lowestPeriodLabel})
-                                                    </p>
-                                                    <div className="relative">
-                                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-bold">Rp</span>
-                                                        <input type="number" min="0" placeholder="0" value={room.additionalCostPerPerson || ''} onChange={e => updRoom(ri,'additionalCostPerPerson',parseInt(e.target.value) || 0)} className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-3 text-sm font-bold outline-none focus:border-orange-500" />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })()}
-
-                                    <div>
-                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Fasilitas Kamar</p>
-                                        <FacilityInput
-                                            selected={room.roomFacilities || []}
-                                            presets={ROOM_AMENITIES}
-                                            onToggle={f => toggleRoomFeature(ri,'roomFacilities',f)}
-                                            onAdd={f => addCustomRoomFeature(ri,'roomFacilities',f)}
-                                            onRemove={f => toggleRoomFeature(ri,'roomFacilities',f)}
-                                            placeholder="Contoh: Sofa, Balkon..."
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Fasilitas Kamar Mandi</p>
-                                        <FacilityInput
-                                            selected={room.bathroomFacilities || []}
-                                            presets={BATH_AMENITIES}
-                                            onToggle={f => toggleRoomFeature(ri,'bathroomFacilities',f)}
-                                            onAdd={f => addCustomRoomFeature(ri,'bathroomFacilities',f)}
-                                            onRemove={f => toggleRoomFeature(ri,'bathroomFacilities',f)}
-                                        />
-                                    </div>
-
-                                    <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={room.isAvailable !== false} 
-                                                onChange={e => updRoom(ri, 'isAvailable', e.target.checked)} 
-                                                className="w-4 h-4 text-orange-500 rounded focus:ring-orange-500" 
-                                            />
-                                            <span className="text-sm font-bold text-gray-700">Kamar Tersedia</span>
-                                        </label>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Sisa Kamar:</span>
-                                            <input 
-                                                type="number" 
-                                                min="0" 
-                                                className="w-14 border-b border-gray-200 py-1 text-center font-bold focus:border-orange-500 outline-none text-xs" 
-                                                placeholder="0" 
-                                                value={room.availableRoomCount || 0} 
-                                                onChange={e => updRoom(ri, 'availableRoomCount', e.target.value)} 
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-
-                            {(form.roomTypes||[]).length === 0 && (
-                                <button type="button" onClick={addRoom}
-                                    className="w-full h-24 border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center gap-1 hover:border-orange-300 transition-colors text-gray-300">
-                                    <Plus size={24}/>
-                                    <span className="text-xs font-bold">Tambah tipe kamar pertama</span>
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    <Field label="Biaya Tambahan" hint="Opsional — listrik, air, dll di luar harga sewa">
-                        <div className="grid grid-cols-2 gap-3">
-                            <Input placeholder="Nama biaya (Listrik)" value={form.additionalFeeName||''} onChange={e => upd('additionalFeeName',e.target.value)} icon={<BookOpen size={16}/>} />
-                            <Input type="number" placeholder="Nominal (Rp)" value={form.additionalFeePrice||''} onChange={e => upd('additionalFeePrice',parseInt(e.target.value)||0)} icon={<DollarSign size={16}/>} />
-                        </div>
-                    </Field>
                 </div>
             );
-
-            // ── STEP 4: Kontak ─────────────────────────────────────────────────
-            case 4: {
-                const isProfile = (form.contactSelection || 'profile') === 'profile';
-                
-                return (
-                    <div className="space-y-6">
-                        <div className="bg-orange-50 border border-orange-100 rounded-3xl p-5 text-sm text-orange-700">
-                            <p className="font-black text-orange-800 mb-1 leading-tight">Integrasi Kontak AI ✨</p>
-                            <p className="text-[11px] font-medium leading-relaxed">
-                                Pilih kontak yang akan dihubungi oleh pencari kost. Nomor ini akan terintegrasi dengan sistem AI RuangSinggah.
-                            </p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                            <button 
-                                type="button" 
-                                onClick={() => {
-                                    setForm(prev => ({
-                                        ...prev,
-                                        contactSelection: 'profile',
-                                        omnichannelContactName: user?.displayName || user?.name || '',
-                                        omnichannelContactPhone: (user?.phone || '').replace(/\D/g, ''),
-                                        omnichannelContactType: 'owner'
-                                    }));
-                                }}
-                                className={`h-24 rounded-3xl border-2 p-4 flex flex-col items-center justify-center gap-2 transition-all ${
-                                    isProfile 
-                                        ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-100' 
-                                        : 'bg-white border-gray-100 text-gray-500 hover:border-gray-200'
-                                }`}
-                            >
-                                <User size={20} />
-                                <span className="text-[10px] font-black uppercase tracking-widest">Profil Saya</span>
-                            </button>
-                            <button 
-                                type="button"
-                                onClick={() => upd('contactSelection', 'caretaker')}
-                                className={`h-24 rounded-3xl border-2 p-4 flex flex-col items-center justify-center gap-2 transition-all ${
-                                    !isProfile 
-                                        ? 'bg-gray-900 border-gray-900 text-white shadow-lg shadow-gray-100' 
-                                        : 'bg-white border-gray-100 text-gray-500 hover:border-gray-200'
-                                }`}
-                            >
-                                <ShieldCheck size={20} />
-                                <span className="text-[10px] font-black uppercase tracking-widest">Penjaga Kost</span>
-                            </button>
-                        </div>
-
-                        {isProfile ? (
-                            <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                                <div>
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Nama Di Profile</p>
-                                    <p className="text-sm font-black text-gray-900">{user?.displayName || user?.name || 'Belum diatur'}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Nomor WhatsApp</p>
-                                    <p className="text-sm font-black text-gray-900">{user?.phone || 'Belum diatur'}</p>
-                                </div>
-                                <div className="pt-2">
-                                    <p className="text-[10px] font-medium text-orange-600 italic">
-                                        * Ingin mengubah? Silakan perbarui di halaman Profil utama.
-                                    </p>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="space-y-5 animate-in fade-in slide-in-from-top-2 duration-300">
-                                <Field label="Nama Penjaga" required>
-                                    <Input 
-                                        placeholder="Contoh: Pak Budi"
-                                        value={form.caretakerName || ''}
-                                        onChange={e => {
-                                            const val = e.target.value;
-                                            setForm(prev => ({
-                                                ...prev,
-                                                caretakerName: val,
-                                                omnichannelContactName: val,
-                                                omnichannelContactType: 'caretaker'
-                                            }));
-                                        }}
-                                        icon={<User size={16} />}
-                                    />
-                                </Field>
-
-                                <Field label="Jenis Kelamin Penjaga" required>
-                                    <div className="flex gap-2">
-                                        {(['Pria', 'Wanita'] as const).map(g => (
-                                            <button 
-                                                key={g} 
-                                                type="button" 
-                                                onClick={() => upd('caretakerGender', g)}
-                                                className={`flex-1 h-12 rounded-2xl text-xs font-bold border-2 transition-all ${
-                                                    form.caretakerGender === g 
-                                                        ? 'bg-gray-900 text-white border-gray-900' 
-                                                        : 'bg-white text-gray-500 border-gray-200'
-                                                }`}
-                                            >
-                                                {g}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </Field>
-
-                                <Field label="WhatsApp Penjaga" required hint="Gunakan format 62812xxx">
-                                    <Input 
-                                        type="tel"
-                                        placeholder="628..."
-                                        value={form.caretakerPhone || ''}
-                                        onChange={e => {
-                                            const val = e.target.value.replace(/\D/g, '');
-                                            setForm(prev => ({
-                                                ...prev,
-                                                caretakerPhone: val,
-                                                omnichannelContactPhone: val
-                                            }));
-                                        }}
-                                        icon={<Phone size={16} />}
-                                    />
-                                </Field>
-                            </div>
-                        )}
-                    </div>
-                );
-            }
-
-            default: return null;
         }
     };
 
