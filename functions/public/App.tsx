@@ -19,7 +19,8 @@ import MyKost from './pages/MyKost';
 import Chat from './pages/Chat';
 import MitraDashboard from './pages/MitraDashboard';
 import OrderPaymentStatus from './pages/OrderPaymentStatus';
-import { getPublishedProperties, getPublishedPropertyDetails } from './userService';
+import Terms from './pages/Terms';
+import { getPublishedProperties, getPublishedPropertyDetails, ensureAbsoluteUrl } from './userService';
 
 // Improved Protected Route Wrapper for strict access control
 const ProtectedRoute: React.FC<{ 
@@ -151,10 +152,10 @@ const App: React.FC = () => {
         id: supabaseUser.id,
         email: supabaseUser.email,
         emailVerified: supabaseUser.email_confirmed_at != null,
-        photoURL: profile.photo_url || supabaseUser.user_metadata?.avatar_url || '',
+        photoURL: ensureAbsoluteUrl(profile.photo_url || supabaseUser.user_metadata?.avatar_url || '', 'profile-photos'),
         displayName: profile.name || supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || '',
         phoneNumber: profile.phone || '',
-        photo_url: profile.photo_url || '', // Keep original for reference
+        photo_url: ensureAbsoluteUrl(profile.photo_url || '', 'profile-photos'), // Keep original but resolved for reference
         relationshipStatus: profile.relationship_status || '',
         occupation: profile.occupation || '',
         institution: profile.institution || '',
@@ -411,6 +412,7 @@ const App: React.FC = () => {
             <Route path={Page.ABOUT} element={<About />} />
             <Route path={Page.CONTACT} element={<Contact />} />
             <Route path={Page.SURVEY_SERVICE} element={<SurveyService user={user} onPageChange={(p: Page) => navigate(p)} />} />
+            <Route path={Page.TERMS} element={<Terms />} />
             <Route path={Page.MY_BOOKINGS} element={
               <ProtectedRoute user={user} loadingAuth={loadingAuth}>
                 <MyKost user={user} onPageChange={(p: Page) => navigate(p)} />

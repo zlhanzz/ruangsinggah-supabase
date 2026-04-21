@@ -23,6 +23,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     gender: '',
     relationshipStatus: '',
     religion: '',
+    birthPlace: '',
+    birthDate: '',
     address: '',
     photoURL: '',
     ktp_number: '',
@@ -49,6 +51,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
         gender: user.gender || '',
         relationshipStatus: user.relationshipStatus || user.relationship_status || user.maritalStatus || '',
         religion: user.religion || '',
+        birthPlace: user.birthPlace || user.birth_place || '',
+        birthDate: user.birthDate || user.birth_date || '',
         address: user.address || '',
         photoURL: user.photoURL || user.photo_url || user.avatar_url || '',
         ktp_number: user.ktp_number || '',
@@ -192,6 +196,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
           gender: formData.gender,
           relationship_status: formData.relationshipStatus,
           religion: formData.religion,
+          birth_place: formData.birthPlace,
+          birth_date: formData.birthDate || null,
           address: formData.address,
           photo_url: formData.photoURL,
           ktp_number: isAgent ? formData.ktp_number : undefined,
@@ -244,6 +250,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
         gender: user.gender || '',
         relationshipStatus: user.relationshipStatus || user.relationship_status || user.maritalStatus || '',
         religion: user.religion || '',
+        birthPlace: user.birthPlace || user.birth_place || '',
+        birthDate: user.birthDate || user.birth_date || '',
         address: user.address || '',
         photoURL: user.photoURL || user.photo_url || user.avatar_url || '',
         ktp_number: user.ktp_number || '',
@@ -262,17 +270,24 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
           <div className="h-40 bg-gradient-to-r from-orange-400 to-orange-600 relative">
             <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 group">
               <div className="relative">
-                {formData.photoURL ? (
-                  <img
-                    src={formData.photoURL}
-                    alt="Profile"
-                    className="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover bg-white"
-                  />
-                ) : (
-                  <div className="w-32 h-32 rounded-full border-4 border-white shadow-lg bg-gray-800 flex items-center justify-center text-white text-3xl font-black">
+                <div className="w-32 h-32 rounded-full border-4 border-white shadow-lg bg-gray-800 flex items-center justify-center text-white text-3xl font-black relative overflow-hidden">
+                  {/* Layer 1: Initials */}
+                  <div className="absolute inset-0 flex items-center justify-center">
                     {getInitials(formData.displayName)}
                   </div>
-                )}
+                  
+                  {/* Layer 2: Image */}
+                  {formData.photoURL && (
+                    <img
+                      src={formData.photoURL}
+                      alt="Profile"
+                      className="absolute inset-0 w-full h-full object-cover bg-white z-10"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  )}
+                </div>
 
                 {isEditing && (
                   <div className="absolute bottom-0 right-0 flex gap-2">
@@ -450,13 +465,43 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                   </div>
                 )}
               </div>
-              {/* Alamat Domisili */}
+
+              {/* Tempat Lahir */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Tempat Lahir</label>
+                {isEditing ? (
+                  <input type="text" name="birthPlace" value={formData.birthPlace} onChange={handleInputChange}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
+                    placeholder="Contoh: Jakarta, Bandung, Surabaya" />
+                ) : (
+                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900">{formData.birthPlace || '-'}</div>
+                )}
+              </div>
+
+              {/* Tanggal Lahir */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Tanggal Lahir</label>
+                {isEditing ? (
+                  <input type="date" name="birthDate" value={formData.birthDate} onChange={handleInputChange}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none cursor-pointer"
+                    onClick={(e) => (e.target as any).showPicker?.()}
+                    max={new Date().toISOString().split('T')[0]} />
+                ) : (
+                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900">
+                    {formData.birthDate
+                      ? new Date(formData.birthDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+                      : '-'}
+                  </div>
+                )}
+              </div>
+
+              {/* Alamat Asal */}
               <div className="space-y-2 md:col-span-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Alamat Domisili <span className="text-red-500">*</span></label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Alamat Asal <span className="text-red-500">*</span></label>
                 {isEditing ? (
                   <textarea name="address" rows={3} value={formData.address} onChange={handleInputChange}
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none resize-none"
-                    placeholder="Alamat lengkap saat ini..." required />
+                    placeholder="Alamat asal lengkap (sesuai KTP/identitas)..." required />
                 ) : (
                   <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900 min-h-[5rem]">{formData.address || '-'}</div>
                 )}

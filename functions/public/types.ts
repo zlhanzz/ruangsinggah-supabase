@@ -102,6 +102,7 @@ export interface Kost {
   // Additional Fees
   additionalFeePrice?: number;
   additionalFeeName?: string;
+  additionalFeeStartsFrom?: 'month_1' | 'month_2';
 
   // Omnichannel Contact Info
   omnichannelContactName?: string;
@@ -179,7 +180,8 @@ export enum Page {
   MY_BOOKINGS = '/my-bookings',
   PROFILE = '/profile',
   MITRA_PROFILE = '/mitra-profile',
-  SURVEY_SERVICE = '/survey-service'
+  SURVEY_SERVICE = '/survey-service',
+  TERMS = '/syarat-ketentuan'
 }
 
 export interface SurveyRequest {
