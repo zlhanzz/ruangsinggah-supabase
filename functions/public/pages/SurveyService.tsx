@@ -8,11 +8,12 @@ import { notificationService } from '../notificationService';
 interface SurveyServiceProps {
   user: any;
   onPageChange: (page: Page) => void;
+  validateProfile?: () => boolean;
 }
 
 const SURVEY_PRODUCT_ID = '5ea7b4e9-6f8d-4a11-b845-8c7a726359e1';
 
-const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange }) => {
+const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, validateProfile }) => {
   const offerSectionRef = useRef<HTMLDivElement>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
@@ -57,6 +58,11 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange }) => 
     if (!user) {
       alert('Silakan login terlebih dahulu untuk melakukan pemesanan survey.');
       return;
+    }
+
+    if (validateProfile) {
+      const isValid = validateProfile();
+      if (!isValid) return;
     }
 
     // Normalize phone numbers to include +62 if not present
@@ -345,6 +351,12 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange }) => 
                   onPageChange(Page.LOGIN);
                   return;
                 }
+                
+                if (validateProfile) {
+                  const isValid = validateProfile();
+                  if (!isValid) return;
+                }
+                
                 setIsModalOpen(true);
               }}
               className="w-full py-4 bg-orange-500 text-white rounded-xl font-bold text-lg hover:bg-orange-600 hover:scale-[1.02] transition-all shadow-lg shadow-orange-500/30"

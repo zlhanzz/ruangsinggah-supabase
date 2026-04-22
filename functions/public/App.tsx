@@ -266,6 +266,18 @@ const App: React.FC = () => {
     }
   };
 
+  const calculateAge = (birthDate: string): number => {
+    if (!birthDate) return 0;
+    const today = new Date();
+    const birth = new Date(birthDate);
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
   const isProfileComplete = (userData: any): boolean => {
     if (!userData) return false;
     return (
@@ -276,6 +288,7 @@ const App: React.FC = () => {
       !!userData.address &&
       !!userData.gender &&
       !!userData.religion &&
+      !!userData.birth_date && // Added birth_date check
       (!!userData.relationshipStatus || !!userData.maritalStatus)
     );
   };
@@ -360,6 +373,12 @@ const App: React.FC = () => {
             navigate(Page.PROFILE);
             return false;
           }
+          
+          if (calculateAge(user.birth_date) < 17) {
+            alert('Mohon maaf, usia minimal untuk melakukan transaksi adalah 17 tahun.');
+            return false;
+          }
+          
           return true;
         }}
       />
@@ -404,6 +423,12 @@ const App: React.FC = () => {
                     navigate(Page.PROFILE);
                     return false;
                   }
+                  
+                  if (calculateAge(user.birth_date) < 17) {
+                    alert('Mohon maaf, usia minimal untuk melakukan transaksi adalah 17 tahun.');
+                    return false;
+                  }
+                  
                   return true;
                 }}
               />
@@ -411,7 +436,26 @@ const App: React.FC = () => {
             <Route path={Page.OWNER} element={<Owner />} />
             <Route path={Page.ABOUT} element={<About />} />
             <Route path={Page.CONTACT} element={<Contact />} />
-            <Route path={Page.SURVEY_SERVICE} element={<SurveyService user={user} onPageChange={(p: Page) => navigate(p)} />} />
+            <Route path={Page.SURVEY_SERVICE} element={
+              <SurveyService 
+                user={user} 
+                onPageChange={(p: Page) => navigate(p)} 
+                validateProfile={() => {
+                  if (!isProfileComplete(user)) {
+                    alert('Silahkan lengkapi profile sebelum menggunakan layanan survey.');
+                    navigate(Page.PROFILE);
+                    return false;
+                  }
+                  
+                  if (calculateAge(user.birth_date) < 17) {
+                    alert('Mohon maaf, usia minimal untuk menggunakan layanan survey adalah 17 tahun.');
+                    return false;
+                  }
+                  
+                  return true;
+                }}
+              />
+            } />
             <Route path={Page.TERMS} element={<Terms />} />
             <Route path={Page.MY_BOOKINGS} element={
               <ProtectedRoute user={user} loadingAuth={loadingAuth}>

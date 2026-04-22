@@ -18,8 +18,6 @@ interface AnalyticsViewProps {
     setCustomEndDate: (date: string) => void;
     selectedYear: string;
     setSelectedYear: (year: string) => void;
-    dashboardViewMode: 'personal' | 'global';
-    setDashboardViewMode: (mode: 'personal' | 'global') => void;
     currentYear: number;
     getMaxEndDate: () => string;
 }
@@ -62,8 +60,6 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     setCustomEndDate,
     selectedYear,
     setSelectedYear,
-    dashboardViewMode,
-    setDashboardViewMode,
     currentYear,
     getMaxEndDate
 }) => {

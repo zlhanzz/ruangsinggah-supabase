@@ -174,9 +174,10 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
       !formData.address ||
       !formData.gender ||
       !formData.relationshipStatus ||
-      !formData.religion
+      !formData.religion ||
+      !formData.birthDate
     ) {
-      alert('Mohon lengkapi semua data wajib (Nama, WhatsApp, Pekerjaan, Kampus, Gender, Agama, Status Hubungan, Alamat).');
+      alert('Mohon lengkapi semua data wajib (Nama, WhatsApp, Pekerjaan, Kampus, Gender, Agama, Status Hubungan, Tanggal Lahir, Alamat).');
       return;
     }
 

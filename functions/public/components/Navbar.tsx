@@ -13,7 +13,8 @@ interface NavbarProps {
   hideNavLinks?: boolean;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogout, hideBottomNav, hideNavLinks }) => {
+  const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogout, hideBottomNav, hideNavLinks }) => {
+  const isAdminPage = activePage.startsWith(Page.DASHBOARD_ADMIN);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -116,14 +117,16 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                   {['admin', 'survey_agent', 'owner', 'mitra'].includes(user.role) && (
                     <button
                       onClick={() => {
-                        const targetPage = user.role === 'admin' ? Page.DASHBOARD_ADMIN : 
-                                           user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : 
-                                           Page.DASHBOARD_MITRA;
+                        const targetPage = user.role === 'admin' 
+                          ? (isAdminPage ? Page.HOME : Page.DASHBOARD_ADMIN) 
+                          : (user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : Page.DASHBOARD_MITRA);
                         onPageChange(targetPage);
                       }}
                       className="bg-gray-900 text-white px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest hover:bg-orange-500 transition-colors"
                     >
-                      {user.role === 'admin' ? 'Admin Panel' : user.role === 'survey_agent' ? 'Agent Panel' : 'Owner Panel'}
+                      {user.role === 'admin' 
+                        ? (isAdminPage ? 'Mode User' : 'Admin Panel') 
+                        : (user.role === 'survey_agent' ? 'Agent Panel' : 'Owner Panel')}
                     </button>
                   )}
 
@@ -219,15 +222,17 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                         {['admin', 'survey_agent', 'owner', 'mitra'].includes(user.role) && (
                           <button
                             onClick={() => {
-                              const targetPage = user.role === 'admin' ? Page.DASHBOARD_ADMIN : 
-                                               user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : 
-                                               Page.DASHBOARD_MITRA;
+                              const targetPage = user.role === 'admin' 
+                                ? (isAdminPage ? Page.HOME : Page.DASHBOARD_ADMIN) 
+                                : (user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : Page.DASHBOARD_MITRA);
                               onPageChange(targetPage);
                               setIsProfileOpen(false);
                             }}
                             className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 font-bold border-t border-gray-50"
                           >
-                            {user.role === 'admin' ? 'Dashboard Admin' : user.role === 'survey_agent' ? 'Dashboard Agen' : 'Dashboard Pemilik'}
+                            {user.role === 'admin' 
+                              ? (isAdminPage ? 'Tampilan User' : 'Dashboard Admin') 
+                              : (user.role === 'survey_agent' ? 'Dashboard Agen' : 'Dashboard Pemilik')}
                           </button>
                         )}
                         <button
@@ -345,15 +350,17 @@ const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogou
                       {['admin', 'survey_agent', 'owner', 'mitra'].includes(user.role) && (
                         <button
                           onClick={() => {
-                            const targetPage = user.role === 'admin' ? Page.DASHBOARD_ADMIN : 
-                                             user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : 
-                                             Page.DASHBOARD_MITRA;
+                            const targetPage = user.role === 'admin' 
+                              ? (isAdminPage ? Page.HOME : Page.DASHBOARD_ADMIN) 
+                              : (user.role === 'survey_agent' ? Page.DASHBOARD_AGENT : Page.DASHBOARD_MITRA);
                             onPageChange(targetPage);
                             setIsProfileOpen(false);
                           }}
                           className="block w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 font-bold border-t border-gray-50"
                         >
-                          {user.role === 'admin' ? 'Dashboard Admin' : user.role === 'survey_agent' ? 'Dashboard Agen' : 'Dashboard Pemilik'}
+                          {user.role === 'admin' 
+                            ? (isAdminPage ? 'Tampilan User' : 'Dashboard Admin') 
+                            : (user.role === 'survey_agent' ? 'Dashboard Agen' : 'Dashboard Pemilik')}
                         </button>
                       )}
                       <button
