@@ -1173,7 +1173,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                                 className="text-4xl sm:text-5xl font-black text-gray-900 leading-[1.1] tracking-tight text-center md:text-left hover:text-orange-500 transition-colors group/title flex items-start gap-4 mb-6"
                                             >
                                                 {kost.kostName || 'Kost Tersembunyi'}
-                                                <ChevronRight className="w-10 h-10 -mt-1 opacity-0 -translate-x-4 group-hover/title:opacity-100 group-hover/title:translate-x-0 transition-all text-orange-500" shrink-0 />
+                                                <ChevronRight className="w-10 h-10 -mt-1 opacity-0 -translate-x-4 group-hover/title:opacity-100 group-hover/title:translate-x-0 transition-all text-orange-500 shrink-0" />
                                             </button>
 
                                             <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 w-full">
