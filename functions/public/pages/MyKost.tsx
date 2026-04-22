@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle, Zap } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check } from 'lucide-react';
 import { Page } from '../types';
 import { addPropertyReview, getExtraBills, settlePendingBills, cancelBookingRequest } from '../userService';
 import PaymentGateway from '../components/PaymentGateway';
 import ChatWindow from '../components/ChatWindow';
 import { notifyAdminTransaction } from '../emailService';
+import { FORMAT_CURRENCY } from '../constants';
 
 interface MyKostProps {
     user: any;
@@ -112,6 +113,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
     const [paymentProductId, setPaymentProductId] = useState('');
     const [paymentProductType, setPaymentProductType] = useState<'kost_booking' | 'database' | 'survey'>('kost_booking');
     const [paymentMetadata, setPaymentMetadata] = useState<any>({});
+    const [includeFacilityInExtension, setIncludeFacilityInExtension] = useState(true);
 
     useEffect(() => {
         if (user) {
@@ -190,22 +192,6 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
         }
     };
 
-    const handleOpenPayment = (kost: any) => {
-        setSelectedKost(kost);
-        setPaymentAmount(kost.totalPrice || kost.amount || 0);
-        setPaymentOrderId(kost.id);
-        setPaymentProductId(kost.kostId);
-        setPaymentProductType('kost_booking');
-        setPaymentMetadata({
-            kostName: kost.kostName,
-            roomType: kost.roomType,
-            duration: kost.duration,
-            period: kost.period,
-            startDate: kost.moveInDate,
-            endDate: kost.endDate
-        });
-        setShowPaymentGateway(true);
-    };
 
     const fetchMyKosts = async () => {
         setLoading(true);
@@ -236,7 +222,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
             const productIds = Array.from(new Set(data?.map(d => d.product_id || d.kost_id).filter(id => !!id)));
             const { data: propertiesData } = await supabase
                 .from('properties')
-                .select('id, title, image_urls, owner_uid, city, area')
+                .select('id, title, image_urls, owner_uid, city, area, additional_fee_name, additional_fee_price, additional_fee_starts_from, room_types, location')
                 .in('id', productIds);
             
             const propMap = (propertiesData || []).reduce((acc: any, p: any) => {
@@ -321,6 +307,11 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                       totalPrice: doc.amount || doc.total_price,
                       displayImage: displayImg,
                       rejection_reason: metadata.rejection_reason || metadata.rejectionReason,
+                      additionalFeePrice: prop?.additional_fee_price,
+                      additionalFeeName: prop?.additional_fee_name,
+                      additionalFeeStartsFrom: prop?.additional_fee_starts_from,
+                      room_types: prop?.room_types,
+                      location: prop?.location || doc.location || metadata.location,
                       ...doc 
                     });
                 }
@@ -336,24 +327,30 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
             };
 
             const uniqueKosts = Object.values(kostsData.reduce((acc: Record<string, any>, curr: any) => {
-                const kostId = curr.kostId;
-                if (!acc[kostId]) {
-                    acc[kostId] = curr;
+                const statusLower = (curr.status || '').toLowerCase();
+                const isPendingOrAwaiting = ['pending_approval', 'awaiting_payment'].includes(statusLower);
+                
+                // For pending/awaiting, use a unique key to ensure they don't get hidden by existing PAID records
+                // For others, group by kostId to show the "best" status for that property
+                const uniqueKey = isPendingOrAwaiting ? `${curr.kostId}_${curr.id}` : curr.kostId;
+                
+                if (!acc[uniqueKey]) {
+                    acc[uniqueKey] = curr;
                 } else {
-                    const existingStatus = (acc[kostId].status || '').toLowerCase();
+                    const existingStatus = (acc[uniqueKey].status || '').toLowerCase();
                     const currentStatus = (curr.status || '').toLowerCase();
                     
                     const pExisting = statusPriority[existingStatus] || 0;
                     const pCurrent = statusPriority[currentStatus] || 0;
 
                     if (pCurrent > pExisting) {
-                        acc[kostId] = curr;
+                        acc[uniqueKey] = curr;
                     } else if (pCurrent === pExisting) {
                         // If priority is same, take the latest one
-                        const tExisting = new Date(acc[kostId].created_at || 0).getTime();
+                        const tExisting = new Date(acc[uniqueKey].created_at || 0).getTime();
                         const tCurrent = new Date(curr.created_at || 0).getTime();
                         if (tCurrent > tExisting) {
-                            acc[kostId] = curr;
+                            acc[uniqueKey] = curr;
                         }
                     }
                 }
@@ -1079,7 +1076,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                     <div>
                                         <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">{bill.bill_name || 'Tagihan Ekstra'}</p>
                                         <p className="text-2xl font-black text-gray-900 mt-1">
-                                            {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(bill.amount || 0)}
+                                            {FORMAT_CURRENCY(bill.amount || 0)}
                                         </p>
                                         <div className="flex items-center gap-2 mt-2">
                                             <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
@@ -1273,7 +1270,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                                 <div className="flex flex-col gap-1.5">
                                                     <span className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Total Tagihan</span>
                                                     <span className="text-xl font-black text-emerald-600 whitespace-nowrap">
-                                                        {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(kost.totalPrice || 0)}
+                                                        {FORMAT_CURRENCY(kost.totalPrice || 0)}
                                                     </span>
                                                 </div>
                                             </div>
@@ -1283,19 +1280,36 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
 
                                 <div className="lg:col-span-4 flex flex-col gap-4 justify-center relative z-10">
                                     <button 
-                                        onClick={() => kost.locationUrl ? window.open(kost.locationUrl, '_blank') : alert('Lokasi belum tersedia')}
+                                        onClick={() => {
+                                            if (kost.location?.lat && kost.location?.lng) {
+                                                // Using Google Maps Directions API URL to automatically trigger routing from user's current location
+                                                window.open(`https://www.google.com/maps/dir/?api=1&destination=${kost.location.lat},${kost.location.lng}`, '_blank');
+                                            } else if (kost.locationUrl) {
+                                                window.open(kost.locationUrl, '_blank');
+                                            } else {
+                                                alert('Lokasi belum tersedia');
+                                            }
+                                        }}
                                         className="w-full bg-gray-900 hover:bg-black text-white px-8 py-5 rounded-3xl font-black flex items-center justify-center gap-4 transition-all text-xs uppercase tracking-[0.2em] shadow-xl active:scale-95 group/btn"
                                     >
-                                        <MapPin className="w-5 h-5 group-hover:scale-110 transition-transform" /> LIHAT LOKASI KOST
+                                        <MapPin className="w-5 h-5 group-hover:scale-110 transition-transform" /> RUTE KE LOKASI KOST
                                     </button>
 
                                     {isPaid && (
-                                        <button 
-                                            onClick={() => handleOpenExtension(kost)}
-                                            className="w-full bg-orange-500 hover:bg-orange-600 text-white px-8 py-7 rounded-3xl font-black flex items-center justify-center gap-4 transition-all text-sm uppercase tracking-[0.2em] shadow-2xl shadow-orange-200 active:scale-95 group/btn"
-                                        >
-                                            <Plus className="w-6 h-6 group-hover:rotate-90 transition-transform" /> PERPANJANG SEWA
-                                        </button>
+                                        <div className="flex flex-col gap-2">
+                                            <button 
+                                                disabled={(kost.daysRemaining || 0) > 7}
+                                                onClick={() => handleOpenExtension(kost)}
+                                                className={`w-full ${ (kost.daysRemaining || 0) > 7 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-200 shadow-2xl' } px-8 py-7 rounded-3xl font-black flex items-center justify-center gap-4 transition-all text-sm uppercase tracking-[0.2em] active:scale-95 group/btn`}
+                                            >
+                                                <Plus className="w-6 h-6 group-hover:rotate-90 transition-transform" /> PERPANJANG SEWA
+                                            </button>
+                                            {(kost.daysRemaining || 0) > 7 && (
+                                                <p className="text-[9px] font-bold text-gray-400 text-center uppercase tracking-widest">
+                                                    Tersedia dlm { (kost.daysRemaining || 0) - 7 } hari lagi
+                                                </p>
+                                            )}
+                                        </div>
                                     )}
 
                                     {isPaid && (
@@ -1425,38 +1439,99 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                             +
                                         </button>
                                     </div>
+
+                                    {/* Rental Packages Options */}
+                                    {(() => {
+                                        const currentRoom = (selectedKost.room_types || []).find((r: any) => r.name === selectedKost.roomType);
+                                        const availablePackages = (currentRoom?.pricing || []).filter((p: any) => p.price > 0 && !['harian', 'mingguan'].includes(p.period));
+                                        
+                                        if (availablePackages.length === 0) return null;
+
+                                        const periodToMonths: Record<string, number> = {
+                                            'bulanan': 1,
+                                            '3bulanan': 3,
+                                            '6bulanan': 6,
+                                            'tahunan': 12
+                                        };
+
+                                        return (
+                                            <div className="mt-6">
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-3">Atau Pilih Paket Hemat</label>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    {availablePackages.map((pkg: any) => (
+                                                        <button
+                                                            key={pkg.period}
+                                                            type="button"
+                                                            onClick={() => setExtensionPeriod(periodToMonths[pkg.period] || 1)}
+                                                            className={`p-4 rounded-2xl border-2 text-left transition-all group ${
+                                                                extensionPeriod === periodToMonths[pkg.period] 
+                                                                ? 'border-orange-500 bg-orange-50' 
+                                                                : 'border-gray-100 bg-white hover:border-orange-200'
+                                                            }`}
+                                                        >
+                                                            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${extensionPeriod === periodToMonths[pkg.period] ? 'text-orange-600' : 'text-gray-400'}`}>
+                                                                Paket {
+                                                                    pkg.period === 'bulanan' ? 'Bulanan' :
+                                                                    pkg.period === '3bulanan' ? '3 Bulan' :
+                                                                    pkg.period === '6bulanan' ? '6 Bulan' :
+                                                                    pkg.period === 'tahunan' ? 'Tahunan' : pkg.period
+                                                                }
+                                                            </p>
+                                                            <p className="text-sm font-black text-gray-900">{FORMAT_CURRENCY(pkg.price)}</p>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Price Breakdown */}
                                 <div className="space-y-4">
-                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] px-2">Rincian Pembayaran</h4>
+                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] px-2">Rincian Pembayaran Perpanjangan</h4>
                                     <div className="bg-white border-2 border-dashed border-gray-100 rounded-[2rem] p-6 space-y-4">
                                         <div className="flex justify-between items-center text-sm">
-                                            <span className="text-gray-500 font-medium">Sewa Kost ({extensionPeriod} {selectedKost.period || 'Bulan'})</span>
+                                            <span className="text-gray-500 font-medium">Sewa Kost & Penghuni ({extensionPeriod} {selectedKost.period || 'Bulan'})</span>
                                             <span className="text-gray-900 font-black">
-                                                {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format((selectedKost.basePrice || selectedKost.totalPrice / (selectedKost.duration || 1)) * extensionPeriod)}
+                                                {(() => {
+                                                    const meta = selectedKost.metadata || {};
+                                                    const monthlyFacility = selectedKost.additionalFeePrice || 0;
+                                                    const rentTotal = (meta.basePrice || 0) + (meta.extraPersonFee || 0) || ((selectedKost.totalPrice / (selectedKost.duration || 1)) - monthlyFacility);
+                                                    return FORMAT_CURRENCY(rentTotal * extensionPeriod);
+                                                })()}
                                             </span>
                                         </div>
-                                        
-                                        {selectedKost.totalPendingBills > 0 && (
-                                            <div className="flex justify-between items-center text-sm py-3 border-y border-gray-50">
-                                                <div className="flex flex-col">
-                                                    <span className="text-gray-500 font-medium">Tagihan Tambahan Tertunggak</span>
-                                                    <span className="text-[10px] text-orange-500 font-black uppercase">Wajib Dilunasi</span>
+
+                                        {selectedKost.additionalFeePrice > 0 && (
+                                            <div 
+                                                className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer ${includeFacilityInExtension ? 'border-emerald-500 bg-emerald-50 shadow-lg shadow-emerald-100' : 'border-gray-100 bg-gray-50'}`}
+                                                onClick={() => setIncludeFacilityInExtension(!includeFacilityInExtension)}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${includeFacilityInExtension ? 'bg-emerald-500 text-white' : 'bg-white border-2 border-gray-200'}`}>
+                                                        {includeFacilityInExtension && <Check className="w-4 h-4 stroke-[4]" />}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[10px] font-black text-gray-900 uppercase tracking-wider">Bayar Tagihan Fasilitas?</p>
+                                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">{selectedKost.additionalFeeName || 'Listrik, Air, Wifi'}</p>
+                                                    </div>
                                                 </div>
-                                                <span className="text-gray-900 font-black">
-                                                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(selectedKost.totalPendingBills)}
+                                                <span className="text-[11px] font-black text-emerald-600">
+                                                    + {FORMAT_CURRENCY(selectedKost.additionalFeePrice)}
                                                 </span>
                                             </div>
                                         )}
-
+                                        
                                         <div className="flex justify-between items-center pt-2">
-                                            <span className="text-gray-900 font-black uppercase tracking-widest text-xs">Total Bayar</span>
+                                            <span className="text-gray-900 font-black uppercase tracking-widest text-xs">Total Pembayaran</span>
                                             <span className="text-2xl font-black text-orange-600">
-                                                {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(
-                                                    ((selectedKost.basePrice || selectedKost.totalPrice / (selectedKost.duration || 1)) * extensionPeriod) + 
-                                                    (selectedKost.totalPendingBills || 0)
-                                                )}
+                                                {(() => {
+                                                    const meta = selectedKost.metadata || {};
+                                                    const monthlyFacility = selectedKost.additionalFeePrice || 0;
+                                                    const rentTotal = (meta.basePrice || 0) + (meta.extraPersonFee || 0) || ((selectedKost.totalPrice / (selectedKost.duration || 1)) - monthlyFacility);
+                                                    const total = (rentTotal * extensionPeriod) + (includeFacilityInExtension ? monthlyFacility : 0);
+                                                    return FORMAT_CURRENCY(total);
+                                                })()}
                                             </span>
                                         </div>
                                     </div>
@@ -1465,26 +1540,32 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                 <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex gap-3 items-start">
                                     <span className="text-base">⚡</span>
                                     <p className="text-[11px] text-blue-800 font-medium leading-relaxed">
-                                        Pembayaran akan dikonfirmasi otomatis melalui sistem <b>Payment Gateway</b>. Anda dapat menggunakan QRIS atau Virtual Account.
+                                        Pembayaran sewa pokok akan memperpanjang masa tinggal Anda. Tagihan fasilitas dapat dibayar sekaligus atau terpisah melalui menu Tagihan.
                                     </p>
                                 </div>
                             </div>
 
                             <div className="mt-10 flex gap-4">
-                                <button type="button" onClick={() => setShowExtensionModal(false)} className="flex-1 py-4 text-gray-500 font-black uppercase text-[11px] tracking-widest hover:bg-gray-50 rounded-2xl transition-colors">Batal</button>
+                                <button type="button" onClick={() => setShowExtensionModal(false)} className="flex-1 py-4 text-gray-500 font-black uppercase text-[11px] tracking-widest hover:bg-gray-50 rounded-2xl transition-colors border border-gray-100">Batal</button>
                                 <button 
                                     onClick={() => {
-                                        const total = ((selectedKost.basePrice || selectedKost.totalPrice / (selectedKost.duration || 1)) * extensionPeriod) + (selectedKost.totalPendingBills || 0);
+                                        const meta = selectedKost.metadata || {};
+                                        const monthlyFacility = selectedKost.additionalFeePrice || 0;
+                                        const rentTotal = (meta.basePrice || 0) + (meta.extraPersonFee || 0) || ((selectedKost.totalPrice / (selectedKost.duration || 1)) - monthlyFacility);
+                                        const total = (rentTotal * extensionPeriod) + (includeFacilityInExtension ? monthlyFacility : 0);
+                                        
                                         handleStartPayment(total, selectedKost.kostId, 'kost_booking', {
                                             extensionPeriod,
                                             extensionType: 'manual_extension',
-                                            includeBills: true,
-                                            pendingBills: selectedKost.pendingBills
+                                            includeFacility: includeFacilityInExtension,
+                                            facilityAmount: includeFacilityInExtension ? monthlyFacility : 0,
+                                            kostName: selectedKost.kostName,
+                                            startDate: selectedKost.endDate
                                         });
                                     }}
                                     className="flex-[2] py-4 bg-gray-900 hover:bg-orange-600 text-white font-black uppercase text-[11px] tracking-[0.2em] rounded-2xl shadow-2xl shadow-gray-200 transition-all active:scale-95"
                                 >
-                                    Lanjut ke Pembayaran
+                                    Bayar Perpanjangan
                                 </button>
                             </div>
                         </div>
@@ -1525,106 +1606,274 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                             <div className="space-y-6">
                                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] px-2">Item Tagihan</h4>
                                 
-                                <div className="space-y-3">
-                                    {(() => {
-                                        const bills = [...(selectedKost.pendingBills || [])];
-                                        // Auto-add rental extension bill if within 5 days
-                                        if (selectedKost.daysRemaining <= 5) {
-                                            const rentPrice = selectedKost.basePrice || (selectedKost.totalPrice / (selectedKost.duration || 1));
-                                            bills.push({
-                                                id: 'virtual-rent-ext',
-                                                bill_name: `Perpanjang Sewa (${selectedKost.kostName})`,
-                                                amount: rentPrice,
-                                                isVirtual: true,
-                                                created_at: new Date().toISOString()
-                                            });
-                                        }
-
-                                        if (bills.length === 0) {
-                                            return (
-                                                <div className="text-center py-10 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-100">
-                                                    <CheckCircle className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
-                                                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Semua Tagihan Lunas</p>
-                                                </div>
-                                            );
-                                        }
-
-                                        return bills.map((bill: any, idx: number) => (
-                                            <div key={bill.id || idx} className={`flex justify-between items-center p-5 ${bill.isVirtual ? 'bg-orange-50 border-orange-100 shadow-sm' : 'bg-gray-50 border-transparent'} rounded-2xl hover:bg-white hover:shadow-xl hover:shadow-gray-100 border transition-all group relative overflow-hidden`}>
-                                                {bill.isVirtual && (
-                                                    <div className="absolute top-0 right-0 px-2 py-0.5 bg-orange-500 text-[8px] font-black text-white uppercase rounded-bl-lg">Jatuh Tempo</div>
-                                                )}
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-10 h-10 ${bill.isVirtual ? 'bg-orange-100' : 'bg-white'} rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform`}>
-                                                        <Receipt className={`w-5 h-5 ${bill.isVirtual ? 'text-orange-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-xs font-black text-gray-800">{bill.bill_name || 'Tagihan Tanpa Nama'}</p>
-                                                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tighter mt-0.5">
-                                                            {bill.isVirtual ? 'Masa Sewa Akan Berakhir' : `Tgl Tagihan: ${new Date(bill.created_at || Date.now()).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <p className={`text-sm font-black ${bill.isVirtual ? 'text-orange-600' : 'text-gray-900'} uppercase`}>
-                                                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(bill.amount)}
-                                                </p>
-                                            </div>
-                                        ));
-                                    })()}
-                                </div>
-
-                                {/* Summary */}
                                 {(() => {
-                                    const rentPrice = selectedKost.daysRemaining <= 5 ? (selectedKost.basePrice || (selectedKost.totalPrice / (selectedKost.duration || 1))) : 0;
-                                    const totalToPay = (selectedKost.totalPendingBills || 0) + rentPrice;
+                                    const allBills = [...(selectedKost.pendingBills || [])];
+                                    const today = new Date();
+                                    
+                                    // 1. Process existing bills from DB (Additional Fees / Tagihan Ekstra)
+                                    const processedExtraBills = allBills.map(bill => {
+                                        const statusLower = (bill.status || '').toLowerCase();
+                                        const isPaid = ['paid', 'success', 'berhasil'].includes(statusLower);
+                                        const createdAt = new Date(bill.created_at);
+                                        
+                                        // Due date is usually 10 days after creation
+                                        const dueDate = new Date(createdAt);
+                                        dueDate.setDate(dueDate.getDate() + 10);
+                                        
+                                        let penalty = 0;
+                                        if (!isPaid && today > dueDate) {
+                                            const diffDays = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+                                            penalty = (bill.amount || 0) * 0.05 * diffDays;
+                                        }
 
-                                    if (totalToPay > 0) {
-                                        return (
-                                            <div className="mt-8 pt-8 border-t-2 border-dashed border-gray-100">
-                                                <div className="flex justify-between items-end">
-                                                    <div>
-                                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">Total yang Harus Dibayar</p>
-                                                        <p className={`text-3xl font-black ${selectedKost.daysRemaining <= 5 ? 'text-orange-600' : 'text-blue-600'} tracking-tighter`}>
-                                                            {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(totalToPay)}
-                                                        </p>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <div className={`px-3 py-1 ${selectedKost.daysRemaining <= 5 ? 'bg-orange-100 text-orange-700' : 'bg-amber-100 text-amber-700'} rounded-lg text-[9px] font-black uppercase tracking-widest mb-2 inline-block`}>
-                                                            {selectedKost.daysRemaining <= 5 ? 'Segera Bayar' : 'Menunggu Pembayaran'}
+                                        const total = (bill.amount || 0) + penalty;
+                                        
+                                        let displayType = 'upcoming'; // Blue
+                                        if (isPaid) displayType = 'history'; // Gray
+                                        else if (today >= createdAt) displayType = 'active'; // Green
+
+                                        return {
+                                            ...bill,
+                                            penalty,
+                                            total,
+                                            displayType,
+                                            dueDate,
+                                            isRent: false
+                                        };
+                                    });
+
+                                    // 2. Virtual Rent Bill Generation logic
+                                    const moveInDate = new Date(selectedKost.moveInDate);
+                                    const period = selectedKost.period?.toLowerCase() || 'bulanan';
+                                    const meta = selectedKost.metadata || {};
+                                    
+                                    let monthsPerCycle = 1;
+                                    if (period === '3bulanan') monthsPerCycle = 3;
+                                    else if (period === '6bulanan') monthsPerCycle = 6;
+                                    else if (period === 'tahunan') monthsPerCycle = 12;
+
+                                    // Calculate rentTotal = Base Price + Extra Person Fee
+                                    // These values from meta are already for the full 'period'
+                                    let rentTotal = (meta.basePrice || 0) + (meta.extraPersonFee || 0);
+                                    
+                                    if (!rentTotal) {
+                                        // Fallback for older bookings
+                                        const total = selectedKost.totalPrice || 0;
+                                        const dur = selectedKost.duration || 1;
+                                        const monthlyTotal = total / dur;
+                                        const monthlyFacility = selectedKost.additionalFeePrice || 0;
+                                        rentTotal = (monthlyTotal - monthlyFacility) * monthsPerCycle;
+                                    }
+
+                                    // Calculate next rent date based on package
+                                    const nextRentDate = new Date(moveInDate);
+                                    nextRentDate.setMonth(nextRentDate.getMonth() + monthsPerCycle);
+                                    
+                                    // Rent bill is always "Awaiting Payment" if not yet extended
+                                    const isRentDueSoon = selectedKost.daysRemaining <= 7;
+                                    
+                                    const virtualRentBill = {
+                                        id: 'v-rent',
+                                        bill_name: `Sewa Kost & Penghuni Tambahan (${monthsPerCycle} Bulan)`,
+                                        amount: rentTotal,
+                                        displayType: isRentDueSoon ? 'active' : 'upcoming',
+                                        isRent: true,
+                                        penalty: 0,
+                                        total: rentTotal,
+                                        dateLabel: `Jatuh Tempo: ${nextRentDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                                    };
+
+                                    // 3. Virtual Monthly Facility Fee (Stacking Logic)
+                                    if (selectedKost.additionalFeePrice > 0) {
+                                        const start = new Date(moveInDate);
+                                        const end = new Date(today);
+                                        
+                                        // Calculate months passed since move-in
+                                        const totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+                                        
+                                        // Iterate through each month from start to current + 1 month (Upcoming)
+                                        for (let i = 1; i <= totalMonths + 1; i++) {
+                                            const currentBillDate = new Date(start);
+                                            currentBillDate.setMonth(start.getMonth() + i);
+                                            
+                                            const hasBillForThisMonth = processedExtraBills.some(b => {
+                                                const bDate = new Date(b.created_at);
+                                                return bDate.getMonth() === currentBillDate.getMonth() && bDate.getFullYear() === currentBillDate.getFullYear();
+                                            });
+
+                                            if (!hasBillForThisMonth) {
+                                                // Create virtual bill for this month
+                                                const billCreatedAt = new Date(currentBillDate);
+                                                billCreatedAt.setHours(0,0,0,0);
+                                                
+                                                const billDueDate = new Date(billCreatedAt);
+                                                billDueDate.setDate(billDueDate.getDate() + 10);
+                                                
+                                                const isUpcoming = currentBillDate > today;
+                                                
+                                                let penalty = 0;
+                                                if (!isUpcoming && today > billDueDate) {
+                                                    const diffDays = Math.floor((today.getTime() - billDueDate.getTime()) / (1000 * 60 * 60 * 24));
+                                                    penalty = (selectedKost.additionalFeePrice || 0) * 0.05 * diffDays;
+                                                }
+                                                
+                                                processedExtraBills.push({
+                                                    id: `v-fac-${i}`,
+                                                    bill_name: `Fasilitas: ${selectedKost.additionalFeeName || 'Listrik, Air, Wifi'} (${currentBillDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })})`,
+                                                    amount: selectedKost.additionalFeePrice,
+                                                    displayType: isUpcoming ? 'upcoming' : 'active',
+                                                    isRent: false,
+                                                    penalty,
+                                                    total: selectedKost.additionalFeePrice + penalty,
+                                                    created_at: billCreatedAt.toISOString(),
+                                                    dueDate: billDueDate,
+                                                    dateLabel: `Jatuh Tempo: ${billDueDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+                                                    isVirtual: true
+                                                } as any);
+                                            }
+                                        }
+                                    }
+
+                                    const allItems = [...processedExtraBills, virtualRentBill].sort((a, b) => {
+                                        const order: any = { 'active': 0, 'upcoming': 1, 'history': 2 };
+                                        return order[a.displayType] - order[b.displayType];
+                                    });
+
+                                    const activeTotal = allItems
+                                        .filter(item => item.displayType === 'active')
+                                        .reduce((sum, item) => sum + item.total, 0);
+
+                                    return (
+                                        <div className="space-y-6">
+                                            <div className="space-y-3">
+                                                {allItems.map((item: any, idx: number) => {
+                                                    const isHistory = item.displayType === 'history';
+                                                    const isActive = item.displayType === 'active';
+                                                    
+                                                    const bgColor = isHistory ? 'bg-gray-50' : isActive ? 'bg-emerald-50' : 'bg-blue-50';
+                                                    const borderColor = isHistory ? 'border-gray-100' : isActive ? 'border-emerald-100' : 'border-blue-100';
+                                                    const textColor = isHistory ? 'text-gray-400' : isActive ? 'text-emerald-600' : 'text-blue-600';
+                                                    const accentColor = isHistory ? 'bg-gray-200' : isActive ? 'bg-emerald-500' : 'bg-blue-500';
+
+                                                    return (
+                                                        <div key={item.id || idx} className={`${bgColor} ${borderColor} border rounded-3xl p-6 transition-all relative overflow-hidden group`}>
+                                                            <div className="flex justify-between items-start">
+                                                                <div className="flex gap-4">
+                                                                    <div className={`w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform`}>
+                                                                        <Receipt className={`w-5 h-5 ${textColor}`} />
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="flex items-center gap-2 mb-1">
+                                                                            <div className={`w-1.5 h-1.5 rounded-full ${accentColor} ${isActive ? 'animate-pulse' : ''}`} />
+                                                                            <p className={`text-[9px] font-black uppercase tracking-widest ${textColor}`}>
+                                                                                {isHistory ? 'LUNAS' : isActive ? 'TAGIHAN AKTIF' : 'TAGIHAN SELANJUTNYA'}
+                                                                            </p>
+                                                                        </div>
+                                                                        <h5 className="text-xs font-black text-gray-900">{item.bill_name}</h5>
+                                                                        <p className="text-[9px] text-gray-500 font-bold mt-1">
+                                                                            {item.dateLabel || (isHistory ? 'Dibayar pada ' : 'Periode: ') + new Date(item.created_at || item.updated_at || Date.now()).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className={`text-base font-black ${isHistory ? 'text-gray-400' : 'text-gray-900'}`}>
+                                                                        {FORMAT_CURRENCY(item.total)}
+                                                                    </p>
+                                                                    {item.penalty > 0 && (
+                                                                        <p className="text-[8px] text-red-500 font-black uppercase mt-1">
+                                                                            + Denda {FORMAT_CURRENCY(item.penalty)}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            {isActive && !item.isRent && (
+                                                                <button 
+                                                                    onClick={() => {
+                                                                        const isVirtual = item.id?.toString().startsWith('v-');
+                                                                        handleStartPayment(
+                                                                            item.total, 
+                                                                            selectedKost.kostId, 
+                                                                            'tagihan_ekstra', 
+                                                                            { 
+                                                                                billId: item.id, 
+                                                                                name: item.bill_name,
+                                                                                billPayment: true,
+                                                                                pendingBills: [item]
+                                                                            }, 
+                                                                            isVirtual ? undefined : item.id
+                                                                        );
+                                                                    }}
+                                                                    className="w-full mt-4 bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all shadow-lg shadow-emerald-200 active:scale-95"
+                                                                >
+                                                                    Bayar Sekarang
+                                                                </button>
+                                                            )}
+                                                            {isActive && item.isRent && (
+                                                                <button 
+                                                                    onClick={() => handleOpenExtension(selectedKost)}
+                                                                    className="w-full mt-4 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all shadow-lg shadow-orange-200 active:scale-95"
+                                                                >
+                                                                    Perpanjang Sewa Sekarang
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {activeTotal > 0 && (
+                                                <div className="space-y-4 mt-6">
+                                                    <div className="bg-gray-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
+                                                        <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-orange-500/20 transition-all duration-700" />
+                                                        
+                                                        <div className="flex justify-between items-center relative z-10">
+                                                            <div>
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Total Tagihan Aktif</p>
+                                                                </div>
+                                                                <p className="text-3xl font-black text-white tracking-tighter">
+                                                                    {FORMAT_CURRENCY(activeTotal)}
+                                                                </p>
+                                                                <p className="text-[8px] font-bold text-gray-500 mt-2 uppercase tracking-widest leading-relaxed">
+                                                                    *Sudah termasuk denda keterlambatan (jika ada).
+                                                                </p>
+                                                            </div>
+                                                            <div className="bg-white/10 px-6 py-3 rounded-2xl border border-white/10 backdrop-blur-sm">
+                                                                <p className="text-[10px] font-black uppercase tracking-widest text-orange-400">Tagihan Aktif</p>
+                                                            </div>
                                                         </div>
                                                     </div>
+
+                                                    <button 
+                                                        onClick={() => {
+                                                            const activeBills = allItems.filter(item => item.displayType === 'active');
+                                                            handleStartPayment(
+                                                                activeTotal,
+                                                                selectedKost.kostId,
+                                                                'tagihan_ekstra',
+                                                                {
+                                                                    billPayment: true,
+                                                                    billName: `Batch: ${activeBills.length} Tagihan (${selectedKost.kostName})`,
+                                                                    pendingBills: activeBills,
+                                                                    kostName: selectedKost.kostName
+                                                                }
+                                                            );
+                                                        }}
+                                                        className="w-full bg-orange-600 hover:bg-orange-700 text-white py-5 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-orange-200 transition-all active:scale-95 flex items-center justify-center gap-3"
+                                                    >
+                                                        <Receipt className="w-5 h-5" /> BAYAR SEMUA TAGIHAN AKTIF
+                                                    </button>
                                                 </div>
-                                            </div>
-                                        );
-                                    }
-                                    return null;
+                                            )}
+                                        </div>
+                                    );
                                 })()}
                             </div>
 
                             <div className="mt-10 flex gap-4">
-                                <button type="button" onClick={() => setShowExtraBillModal(false)} className="flex-1 py-4 text-gray-500 font-black uppercase text-[11px] tracking-widest hover:bg-gray-50 rounded-2xl transition-colors">Tutup</button>
-                                {(() => {
-                                    const rentPrice = selectedKost.daysRemaining <= 5 ? (selectedKost.basePrice || (selectedKost.totalPrice / (selectedKost.duration || 1))) : 0;
-                                    const totalToPay = (selectedKost.totalPendingBills || 0) + rentPrice;
-
-                                    if (totalToPay > 0) {
-                                        return (
-                                            <button 
-                                                onClick={() => handleStartPayment(totalToPay, selectedKost.kostId, 'kost_booking', {
-                                                    billPayment: true,
-                                                    isNearExpiry: selectedKost.daysRemaining <= 5,
-                                                    kostId: selectedKost.kostId,
-                                                    kostName: selectedKost.kostName,
-                                                    pendingBills: selectedKost.pendingBills
-                                                }, selectedKost.id)}
-                                                className={`flex-[2] py-4 ${selectedKost.daysRemaining <= 5 ? 'bg-orange-600 hover:bg-orange-700 shadow-orange-100' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-100'} text-white font-black uppercase text-[11px] tracking-[0.2em] rounded-2xl shadow-2xl transition-all active:scale-95`}
-                                            >
-                                                Bayar Sekarang
-                                            </button>
-                                        );
-                                    }
-                                    return null;
-                                })()}
+                                <button type="button" onClick={() => setShowExtraBillModal(false)} className="w-full py-4 text-gray-500 font-black uppercase text-[11px] tracking-widest hover:bg-gray-50 rounded-2xl transition-colors border border-gray-100">Tutup</button>
                             </div>
                         </div>
                         
@@ -1762,7 +2011,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                     productId={paymentProductId}
                     productType={paymentProductType}
                     userId={user.uid}
-                    existingOrderId={paymentOrderId.includes('-') && !paymentOrderId.includes('BOOK') ? paymentOrderId : undefined}
+                    existingOrderId={(paymentOrderId && !paymentOrderId.startsWith('v-')) ? paymentOrderId : undefined}
                     metadata={{
                         ...paymentMetadata,
                         userName: user.name || user.displayName || 'Penyewa',
@@ -1777,7 +2026,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                             await settlePendingBills(pendingIds);
                         }
                         setShowPaymentGateway(false);
-                        alert('Pembayaran Berhasil! Tagihan Fasilitas Lunas.');
+                        alert('Pembayaran Berhasil!');
                         fetchMyKosts(); // Refresh data
                     }}
                     onCancel={() => setShowPaymentGateway(false)}

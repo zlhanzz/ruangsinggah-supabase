@@ -125,6 +125,7 @@ export async function getPublishedProperties(): Promise<Kost[]> {
         virtualTourUrl: row.virtual_tour_url || '',
         additionalFeePrice: row.additional_fee_price,
         additionalFeeName: row.additional_fee_name,
+        additionalFeeStartsFrom: row.additional_fee_starts_from,
         createdAt: convertTimestamp(row.created_at),
         updatedAt: convertTimestamp(row.updated_at),
         omnichannelContactName: row.omnichannel_contact_name,
@@ -180,6 +181,9 @@ export async function getPublishedPropertyDetails(propertyId: string): Promise<K
       publicFacilities: row.public_facilities || [],
       createdAt: convertTimestamp(row.created_at),
       updatedAt: convertTimestamp(row.updated_at),
+      additionalFeePrice: row.additional_fee_price,
+      additionalFeeName: row.additional_fee_name,
+      additionalFeeStartsFrom: row.additional_fee_starts_from,
       omnichannelContactName: row.omnichannel_contact_name,
       omnichannelContactPhone: row.omnichannel_contact_phone,
       omnichannelContactType: row.omnichannel_contact_type,
@@ -294,7 +298,7 @@ export async function getExtraBills(userId: string): Promise<any[]> {
       .select('*')
       .eq('user_id', userId)
       .eq('product_type', 'tagihan_ekstra')
-      .in('status', ['pending', 'AWAITING_PAYMENT']);
+      .in('status', ['pending', 'AWAITING_PAYMENT', 'PAID', 'SUCCESS', 'berhasil']);
 
     if (error) throw error;
     return data || [];
@@ -551,7 +555,7 @@ export async function getOwnerTenancyData(ownerUid: string): Promise<any[]> {
     }).filter(t => {
       const type = t.product_type || t.type;
       const status = t.status?.toUpperCase();
-      const validStatuses = ['PAID', 'PENDING_APPROVAL', 'AWAITING_PAYMENT', 'SUCCESS', 'APPROVED', 'PENDING'];
+      const validStatuses = ['PAID', 'SUCCESS', 'COMPLETED'];
       return rentTypes.includes(type) && validStatuses.includes(status);
     });
 
@@ -606,6 +610,9 @@ export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
         createdAt: convertTimestamp(row.created_at),
         updatedAt: convertTimestamp(row.updated_at),
         views: row.views || 0,
+        additionalFeePrice: row.additional_fee_price,
+        additionalFeeName: row.additional_fee_name,
+        additionalFeeStartsFrom: row.additional_fee_starts_from,
         omnichannelContactName: row.omnichannel_contact_name,
         omnichannelContactPhone: row.omnichannel_contact_phone,
         omnichannelContactType: row.omnichannel_contact_type,

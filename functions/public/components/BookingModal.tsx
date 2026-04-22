@@ -73,8 +73,16 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
       const proportion = selectedWeight / lowestWeight;
       
       const totalExtraCost = Math.max(0, occupantsCount - 1) * Math.round(extraCostBase * proportion);
+
+      // Add property-wide additional fee if starting from month 1
+      let propertyAddFee = 0;
+      if (kost.additionalFeePrice && kost.additionalFeePrice > 0 && kost.additionalFeeStartsFrom !== 'month_2') {
+          // Proportionally calculate additional fee based on the period (assuming additionalFeePrice is monthly)
+          const monthlyWeight = 30;
+          propertyAddFee = Math.round(kost.additionalFeePrice * (selectedWeight / monthlyWeight));
+      }
       
-      return basePrice + totalExtraCost;
+      return basePrice + totalExtraCost + propertyAddFee;
   };
 
   const currentPrice = getPrice(selectedPeriod, occupants);
@@ -86,12 +94,43 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
     }
     setIsSubmitting(true);
     setTimeout(() => {
+      // Calculate breakdown for onConfirm
+      const selectedWeight = periodWeights[selectedPeriod] || 30;
+      const lowestWeight = periodWeights[lowestPeriod] || 30;
+      const proportion = selectedWeight / lowestWeight;
+      
+      let basePrice = 0;
+      if (hasFlexiblePricing) {
+          const scheme = variant.pricing?.find(p => p.period === selectedPeriod);
+          basePrice = scheme ? scheme.price : 0;
+      } else {
+          const base = variant.price;
+          if (selectedPeriod === 'bulanan') basePrice = base;
+          else if (selectedPeriod === '3bulanan') basePrice = base * 3 * 0.95;
+          else if (selectedPeriod === '6bulanan') basePrice = base * 6 * 0.90;
+          else if (selectedPeriod === 'tahunan') basePrice = base * 12 * 0.85;
+      }
+
+      const extraPersonFee = Math.max(0, occupants - 1) * Math.round(additionalCostPerPerson * proportion);
+      
+      let facilityFee = 0;
+      if (kost.additionalFeePrice && kost.additionalFeePrice > 0) {
+          // Note: Facility fee is always proportional to the period here for the INITIAL payment
+          facilityFee = Math.round(kost.additionalFeePrice * (selectedWeight / 30));
+          if (kost.additionalFeeStartsFrom === 'month_2') {
+              facilityFee = 0; // Promo free month 1
+          }
+      }
+
       onConfirm({
         period: selectedPeriod,
         startDate,
         total: currentPrice,
         variantName: variant.name,
-        occupants: occupants
+        occupants: occupants,
+        basePrice,
+        extraPersonFee,
+        facilityFee
       });
       setIsSubmitting(false);
     }, 1500);
@@ -187,23 +226,41 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
           </div>
 
           {/* Rincian Harga */}
-          <div className="bg-gray-50 rounded-[2rem] p-6 space-y-3">
-            <div className="flex justify-between items-center text-sm font-medium text-gray-500">
-              <span>Paket Sewa</span>
-              <span className="font-bold text-gray-900">{periodMapping[selectedPeriod]?.label || selectedPeriod}</span>
+          <div className="bg-gray-50 rounded-[2.5rem] p-8 space-y-4 border border-gray-100">
+            <div className="space-y-3">
+              <div className="flex justify-between items-center text-xs font-bold text-gray-500 uppercase tracking-widest">
+                <span>Harga Sewa Dasar ({periodMapping[selectedPeriod]?.label || selectedPeriod})</span>
+                <span className="text-gray-900">{FORMAT_CURRENCY(hasFlexiblePricing ? (variant.pricing?.find(p => p.period === selectedPeriod)?.price || 0) : (selectedPeriod === 'bulanan' ? variant.price : getPrice(selectedPeriod, 1)))}</span>
+              </div>
+              
+              {occupants > 1 && additionalCostPerPerson > 0 && (
+                <div className="flex justify-between items-center text-xs font-bold text-orange-500 uppercase tracking-widest">
+                  <span>Tambahan {occupants - 1} Orang</span>
+                  <span>+{FORMAT_CURRENCY(Math.max(0, occupants - 1) * Math.round(additionalCostPerPerson * (periodWeights[selectedPeriod] / (periodWeights[lowestPeriod] || 30))))}</span>
+                </div>
+              )}
+
+              {kost.additionalFeePrice > 0 && kost.additionalFeeStartsFrom !== 'month_2' && (
+                <div className="flex justify-between items-center text-xs font-bold text-blue-500 uppercase tracking-widest">
+                  <span>{kost.additionalFeeName || 'Biaya Tambahan Properti'}</span>
+                  <span>+{FORMAT_CURRENCY(Math.round(kost.additionalFeePrice * (periodWeights[selectedPeriod] / 30)))}</span>
+                </div>
+              )}
             </div>
-            <div className="h-px bg-gray-200 my-2"></div>
-            <div className="flex justify-between items-end">
+
+            <div className="h-px bg-gray-200"></div>
+
+            <div className="flex justify-between items-end pt-2">
               <div>
-                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Total Pembayaran</p>
-                <p className="text-2xl font-black text-gray-900 tracking-tighter">{FORMAT_CURRENCY(currentPrice)}</p>
-                {occupants > 1 && additionalCostPerPerson > 0 && (
-                  <p className="text-[9px] text-orange-500 font-bold mt-1">Termasuk biaya tambahan untuk {occupants} orang</p>
+                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Total Pembayaran Pertama</p>
+                <p className="text-3xl font-black text-gray-900 tracking-tighter leading-none">{FORMAT_CURRENCY(currentPrice)}</p>
+                {kost.additionalFeeStartsFrom === 'month_2' && (
+                   <p className="text-[9px] text-green-600 font-bold mt-2">✨ Promo: {kost.additionalFeeName || 'Biaya Tambahan'} Gratis di Bulan Pertama</p>
                 )}
               </div>
               <div className="text-right">
-                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest leading-none">Status</p>
-                <p className="text-[10px] text-orange-500 font-black uppercase tracking-widest text-right">Menunggu Persetujuan Pemilik</p>
+                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest leading-none mb-1">Status</p>
+                <p className="text-[10px] text-orange-500 font-black uppercase tracking-widest">Menunggu Persetujuan</p>
               </div>
             </div>
           </div>

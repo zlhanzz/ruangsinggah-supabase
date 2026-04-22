@@ -22,7 +22,7 @@ const BillingStatusBadge: React.FC<{ status: string }> = ({ status }) => {
         case 'sudah_ditagih':
             return <div className="px-2 py-1 bg-amber-50 text-amber-600 rounded-lg text-[8px] font-black uppercase tracking-widest border border-amber-100 flex items-center gap-1"><Clock size={10} /> Sudah Ditagih</div>;
         case 'perlu_ditagih':
-            return <div className="px-2 py-1 bg-rose-50 text-rose-600 rounded-lg text-[8px] font-black uppercase tracking-widest border border-rose-100 flex items-center gap-1 animate-pulse"><AlertCircle size={10} /> Perlu Ditagih</div>;
+            return <div className="px-2 py-1 bg-rose-50 text-rose-600 rounded-lg text-[8px] font-black uppercase tracking-widest border border-rose-100 flex items-center gap-1 animate-pulse"><AlertCircle size={10} /> Tertunggak / Belum Bayar</div>;
         default:
             return null;
     }
@@ -172,25 +172,63 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                 groups[uid].currentMonth = 1;
             }
 
-            // Billing Status Logic
-            const monthBills = sortedTrx.filter(t => {
-                if (!t.created_at) return false;
-                const d = new Date(t.created_at);
-                if (isNaN(d.getTime())) return false;
-                return t.product_type === 'tagihan_ekstra' && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-            });
-
+            // --- VIRTUAL BILLING ENGINE (SYNCED WITH MYKOST) ---
             const property = properties.find(p => p.id === groups[uid].kostId);
+            groups[uid].totalOutstanding = 0;
+            groups[uid].missedMonthsCount = 0;
+            
             if (property?.additionalFeePrice > 0) {
-                const isFirstMonthPromo = property.additionalFeeStartsFrom === 'month_2' && groups[uid].currentMonth === 1;
-                
-                if (isFirstMonthPromo) {
-                    groups[uid].billingStatus = 'lunas'; 
-                } else if (monthBills.length === 0) {
-                    groups[uid].billingStatus = 'perlu_ditagih';
+                const startOfLease = groups[uid].initialStartDate || groups[uid].startDate;
+                if (startOfLease && !isNaN(new Date(startOfLease).getTime())) {
+                    const start = new Date(startOfLease);
+                    const now = new Date();
+                    
+                    // Iterate through each month from the SECOND month of stay
+                    // Month 1 is assumed to be included in the initial booking transaction
+                    let iter = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+                    const endIter = new Date(now.getFullYear(), now.getMonth(), 1);
+                    
+                    let billingStatus = 'lunas';
+                    let hasMissing = false;
+
+                    while (iter <= endIter) {
+                        const isPaid = sortedTrx.some(t => {
+                            if (t.product_type !== 'tagihan_ekstra') return false;
+                            const d = new Date(t.created_at || t.startDate);
+                            return d.getMonth() === iter.getMonth() && 
+                                   d.getFullYear() === iter.getFullYear() && 
+                                   ['PAID', 'SUCCESS', 'berhasil'].includes(t.status?.toUpperCase());
+                        });
+
+                        if (!isPaid) {
+                            hasMissing = true;
+                            groups[uid].missedMonthsCount++;
+                            
+                            // Calculate Penalty (5% per day after 10 days)
+                            // Match MyKost.tsx logic: Due Date is 10 days after 1st of month
+                            const billCreatedAt = new Date(iter.getFullYear(), iter.getMonth(), 1, 0, 0, 0);
+                            const billDueDate = new Date(billCreatedAt);
+                            billDueDate.setDate(billDueDate.getDate() + 10);
+                            
+                            if (now > billDueDate) {
+                                const diffDays = Math.floor((now.getTime() - billDueDate.getTime()) / (1000 * 60 * 60 * 24));
+                                const penalty = property.additionalFeePrice * 0.05 * diffDays;
+                                groups[uid].totalOutstanding += (property.additionalFeePrice + penalty);
+                            } else {
+                                groups[uid].totalOutstanding += property.additionalFeePrice;
+                            }
+                        }
+                        
+                        // Move to next month
+                        iter.setMonth(iter.getMonth() + 1);
+                    }
+
+                    if (hasMissing) {
+                        billingStatus = 'perlu_ditagih';
+                    }
+                    groups[uid].billingStatus = billingStatus;
                 } else {
-                    const isPaid = monthBills.some(b => b.status?.toUpperCase() === 'PAID');
-                    groups[uid].billingStatus = isPaid ? 'lunas' : 'sudah_ditagih';
+                    groups[uid].billingStatus = 'not_needed';
                 }
             } else {
                 groups[uid].billingStatus = 'not_needed';
@@ -448,18 +486,17 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                                             <h4 className="font-black text-gray-900 uppercase text-xs tracking-widest">Rincian Keuangan</h4>
                                             <div className="space-y-4">
                                                 <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase">Sewa Kamar</span>
-                                                    <span className="text-xs font-black text-gray-900">{FORMAT_CURRENCY(viewingResident.lastRentAmount)}</span>
-                                                </div>
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-bold text-gray-400 uppercase">Biaya Tambahan</span>
-                                                    <span className="text-xs font-black text-rose-500">{FORMAT_CURRENCY(viewingResident.pendingBills)}</span>
-                                                </div>
-                                                <hr className="border-dashed border-gray-200" />
-                                                <div className="flex justify-between items-center pt-1">
-                                                    <span className="text-[10px] font-black text-gray-900 uppercase">Total Tagihan</span>
-                                                    <span className="text-sm font-black text-orange-600">{FORMAT_CURRENCY(viewingResident.lastRentAmount + viewingResident.pendingBills)}</span>
-                                                </div>
+                                                     <span className="text-[10px] font-bold text-gray-400 uppercase">Tunggakan Fasilitas</span>
+                                                     <span className={`text-xs font-black ${viewingResident.totalOutstanding > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+                                                         {FORMAT_CURRENCY(viewingResident.totalOutstanding)}
+                                                         {viewingResident.missedMonthsCount > 0 && ` (${viewingResident.missedMonthsCount} Bln)`}
+                                                     </span>
+                                                 </div>
+                                                 <hr className="border-dashed border-gray-200" />
+                                                 <div className="flex justify-between items-center pt-1">
+                                                     <span className="text-[10px] font-black text-gray-900 uppercase">Estimasi Total</span>
+                                                     <span className="text-sm font-black text-orange-600">{FORMAT_CURRENCY(viewingResident.lastRentAmount + viewingResident.totalOutstanding)}</span>
+                                                 </div>
                                             </div>
                                             <button 
                                                 onClick={() => setShowAddBillModal(true)}
