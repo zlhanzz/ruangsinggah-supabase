@@ -1153,72 +1153,82 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
                                 <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-br from-orange-400/5 to-transparent rounded-full blur-3xl -mr-40 -mt-40 group-hover:from-orange-400/10 transition-all duration-700 pointer-events-none" />
                                 
                                 <div className="lg:col-span-8 flex flex-col gap-10">
-                                    <div className="flex flex-col md:flex-row items-center md:items-start gap-10 sm:gap-14 w-full">
-                                        <div className="relative shrink-0">
-                                            <div className="w-32 h-32 sm:w-44 sm:h-44 bg-white rounded-[3.5rem] flex items-center justify-center shadow-2xl shadow-orange-100 border-4 border-white transform hover:rotate-3 transition-all duration-700 overflow-hidden">
+                                    <div className="flex flex-col items-center gap-8 sm:gap-12 w-full text-center">
+                                        <div className="relative group/img w-full max-w-[280px] sm:max-w-md">
+                                            <div className="aspect-[4/3] w-full bg-white rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-orange-100 border-4 border-white transform hover:rotate-1 transition-all duration-700 overflow-hidden">
                                                 {kost.displayImage ? (
-                                                    <img src={kost.displayImage} className="w-full h-full object-cover scale-110 group-hover:scale-100 transition-transform duration-700" alt={kost.kostName} />
+                                                    <img src={kost.displayImage} className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-1000" alt={kost.kostName} />
                                                 ) : (
                                                     <MapPin className="w-16 h-16 text-orange-500" />
                                                 )}
                                             </div>
-                                            <div className="absolute -bottom-3 -right-3 w-14 h-14 bg-white rounded-2xl shadow-xl flex items-center justify-center border-2 border-orange-50 animate-pulse">
-                                                <span className="text-2xl">⚡</span>
+                                            <div className="absolute -bottom-4 -right-4 w-16 h-16 bg-white rounded-3xl shadow-2xl flex items-center justify-center border-4 border-orange-50 z-20">
+                                                <span className="text-3xl animate-bounce">⚡</span>
                                             </div>
                                         </div>
                                         
-                                        <div className="flex-1 min-w-0 flex flex-col items-center md:items-start w-full">
+                                        <div className="flex-1 min-w-0 flex flex-col items-center w-full">
                                             <button 
                                                 onClick={() => onPageChange(`${Page.DETAIL}?kostId=${kost.kostId}` as any)}
-                                                className="text-4xl sm:text-5xl font-black text-gray-900 leading-[1.1] tracking-tight text-center md:text-left hover:text-orange-500 transition-colors group/title flex items-start gap-4 mb-6"
+                                                className="text-4xl sm:text-6xl font-black text-gray-900 leading-tight tracking-tight hover:text-orange-500 transition-colors group/title flex flex-col items-center gap-2 mb-8"
                                             >
-                                                {kost.kostName || 'Kost Tersembunyi'}
-                                                <ChevronRight className="w-10 h-10 -mt-1 opacity-0 -translate-x-4 group-hover/title:opacity-100 group-hover/title:translate-x-0 transition-all text-orange-500 shrink-0" />
+                                                <span className="uppercase">{kost.kostName || 'Kost Tersembunyi'}</span>
+                                                <ChevronRight className="w-8 h-8 opacity-0 -translate-y-2 group-hover/title:opacity-100 group-hover/title:translate-y-0 transition-all text-orange-500 shrink-0" />
                                             </button>
 
-                                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 w-full">
-                                                {isPaid && (
-                                                    <div className="flex items-center gap-1.5 bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm">
-                                                        {[1, 2, 3, 4, 5].map((s) => (
-                                                            <Star key={s} className="w-4 h-4 text-gray-300" />
-                                                        ))}
-                                                        <span className="text-[10px] font-black text-gray-400 ml-2 uppercase tracking-widest">Rating</span>
-                                                    </div>
-                                                )}
+                                            <div className="flex flex-wrap items-center justify-center gap-3 w-full">
+                                                {/* Rating only appears after 1 month of stay */}
+                                                {(() => {
+                                                    const startDate = new Date(kost.moveInDate || new Date());
+                                                    const now = new Date();
+                                                    const diffDays = Math.floor((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+                                                    
+                                                    if (isPaid && diffDays >= 30) {
+                                                        return (
+                                                            <div className="flex items-center gap-1.5 bg-white px-5 py-3 rounded-2xl border border-gray-100 shadow-xl shadow-gray-100/50">
+                                                                {[1, 2, 3, 4, 5].map((s) => (
+                                                                    <Star key={s} className="w-4 h-4 text-orange-400 fill-orange-400" />
+                                                                ))}
+                                                                <span className="text-[11px] font-black text-gray-900 ml-2 uppercase tracking-widest">Beri Ulasan</span>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
                                                 
                                                 {kost.daysRemaining !== null && isPaid && (
-                                                    <div className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 border ${
+                                                    <div className={`px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-3 border shadow-sm ${
                                                         kost.daysRemaining <= 7 ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
                                                     }`}>
-                                                        <div className={`w-2.5 h-2.5 rounded-full ${kost.daysRemaining <= 7 ? 'bg-red-500 animate-ping' : 'bg-emerald-500'}`} />
+                                                        <div className={`w-3 h-3 rounded-full ${kost.daysRemaining <= 7 ? 'bg-red-500 animate-ping' : 'bg-emerald-500'}`} />
                                                         {kost.daysRemaining < 0 ? 'Masa Sewa Habis' : `${kost.daysRemaining} Hari Tersisa`}
                                                     </div>
                                                 )}
 
-                                                <span className="bg-gray-50 px-5 py-2.5 rounded-xl text-[10px] font-black text-gray-600 uppercase tracking-widest border border-gray-100">
+                                                <span className="bg-gray-50 px-6 py-3 rounded-2xl text-[11px] font-black text-gray-600 uppercase tracking-widest border border-gray-100">
                                                     {kost.roomType || 'Standard Room'}
                                                 </span>
 
                                                 {isPaid && (
-                                                    <span className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-5 py-2.5 rounded-xl border border-emerald-100 text-[10px] font-black uppercase tracking-widest">
+                                                    <span className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-6 py-3 rounded-2xl border border-emerald-100 text-[11px] font-black uppercase tracking-widest">
                                                         <CheckCircle className="w-4 h-4" /> SEDANG DISEWA
                                                     </span>
                                                 )}
 
                                                 {statusLower === 'cancelled' && (
-                                                    <span className="flex items-center gap-2 text-gray-400 bg-gray-50 px-5 py-2.5 rounded-xl border border-gray-100 text-[10px] font-black uppercase tracking-widest">
+                                                    <span className="flex items-center gap-2 text-gray-400 bg-gray-50 px-6 py-3 rounded-2xl border border-gray-100 text-[11px] font-black uppercase tracking-widest">
                                                         <XCircle className="w-4 h-4" /> PENGAJUAN DIBATALKAN
                                                     </span>
                                                 )}
 
                                                 {statusLower === 'pending_approval' && (
-                                                    <span className="flex items-center gap-2 text-amber-600 bg-amber-50 px-5 py-2.5 rounded-xl border border-amber-100 text-[10px] font-black uppercase tracking-widest">
-                                                        <Clock className="w-4 h-4 animate-pulse" /> MENUNGGU PERSETUJUAN PEMILIK
+                                                    <span className="flex items-center gap-2 text-amber-600 bg-amber-50 px-6 py-3 rounded-2xl border border-amber-100 text-[11px] font-black uppercase tracking-widest">
+                                                        <Clock className="w-4 h-4 animate-pulse" /> MENUNGGU PERSETUJUAN
                                                     </span>
                                                 )}
 
                                                 {statusLower === 'awaiting_payment' && (
-                                                    <span className="flex items-center gap-2 text-orange-600 bg-orange-50 px-5 py-2.5 rounded-xl border border-orange-100 text-[10px] font-black uppercase tracking-widest">
+                                                    <span className="flex items-center gap-2 text-orange-600 bg-orange-50 px-6 py-3 rounded-2xl border border-orange-100 text-[11px] font-black uppercase tracking-widest">
                                                         <Zap className="w-4 h-4" /> MENUNGGU PEMBAYARAN
                                                     </span>
                                                 )}
