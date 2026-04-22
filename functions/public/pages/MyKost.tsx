@@ -994,7 +994,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
     });
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] pt-20 pb-12 font-outfitSelection">
+        <div className="min-h-screen bg-[#F8FAFC] pt-8 pb-12 font-outfitSelection">
             {/* Background Decorations */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
                 <div className="absolute -top-[10%] -right-[10%] w-[40%] h-[40%] bg-orange-100/30 rounded-full blur-[120px]" />
@@ -1004,7 +1004,7 @@ const MyKost: React.FC<MyKostProps> = ({ user, onPageChange }) => {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
 
                 {/* Header Section */}
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
                     <div>
                         <div className="flex items-center gap-4 mb-4">
                             <button 
