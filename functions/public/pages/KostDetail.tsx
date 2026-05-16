@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Kost, RoomType, PricingPeriod, Page } from '../types';
 import { FORMAT_CURRENCY } from '../constants';
 import BookingModal from '../components/BookingModal';
@@ -49,6 +50,64 @@ const InfoSection: React.FC<{ title: string; children: React.ReactNode; defaultO
 const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user, onLoginRedirect, validateProfile }) => {
   const [currentPhoto, setCurrentPhoto] = useState(0);
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
+
+  // === SEO: Dynamic Meta Tags ===
+  const kostName = kost.name || 'Kost Makassar';
+  const kostArea = kost.area || kost.address || 'Makassar';
+  const kostPrice = kost.price ? FORMAT_CURRENCY(kost.price) : '';
+  const kostGender = (kost as any).gender === 'putra' ? 'Putra' : (kost as any).gender === 'putri' ? 'Putri' : (kost as any).gender === 'campur' ? 'Campur' : '';
+  const genderLabel = kostGender ? ` Kost ${kostGender}` : ' Kost';
+  const campusNearby = kost.campuses?.[0]?.name || '';
+  const campusLabel = campusNearby ? ` Dekat ${campusNearby}` : '';
+
+  const seoTitle = `${kostName}${campusLabel} - ${kostArea} | RuangSinggah.id`;
+  const seoDescription = [
+    `${genderLabel.trim()} di ${kostArea}`,
+    kostPrice ? `Harga mulai ${kostPrice}/bulan` : '',
+    kost.facilities?.slice(0, 3).join(', ') || '',
+    campusNearby ? `Dekat ${campusNearby}.` : '',
+    'Cek detail, foto, dan booking langsung di RuangSinggah.id.'
+  ].filter(Boolean).join('. ');
+
+  // First valid image URL for OG image
+  const firstImage = (() => {
+    const img = kost.imageUrls?.[0];
+    if (!img) return 'https://ruangsinggah.id/logo.png';
+    if (typeof img === 'string') return img;
+    return (img as any).url || (img as any).thumbnail || 'https://ruangsinggah.id/logo.png';
+  })();
+
+  const canonicalUrl = `https://ruangsinggah.id/kost/${kost.id}`;
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Accommodation',
+    name: kostName,
+    description: seoDescription,
+    url: canonicalUrl,
+    image: firstImage,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: kost.address || '',
+      addressLocality: kostArea,
+      addressRegion: 'Sulawesi Selatan',
+      addressCountry: 'ID'
+    },
+    ...(kost.price ? { priceRange: `Rp ${kost.price.toLocaleString('id-ID')}/bulan` } : {}),
+    amenityFeature: (kost.facilities || []).map((f: string) => ({
+      '@type': 'LocationFeatureSpecification',
+      name: f,
+      value: true
+    })),
+    ...(kost.lat && kost.lng ? {
+      geo: {
+        '@type': 'GeoCoordinates',
+        latitude: kost.lat,
+        longitude: kost.lng
+      }
+    } : {})
+  };
+  // === END SEO ===
 
   // Auto-track view
   useEffect(() => {
@@ -270,6 +329,35 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
 
   return (
     <div className="bg-gray-50/30 min-h-screen pb-24 lg:pb-20">
+      {/* ===== SEO: Dynamic Meta Tags per Listing ===== */}
+      <Helmet>
+        <title>{seoTitle}</title>
+        <meta name="description" content={seoDescription} />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta name="robots" content="index, follow" />
+
+        {/* Open Graph */}
+        <meta property="og:title" content={seoTitle} />
+        <meta property="og:description" content={seoDescription} />
+        <meta property="og:image" content={firstImage} />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:type" content="website" />
+        <meta property="og:locale" content="id_ID" />
+        <meta property="og:site_name" content="RuangSinggah.id" />
+
+        {/* Twitter Card */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={seoTitle} />
+        <meta name="twitter:description" content={seoDescription} />
+        <meta name="twitter:image" content={firstImage} />
+
+        {/* JSON-LD Accommodation Schema */}
+        <script type="application/ld+json">
+          {JSON.stringify(jsonLd)}
+        </script>
+      </Helmet>
+      {/* ===== END SEO ===== */}
+
       {/* Mobile Sticky Header */}
       <div className="lg:hidden sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-gray-100 px-4 py-4 flex items-center justify-between">
         <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
