@@ -91,7 +91,7 @@ interface NavbarProps {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-20 items-center">
             <div className="flex-shrink-0 flex items-center cursor-pointer" onClick={() => onPageChange(Page.HOME)}>
-              <img src="/logo.png" alt="RuangSinggah.id" className="h-10 sm:h-12 w-auto mr-1.5" />
+              <img src="/logo.png" alt="RuangSinggah.id" className="h-10 sm:h-12 w-auto mr-1.5" width="48" height="48" fetchPriority="high" />
               <span className="text-orange-500 font-extrabold text-2xl tracking-tight">RuangSinggah</span>
               <span className="text-gray-900 font-bold text-2xl">.id</span>
             </div>

@@ -1,26 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate, useParams } from 'react-router-dom';
 import { supabase } from './supabase';
 import { Page, Kost } from './types';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
-import Listings from './pages/Listings';
-import Products from './pages/Products';
-import About from './pages/About';
-import Contact from './pages/Contact';
-import Owner from './pages/Owner';
-import Login from './pages/Login';
-import Profile from './pages/Profile';
-import KostDetail from './pages/KostDetail';
-import Dashboard from './pages/Dashboard';
-import SurveyService from './pages/SurveyService';
-import MyKost from './pages/MyKost';
-import Chat from './pages/Chat';
-import MitraDashboard from './pages/MitraDashboard';
-import OrderPaymentStatus from './pages/OrderPaymentStatus';
-import Terms from './pages/Terms';
 import { getPublishedProperties, getPublishedPropertyDetails, ensureAbsoluteUrl } from './userService';
+
+// Code splitting: semua page selain Home dimuat on-demand (lazy)
+const Listings = lazy(() => import('./pages/Listings'));
+const Products = lazy(() => import('./pages/Products'));
+const About = lazy(() => import('./pages/About'));
+const Contact = lazy(() => import('./pages/Contact'));
+const Owner = lazy(() => import('./pages/Owner'));
+const Login = lazy(() => import('./pages/Login'));
+const Profile = lazy(() => import('./pages/Profile'));
+const KostDetail = lazy(() => import('./pages/KostDetail'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const SurveyService = lazy(() => import('./pages/SurveyService'));
+const MyKost = lazy(() => import('./pages/MyKost'));
+const Chat = lazy(() => import('./pages/Chat'));
+const MitraDashboard = lazy(() => import('./pages/MitraDashboard'));
+const OrderPaymentStatus = lazy(() => import('./pages/OrderPaymentStatus'));
+const Terms = lazy(() => import('./pages/Terms'));
+
+// Loading fallback
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <div className="flex flex-col items-center gap-3">
+      <div className="w-10 h-10 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin"></div>
+      <p className="text-sm text-gray-400 font-medium">Memuat halaman...</p>
+    </div>
+  </div>
+);
+
 
 // Improved Protected Route Wrapper for strict access control
 const ProtectedRoute: React.FC<{ 
@@ -438,6 +451,7 @@ const App: React.FC = () => {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
           </div>
         ) : (
+           <Suspense fallback={<PageLoader />}>
            <Routes>
              <Route path="/payment-status/:orderId" element={<OrderPaymentStatus user={user} />} />
               <Route path={Page.HOME} element={<Home onPageChange={(p: Page | string) => navigate(p)} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />} />
@@ -595,6 +609,7 @@ const App: React.FC = () => {
 
             <Route path="*" element={<Navigate to={Page.HOME} replace />} />
           </Routes>
+          </Suspense>
         )}
       </main>
 
