@@ -125,7 +125,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     try {
       setTempBookingData(data);
       setIsBookingModalOpen(false);
-      
+
       if (!user) {
         alert('Anda harus login untuk melakukan pengajuan sewa.');
         return;
@@ -137,21 +137,22 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
         productType: 'kost_booking',
         amount: data.total,
         metadata: {
+          kostId: kost.id,
           kostName: kost.title,
           imageUrls: kost.image_urls,
           periodLabel: periodLabels[selectedPeriod] || selectedPeriod,
-          roomType: data.variantName,
-          startDate: data.startDate,
+          roomType: data.variantName || selectedRoom.name || '-',
+          startDate: data.startDate || new Date().toISOString().split('T')[0],
           endDate: (() => {
-             const d = new Date(data.startDate);
-             const p = data.period;
-             if (p === 'harian') d.setDate(d.getDate() + 1);
-             else if (p === 'mingguan') d.setDate(d.getDate() + 7);
-             else if (p === 'bulanan') d.setMonth(d.getMonth() + 1);
-             else if (p === '3bulanan') d.setMonth(d.getMonth() + 3);
-             else if (p === '6bulanan') d.setMonth(d.getMonth() + 6);
-             else if (p === 'tahunan') d.setFullYear(d.getFullYear() + 1);
-             return d.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+            const d = new Date(data.startDate || new Date());
+            const p = data.period;
+            if (p === 'harian') d.setDate(d.getDate() + 1);
+            else if (p === 'mingguan') d.setDate(d.getDate() + 7);
+            else if (p === 'bulanan') d.setMonth(d.getMonth() + 1);
+            else if (p === '3bulanan') d.setMonth(d.getMonth() + 3);
+            else if (p === '6bulanan') d.setMonth(d.getMonth() + 6);
+            else if (p === 'tahunan') d.setFullYear(d.getFullYear() + 1);
+            return d.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
           })(),
           ...data
         }
@@ -255,8 +256,8 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
             <p className="text-gray-500 font-medium text-center">Pengajuan sewa Anda telah terkirim ke pemilik kost. Mohon tunggu konfirmasi ketersediaan kamar. Anda akan menerima notifikasi untuk langkah pembayaran selanjutnya.</p>
           </div>
           <div className="flex flex-col gap-4">
-            <button 
-              onClick={() => window.location.href = Page.MY_BOOKINGS} 
+            <button
+              onClick={() => window.location.href = Page.MY_BOOKINGS}
               className="bg-orange-500 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-orange-100 active:scale-95 transition-all"
             >
               Selesaikan & Lihat Status
@@ -275,8 +276,8 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </button>
         <span className="font-bold text-gray-900 truncate max-w-[200px] uppercase tracking-tight text-xs">{kost.title}</span>
-        <button 
-          onClick={handleOpenChat} 
+        <button
+          onClick={handleOpenChat}
           disabled={isSubmittingChat}
           className="text-orange-500 font-black text-sm uppercase tracking-widest disabled:opacity-50"
         >
@@ -459,7 +460,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                   {campus.distance}
                                 </span>
                                 {campus.lat && campus.lng && (
-                                  <a 
+                                  <a
                                     href={`https://www.google.com/maps/dir/?api=1&origin=${kost.location?.lat || 0},${kost.location?.lng || 0}&destination=${campus.lat},${campus.lng}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
@@ -508,7 +509,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                   {fac.distance}
                                 </span>
                                 {fac.lat && fac.lng && (
-                                  <a 
+                                  <a
                                     href={`https://www.google.com/maps/dir/?api=1&origin=${kost.location?.lat || 0},${kost.location?.lng || 0}&destination=${fac.lat},${fac.lng}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
@@ -727,31 +728,37 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           productId={kost.id}
           productType="kost_booking"
           userId={user?.id}
-          metadata={{ 
-            kostName: kost.title, 
-            periodLabel: periodLabels[selectedPeriod] || selectedPeriod, 
+          metadata={{
+            userName: user?.displayName || user?.name || 'Customer',
+            userEmail: user?.email || '',
+            userPhone: user?.phoneNumber || user?.phone || '',
+            userAddress: user?.address || '',
+            bill_name: `Booking Kost: ${kost.title}`,
+            kostName: kost.title,
+            periodLabel: periodLabels[selectedPeriod] || selectedPeriod,
             roomType: tempBookingData.variantName,
             startDate: tempBookingData.startDate,
             endDate: (() => {
-               const d = new Date(tempBookingData.startDate);
-               const p = tempBookingData.period;
-               if (p === 'harian') d.setDate(d.getDate() + 1);
-               else if (p === 'mingguan') d.setDate(d.getDate() + 7);
-               else if (p === 'bulanan') d.setMonth(d.getMonth() + 1);
-               else if (p === '3bulanan') d.setMonth(d.getMonth() + 3);
-               else if (p === '6bulanan') d.setMonth(d.getMonth() + 6);
-               else if (p === 'tahunan') d.setFullYear(d.getFullYear() + 1);
+              const d = new Date(tempBookingData.startDate);
+              const p = tempBookingData.period;
+              if (p === 'harian') d.setDate(d.getDate() + 1);
+              else if (p === 'mingguan') d.setDate(d.getDate() + 7);
+              else if (p === 'bulanan') d.setMonth(d.getMonth() + 1);
+              else if (p === '3bulanan') d.setMonth(d.getMonth() + 3);
+              else if (p === '6bulanan') d.setMonth(d.getMonth() + 6);
+              else if (p === 'tahunan') d.setFullYear(d.getFullYear() + 1);
               return d.toISOString().split('T')[0];
             })(),
-            ...tempBookingData 
+            ...tempBookingData
           }}
+          isAdmin={user?.role === 'admin'}
           onPaymentSuccess={handlePaymentSuccess}
           onCancel={() => setIsPaymentGatewayOpen(false)}
         />
       )}
 
       {showChatWindow && activeChatSession && (
-        <ChatWindow 
+        <ChatWindow
           session={activeChatSession}
           currentUser={user}
           onClose={() => setShowChatWindow(false)}

@@ -108,6 +108,7 @@ const OrderPaymentStatus: React.FC<OrderPaymentStatusProps> = ({ user }) => {
         productId={order.product_id}
         productType={order.product_type as any}
         userId={user?.id || order.user_id}
+        isAdmin={user?.role === 'admin'}
         onPaymentSuccess={() => {
           // If survey, maybe redirect to WA? But PaymentGateway might handle it if we are on SurveyService.
           // However, here we are on a dedicated status page.

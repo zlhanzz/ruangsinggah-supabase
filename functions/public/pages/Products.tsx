@@ -551,6 +551,14 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
           productId={showPaymentProduct.id}
           productType="database"
           userId={user?.id}
+          metadata={{
+            userName: user?.displayName || user?.name || 'Customer',
+            userEmail: user?.email || '',
+            userPhone: user?.phoneNumber || user?.phone || '',
+            userAddress: user?.address || '',
+            billName: `Database Kost ${showPaymentProduct.campus || showPaymentProduct.area || showPaymentProduct.name || ''}`.trim(),
+            bill_name: `Database Kost ${showPaymentProduct.campus || showPaymentProduct.area || showPaymentProduct.name || ''}`.trim(),
+          }}
           onPaymentSuccess={() => {
             setPurchasedItem(showPaymentProduct);
             setExistingOrderId(undefined);

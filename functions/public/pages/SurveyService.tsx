@@ -77,6 +77,10 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
     // Prepare metadata for payment and post-payment message
     const metadata = {
       ...formData,
+      userName: user?.displayName || user?.name || formData.name || 'Customer',
+      userEmail: user?.email || formData.email || '',
+      userPhone: normalizePhone(formData.phone),
+      userAddress: user?.address || formData.kostAddress || '',
       phone: normalizePhone(formData.phone),
       ownerPhone: normalizePhone(formData.ownerPhone),
       item: 'Jasa Survey Lokasi Kost',

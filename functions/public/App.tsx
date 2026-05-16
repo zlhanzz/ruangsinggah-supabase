@@ -219,6 +219,37 @@ const App: React.FC = () => {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // --- SYNC (CROSS-TAB) ---
+  useEffect(() => {
+    // 1. Storage Event Listener (Cross-tab fallback)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'RS_MOCK_TIME' || e.key === 'RS_DATA_REFRESH') {
+        console.log(`Sync event detected via storage (${e.key}). Reloading...`);
+        window.location.reload();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    // 2. BroadcastChannel Listener (Instant sync for active tabs)
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('RS_TIME_SYNC');
+      channel.onmessage = (event) => {
+        if (event.data.type === 'TIME_CHANGED') {
+          console.log('Time sync received via BroadcastChannel. Reloading...');
+          window.location.reload();
+        }
+      };
+    } catch (e) {
+      console.warn('BroadcastChannel not supported in this browser.');
+    }
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      if (channel) channel.close();
+    };
+  }, []);
+
   // Handle kostId deep link authentication check
   useEffect(() => {
     if (!loadingAuth) {
@@ -457,9 +488,9 @@ const App: React.FC = () => {
               />
             } />
             <Route path={Page.TERMS} element={<Terms />} />
-            <Route path={Page.MY_BOOKINGS} element={
+            <Route path={`${Page.MY_BOOKINGS}/*`} element={
               <ProtectedRoute user={user} loadingAuth={loadingAuth}>
-                <MyKost user={user} onPageChange={(p: Page) => navigate(p)} />
+                <MyKost user={user} />
               </ProtectedRoute>
             } />
             <Route path={Page.CHAT} element={
