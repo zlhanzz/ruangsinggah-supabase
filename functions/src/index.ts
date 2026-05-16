@@ -1155,7 +1155,6 @@ export const createMidtransPayment = functions.https.onRequest({ cors: true }, a
     const { data: userProfile } = await supabase.from('users').select('email, name, phone, address').eq('id', userId).maybeSingle();
     
     const safeEmail = (userProfile?.email || metadata?.userEmail || 'customer@example.com').trim();
-    const safeName = (userProfile?.name || (userProfile as any)?.full_name || metadata?.userName || 'Customer').trim();
     const safePhone = (userProfile?.phone || metadata?.userPhone || '').trim();
     const safeAddress = (userProfile?.address || metadata?.userAddress || '').trim();
     
