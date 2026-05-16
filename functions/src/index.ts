@@ -1355,17 +1355,17 @@ export const createMidtransPayment = functions.https.onRequest({ cors: true }, a
     const parameter: any = {
       transaction_details: { order_id: midtransOrderId, gross_amount: finalGrossAmount },
       customer_details: { 
-          first_name: safeName, 
+          first_name: 'Pelanggan', 
           email: safeEmail,
           phone: safePhone,
           billing_address: {
-              first_name: safeName,
+              first_name: 'Pelanggan',
               email: safeEmail,
               phone: safePhone,
               address: safeAddress || 'Indonesia'
           },
           shipping_address: {
-              first_name: safeName,
+              first_name: 'Pelanggan',
               email: safeEmail,
               phone: safePhone,
               address: safeAddress || 'Indonesia'
