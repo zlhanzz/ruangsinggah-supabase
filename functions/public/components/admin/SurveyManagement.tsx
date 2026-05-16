@@ -28,6 +28,51 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
     surveyAgents,
     refreshData
 }) => {
+    // --- HELPER COMPONENTS ---
+    const categoryChecklists: Record<string, string[]> = {
+        kost_type: ['Putra', 'Putri', 'Campur', 'Pasutri'],
+        room_facilities: ['Tanpa Fasilitas', 'Tempat Tidur', 'Bantal', 'Sprei', 'Lemari Pakaian', 'Meja Belajar/Kerja', 'Kursi', 'Cermin', 'Rak Sepatu', 'AC', 'Kipas Angin', 'TV', 'Kulkas', 'Stop Kontak', 'Listrik/Kamar'],
+        bathroom_facilities: ['WC Dalam', 'WC Umum', 'Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Bak Mandi', 'Gayung', 'Ember', 'Wastafel', 'Cermin WC', 'Gantungan Baju', 'Exhaust Fan', 'Water Heater'],
+        kitchen_facilities: ['Dapur Umum', 'Dapur Dalam', 'Kompor', 'Gas', 'Kulkas', 'Wastafel Dapur', 'Rak Piring', 'Meja Dapur', 'Alat Masak', 'Alat Makan', 'Tempat Sampah'],
+        public_facilities: ['Ruang Tamu', 'Dapur Bersama', 'WiFi', 'Listrik Umum', 'Jemuran', 'Mesin Cuci', 'Ruang Santai', 'Parkir Motor', 'Parkir Mobil'],
+        water_check: ['Air Bersih/Jernih', 'Air Tidak Berbau', 'Aliran Air Deras', 'Keran Berfungsi Baik'],
+        wifi_check: ['Tidak Ada WiFi'],
+        security_check: ['CCTV Aktif', 'Gembok/Pagar', 'Akses 24 Jam', 'Batas Jam Malam', 'Penjaga Kos/Satpam', 'Lingkungan Aman'],
+        access_check: ['Akses Mobil Mudah', 'Akses Motor Mudah', 'Dalam Gang', 'Dekat Jalan Utama', 'Dekat Masjid', 'Dekat Gereja', 'Dekat Warung Makan', 'Dekat Minimarket', 'Dekat Toko Grosir', 'Dekat Kampus/Kantor', 'Jalanan Beraspal', 'Bebas Banjir'],
+        environmental_conditions: ['Area Kostan', 'Area Perumahan', 'Padat Penduduk', 'Lingkungan Tenang', 'Bebas Bau/Polusi', 'Pencahayaan Baik', 'Bebas Hewan/Serangga'],
+        building_conditions: ['Bangunan Baru', 'Bangunan Terawat', 'Cat Masih Bagus', 'Tidak Ada Retak', 'Atap Tidak Bocor', 'Tidak Ada Rembes', 'Tidak Ada Jamur Dinding', 'Sirkulasi Udara Lancar']
+    };
+
+    const StarRatingDisplay: React.FC<{ rating?: number }> = ({ rating }) => (
+        <div className="flex gap-0.5">
+            {[1, 2, 3, 4, 5].map((star) => (
+                <span key={star} className={`text-sm ${rating && star <= rating ? 'text-yellow-400' : 'text-gray-200'}`}>
+                    ★
+                </span>
+            ))}
+        </div>
+    );
+
+    const StarRatingInput: React.FC<{ value: number; onChange: (rating: number) => void; disabled?: boolean }> = ({ value, onChange, disabled }) => (
+        <div className="flex gap-1 sm:gap-1.5 p-1.5 sm:p-2 bg-gray-50/80 rounded-xl border border-gray-100 hover:border-orange-200 transition-colors">
+            {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                    key={star}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onChange(star)}
+                    className={`text-xl sm:text-2xl transition-all duration-200 w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center ${
+                        star <= value 
+                        ? 'text-yellow-400 bg-yellow-50 drop-shadow-[0_0_8px_rgba(250,204,21,0.3)] scale-110 border border-yellow-200' 
+                        : 'text-gray-300 bg-white hover:bg-gray-100 hover:text-gray-400 border border-gray-200 shadow-sm'
+                    } ${!disabled && 'active:scale-95 cursor-pointer'} ${disabled && 'cursor-not-allowed opacity-70'}`}
+                >
+                    {star <= value ? '★' : '☆'}
+                </button>
+            ))}
+        </div>
+    );
+
     // --- LOCAL UI STATE ---
     const [adminSurveyTab, setAdminSurveyTab] = useState<'all' | 'pending' | 'active' | 'completed'>('all');
     const [agentTab, setAgentTab] = useState<'pending' | 'active' | 'history'>('pending');
@@ -97,6 +142,11 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
 
             await updateSurveyRequest(isEditingSurvey.id, updates);
 
+            // [NEW] Trigger notifikasi email ke AGEN jika ini penugasan pertama
+            if (!isEditingSurvey.assigned_agent_id && updates.assigned_agent_id) {
+                await notifySurveyStatusUpdate(isEditingSurvey.id, 'ASSIGNED_TO_AGENT');
+            }
+
             if (updates.status !== oldStatus) {
                 await notifySurveyStatusUpdate(isEditingSurvey.id, updates.status);
             }
@@ -122,6 +172,7 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                 survey_time: newSurveyTime,
                 status: 'RESCHEDULED'
             });
+            await notifySurveyStatusUpdate(isReschedulingSurvey.id, 'RESCHEDULED');
             alert('Jadwal survey berhasil diubah');
             setIsReschedulingSurvey(null);
             refreshData();
@@ -511,8 +562,8 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsEditingSurvey(null)}></div>
                     <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-orange-50/50">
-                            <div><h2 className="text-xl font-black uppercase text-orange-900">Kelola Survey</h2><p className="text-xs font-bold text-orange-500 uppercase tracking-widest mt-1">Update Status & Agen Surveyor</p></div>
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                            <div><h2 className="text-xl font-black uppercase text-gray-900">Kelola Survey</h2><p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Update Status & Agen Surveyor</p></div>
                             <button onClick={() => setIsEditingSurvey(null)} className="w-8 h-8 flex items-center justify-center border rounded-full hover:bg-white transition-colors">&times;</button>
                         </div>
                         <form onSubmit={handleUpdateSurvey} className="flex-grow overflow-y-auto p-6 space-y-5">
@@ -592,50 +643,189 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                                     </div>
                                 )}
 
-                                <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
-                                    <div className="flex justify-between items-center mb-1.5">
-                                        <label className="text-[10px] font-black text-blue-900 uppercase tracking-widest">Link Hasil Survey (Automated Drive)</label>
-                                        {!surveyForm.result_drive_link && isAdmin && !isAgent && (
-                                            <button 
-                                                type="button" 
-                                                onClick={handleGenerateDriveFolderLocal}
-                                                className="text-[10px] font-black text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-lg shadow-sm transition-all active:scale-95 flex items-center gap-1.5"
-                                                disabled={isSubmitting}
-                                            >
-                                                {isSubmitting ? '...' : '📂 Buat Folder Manual'}
-                                            </button>
-                                        )}
-                                    </div>
-                                    <input 
-                                        readOnly
-                                        className="w-full bg-white/80 border border-blue-200 rounded-xl px-4 py-3 text-xs font-bold text-blue-600 cursor-not-allowed outline-none"
-                                        value={surveyForm.result_drive_link || ''}
-                                        placeholder="Menunggu penjadwalan/folder..."
-                                    />
-                                </div>
-
-                                {isAgent && (
-                                    <div className="pt-4 border-t border-gray-100">
-                                        <h3 className="text-xs font-black text-orange-900 uppercase tracking-widest mb-4 flex items-center gap-2">📝 Summary Penilaian Surveyor</h3>
+                                {(isAdmin || isAgent) && (
+                                    <div>
+                                        <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            {isAdmin ? '📋 Peninjauan Laporan Surveyor' : '📝 Summary Penilaian Surveyor'}
+                                        </h3>
                                         <div className="space-y-4">
                                              {[
-                                                 { id: 'room_facilities', label: 'Fasilitas Kamar', icon: '🛏️' },
+                                                 { id: 'kost_type', label: 'Jenis Kost', icon: '👤' },
+                                                  { id: 'room_facilities', label: 'Fasilitas Kamar', icon: '🛏️' },
                                                  { id: 'bathroom_facilities', label: 'Fasilitas WC', icon: '🚿' },
+                                                 { id: 'kitchen_facilities', label: 'Fasilitas Dapur', icon: '🍳' },
+                                                 { id: 'public_facilities', label: 'Fasilitas Umum', icon: '🛋️' },
                                                  { id: 'water_check', label: 'Pengecekan Air', icon: '💧' },
                                                  { id: 'wifi_check', label: 'Pengecekan WiFi', icon: '📶' },
                                                  { id: 'security_check', label: 'Pengecekan Keamanan', icon: '🛡️' },
-                                                 { id: 'access_check', label: 'Akses Umum', icon: '📍' },
-                                                 { id: 'resident_testimonial', label: 'Testimoni', icon: '💬' },
+                                                 { id: 'access_check', label: 'Akses Umum/Kampus/Kantor', icon: '📍' },
+                                                 { id: 'building_conditions', label: 'Kondisi Bangunan/Kamar', icon: '🏠' },
+                                                 { id: 'environmental_conditions', label: 'Lingkungan Sekitar', icon: '🌳' },
                                              ].map((field) => (
                                                  <div key={field.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm transition-all hover:border-orange-200">
-                                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
-                                                         <span>{field.icon}</span> {field.label}
-                                                     </label>
+                                                     <div className="mb-3">
+                                                        <label className="text-[10px] font-black text-gray-800 uppercase tracking-widest flex items-center gap-1.5">
+                                                            <span>{field.icon}</span> {field.label}
+                                                        </label>
+                                                     </div>
+
+                                                     {categoryChecklists[field.id] && (
+                                                         <div className="mb-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                              {categoryChecklists[field.id].map(item => {
+                                                                  const isChecked = ((surveyForm.evaluation_summary as any)?.[`${field.id}_checklist`] || []).includes(item);
+                                                                  const isDekat = item.toLowerCase().startsWith('dekat');
+                                                                  return (
+                                                                      <div key={item} className="flex flex-col gap-1.5">
+                                                                         <label className={`flex items-center gap-2 p-2 rounded-lg border text-[10px] sm:text-xs transition-colors ${isChecked ? 'bg-orange-50 border-orange-200 text-orange-700 font-bold' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'} ${isAdmin && !isAgent ? 'opacity-80 cursor-default hover:bg-gray-50' : 'cursor-pointer'}`}>
+                                                                             <input
+                                                                                 type="checkbox"
+                                                                                 className="w-3.5 h-3.5 text-orange-500 rounded border-gray-300 focus:ring-orange-500 cursor-pointer disabled:cursor-default"
+                                                                                 checked={isChecked}
+                                                                                 onChange={(e) => {
+                                                                                     if (isAdmin && !isAgent) return;
+                                                                                     const currentList = (surveyForm.evaluation_summary as any)?.[`${field.id}_checklist`] || [];
+                                                                                     const newList = e.target.checked 
+                                                                                         ? [...currentList, item] 
+                                                                                         : currentList.filter((i: string) => i !== item);
+                                                                                     
+                                                                                     setSurveyForm({ 
+                                                                                         ...surveyForm, 
+                                                                                         evaluation_summary: { 
+                                                                                             ...(surveyForm.evaluation_summary || {}), 
+                                                                                             [`${field.id}_checklist`]: newList 
+                                                                                         } 
+                                                                                     });
+                                                                                 }}
+                                                                                 disabled={isAdmin && !isAgent}
+                                                                             />
+                                                                             <span className="truncate" title={item}>{item}</span>
+                                                                         </label>
+                                                                         
+                                                                         {isDekat && isChecked && (
+                                                                             <div className="flex flex-col gap-1 px-1">
+                                                                                 <div className="flex items-center gap-1">
+                                                                                    {isAdmin && !isAgent ? (
+                                                                                        <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
+                                                                                            Jarak: {(surveyForm.evaluation_summary as any)?.[`${field.id}_${item}_dist`] || '-'} {(surveyForm.evaluation_summary as any)?.[`${field.id}_${item}_unit`] || ''}
+                                                                                        </span>
+                                                                                    ) : (
+                                                                                        <>
+                                                                                            <input 
+                                                                                                type="number"
+                                                                                                className="w-16 bg-white border border-gray-200 rounded-md px-1.5 py-1 text-[10px] font-bold outline-none focus:ring-1 focus:ring-orange-500"
+                                                                                                placeholder="Angka"
+                                                                                                value={(surveyForm.evaluation_summary as any)?.[`${field.id}_${item}_dist`] || ''}
+                                                                                                onChange={e => setSurveyForm({
+                                                                                                    ...surveyForm,
+                                                                                                    evaluation_summary: {
+                                                                                                        ...(surveyForm.evaluation_summary || {}),
+                                                                                                        [`${field.id}_${item}_dist`]: e.target.value
+                                                                                                    }
+                                                                                                })}
+                                                                                            />
+                                                                                            <select 
+                                                                                                className="bg-white border border-gray-200 rounded-md px-1 py-1 text-[10px] font-bold outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer"
+                                                                                                value={(surveyForm.evaluation_summary as any)?.[`${field.id}_${item}_unit`] || 'm'}
+                                                                                                onChange={e => setSurveyForm({
+                                                                                                    ...surveyForm,
+                                                                                                    evaluation_summary: {
+                                                                                                        ...(surveyForm.evaluation_summary || {}),
+                                                                                                        [`${field.id}_${item}_unit`]: e.target.value
+                                                                                                    }
+                                                                                                })}
+                                                                                            >
+                                                                                                <option value="m">m</option>
+                                                                                                <option value="km">km</option>
+                                                                                            </select>
+                                                                                        </>
+                                                                                    )}
+                                                                                 </div>
+
+                                                                                 {item === 'Dekat Kampus/Kantor' && (
+                                                                                    <div className="mt-0.5">
+                                                                                        {isAdmin && !isAgent ? (
+                                                                                            <span className="text-[10px] font-bold text-gray-500 italic block">
+                                                                                                Nama: {(surveyForm.evaluation_summary as any)?.[`${field.id}_${item}_name`] || '-'}
+                                                                                            </span>
+                                                                                        ) : (
+                                                                                            <input 
+                                                                                                type="text"
+                                                                                                className="w-full bg-white border border-gray-200 rounded-md px-2 py-1 text-[10px] font-bold outline-none focus:ring-1 focus:ring-orange-500"
+                                                                                                placeholder="Nama Kampus/Kantor..."
+                                                                                                value={(surveyForm.evaluation_summary as any)?.[`${field.id}_${item}_name`] || ''}
+                                                                                                onChange={e => setSurveyForm({
+                                                                                                    ...surveyForm,
+                                                                                                    evaluation_summary: {
+                                                                                                        ...(surveyForm.evaluation_summary || {}),
+                                                                                                        [`${field.id}_${item}_name`]: e.target.value
+                                                                                                    }
+                                                                                                })}
+                                                                                            />
+                                                                                        )}
+                                                                                    </div>
+                                                                                 )}
+                                                                             </div>
+                                                                         )}
+                                                                      </div>
+                                                                 );
+                                                              })}
+                                                         </div>
+                                                     )}
+
+                                                     {field.id === 'wifi_check' && (
+                                                         <div className="mb-3">
+                                                            <div className={`flex items-center gap-2 ${isAdmin && !isAgent ? 'bg-gray-50/50' : 'bg-gray-50'} border border-gray-200 rounded-xl px-4 py-2.5`}>
+                                                                {isAdmin && !isAgent ? (
+                                                                    <div className="flex-1 text-sm font-bold text-gray-700">
+                                                                        {(surveyForm.evaluation_summary as any)?.wifi_speed || '-'}
+                                                                    </div>
+                                                                ) : (
+                                                                    <input 
+                                                                        type="number"
+                                                                        className="flex-1 bg-transparent text-sm font-bold outline-none text-gray-700"
+                                                                        placeholder="Ketik kecepatan internet..."
+                                                                        value={(surveyForm.evaluation_summary as any)?.wifi_speed || ''}
+                                                                        onChange={e => setSurveyForm({
+                                                                            ...surveyForm,
+                                                                            evaluation_summary: {
+                                                                                ...(surveyForm.evaluation_summary || {}),
+                                                                                wifi_speed: e.target.value
+                                                                            }
+                                                                        })}
+                                                                    />
+                                                                )}
+                                                                <span className="text-xs font-black text-gray-400 tracking-widest">MBPS</span>
+                                                            </div>
+                                                         </div>
+                                                     )}
+
+                                                     <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-gray-100 pt-3">
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Penilaian Keseluruhan</label>
+                                                        {isAdmin ? (
+                                                            <StarRatingDisplay rating={(surveyForm.evaluation_summary as any)?.[`${field.id}_rating`]} />
+                                                        ) : (
+                                                            <StarRatingInput 
+                                                                value={(surveyForm.evaluation_summary as any)?.[`${field.id}_rating`] || 0} 
+                                                                onChange={(val) => {
+                                                                    setSurveyForm({
+                                                                        ...surveyForm,
+                                                                        evaluation_summary: {
+                                                                            ...(surveyForm.evaluation_summary || {}),
+                                                                            [`${field.id}_rating`]: val
+                                                                        }
+                                                                    });
+                                                                }}
+                                                            />
+                                                        )}
+                                                     </div>
+
                                                       <textarea 
-                                                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-orange-500 transition-all outline-none mb-3"
+                                                          readOnly={isAdmin && !isAgent}
+                                                          className={`w-full ${isAdmin && !isAgent ? 'bg-gray-50/50 cursor-default' : 'bg-gray-50'} border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-orange-500 transition-all outline-none mb-3`}
                                                           rows={2}
                                                           value={(surveyForm.evaluation_summary as any)?.[field.id] || ''}
                                                           onChange={e => {
+                                                              if (isAdmin && !isAgent) return;
                                                               setSurveyForm({ 
                                                                   ...surveyForm, 
                                                                   evaluation_summary: { 
@@ -644,37 +834,46 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                                                                   } 
                                                               });
                                                           }}
-                                                          placeholder={`Tulis hasil pengecekan ${field.label.toLowerCase()}...`}
+                                                          placeholder={isAdmin && !isAgent ? 'Belum ada catatan...' : `Tulis hasil pengecekan ${field.label.toLowerCase()}...`}
                                                       />
 
                                                      <div className="space-y-2">
                                                          <div className="flex items-center justify-between">
-                                                             <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Bukti Foto</span>
-                                                              <label className={`text-[9px] font-black uppercase px-2.5 py-1.5 rounded-lg bg-orange-50 text-orange-600 cursor-pointer hover:bg-orange-100 flex items-center gap-1.5 ${isUploadingSurveyPhoto === field.id ? 'opacity-50' : ''}`}>
-                                                                 {isUploadingSurveyPhoto === field.id ? 'Uploading...' : 'Tambah Foto'}
-                                                                 <input 
-                                                                     type="file" 
-                                                                     multiple 
-                                                                     accept="image/*" 
-                                                                     className="hidden" 
-                                                                     disabled={isUploadingSurveyPhoto === field.id}
-                                                                     onChange={(e) => handleSurveyPhotoUploadLocal(field.id, e.target.files)} 
-                                                                 />
-                                                              </label>
+                                                             <span className="text-[9px] font-black text-gray-700 uppercase tracking-widest">Bukti Foto</span>
+                                                              {isAgent && (
+                                                                <label className={`text-[9px] font-black uppercase px-2.5 py-1.5 rounded-lg bg-orange-50 text-orange-600 cursor-pointer hover:bg-orange-100 flex items-center gap-1.5 ${isUploadingSurveyPhoto === field.id ? 'opacity-50' : ''}`}>
+                                                                    {isUploadingSurveyPhoto === field.id ? 'Uploading...' : 'Tambah Foto'}
+                                                                    <input 
+                                                                        type="file" 
+                                                                        multiple 
+                                                                        accept="image/*" 
+                                                                        className="hidden" 
+                                                                        disabled={isUploadingSurveyPhoto === field.id}
+                                                                        onChange={(e) => handleSurveyPhotoUploadLocal(field.id, e.target.files)} 
+                                                                    />
+                                                                </label>
+                                                              )}
                                                          </div>
                                                          <div className="grid grid-cols-5 gap-2">
                                                              {((surveyForm.evaluation_summary as any)?.[`${field.id}_photos`] || []).map((url: string, idx: number) => (
                                                                  <div key={idx} className="relative aspect-square rounded-xl overflow-hidden group shadow-sm bg-gray-50">
                                                                      <img src={url} alt="Proof" className="w-full h-full object-cover" />
-                                                                     <button 
-                                                                         type="button"
-                                                                         onClick={() => handleRemoveSurveyPhotoLocal(field.id, url)}
-                                                                         className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
-                                                                     >
-                                                                         &times;
-                                                                     </button>
+                                                                     {isAgent && (
+                                                                        <button 
+                                                                            type="button"
+                                                                            onClick={() => handleRemoveSurveyPhotoLocal(field.id, url)}
+                                                                            className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                                                                        >
+                                                                            &times;
+                                                                        </button>
+                                                                     )}
                                                                  </div>
                                                              ))}
+                                                             {((surveyForm.evaluation_summary as any)?.[`${field.id}_photos`] || []).length === 0 && (
+                                                                <div className="col-span-5 py-3 border border-dashed border-gray-100 rounded-xl flex items-center justify-center">
+                                                                    <span className="text-[10px] font-bold text-gray-300 italic">Tidak ada foto</span>
+                                                                </div>
+                                                             )}
                                                          </div>
                                                      </div>
                                                  </div>
@@ -682,6 +881,30 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                                          </div>
                                     </div>
                                 )}
+
+                                <div className="pt-4 border-t border-gray-100">
+                                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Link Hasil Survey (Foto & Video)</label>
+                                            {!surveyForm.result_drive_link && isAdmin && !isAgent && (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleGenerateDriveFolderLocal}
+                                                    className="text-[10px] font-black text-white bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded-lg shadow-sm transition-all active:scale-95 flex items-center gap-1.5"
+                                                    disabled={isSubmitting}
+                                                >
+                                                    {isSubmitting ? '...' : '📂 Buat Folder Manual'}
+                                                </button>
+                                            )}
+                                        </div>
+                                        <input 
+                                            readOnly
+                                            className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold text-gray-600 cursor-not-allowed outline-none"
+                                            value={surveyForm.result_drive_link || ''}
+                                            placeholder="Menunggu penjadwalan/folder..."
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="flex gap-3 pt-4 border-t border-gray-100">

@@ -204,18 +204,29 @@ export interface SurveyRequest {
   evaluation_summary?: {
     room_facilities?: string;
     room_facilities_photos?: string[];
+    room_facilities_rating?: number;
     bathroom_facilities?: string;
     bathroom_facilities_photos?: string[];
+    bathroom_facilities_rating?: number;
     water_check?: string;
     water_check_photos?: string[];
+    water_check_rating?: number;
     wifi_check?: string;
     wifi_check_photos?: string[];
+    wifi_check_rating?: number;
     security_check?: string;
     security_check_photos?: string[];
+    security_check_rating?: number;
     access_check?: string;
     access_check_photos?: string[];
+    access_check_rating?: number;
+    /** @deprecated Use environmental_conditions instead */
     resident_testimonial?: string;
+    /** @deprecated Use environmental_conditions_photos instead */
     resident_testimonial_photos?: string[];
+    environmental_conditions?: string;
+    environmental_conditions_photos?: string[];
+    environmental_conditions_rating?: number;
   };
   user_rating?: number;
   user_comment?: string;

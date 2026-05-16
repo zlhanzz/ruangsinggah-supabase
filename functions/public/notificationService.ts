@@ -140,10 +140,16 @@ export const notifySurveyStatusUpdate = async (surveyId: string, newStatus: stri
     if (newStatus === 'AGENT_ASSIGNED') {
       userTitle = 'Surveyor Ditemukan! 🔎';
       userMsg = `Surveyor telah ditetapkan untuk kost ${kost_name}. Mohon tunggu jadwal kunjungan.`;
+    } else if (newStatus === 'HEADING_TO_LOCATION') {
+      userTitle = 'Surveyor Menuju Lokasi 🚗';
+      userMsg = `Surveyor kami sedang dalam perjalanan menuju ${kost_name}. Mohon pastikan akses tersedia.`;
+    } else if (newStatus === 'RESCHEDULED') {
+      userTitle = 'Jadwal Survey Diperbarui 🗓️';
+      userMsg = `Jadwal survey untuk ${kost_name} telah diubah. Cek detail jadwal terbaru Anda.`;
     } else if (newStatus === 'SURVEYING') {
       userTitle = 'Survey Sedang Berlangsung ⚡';
       userMsg = `Surveyor sedang berada di lokasi ${kost_name} untuk melakukan pengecekan.`;
-    } else if (newStatus === 'COMPLETED') {
+    } else if (newStatus === 'COMPLETED' || newStatus === 'SUBMITTED') {
       userTitle = 'Survey Selesai! ✅';
       userMsg = `Hasil survey untuk ${kost_name} telah tersedia. Silakan cek di menu My Kost.`;
     }
@@ -161,6 +167,37 @@ export const notifySurveyStatusUpdate = async (surveyId: string, newStatus: stri
       }
 
       await sendNotification(assigned_agent_id, agentTitle, agentMsg, 'assignment', { surveyId, status: newStatus }, '/agent-dashboard');
+    }
+
+    // 4. Kirim Email Notifikasi via Cloud Function
+    try {
+      const emailEndpoint = 'https://us-central1-ruangsinggahid-3afb2.cloudfunctions.net/sendSurveyStatusEmail';
+      
+      // Tentukan siapa yang menerima email berdasarkan status
+      let recipientRole: 'user' | 'agent' | null = null;
+      
+      // Kasus khusus: ASSIGNED_TO_AGENT dipanggil saat admin pertama kali menetapkan agen
+      if (newStatus === 'ASSIGNED_TO_AGENT') {
+        recipientRole = 'agent';
+      } else if (['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'RESCHEDULED', 'COMPLETED'].includes(newStatus)) {
+        recipientRole = 'user';
+      }
+
+      if (recipientRole) {
+        // Panggil secara asynchronous tanpa menunggu (fire and forget)
+        // untuk menjaga performa UI
+        fetch(emailEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            surveyId,
+            status: newStatus,
+            recipientRole
+          })
+        }).catch(err => console.error('[NotificationService] Email trigger failed:', err));
+      }
+    } catch (emailErr) {
+      console.error('[NotificationService] Error in email notification block:', emailErr);
     }
 
     return true;

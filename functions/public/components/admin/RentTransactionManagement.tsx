@@ -1,24 +1,27 @@
-import React, { useState } from 'react';
-import { AdminTransaction, updateTransactionStatus, deleteTransaction, deleteTransactions } from '../../adminService';
+import React, { useState, useEffect } from 'react';
+import { AdminTransaction, updateTransactionStatus, deleteTransaction, deleteTransactions, getAdminProperties, BasicPropertyInfo, syncResidentStatus } from '../../adminService';
 import { supabase } from '../../supabase';
 import { notifyAdminTransaction } from '../../emailService';
 import { FORMAT_CURRENCY } from '../../constants';
+import { getCurrentDate } from '../../utils/timeUtils';
 
 interface RentTransactionManagementProps {
-    rentTransactions: AdminTransaction[];
     isAdmin: boolean;
     uid?: string;
+    rentTransactions: AdminTransaction[];
     refreshData: () => void;
 }
 
 const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
-    rentTransactions,
     isAdmin,
     uid,
+    rentTransactions,
     refreshData
 }) => {
     // --- LOCAL UI STATE ---
-    const [rentFilter, setRentFilter] = useState<'all' | 'pengajuan' | 'menunggu_pembayaran' | 'realisasi' | 'perpanjangan'>('all');
+    const [rentFilter, setRentFilter] = useState<'all' | 'pengajuan' | 'menunggu_pembayaran' | 'realisasi'>('all');
+
+
     const [selectedRentTrxIds, setSelectedRentTrxIds] = useState<string[]>([]);
     
     const [isAddingManualRent, setIsAddingManualRent] = useState(false);
@@ -29,6 +32,19 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [rejectingTrxId, setRejectingTrxId] = useState<string | null>(null);
     const [rejectionReason, setRejectionReason] = useState('');
+    const [userProperties, setUserProperties] = useState<BasicPropertyInfo[]>([]);
+
+    useEffect(() => {
+        const fetchProperties = async () => {
+            try {
+                const props = await getAdminProperties(isAdmin ? undefined : uid);
+                setUserProperties(props);
+            } catch (err) {
+                console.error("Gagal memuat properti:", err);
+            }
+        };
+        fetchProperties();
+    }, [isAdmin, uid]);
 
     // --- HANDLERS ---
     const handleUpdateStatus = async (id: string, newStatus: string, metadata: any = {}) => {
@@ -36,6 +52,18 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
         setIsSubmitting(true);
         try {
             await updateTransactionStatus(id, newStatus, { metadata });
+
+            // Jika status diubah jadi PAID, sync ke resident_status
+            // agar penyewa langsung muncul di dashboard aktif
+            if (newStatus === 'PAID') {
+                try {
+                    await syncResidentStatus(id);
+                    console.log(`[RentTrxMgmt] syncResidentStatus called for trx ${id}`);
+                } catch (syncErr) {
+                    console.error('[RentTrxMgmt] syncResidentStatus failed (non-fatal):', syncErr);
+                }
+            }
+
             alert('Status transaksi berhasil diperbarui');
             refreshData();
             setRejectingTrxId(null);
@@ -82,11 +110,52 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
         if (isSubmitting) return;
         setIsSubmitting(true);
         try {
-            // Analogous to Dashboard.tsx logic (Dummy implementation for now)
-            alert('Pencatatan transaksi manual berhasil (Simulasi). Data ini biasanya dihubungkan ke API pos_transactions.');
+            const payload = {
+                type: 'rent',
+                product_type: 'kost_booking',
+                amount: Number(manualRentForm.amount),
+                status: manualRentForm.status === 'Selesai' ? 'PAID' : 'PENDING_APPROVAL',
+                product_id: manualRentForm.productId,
+                metadata: {
+                    isManualEntry: true,
+                    tenantName: manualRentForm.name,
+                    phone: manualRentForm.phone,
+                    email: manualRentForm.email,
+                    kostName: userProperties.find(p => p.id === manualRentForm.productId)?.title || manualRentForm.item,
+                    roomType: manualRentForm.roomType,
+                    periodLabel: manualRentForm.periodLabel,
+                    startDate: manualRentForm.startDate,
+                    endDate: manualRentForm.endDate,
+                },
+                created_at: getCurrentDate().toISOString()
+            };
+
+            const { data: inserted, error } = await supabase.from('transactions').insert([payload]).select('id').single();
+            if (error) throw error;
+
+            // Sync with resident_status if PAID
+            if (payload.status === 'PAID') {
+                await supabase
+                    .from('resident_status')
+                    .insert([{
+                        user_id: manualRentForm.userId || manualRentForm.uid || null, // Might be null for manual offline entries
+                        kost_id: manualRentForm.productId,
+                        room_type: manualRentForm.roomType,
+                        start_date: manualRentForm.startDate,
+                        end_date: manualRentForm.endDate,
+                        total_months: 1, // Default for manual
+                        last_transaction_id: inserted.id,
+                        created_at: getCurrentDate().toISOString(),
+                        updated_at: getCurrentDate().toISOString()
+                    }]);
+            }
+
+            alert('Pencatatan transaksi manual berhasil disimpan ke database.');
             setIsAddingManualRent(false);
             setManualRentForm({});
             refreshData();
+        } catch (error: any) {
+            alert('Gagal menyimpan: ' + error.message);
         } finally {
             setIsSubmitting(false);
         }
@@ -134,16 +203,28 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
     };
 
     const filtered = rentTransactions.filter(t => {
+        const meta = t.metadata || {};
+        const isExtension = 
+            t.product_type === 'perpanjangan_sewa' || 
+            t.product_type === 'extension' ||
+            t.type === 'perpanjangan_sewa' || 
+            t.type === 'extension' ||
+            meta.extensionType === 'manual_extension' ||
+            meta.extensionPeriod !== undefined ||
+            meta.originalTransactionId !== undefined ||
+            (t.pakasir_order_id && String(t.pakasir_order_id).toUpperCase().includes('EXT'));
+        
+        // Exclude extensions from RentTransactionManagement
+        if (isExtension) return false;
+
         if (rentFilter === 'all') return true;
         const isNewSubmission = t.status === 'pending' || t.status === 'PENDING_APPROVAL';
         const isAwaitingPayment = t.status === 'AWAITING_PAYMENT';
         const isPaid = ['PAID', 'paid', 'Selesai', 'success', 'Berhasil', 'COMPLETED', 'SUCCESS'].includes((t.status || '').toUpperCase());
-        const isExtension = t.type === 'perpanjangan_sewa' || t.product_type === 'perpanjangan_sewa' || t.metadata?.extensionType === 'manual_extension';
 
-        if (rentFilter === 'pengajuan') return isNewSubmission && !isExtension;
+        if (rentFilter === 'pengajuan') return isNewSubmission;
         if (rentFilter === 'menunggu_pembayaran') return isAwaitingPayment;
         if (rentFilter === 'realisasi') return isPaid;
-        if (rentFilter === 'perpanjangan') return isExtension;
         
         return true;
     });
@@ -205,8 +286,7 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
                     { id: 'all', label: 'Semua Transaksi', icon: '📋' },
                     { id: 'pengajuan', label: 'Pengajuan Baru', icon: '📩' },
                     { id: 'menunggu_pembayaran', label: 'Menunggu Pembayaran', icon: '⏳' },
-                    { id: 'realisasi', label: 'Penyewaan Terealisasi', icon: '✅' },
-                    { id: 'perpanjangan', label: 'Perpanjangan Sewa', icon: '➕' }
+                    { id: 'realisasi', label: 'Penyewaan Terealisasi', icon: '✅' }
                 ].map((tab) => (
                     <button
                         key={tab.id}
@@ -294,9 +374,7 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
                                                 <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest ${trx.paymentType === 'gateway' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
                                                     {trx.paymentType === 'gateway' ? '⚡ Otomatis' : '🏦 Bank Transfer'}
                                                 </span>
-                                                {trx.type === 'perpanjangan_sewa' && (
-                                                    <span className="text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest bg-purple-50 text-purple-600 border border-purple-100">Perpanjangan</span>
-                                                )}
+
                                             </div>
                                             <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">{trx.item}</h3>
                                             <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Status: <span className={`ml-1 ${['Selesai/Diproses', 'Selesai', 'PAID'].includes((trx.rawStatus || '').toUpperCase()) ? 'text-green-600' : trx.status.includes('Menunggu') ? 'text-amber-500' : 'text-red-500'}`}>{trx.status}</span></p>
@@ -611,7 +689,20 @@ const RentTransactionManagement: React.FC<RentTransactionManagementProps> = ({
                                 </div>
                                 <div className="grid grid-cols-2 gap-6">
                                     <div className="col-span-2">
-                                        <FormField label="Nama Kost / Properti" placeholder="Cth: Kost Babakan Raya" value={manualRentForm.item || ''} onChange={val => setManualRentForm({ ...manualRentForm, item: val })} />
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Pilih Properti</label>
+                                            <select 
+                                                required
+                                                className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3.5 text-sm font-bold outline-none focus:ring-2 focus:ring-orange-500/20 transition-all" 
+                                                value={manualRentForm.productId || ''} 
+                                                onChange={e => setManualRentForm({ ...manualRentForm, productId: e.target.value })}
+                                            >
+                                                <option value="">-- Pilih Properti --</option>
+                                                {userProperties.map(p => (
+                                                    <option key={p.id} value={p.id}>{p.title}</option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     </div>
                                     <FormField label="Tipe Kamar" placeholder="Cth: Kamar A - AC" value={manualRentForm.roomType || ''} onChange={val => setManualRentForm({ ...manualRentForm, roomType: val })} />
                                     <div className="space-y-2">

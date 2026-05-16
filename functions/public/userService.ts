@@ -1,10 +1,11 @@
 import { supabase } from './supabase';
 import { Kost, DatabaseProduct } from './types';
 import { notifyAdminTransaction } from './emailService';
+import { getCurrentDate } from './utils/timeUtils';
 
 // Helper to safely convert timestamps
 const convertTimestamp = (ts: any): string => {
-  if (!ts) return new Date().toISOString();
+  if (!ts) return getCurrentDate().toISOString();
   if (typeof ts === 'string') return ts;
   return ts;
 };
@@ -268,7 +269,7 @@ export async function addPropertyReview(propertyId: string, review: { userId: st
     const currentReviews = property.reviews || [];
     const newReview = {
       ...review,
-      date: new Date().toISOString()
+      date: getCurrentDate().toISOString()
     };
     const updatedReviews = [...currentReviews, newReview];
 
@@ -316,20 +317,85 @@ export async function createBookingRequest(bookingData: {
   metadata: any;
 }) {
   try {
-    const { data, error } = await supabase
+    const facilityAmount = Number(bookingData.metadata?.facilityFee || 0);
+    const rentAmount = bookingData.amount - facilityAmount;
+
+    const bookingSessionId = crypto.randomUUID();
+    
+    // 0. Create Resident Status record (Inactive/Pending until payment)
+    const { data: resStatus, error: resError } = await supabase
+      .from('resident_status')
+      .insert([{
+        user_id: bookingData.userId,
+        kost_id: bookingData.productId,
+        status: 'PENDING', // Will be activated on payment
+        start_date: bookingData.metadata?.startDate || getCurrentDate().toISOString().split('T')[0],
+        endDate: bookingData.metadata?.endDate || getCurrentDate().toISOString().split('T')[0],
+        room_type: bookingData.metadata?.roomType || '-',
+        metadata: {
+            ...bookingData.metadata,
+            booking_session_id: bookingSessionId,
+            created_via: 'booking_request'
+        }
+      }])
+      .select()
+      .single();
+
+    if (resError) {
+        console.error("Error creating resident status:", resError);
+        // We continue even if this fails to not block the booking, but it's ideal to have it.
+    }
+
+    const residentStatusId = resStatus?.id || null;
+
+    // 1. Create Main Rent Transaction (kost_booking)
+    const { data: rentTrx, error: rentError } = await supabase
       .from('transactions')
       .insert([{
         user_id: bookingData.userId,
         product_id: bookingData.productId,
         product_type: bookingData.productType,
-        amount: bookingData.amount,
+        amount: rentAmount,
         status: 'PENDING_APPROVAL',
-        metadata: bookingData.metadata
+        resident_status_id: residentStatusId,
+        metadata: {
+          ...bookingData.metadata,
+          billName: `Sewa Kost: ${bookingData.metadata?.kostName || 'Kost'}`,
+          booking_session_id: bookingSessionId,
+          is_bundled_parent: true,
+          resident_status_id: residentStatusId
+        }
       }])
       .select()
       .single();
 
-    if (error) throw error;
+    if (rentError) throw rentError;
+
+    // 2. Create Facility Transaction (tagihan_ekstra) if needed
+    if (facilityAmount > 0) {
+      await supabase
+        .from('transactions')
+        .insert([{
+          user_id: bookingData.userId,
+          product_id: bookingData.productId,
+          product_type: 'tagihan_ekstra',
+          amount: facilityAmount,
+          status: 'PENDING_APPROVAL',
+          resident_status_id: residentStatusId,
+          metadata: {
+            ...bookingData.metadata, // Spread full metadata for consistency
+            billName: `Fasilitas: ${bookingData.metadata?.kostName || 'Kost'} (Bundled)`,
+            type: 'tagihan_ekstra',
+            is_bundled: true,
+            booking_session_id: bookingSessionId,
+            parent_order_id: rentTrx.id,
+            resident_status_id: residentStatusId,
+            createdAt: getCurrentDate().toISOString()
+          }
+        }]);
+    }
+
+    const data = rentTrx;
     
     // Notify Mitra (Owner) via WhatsApp & App
     try {
@@ -386,7 +452,7 @@ export async function updateBookingStatus(transactionId: string, status: 'PAID' 
       .from('transactions')
       .update({ 
         status, 
-        updated_at: new Date().toISOString() 
+        updated_at: getCurrentDate().toISOString() 
       })
       .eq('id', transactionId);
 
@@ -456,7 +522,7 @@ export async function createStandaloneBill(billData: {
           ...billData.metadata,
           billName: billData.billName,
           type: 'tagihan_ekstra',
-          createdAt: new Date().toISOString()
+          createdAt: getCurrentDate().toISOString()
         }
       }])
       .select()
@@ -474,13 +540,17 @@ export async function settlePendingBills(billIds: string[]) {
   try {
     if (!billIds || billIds.length === 0) return;
     
+    // Filter out virtual IDs (like 'v-fac-1') which are not UUIDs
+    const realTrxIds = billIds.filter(id => !id.startsWith('v-'));
+    if (realTrxIds.length === 0) return;
+
     const { error } = await supabase
       .from('transactions')
       .update({ 
         status: 'PAID',
-        updated_at: new Date().toISOString() 
+        updated_at: getCurrentDate().toISOString() 
       })
-      .in('id', billIds);
+      .in('id', realTrxIds);
 
     if (error) throw error;
   } catch (error) {
@@ -495,7 +565,7 @@ export async function cancelBookingRequest(transactionId: string) {
       .from('transactions')
       .update({ 
         status: 'CANCELLED',
-        updated_at: new Date().toISOString() 
+        updated_at: getCurrentDate().toISOString() 
       })
       .eq('id', transactionId);
 
@@ -555,7 +625,7 @@ export async function getOwnerTenancyData(ownerUid: string): Promise<any[]> {
     }).filter(t => {
       const type = t.product_type || t.type;
       const status = t.status?.toUpperCase();
-      const validStatuses = ['PAID', 'SUCCESS', 'COMPLETED'];
+      const validStatuses = ['PAID', 'SUCCESS', 'COMPLETED', 'BERHASIL', 'LUNAS'];
       return rentTypes.includes(type) && validStatuses.includes(status);
     });
 
@@ -715,18 +785,24 @@ export async function getOwnerBookings(ownerId: string): Promise<any[]> {
 
 export async function incrementPropertyView(propertyId: string) {
   try {
-    const { error } = await supabase.rpc('increment_property_view', { 
+    if (!propertyId) return;
+
+    // 1. Try RPC first
+    const { error: rpcError } = await supabase.rpc('increment_property_view', { 
       prop_id: propertyId 
     });
-    if (error) {
-      // If RPC fails, try generic update as fallback
-      const { data: prop } = await supabase
+
+    // 2. Fallback to manual update if RPC is missing (404) or failed
+    if (rpcError) {
+      console.log("[DEBUG] RPC increment_property_view failed, trying manual update...", rpcError.message);
+      
+      const { data: prop, error: fetchError } = await supabase
         .from('properties')
         .select('views')
         .eq('id', propertyId)
-        .single();
+        .maybeSingle();
         
-      if (prop) {
+      if (!fetchError && prop) {
         await supabase
           .from('properties')
           .update({ views: (prop.views || 0) + 1 })
@@ -734,6 +810,7 @@ export async function incrementPropertyView(propertyId: string) {
       }
     }
   } catch (error) {
-    console.warn('Failed to increment view:', error);
+    // Silent fail for view counter to not disrupt user experience
+    console.warn('View counter increment failed (non-critical):', error);
   }
 }

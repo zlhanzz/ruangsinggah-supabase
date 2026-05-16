@@ -17,7 +17,8 @@ import {
     getAdminMitraRequests, updateMitraRequestStatus,
     getAdminBanners, addBanner, updateBanner, deleteBanner,
     getUsersByRole, getActiveMitra, deleteUserAccount, updateUserStatus,
-    transferPropertyOwnership, getUserFullDetails
+    transferPropertyOwnership, getUserFullDetails,
+    getResidentStatus
 } from '../adminService';
 import AgentDashboard from './AgentDashboard';
 import { getUserTransactions } from '../userService';
@@ -33,13 +34,17 @@ import BannerManagement from '../components/admin/BannerManagement';
 import ComplaintManagement from '../components/admin/ComplaintManagement';
 import CatalogManagement from '../components/admin/CatalogManagement';
 import RentTransactionManagement from '../components/admin/RentTransactionManagement';
+import ExtensionTransactionManagement from '../components/admin/ExtensionTransactionManagement';
 import DbTransactionManagement from '../components/admin/DbTransactionManagement';
+import ActiveTenantsManagement from '../components/admin/ActiveTenantsManagement';
 
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
     BarChart, Bar, Legend
 } from 'recharts';
-import { Zap, Eye } from 'lucide-react';
+import { Zap, Eye, Clock, Calendar, RefreshCcw, ArrowRight } from 'lucide-react';
+import { getCurrentDate, setMockDate, getMockDateStr } from '../utils/timeUtils';
+import TimeSimulator from '../components/TimeSimulator';
 
 
 
@@ -179,7 +184,9 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
     );
 };
 
-type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_db' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'tenants' | 'agent_verification' | 'banners';
+
+
+type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_extension' | 'transactions_db' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'tenants' | 'active_tenants' | 'agent_verification' | 'banners';
 
 const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, listings = [], onAdd, onEdit, onDelete, onRefreshListings, verificationStatus }) => {
     const isAdmin = role === 'admin';
@@ -318,7 +325,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                 dateFilter, 
                 customStartDate, 
                 customEndDate, 
-                undefined
+                isAdmin ? undefined : uid
             );
             setAnalyticsSummary(data);
         } catch (error) {
@@ -345,7 +352,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
     const [activeUsers, setActiveUsers] = useState<any[]>([]);
     const [banners, setBanners] = useState<Banner[]>([]);
     const [dbTransactions, setDbTransactions] = useState<AdminTransaction[]>([]);
+    const [surveyTransactions, setSurveyTransactions] = useState<AdminTransaction[]>([]);
     const [rentTransactions, setRentTransactions] = useState<any[]>([]);
+    const [residentStatus, setResidentStatus] = useState<any[]>([]);
     const [complaints, setComplaints] = useState<any[]>([]);
 
     // Selection states
@@ -599,14 +608,16 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         if (activeMenu === 'databases') loadDatabases();
         if (activeMenu === 'complaints') loadComplaints();
         if (activeMenu === 'transactions_db') loadDbTransactions();
+        if (activeMenu === 'transactions_survey') loadSurveyTransactions();
         if (activeMenu === 'analytics' || activeMenu === 'overview') loadAnalyticsData();
-        if (activeMenu === 'verifikasi' || activeMenu === 'my_surveys' || activeMenu === 'overview') loadSurveyRequests();
+        if (activeMenu === 'verifikasi' || activeMenu === 'my_surveys' || activeMenu === 'overview' || activeMenu === 'tasks') loadSurveyRequests();
         if (activeMenu === 'agent_wallet') {
             loadSurveyRequests();
             loadAgentWalletProfile();
         }
         if (activeMenu === 'banners') loadBanners();
         if (activeMenu === 'tenants') loadActiveUsers();
+        if (activeMenu === 'active_tenants' || activeMenu === 'transactions_rent' || activeMenu === 'transactions_extension') loadRentTransactions();
         if (activeMenu === 'mitra') {
             loadMitraRequests(); // Pendaftar
             loadActiveMitra();   // Mitra Aktif
@@ -1803,11 +1814,10 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
     const loadRentTransactions = async () => {
         setLoading(true);
         try {
-            const data = await getAdminTransactions();
-            // Stricter filtering: Exclude 70,000 amount (survey price) and explicitly allow rental types
+            const data = await getAdminTransactions(undefined, isAdmin ? undefined : uid);
+            // Stricter filtering: Explicitly allow rental types
             const filtered = (data || []).filter((t: any) => 
-                (t.product_type === 'kost_booking' || t.product_type === 'perpanjangan_sewa' || t.product_type === 'rent') && 
-                Number(t.amount) !== 70000
+                (t.product_type === 'kost_booking' || t.product_type === 'perpanjangan_sewa' || t.product_type === 'rent')
             );
             setRentTransactions(filtered);
         } catch (error) {
@@ -1815,6 +1825,31 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         } finally {
             setLoading(false);
             setSelectedRentTrxIds([]);
+        }
+    };
+
+    const loadSurveyTransactions = async () => {
+        setLoading(true);
+        try {
+            const data = await getAdminTransactions();
+            const srvTrx = data.filter(t => t.product_type === 'survey' || Number(t.amount) === 70000);
+            setSurveyTransactions(srvTrx);
+        } catch (error) {
+            console.error("Gagal memuat transaksi survey", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadResidentStatusData = async () => {
+        setLoading(true);
+        try {
+            const data = await getResidentStatus(isAdmin ? undefined : uid);
+            setResidentStatus(data || []);
+        } catch (error) {
+            console.error("Gagal memuat status penghuni", error);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -1850,12 +1885,26 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
     };
 
     useEffect(() => {
-        if (activeMenu === 'transactions_rent') {
+        if (activeMenu === 'transactions_rent' || activeMenu === 'transactions_extension') {
             loadRentTransactions();
 
             const channel = supabase.channel('realtime_rent_trx')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => {
                     loadRentTransactions();
+                })
+                .subscribe();
+
+            return () => {
+                supabase.removeChannel(channel);
+            };
+        }
+
+        if (activeMenu === 'active_tenants') {
+            loadResidentStatusData();
+            
+            const channel = supabase.channel('realtime_resident_status')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'resident_status' }, () => {
+                    loadResidentStatusData();
                 })
                 .subscribe();
 
@@ -2039,17 +2088,26 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                 )}
 
                 {(isAdmin || isOwner) && (
-                    <SidebarItem 
-                        icon="🛒" 
-                        label="Sewa Kost" 
-                        isActive={activeMenu === 'transactions_rent'} 
-                        onClick={() => handleMenuChange('transactions_rent')} 
-                    />
+                    <>
+                        <SidebarItem 
+                            icon="🛒" 
+                            label="Sewa Kost" 
+                            isActive={activeMenu === 'transactions_rent'} 
+                            onClick={() => handleMenuChange('transactions_rent')} 
+                        />
+                        <SidebarItem 
+                            icon="➕" 
+                            label="Perpanjangan Sewa" 
+                            isActive={activeMenu === 'transactions_extension'} 
+                            onClick={() => handleMenuChange('transactions_extension')} 
+                        />
+                    </>
                 )}
 
                 {isAdmin && (
                     <>
                         <SidebarItem icon="📦" label="Pembelian DB" isActive={activeMenu === 'transactions_db'} onClick={() => handleMenuChange('transactions_db')} />
+                        <SidebarItem icon="📋" label="Pembayaran Survey" isActive={activeMenu === 'transactions_survey'} onClick={() => handleMenuChange('transactions_survey')} />
                         <SidebarItem icon="✅" label="Jasa Survey" isActive={activeMenu === 'verifikasi'} onClick={() => handleMenuChange('verifikasi')} />
                     </>
                 )}
@@ -2064,6 +2122,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                 {isAdmin && (
                     <>
                         <SidebarItem icon="👥" label="Kelola User" isActive={activeMenu === 'tenants'} onClick={() => handleMenuChange('tenants')} />
+                        <SidebarItem icon="🏠" label="Penyewa Aktif" isActive={activeMenu === 'active_tenants'} onClick={() => handleMenuChange('active_tenants')} />
                         <SidebarItem icon="🤝" label="Kelola Mitra" isActive={activeMenu === 'mitra'} onClick={() => handleMenuChange('mitra')} />
                         <SidebarItem icon="🛡️" label="Kelola Agen" isActive={activeMenu === 'agent_verification'} onClick={() => handleMenuChange('agent_verification')} />
                         <SidebarItem icon="🖼️" label="Banner Promo" isActive={activeMenu === 'banners'} onClick={() => handleMenuChange('banners')} />
@@ -2578,6 +2637,20 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         );
     };
 
+    if (isAgent) {
+        return (
+            <AgentDashboard 
+                uid={uid || ''}
+                user={user}
+                verificationStatus={verificationStatus}
+                surveyRequests={surveyRequests}
+                loadSurveyRequests={loadSurveyRequests}
+                activeMenu={activeMenu as any}
+                onMenuChange={handleMenuChange as any}
+            />
+        );
+    }
+
     return (
         <div className="min-h-screen bg-gray-50 flex">
             {isSubmitting && (
@@ -2588,52 +2661,14 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
             )}
 
             {/* SIDEBAR DESKTOP */}
-            {(isAdmin || isOwner || isAgent) && renderSidebar()}
+            {(isAdmin || isOwner) && renderSidebar()}
 
-
-            {/* MAIN CONTENT AREA */}
-            <div className={`flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto ${isAgent ? 'pb-24' : ''}`}>
+            <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
                 <div className="max-w-7xl mx-auto">
-                    
-
-                    {/* MOBILE MENU DROPDOWN (if no sidebar) - Hidden for Agent because they have Bottom Nav */}
-                    {(isAdmin || isOwner) && !isAgent && (
-                        <div className="md:hidden w-full mb-6 relative z-20">
-                            <select
-                                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold uppercase tracking-widest focus:ring-2 focus:ring-orange-500/20"
-                                value={activeMenu}
-                                onChange={(e) => handleMenuChange(e.target.value as DashboardMenu)}
-                            >
-                                <option value="analytics">📊 Ringkasan Analisis</option>
-                                <option value="properties">🏠 Kelola Kost</option>
-                                {isAdmin && <option value="databases">🗄️ Kelola Database</option>}
-                                {isAdmin && <option value="verification">⚙️ Katalog Verifikasi</option>}
-                                <option value="transactions_rent">🛒 Sewa Kost</option>
-                                {isAdmin && <option value="transactions_db">📦 Pembelian DB</option>}
-                                {isAdmin && <option value="verifikasi">✅ Jasa Survey</option>}
-                                {isAdmin && <option value="mitra">🤝 Pendaftar Mitra</option>}
-                                <option value="complaints">🛠️ Komplain</option>
-                            </select>
-                        </div>
-                    )}
-
-                    {/* LOADING STATE */}
                     {loading ? (
                         <div className="text-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div></div>
                     ) : (
                         <>
-                            {/* AGENT VIEW: Full screen experience */}
-                            {isAgent ? (
-                                <AgentDashboard 
-                                    uid={uid || ''}
-                                    user={user}
-                                    verificationStatus={verificationStatus}
-                                    surveyRequests={surveyRequests}
-                                    loadSurveyRequests={loadSurveyRequests}
-                                    activeMenu={activeMenu as any}
-                                    onMenuChange={handleMenuChange as any}
-                                />
-                            ) : (
                                 <div className="admin-content-area">
                                     {activeMenu === 'analytics' && (isAdmin || isOwner) && (
                                         <AnalyticsView
@@ -2760,12 +2795,31 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                             refreshData={loadRentTransactions}
                                         />
                                     )}
+                                    {activeMenu === 'transactions_extension' && (
+                                        <ExtensionTransactionManagement 
+                                            isAdmin={isAdmin}
+                                            uid={uid}
+                                            rentTransactions={rentTransactions}
+                                            residentStatus={residentStatus}
+                                            refreshData={loadRentTransactions}
+                                        />
+                                    )}
 
                                     {activeMenu === 'transactions_db' && (
                                         <DbTransactionManagement 
                                             isAdmin={isAdmin}
                                             dbTransactions={dbTransactions}
+                                            residentStatus={residentStatus}
                                             refreshData={loadDbTransactions}
+                                        />
+                                    )}
+
+                                    {activeMenu === 'transactions_survey' && (
+                                        <DbTransactionManagement 
+                                            isAdmin={isAdmin}
+                                            dbTransactions={surveyTransactions}
+                                            residentStatus={residentStatus}
+                                            refreshData={loadSurveyTransactions}
                                         />
                                     )}
 
@@ -2831,6 +2885,14 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                             onViewProfile={handleViewProfile}
                                         />
                                     )}
+                                    {activeMenu === 'active_tenants' && isAdmin && (
+                                        <ActiveTenantsManagement 
+                                            residentStatus={residentStatus}
+                                            refreshData={loadResidentStatusData}
+                                            rentTransactions={rentTransactions}
+                                            loading={loading}
+                                        />
+                                    )}
                                     {activeMenu === 'banners' && isAdmin && (
                                         <BannerManagement
                                             banners={banners}
@@ -2844,10 +2906,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                         />
                                     )}
                                 </div>
-                            )}
-                        </>
-                    )}
-                </div>
+                            </>
+                        )}
+                    </div>
 
                 {/* MODAL PROPERTY FORM */}
                 {isModalOpen && activeMenu === 'properties' && (
@@ -3222,9 +3283,10 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                     </div>
                 </div>
             )}
-        </div>
-    );
-};
+                <TimeSimulator />
+            </div>
+        );
+    };
 
 const DetailItem = ({ label, value, isOrange }: { label: string, value: string, isOrange?: boolean }) => (
     <div className="space-y-1.5">

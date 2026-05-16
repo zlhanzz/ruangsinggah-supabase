@@ -331,6 +331,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                   onChange={handleInputChange}
                   className="text-2xl font-black text-gray-900 text-center border-b-2 border-orange-200 focus:border-orange-500 focus:outline-none bg-transparent w-full max-w-sm mb-1"
                   placeholder="Nama Lengkap"
+                  maxLength={100}
                 />
               ) : (
                 <div className="flex items-center justify-center gap-2 mb-1">
@@ -398,7 +399,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                 {isEditing ? (
                   <input type="text" name="occupation" value={formData.occupation} onChange={handleInputChange}
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
-                    placeholder="Contoh: Mahasiswa, Karyawan" required />
+                    placeholder="Contoh: Mahasiswa, Karyawan" required maxLength={100} />
                 ) : (
                   <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900">{formData.occupation || '-'}</div>
                 )}
@@ -410,7 +411,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                 {isEditing ? (
                   <input type="text" name="institution" value={formData.institution} onChange={handleInputChange}
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
-                    placeholder="Contoh: Universitas Indonesia, PT. Gojek" required />
+                    placeholder="Contoh: Universitas Indonesia, PT. Gojek" required maxLength={150} />
                 ) : (
                   <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900">{formData.institution || '-'}</div>
                 )}
@@ -502,7 +503,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                 {isEditing ? (
                   <textarea name="address" rows={3} value={formData.address} onChange={handleInputChange}
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none resize-none"
-                    placeholder="Alamat asal lengkap (sesuai KTP/identitas)..." required />
+                    placeholder="Alamat asal lengkap (sesuai KTP/identitas)..." required maxLength={500} />
                 ) : (
                   <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-900 min-h-[5rem]">{formData.address || '-'}</div>
                 )}

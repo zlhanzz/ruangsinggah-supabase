@@ -4,8 +4,11 @@ import { supabase } from '../supabase';
 import KostFormMitra from '../components/KostFormMitra';
 import { Kost, Page } from '../types';
 import { FORMAT_CURRENCY, INDONESIAN_BANKS } from '../constants';
-import { getOwnerProperties, getOwnerBookings, updateBookingStatus, getOwnerTenancyData } from '../userService';
+import { getOwnerProperties, getOwnerBookings, updateBookingStatus } from '../userService';
+import { getResidentStatus } from '../adminService';
 import { getMyChatSessions, ChatSession } from '../chatService';
+import { getCurrentDate, setMockDate, getMockDateStr, parseDateSafely } from '../utils/timeUtils';
+import TimeSimulator from '../components/TimeSimulator';
 import { 
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer
 } from 'recharts';
@@ -50,16 +53,16 @@ const DUMMY_PROPERTIES: Kost[] = [
 ];
 
 const DUMMY_BOOKINGS = [
-    { id: 'B1', status: 'PENDING_APPROVAL', amount: 1500000, created_at: new Date().toISOString(), user: { name: 'Budi Santoso', email: 'budi@gmail.com', phone: '08123456789' }, metadata: { kostName: 'Kost Orange Premium', roomType: 'Kamar Standard', periodLabel: 'Per Bulan', startDate: '2026-04-01' } },
-    { id: 'B2', status: 'AWAITING_PAYMENT', amount: 900000, created_at: new Date().toISOString(), user: { name: 'Siti Aminah', email: 'siti@gmail.com', phone: '08234567890' }, metadata: { kostName: 'Kost Sunrise Putera', roomType: 'Kamar Deluxe', periodLabel: 'Per 3 Bulan', startDate: '2026-04-15' } },
-    { id: 'B3', status: 'PAID', amount: 1800000, created_at: new Date(Date.now() - 7 * 86400000).toISOString(), user: { name: 'Andi Wijaya', email: 'andi@gmail.com', phone: '08345678901' }, metadata: { kostName: 'Kost Orange Premium', roomType: 'Kamar Premium', periodLabel: 'Per Bulan', startDate: '2026-03-01' } },
-    { id: 'B4', status: 'PENDING_APPROVAL', amount: 900000, created_at: new Date().toISOString(), user: { name: 'Dewi Lestari', email: 'dewi@gmail.com', phone: '08456789012' }, metadata: { kostName: 'Kost Sunrise Putera', roomType: 'Kamar Standard', periodLabel: 'Per Bulan', startDate: '2026-04-10' } },
+    { id: 'B1', status: 'PENDING_APPROVAL', amount: 1500000, created_at: getCurrentDate().toISOString(), user: { name: 'Budi Santoso', email: 'budi@gmail.com', phone: '08123456789' }, metadata: { kostName: 'Kost Orange Premium', roomType: 'Kamar Standard', periodLabel: 'Per Bulan', startDate: '2026-04-01' } },
+    { id: 'B2', status: 'AWAITING_PAYMENT', amount: 900000, created_at: getCurrentDate().toISOString(), user: { name: 'Siti Aminah', email: 'siti@gmail.com', phone: '08234567890' }, metadata: { kostName: 'Kost Sunrise Putera', roomType: 'Kamar Deluxe', periodLabel: 'Per 3 Bulan', startDate: '2026-04-15' } },
+    { id: 'B3', status: 'PAID', amount: 1800000, created_at: new Date(getCurrentDate().getTime() - 7 * 86400000).toISOString(), user: { name: 'Andi Wijaya', email: 'andi@gmail.com', phone: '08345678901' }, metadata: { kostName: 'Kost Orange Premium', roomType: 'Kamar Premium', periodLabel: 'Per Bulan', startDate: '2026-03-01' } },
+    { id: 'B4', status: 'PENDING_APPROVAL', amount: 900000, created_at: getCurrentDate().toISOString(), user: { name: 'Dewi Lestari', email: 'dewi@gmail.com', phone: '08456789012' }, metadata: { kostName: 'Kost Sunrise Putera', roomType: 'Kamar Standard', periodLabel: 'Per Bulan', startDate: '2026-04-10' } },
 ];
 
 const DUMMY_CHATS: ChatSession[] = [
-    { id: 'C1', user_id: 'u1', owner_id: 'dummy', last_message: 'Halo, apakah kamar masih ada pak?', last_message_at: new Date(Date.now() - 1800000).toISOString(), created_at: '', updated_at: '', user: { name: 'Budi Santoso' }, property: { title: 'Kost Orange Premium' } } as any,
-    { id: 'C2', user_id: 'u2', owner_id: 'dummy', last_message: 'Boleh survei besok jam 10?', last_message_at: new Date(Date.now() - 3600000).toISOString(), created_at: '', updated_at: '', user: { name: 'Siti Aminah' }, property: { title: 'Kost Sunrise Putera' } } as any,
-    { id: 'C3', user_id: 'u3', owner_id: 'dummy', last_message: 'Terima kasih sudah disetujui!', last_message_at: new Date(Date.now() - 86400000).toISOString(), created_at: '', updated_at: '', user: { name: 'Andi Wijaya' }, property: { title: 'Kost Orange Premium' } } as any,
+    { id: 'C1', user_id: 'u1', owner_id: 'dummy', last_message: 'Halo, apakah kamar masih ada pak?', last_message_at: new Date(getCurrentDate().getTime() - 1800000).toISOString(), created_at: '', updated_at: '', user: { name: 'Budi Santoso' }, property: { title: 'Kost Orange Premium' } } as any,
+    { id: 'C2', user_id: 'u2', owner_id: 'dummy', last_message: 'Boleh survei besok jam 10?', last_message_at: new Date(getCurrentDate().getTime() - 3600000).toISOString(), created_at: '', updated_at: '', user: { name: 'Siti Aminah' }, property: { title: 'Kost Sunrise Putera' } } as any,
+    { id: 'C3', user_id: 'u3', owner_id: 'dummy', last_message: 'Terima kasih sudah disetujui!', last_message_at: new Date(getCurrentDate().getTime() - 86400000).toISOString(), created_at: '', updated_at: '', user: { name: 'Andi Wijaya' }, property: { title: 'Kost Orange Premium' } } as any,
 ];
 
 const CHART_DATA = [
@@ -104,6 +107,8 @@ const BottomNavItem: React.FC<{ active: boolean; icon: React.ReactNode; label: s
     </button>
 );
 
+
+
 // ── Main Component ────────────────────────────────────────────────────────────
 const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange }) => {
     const navigate = useNavigate();
@@ -126,13 +131,14 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [properties, setProperties] = useState<Kost[]>([]);
     const [bookings, setBookings] = useState<any[]>([]);
-    const [tenancyData, setTenancyData] = useState<any[]>([]);
+    const [residentStatus, setResidentStatus] = useState<any[]>([]);
     const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
     const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [stats, setStats] = useState({ totalRevenue: 0, pendingApprovals: 0, totalViews: 1240, ctr: 4.2 });
     const [showKostForm, setShowKostForm] = useState(false);
     const [editingKost, setEditingKost] = useState<Partial<Kost> | null>(null);
+    const [dynamicChartData, setDynamicChartData] = useState<any[]>(CHART_DATA);
     
     // Withdrawal Bank Info State
     const [withdrawalAccount, setWithdrawalAccount] = useState({
@@ -206,24 +212,119 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         if (!uid) return;
         setLoading(true);
         try {
-            const [propsData, bookingsData, tenancyRecords, chatData] = await Promise.all([
+            const [propsData, rawBookingsData, statusRecords, chatData] = await Promise.all([
                 getOwnerProperties(uid),
                 getOwnerBookings(uid),
-                getOwnerTenancyData(uid),
+                getResidentStatus(uid),
                 getMyChatSessions(uid)
             ]);
 
+            // GROUPING LOGIC: Group split transactions (Rent + Facility) into one card for the Owner
+            const groupedBookingsMap = new Map<string, any>();
+            
+            // First pass: map all booking_session_ids to the main transaction ID
+            const sessionToParentMap = new Map<string, string>();
+            rawBookingsData.forEach((b: any) => {
+                const bMeta = typeof b.metadata === 'string' ? JSON.parse(b.metadata) : (b.metadata || {});
+                if (bMeta.booking_session_id && (b.product_type === 'kost_booking' || b.product_type === 'perpanjangan_sewa')) {
+                    sessionToParentMap.set(bMeta.booking_session_id, b.id);
+                }
+            });
+
+            rawBookingsData.forEach((b: any) => {
+                const bMeta = typeof b.metadata === 'string' ? JSON.parse(b.metadata) : (b.metadata || {});
+                
+                // Determine the "True Parent ID" for this transaction
+                // 1. If it has a booking_session_id that we mapped to a parent
+                // 2. If it has a direct parent_order_id
+                // 3. Fallback to its own ID
+                const trueParentId = (bMeta.booking_session_id ? sessionToParentMap.get(bMeta.booking_session_id) : null) 
+                                     || bMeta.parent_order_id 
+                                     || b.id;
+                
+                if (!groupedBookingsMap.has(trueParentId)) {
+                    groupedBookingsMap.set(trueParentId, { 
+                        ...b, 
+                        all_transactions: [b],
+                        total_amount: Number(b.amount || 0) 
+                    });
+                } else {
+                    const existing = groupedBookingsMap.get(trueParentId);
+                    existing.all_transactions.push(b);
+                    existing.total_amount += Number(b.amount || 0);
+                    
+                    // Priority for main display info: 'kost_booking' or 'perpanjangan_sewa'
+                    const isMainProduct = ['kost_booking', 'perpanjangan_sewa', 'rent', 'kost'].includes(b.product_type);
+                    if (isMainProduct) {
+                        existing.id = b.id; // Ensure head ID is the Rent ID
+                        existing.product_type = b.product_type;
+                        existing.metadata = { ...existing.metadata, ...bMeta };
+                        existing.amount = b.amount; 
+                    }
+                }
+            });
+
+            const bookingsData = Array.from(groupedBookingsMap.values()).map(group => ({
+                ...group,
+                amount: group.total_amount // UI expects 'amount' to be the total
+            }));
+
             setProperties(propsData);
             setBookings(bookingsData);
-            setTenancyData(tenancyRecords);
+            setResidentStatus(statusRecords);
             setChatSessions(chatData);
 
-            const revenue = bookingsData.filter(b => (b.status || '').toUpperCase() === 'PAID').reduce((a, b) => a + (b.amount || 0), 0);
+            // --- TIME TRAVEL SYNCED ANALYTICS ---
+            const now = getCurrentDate();
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+
+            // 1. Revenue (Current Month only based on simulated 'now')
+            const revenue = bookingsData
+                .filter(b => {
+                    const isPaid = (b.status || '').toUpperCase() === 'PAID';
+                    if (!isPaid) return false;
+                    const date = new Date(b.created_at);
+                    return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+                })
+                .reduce((a, b) => a + (b.amount || 0), 0);
+
+            // 2. Views (Total views from properties)
             const totalViews = propsData.reduce((a, p) => a + (p.views || 0), 0);
+
+            // 3. Active Tenants (Direct from Resident Status Table)
+            const activeCount = statusRecords.filter(r => {
+                const daysLeft = r.end_date ? Math.ceil((new Date(r.end_date).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                return daysLeft >= 0;
+            }).length;
+
+            // 4. Dynamic Chart Data (Last 7 Days revenue)
+            const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+            const last7DaysData = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(now);
+                d.setDate(d.getDate() - i);
+                const dayLabel = days[d.getDay()];
+                const dayRevenue = bookingsData
+                    .filter(b => {
+                        const isPaid = (b.status || '').toUpperCase() === 'PAID';
+                        if (!isPaid) return false;
+                        const bDate = new Date(b.created_at);
+                        return bDate.getDate() === d.getDate() && 
+                               bDate.getMonth() === d.getMonth() && 
+                               bDate.getFullYear() === d.getFullYear();
+                    })
+                    .reduce((a, b) => a + (b.amount || 0), 0);
+                
+                last7DaysData.push({ day: dayLabel, views: dayRevenue });
+            }
+            setDynamicChartData(last7DaysData);
+
             setStats({
                 totalRevenue: revenue,
                 pendingApprovals: bookingsData.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL').length,
                 totalViews: totalViews,
+                activeTenants: activeCount,
                 ctr: totalViews > 0 ? parseFloat(((bookingsData.length * 5 / totalViews) * 100).toFixed(1)) : 0
             });
         } catch (e) {
@@ -262,32 +363,53 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 })
                 .subscribe();
 
-            const transactionsChannel = supabase
-                .channel('mitra-transactions')
+            const statusChannel = supabase
+                .channel('mitra-resident-status')
                 .on('postgres_changes', {
-                    event: '*', // Listen to INSERT, UPDATE, and DELETE
+                    event: '*',
                     schema: 'public',
-                    table: 'transactions'
-                }, (payload) => {
-                    console.log('Transaction change detected:', payload.eventType);
-                    loadData();
+                    table: 'resident_status'
+                }, () => {
+                   console.log('Resident status change detected');
+                   loadData();
                 })
                 .subscribe();
 
             return () => { 
                 supabase.removeChannel(sessionsChannel); 
-                supabase.removeChannel(transactionsChannel);
+                supabase.removeChannel(statusChannel);
             };
         }
     }, [uid, user]);
 
-    const handleApprove = async (id: string) => {
+    const handleApprove = async (group: any) => {
         if (!window.confirm('Setujui pesanan ini? Calon penghuni akan diminta melakukan pembayaran.')) return;
-        try { await updateBookingStatus(id, 'AWAITING_PAYMENT'); loadData(); } catch { alert('Gagal menyetujui.'); }
+        try { 
+            setLoading(true);
+            const transactions = group.all_transactions || [group];
+            await Promise.all(transactions.map((t: any) => updateBookingStatus(t.id, 'AWAITING_PAYMENT')));
+            await loadData();
+            alert('Pengajuan sewa disetujui.');
+        } catch (err: any) {
+            alert('Gagal menyetujui: ' + err.message);
+        } finally {
+            setLoading(false);
+        }
     };
-    const handleReject = async (id: string) => {
-        if (!window.confirm('Tolak pesanan ini?')) return;
-        try { await updateBookingStatus(id, 'REJECTED'); loadData(); } catch { alert('Gagal menolak.'); }
+
+    const handleReject = async (group: any) => {
+        if (!window.confirm('Tolak pengajuan sewa ini?')) return;
+        try {
+            setLoading(true);
+            const transactions = group.all_transactions || [group];
+            await Promise.all(transactions.map((t: any) => updateBookingStatus(t.id, 'REJECTED')));
+            await loadData();
+            alert('Pengajuan sewa ditolak.');
+        } catch (err: any) {
+            alert('Gagal menolak: ' + err.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const filteredBookings = bookings.filter(b => {
@@ -304,7 +426,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         { key: 'overview', icon: <Zap size={20} />, label: 'Beranda' },
         { key: 'properties', icon: <Home size={20} />, label: 'Kost Saya' },
         { key: 'bookings', icon: <ClipboardList size={20} />, label: 'Pesanan', badge: pendingCount },
-        { key: 'tenants', icon: <Users size={20} />, label: 'Penghuni Aktif' },
+        { key: 'tenants', icon: <Users size={20} />, label: 'Penghuni Aktif', badge: stats.activeTenants },
         { key: 'chat', icon: <MessageSquare size={20} />, label: 'Pesan', badge: chatCount },
         { key: 'wallet', icon: <Wallet size={20} />, label: 'Dompet' },
         { key: 'profile', icon: <User size={20} />, label: 'Profil' },
@@ -317,6 +439,16 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             </div>
         );
     }
+
+    const handleStartChat = async (tenantId: string, kostId: string) => {
+        try {
+            const session = await getOrCreateChatSession(tenantId, uid, kostId);
+            setActiveChat(session);
+            handleMenuChange('chat');
+        } catch (e: any) {
+            alert('Gagal memulai percakapan: ' + e.message);
+        }
+    };
 
     const render = (
         <div className="min-h-screen bg-gray-50 font-sans flex">
@@ -523,7 +655,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     </div>
                                     <div className="h-48">
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <AreaChart data={CHART_DATA}>
+                                            <AreaChart data={dynamicChartData}>
                                                 <defs>
                                                     <linearGradient id="gViews" x1="0" y1="0" x2="0" y2="1">
                                                         <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.12} />
@@ -809,13 +941,13 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                         {bookingTab === 'pending' && (
                                                             <div className="flex flex-col gap-2">
                                                                 <button 
-                                                                    onClick={() => handleReject(b.id)} 
+                                                                    onClick={() => handleReject(b)} 
                                                                     className="w-full h-10 rounded-xl border border-rose-200 text-rose-500 font-black text-[10px] uppercase hover:bg-rose-50 transition-colors"
                                                                 >
                                                                     Tolak
                                                                 </button>
                                                                 <button 
-                                                                    onClick={() => handleApprove(b.id)} 
+                                                                    onClick={() => handleApprove(b)} 
                                                                     className="w-full h-10 bg-gray-900 text-white rounded-xl font-black text-[10px] uppercase shadow-lg shadow-gray-200 hover:bg-orange-500 transition-all active:scale-95"
                                                                 >
                                                                     Setujui
@@ -854,10 +986,12 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     {activeMenu === 'tenants' && (
                         <div className="animate-in fade-in duration-300">
                             <MitraTenantManagement 
-                                tenancyData={tenancyData}
+                                residentStatus={residentStatus}
                                 properties={properties}
+                                bookings={bookings}
                                 refreshData={loadData}
                                 onViewUserProfile={(userData) => setSelectedUserForProfile(userData)}
+                                onStartChat={handleStartChat}
                             />
                         </div>
                     )}
@@ -1035,6 +1169,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     ))}
                 </nav>
             </div>
+            <TimeSimulator />
         </div>
     );
 
@@ -1258,6 +1393,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     </div>
                 </div>
             )}
+            {/* Time Travel Controller */}
+            <TimeSimulator />
         </>
     );
 };

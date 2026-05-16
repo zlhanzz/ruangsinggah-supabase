@@ -33,6 +33,7 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
 
     const [isExpandingVerification, setIsExpandingVerification] = useState(false);
     const [sameAsKtp, setSameAsKtp] = useState(false);
+    const [profileImgError, setProfileImgError] = useState(false);
 
     useEffect(() => {
         loadProfile();
@@ -265,8 +266,13 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
                 <div className="relative z-10 flex flex-col md:flex-row gap-8 items-center md:items-start text-center md:text-left">
                     <div className="relative group">
                         <div className="w-32 h-32 bg-orange-50 rounded-[2.5rem] flex items-center justify-center text-4xl border-4 border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] shrink-0 overflow-hidden relative">
-                            {formData.photo_url ? (
-                                <img src={formData.photo_url} className="w-full h-full object-cover" alt="Profile" />
+                            {formData.photo_url && !profileImgError ? (
+                                <img 
+                                    src={formData.photo_url} 
+                                    className="w-full h-full object-cover" 
+                                    alt="Profile" 
+                                    onError={() => setProfileImgError(true)}
+                                />
                             ) : (
                                 <span className="text-orange-200 font-black">{formData.display_name?.charAt(0).toUpperCase() || <User size={48} />}</span>
                             )}

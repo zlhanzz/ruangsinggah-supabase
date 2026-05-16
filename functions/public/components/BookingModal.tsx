@@ -13,7 +13,7 @@ interface BookingModalProps {
 
 const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPeriod, onClose, onConfirm }) => {
   const maxOccupants = variant.maxOccupants || 1;
-  const additionalCostPerPerson = variant.additionalCostPerPerson || 0;
+  const additionalCostPerPerson = variant.additionalCostPerPerson || variant.additional_cost_per_person || variant.extra_person_fee || 0;
   const hasFlexiblePricing = variant.pricing && variant.pricing.length > 0;
   
   const [occupants, setOccupants] = useState<number>(1);
@@ -56,17 +56,17 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
       let basePrice = 0;
       if (hasFlexiblePricing) {
           const scheme = variant.pricing?.find(p => p.period === period);
-          basePrice = scheme ? scheme.price : 0;
+          basePrice = scheme ? Number(scheme.price) : 0;
       } else {
           // Fallback legacy calculation
-          const base = variant.price;
+          const base = Number(variant.price || 0);
           if (period === 'bulanan') basePrice = base;
           else if (period === '3bulanan') basePrice = base * 3 * 0.95;
           else if (period === '6bulanan') basePrice = base * 6 * 0.90;
           else if (period === 'tahunan') basePrice = base * 12 * 0.85;
       }
       
-      const extraCostBase = additionalCostPerPerson;
+      const extraCostBase = Number(additionalCostPerPerson || 0);
       
       const selectedWeight = periodWeights[period] || 30;
       const lowestWeight = periodWeights[lowestPeriod] || 30;
@@ -76,10 +76,8 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
 
       // Add property-wide additional fee if starting from month 1
       let propertyAddFee = 0;
-      if (kost.additionalFeePrice && kost.additionalFeePrice > 0 && kost.additionalFeeStartsFrom !== 'month_2') {
-          // Proportionally calculate additional fee based on the period (assuming additionalFeePrice is monthly)
-          const monthlyWeight = 30;
-          propertyAddFee = Math.round(kost.additionalFeePrice * (selectedWeight / monthlyWeight));
+      if (kost.additionalFeePrice && Number(kost.additionalFeePrice) > 0 && kost.additionalFeeStartsFrom !== 'month_2') {
+          propertyAddFee = Number(kost.additionalFeePrice);
       }
       
       return basePrice + totalExtraCost + propertyAddFee;
@@ -102,21 +100,20 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
       let basePrice = 0;
       if (hasFlexiblePricing) {
           const scheme = variant.pricing?.find(p => p.period === selectedPeriod);
-          basePrice = scheme ? scheme.price : 0;
+          basePrice = scheme ? Number(scheme.price) : 0;
       } else {
-          const base = variant.price;
+          const base = Number(variant.price || 0);
           if (selectedPeriod === 'bulanan') basePrice = base;
           else if (selectedPeriod === '3bulanan') basePrice = base * 3 * 0.95;
           else if (selectedPeriod === '6bulanan') basePrice = base * 6 * 0.90;
           else if (selectedPeriod === 'tahunan') basePrice = base * 12 * 0.85;
       }
 
-      const extraPersonFee = Math.max(0, occupants - 1) * Math.round(additionalCostPerPerson * proportion);
+      const extraPersonFee = Math.max(0, occupants - 1) * Math.round(Number(additionalCostPerPerson || 0) * proportion);
       
       let facilityFee = 0;
-      if (kost.additionalFeePrice && kost.additionalFeePrice > 0) {
-          // Note: Facility fee is always proportional to the period here for the INITIAL payment
-          facilityFee = Math.round(kost.additionalFeePrice * (selectedWeight / 30));
+      if (kost.additionalFeePrice && Number(kost.additionalFeePrice) > 0) {
+          facilityFee = Number(kost.additionalFeePrice);
           if (kost.additionalFeeStartsFrom === 'month_2') {
               facilityFee = 0; // Promo free month 1
           }
@@ -243,7 +240,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
               {kost.additionalFeePrice > 0 && kost.additionalFeeStartsFrom !== 'month_2' && (
                 <div className="flex justify-between items-center text-xs font-bold text-blue-500 uppercase tracking-widest">
                   <span>{kost.additionalFeeName || 'Biaya Tambahan Properti'}</span>
-                  <span>+{FORMAT_CURRENCY(Math.round(kost.additionalFeePrice * (periodWeights[selectedPeriod] / 30)))}</span>
+                  <span>+{FORMAT_CURRENCY(kost.additionalFeePrice)}</span>
                 </div>
               )}
             </div>

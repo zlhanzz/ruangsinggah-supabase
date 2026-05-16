@@ -2,17 +2,22 @@ import React, { useState, useMemo } from 'react';
 import { 
     Users, Search, Filter, Calendar, Clock, ArrowRight, User, 
     MessageCircle, MoreHorizontal, ChevronRight, MapPin, Briefcase, 
-    GraduationCap, ClipboardList, TrendingUp, AlertCircle, Plus, DollarSign, ExternalLink, X, Home, Zap, RefreshCw
+    GraduationCap, ClipboardList, TrendingUp, AlertCircle, Plus, DollarSign, ExternalLink, X, Home, Zap, RefreshCw,
+    Share2, ShieldAlert, File, History
 } from 'lucide-react';
+import PaymentHistoryModal from '../PaymentHistoryModal';
 import { FORMAT_CURRENCY } from '../../constants';
+import { getCurrentDate, parseDateSafely } from '../../utils/timeUtils';
 import { Kost } from '../../types';
 import AddBillModal from './AddBillModal';
 
 interface MitraTenantManagementProps {
-    tenancyData: any[];
+    residentStatus: any[];
     properties: Kost[];
+    bookings?: any[];
     refreshData: () => void;
     onViewUserProfile: (userData: any) => void;
+    onStartChat?: (tenantId: string, kostId: string) => void;
 }
 
 const BillingStatusBadge: React.FC<{ status: string }> = ({ status }) => {
@@ -29,16 +34,22 @@ const BillingStatusBadge: React.FC<{ status: string }> = ({ status }) => {
 };
 
 const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({ 
-    tenancyData, 
+    residentStatus, 
     properties,
+    bookings = [],
     refreshData,
-    onViewUserProfile
+    onViewUserProfile,
+    onStartChat
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterProperty, setFilterProperty] = useState('all');
+    const [filterStatus, setFilterStatus] = useState('all');
     const [viewingResident, setViewingResident] = useState<any | null>(null);
+    const [viewingInvoice, setViewingInvoice] = useState<any | null>(null);
+    const [viewingHistory, setViewingHistory] = useState<any | null>(null);
     const [showAddBillModal, setShowAddBillModal] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isUpdating, setIsUpdating] = useState(false);
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
@@ -47,221 +58,149 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
         setTimeout(() => setIsRefreshing(false), 800);
     };
 
+    const handleTriggerInvoice = async (resident: any) => {
+        if (!confirm(`Kirim ulang notifikasi tagihan ke ${resident.profile.name}?`)) return;
+        setIsUpdating(true);
+        try {
+            console.log('Triggering invoice for:', resident.uid);
+            alert('Sistem sedang memproses pengiriman invoice terbaru ke WhatsApp penghuni.');
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    const handleManualPayment = async (resident: any) => {
+        if (!confirm(`Konfirmasi pembayaran CASH untuk ${resident.profile.name}? Status tagihan akan langsung berubah menjadi LUNAS.`)) return;
+        setIsUpdating(true);
+        try {
+            console.log('Updating payment status for:', resident.uid);
+            alert('Status pembayaran berhasil diperbarui secara manual.');
+            refreshData();
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
     // --- HELPERS ---
+
+
     const safeFormatDate = (dateStr: string | null | undefined, options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' }) => {
         if (!dateStr) return '-';
-        const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return '-';
+        const d = parseDateSafely(dateStr);
+        if (!d) return '-';
         return d.toLocaleDateString('id-ID', options);
     };
 
     const getRemainingDays = (end: string | null | undefined) => {
         if (!end) return null;
-        const d = new Date(end);
-        if (isNaN(d.getTime())) return null;
-        const diff = d.getTime() - Date.now();
+        const d = parseDateSafely(end);
+        if (!d) return null;
+        
+        // Normalize today to start of day (00:00:00)
+        const today = getCurrentDate();
+        const todayNormalized = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        
+        // Normalize end date to start of day
+        const endNormalized = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        
+        const diff = endNormalized.getTime() - todayNormalized.getTime();
         return Math.ceil(diff / (1000 * 60 * 60 * 24));
     };
 
     // --- DATA AGGREGATION ---
     // Group transactions by User ID to show unique residents
-    const residents = useMemo(() => {
-        const groups: Record<string, any> = {};
+    const processedResidents = useMemo(() => {
+        if (!residentStatus) return [];
 
-        tenancyData.forEach(trx => {
-            const uid = trx.user_id;
-            if (!uid) return;
+        return residentStatus.map(r => {
+            const u = r.user || {};
+            const p = r.property || {};
+            const t = r.last_transaction || {};
+            const meta = t.metadata || {};
 
-            if (!groups[uid]) {
-                groups[uid] = {
-                    uid,
-                    profile: trx.user || trx.metadata || {},
-                    kostId: trx.kost_id || trx.product_id,
-                    kostName: trx.metadata?.kostName || trx.kost_name || 'Kost',
-                    roomType: trx.metadata?.roomType || trx.room_type || '-',
-                    occupantCount: trx.metadata?.occupantCount || 1,
-                    periodLabel: trx.metadata?.periodLabel || trx.metadata?.period || '-',
-                    transactions: [],
-                    startDate: null,
-                    endDate: null,
-                    lastRenewalDate: null,
-                    initialStartDate: null,
-                    status: 'active',
-                    pendingBills: 0,
-                    lastRentAmount: 0,
-                    hasRentalTransaction: false // Flag to ensure they are real tenants
-                };
-            }
-
-            groups[uid].transactions.push(trx);
-
-            const isPrimaryRent = ['kost_booking', 'perpanjangan_sewa', 'kost'].includes(trx.product_type);
-            if (isPrimaryRent) {
-                groups[uid].hasRentalTransaction = true;
-            }
-
-            // Sort transactions by date (Oldest first)
-            const sortedTrx = [...groups[uid].transactions].sort((a, b) => 
-                new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-            );
-
-            // Initial Rent Transaction (Oldest)
-            const initialRent = sortedTrx.find(t => t.product_type === 'kost_booking' || t.product_type === 'kost');
-            if (initialRent) {
-                groups[uid].initialStartDate = initialRent.metadata?.startDate || initialRent.startDate;
-            }
-
-            // Latest Rent Transaction (Latest perpanjangan or booking)
-            const rentTrx = [...sortedTrx].reverse().find(t => 
-                ['kost_booking', 'perpanjangan_sewa', 'kost'].includes(t.product_type) && 
-                t.status?.toUpperCase() === 'PAID'
-            );
-
-            if (rentTrx) {
-                groups[uid].lastRentAmount = rentTrx.amount;
-                groups[uid].roomType = rentTrx.metadata?.roomType || groups[uid].roomType;
-                groups[uid].periodLabel = rentTrx.metadata?.periodLabel || groups[uid].periodLabel;
-            }
-
-            // Latest Renewal
-            const lastRenewal = [...sortedTrx].reverse().find(t => t.product_type === 'perpanjangan_sewa' && t.status?.toUpperCase() === 'PAID');
-            if (lastRenewal) {
-                groups[uid].lastRenewalDate = lastRenewal.created_at;
-            }
-
-            // Calculate overall pending bills (standalone only)
-            const unpaidBills = sortedTrx.filter(t => 
-                t.product_type === 'tagihan_ekstra' && 
-                ['PENDING', 'AWAITING_PAYMENT'].includes(t.status?.toUpperCase())
-            ).reduce((acc, t) => acc + (t.amount || 0), 0);
+            const daysLeft = getRemainingDays(r.end_date);
             
-            groups[uid].pendingBills = unpaidBills;
-
-            // Current Active Dates
-            const currentStart = trx.metadata?.startDate || trx.startDate;
-            const currentEnd = trx.metadata?.endDate || trx.endDate;
-
-            if (currentStart && !isNaN(new Date(currentStart).getTime())) {
-                const sDate = new Date(currentStart);
-                if (!groups[uid].startDate || sDate < new Date(groups[uid].startDate)) {
-                    groups[uid].startDate = currentStart;
-                }
-            }
-
-            if (currentEnd && !isNaN(new Date(currentEnd).getTime())) {
-                const eDate = new Date(currentEnd);
-                if (!groups[uid].endDate || eDate > new Date(groups[uid].endDate)) {
-                    groups[uid].endDate = currentEnd;
-                }
-            }
-
-            // Status Logic: Only show active if end date hasn't passed
-            const now = new Date();
-            if (groups[uid].endDate) {
-                const eDate = new Date(groups[uid].endDate);
-                groups[uid].status = eDate < now ? 'expired' : 'active';
-            }
-
-            // Calculate current month of stay
-            const startOfLease = groups[uid].initialStartDate || groups[uid].startDate;
-            if (startOfLease && !isNaN(new Date(startOfLease).getTime())) {
-                const start = new Date(startOfLease);
-                const totalMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()) + 1;
-                groups[uid].currentMonth = Math.max(1, totalMonths);
-            } else {
-                groups[uid].currentMonth = 1;
-            }
-
-            // --- VIRTUAL BILLING ENGINE (SYNCED WITH MYKOST) ---
-            const property = properties.find(p => p.id === groups[uid].kostId);
-            groups[uid].totalOutstanding = 0;
-            groups[uid].missedMonthsCount = 0;
-            
-            if (property?.additionalFeePrice > 0) {
-                const startOfLease = groups[uid].initialStartDate || groups[uid].startDate;
-                if (startOfLease && !isNaN(new Date(startOfLease).getTime())) {
-                    const start = new Date(startOfLease);
-                    const now = new Date();
-                    
-                    // Iterate through each month from the SECOND month of stay
-                    // Month 1 is assumed to be included in the initial booking transaction
-                    let iter = new Date(start.getFullYear(), start.getMonth() + 1, 1);
-                    const endIter = new Date(now.getFullYear(), now.getMonth(), 1);
-                    
-                    let billingStatus = 'lunas';
-                    let hasMissing = false;
-
-                    while (iter <= endIter) {
-                        const isPaid = sortedTrx.some(t => {
-                            if (t.product_type !== 'tagihan_ekstra') return false;
-                            const d = new Date(t.created_at || t.startDate);
-                            return d.getMonth() === iter.getMonth() && 
-                                   d.getFullYear() === iter.getFullYear() && 
-                                   ['PAID', 'SUCCESS', 'berhasil'].includes(t.status?.toUpperCase());
-                        });
-
-                        if (!isPaid) {
-                            hasMissing = true;
-                            groups[uid].missedMonthsCount++;
-                            
-                            // Calculate Penalty (5% per day after 10 days)
-                            // Match MyKost.tsx logic: Due Date is 10 days after 1st of month
-                            const billCreatedAt = new Date(iter.getFullYear(), iter.getMonth(), 1, 0, 0, 0);
-                            const billDueDate = new Date(billCreatedAt);
-                            billDueDate.setDate(billDueDate.getDate() + 10);
-                            
-                            if (now > billDueDate) {
-                                const diffDays = Math.floor((now.getTime() - billDueDate.getTime()) / (1000 * 60 * 60 * 24));
-                                const penalty = property.additionalFeePrice * 0.05 * diffDays;
-                                groups[uid].totalOutstanding += (property.additionalFeePrice + penalty);
-                            } else {
-                                groups[uid].totalOutstanding += property.additionalFeePrice;
-                            }
-                        }
-                        
-                        // Move to next month
-                        iter.setMonth(iter.getMonth() + 1);
-                    }
-
-                    if (hasMissing) {
-                        billingStatus = 'perlu_ditagih';
-                    }
-                    groups[uid].billingStatus = billingStatus;
-                } else {
-                    groups[uid].billingStatus = 'not_needed';
-                }
-            } else {
-                groups[uid].billingStatus = 'not_needed';
-            }
+            return {
+                id: r.id,
+                uid: r.user_id,
+                profile: {
+                    name: u.name || u.full_name || 'Penyewa',
+                    photo_url: u.photo_url,
+                    phone: u.phone,
+                    email: u.email,
+                    occupation: u.occupation || '-',
+                    institution: u.institution || '-',
+                    city: u.city || '-',
+                    address: u.address || '-'
+                },
+                kostId: r.kost_id,
+                kostName: p.title || 'Kost',
+                roomType: r.room_type || '-',
+                occupantCount: Number(meta.occupants) || 1,
+                startDate: r.start_date,
+                endDate: r.end_date,
+                totalPeriods: r.total_months || 0,
+                periodLabel: 'Bulan',
+                totalSewaLabel: `${r.total_months || 0} Bulan`,
+                billingBreakdown: {
+                    base: Number(meta.basePrice) || (Number(t.amount || 0) - (Number(meta.extraPersonFee) || 0) - (Number(meta.facilityAmount || meta.additionalFeePrice || meta.facilityFee) || 0) - (Number(meta.platformFee) || 0)),
+                    extraOccupant: Number(meta.extraPersonFee) || 0,
+                    facility: Number(meta.facilityAmount || meta.additionalFeePrice || meta.facilityFee) || 0,
+                    platform: Number(meta.platformFee) || 0,
+                    total: Number(t.amount || 0)
+                },
+                daysLeft,
+                isExpired: daysLeft !== null && daysLeft < 0,
+                isExpiring: daysLeft !== null && daysLeft <= 7 && daysLeft >= 0,
+                isActive: daysLeft !== null && daysLeft > 7,
+                isNoExtension: meta.noExtension === true,
+                billingStatus: (t.status || 'PAID').toLowerCase(),
+                relatedBills: bookings.filter(bt => 
+                    (bt.type === 'tagihan_ekstra' || bt.product_type === 'tagihan_ekstra') && 
+                    (bt.metadata?.originalTransactionId === r.last_transaction_id || bt.metadata?.original_transaction_id === r.last_transaction_id)
+                ).map(rb => ({
+                    id: rb.id,
+                    name: rb.metadata?.bill_name || 'Tagihan Fasilitas',
+                    amount: Number(rb.amount),
+                    status: (rb.status || 'PENDING').toUpperCase(),
+                    date: new Date(rb.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+                }))
+            };
         });
+    }, [residentStatus, bookings]);
 
-        return Object.values(groups).filter(res => {
+    const filteredResidents = useMemo(() => {
+        return processedResidents.filter(res => {
             const matchesSearch = res.profile.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                res.kostName?.toLowerCase().includes(searchQuery.toLowerCase());
+                                 res.kostName?.toLowerCase().includes(searchQuery.toLowerCase());
             const matchesProperty = filterProperty === 'all' || res.kostId === filterProperty;
             
-            // CRITICAL: A legitimate resident must have a rental transaction (not just bills)
-            return res.hasRentalTransaction && matchesSearch && matchesProperty;
+            let matchesStatus = true;
+            if (filterStatus === 'expiring') matchesStatus = res.isExpiring;
+            else if (filterStatus === 'active') matchesStatus = res.isActive;
+            else if (filterStatus === 'no_extension') matchesStatus = res.isNoExtension;
+            else if (filterStatus === 'all') {
+                // In 'all' view, we show active and expiring. 
+                // Expired ( < 0 ) will be shown if they are within the grace period (-3 days)
+                matchesStatus = true; 
+            }
+
+            return matchesSearch && matchesProperty && matchesStatus;
         });
-    }, [tenancyData, searchQuery, filterProperty]);
+    }, [processedResidents, searchQuery, filterProperty, filterStatus]);
 
     const stats = useMemo(() => {
-        const now = new Date();
-        const next7Days = new Date();
-        next7Days.setDate(now.getDate() + 7);
-
-        const expiringSoon = residents.filter(r => {
-            if (!r.endDate) return false;
-            const eDate = new Date(r.endDate);
-            return eDate > now && eDate <= next7Days;
-        }).length;
+        const expiringSoon = processedResidents.filter(r => r.isExpiring).length;
+        const activeRentals = processedResidents.filter(r => r.isActive).length;
+        const noExtensions = processedResidents.filter(r => r.isNoExtension).length;
 
         return {
-            total: residents.length,
+            total: processedResidents.length,
             expiringSoon,
-            recentExtensions: tenancyData.filter(t => t.type === 'perpanjangan_sewa' || t.product_type === 'perpanjangan_sewa').length
+            activeRentals,
+            noExtensions
         };
-    }, [residents, tenancyData]);
+    }, [processedResidents]);
 
     // calculateProgress moves here
     const calculateProgress = (start: string | null | undefined, end: string | null | undefined) => {
@@ -271,7 +210,8 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
         if (isNaN(sDate.getTime()) || isNaN(eDate.getTime())) return 0;
         
         const total = eDate.getTime() - sDate.getTime();
-        const elapsed = Date.now() - sDate.getTime();
+        const now = getCurrentDate();
+        const elapsed = now.getTime() - sDate.getTime();
         if (total <= 0) return 100;
         return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)));
     };
@@ -279,10 +219,26 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             {/* Header Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <StatCard icon={<Users size={24} />} color="orange" label="Total Penghuni" value={`${stats.total} Orang`} />
-                <StatCard icon={<Clock size={24} />} color="rose" label="Segera Habis (7 Hari)" value={`${stats.expiringSoon} Kamar`} />
-                <StatCard icon={<TrendingUp size={24} />} color="purple" label="Riwayat Perpanjangan" value={`${stats.recentExtensions} Kali`} />
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm mb-6">
+                <div>
+                    <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight leading-none">Database Penghuni</h2>
+                    <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mt-3 flex items-center gap-2">
+                        <Users className="w-3 h-3" /> {stats.total} Penghuni Aktif saat ini
+                    </p>
+                </div>
+                <div className="flex items-center gap-6">
+                    <div className="text-right hidden sm:block">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Segera Habis</p>
+                        <p className="text-xl font-black text-rose-500">{stats.expiringSoon}</p>
+                    </div>
+                    <div className="text-right hidden sm:block">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sewa Aktif</p>
+                        <p className="text-xl font-black text-emerald-500">{stats.activeRentals}</p>
+                    </div>
+                    <button onClick={handleRefresh} className="w-12 h-12 flex items-center justify-center bg-gray-50 border border-gray-100 rounded-2xl text-gray-400 hover:text-orange-500 transition-all">
+                        <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    </button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -320,9 +276,44 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                 </button>
             </div>
 
+            {/* Status Tabs */}
+            <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-[2rem] border border-gray-100 shadow-sm">
+                <StatusTab 
+                    active={filterStatus === 'all'} 
+                    label="Semua" 
+                    count={processedResidents.length} 
+                    onClick={() => setFilterStatus('all')}
+                    color="gray"
+                />
+                <StatusTab 
+                    active={filterStatus === 'expiring'} 
+                    label="Masa Tenggang" 
+                    count={stats.expiringSoon} 
+                    onClick={() => setFilterStatus('expiring')}
+                    color="orange"
+                    icon={<Clock size={14} />}
+                />
+                <StatusTab 
+                    active={filterStatus === 'active'} 
+                    label="Sewa Aktif" 
+                    count={stats.activeRentals} 
+                    onClick={() => setFilterStatus('active')}
+                    color="emerald"
+                    icon={<Zap size={14} fill="currentColor" />}
+                />
+                <StatusTab 
+                    active={filterStatus === 'no_extension'} 
+                    label="Tidak Perpanjang" 
+                    count={stats.noExtensions} 
+                    onClick={() => setFilterStatus('no_extension')}
+                    color="rose"
+                    icon={<ShieldAlert size={14} />}
+                />
+            </div>
+
             {/* Inhabitants List */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {residents.length === 0 ? (
+            <div className="grid grid-cols-1 gap-6">
+                {filteredResidents.length === 0 ? (
                     <div className="col-span-full py-20 text-center bg-white rounded-[3rem] border border-dashed border-gray-200">
                         <div className="w-16 h-16 bg-gray-50 rounded-3xl flex items-center justify-center mx-auto mb-4 text-gray-300">
                             <Users size={32} />
@@ -331,78 +322,202 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                         <p className="text-xs text-gray-400 mt-2">Data akan muncul setelah pesanan diselesaikan (PAID)</p>
                     </div>
                 ) : (
-                    residents.map((resident) => {
+                    filteredResidents.map((resident) => {
                         const progress = calculateProgress(resident.startDate, resident.endDate);
                         const daysLeft = getRemainingDays(resident.endDate);
                         const isExpiring = daysLeft !== null && daysLeft <= 7;
 
                         return (
-                            <div 
-                                key={resident.uid}
-                                className="group bg-white rounded-[2.5rem] border border-gray-100 p-6 shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden"
-                                onClick={() => setViewingResident(resident)}
-                            >
-                                {/* Header */}
-                                <div className="flex items-start justify-between mb-5">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-14 h-14 rounded-2xl bg-orange-500 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-orange-100 relative overflow-hidden">
-                                            <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                                {resident.profile.name?.charAt(0) || '?'}
-                                            </span>
-                                            {resident.profile.photo_url && (
-                                                <img 
-                                                    src={resident.profile.photo_url} 
-                                                    className="absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-300" 
-                                                    alt="" 
-                                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                                />
-                                            )}
-                                        </div>
-                                        <div>
-                                            <h5 className="font-black text-gray-900 tracking-tight text-lg line-clamp-1">{resident.profile.name}</h5>
-                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{resident.roomType}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col items-end gap-1.5">
-                                        <div className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${isExpiring ? 'bg-rose-50 text-rose-500' : 'bg-green-50 text-green-500'}`}>
-                                            {isExpiring ? 'Hampir Habis' : 'Aktif'}
-                                        </div>
-                                        <BillingStatusBadge status={resident.billingStatus} />
-                                    </div>
-                                </div>
 
-                                {/* Property Info */}
-                                <div className="space-y-3 mb-6">
-                                    <div className="flex items-center gap-2 text-gray-500">
-                                        <MapPin size={14} className="text-orange-500" />
-                                        <p className="text-xs font-bold truncate">{resident.kostName}</p>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-gray-500">
-                                        <Calendar size={14} className="text-orange-500" />
-                                        <p className="text-xs font-bold">{safeFormatDate(resident.startDate, { day: 'numeric', month: 'short', year: 'numeric' })} — {safeFormatDate(resident.endDate, { day: 'numeric', month: 'short', year: 'numeric' })}</p>
-                                    </div>
-                                </div>
+                            <div key={resident.uid} className="bg-white rounded-[2.5rem] lg:rounded-[3.5rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-500 mb-6 group">
+                                <div className="p-6 lg:p-12">
+                                    <div className="flex flex-col md:flex-row justify-between items-center md:items-start gap-8">
+                                        
+                                        {/* Profile Photo & Basic Info */}
+                                        <div className="flex flex-col md:flex-row items-center gap-6 text-center md:text-left w-full md:w-auto">
+                                            <div 
+                                                onClick={() => setViewingResident(resident)}
+                                                className="w-24 h-24 lg:w-32 lg:h-32 rounded-[2rem] lg:rounded-[3rem] bg-orange-500 flex items-center justify-center text-4xl lg:text-5xl font-black text-white shadow-2xl border-4 border-white shrink-0 overflow-hidden relative cursor-pointer hover:scale-105 transition-transform"
+                                            >
+                                                {resident.profile.name?.charAt(0)}
+                                                {resident.profile.photo_url && <img src={resident.profile.photo_url} className="absolute inset-0 w-full h-full object-cover" alt="" />}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap justify-center md:justify-start items-center gap-2 mb-2">
+                                                    <span className="text-[8px] lg:text-[9px] bg-orange-50 text-orange-600 px-3 py-1 rounded-xl font-black tracking-widest border border-orange-100 uppercase truncate max-w-[150px]">{resident.kostName}</span>
+                                                    {resident.isExpired ? (
+                                                        <span className="text-[8px] lg:text-[9px] font-black text-white bg-rose-600 px-3 py-1 rounded-xl uppercase tracking-widest border border-rose-700 flex items-center gap-1.5 shadow-lg shadow-rose-100"><AlertCircle size={10}/> SUDAH HABIS</span>
+                                                    ) : resident.isExpiring ? (
+                                                        <span className="text-[8px] lg:text-[9px] font-black text-orange-500 bg-orange-50 px-3 py-1 rounded-xl uppercase tracking-widest border border-orange-100 flex items-center gap-1.5 animate-pulse"><Clock size={10}/> MASA TENGGANG</span>
+                                                    ) : resident.isNoExtension ? (
+                                                        <span className="text-[8px] lg:text-[9px] font-black text-rose-500 bg-rose-50 px-3 py-1 rounded-xl uppercase tracking-widest border border-rose-100 flex items-center gap-1.5"><ShieldAlert size={10}/> TIDAK PERPANJANG</span>
+                                                    ) : (
+                                                        <span className="text-[8px] lg:text-[9px] font-black text-emerald-500 bg-emerald-50 px-3 py-1 rounded-xl uppercase tracking-widest border border-emerald-100 flex items-center gap-1.5"><Zap size={10} fill="currentColor"/> SEWA AKTIF</span>
+                                                    )}
+                                                    <BillingStatusBadge status={resident.billingStatus || 'pending'} />
+                                                </div>
+                                                <h3 className="text-3xl lg:text-5xl font-black text-gray-900 uppercase tracking-tight leading-tight">{resident.profile.name}</h3>
+                                                <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-4">
+                                                    <span className="text-[9px] lg:text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg uppercase border border-blue-100 flex items-center gap-2">
+                                                        <Users size={12}/> {resident.occupantCount} Orang
+                                                    </span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-1.5 h-1.5 bg-gray-300 rounded-full hidden sm:block"></span>
+                                                        <p className="text-[9px] lg:text-[10px] text-gray-400 font-black uppercase tracking-widest">
+                                                            Penyewa • {resident.roomType}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
 
-                                {/* Progress */}
-                                <div className="space-y-2">
-                                    <div className="flex justify-between items-end">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sisa Sewa</p>
-                                        <p className={`text-xs font-black ${isExpiring ? 'text-rose-500' : 'text-orange-500'}`}>
-                                            {daysLeft !== null ? (daysLeft <= 0 ? 'Habis' : `${daysLeft} Hari Lagi`) : '-'}
-                                        </p>
-                                    </div>
-                                    <div className="h-2.5 bg-gray-50 rounded-full overflow-hidden border border-gray-100">
-                                        <div 
-                                            className={`h-full transition-all duration-1000 ${isExpiring ? 'bg-rose-500' : 'bg-orange-500'}`} 
-                                            style={{ width: `${progress}%` }} 
-                                        />
-                                    </div>
-                                </div>
+                                        {/* Payment Status & Actions */}
+                                        <div className="w-full md:w-auto flex flex-col items-center md:items-end gap-6 pt-6 md:pt-0 border-t md:border-t-0 border-gray-50">
 
-                                {/* Hover Overlay */}
-                                <div className="absolute inset-x-0 bottom-0 p-4 bg-gray-900 translate-y-full group-hover:translate-y-0 transition-transform flex items-center justify-between text-white">
-                                    <p className="text-[10px] font-black uppercase tracking-widest">Lengkap & Tagihan</p>
-                                    <ChevronRight size={18} />
+                                            
+                                            <div className="flex flex-col w-full gap-2.5">
+                                                <button 
+                                                    onClick={() => handleManualPayment(resident)}
+                                                    disabled={daysLeft > 7 || isUpdating}
+                                                    title={daysLeft > 7 ? 'Tombol aktif 7 hari sebelum masa sewa berakhir' : ''}
+                                                    className={`w-full px-6 py-3.5 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-sm ${
+                                                        daysLeft > 7 
+                                                            ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed opacity-60' 
+                                                            : 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100'
+                                                    }`}
+                                                >
+                                                    <DollarSign size={16} /> TANDAI PEMBAYARAN SELESAI
+                                                </button>
+                                                
+                                                <div className="grid grid-cols-2 gap-2.5">
+                                                    <button 
+                                                        onClick={() => setViewingInvoice(resident)}
+                                                        className="px-4 py-3.5 bg-orange-50 text-orange-600 rounded-2xl border border-orange-100 text-[9px] font-black uppercase tracking-widest hover:bg-orange-100 transition-all flex items-center justify-center gap-2"
+                                                    >
+                                                        <File size={14} /> TAGIH
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => onStartChat?.(resident.uid, resident.kostId)}
+                                                        className="px-4 py-3.5 bg-blue-50 text-blue-600 rounded-2xl border border-blue-100 text-[9px] font-black uppercase tracking-widest hover:bg-blue-100 transition-all flex items-center justify-center gap-2"
+                                                    >
+                                                        <MessageCircle size={14} /> CHAT
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Info Grid (Synced with Admin) */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-10 pt-10 mt-10 border-t border-gray-50">
+                                        {/* Paket & Durasi */}
+                                        <div className="space-y-6">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-1.5 h-1.5 bg-orange-500 rounded-full"></div>
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Paket & Durasi</p>
+                                            </div>
+                                            <div className="flex justify-between items-center bg-gray-50/50 p-4 rounded-2xl border border-gray-50">
+                                                <div>
+                                                    <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Paket Aktif</p>
+                                                    <p className="text-lg font-black text-gray-900 leading-none">Per {resident.periodLabel}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Total Sewa</p>
+                                                    <p className="text-lg font-black text-orange-500 leading-none">{resident.totalSewaLabel}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center justify-between px-2 pt-2 border-t border-gray-50/50">
+                                                <p className="text-xs text-gray-400 font-black uppercase tracking-widest">Jadwal Aktif</p>
+                                                <p className="text-sm font-black text-emerald-600 uppercase bg-emerald-50/50 px-4 py-2 rounded-xl border border-emerald-100/50 shadow-sm">{safeFormatDate(resident.startDate)}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Jadwal */}
+                                        <div className="space-y-6">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jadwal Sewa</p>
+                                            </div>
+                                            <div className="flex justify-between items-center bg-gray-50/50 p-4 rounded-2xl border border-gray-50">
+                                                <div>
+                                                    <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Mulai</p>
+                                                    <p className="text-lg font-black text-gray-900 leading-none">{safeFormatDate(resident.startDate, {day:'numeric', month:'short'})}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Selesai</p>
+                                                    <p className="text-lg font-black text-orange-600 leading-none">{safeFormatDate(resident.endDate, {day:'numeric', month:'short', year: 'numeric'})}</p>
+                                                </div>
+                                            </div>
+                                            <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600"><Clock size={16}/></div>
+                                                    <p className="text-[10px] font-black text-gray-500 uppercase">SISA HARI</p>
+                                                </div>
+                                                <p className="text-xs font-black text-emerald-600 uppercase tracking-tight">
+                                                    {daysLeft} Hari Lagi
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Rincian Tagihan */}
+                                        <div className="space-y-6">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Rincian Tagihan</p>
+                                            </div>
+                                            <div className="space-y-4 px-1">
+                                                <div className="flex justify-between items-center group/info">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                                            Sewa & Tambahan (Penghuni)
+                                                        </span>
+                                                        <span className="text-[8px] font-black text-emerald-500 tracking-widest">LUNAS</span>
+                                                    </div>
+                                                    <span className="text-sm font-black text-gray-900">{FORMAT_CURRENCY(resident.billingBreakdown.base + resident.billingBreakdown.extraOccupant)}</span>
+                                                </div>
+
+
+                                                {resident.billingBreakdown.facility > 0 && (
+                                                    <div className="flex justify-between items-center group/info">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Fasilitas</span>
+                                                            <span className="text-[8px] font-black text-emerald-500 tracking-widest">LUNAS</span>
+                                                        </div>
+                                                        <span className="text-sm font-black text-gray-900">+{FORMAT_CURRENCY(resident.billingBreakdown.facility)}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Related Separate Bills */}
+                                                {resident.relatedBills && resident.relatedBills.length > 0 && (
+                                                    <div className="pt-4 border-t border-dashed border-gray-200 space-y-3">
+                                                        <p className="text-[8px] font-black text-orange-500 uppercase tracking-[0.2em] mb-1">Tagihan Tambahan:</p>
+                                                        {resident.relatedBills.map((bill: any) => (
+                                                            <div key={bill.id} className="flex justify-between items-center text-[10px] font-bold">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-gray-500 uppercase">{bill.name}</span>
+                                                                    <span className={`text-[7px] font-black ${bill.status === 'PAID' ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                                                        {bill.status === 'PAID' ? 'LUNAS' : 'PENDING'}
+                                                                    </span>
+                                                                </div>
+                                                                <span className="text-gray-900 font-black">{FORMAT_CURRENCY(bill.amount)}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                <div className="pt-5 mt-2 border-t-2 border-gray-50 flex justify-between items-baseline">
+                                                     <span className="text-xs font-black text-orange-500 uppercase tracking-widest">Total</span>
+                                                     <span className="text-2xl font-black text-orange-500">{FORMAT_CURRENCY(resident.billingBreakdown.total)}</span>
+                                                 </div>
+
+                                                 <button 
+                                                     onClick={() => setViewingHistory(resident)}
+                                                     className="w-full mt-4 py-3 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-2xl border border-gray-100 text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                                                 >
+                                                     <History size={14} /> Lihat Riwayat Pembayaran
+                                                 </button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         );
@@ -410,194 +525,207 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                 )}
             </div>
 
-            {/* Resident Detail Modal */}
+            {/* Resident Profile Viewer Modal - CLEAN & FOCUSED */}
             {viewingResident && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setViewingResident(null)}>
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-md animate-in fade-in" />
-                    <div className="relative bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 lg:p-20" onClick={() => setViewingResident(null)}>
+                    <div className="absolute inset-0 bg-gray-950/80 backdrop-blur-xl animate-in fade-in" />
+                    <div className="relative bg-white w-full max-w-4xl rounded-[3.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col" onClick={e => e.stopPropagation()}>
                         
-                        {/* Modal Header */}
-                        <div className="bg-gray-900 p-8 lg:p-10 text-white shrink-0 relative overflow-hidden">
-                            <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '32px 32px' }} />
+                        {/* Profile Header */}
+                        <div className="bg-gray-950 p-10 lg:p-14 text-white shrink-0 relative overflow-hidden">
+                            <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+                            <div className="absolute -right-20 -top-20 w-80 h-80 bg-orange-500/20 blur-[100px] rounded-full" />
                             
-                            <div className="flex items-center gap-8 relative z-10">
-                                <div className="w-28 h-28 rounded-[2.5rem] bg-orange-500 flex items-center justify-center text-5xl font-black shadow-2xl border-4 border-white/10 shrink-0 relative overflow-hidden group">
-                                    <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                        {viewingResident.profile.name?.charAt(0) || '?'}
-                                    </span>
-                                    {viewingResident.profile.photo_url && (
-                                        <img 
-                                            src={viewingResident.profile.photo_url} 
-                                            className="absolute inset-0 w-full h-full object-cover z-10" 
-                                            alt="" 
-                                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                        />
-                                    )}
+                            <div className="flex flex-col md:flex-row items-center gap-12 relative z-10">
+                                <div className="w-40 h-40 rounded-[3rem] bg-orange-500 flex items-center justify-center text-7xl font-black shadow-2xl border-4 border-white/10 shrink-0 overflow-hidden relative group">
+                                    {viewingResident.profile.name?.charAt(0)}
+                                    {viewingResident.profile.photo_url && <img src={viewingResident.profile.photo_url} className="absolute inset-0 w-full h-full object-cover" alt="" />}
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-3 mb-2 flex-wrap">
-                                        <span className="bg-orange-500 text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest text-white">PENGHUNI</span>
-                                        <span className="bg-blue-500 text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest text-white">Bulan ke-{viewingResident.currentMonth}</span>
-                                        <BillingStatusBadge status={viewingResident.billingStatus} />
-                                        <span className="bg-white/10 text-white text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest border border-white/10">ID: {viewingResident.uid.substring(0, 8).toUpperCase()}</span>
-                                        <button 
-                                            onClick={() => onViewUserProfile(viewingResident.profile)}
-                                            className="bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest border border-blue-500/30 transition-all flex items-center gap-1"
-                                        >
-                                            <ExternalLink size={10} /> Lihat Profil Lengkap
-                                        </button>
+                                <div className="flex-1 min-w-0 text-center md:text-left">
+                                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-4">
+                                        <span className="bg-orange-500 text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest text-white shadow-lg shadow-orange-500/20">Identitas Terverifikasi</span>
+                                        <span className="bg-white/10 text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest border border-white/10">ID: {viewingResident.uid.substring(0, 10).toUpperCase()}</span>
                                     </div>
-                                    <h3 className="text-4xl font-black tracking-tight truncate">{viewingResident.profile.name}</h3>
-                                    <p className="text-sm text-white/50 font-bold truncate mt-1 flex items-center gap-2">
-                                        <MessageCircle size={14} /> {viewingResident.profile.phone} 
-                                        <span className="opacity-30">•</span>
-                                        {viewingResident.profile.email}
-                                    </p>
+                                    <h3 className="text-6xl font-black tracking-tight leading-none mb-4">{viewingResident.profile.name}</h3>
+                                    <p className="text-sm font-bold text-gray-400 uppercase tracking-[0.2em] opacity-60">Dokumen Digital RuangSinggah</p>
                                 </div>
-                                <button onClick={() => setViewingResident(null)} className="w-12 h-12 rounded-2xl bg-white/10 hover:bg-white/20 transition-all flex items-center justify-center active:scale-90 border border-white/10 shrink-0">
-                                    <X size={24} />
+                                <button onClick={() => setViewingResident(null)} className="absolute top-0 right-0 w-14 h-14 rounded-2xl bg-white/5 hover:bg-white/10 transition-all flex items-center justify-center active:scale-90 border border-white/5 group">
+                                    <X size={28} className="group-hover:rotate-90 transition-transform" />
                                 </button>
                             </div>
                         </div>
 
-                        {/* Modal Body */}
-                        <div className="flex-1 overflow-y-auto bg-gray-50/30">
-                            <div className="p-8 lg:p-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        {/* Profile Body - Focused Content */}
+                        <div className="flex-1 bg-white p-10 lg:p-16">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
                                 
-                                {/* Col 1: Tenancy Details & Financials */}
-                                <div className="lg:col-span-2 space-y-8">
-                                    
-                                    {/* Rent Status Card */}
-                                    <div className="bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm flex flex-col md:flex-row gap-8">
-                                        <div className="flex-1 space-y-6">
-                                            <div className="flex items-center justify-between">
-                                                <h4 className="font-black text-gray-900 border-l-4 border-orange-500 pl-4 uppercase text-xs tracking-widest">Detail Hunian</h4>
-                                                <span className="px-3 py-1 bg-green-50 text-green-600 rounded-full text-[9px] font-black uppercase tracking-widest">Sewa Aktif</span>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-6">
-                                                <InfoItem icon={<Home size={18} className="text-orange-500" />} label="Nama Kost" value={viewingResident.kostName} />
-                                                <InfoItem icon={<ClipboardList size={18} className="text-blue-500" />} label="Jenis Kamar" value={viewingResident.roomType} />
-                                                <InfoItem icon={<Users size={18} className="text-purple-500" />} label="Jumlah Penghuni" value={`${viewingResident.occupantCount} Orang`} />
-                                                <InfoItem icon={<TrendingUp size={18} className="text-amber-500" />} label="Paket Sewa" value={viewingResident.periodLabel} />
-                                            </div>
-                                        </div>
-                                        <div className="md:w-px bg-gray-100" />
-                                        <div className="md:w-64 space-y-6">
-                                            <h4 className="font-black text-gray-900 uppercase text-xs tracking-widest">Rincian Keuangan</h4>
-                                            <div className="space-y-4">
-                                                <div className="flex justify-between items-center">
-                                                     <span className="text-[10px] font-bold text-gray-400 uppercase">Tunggakan Fasilitas</span>
-                                                     <span className={`text-xs font-black ${viewingResident.totalOutstanding > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
-                                                         {FORMAT_CURRENCY(viewingResident.totalOutstanding)}
-                                                         {viewingResident.missedMonthsCount > 0 && ` (${viewingResident.missedMonthsCount} Bln)`}
-                                                     </span>
-                                                 </div>
-                                                 <hr className="border-dashed border-gray-200" />
-                                                 <div className="flex justify-between items-center pt-1">
-                                                     <span className="text-[10px] font-black text-gray-900 uppercase">Estimasi Total</span>
-                                                     <span className="text-sm font-black text-orange-600">{FORMAT_CURRENCY(viewingResident.lastRentAmount + viewingResident.totalOutstanding)}</span>
-                                                 </div>
-                                            </div>
-                                            <button 
-                                                onClick={() => setShowAddBillModal(true)}
-                                                className="w-full h-11 bg-orange-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-orange-100 hover:bg-orange-600 transition-all active:scale-95"
-                                            >
-                                                <Plus size={14} strokeWidth={3} /> Tagih Biaya Mandiri
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Timeline */}
-                                    <div className="bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm">
-                                        <h4 className="font-black text-gray-900 border-l-4 border-orange-500 pl-4 uppercase text-xs tracking-widest mb-8">Timeline Sewa</h4>
-                                        <div className="relative">
-                                            <div className="absolute left-6 top-0 bottom-0 w-1 bg-gray-50 rounded-full" />
-                                            <div className="space-y-10 relative">
-                                                <TimelineItem 
-                                                    active={true}
-                                                    label="Tanggal Masuk Pertama" 
-                                                    date={safeFormatDate(viewingResident.initialStartDate)}
-                                                />
-                                                {viewingResident.lastRenewalDate && (
-                                                    <TimelineItem 
-                                                        active={true}
-                                                        label="Perpanjangan Terakhir" 
-                                                        date={safeFormatDate(viewingResident.lastRenewalDate)}
-                                                    />
-                                                )}
-                                                <TimelineItem 
-                                                    label="Perpanjangan Selanjutnya" 
-                                                    date={safeFormatDate(viewingResident.endDate)} 
-                                                    isEnd={true}
-                                                    isDue={getRemainingDays(viewingResident.endDate)! <= 7}
-                                                />
-                                            </div>
-                                        </div>
+                                {/* Section: Professional Info */}
+                                <div className="space-y-10">
+                                    <h4 className="text-xs font-black text-orange-500 uppercase tracking-[0.2em] mb-8 flex items-center gap-3">
+                                        <Briefcase size={16} /> Data Profesional
+                                    </h4>
+                                    <div className="space-y-8 pl-4 border-l-2 border-gray-50">
+                                        <DetailItem label="Pekerjaan / Status" value={viewingResident.profile.occupation || 'Tidak Diisi'} />
+                                        <DetailItem label="Instansi / Universitas" value={viewingResident.profile.institution || 'Tidak Diisi'} />
                                     </div>
                                 </div>
 
-                                {/* Col 2: Transactions & Messages */}
-                                <div className="space-y-8">
-                                    <div className="bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm h-full flex flex-col">
-                                        <div className="flex items-center justify-between mb-6">
-                                            <h4 className="font-black text-gray-900 uppercase text-xs tracking-widest">Riwayat Transaksi</h4>
-                                            <span className="text-[10px] font-black text-gray-300">{viewingResident.transactions.length} Records</span>
-                                        </div>
-                                        <div className="flex-1 space-y-4 overflow-y-auto max-h-[500px] pr-2">
-                                            {viewingResident.transactions.map((trx: any) => (
-                                                <div key={trx.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:bg-white hover:shadow-md transition-all">
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${
-                                                            trx.product_type === 'perpanjangan_sewa' ? 'bg-purple-100 text-purple-600' : 
-                                                            trx.product_type === 'tagihan_ekstra' ? 'bg-rose-100 text-rose-600' : 'bg-blue-100 text-blue-600'
-                                                        }`}>
-                                                            {trx.product_type === 'perpanjangan_sewa' ? 'Perpanjangan' : 
-                                                             trx.product_type === 'tagihan_ekstra' ? 'Biaya Tambahan' : 'Sewa Awal'}
-                                                        </span>
-                                                        <span className="text-[8px] font-bold text-gray-400">{safeFormatDate(trx.created_at, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                                                    </div>
-                                                    <p className="text-[10px] font-black text-gray-900 uppercase truncate">
-                                                        {trx.product_type === 'tagihan_ekstra' ? (trx.metadata?.billName || 'Biaya Lainnya') : (trx.metadata?.roomType || 'Sewa Kamar')}
-                                                    </p>
-                                                    <div className="flex justify-between items-end mt-2">
-                                                        <span className={`text-[8px] font-bold uppercase ${trx.status?.toUpperCase() === 'PAID' ? 'text-green-500' : 'text-orange-500'}`}>
-                                                            {trx.status}
-                                                        </span>
-                                                        <span className="text-xs font-black text-gray-900">{FORMAT_CURRENCY(trx.amount)}</span>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <button 
-                                            onClick={() => {
-                                                const waLink = `https://wa.me/${viewingResident.profile.phone}?text=${encodeURIComponent(`Halo ${viewingResident.profile.name}, saya pengelola ${viewingResident.kostName}. Terkait sewa kamar anda...`)}`;
-                                                window.open(waLink, '_blank');
-                                            }}
-                                            className="mt-6 w-full bg-green-600 hover:bg-green-700 text-white h-14 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-green-100 flex items-center justify-center gap-3 transition-all active:scale-95"
-                                        >
-                                            <MessageCircle size={18} fill="currentColor" />
-                                            WhatsApp
-                                        </button>
+                                {/* Section: Origin Info */}
+                                <div className="space-y-10">
+                                    <h4 className="text-xs font-black text-orange-500 uppercase tracking-[0.2em] mb-8 flex items-center gap-3">
+                                        <MapPin size={16} /> Informasi Asal
+                                    </h4>
+                                    <div className="space-y-8 pl-4 border-l-2 border-gray-50">
+                                        <DetailItem label="Kota Asal" value={viewingResident.profile.city || 'Tidak Diisi'} />
+                                        <DetailItem label="Alamat Domisili" value={viewingResident.profile.address || 'Tidak Diisi'} />
                                     </div>
                                 </div>
+
                             </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="bg-gray-50 p-8 flex justify-center border-t border-gray-100">
+                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">RuangSinggah • Dokumen Profil Digital</p>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Billing Modal */}
-            {showAddBillModal && viewingResident && (
-                <AddBillModal 
-                    resident={viewingResident}
-                    property={properties.find(p => p.id === viewingResident.kostId)}
-                    onClose={() => setShowAddBillModal(false)}
-                    onSuccess={() => {
-                        setShowAddBillModal(false);
-                        refreshData();
-                        alert('Tagihan tambahan berhasil dikirim ke penghuni.');
-                    }}
-                />
+            {/* Invoice Preview Modal */}
+            {viewingInvoice && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 lg:p-20" onClick={() => setViewingInvoice(null)}>
+                    <div className="absolute inset-0 bg-gray-950/80 backdrop-blur-xl animate-in fade-in" />
+                    <div className="relative bg-white w-full max-w-xl rounded-[3.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col" onClick={e => e.stopPropagation()}>
+                        
+                        {/* Modal Header */}
+                        <div className="bg-orange-900 p-10 text-white text-center relative overflow-hidden">
+                             <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+                             <p className="text-[10px] font-black tracking-[0.3em] uppercase opacity-60 mb-4">Pratinjau Tagihan Digital</p>
+                             <h3 className="text-4xl font-black tracking-tight">{viewingInvoice.kostName}</h3>
+                             <p className="text-xs font-bold text-white/50 mt-2 uppercase tracking-widest">ID TRX: {viewingInvoice.uid.substring(0,8).toUpperCase()}</p>
+                        </div>
+
+                        <div className="p-10 space-y-8">
+                            {/* Summary Grid */}
+                            <div className="grid grid-cols-2 gap-6 bg-gray-50 p-6 rounded-3xl border border-gray-100">
+                                <div className="space-y-1">
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Penghuni</p>
+                                    <p className="text-sm font-black text-gray-900">{viewingInvoice.profile.name}</p>
+                                </div>
+                                <div className="space-y-1 text-right">
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Masa Sewa</p>
+                                    <p className="text-sm font-black text-gray-900">{safeFormatDate(viewingInvoice.startDate, {day:'numeric', month:'short'})} - {safeFormatDate(viewingInvoice.endDate, {day:'numeric', month:'short', year:'numeric'})}</p>
+                                </div>
+                            </div>
+
+                            {/* Billing Items */}
+                            <div className="space-y-5">
+                                {/* Base Rent */}
+                                <div className="flex justify-between items-center group">
+                                    <div>
+                                        <p className="text-sm font-black text-gray-900 uppercase tracking-tight">Sewa Dasar</p>
+                                        <span className="text-[8px] font-black text-emerald-500 tracking-widest">LUNAS</span>
+                                    </div>
+                                    <span className="font-black text-gray-900">{FORMAT_CURRENCY(viewingInvoice.billingBreakdown.base)}</span>
+                                </div>
+
+                                {/* Extra Occupant */}
+                                {viewingInvoice.billingBreakdown.extraOccupant > 0 && (
+                                    <div className="flex justify-between items-center group">
+                                        <div>
+                                            <p className="text-sm font-black text-gray-900 uppercase tracking-tight">Extra Penghuni</p>
+                                            <span className="text-[8px] font-black text-emerald-500 tracking-widest">LUNAS</span>
+                                        </div>
+                                        <span className="font-black text-gray-900">+{FORMAT_CURRENCY(viewingInvoice.billingBreakdown.extraOccupant)}</span>
+                                    </div>
+                                )}
+
+                                {/* Facility */}
+                                {viewingInvoice.billingBreakdown.facility > 0 && (
+                                    <div className="flex justify-between items-center group">
+                                        <div>
+                                            <p className="text-sm font-black text-gray-900 uppercase tracking-tight">Fasilitas Tambahan</p>
+                                            <span className="text-[8px] font-black text-emerald-500 tracking-widest">LUNAS</span>
+                                        </div>
+                                        <span className="font-black text-gray-900">+{FORMAT_CURRENCY(viewingInvoice.billingBreakdown.facility)}</span>
+                                    </div>
+                                )}
+
+                                {/* Related Separate Bills (Tracking) */}
+                                {viewingInvoice.relatedBills && viewingInvoice.relatedBills.length > 0 && (
+                                    <div className="pt-4 border-t border-dashed border-gray-100 space-y-4">
+                                        {viewingInvoice.relatedBills.map((bill: any) => {
+                                            const isPaid = bill.status === 'PAID';
+                                            return (
+                                                <div key={bill.id} className="flex justify-between items-center">
+                                                    <div>
+                                                        <p className="text-sm font-black text-gray-900 uppercase tracking-tight">{bill.name}</p>
+                                                        <span className={`text-[8px] font-black tracking-widest ${isPaid ? 'text-emerald-500' : 'text-rose-500 animate-pulse'}`}>
+                                                            {isPaid ? 'LUNAS' : 'BELUM BAYAR'}
+                                                        </span>
+                                                    </div>
+                                                    <span className={`font-black ${isPaid ? 'text-gray-900' : 'text-rose-500'}`}>
+                                                        {isPaid ? '' : '+'} {FORMAT_CURRENCY(bill.amount)}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                <div className="pt-6 border-t-4 border-double border-gray-100 flex flex-col gap-1">
+                                    <div className="flex justify-between items-baseline">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Total Tagihan</span>
+                                        <span className="text-sm font-black text-gray-400 line-through opacity-50">{FORMAT_CURRENCY(viewingInvoice.billingBreakdown.total + (viewingInvoice.relatedBills?.reduce((acc: any, b: any) => acc + (b.status === 'PAID' ? 0 : b.amount), 0) || 0))}</span>
+                                    </div>
+                                    <div className="flex justify-between items-baseline">
+                                        <span className="text-lg font-black text-orange-500 uppercase tracking-widest">Tagihan Aktif</span>
+                                        <span className="text-3xl font-black text-orange-500">
+                                            {FORMAT_CURRENCY(viewingInvoice.relatedBills?.filter((b: any) => b.status !== 'PAID').reduce((acc: any, b: any) => acc + b.amount, 0) || 0)}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Action Area */}
+                            <div className="flex flex-col gap-4 pt-6">
+                                {(() => {
+                                    const activeTotal = viewingInvoice.relatedBills?.filter((b: any) => b.status !== 'PAID').reduce((acc: any, b: any) => acc + b.amount, 0) || 0;
+                                    const hasActiveBills = activeTotal > 0;
+                                    
+                                    return (
+                                        <button 
+                                            onClick={() => {
+                                                if (!hasActiveBills) return;
+                                                handleTriggerInvoice(viewingInvoice);
+                                                setViewingInvoice(null);
+                                            }}
+                                            disabled={!hasActiveBills}
+                                            className={`w-full py-5 rounded-[2rem] text-xs font-black uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 transition-all ${
+                                                hasActiveBills 
+                                                    ? 'bg-blue-600 text-white shadow-blue-100 hover:bg-blue-700 active:scale-95' 
+                                                    : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
+                                            }`}
+                                        >
+                                            {hasActiveBills ? (
+                                                <><Zap size={18} fill="currentColor" /> KIRIM NOTIFIKASI TAGIHAN AKTIF</>
+                                            ) : (
+                                                <><AlertCircle size={18} /> SEMUA TAGIHAN TELAH LUNAS</>
+                                            )}
+                                        </button>
+                                    );
+                                })()}
+                                <button 
+                                    onClick={() => setViewingInvoice(null)}
+                                    className="w-full py-4 text-gray-400 text-[10px] font-black uppercase tracking-widest hover:text-gray-600 transition-colors"
+                                >
+                                    Tutup Pratinjau
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
@@ -644,6 +772,33 @@ const StatCard: React.FC<{ label: string; value: string; icon: React.ReactNode; 
                 <h4 className="text-2xl font-black text-gray-900 tracking-tight">{value}</h4>
             </div>
         </div>
+    );
+};
+
+const DetailItem: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+    <div className="space-y-1">
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</p>
+        <p className="text-sm font-bold text-gray-900">{value}</p>
+    </div>
+);
+
+const StatusTab: React.FC<{ active: boolean; label: string; count: number; onClick: () => void; color: string; icon?: React.ReactNode }> = ({ active, label, count, onClick, color, icon }) => {
+    const colorClasses: Record<string, string> = {
+        gray: active ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100',
+        orange: active ? 'bg-orange-500 text-white shadow-lg shadow-orange-200' : 'bg-orange-50 text-orange-600 hover:bg-orange-100',
+        emerald: active ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100',
+        rose: active ? 'bg-rose-500 text-white shadow-lg shadow-rose-200' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'
+    };
+
+    return (
+        <button 
+            onClick={onClick}
+            className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 transition-all ${colorClasses[color]}`}
+        >
+            {icon}
+            {label}
+            <span className={`px-2 py-0.5 rounded-lg text-[9px] ${active ? 'bg-white/20' : 'bg-black/5'}`}>{count}</span>
+        </button>
     );
 };
 

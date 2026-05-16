@@ -4,12 +4,14 @@ import { FORMAT_CURRENCY } from '../../constants';
 
 interface DbTransactionManagementProps {
     dbTransactions: AdminTransaction[];
+    residentStatus?: any[]; // Added for consistency
     isAdmin: boolean;
     refreshData: () => void;
 }
 
 const DbTransactionManagement: React.FC<DbTransactionManagementProps> = ({
     dbTransactions,
+    residentStatus = [],
     isAdmin,
     refreshData
 }) => {

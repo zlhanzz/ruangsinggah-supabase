@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner } from './types';
 import { notifyAdminStatusUpdate } from './emailService';
 import { ensureAbsoluteUrl } from './userService';
+import { getCurrentDate, parseDateSafely } from './utils/timeUtils';
 
 // ---- TYPE DEF ----
 export interface BasicPropertyInfo extends Partial<Kost> {
@@ -116,6 +117,16 @@ async function deleteFileFromStorage(fileUrl: string): Promise<void> {
     console.warn('deleteFileFromStorage error (non-fatal):', e);
   }
 }
+
+/**
+ * Memaksa tab lain untuk reload data (misal: Mitra Dashboard) 
+ * saat Admin melakukan perubahan data krusial.
+ */
+export const triggerCrossTabRefresh = () => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('RS_DATA_REFRESH', Date.now().toString());
+  }
+};
 
 // Upload survey photo
 export async function uploadSurveyPhoto(file: File, surveyId: string): Promise<string> {
@@ -324,7 +335,7 @@ export async function transferPropertyOwnership(propertyId: string, newOwnerId: 
     .update({ 
       owner_uid: newOwnerId,
       mitra_id: newOwnerId,
-      updated_at: new Date().toISOString()
+      updated_at: getCurrentDate().toISOString()
     })
     .eq('id', propertyId);
 
@@ -338,9 +349,12 @@ export async function getAdminTransactions(limitOrType?: number | string, ownerU
   if (!user) throw new Error('Unauthorized');
 
   const isAdmin = await checkIfUserIsAdmin(user.id);
-  if (!isAdmin) throw new Error('Access Denied');
+  const role = await getUserRole(user.id);
+  const isOwner = role === 'owner' || role === 'mitra';
 
-  const limit = typeof limitOrType === 'number' ? limitOrType : 50;
+  if (!isAdmin && !isOwner) throw new Error('Access Denied');
+
+  const limit = typeof limitOrType === 'number' ? limitOrType : 1000;
 
   // 1. Fetch Transactions
   const { data: rawTransactions, error: trxError } = await supabase
@@ -405,6 +419,563 @@ export async function getAdminTransactions(limitOrType?: number | string, ownerU
   return mapped as AdminTransaction[];
 }
 
+/**
+ * getResidentStatus: Fetches the current lease state for all active residents.
+ * This reads from the resident_status table (Source of Truth).
+ */
+export async function getResidentStatus(filters?: { ownerUid?: string; userId?: string } | string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Unauthorized');
+
+    let ownerUid: string | undefined;
+    let userId: string | undefined;
+
+    if (typeof filters === 'string') {
+        ownerUid = filters;
+    } else if (filters) {
+        ownerUid = filters.ownerUid;
+        userId = filters.userId;
+    }
+
+    console.log("FETCH_RESIDENTS: Fetching for", { ownerUid, userId });
+    
+    // 1. Fetch the base records first (without joins) to avoid "Relationship not found" errors
+    let query = supabase.from('resident_status').select('*');
+    
+    if (ownerUid) {
+        const { data: ownerProps } = await supabase.from('properties').select('id').eq('owner_uid', ownerUid);
+        const propIds = ownerProps?.map(p => p.id) || [];
+        if (propIds.length === 0 && ownerUid) {
+            console.log("FETCH_RESIDENTS: No properties found for owner", ownerUid);
+            return [];
+        }
+        if (propIds.length > 0) {
+            query = query.in('kost_id', propIds);
+        }
+    }
+
+    if (userId) {
+        query = query.eq('user_id', userId);
+    }
+    
+    const { data: residents, error: resError } = await query.order('created_at', { ascending: false });
+    
+    if (resError) {
+        console.error("getResidentStatus error:", resError.message);
+        return [];
+    }
+
+    if (!residents || residents.length === 0) return [];
+
+    // 2. Perform Manual Joins (Fetch related data in parallel)
+    const userIds = [...new Set(residents.map(r => r.user_id).filter(Boolean))];
+    const propertyIds = [...new Set(residents.map(r => r.kost_id).filter(Boolean))];
+    const trxIds = [...new Set(residents.map(r => r.last_transaction_id).filter(Boolean))];
+
+    const [usersRes, propsRes, trxsRes] = await Promise.all([
+        supabase.from('users').select('id, full_name, photo_url, phone').in('id', userIds),
+        supabase.from('properties').select('id, title, address, city, area, image_urls, location, price, room_types, additional_fee_name, additional_fee_price').in('id', propertyIds),
+        supabase.from('transactions').select('id, amount, status, payment_method, pakasir_order_id, metadata, product_type').in('id', trxIds.filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)))
+    ]);
+
+    const userMap = new Map(usersRes.data?.map(u => [u.id, u]) || []);
+    const propMap = new Map(propsRes.data?.map(p => [p.id, p]) || []);
+    const trxMap = new Map(trxsRes.data?.map(t => [t.id, t]) || []);
+
+    // 3. Assemble the data
+    const mappedData = residents.map(r => {
+        const userData = userMap.get(r.user_id);
+        const propData = propMap.get(r.kost_id);
+        const trxData = trxMap.get(r.last_transaction_id);
+
+        return {
+            ...r,
+            user: userData || null,
+            property: propData || null,
+            last_transaction: trxData || null
+        };
+    });
+    
+    console.log(`FETCH_RESIDENTS: Assembled ${mappedData.length} records with manual joins`);
+    return mappedData;
+}
+
+/**
+ * syncResidentStatus: Synchronizes a PAID transaction with the resident_status table.
+ * This is the frontend implementation of the backend logic to handle simulation gaps.
+ */
+export async function syncResidentStatus(transactionId: string, metadataOverride?: any, transactionOverride?: any) {
+    try {
+        console.log(`SYNC_RESIDENT: Starting for Transaction ${transactionId}`);
+        
+        // 1. Get transaction data (Use override if provided to avoid race conditions)
+        let trx = transactionOverride;
+        
+        if (!trx) {
+            const { data, error: fetchErr } = await supabase
+                .from('transactions')
+                .select('*')
+                .eq('id', transactionId)
+                .maybeSingle(); // Use maybeSingle to avoid 406/single errors
+                
+            if (fetchErr || !data) {
+                console.error("SYNC_RESIDENT: Transaction not found in DB", fetchErr);
+                return;
+            }
+            trx = data;
+        } else {
+            console.log("SYNC_RESIDENT: Using provided transaction override (Fast-track)");
+        }
+
+        // Only sync if PAID or SUCCESS (or if we have manual override from simulation)
+        const status = (trx.status || '').toUpperCase();
+        console.log(`SYNC_RESIDENT: [DEBUG] Checking status for trx ${transactionId}. Current status: ${status}`);
+        
+        if (status !== 'PAID' && status !== 'SUCCESS' && !metadataOverride) {
+            console.log(`SYNC_RESIDENT: Skipping. Status is ${status}. Sync only runs for PAID/SUCCESS.`);
+            return;
+        }
+
+        if (metadataOverride) {
+            console.log("SYNC_RESIDENT: [DEBUG] Manual Sync Triggered for Extension Simulation");
+        }
+
+        const dbMeta = trx.metadata || {};
+        // Merge instead of override to preserve existing data (like roomType from DB)
+        const meta = { ...dbMeta, ...(metadataOverride || {}) };
+        
+        const parseDateSafely = (d: any) => {
+            if (!d) return null;
+            if (d instanceof Date) return d;
+            
+            // Handle Indonesian Month Names if present
+            let cleanDate = String(d);
+            const monthsIndo: Record<string, string> = {
+                'januari': 'January', 'februari': 'February', 'maret': 'March', 'april': 'April',
+                'mei': 'May', 'juni': 'June', 'juli': 'July', 'agustus': 'August',
+                'september': 'September', 'oktober': 'October', 'november': 'November', 'desember': 'December',
+                'jan': 'January', 'feb': 'February', 'mar': 'March', 'apr': 'April', 'jun': 'June',
+                'jul': 'July', 'ags': 'August', 'sep': 'September', 'okt': 'October', 'nov': 'November', 'des': 'December'
+            };
+            
+            Object.entries(monthsIndo).forEach(([indo, eng]) => {
+                const regex = new RegExp(`\\b${indo}\\b`, 'gi');
+                cleanDate = cleanDate.replace(regex, eng);
+            });
+
+            const date = new Date(cleanDate);
+            if (!isNaN(date.getTime())) return date;
+            
+            // Fallback for YYYY-MM-DD
+            const isoMatch = cleanDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (isoMatch) {
+                return new Date(parseInt(isoMatch[1]), parseInt(isoMatch[2]) - 1, parseInt(isoMatch[3]));
+            }
+            
+            return null;
+        };
+
+        const userId = trx.user_id;
+        // Get kostId from all possible sources
+        const kostId = trx.kost_id || meta.kostId || trx.product_id;
+        const roomType = trx.room_type || meta.roomType || meta.variantName || '-';
+
+        // 3. Determine Duration Types EARLY
+        const isExtension = trx.product_type === 'perpanjangan_sewa' || !!meta.extensionPeriod || meta.extensionType === 'manual_extension';
+        const isFacilityOnly = (trx.product_type === 'tagihan_ekstra' || meta.isFacilityPayment || meta.isFacilityOnly || (meta.billPayment && !isExtension)) && !isExtension;
+
+        if (!userId || !kostId) {
+            console.warn("SYNC_RESIDENT: Missing userId or kostId");
+            return;
+        }
+
+        // 2. Fetch Existing Record — COMPREHENSIVE SEARCH
+        let existing: any = null;
+        const incomingSessionId = meta.booking_session_id || meta.bookingSessionId;
+        console.log(`SYNC_RESIDENT: [DEBUG] Starting Comprehensive Search for User: ${userId}, Kost: ${kostId}`);
+
+        // Fetch all records for this user and kost to find a match
+        const { data: candidates, error: listErr } = await supabase
+            .from('resident_status')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('kost_id', kostId);
+
+        if (listErr) {
+            console.error("SYNC_RESIDENT: [DEBUG] Failed to fetch resident candidates", listErr);
+        } else if (candidates && candidates.length > 0) {
+            console.log(`SYNC_RESIDENT: [DEBUG] Found ${candidates.length} candidate records.`);
+            
+            // PRIORITY 1: Match by booking_session_id
+            if (incomingSessionId) {
+                existing = candidates.find(r => r.metadata?.booking_session_id === incomingSessionId);
+            }
+
+            // PRIORITY 2: Match by ACTIVE status (if no session match)
+            if (!existing) {
+                existing = candidates.find(r => (r.status || '').toUpperCase() === 'ACTIVE');
+            }
+
+            // PRIORITY 3: Match by latest updated_at
+            if (!existing) {
+                existing = candidates.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime())[0];
+            }
+
+            if (existing) {
+                console.log(`SYNC_RESIDENT: [DEBUG] ✅ Match found (ID: ${existing.id}, Status: ${existing.status})`);
+            }
+        }
+        
+        // 3. Determine Duration (Already calculated types above)
+        
+        console.log(`SYNC_RESIDENT: [DEBUG] TransactionID=${transactionId}, isExtension=${isExtension}, isFacilityOnly=${isFacilityOnly}`);
+        
+        // 3. Determine Duration (Comprehensive Parsing)
+        const possibleDurationFields = [
+            meta.extensionPeriod, 
+            meta.duration, 
+            meta.periodLabel, 
+            meta.period, 
+            meta.paketSewa
+        ];
+        
+        let durationInMonths = 0;
+        let foundYearly = false;
+        let numericValue = 1;
+
+        // Search through all fields for a year indicator
+        for (const field of possibleDurationFields) {
+            if (!field) continue;
+            const strField = String(field).toLowerCase();
+            if (strField.includes('tahun') || strField.includes('year') || strField.includes('thn')) {
+                const match = strField.match(/(\d+)/);
+                numericValue = match ? parseInt(match[1], 10) : 1;
+                durationInMonths = numericValue * 12;
+                foundYearly = true;
+                console.log(`SYNC_RESIDENT: [DEBUG] Year-based duration detected in field: ${field}. Result: ${durationInMonths} months.`);
+                break;
+            }
+        }
+
+        // If no yearly indicator found, fall back to month-based parsing
+        if (!foundYearly) {
+            const rawDuration = meta.extensionPeriod ?? meta.duration ?? meta.periodLabel ?? meta.period ?? '1';
+            numericValue = typeof rawDuration === 'number' 
+                ? rawDuration 
+                : (parseInt(String(rawDuration).match(/(\d+)/)?.[1] || '1', 10) || 1);
+            durationInMonths = numericValue;
+            console.log(`SYNC_RESIDENT: [DEBUG] Month-based duration detected: ${durationInMonths} months.`);
+        }
+
+        // If it's an extension but no duration found, default to 1 month
+        if (isExtension && durationInMonths === 0) {
+            console.log("SYNC_RESIDENT: [DEBUG] Extension detected but no duration found. Defaulting to 1 month.");
+            durationInMonths = 1;
+        }
+
+        // If it's JUST a facility bill payment, don't add duration to the rent
+        if (isFacilityOnly) {
+            console.log("SYNC_RESIDENT: [DEBUG] Facility bill only detected. Setting duration increase to 0.");
+            durationInMonths = 0;
+        }
+
+        console.log(`SYNC_RESIDENT: [DEBUG] Final Duration to Add: ${durationInMonths} months`);
+        
+        if (isExtension) {
+            console.log(`SYNC_RESIDENT: [DEBUG] Perpanjangan Sewa (+${durationInMonths} Bulan) detected.`);
+        }
+
+        // 4. Determine Dates
+        const startDateRaw = meta.startDate || meta.move_in_date || trx.created_at;
+        
+        // IDEMPOTENCY CHECK 1: Check existing last_transaction_id
+        if (existing && existing.last_transaction_id === transactionId && !metadataOverride) {
+            console.log("SYNC_RESIDENT: [DEBUG] Transaction already processed (last_transaction_id match). Skipping.");
+            return;
+        }
+
+        // IDEMPOTENCY CHECK 2: Check processed_transactions array (Synced with Backend)
+        const processedTrx = Array.isArray(existing?.metadata?.processed_transactions) ? existing.metadata.processed_transactions : [];
+        if (processedTrx.includes(transactionId) && !metadataOverride) {
+            console.log(`SYNC_RESIDENT: [DEBUG] Transaction ${transactionId} already processed in processed_transactions array. Skipping.`);
+            return;
+        }
+
+        // IDEMPOTENCY CHECK 3: Check if this is a Parent transaction whose Child was already processed
+        if (meta.is_bundled_parent && existing && !metadataOverride) {
+            // Check if any processed transaction is a child of this parent
+            // Since we don't have the full child list here easily, we just check if any processed ID starts with this parent ID
+            const hasProcessedChild = processedTrx.some((id: string) => id.startsWith(transactionId + '-'));
+            if (hasProcessedChild) {
+                console.log(`SYNC_RESIDENT: [DEBUG] Parent Transaction ${transactionId} skipped because its Child was already processed.`);
+                return;
+            }
+        }
+
+        // NEW SESSION DETECTION: Jika ada booking_session_id baru, kita abaikan riwayat lama
+        const isNewSession = !isExtension && incomingSessionId && (!existing || (existing.metadata?.booking_session_id && existing.metadata?.booking_session_id !== incomingSessionId));
+
+        // Only extend if it's NOT a new session and it's an extension or has duration
+        let baseDateForExtension: Date | null = null;
+        if (existing && !isNewSession && (isExtension || (existing.end_date && durationInMonths > 0))) {
+            baseDateForExtension = parseDateSafely(existing.end_date);
+            console.log(`SYNC_RESIDENT: [DEBUG] EXTENDING from existing end_date: ${existing.end_date}`);
+        } else if (existing && !isNewSession) {
+            // Preserve current dates for facility payments
+            baseDateForExtension = parseDateSafely(existing.end_date);
+            console.log(`SYNC_RESIDENT: [DEBUG] Facility payment. Preserving existing dates.`);
+            durationInMonths = 0;
+        } else {
+            // FRESH START (New Session or No Existing Record)
+            baseDateForExtension = parseDateSafely(startDateRaw);
+            console.log(`SYNC_RESIDENT: [DEBUG] STARTING FRESH from: ${startDateRaw}`);
+        }
+
+        if (!baseDateForExtension) {
+            baseDateForExtension = getCurrentDate();
+            console.warn("SYNC_RESIDENT: [DEBUG] Fallback to today (via TimeSimulator) for base date.");
+        }
+
+        const newEndDate = new Date(baseDateForExtension);
+        console.log(`SYNC_RESIDENT: [DEBUG] Before Add Month: ${newEndDate.toISOString()} + ${durationInMonths} months`);
+        newEndDate.setMonth(newEndDate.getMonth() + durationInMonths);
+        console.log(`SYNC_RESIDENT: [DEBUG] After Add Month: ${newEndDate.toISOString()}`);
+
+        const parseDateISO = (d: any) => {
+            const date = parseDateSafely(d);
+            return date ? date.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]; // ALWAYS fallback to today
+        };
+
+        const startDate = (existing?.start_date && !isNewSession) ? existing.start_date : parseDateISO(startDateRaw);
+        const currentTotalMonths = isNewSession ? 0 : Number(existing?.total_months || 0);
+        const newTotalMonths = currentTotalMonths + durationInMonths;
+        const endDate = parseDateISO(newEndDate);
+
+        console.log(`SYNC_RESIDENT: [DEBUG] FINAL CALCULATION: Start=${startDate}, End=${endDate} (+${durationInMonths} months)`);
+
+        const durationLabel = durationInMonths >= 12 && durationInMonths % 12 === 0 
+            ? `${durationInMonths / 12} Tahun` 
+            : `${durationInMonths} Bulan`;
+
+        // 5. Save computed data back to transaction for record keeping
+        await supabase
+            .from('transactions')
+            .update({ 
+                metadata: { 
+                    ...meta, 
+                    computedEndDate: endDate, 
+                    computedStartDate: startDate,
+                    paketSewa: durationLabel
+                }
+            })
+            .eq('id', transactionId);
+
+        // 6. Build Payload
+        const resolvedSessionId = incomingSessionId || existing?.metadata?.booking_session_id;
+
+        const mergedMetadata = {
+            ...(existing?.metadata || {}),
+            ...meta,
+            booking_session_id: resolvedSessionId,
+            extraPersonFee: (() => {
+                const dur = Number(meta.extensionPeriod || meta.duration || (meta.period === 'bulanan' ? 1 : (meta.period === '3bulanan' ? 3 : (meta.period === '6bulanan' ? 6 : (meta.period === 'tahunan' ? 12 : 1)))));
+                if (meta.composition?.extraPersonFee) return Number(meta.composition.extraPersonFee) / (Number(meta.extensionPeriod || 1));
+                if (meta.extraPersonFee) return Number(meta.extraPersonFee) / dur;
+                return existing?.metadata?.extraPersonFee || 0;
+            })(),
+            occupants: meta.occupants || meta.occupantsCount || meta.composition?.occupants || existing?.metadata?.occupants || 1,
+            paketSewa: durationInMonths > 0 ? durationLabel : (existing?.metadata?.paketSewa),
+            lastExtendedAt: durationInMonths > 0 ? getCurrentDate().toISOString() : (existing?.metadata?.lastExtendedAt),
+            lastFacilityPaidAt: isFacilityOnly ? getCurrentDate().toISOString() : (existing?.metadata?.lastFacilityPaidAt),
+            paidBills: meta.billId ? Array.from(new Set([...(existing?.metadata?.paidBills || []), meta.billId])) : (existing?.metadata?.paidBills || []),
+            lastEndDate: endDate,
+            accumulatedMonths: newTotalMonths,
+            processed_transactions: Array.from(new Set([...processedTrx, transactionId]))
+        };
+
+        const payload: any = {
+            user_id: userId,
+            kost_id: kostId,
+            room_type: roomType !== '-' ? roomType : (existing?.room_type || roomType),
+            start_date: startDate,
+            end_date: endDate,
+            total_months: newTotalMonths,
+            last_transaction_id: isFacilityOnly && existing?.last_transaction_id ? existing.last_transaction_id : transactionId,
+            status: 'ACTIVE',
+            metadata: mergedMetadata,
+            updated_at: getCurrentDate().toISOString()
+        };
+
+        console.log('[DEBUG] Syncing resident_status payload:', JSON.stringify(payload, null, 2));
+
+        // 7. PERFORM DB OPERATION (UPSERT)
+        let syncError: any = null;
+
+        if (existing) {
+            console.log(`SYNC_RESIDENT: [DEBUG] Performing UPDATE for resident_status ${existing.id}`);
+            const { error } = await supabase.from('resident_status').update(payload).eq('id', existing.id);
+            syncError = error;
+        } else {
+            const { error } = await supabase.from('resident_status').insert([payload]);
+            if (error && error.code === '23505') {
+                const { data: retryRow } = await supabase.from('resident_status').select('id').eq('user_id', userId).eq('kost_id', kostId).maybeSingle();
+                if (retryRow?.id) {
+                    const { error: updateErr } = await supabase.from('resident_status').update(payload).eq('id', retryRow.id);
+                    syncError = updateErr;
+                }
+            } else {
+                syncError = error;
+            }
+        }
+
+        if (syncError) throw syncError;
+
+        const { data: activeRes } = await supabase.from('resident_status').select('id').eq('user_id', userId).eq('kost_id', kostId).eq('status', 'ACTIVE').order('created_at', { ascending: false }).limit(1).single();
+        if (activeRes?.id) {
+            await supabase.from('transactions').update({ resident_status_id: activeRes.id }).or(`id.eq.${transactionId},metadata->>parent_order_id.eq.${transactionId}`);
+        }
+    } catch (err) {
+        console.error("SYNC_RESIDENT_ERROR:", err);
+    }
+}
+
+/**
+ * syncSurveyRequest: Synchronizes a PAID survey transaction with the survey_requests table.
+ */
+export async function syncSurveyRequest(transactionId: string, transactionOverride?: any) {
+    try {
+        console.log(`SYNC_SURVEY: [DEBUG] Starting for Transaction ${transactionId}`);
+        
+        let trx = transactionOverride;
+        if (!trx) {
+            const { data, error: fetchErr } = await supabase
+                .from('transactions')
+                .select('*')
+                .eq('id', transactionId)
+                .maybeSingle();
+                
+            if (fetchErr || !data) {
+                console.error("SYNC_SURVEY: [ERROR] Transaction not found in DB", fetchErr);
+                return;
+            }
+            trx = data;
+        }
+
+        const status = (trx.status || '').toUpperCase();
+        const productType = (trx.product_type || trx.type || '').toLowerCase();
+
+        console.log(`SYNC_SURVEY: [DEBUG] Trx ${transactionId} Status: ${status}, Type: ${productType}`);
+
+        // Only sync if PAID or SUCCESS
+        if (status !== 'PAID' && status !== 'SUCCESS' && status !== 'SELESAI') {
+            console.log(`SYNC_SURVEY: [DEBUG] Skipping. Status is ${status}.`);
+            return;
+        }
+
+        if (productType !== 'survey') {
+            console.log(`SYNC_SURVEY: [DEBUG] Skipping. Product type is ${productType}.`);
+            return;
+        }
+
+        const meta = trx.metadata || {};
+        
+        // 1. Check existing record to avoid status regression or overwriting drive links
+        const { data: existing } = await supabase
+            .from('survey_requests')
+            .select('*')
+            .eq('transaction_id', transactionId)
+            .maybeSingle();
+
+        const currentStatus = (existing?.status || 'AWAITING_PAYMENT').toUpperCase();
+        
+        // Determine the safest status to set
+        // If it's already more advanced than PENDING_ASSIGNMENT (like AGENT_ASSIGNED), keep it.
+        let targetStatus = 'PENDING_ASSIGNMENT';
+        if (existing && currentStatus !== 'AWAITING_PAYMENT') {
+            targetStatus = existing.status; 
+        }
+
+        const payload: any = {
+            user_id: trx.user_id,
+            transaction_id: transactionId,
+            status: targetStatus,
+            kost_name: meta.kostName || meta.title || existing?.kost_name || 'Kost Terdaftar',
+            kost_address: meta.kostAddress || meta.address || existing?.kost_address || '-',
+            owner_phone: meta.ownerPhone || meta.owner_phone || existing?.owner_phone || '-',
+            survey_date: meta.surveyDate || meta.date || existing?.survey_date || getCurrentDate().toISOString().split('T')[0],
+            survey_time: meta.surveyTime || meta.time || existing?.survey_time || '10:00',
+            notes: meta.notes || existing?.notes || '',
+            updated_at: getCurrentDate().toISOString()
+        };
+
+        // NEVER overwrite result_drive_link with null if it already exists
+        if (existing?.result_drive_link) {
+            payload.result_drive_link = existing.result_drive_link;
+        }
+
+        if (existing) {
+            console.log(`SYNC_SURVEY: [DEBUG] Record already exists (ID: ${existing.id}). Performing UPDATE.`);
+            const { error: updateErr } = await supabase
+                .from('survey_requests')
+                .update(payload)
+                .eq('id', existing.id);
+            if (updateErr) throw updateErr;
+        } else {
+            console.log("SYNC_SURVEY: [DEBUG] Creating NEW survey request record.");
+            (payload as any).created_at = trx.created_at || getCurrentDate().toISOString();
+            const { error: insertErr } = await supabase
+                .from('survey_requests')
+                .insert([payload]);
+            if (insertErr) throw insertErr;
+        }
+        console.log("SYNC_SURVEY: [SUCCESS] Survey request record synchronized.");
+        // Removed triggerCrossTabRefresh() to prevent infinite reload loops during auto-sync
+
+    } catch (err) {
+        console.error("SYNC_SURVEY_ERROR:", err);
+    }
+}
+
+/**
+ * autoSyncPaidSurveys: Scans for PAID survey transactions that are missing from survey_requests.
+ */
+export async function autoSyncPaidSurveys(userId?: string) {
+    try {
+        console.log("AUTO_SYNC_SURVEY: [DEBUG] Starting comprehensive scan...");
+        
+        // Query transactions of type survey that are PAID
+        let query = supabase
+            .from('transactions')
+            .select('*')
+            .eq('product_type', 'survey')
+            .in('status', ['PAID', 'SUCCESS', 'SELESAI']);
+            
+        if (userId) {
+            query = query.eq('user_id', userId);
+        }
+
+        const { data: transactions, error } = await query;
+        if (error) throw error;
+
+        if (!transactions || transactions.length === 0) {
+            console.log("AUTO_SYNC_SURVEY: [DEBUG] No paid survey transactions found.");
+            return;
+        }
+
+        console.log(`AUTO_SYNC_SURVEY: [DEBUG] Found ${transactions.length} paid survey transactions. Processing sync for each...`);
+
+        // Process all found transactions to ensure they exist in survey_requests
+        for (const trx of transactions) {
+            await syncSurveyRequest(trx.id, trx);
+        }
+        
+        console.log("AUTO_SYNC_SURVEY: [SUCCESS] Scan and sync completed.");
+        
+    } catch (err) {
+        console.error("AUTO_SYNC_SURVEY_ERROR:", err);
+    }
+}
+
 export async function updateTransactionStatus(
   transactionId: string,
   newStatus: string,
@@ -442,16 +1013,52 @@ export async function updateTransactionStatus(
     .from('transactions')
     .update({ 
         status: newStatus, 
-        updated_at: new Date().toISOString(),
+        updated_at: getCurrentDate().toISOString(),
         ...finalUpdates
     })
     .eq('id', transactionId);
 
   if (error) {
-    console.error('Error updating transaction status:', error);
+    console.error('Error updating transaction status:', error.message);
     throw new Error(error.message);
   } else {
+    // Post-update logic for certain types
+    if (newStatus === 'PAID') {
+        const { data: currentTrx } = await supabase.from('transactions').select('*').eq('id', transactionId).single();
+        if (currentTrx) {
+            const type = (currentTrx.product_type || '').toLowerCase();
+            
+            // 1. If it's a new booking, trigger the edge function (handles notifications, etc)
+            if (type === 'rent' || type === 'kost_booking') {
+                console.log(`[AdminService] Detected ${type} transaction. Triggering approval process and sync...`);
+                await processBookingApproval(transactionId, 'accept').catch(e => console.error("Auto-process booking error:", e));
+                
+                // Also call syncResidentStatus directly as a guaranteed fallback,
+                // in case the Edge Function fails or is not deployed.
+                console.log(`[AdminService] Triggering syncResidentStatus fallback for ${transactionId}`);
+                await syncResidentStatus(transactionId).catch(e => {
+                    console.error("syncResidentStatus fallback error (non-fatal):", e);
+                    // Jika gagal, berikan notifikasi ke konsol yang lebih jelas
+                    console.error("CRITICAL: Resident status sync failed for PAID transaction. Data might be out of sync.");
+                });
+            }
+            
+            // 2. If it's an extension, update the resident_status end_date
+            if (type === 'perpanjangan_sewa' || type === 'extension') {
+                await syncResidentStatus(transactionId);
+            }
+
+            // 3. If it's a survey, initialize the survey_request record
+            if (type === 'survey') {
+                console.log(`[AdminService] Detected survey transaction. Syncing survey request...`);
+                await syncSurveyRequest(transactionId);
+            }
+
+        }
+    }
+
     notifyAdminStatusUpdate("Transaksi", transactionId, newStatus, additionalUpdates.metadata);
+    triggerCrossTabRefresh();
   }
 }
 
@@ -474,6 +1081,7 @@ export async function processBookingApproval(
     "Alasan": reason || '-'
   });
 
+  triggerCrossTabRefresh();
   return data;
 }
 
@@ -484,6 +1092,27 @@ export async function deleteTransaction(transactionId: string): Promise<void> {
   const isAdmin = await checkIfUserIsAdmin(user.id);
   if (!isAdmin) throw new Error('Unauthorized: User is not an admin.');
 
+  console.log(`ADMIN_DELETE: Starting cleanup for transaction ${transactionId}`);
+
+  // 1. Get the transaction details before deleting
+  const { data: trx } = await supabase.from('transactions').select('*').eq('id', transactionId).single();
+  
+  if (trx) {
+    // 2. Clear references in resident_status
+    await supabase
+      .from('resident_status')
+      .update({ 
+        last_transaction_id: null,
+        // If this was the only transaction, maybe we should mark it as INACTIVE or similar
+        // to prevent "zombie" virtual bills from appearing
+      })
+      .eq('last_transaction_id', transactionId);
+
+    // 3. Optional: If it's a rent booking being deleted, we might want to be more aggressive
+    // to allow a clean simulation re-run.
+  }
+
+  // 4. Safely delete the transaction
   const { error } = await supabase
     .from('transactions')
     .delete()
@@ -493,6 +1122,8 @@ export async function deleteTransaction(transactionId: string): Promise<void> {
     console.error('Error deleting transaction:', error);
     throw new Error(error.message);
   }
+  
+  triggerCrossTabRefresh();
 }
 
 export async function deleteTransactions(transactionIds: string[]): Promise<void> {
@@ -502,6 +1133,15 @@ export async function deleteTransactions(transactionIds: string[]): Promise<void
   const isAdmin = await checkIfUserIsAdmin(user.id);
   if (!isAdmin) throw new Error('Unauthorized: User is not an admin.');
 
+  console.log(`ADMIN_DELETE_BULK: Cleaning up dependencies for ${transactionIds.length} transactions`);
+
+  // Step 1: Release foreign key in resident_status for ALL selected transactions
+  await supabase
+    .from('resident_status')
+    .update({ last_transaction_id: null })
+    .in('last_transaction_id', transactionIds);
+
+  // Step 2: Now safely delete the transactions in bulk
   const { error } = await supabase
     .from('transactions')
     .delete()
@@ -511,6 +1151,45 @@ export async function deleteTransactions(transactionIds: string[]): Promise<void
     console.error('Error deleting multiple transactions:', error);
     throw new Error(error.message);
   }
+  triggerCrossTabRefresh();
+}
+
+/**
+ * deleteResidentStatus: Safely deletes a resident record by breaking circular FK dependencies.
+ */
+export async function deleteResidentStatus(residentId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Unauthorized: Hanya admin yang dapat menghapus status penghuni.');
+
+  console.log(`ADMIN_DELETE_RESIDENT: Starting cleanup for ${residentId}`);
+
+  // Step 1: Release foreign key in transactions pointing to this resident
+  await supabase
+    .from('transactions')
+    .update({ resident_status_id: null })
+    .eq('resident_status_id', residentId);
+
+  // Step 2: Release its own FK to transaction (if any) to be extra safe
+  await supabase
+    .from('resident_status')
+    .update({ last_transaction_id: null })
+    .eq('id', residentId);
+
+  // Step 3: Now delete the resident status record
+  const { error } = await supabase
+    .from('resident_status')
+    .delete()
+    .eq('id', residentId);
+
+  if (error) {
+    console.error('Error deleting resident status:', error);
+    throw new Error(error.message);
+  }
+  
+  triggerCrossTabRefresh();
 }
 
 export async function addPropertyWithMedia(
@@ -713,7 +1392,7 @@ export async function updatePropertyWithMedia(
       omnichannel_contact_name: kostData.omnichannelContactName,
       omnichannel_contact_phone: kostData.omnichannelContactPhone,
       omnichannel_contact_type: kostData.omnichannelContactType,
-      updated_at: new Date().toISOString(),
+      updated_at: getCurrentDate().toISOString(),
     })
     .eq('id', propertyId);
 
@@ -741,7 +1420,7 @@ export async function updatePropertyStatus(propertyId: string, newStatus: 'draft
 
   const { error } = await supabase
     .from('properties')
-    .update({ status: newStatus, updated_at: new Date().toISOString() })
+    .update({ status: newStatus, updated_at: getCurrentDate().toISOString() })
     .eq('id', propertyId);
 
   if (error) throw error;
@@ -1085,7 +1764,10 @@ export async function getAnalyticsSummary(
   if (!authUser) throw new Error('Unauthorized');
 
   const isAdmin = await checkIfUserIsAdmin(authUser.id);
-  if (!isAdmin) throw new Error('Access Denied');
+  const role = await getUserRole(authUser.id);
+  const isOwner = role === 'owner' || role === 'mitra';
+
+  if (!isAdmin && !isOwner) throw new Error('Access Denied');
 
   // 1. Total User Count (Global)
   const { count: totalUsers } = await supabase
@@ -1098,30 +1780,31 @@ export async function getAnalyticsSummary(
     .select('*', { count: 'exact', head: true });
 
   // 3. Properties (Active Listings & Mitra)
-  let propQuery = supabase.from('properties').select('owner_uid');
+  let propQuery = supabase.from('properties').select('id, owner_uid');
   if (ownerUid) {
     propQuery = propQuery.eq('owner_uid', ownerUid);
   }
   const { data: properties } = await propQuery;
   
+  const ownerPropertyIds = properties?.map(p => p.id) || [];
   const totalMitra = new Set(properties?.map(p => p.owner_uid)).size;
   const totalActiveKosts = properties?.length || 0;
 
   // 4. Transactions with Date Filtering
   let query = supabase
     .from('transactions')
-    .select('product_type, amount, status, created_at, product_id')
+    .select('product_type, amount, status, created_at, product_id, user_id')
     .or('status.eq.paid,status.eq.Selesai');
 
   if (dateFilter && dateFilter !== 'all') {
-    const now = new Date();
+    const now = getCurrentDate();
     if (dateFilter === 'hari_ini') {
       const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       query = query.gte('created_at', start.toISOString());
     } else if (dateFilter === 'minggu_ini') {
       const day = now.getDay();
       const diff = now.getDate() - day + (day === 0 ? -6 : 1); 
-      const start = new Date(now.setDate(diff));
+      const start = new Date(now.getFullYear(), now.getMonth(), diff);
       start.setHours(0,0,0,0);
       query = query.gte('created_at', start.toISOString());
     } else if (dateFilter === 'bulan_ini') {
@@ -1143,20 +1826,13 @@ export async function getAnalyticsSummary(
   const { data: rawTransactions, error: trxError } = await query;
   if (trxError) throw trxError;
 
-  // Filter transactions by ownerUid in-memory if needed
   let transactions = rawTransactions || [];
   if (ownerUid) {
-    const { data: ownerProps } = await supabase
-      .from('properties')
-      .select('id')
-      .eq('owner_uid', ownerUid);
-    
-    const ownerPropIds = new Set(ownerProps?.map(p => p.id) || []);
-    transactions = transactions.filter(t => ownerPropIds.has(t.product_id));
+    transactions = transactions.filter(t => ownerPropertyIds.includes(t.product_id));
   }
 
   const result: AnalyticsSummary = {
-    totalUsers: totalUsers || 0,
+    totalUsers: ownerUid ? new Set(transactions.map(t => (t as any).user_id)).size : (totalUsers || 0),
     totalRevenue: 0,
     totalMitra,
     totalDatabases: totalDatabases || 0,
@@ -1172,7 +1848,7 @@ export async function getAnalyticsSummary(
   transactions?.forEach(t => {
     const amount = Number(t.amount || 0);
     result.totalRevenue += amount;
-    if (t.product_type === 'rent') {
+    if (t.product_type === 'rent' || t.product_type === 'kost_booking' || t.product_type === 'perpanjangan_sewa') {
       result.kostStats.revenue += amount;
       result.kostStats.users++;
     } else if (t.product_type === 'database') {
@@ -1253,7 +1929,12 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
   const isAdmin = role === 'admin';
   const isAgent = role === 'survey_agent';
 
-  // Allow regular users too
+  // Auto-sync missing requests in background
+  if (isAdmin) {
+    autoSyncPaidSurveys().catch(console.error);
+  } else {
+    autoSyncPaidSurveys(user.id).catch(console.error);
+  }
 
   let query = supabase
     .from('survey_requests')
@@ -1281,6 +1962,10 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
   const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) throw error;
+  
+  // If we found zero requests and just triggered a sync, we might want to retry once or just let the next refresh handle it.
+  // For now, we return what we have.
+  
   return (data || []) as SurveyRequest[];
 }
 
@@ -1667,7 +2352,7 @@ export async function getUsersByRole(role: string): Promise<any[]> {
             if (endDateString) {
                 const end = new Date(endDateString);
                 if (!isNaN(end.getTime())) {
-                    const diff = end.getTime() - new Date().getTime();
+                    const diff = end.getTime() - getCurrentDate().getTime();
                     daysRem = Math.ceil(diff / (1000 * 60 * 60 * 24));
                 }
             }
@@ -1844,4 +2529,109 @@ export async function updateUserStatus(userId: string, status: 'active' | 'block
     .eq('id', userId);
 
   if (error) throw error;
+}
+
+/**
+ * parseDateSafely: Robust date parser for various Indonesian and ISO formats
+ */
+function parseDateSafely(dateStr: any): Date | null {
+    if (!dateStr) return null;
+    if (dateStr instanceof Date) return dateStr;
+    
+    // Try native parser first
+    const nativeDate = new Date(dateStr);
+    if (!isNaN(nativeDate.getTime())) return nativeDate;
+
+    // Handle Indonesian format like "28 Mei 2026"
+    try {
+        const months: { [key: string]: string } = {
+            'Januari': '01', 'Februari': '02', 'Maret': '03', 'April': '04', 'Mei': '05', 'Juni': '06',
+            'Juli': '07', 'Agustus': '08', 'September': '09', 'Oktober': '10', 'November': '11', 'Desember': '12'
+        };
+        
+        let cleaned = String(dateStr).trim();
+        for (const [indo, numeric] of Object.entries(months)) {
+            if (cleaned.includes(indo)) {
+                cleaned = cleaned.replace(indo, numeric);
+                break;
+            }
+        }
+
+        // Try to parse "28 05 2026" or "28/05/2026"
+        const parts = String(dateStr).trim().split(/[\s/-]+/);
+        if (parts.length === 3) {
+            // Assume Day Month Year
+            const day = parts[0].padStart(2, '0');
+            const month = parts[1].padStart(2, '0');
+            const year = parts[2];
+            const iso = `${year}-${month}-${day}`;
+            const d = new Date(iso);
+            if (!isNaN(d.getTime())) return d;
+        }
+    } catch (e) {
+        console.warn("parseDateSafely: Failed to parse", dateStr, e);
+    }
+
+    return null;
+}
+
+/**
+ * createManualExtension: Creates a new transaction record for a manual extension
+ * and syncs it with the resident_status table.
+ */
+export async function createManualExtension(payload: {
+    userId: string;
+    kostId: string;
+    amount: number;
+    durationMonths: number;
+    paymentMethod?: string;
+    metadata?: any;
+}) {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Unauthorized');
+
+        // 1. Get Property Info for metadata
+        const { data: property } = await supabase
+            .from('properties')
+            .select('namaKost, price')
+            .eq('id', payload.kostId)
+            .single();
+
+        // 2. Insert into transactions
+        const { data: trx, error: trxError } = await supabase
+            .from('transactions')
+            .insert([{
+                user_id: payload.userId,
+                kost_id: payload.kostId,
+                product_id: payload.kostId,
+                product_type: 'perpanjangan_sewa',
+                type: 'perpanjangan_sewa',
+                amount: payload.amount,
+                status: 'PAID',
+                payment_method: payload.paymentMethod || 'Manual/Cash',
+                metadata: {
+                    ...(payload.metadata || {}),
+                    kostName: property?.namaKost || 'Kost',
+                    extensionPeriod: payload.durationMonths,
+                    isManualEntry: true,
+                    processedBy: user.id,
+                    processedAt: new Date().toISOString()
+                },
+                created_at: new Date().toISOString()
+            }])
+            .select()
+            .single();
+
+        if (trxError) throw trxError;
+
+        // 3. Sync with resident_status
+        await syncResidentStatus(trx.id);
+        
+        triggerCrossTabRefresh();
+        return trx;
+    } catch (err) {
+        console.error("CREATE_MANUAL_EXTENSION_ERROR:", err);
+        throw err;
+    }
 }

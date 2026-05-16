@@ -14,6 +14,7 @@ import {
     Zap, Home, ClipboardList, Wallet, User, ShieldCheck, 
     Menu, X, LogOut, Bell, MessageSquare, Search
 } from 'lucide-react';
+import { notifySurveyStatusUpdate } from '../notificationService';
 import AgentProfile from './AgentProfile';
 import { Page } from '../types';
 
@@ -59,6 +60,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 }) => {
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [agentTab, setAgentTab] = useState<'pending' | 'active' | 'history'>('pending');
+    const [profileImgError, setProfileImgError] = useState(false);
     
     // Wallet State
     const [walletView, setWalletView] = useState<'balance' | 'history' | 'bank'>('balance');
@@ -107,19 +109,23 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             { id: 'wifi_check', label: 'Pengecekan WiFi' },
             { id: 'security_check', label: 'Pengecekan Keamanan' },
             { id: 'access_check', label: 'Akses Umum/Toko/Kampus' },
-            { id: 'resident_testimonial', label: 'Testimoni Penghuni' }
+            { id: 'environmental_conditions', label: 'Kondisi Lingkungan Sekitar Kost' }
         ];
 
         const missing = [];
         for (const section of requiredSections) {
             const text = (surveyForm.evaluation_summary as any)?.[section.id];
             const photos = (surveyForm.evaluation_summary as any)?.[`${section.id}_photos`];
+            const rating = (surveyForm.evaluation_summary as any)?.[`${section.id}_rating`];
             
-            if (!text || text.trim().length < 5) {
+            if (!text || text.trim().length < 1) {
                 missing.push(`${section.label} (Keterangan belum diisi)`);
             }
             if (!photos || photos.length === 0) {
                 missing.push(`${section.label} (Foto bukti belum diupload)`);
+            }
+            if (!rating || rating === 0) {
+                missing.push(`${section.label} (Rating bintang belum dipilih)`);
             }
         }
 
@@ -136,9 +142,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 status: 'SUBMITTED'
             };
             await updateSurveyRequest(isEditingSurvey.id, finalForm);
+            await notifySurveyStatusUpdate(isEditingSurvey.id, 'SUBMITTED');
             setIsEditingSurvey(null);
             alert('Laporan berhasil dikirim! Menunggu konfirmasi dari User.');
             await loadSurveyRequests();
+            setAgentTab('history');
         } catch (error) {
             console.error('Error updating survey:', error);
             alert('Gagal update survey');
@@ -264,6 +272,40 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         </button>
     );
 
+    const categoryChecklists: Record<string, string[]> = {
+        kost_type: ['Putra', 'Putri', 'Campur', 'Pasutri'],
+        room_facilities: ['Tanpa Fasilitas', 'Tempat Tidur', 'Bantal', 'Sprei', 'Lemari Pakaian', 'Meja Belajar/Kerja', 'Kursi', 'Cermin', 'Rak Sepatu', 'AC', 'Kipas Angin', 'TV', 'Kulkas', 'Stop Kontak', 'Listrik/Kamar'],
+        bathroom_facilities: ['WC Dalam', 'WC Umum', 'Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Bak Mandi', 'Gayung', 'Ember', 'Wastafel', 'Cermin WC', 'Gantungan Baju', 'Exhaust Fan', 'Water Heater'],
+        kitchen_facilities: ['Dapur Umum', 'Dapur Dalam', 'Kompor', 'Gas', 'Kulkas', 'Wastafel Dapur', 'Rak Piring', 'Meja Dapur', 'Alat Masak', 'Alat Makan', 'Tempat Sampah'],
+        public_facilities: ['Ruang Tamu', 'Dapur Bersama', 'WiFi', 'Listrik Umum', 'Jemuran', 'Mesin Cuci', 'Ruang Santai', 'Parkir Motor', 'Parkir Mobil'],
+        water_check: ['Air Bersih/Jernih', 'Air Tidak Berbau', 'Aliran Air Deras', 'Keran Berfungsi Baik'],
+        wifi_check: ['Tidak Ada WiFi'],
+        security_check: ['CCTV Aktif', 'Gembok/Pagar', 'Akses 24 Jam', 'Batas Jam Malam', 'Penjaga Kos/Satpam', 'Lingkungan Aman'],
+        access_check: ['Akses Mobil Mudah', 'Akses Motor Mudah', 'Dalam Gang', 'Dekat Jalan Utama', 'Dekat Masjid', 'Dekat Gereja', 'Dekat Warung Makan', 'Dekat Minimarket', 'Dekat Toko Grosir', 'Dekat Kampus/Kantor', 'Jalanan Beraspal', 'Bebas Banjir'],
+        environmental_conditions: ['Area Kostan', 'Area Perumahan', 'Padat Penduduk', 'Lingkungan Tenang', 'Bebas Bau/Polusi', 'Pencahayaan Baik', 'Bebas Hewan/Serangga'],
+        building_conditions: ['Bangunan Baru', 'Bangunan Terawat', 'Cat Masih Bagus', 'Tidak Ada Retak', 'Atap Tidak Bocor', 'Tidak Ada Rembes', 'Tidak Ada Jamur Dinding', 'Sirkulasi Udara Lancar']
+    };
+
+    const StarRatingInput: React.FC<{ value: number; onChange: (rating: number) => void; disabled?: boolean }> = ({ value, onChange, disabled }) => (
+        <div className="flex gap-1 sm:gap-1.5 p-1.5 sm:p-2 bg-gray-50/80 rounded-xl border border-gray-100 hover:border-orange-200 transition-colors">
+            {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                    key={star}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onChange(star)}
+                    className={`text-xl sm:text-2xl transition-all duration-200 w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center ${
+                        star <= value 
+                        ? 'text-yellow-400 bg-yellow-50 drop-shadow-[0_0_8px_rgba(250,204,21,0.3)] scale-110 border border-yellow-200' 
+                        : 'text-gray-300 bg-white hover:bg-gray-100 hover:text-gray-400 border border-gray-200 shadow-sm'
+                    } ${!disabled && 'active:scale-95 cursor-pointer'} ${disabled && 'cursor-not-allowed opacity-70'}`}
+                >
+                    {star <= value ? '★' : '☆'}
+                </button>
+            ))}
+        </div>
+    );
+
     const renderOverview = () => (
         <div className="space-y-6">
             {verificationStatus !== 'verified' && (
@@ -367,7 +409,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         const filteredRequests = surveyRequests.filter(req => {
             if (agentTab === 'pending') return req.status === 'PENDING_ASSIGNMENT';
             if (agentTab === 'active') return ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED'].includes(req.status);
-            if (agentTab === 'history') return ['COMPLETED', 'CANCELLED'].includes(req.status);
+            if (agentTab === 'history') return ['SUBMITTED', 'COMPLETED', 'CANCELLED'].includes(req.status);
             return false;
         });
 
@@ -392,8 +434,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             {t.label}
                             {surveyRequests.filter(r => {
                                 if (t.id === 'pending') return r.status === 'PENDING_ASSIGNMENT';
-                                if (t.id === 'active') return ['AGENT_ASSIGNED', 'SURVEYING', 'RESCHEDULED'].includes(r.status);
-                                if (t.id === 'history') return ['COMPLETED', 'CANCELLED'].includes(r.status);
+                                if (t.id === 'active') return ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED'].includes(r.status);
+                                if (t.id === 'history') return ['SUBMITTED', 'COMPLETED', 'CANCELLED'].includes(r.status);
                                 return false;
                             }).length > 0 && (
                                 <span className={`w-2 h-2 rounded-full ${agentTab === t.id ? 'bg-white' : 'bg-red-500'}`} />
@@ -424,14 +466,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         <span className={`inline-flex w-full sm:w-auto justify-center px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl border shadow-sm
                                             ${req.status === 'AWAITING_PAYMENT' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
                                               req.status === 'PENDING_ASSIGNMENT' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                                              req.status === 'HEADING_TO_LOCATION' ? 'bg-indigo-600 text-white border-indigo-600' :
                                               req.status === 'SURVEYING' ? 'bg-orange-600 text-white border-orange-600 animate-pulse' : 
+                                              req.status === 'SUBMITTED' ? 'bg-blue-600 text-white border-blue-600' :
                                               req.status === 'COMPLETED' ? 'bg-green-600 text-white border-green-600' : 
                                               req.status === 'RESCHEDULED' ? 'bg-amber-500 text-white border-amber-600 shadow-amber-100' : 
                                               'bg-red-50 text-red-700 border-red-200'}`}>
                                             {req.status === 'AWAITING_PAYMENT' ? 'Menunggu Bayar' : 
                                              req.status === 'PENDING_ASSIGNMENT' ? 'Menunggu Agen' : 
                                              req.status === 'AGENT_ASSIGNED' ? 'Tugas Baru' : 
+                                             req.status === 'HEADING_TO_LOCATION' ? 'Menuju Lokasi' :
                                              req.status === 'SURVEYING' ? 'Sedang Survey' : 
+                                             req.status === 'SUBMITTED' ? 'Menunggu Konfirmasi' :
                                              req.status === 'COMPLETED' ? 'Selesai' : 
                                              req.status === 'RESCHEDULED' ? 'Jadwal Ulang' : 
                                              req.status}
@@ -443,26 +489,26 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 mt-1">
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                         </div>
-                                        <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Lokasi Kost</p><p className="font-bold text-gray-900 text-xs sm:text-sm leading-relaxed">{req.kost_address}</p></div>
+                                        <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Lokasi Kost</p><p className="font-bold text-gray-900 text-xs sm:text-sm leading-relaxed">{req.kost_address}</p></div>
                                     </div>
                                     <div className="flex items-start gap-3">
                                         <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 mt-1">
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                                         </div>
-                                        <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Jadwal Survey</p><p className="font-bold text-orange-700 text-xs sm:text-sm">{req.survey_date} · {req.survey_time}</p></div>
+                                        <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Jadwal Survey</p><p className="font-bold text-orange-700 text-xs sm:text-sm">{req.survey_date} · {req.survey_time}</p></div>
                                     </div>
                                     <div className="flex items-start gap-3">
                                         <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 mt-1">
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
                                         </div>
-                                        <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Kontak Pemilik</p><p className="font-bold text-gray-900 text-xs sm:text-sm">{req.owner_phone}</p></div>
+                                        <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Kontak Pemilik</p><p className="font-bold text-gray-900 text-xs sm:text-sm">{req.owner_phone}</p></div>
                                     </div>
                                 </div>
                                 {req.status === 'RESCHEDULED' && (
                                     <div className="bg-amber-50 rounded-2xl p-3 border border-amber-100 flex items-start gap-3">
                                         <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-amber-500 shadow-sm shrink-0 mt-0.5">🗓️</div>
                                         <div className="flex-1">
-                                            <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest leading-none mb-1">Informasi Jadwal Ulang</p>
+                                            <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Informasi Jadwal Ulang</p>
                                             <p className="text-xs text-amber-800 font-medium leading-relaxed italic">"{req.notes || 'User/Admin meminta perubahan jadwal survey sesuai kesepakatan baru.'}"</p>
                                         </div>
                                     </div>
@@ -493,6 +539,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                             agent_phone: user?.phone || user?.phoneNumber || '',
                                                             agent_photo_url: user?.photo_url || user?.photoURL || ''
                                                         });
+                                                        await notifySurveyStatusUpdate(req.id, 'AGENT_ASSIGNED');
                                                         alert('Pesanan Diterima! Tugas kini ada di tab Aktif.');
                                                         await loadSurveyRequests(true);
                                                         setAgentTab('active');
@@ -547,6 +594,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                     try {
                                                         setIsSubmitting(true);
                                                         await updateSurveyRequest(req.id, { status: 'HEADING_TO_LOCATION' });
+                                                        await notifySurveyStatusUpdate(req.id, 'HEADING_TO_LOCATION');
                                                         await loadSurveyRequests(true);
                                                     } catch (e) {
                                                         alert('Gagal update status');
@@ -568,6 +616,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                     try {
                                                         setIsSubmitting(true);
                                                         await updateSurveyRequest(req.id, { status: 'SURVEYING' });
+                                                        await notifySurveyStatusUpdate(req.id, 'SURVEYING');
                                                         await loadSurveyRequests(true);
                                                     } catch (e) {
                                                         alert('Gagal update status');
@@ -822,12 +871,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         </div>
     );
 
-    const renderProfile = () => (
-        <AgentProfile 
-            uid={uid} 
-            onEditModeChange={setIsProfileEditing} 
-        />
-    );
 
     const render = (
         <div className="min-h-screen bg-gray-50 font-sans flex">
@@ -851,8 +894,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 <div className="px-4 py-5 border-b border-gray-50">
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl">
                         <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white font-black text-sm shrink-0 overflow-hidden">
-                            {user?.photoURL || user?.photo_url ? (
-                                <img src={user.photoURL || user.photo_url} alt="Profile" className="w-full h-full object-cover" />
+                            {(user?.photoURL || user?.photo_url) && !profileImgError ? (
+                                <img 
+                                    src={user.photoURL || user.photo_url} 
+                                    alt="Profile" 
+                                    className="w-full h-full object-cover" 
+                                    onError={() => setProfileImgError(true)}
+                                />
                             ) : (
                                 user?.displayName?.charAt(0) || user?.name?.charAt(0) || 'A'
                             )}
@@ -920,7 +968,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                     icon={item.icon}
                                     label={item.label}
                                     badge={item.badge}
-                                    onClick={() => { setActiveMenu(item.key); setMobileSidebarOpen(false); }}
+                                    onClick={() => { onMenuChange(item.key as any); setMobileSidebarOpen(false); }}
                                 />
                             ))}
                         </nav>
@@ -966,8 +1014,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             onClick={() => onMenuChange('profile')}
                             className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-black text-xs overflow-hidden"
                         >
-                            {user?.photoURL || user?.photo_url ? (
-                                <img src={user.photoURL || user.photo_url} alt="Profile" className="w-full h-full object-cover" />
+                            {(user?.photoURL || user?.photo_url) && !profileImgError ? (
+                                <img 
+                                    src={user.photoURL || user.photo_url} 
+                                    alt="Profile" 
+                                    className="w-full h-full object-cover" 
+                                    onError={() => setProfileImgError(true)}
+                                />
                             ) : (
                                 user?.displayName?.charAt(0) || user?.name?.charAt(0) || 'A'
                             )}
@@ -1002,12 +1055,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             className="flex items-center gap-3 pl-2 pr-1 py-1 rounded-2xl hover:bg-gray-50 transition-all group"
                         >
                             <div className="text-right hidden xl:block">
-                                <p className="text-xs font-black text-gray-900 leading-none">{user?.displayName || user?.name || 'Surveyor'}</p>
+                                <p className="text-xs font-black text-gray-900">{user?.displayName || user?.name || 'Surveyor'}</p>
                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter mt-1">ID: #{uid.slice(0, 6)}</p>
                             </div>
                             <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center text-white font-black text-sm shadow-md shadow-orange-500/20 overflow-hidden">
-                                {user?.photoURL || user?.photo_url ? (
-                                    <img src={user.photoURL || user.photo_url} alt="Profile" className="w-full h-full object-cover" />
+                                {(user?.photoURL || user?.photo_url) && !profileImgError ? (
+                                    <img 
+                                        src={user.photoURL || user.photo_url} 
+                                        alt="Profile" 
+                                        className="w-full h-full object-cover" 
+                                        onError={() => setProfileImgError(true)}
+                                    />
                                 ) : (
                                     user?.displayName?.charAt(0) || user?.name?.charAt(0) || 'A'
                                 )}
@@ -1018,7 +1076,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                 {/* ── SCROLLABLE CONTENT ───────────────────────────────────── */}
                 <main className="flex-1 p-4 lg:p-8 pb-32">
-                    {activeMenu === 'overview' && <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 leading-none">{renderOverview()}</div>}
+                    {activeMenu === 'overview' && <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">{renderOverview()}</div>}
                     {activeMenu === 'tasks' && <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">{renderTasks()}</div>}
                     {activeMenu === 'wallet' && <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">{renderWallet()}</div>}
                     {activeMenu === 'profile' && <div className="animate-in fade-in slide-in-from-bottom-4 duration-500"><AgentProfile uid={uid} onEditModeChange={() => {}} /></div>}
@@ -1043,53 +1101,29 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                         <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsEditingSurvey(null)}></div>
                         <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95">
-                            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-orange-50/50">
-                                <div><h2 className="text-xl font-black uppercase text-orange-900">Form Laporan Survey</h2><p className="text-xs font-bold text-orange-500 uppercase tracking-widest mt-1">Lengkapi data pengecekan</p></div>
+                            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                                <div><h2 className="text-xl font-black uppercase text-gray-900">Form Laporan Survey</h2><p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Lengkapi data pengecekan</p></div>
                                 <button onClick={() => setIsEditingSurvey(null)} className="w-8 h-8 flex items-center justify-center border rounded-full hover:bg-white transition-colors">&times;</button>
                             </div>
                             <form onSubmit={handleUpdateSurvey} className="flex-grow overflow-y-auto p-0 m-0">
                                 <div className="p-6 space-y-5">
-                                    <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
-                                        <div className="flex justify-between items-center mb-1.5">
-                                            <label className="text-[10px] font-black text-blue-900 uppercase tracking-widest">Link Hasil Survey (Automated Drive)</label>
-                                            {surveyForm.result_drive_link && (
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => window.open(surveyForm.result_drive_link, '_blank')}
-                                                    className="text-[10px] font-black text-blue-600 hover:text-blue-700 flex items-center gap-1 uppercase tracking-widest bg-white px-2 py-1 rounded-md border border-blue-200 shadow-sm transition-all active:scale-95"
-                                                >
-                                                    <span>📁</span> Buka Folder
-                                                </button>
-                                            )}
-                                        </div>
-                                        <input 
-                                            readOnly
-                                            className="w-full bg-white/80 border border-blue-200 rounded-xl px-4 py-3 text-xs font-bold text-blue-600 cursor-not-allowed outline-none"
-                                            value={surveyForm.result_drive_link || ''}
-                                            placeholder="Sistem belum membuat folder drive..."
-                                        />
-                                        <p className="text-[9px] text-blue-500 mt-2 font-medium italic">
-                                            {surveyForm.result_drive_link 
-                                                ? "✓ Folder Drive otomatis telah berhasil dibuat. Upload video pengecekan ke dalam folder tersebut." 
-                                                : "ℹ Folder akan dibuat otomatis oleh sistem saat survey berhasil."}
-                                        </p>
-                                    </div>
-
-                                    <div className="pt-4 border-t border-gray-100">
-                                        <h3 className="text-xs font-black text-orange-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <div>
+                                        <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-2">
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
                                             Summary Penilaian Surveyor
                                         </h3>
                                         
                                         <div className="space-y-4">
                                             {/* WA Evidence Section */}
-                                            <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 mb-6">
-                                                <label className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Bukti Screenshot WhatsApp Video Call / Chat dengan user</label>
+                                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 mb-6">
+                                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Bukti Screenshot WhatsApp Video Call / Chat dengan user</label>
                                                 <div className="mt-1.5 flex items-center gap-3">
                                                     {(isEditingSurvey?.status !== 'COMPLETED' && isEditingSurvey?.status !== 'SUBMITTED') && (
-                                                        <label className="flex-1 bg-white border border-dashed border-orange-200 rounded-xl px-4 py-3 text-[10px] font-bold text-orange-400 cursor-pointer hover:border-orange-400 hover:text-orange-600 transition-all flex items-center justify-center gap-2">
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                                            {(surveyForm.evaluation_summary as any)?.whatsapp_evidence_url ? 'Ganti Bukti WA' : 'Upload Bukti WA'}
+                                                        <label className="flex-1 bg-white border border-dashed border-gray-300 shadow-sm rounded-xl px-4 py-4 text-xs font-black text-gray-500 cursor-pointer hover:bg-gray-50 hover:border-gray-400 hover:text-gray-700 transition-all flex flex-col items-center justify-center gap-2">
+                                                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">
+                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                                            </div>
+                                                            <span className="uppercase tracking-widest">{(surveyForm.evaluation_summary as any)?.whatsapp_evidence_url ? 'Ganti Bukti WA' : 'Upload Bukti WA'}</span>
                                                             <input 
                                                                 type="file" 
                                                                 accept="image/*" 
@@ -1099,26 +1133,168 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                         </label>
                                                     )}
                                                     {(surveyForm.evaluation_summary as any)?.whatsapp_evidence_url && (
-                                                        <div className="w-16 h-16 bg-white rounded-xl overflow-hidden border border-orange-200 flex-shrink-0 cursor-zoom-in" onClick={() => window.open((surveyForm.evaluation_summary as any).whatsapp_evidence_url, '_blank')}>
-                                                            <img src={(surveyForm.evaluation_summary as any).whatsapp_evidence_url[0] || (surveyForm.evaluation_summary as any).whatsapp_evidence_url} className="w-full h-full object-cover" alt="WA Evidence" />
+                                                        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-xl overflow-hidden border border-orange-200 flex-shrink-0 cursor-zoom-in group relative" onClick={() => window.open(Array.isArray((surveyForm.evaluation_summary as any).whatsapp_evidence_url) ? (surveyForm.evaluation_summary as any).whatsapp_evidence_url[0] : (surveyForm.evaluation_summary as any).whatsapp_evidence_url, '_blank')}>
+                                                            <img 
+                                                                src={Array.isArray((surveyForm.evaluation_summary as any).whatsapp_evidence_url) ? (surveyForm.evaluation_summary as any).whatsapp_evidence_url[0] : (surveyForm.evaluation_summary as any).whatsapp_evidence_url} 
+                                                                className="w-full h-full object-cover transition-transform group-hover:scale-110" 
+                                                                alt="WA Evidence" 
+                                                            />
+                                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>
                                             </div>
 
                                             {[
+                                                { id: 'kost_type', label: 'Jenis Kost', icon: '👤' },
                                                 { id: 'room_facilities', label: 'Fasilitas Kamar', icon: '🛏️' },
                                                 { id: 'bathroom_facilities', label: 'Fasilitas WC', icon: '🚿' },
+                                                { id: 'kitchen_facilities', label: 'Fasilitas Dapur', icon: '🍳' },
+                                                { id: 'public_facilities', label: 'Fasilitas Umum', icon: '🛋️' },
                                                 { id: 'water_check', label: 'Pengecekan Air', icon: '💧' },
                                                 { id: 'wifi_check', label: 'Pengecekan WiFi', icon: '📶' },
                                                 { id: 'security_check', label: 'Pengecekan Keamanan', icon: '🛡️' },
-                                                { id: 'access_check', label: 'Akses Umum/Toko/Kampus', icon: '📍' },
-                                                { id: 'resident_testimonial', label: 'Testimoni Penghuni', icon: '💬' },
+                                                { id: 'access_check', label: 'Akses Umum/Kampus/Kantor', icon: '📍' },
+                                                { id: 'building_conditions', label: 'Kondisi Bangunan/Kamar', icon: '🏠' },
+                                                { id: 'environmental_conditions', label: 'Lingkungan Sekitar', icon: '🌳' },
                                             ].map((field) => (
                                                 <div key={field.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm transition-all hover:border-orange-200">
-                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
-                                                        <span>{field.icon}</span> {field.label}
-                                                    </label>
+                                                    <div className="mb-3">
+                                                        <label className="text-[10px] font-black text-gray-800 uppercase tracking-widest flex items-center gap-1.5">
+                                                            <span>{field.icon}</span> {field.label}
+                                                        </label>
+                                                    </div>
+                                                    
+                                                    {categoryChecklists[field.id] && (
+                                                        <div className="mb-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                            {categoryChecklists[field.id].map(item => {
+                                                                const isChecked = ((surveyForm.evaluation_summary as any)?.[`${field.id}_checklist`] || []).includes(item);
+                                                                const isDekat = item.toLowerCase().startsWith('dekat');
+                                                                return (
+                                                                    <div key={item} className="flex flex-col gap-1.5">
+                                                                       <label className={`flex items-center gap-2 p-2 rounded-lg border text-[10px] sm:text-xs transition-colors ${isChecked ? 'bg-orange-50 border-orange-200 text-orange-700 font-bold' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'} cursor-pointer`}>
+                                                                           <input
+                                                                               type="checkbox"
+                                                                               className="w-3.5 h-3.5 text-orange-500 rounded border-gray-300 focus:ring-orange-500 cursor-pointer disabled:cursor-default"
+                                                                               checked={isChecked}
+                                                                               onChange={(e) => {
+                                                                                   const currentList = (surveyForm.evaluation_summary as any)?.[`${field.id}_checklist`] || [];
+                                                                                   const newList = e.target.checked 
+                                                                                       ? [...currentList, item] 
+                                                                                       : currentList.filter((i: string) => i !== item);
+                                                                                   
+                                                                                   setSurveyForm({ 
+                                                                                       ...surveyForm, 
+                                                                                       evaluation_summary: { 
+                                                                                           ...(surveyForm.evaluation_summary || {}), 
+                                                                                           [`${field.id}_checklist`]: newList 
+                                                                                       } 
+                                                                                   });
+                                                                               }}
+                                                                               disabled={isEditingSurvey?.status === 'COMPLETED' || isEditingSurvey?.status === 'SUBMITTED'}
+                                                                           />
+                                                                           <span className="truncate" title={item}>{item}</span>
+                                                                       </label>
+                                                                       
+                                                                       {isDekat && isChecked && (
+                                                                           <div className="flex flex-col gap-1 px-1">
+                                                                               <div className="flex items-center gap-1">
+                                                                                   <input 
+                                                                                       type="number"
+                                                                                       className="w-16 bg-white border border-gray-200 rounded-md px-1.5 py-1 text-[10px] font-bold outline-none focus:ring-1 focus:ring-orange-500"
+                                                                                       placeholder="Angka"
+                                                                                       value={(surveyForm.evaluation_summary as any)?.[`${field.id}_${item}_dist`] || ''}
+                                                                                       onChange={e => setSurveyForm({
+                                                                                           ...surveyForm,
+                                                                                           evaluation_summary: {
+                                                                                               ...(surveyForm.evaluation_summary || {}),
+                                                                                               [`${field.id}_${item}_dist`]: e.target.value
+                                                                                           }
+                                                                                       })}
+                                                                                       disabled={isEditingSurvey?.status === 'COMPLETED' || isEditingSurvey?.status === 'SUBMITTED'}
+                                                                                   />
+                                                                                   <select 
+                                                                                       className="bg-white border border-gray-200 rounded-md px-1 py-1 text-[10px] font-bold outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer"
+                                                                                       value={(surveyForm.evaluation_summary as any)?.[`${field.id}_${item}_unit`] || 'm'}
+                                                                                       onChange={e => setSurveyForm({
+                                                                                           ...surveyForm,
+                                                                                           evaluation_summary: {
+                                                                                               ...(surveyForm.evaluation_summary || {}),
+                                                                                               [`${field.id}_${item}_unit`]: e.target.value
+                                                                                           }
+                                                                                       })}
+                                                                                       disabled={isEditingSurvey?.status === 'COMPLETED' || isEditingSurvey?.status === 'SUBMITTED'}
+                                                                                   >
+                                                                                       <option value="m">m</option>
+                                                                                       <option value="km">km</option>
+                                                                                   </select>
+                                                                               </div>
+                                                                               
+                                                                               {item === 'Dekat Kampus/Kantor' && (
+                                                                                   <input 
+                                                                                       type="text"
+                                                                                       className="w-full bg-white border border-gray-200 rounded-md px-2 py-1 text-[10px] font-bold outline-none focus:ring-1 focus:ring-orange-500"
+                                                                                       placeholder="Nama Kampus/Kantor..."
+                                                                                       value={(surveyForm.evaluation_summary as any)?.[`${field.id}_${item}_name`] || ''}
+                                                                                       onChange={e => setSurveyForm({
+                                                                                           ...surveyForm,
+                                                                                           evaluation_summary: {
+                                                                                               ...(surveyForm.evaluation_summary || {}),
+                                                                                               [`${field.id}_${item}_name`]: e.target.value
+                                                                                           }
+                                                                                       })}
+                                                                                       disabled={isEditingSurvey?.status === 'COMPLETED' || isEditingSurvey?.status === 'SUBMITTED'}
+                                                                                   />
+                                                                               )}
+                                                                           </div>
+                                                                       )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+
+                                                    {field.id === 'wifi_check' && (
+                                                        <div className="mb-3">
+                                                            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus-within:ring-2 focus-within:ring-orange-500 transition-all">
+                                                                <input 
+                                                                    type="number"
+                                                                    className="flex-1 bg-transparent text-sm font-bold outline-none text-gray-700"
+                                                                    placeholder="Ketik kecepatan internet..."
+                                                                    value={(surveyForm.evaluation_summary as any)?.wifi_speed || ''}
+                                                                    onChange={e => setSurveyForm({
+                                                                        ...surveyForm,
+                                                                        evaluation_summary: {
+                                                                            ...(surveyForm.evaluation_summary || {}),
+                                                                            wifi_speed: e.target.value
+                                                                        }
+                                                                    })}
+                                                                    disabled={isEditingSurvey?.status === 'COMPLETED' || isEditingSurvey?.status === 'SUBMITTED'}
+                                                                />
+                                                                <span className="text-xs font-black text-gray-400 tracking-widest">MBPS</span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-gray-100 pt-3">
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Penilaian Keseluruhan</label>
+                                                        <StarRatingInput 
+                                                            value={(surveyForm.evaluation_summary as any)?.[`${field.id}_rating`] || 0}
+                                                            onChange={(val) => {
+                                                                setSurveyForm({ 
+                                                                    ...surveyForm, 
+                                                                    evaluation_summary: { 
+                                                                        ...(surveyForm.evaluation_summary || {}), 
+                                                                        [`${field.id}_rating`]: val 
+                                                                    } 
+                                                                });
+                                                            }}
+                                                            disabled={isEditingSurvey?.status === 'COMPLETED' || isEditingSurvey?.status === 'SUBMITTED'}
+                                                        />
+                                                    </div>
+
                                                     <textarea 
                                                         className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-orange-500 transition-all outline-none mb-3 disabled:bg-gray-100 disabled:opacity-80"
                                                         rows={2}
@@ -1139,7 +1315,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                     {/* Photo Upload Section */}
                                                     <div className="space-y-2">
                                                         <div className="flex items-center justify-between">
-                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Bukti Foto</span>
+                                                            <span className="text-[9px] font-black text-gray-700 uppercase tracking-widest">Bukti Foto</span>
                                                             {(isEditingSurvey?.status !== 'COMPLETED' && isEditingSurvey?.status !== 'SUBMITTED') && (
                                                                 <label className={`text-[9px] font-black uppercase px-2.5 py-1.5 rounded-lg bg-orange-50 text-orange-600 transition-colors flex items-center gap-1.5 cursor-pointer hover:bg-orange-100 ${isUploadingSurveyPhoto === field.id ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                                                     {isUploadingSurveyPhoto === field.id ? (
@@ -1185,6 +1361,34 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                     </div>
                                                 </div>
                                             ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 border-t border-gray-100">
+                                        <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                                            <div className="flex justify-between items-center mb-1.5">
+                                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Link Hasil Survey (Foto & Video)</label>
+                                                {surveyForm.result_drive_link && (
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => window.open(surveyForm.result_drive_link, '_blank')}
+                                                        className="text-[10px] font-black text-gray-700 hover:text-gray-900 flex items-center gap-1 uppercase tracking-widest bg-white px-2 py-1 rounded-md border border-gray-200 shadow-sm transition-all active:scale-95"
+                                                    >
+                                                        <span>📁</span> Buka Folder
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <input 
+                                                readOnly
+                                                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold text-gray-600 cursor-not-allowed outline-none"
+                                                value={surveyForm.result_drive_link || ''}
+                                                placeholder="Sistem belum membuat folder drive..."
+                                            />
+                                            <p className="text-[9px] text-gray-500 mt-2 font-medium italic">
+                                                {surveyForm.result_drive_link 
+                                                    ? "✓ Folder Drive otomatis telah berhasil dibuat. Upload video pengecekan ke dalam folder tersebut." 
+                                                    : "ℹ Folder akan dibuat otomatis oleh sistem saat survey berhasil."}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>

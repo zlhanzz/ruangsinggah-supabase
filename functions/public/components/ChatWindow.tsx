@@ -140,6 +140,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Ketik balasan..."
+            maxLength={1000}
             className="flex-1 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
           />
           <button
@@ -221,6 +222,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Ketik balasan..."
+            maxLength={1000}
             className="flex-1 bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
           />
           <button

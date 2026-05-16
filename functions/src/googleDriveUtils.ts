@@ -4,20 +4,50 @@
  * Creates a Google Drive folder and returns its web view link.
  * @param folderName The name of the folder to be created
  * @param parentFolderId Optional parent folder ID
+ * @param config Optional credentials object
  */
-export async function createSurveyFolder(folderName: string, parentFolderId?: string): Promise<string> {
+export async function createSurveyFolder(
+  folderName: string, 
+  parentFolderId?: string, 
+  config?: { privateKey?: string, clientEmail?: string }
+): Promise<string> {
   const { google } = require('googleapis');
-  const privateKey = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
-  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  
+  // Use passed config or environment variables
+  let rawPrivateKey = config?.privateKey || process.env.GOOGLE_PRIVATE_KEY || '';
+  
+  // Robust parsing: Handle cases where the user might have pasted the entire JSON
+  if (rawPrivateKey.trim().startsWith('{')) {
+    try {
+      const jsonKey = JSON.parse(rawPrivateKey);
+      if (jsonKey.private_key) {
+        rawPrivateKey = jsonKey.private_key;
+      }
+    } catch (e) {
+      console.warn('GOOGLE_DRIVE_CONFIG: Attempted to parse private key as JSON but failed.');
+    }
+  }
+
+  // Robust replacement for newlines and removal of extra quotes
+  const privateKey = rawPrivateKey
+    .replace(/\\n/g, '\n')
+    .replace(/\n/g, '\n')
+    .replace(/"/g, '')
+    .trim();
+  const clientEmail = config?.clientEmail || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
 
   if (!privateKey || !clientEmail) {
+    console.error('GOOGLE_DRIVE_CONFIG_ERROR: Missing credentials', { 
+      hasKey: !!privateKey, 
+      hasEmail: !!clientEmail 
+    });
     throw new Error('GOOGLE_PRIVATE_KEY or GOOGLE_SERVICE_ACCOUNT_EMAIL is missing');
   }
 
   const auth = new google.auth.JWT({
     email: clientEmail,
     key: privateKey,
-    scopes: ['https://www.googleapis.com/auth/drive.file']
+    scopes: ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive']
   });
 
   const drive = google.drive({ version: 'v3', auth });
