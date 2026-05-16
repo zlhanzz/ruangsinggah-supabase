@@ -1401,7 +1401,7 @@ export const createMidtransPayment = functions.https.onRequest({ cors: true }, a
         // 5. GOPAY (Direct Charge with Deeplink)
         else if (method === 'gopay') {
             parameter.payment_type = 'gopay';
-            parameter.gopay = { enable_callback: true, callback_url: "https://ruangsinggah.id/payment-callback" };
+            parameter.gopay = { enable_callback: true, callback_url: `https://ruangsinggah.id/payment-status/${order.id}` };
         }
         // 5b. QRIS / OVO
         else if (['qris', 'ovo'].includes(method)) {
@@ -1412,12 +1412,13 @@ export const createMidtransPayment = functions.https.onRequest({ cors: true }, a
         else if (method === 'dana') {
             console.log("MIDTRANS_CREATE: DANA requested, using Snap redirect flow");
             parameter.enabled_payments = ['dana'];
-            // Do not set payment_type to force Snap fallback/redirect
+            // Inject callbacks.finish so Midtrans redirects back with real UUID (not {order_id} template)
+            (parameter as any).callbacks = { finish: `https://ruangsinggah.id/payment-status/${order.id}` };
         }
         // 6. SHOPEEPAY
         else if (method === 'shopeepay') {
             parameter.payment_type = 'shopeepay';
-            parameter.shopeepay = { callback_url: "https://ruangsinggah.id/payment-callback" };
+            parameter.shopeepay = { callback_url: `https://ruangsinggah.id/payment-status/${order.id}` };
         }
         // 6. CONVENIENCE STORE (Alfamart, Indomaret)
         else if (['alfamart', 'indomaret'].includes(method)) {
@@ -1492,6 +1493,10 @@ export const createMidtransPayment = functions.https.onRequest({ cors: true }, a
                 (snapParameter as any).enabled_payments = enabledPayments;
             }
 
+            // Ensure Snap fallback also has finish callback with real UUID
+            if (!(snapParameter as any).callbacks) {
+                (snapParameter as any).callbacks = { finish: `https://ruangsinggah.id/payment-status/${order.id}` };
+            }
             const transaction = await getMidtransSnap().createTransaction(snapParameter);
             responseData = {
                 token: transaction.token,
@@ -1503,6 +1508,10 @@ export const createMidtransPayment = functions.https.onRequest({ cors: true }, a
         }
     } else {
         console.log(`MIDTRANS_CREATE: Requesting Snap Token for ${midtransOrderId}`);
+        // Inject callbacks.finish with real UUID so redirect always resolves correctly
+        if (!(parameter as any).callbacks) {
+            (parameter as any).callbacks = { finish: `https://ruangsinggah.id/payment-status/${order.id}` };
+        }
         const transaction = await getMidtransSnap().createTransaction(parameter);
         responseData = {
             token: transaction.token,
