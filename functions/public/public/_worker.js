@@ -1,41 +1,21 @@
 /**
- * Cloudflare Pages _worker.js
+ * Cloudflare Pages _worker.js — OG Meta Tag Server for Social Media Previews
  * 
- * Advanced mode: satu Worker untuk semua request.
- * 
- * - Bot (WhatsApp, Facebook, Telegram, dll) yang mengakses /kost/:id
- *   → Return HTML server-rendered dengan OG meta tags spesifik per kost
- * - User biasa & semua request lain
- *   → Serve static assets dari Cloudflare Pages (env.ASSETS)
+ * - Bot (WhatsApp, Facebook, Telegram, dll) akses /kost/:id
+ *   → Fetch dari Supabase, return HTML dengan OG tags spesifik per listing
+ * - User biasa & semua path lain
+ *   → Pass through ke static SPA via env.ASSETS
  */
 
 const SUPABASE_URL = 'https://sgcmnsnokrztocnhxnqm.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNnY21uc25va3J6dG9jbmh4bnFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwNDMxMjUsImV4cCI6MjA4NjYxOTEyNX0.SuBkVkPAEu_LGQUklbrhkK1Uw8nlsvV9lXgHVBuqYos';
 
 const BOT_USER_AGENTS = [
-  'whatsapp',
-  'facebookexternalhit',
-  'facebot',
-  'twitterbot',
-  'telegrambot',
-  'linkedinbot',
-  'slackbot',
-  'discordbot',
-  'googlebot',
-  'bingbot',
-  'applebot',
-  'preview',
-  'crawler',
-  'spider',
-  'scraper',
-  'opengraph',
-  'iframely',
-  'embedly',
-  'quora link preview',
-  'rogerbot',
-  'showyoubot',
-  'outbrain',
-  'pinterest',
+  'whatsapp', 'facebookexternalhit', 'facebot', 'twitterbot',
+  'telegrambot', 'linkedinbot', 'slackbot', 'discordbot',
+  'googlebot', 'bingbot', 'applebot', 'preview', 'crawler',
+  'spider', 'scraper', 'opengraph', 'iframely', 'embedly',
+  'rogerbot', 'pinterest', 'quora link preview',
 ];
 
 function isBot(userAgent) {
@@ -50,25 +30,27 @@ function formatRupiah(price) {
 }
 
 function getFirstImageUrl(kost) {
-  const imgs = kost.imageUrls || kost.image_urls || [];
+  // Kolom aktual di DB: image_urls = [{original: "..."}, ...]
+  const imgs = kost.image_urls || kost.imageUrls || [];
   if (!imgs || imgs.length === 0) return 'https://ruangsinggah.id/logo.png';
   const first = imgs[0];
   if (!first) return 'https://ruangsinggah.id/logo.png';
   if (typeof first === 'string') return first;
-  if (first.url) return first.url;
-  if (first.thumbnail) return first.thumbnail;
-  return 'https://ruangsinggah.id/logo.png';
+  // Coba key: original, url, thumbnail
+  return first.original || first.url || first.thumbnail || 'https://ruangsinggah.id/logo.png';
 }
 
 function buildOgHtml({ kost, kostId }) {
-  const name = kost.name || kost.title || 'Kost di Makassar';
-  const area = kost.area || kost.address || 'Makassar';
+  // Kolom aktual: title (bukan name), property_type/type (bukan gender)
+  const name = kost.title || kost.name || 'Kost di Makassar';
+  const area = kost.area || kost.city || kost.address?.split(',')[0] || 'Makassar';
   const price = kost.price ? `Rp ${formatRupiah(kost.price)}/bulan` : '';
 
-  const gender = kost.gender;
-  const genderLabel = gender === 'putra' ? 'Kost Putra'
-    : gender === 'putri' ? 'Kost Putri'
-    : gender === 'campur' ? 'Kost Campur'
+  // property_type atau type: "Putri", "Putra", "Campur"
+  const typeRaw = (kost.property_type || kost.type || '').toLowerCase();
+  const genderLabel = typeRaw === 'putri' ? 'Kost Putri'
+    : typeRaw === 'putra' ? 'Kost Putra'
+    : typeRaw === 'campur' ? 'Kost Campur'
     : 'Kost';
 
   const campuses = Array.isArray(kost.campuses) ? kost.campuses : [];
@@ -92,8 +74,7 @@ function buildOgHtml({ kost, kostId }) {
     ? `${name} - Dekat ${nearestCampus} | RuangSinggah.id`
     : `${name} - ${area} | RuangSinggah.id`;
 
-  // Escape HTML special chars
-  const esc = s => String(s)
+  const esc = s => String(s || '')
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')
@@ -107,8 +88,6 @@ function buildOgHtml({ kost, kostId }) {
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(description)}">
 <link rel="canonical" href="${esc(pageUrl)}">
-
-<!-- Open Graph — dibaca WhatsApp, Facebook, Telegram, Discord, dll -->
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:image" content="${esc(imageUrl)}">
@@ -118,8 +97,6 @@ function buildOgHtml({ kost, kostId }) {
 <meta property="og:type" content="website">
 <meta property="og:locale" content="id_ID">
 <meta property="og:site_name" content="RuangSinggah.id">
-
-<!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${esc(title)}">
 <meta name="twitter:description" content="${esc(description)}">
@@ -137,17 +114,17 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const pathname = url.pathname;
-
-    // Hanya proses /kost/:id dan hanya jika bot
     const kostMatch = pathname.match(/^\/kost\/([^/]+)$/);
     const userAgent = request.headers.get('User-Agent') || '';
 
     if (kostMatch && isBot(userAgent)) {
       const kostId = kostMatch[1];
-
       try {
-        // Fetch data kost dari Supabase REST API
-        const apiUrl = `${SUPABASE_URL}/rest/v1/properties?id=eq.${encodeURIComponent(kostId)}&select=id,name,title,area,address,price,gender,facilities,imageUrls,campuses&limit=1`;
+        // Gunakan kolom yang sesuai schema DB aktual
+        const apiUrl = `${SUPABASE_URL}/rest/v1/properties`
+          + `?id=eq.${encodeURIComponent(kostId)}`
+          + `&select=id,title,area,city,address,price,property_type,type,facilities,image_urls,campuses`
+          + `&limit=1`;
 
         const res = await fetch(apiUrl, {
           headers: {
@@ -160,10 +137,8 @@ export default {
         if (res.ok) {
           const data = await res.json();
           const kost = data?.[0];
-
           if (kost) {
-            const html = buildOgHtml({ kost, kostId });
-            return new Response(html, {
+            return new Response(buildOgHtml({ kost, kostId }), {
               status: 200,
               headers: {
                 'Content-Type': 'text/html; charset=utf-8',
@@ -173,12 +148,11 @@ export default {
           }
         }
       } catch (err) {
-        // Log error tapi jangan break — fallback ke SPA
-        console.error('[OG Worker] Error fetching kost:', err);
+        console.error('[OG Worker] Error:', err);
       }
     }
 
-    // Semua request lain (user biasa, atau kost tidak ditemukan) → serve SPA
+    // User biasa atau error → serve SPA
     return env.ASSETS.fetch(request);
   },
 };
