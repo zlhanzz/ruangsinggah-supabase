@@ -1,0 +1,47 @@
+const crypto = require('crypto');
+
+async function test() {
+  console.log("Testing Auth with Single Line Key...");
+  
+  const header = "-----BEGIN PRIVATE KEY-----";
+  const footer = "-----END PRIVATE KEY-----";
+  
+  // The raw base64 content (removing headers and all \n)
+  const rawBase64 = `MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDMsqgUBecKcFy0
+wH3kYZflHFDGIBMX8sta9TLjZ4tp5zd3tlRS2YQKdpsKjlS3Eww4CQ1C4jiJIzST
+CQZO7s8xSWJhGeCAhLp84hij/GwINWj56pOnHq9Kkz32bae3s043IFvrAUzFbQ3E
+SZB9/vrhGVPa1C2/OFHddxdftCmUATWSctSsCunKKsnvoFIbX65q07fbPPRr1ffc
+3oTwobS2jB4jCxAOBXuRZhHDkXVZKH0wyniKFCZlKczzbQLiYJOLtHqKHJQIvLmF
+tXetWQWf+uWopPER2HzpiLxxUcna81nfFOTU4oeCC6m4OyeI8kmIRqudEQrpBlJt
+6YVS17MBAgMBAAECggEAAQ+6GbnQHA3qGnvXC0dK8NgH6THDDOroOAqxHrHA7NB9
+8/kg5c8VRV1JFNxuabFHwnCgPiULKFbjj7xKaUAJbgF/PkP9QIgE/t8d7pfBUvzn
+6Z0tnSkREqDB1P8g5q3KLYoAQASL392JZpJVFU+BqzIk7QEQUv9ZQ/3j7qNHWz+b
+UJGMlNAAEHTrd4vZGSWyL9l+i6xtYJT/BAmWTf4U/ItWjqswHPHz43h6GUUJgsQV
+VdPbv7XdbUS0BLBb2auXGvSmtIsfduxeYrBic+HD06R1Xr5TEyXnCPZ/T5NVx6um
+GZToIoQTSIY/n61Elv/2c/krLJKMZQKorOiltJ/qYQKBgQDsxisZea9Yu5ldyYbg
+3SGGDTac95mEALILeFkcpSo4D8Cfe71zLu/R91ZlJXecAUKPsCfREhbXjpqjdhWm
+iULZvcsy3AaGhJ5SM8fi4TFWV7dL7tAh56Dv+CDttBqY5Ghi0UmUVS6TIY3Z39pr
+cER7aiyuvpx4CW6RRFhOxtLbmQKBgQDdUbf8tqC2gPUrA1XZdGKRKsEXf5gZ6Ai7
+BofpbXN8LgVMLTUrRbyFP+QOPJIKtTzb3eZlAAB4C1GNIihf95tyVK+n9Qba4khb
+OT30BBzbC0g8ijnjxqvstv/lSJf5ly1Z0KU8F5Z5w2b5tc6kisQQNLwW7XrAJz4Y
+nvdTeFdzqQKBgAk1h/WcswI7gbKRJQrX7vbcyrP+OV1V/ZbOnoCrt+GoUzCgynSR
+nbch320dh1q4dqm4WRuYt0u+dX0xeSmdIzW3UoPOgdSyEOfguhWbApX+bN8jfR/8Z
+mDvdJcK5D5PExn6Zb0gyq/YTBwZjW4Z0PmWicox1Y3aTv1YtF1YxC4B5AoGAPeu/
+LlVqYaVy8rXcLxsA+NydaZWpWJYy2yDYpdaZmQTHNqjvV0wLkrxtcg5ATf6nKFzN
+OTTm7K8+Ad6srSz5sONAwh0r7dGhrOQ3ES6VZDOj4kxKJhBPycrpjZzh6FMDvT1C
+/a0bzLV++h6D0kWA1Yfrl/6ZeWmBViIj0Ja64QECgYEA4YDDE7E8rRep2AhsNQcP
+UhPvWrn+rXMidnJ5H89ceMfZ2QJnNEesVwRE+R92mf9p7vW4fd3MDkPB9BL7quju
+2sm8YI/IZeUwrZqOnFg4l1qqQYCol1xZ3W721JQpLvUZD0QYoffBn0oq6euHZGkJ
+/2TISo9C4+cCDG+qh4+F65I=`.replace(/\s/g, '');
+
+  const privateKey = `${header}\n${rawBase64}\n${footer}`;
+  
+  try {
+    crypto.createPrivateKey(privateKey);
+    console.log("Key is VALID!");
+  } catch (error) {
+    console.error("Validation Failed:", error.message);
+  }
+}
+
+test();

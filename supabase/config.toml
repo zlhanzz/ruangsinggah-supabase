@@ -1,0 +1,9 @@
+
+[functions.cancel-booking]
+enabled = true
+verify_jwt = true
+import_map = "./functions/cancel-booking/deno.json"
+entrypoint = "./functions/cancel-booking/index.ts"
+
+[functions.wa-webhook]
+verify_jwt = false
