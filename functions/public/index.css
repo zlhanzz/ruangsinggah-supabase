@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+/* Global Styles */
+body {
+  font-family: 'Inter', sans-serif;
+  scroll-behavior: smooth;
+}
+
+/* Google Maps Autocomplete dropdown above modals */
+.pac-container {
+  z-index: 10000 !important;
+}
+
+/* Payment button bounce animation */
+@keyframes subtle-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(10px); }
+}
+.animate-subtle-bounce {
+  animation: subtle-bounce 3s infinite ease-in-out;
+}
