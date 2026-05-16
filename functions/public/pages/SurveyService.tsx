@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { CheckCircle, AlertTriangle, Video, MapPin, Calendar, Clock, ArrowRight, ShieldCheck, Wifi, Droplets, X, ChevronRight } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { CheckCircle, AlertTriangle, MapPin, Video, ArrowRight, ShieldCheck, Wifi, Droplets, Calendar, Clock, X, ChevronRight, Play, Pause } from 'lucide-react';
 import { Page } from '../types';
 import PaymentGateway from '../components/PaymentGateway';
 import { supabase } from '../supabase';
@@ -12,14 +12,24 @@ interface SurveyServiceProps {
 }
 
 const SURVEY_PRODUCT_ID = '5ea7b4e9-6f8d-4a11-b845-8c7a726359e1';
+const YT_VIDEO_ID = 'dQw4w9WgXcQ'; // Ganti dengan ID video demo Anda
 
 const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, validateProfile }) => {
   const offerSectionRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<any>(null);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
+  const progressIntervalRef = useRef<any>(null);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [showPayment, setShowPayment] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [paymentMetadata, setPaymentMetadata] = useState<any>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [ytReady, setYtReady] = useState(false);
+
 
   const [formData, setFormData] = useState({
     name: '',
@@ -33,6 +43,77 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
     surveyTime: '',
     notes: ''
   });
+
+  // Load YouTube IFrame API
+  useEffect(() => {
+    if ((window as any).YT && (window as any).YT.Player) {
+      setYtReady(true);
+      return;
+    }
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(tag);
+    (window as any).onYouTubeIframeAPIReady = () => setYtReady(true);
+    return () => { delete (window as any).onYouTubeIframeAPIReady; };
+  }, []);
+
+  // Init player once API is ready
+  useEffect(() => {
+    if (!ytReady || !playerContainerRef.current) return;
+    playerRef.current = new (window as any).YT.Player(playerContainerRef.current, {
+      videoId: YT_VIDEO_ID,
+      playerVars: {
+        autoplay: 0,
+        controls: 0,
+        disablekb: 1,
+        modestbranding: 1,
+        rel: 0,
+        iv_load_policy: 3,
+        fs: 0,
+      },
+      events: {
+        onReady: (e: any) => { setDuration(e.target.getDuration()); },
+        onStateChange: (e: any) => {
+          const YT = (window as any).YT.PlayerState;
+          setIsPlaying(e.data === YT.PLAYING);
+        }
+      }
+    });
+    return () => { playerRef.current?.destroy?.(); };
+  }, [ytReady]);
+
+  // Progress tracker
+  useEffect(() => {
+    if (isPlaying) {
+      progressIntervalRef.current = setInterval(() => {
+        if (playerRef.current?.getCurrentTime) {
+          const cur = playerRef.current.getCurrentTime();
+          const dur = playerRef.current.getDuration() || 1;
+          setProgress((cur / dur) * 100);
+        }
+      }, 500);
+    } else {
+      clearInterval(progressIntervalRef.current);
+    }
+    return () => clearInterval(progressIntervalRef.current);
+  }, [isPlaying]);
+
+  const togglePlay = useCallback(() => {
+    if (!playerRef.current) return;
+    if (isPlaying) {
+      playerRef.current.pauseVideo();
+    } else {
+      playerRef.current.playVideo();
+    }
+  }, [isPlaying]);
+
+  const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!playerRef.current || !duration) return;
+    const pct = Number(e.target.value);
+    const seekTo = (pct / 100) * duration;
+    playerRef.current.seekTo(seekTo, true);
+    setProgress(pct);
+  }, [duration]);
 
   // Pre-fill form with user profile data when modal opens
   useEffect(() => {
@@ -185,34 +266,59 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
               </div>
             </div>
 
-            {/* Kanan / Tengah: Gambar Hero */}
+            {/* Kanan / Tengah: Custom YouTube Player */}
             <div className="order-2 relative animate-in zoom-in-95 duration-1000 delay-300 w-[90%] sm:w-4/5 lg:w-full mx-auto mt-2 sm:mt-4 lg:mt-0">
-              <div className="relative rounded-2xl lg:rounded-3xl overflow-hidden shadow-2xl border-2 lg:border-4 border-white aspect-[4/3] lg:aspect-square xl:aspect-[4/3]">
-                <img
-                  src="https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80"
-                  alt="Tim Survey Mengecek Kost"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-gray-900/60 via-transparent to-transparent flex items-end justify-center pb-4 lg:pb-6">
-                  <p className="text-white font-medium text-[10px] sm:text-xs lg:text-sm bg-black/40 backdrop-blur-md px-3 py-1 lg:px-4 lg:py-1.5 rounded-full border border-white/20">
-                    Kami pastikan sesuai ekspektasi Anda
-                  </p>
-                </div>
-              </div>
+              <div className="relative rounded-2xl lg:rounded-3xl overflow-hidden shadow-2xl border-2 lg:border-4 border-white bg-black">
+                {/* 16:9 Aspect Ratio Wrapper (padding-bottom trick, stays 16:9 even after YT replaces inner div) */}
+                <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+                  {/* YT Player mounts here — positioned absolute to fill the ratio box */}
+                  <div ref={playerContainerRef} className="absolute inset-0 w-full h-full" />
 
-              {/* Ornamen pelengkap gambar melayang */}
-              <div className="absolute -bottom-4 -left-4 lg:-bottom-6 lg:-left-6 bg-white p-2.5 lg:p-4 rounded-xl lg:rounded-2xl shadow-xl border border-gray-100 animate-bounce" style={{ animationDuration: '3s' }}>
-                <div className="flex items-center gap-2 lg:gap-3">
-                  <div className="w-8 h-8 lg:w-10 lg:h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">
-                    <Video className="w-4 h-4 lg:w-5 lg:h-5" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] lg:text-xs font-bold text-gray-900 leading-tight">Live Video Call</p>
-                    <p className="text-[8px] lg:text-[10px] text-gray-500">Kondisi Real-time</p>
+                  {/* Transparent overlay to block YouTube click-through */}
+                  <div
+                    className="absolute inset-0 cursor-pointer z-10"
+                    onClick={togglePlay}
+                  />
+
+                  {/* Play/Pause center overlay (shows when paused) */}
+                  {!isPlaying && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                      <div className="w-16 h-16 bg-white/90 rounded-full flex items-center justify-center shadow-2xl">
+                        <Play className="w-7 h-7 text-orange-500 ml-1" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Custom Controls Bar */}
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-4 pt-8 pb-3 flex flex-col gap-2 z-20">
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={0.1}
+                      value={progress}
+                      onChange={handleSeek}
+                      onClick={e => e.stopPropagation()}
+                      className="w-full h-1 accent-orange-500 cursor-pointer"
+                    />
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={e => { e.stopPropagation(); togglePlay(); }}
+                        className="text-white hover:text-orange-400 transition-colors z-30"
+                      >
+                        {isPlaying
+                          ? <Pause className="w-5 h-5" />
+                          : <Play className="w-5 h-5 ml-0.5" />}
+                      </button>
+                      <p className="text-white/70 text-[10px] font-medium flex-grow">
+                        Demo Jasa Survey RuangSinggah
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+
 
             {/* Bawah: Tombol CTA Ekstra Khusus Mobile */}
             <div className="order-3 lg:hidden w-full mt-3 sm:mt-4">
@@ -230,14 +336,14 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
       {/* PAIN & GAIN SECTION */}
       <section className="py-16 lg:py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-2 gap-8 lg:gap-20 items-stretch md:items-center">
+          <div className="grid md:grid-cols-2 gap-8 lg:gap-12 items-start">
 
-            {/* Kiri: Masalah (Pain) - Tema Orange */}
-            <div className="bg-orange-50 rounded-2xl lg:rounded-3xl p-6 lg:p-8 border border-orange-100 order-1 md:order-1 h-full flex flex-col">
-              <h3 className="font-black text-lg lg:text-xl text-orange-900 mb-4 lg:mb-6 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 lg:w-5 lg:h-5 text-orange-600" />
+            {/* Kiri: Masalah (Pain) */}
+            <div className="bg-orange-50 rounded-2xl lg:rounded-3xl p-6 lg:p-8 border border-orange-100 flex flex-col">
+              <h2 className="text-2xl sm:text-3xl font-black text-orange-900 mb-6 flex items-center gap-3">
+                <AlertTriangle className="w-6 h-6 text-orange-600 shrink-0" />
                 Apa yang Sering Terjadi?
-              </h3>
+              </h2>
               <div className="space-y-3 lg:space-y-4 flex-1">
                 <div className="bg-white p-3 lg:p-4 rounded-lg lg:rounded-xl shadow-sm border border-orange-100 flex items-start gap-2 lg:gap-3 hover:shadow-md transition-shadow">
                   <span className="text-xl lg:text-2xl mt-0.5 lg:mt-1">😭</span>
@@ -257,9 +363,9 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
               </div>
             </div>
 
-            {/* Kanan: Solusi (Gain) - Tema Biru */}
-            <div className="order-2 md:order-2">
-              <h2 className="text-3xl font-black text-gray-900 mb-6">
+            {/* Kanan: Solusi (Gain) */}
+            <div className="flex flex-col justify-start">
+              <h2 className="text-2xl sm:text-3xl font-black text-gray-900 mb-6">
                 Kenapa Harus Lewat <span className="text-orange-600">RuangSinggah</span>?
               </h2>
               <div className="space-y-6">

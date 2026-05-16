@@ -113,17 +113,17 @@ function normalizeFirebaseStorageUrl(url: string): string {
 
 
 const MASTER_PAYMENT_METHODS = [
-  { code: 'qris', name: 'QRIS (Gopay, Dana, ShopeePay, dll)', icon: '📱', iconUrl: '/assets/payment-logos/qris-logo.svg', color: 'bg-white', category: 'none' },
-  { code: 'gopay', name: 'GoPay', icon: '💸', iconUrl: '/assets/payment-logos/gopay-logo.svg', color: 'bg-white', category: 'ewallet' },
-  { code: 'dana', name: 'DANA', icon: '💸', iconUrl: '/assets/payment-logos/dana-logo.svg', color: 'bg-white', category: 'ewallet' },
-  
+  { code: 'qris', name: 'QRIS', icon: '📱', iconUrl: '/payment-logos/qris-logo.svg', color: 'bg-white', category: 'none' },
+  { code: 'gopay', name: 'GoPay', icon: '💸', iconUrl: '/payment-logos/gopay-logo.svg', color: 'bg-white', category: 'ewallet' },
+  { code: 'dana', name: 'DANA', icon: '💸', iconUrl: '/payment-logos/dana-logo.svg', color: 'bg-white', category: 'ewallet' },
+
   // Virtual Accounts (Sesuai Production)
-  { code: 'bri_va', name: 'BRI Virtual Account', icon: '🏦', iconUrl: '/assets/payment-logos/bank-rakyat-indonesia-(bri)-logo.svg', color: 'bg-white', category: 'va' },
-  { code: 'bni_va', name: 'BNI Virtual Account', icon: '🏦', iconUrl: '/assets/payment-logos/bank-negara-indonesia-(bni)-logo.svg', color: 'bg-white', category: 'va' },
-  { code: 'mandiri_va', name: 'Mandiri Virtual Account', icon: '🏦', iconUrl: '/assets/payment-logos/bank-mandiri-logo.svg', color: 'bg-white', category: 'va' },
-  { code: 'bsi_va', name: 'BSI Virtual Account', icon: '🌙', iconUrl: '/assets/payment-logos/bank-bsi-logo.svg', color: 'bg-white', category: 'va' },
-  { code: 'permata_va', name: 'Permata Virtual Account', icon: '🏦', iconUrl: '/assets/payment-logos/bank-permata-logo.svg', color: 'bg-white', category: 'va' },
-  { code: 'cimb_va', name: 'CIMB Virtual Account', icon: '🏦', iconUrl: '/assets/payment-logos/bank-cimb-niaga-logo.svg', color: 'bg-white', category: 'va' }
+  { code: 'bri_va', name: 'BRI Virtual Account', icon: '🏦', iconUrl: '/payment-logos/bank-rakyat-indonesia-(bri)-logo.svg', color: 'bg-white', category: 'va' },
+  { code: 'bni_va', name: 'BNI Virtual Account', icon: '🏦', iconUrl: '/payment-logos/bank-negara-indonesia-(bni)-logo.svg', color: 'bg-white', category: 'va' },
+  { code: 'mandiri_va', name: 'Mandiri Virtual Account', icon: '🏦', iconUrl: '/payment-logos/bank-mandiri-logo.svg', color: 'bg-white', category: 'va' },
+  { code: 'bsi_va', name: 'BSI Virtual Account', icon: '🌙', iconUrl: '/payment-logos/bank-bsi-logo.svg', color: 'bg-white', category: 'va' },
+  { code: 'permata_va', name: 'Permata Virtual Account', icon: '🏦', iconUrl: '/payment-logos/bank-permata-logo.svg', color: 'bg-white', category: 'va' },
+  { code: 'cimb_va', name: 'CIMB Virtual Account', icon: '🏦', iconUrl: '/payment-logos/bank-cimb-niaga-logo.svg', color: 'bg-white', category: 'va' }
 ];
 
 /**
