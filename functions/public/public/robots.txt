@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+
+# Blokir halaman privat dari crawling
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /mitra-dashboard
+Disallow: /agent-dashboard
+Disallow: /profile
+Disallow: /my-bookings
+Disallow: /payment-status/
+Disallow: /payment-callback
+
+# Sitemap
+Sitemap: https://ruangsinggah.id/sitemap.xml
