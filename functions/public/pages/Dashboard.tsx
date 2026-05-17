@@ -18,7 +18,8 @@ import {
     getAdminBanners, addBanner, updateBanner, deleteBanner,
     getUsersByRole, getActiveMitra, deleteUserAccount, updateUserStatus,
     transferPropertyOwnership, getUserFullDetails,
-    getResidentStatus
+    getResidentStatus,
+    getSurveyCatalogSettings
 } from '../adminService';
 import AgentDashboard from './AgentDashboard';
 import { getUserTransactions } from '../userService';
@@ -339,9 +340,21 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
     
     // --- SURVEY CATALOG STATE ---
     const [verifikasiPrice, setVerifikasiPrice] = useState(70000);
-    const [verifikasiDiscount, setVerifikasiDiscount] = useState(150000);
+    const [verifikasiDiscount, setVerifikasiDiscount] = useState(50000);
     const [verifikasiDescription, setVerifikasiDescription] = useState("Dapatkan bantuan profesional untuk mengecek kondisi kost impian Anda secara langsung via Video Call. Hemat waktu, tenaga, dan hindari penipuan ZONK!");
     const [isSavingVerifikasi, setIsSavingVerifikasi] = useState(false);
+
+    // Load survey catalog settings dari Supabase saat admin mount
+    useEffect(() => {
+        if (!isAdmin) return;
+        getSurveyCatalogSettings().then((settings) => {
+            setVerifikasiPrice(settings.price);
+            setVerifikasiDiscount(settings.discount_price);
+            setVerifikasiDescription(settings.description);
+        }).catch((err) => {
+            console.error('Gagal load survey catalog settings:', err);
+        });
+    }, [isAdmin]);
 
     const [analyticsSummary, setAnalyticsSummary] = useState<AnalyticsSummary | null>(null);
     const [mitraRequests, setMitraRequests] = useState<any[]>([]);

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DatabaseProduct } from '../../types';
-import { addDatabaseProduct, updateDatabaseProduct, deleteDatabase } from '../../adminService';
+import { addDatabaseProduct, updateDatabaseProduct, deleteDatabase, saveSurveyCatalogSettings } from '../../adminService';
 
 interface CatalogManagementProps {
     // Verification Props
@@ -201,15 +201,25 @@ const CatalogManagement: React.FC<CatalogManagementProps> = ({
                         </div>
                         <div className="flex justify-end pt-4">
                             <button
-                                onClick={() => {
+                                onClick={async () => {
                                     setIsSavingVerifikasi(true);
-                                    setTimeout(() => setIsSavingVerifikasi(false), 800);
-                                    alert("Katalog Layanan Verifikasi berhasil diperbarui secara global!");
+                                    try {
+                                        await saveSurveyCatalogSettings({
+                                            price: verifikasiPrice,
+                                            discount_price: verifikasiDiscount,
+                                            description: verifikasiDescription,
+                                        });
+                                        alert('✅ Katalog berhasil disimpan! Harga baru akan aktif untuk semua order baru.');
+                                    } catch (err: any) {
+                                        alert('❌ Gagal menyimpan: ' + err.message);
+                                    } finally {
+                                        setIsSavingVerifikasi(false);
+                                    }
                                 }}
                                 className={`px-8 py-3.5 rounded-xl font-bold text-white transition-all shadow-lg active:scale-95 flex items-center gap-2 ${isSavingVerifikasi ? 'bg-gray-400 cursor-not-allowed' : 'bg-orange-600 hover:bg-orange-700'}`}
                                 disabled={isSavingVerifikasi}
                             >
-                                {isSavingVerifikasi ? 'Menyimpan...' : 'Simpan Perubahan'}
+                                {isSavingVerifikasi ? 'Menyimpan ke Database...' : 'Simpan Perubahan'}
                             </button>
                         </div>
                     </div>

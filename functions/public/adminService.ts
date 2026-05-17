@@ -2635,3 +2635,74 @@ export async function createManualExtension(payload: {
         throw err;
     }
 }
+
+// ---- APP SETTINGS (SURVEY CATALOG) ----
+
+export interface SurveyCatalogSettings {
+  price: number;
+  discount_price: number;
+  description: string;
+}
+
+/**
+ * Ambil pengaturan katalog jasa survey dari tabel app_settings.
+ * Bisa dipanggil tanpa login (public read).
+ */
+export async function getSurveyCatalogSettings(): Promise<SurveyCatalogSettings> {
+  const DEFAULT: SurveyCatalogSettings = {
+    price: 70000,
+    discount_price: 50000,
+    description: 'Dapatkan bantuan profesional untuk mengecek kondisi kost impian Anda secara langsung via Video Call. Hemat waktu, tenaga, dan hindari penipuan ZONK!',
+  };
+
+  try {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'survey_catalog')
+      .single();
+
+    if (error || !data) {
+      console.warn('getSurveyCatalogSettings: fallback ke default.', error?.message);
+      return DEFAULT;
+    }
+
+    return {
+      price: Number(data.value?.price ?? DEFAULT.price),
+      discount_price: Number(data.value?.discount_price ?? DEFAULT.discount_price),
+      description: String(data.value?.description ?? DEFAULT.description),
+    };
+  } catch (err) {
+    console.error('getSurveyCatalogSettings error:', err);
+    return DEFAULT;
+  }
+}
+
+/**
+ * Simpan pengaturan katalog jasa survey ke tabel app_settings.
+ * Hanya bisa dipanggil oleh user yang sudah login (admin).
+ */
+export async function saveSurveyCatalogSettings(settings: SurveyCatalogSettings): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized: harus login sebagai admin.');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Hanya admin yang dapat mengubah pengaturan katalog.');
+
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert(
+      {
+        key: 'survey_catalog',
+        value: {
+          price: settings.price,
+          discount_price: settings.discount_price,
+          description: settings.description,
+        },
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'key' }
+    );
+
+  if (error) throw new Error(`Gagal menyimpan katalog survey: ${error.message}`);
+}

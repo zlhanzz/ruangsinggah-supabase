@@ -4,6 +4,7 @@ import { Page } from '../types';
 import PaymentGateway from '../components/PaymentGateway';
 import { supabase } from '../supabase';
 import { notificationService } from '../notificationService';
+import { getSurveyCatalogSettings } from '../adminService';
 
 interface SurveyServiceProps {
   user: any;
@@ -29,6 +30,22 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [ytReady, setYtReady] = useState(false);
+
+  // Harga jasa survey — dimuat dari Supabase app_settings
+  const [surveyPrice, setSurveyPrice] = useState(70000);
+  const [surveyDiscountPrice, setSurveyDiscountPrice] = useState(50000);
+  const [surveyDescription, setSurveyDescription] = useState('');
+
+  // Load harga aktual dari database saat komponen mount
+  useEffect(() => {
+    getSurveyCatalogSettings().then((settings) => {
+      setSurveyPrice(settings.price);
+      setSurveyDiscountPrice(settings.discount_price);
+      setSurveyDescription(settings.description);
+    }).catch((err) => {
+      console.error('Gagal load harga survey:', err);
+    });
+  }, []);
 
 
   const [formData, setFormData] = useState({
@@ -166,7 +183,7 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
       ownerPhone: normalizePhone(formData.ownerPhone),
       item: 'Jasa Survey Lokasi Kost',
       service_name: 'Jasa Survey Lokasi Kost',
-      package_price: 70000
+      package_price: surveyPrice
     };
 
     setPaymentMetadata(metadata);
@@ -822,7 +839,7 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
       {/* PAYMENT MODAL */}
       {showPayment && user && (
         <PaymentGateway
-          amount={70000}
+          amount={surveyPrice}
           orderId={`SRV-${Date.now()}`}
           productId={SURVEY_PRODUCT_ID}
           productType="survey"
