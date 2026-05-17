@@ -13,7 +13,7 @@ interface SurveyServiceProps {
 }
 
 const SURVEY_PRODUCT_ID = '5ea7b4e9-6f8d-4a11-b845-8c7a726359e1';
-const YT_VIDEO_ID = 'J1lkBcwM6fw'; // Video demo jasa survey RuangSinggah
+const YT_VIDEO_ID = 'J1lkBcwM6fw'; // Video demo Jasa Survey RuangSinggah
 
 // Format angka ke format Rupiah (misal: 70000 -> "Rp 70.000")
 const formatRupiah = (val: number) =>
@@ -300,11 +300,6 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
                     className="absolute inset-0 cursor-pointer z-10"
                     onClick={togglePlay}
                   />
-
-                  {/* ── Overlay: sembunyikan info channel YouTube di pojok kiri atas ── */}
-                  <div className="absolute top-0 left-0 right-0 h-[18%] bg-gradient-to-b from-black via-black/80 to-transparent pointer-events-none z-30" />
-                  {/* ── Overlay: sembunyikan logo YouTube di pojok kanan bawah ── */}
-                  <div className="absolute bottom-0 right-0 w-[22%] h-[14%] bg-black pointer-events-none z-30" />
 
                   {/* Play/Pause center overlay (shows when paused) */}
                   {!isPlaying && (
