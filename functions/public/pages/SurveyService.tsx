@@ -15,6 +15,10 @@ interface SurveyServiceProps {
 const SURVEY_PRODUCT_ID = '5ea7b4e9-6f8d-4a11-b845-8c7a726359e1';
 const YT_VIDEO_ID = 'dQw4w9WgXcQ'; // Ganti dengan ID video demo Anda
 
+// Format angka ke format Rupiah (misal: 70000 -> "Rp 70.000")
+const formatRupiah = (val: number) =>
+  'Rp ' + val.toLocaleString('id-ID');
+
 const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, validateProfile }) => {
   const offerSectionRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
@@ -434,8 +438,8 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
               <div className="text-left">
                 <p className="text-gray-300 text-sm uppercase tracking-widest font-bold mb-1">Harga Spesial</p>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-5xl font-black text-orange-500">Rp 70.000</span>
-                  <span className="text-gray-400 line-through decoration-red-500 decoration-2">Rp 150.000</span>
+                  <span className="text-5xl font-black text-orange-500">{formatRupiah(surveyPrice)}</span>
+                  <span className="text-gray-400 line-through decoration-red-500 decoration-2">{formatRupiah(surveyDiscountPrice)}</span>
                 </div>
                 <p className="text-xs text-gray-400 mt-2">*Per satu lokasi kost</p>
               </div>
@@ -784,7 +788,7 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
                     </div>
                     <div className="flex justify-between text-sm pt-2">
                       <span className="text-gray-900 font-black uppercase tracking-tighter">Total Bayar</span>
-                      <span className="text-orange-600 font-black">Rp 70.000</span>
+                      <span className="text-orange-600 font-black">{formatRupiah(surveyPrice)}</span>
                     </div>
                   </div>
 
