@@ -13,7 +13,7 @@ interface SurveyServiceProps {
 }
 
 const SURVEY_PRODUCT_ID = '5ea7b4e9-6f8d-4a11-b845-8c7a726359e1';
-const YT_VIDEO_ID = 'dQw4w9WgXcQ'; // Ganti dengan ID video demo Anda
+const YT_VIDEO_ID = 'J1lkBcwM6fw'; // Video demo jasa survey RuangSinggah
 
 // Format angka ke format Rupiah (misal: 70000 -> "Rp 70.000")
 const formatRupiah = (val: number) =>
