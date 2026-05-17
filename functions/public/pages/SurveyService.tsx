@@ -301,6 +301,11 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
                     onClick={togglePlay}
                   />
 
+                  {/* ── Overlay: sembunyikan info channel YouTube di pojok kiri atas ── */}
+                  <div className="absolute top-0 left-0 right-0 h-[18%] bg-gradient-to-b from-black via-black/80 to-transparent pointer-events-none z-30" />
+                  {/* ── Overlay: sembunyikan logo YouTube di pojok kanan bawah ── */}
+                  <div className="absolute bottom-0 right-0 w-[22%] h-[14%] bg-black pointer-events-none z-30" />
+
                   {/* Play/Pause center overlay (shows when paused) */}
                   {!isPlaying && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
