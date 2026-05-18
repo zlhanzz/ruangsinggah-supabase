@@ -40,6 +40,10 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
   const [surveyDiscountPrice, setSurveyDiscountPrice] = useState(50000);
   const [surveyDescription, setSurveyDescription] = useState('');
 
+  // T&C state
+  const [agreedToTnC, setAgreedToTnC] = useState(false);
+  const [showTnCModal, setShowTnCModal] = useState(false);
+
   // Load harga aktual dari database saat komponen mount
   useEffect(() => {
     getSurveyCatalogSettings().then((settings) => {
@@ -798,6 +802,141 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
                       Anda akan diarahkan ke Payment Gateway aman kami. Segera setelah pembayaran lunas, sistem akan mengirimkan konfirmasi ke tim surveyor kami.
                     </p>
                   </div>
+
+                  {/* T&C CHECKBOX */}
+                  <div
+                    onClick={() => setAgreedToTnC(!agreedToTnC)}
+                    className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all select-none ${
+                      agreedToTnC
+                        ? 'bg-green-50 border-green-400'
+                        : 'bg-gray-50 border-gray-200 hover:border-orange-300'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 mt-0.5 transition-all border-2 ${
+                      agreedToTnC ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'
+                    }`}>
+                      {agreedToTnC && (
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      Saya telah membaca dan menyetujui{' '}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setShowTnCModal(true); }}
+                        className="text-orange-600 font-bold underline underline-offset-2 hover:text-orange-700"
+                      >
+                        Syarat & Ketentuan Layanan Jasa Survey
+                      </button>
+                      {' '}Ruang Singgah.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* MODAL SYARAT & KETENTUAN */}
+              {showTnCModal && (
+                <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+                  <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowTnCModal(false)} />
+                  <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden z-10">
+                    <div className="flex items-center justify-between p-6 border-b border-gray-100 shrink-0">
+                      <div>
+                        <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Syarat & Ketentuan</h3>
+                        <p className="text-xs text-gray-400 font-medium mt-0.5">Layanan Jasa Survey Ruang Singgah</p>
+                      </div>
+                      <button onClick={() => setShowTnCModal(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="overflow-y-auto p-6 space-y-5 text-sm text-gray-700 leading-relaxed flex-1">
+                      <p className="text-xs text-gray-500 italic border-l-4 border-orange-400 pl-3">
+                        Dengan mencentang kotak persetujuan ini, Anda (Pengguna) menyetujui seluruh Syarat dan Ketentuan penggunaan Layanan Jasa Survey yang disediakan oleh platform Ruang Singgah.
+                      </p>
+
+                      {[
+                        {
+                          title: '1. Ketentuan Layanan Umum',
+                          points: [
+                            'Layanan Survey Ruang Singgah adalah jasa pengecekan, dokumentasi, dan penilaian properti (kost) secara langsung oleh Agen Survey yang ditugaskan oleh sistem.',
+                            'Ruang Singgah bertindak sebagai pihak ketiga independen yang memberikan laporan objektif berdasarkan kondisi lapangan pada saat survey dilakukan.',
+                          ],
+                        },
+                        {
+                          title: '2. Pemesanan dan Pembayaran',
+                          points: [
+                            'Pemesanan layanan survey dianggap sah apabila Pengguna telah melengkapi formulir pemesanan dan melakukan pembayaran secara penuh (100%) di muka.',
+                            'Setelah pembayaran berhasil, Pengguna dapat memantau status pesanan dan progres survey melalui menu dashboard Pengguna di platform Ruang Singgah.',
+                          ],
+                        },
+                        {
+                          title: '3. Penjadwalan dan Reschedule',
+                          points: [
+                            'Agen Survey akan menyesuaikan jadwal kunjungan dengan permintaan waktu Pengguna dan ketersediaan pemilik kost/pengelola.',
+                            'Apabila jadwal yang diminta Pengguna tidak memungkinkan, Agen Survey berhak mengajukan penyesuaian jadwal (reschedule) melalui fitur di dashboard.',
+                            'Pengguna dan Agen dapat berkomunikasi terkait kesepakatan jadwal melalui fitur Chat yang tersedia di platform.',
+                          ],
+                        },
+                        {
+                          title: '4. Pelaksanaan Survey dan Video Call',
+                          points: [
+                            'Pada waktu yang telah disepakati, Agen Survey akan hadir di lokasi properti dan wajib melakukan panggilan video (Live Video Call) dengan Pengguna untuk memperlihatkan kondisi kost secara virtual real-time.',
+                            'Pengguna berhak memberikan pertanyaan atau meminta Agen untuk menyorot area tertentu selama sesi Video Call berlangsung.',
+                          ],
+                        },
+                        {
+                          title: '5. Hasil dan Dokumentasi Survey',
+                          points: [
+                            'Agen Survey akan melakukan dokumentasi lengkap berupa foto dan video yang diunggah ke link penyimpanan (Google Drive) yang dibuat otomatis oleh sistem Ruang Singgah.',
+                            'Agen Survey akan mengisi formulir penilaian objektif berdasarkan standarisasi kelayakan Ruang Singgah beserta bukti fisik dari lapangan.',
+                            'Seluruh hasil laporan, penilaian, dan dokumentasi akan dapat diakses sepenuhnya oleh Pengguna setelah Agen mengonfirmasi bahwa survey telah selesai.',
+                          ],
+                        },
+                        {
+                          title: '6. Kebijakan Pengembalian Dana (Refund Policy)',
+                          points: [
+                            'Refund 100% (Penuh): Berlaku apabila pesanan dibatalkan sebelum Agen Survey tiba di lokasi (misalnya: Agen tidak tersedia, kost ternyata sudah tutup/fiktif, atau pemilik kost menolak kunjungan survey secara sepihak).',
+                            'Tidak Ada Refund (Hangus): Berlaku apabila survey telah selesai dilakukan, dokumen telah diunggah, dan hasil penilaian telah sesuai dengan SOP Ruang Singgah, terlepas dari apakah Pengguna pada akhirnya jadi menyewa kost tersebut atau tidak.',
+                            'Refund Bersyarat (Garansi Kualitas): Pengguna berhak mengajukan pengembalian dana apabila terbukti hasil survey berada di bawah standar/tidak valid. Klaim harus disertai bukti dan akan ditinjau oleh tim Admin Ruang Singgah.',
+                          ],
+                        },
+                        {
+                          title: '7. Batasan Tanggung Jawab',
+                          points: [
+                            'Laporan survey adalah murni potret kondisi properti pada hari dan jam pelaksanaan survey. Ruang Singgah tidak bertanggung jawab atas perubahan kondisi, kerusakan properti, atau perubahan harga sewa yang dilakukan oleh pemilik kost setelah jadwal survey berakhir.',
+                            'Ruang Singgah tidak menjamin ketersediaan kamar. Kesepakatan sewa-menyewa tetap menjadi ranah pribadi antara Pengguna dan Pemilik Kost.',
+                          ],
+                        },
+                      ].map((section) => (
+                        <div key={section.title}>
+                          <p className="font-black text-gray-900 text-sm mb-2">{section.title}</p>
+                          <ul className="space-y-1.5">
+                            {section.points.map((point, i) => (
+                              <li key={i} className="flex items-start gap-2 text-xs text-gray-600">
+                                <span className="w-1.5 h-1.5 bg-orange-400 rounded-full mt-1.5 shrink-0" />
+                                {point}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="p-6 border-t border-gray-100 shrink-0 flex gap-3">
+                      <button
+                        onClick={() => setShowTnCModal(false)}
+                        className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-500 font-bold text-sm hover:bg-gray-50 transition-all"
+                      >
+                        Tutup
+                      </button>
+                      <button
+                        onClick={() => { setAgreedToTnC(true); setShowTnCModal(false); }}
+                        className="flex-[2] py-3 bg-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-500/20 hover:bg-orange-600 transition-all text-sm"
+                      >
+                        ✓ Saya Setuju
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -829,7 +968,12 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
                 ) : (
                   <button
                     onClick={handleSubmit}
-                    className="flex-[2] py-3.5 bg-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-500/30 hover:bg-orange-600 transition-all flex items-center justify-center gap-2"
+                    disabled={!agreedToTnC}
+                    className={`flex-[2] py-3.5 font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 ${
+                      agreedToTnC
+                        ? 'bg-orange-500 text-white shadow-orange-500/30 hover:bg-orange-600'
+                        : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                    }`}
                   >
                     Selesaikan & Bayar <ArrowRight className="w-4 h-4" />
                   </button>
