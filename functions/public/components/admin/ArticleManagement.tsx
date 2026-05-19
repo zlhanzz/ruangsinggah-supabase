@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabase';
-import { Plus, Edit2, Trash2, Eye, FileText, CheckCircle, AlertCircle, RefreshCcw, Save, X, HelpCircle, Code } from 'lucide-react';
+import { Plus, Edit2, Trash2, Eye, FileText, CheckCircle, AlertCircle, RefreshCcw, Save, X, HelpCircle, Code, Image } from 'lucide-react';
 
 interface ArticleDb {
   id?: string;
@@ -51,6 +51,7 @@ const ArticleManagement: React.FC = () => {
   
   // Editor view
   const [editorTab, setEditorTab] = useState<'write' | 'preview'>('write');
+  const [isUploadingImg, setIsUploadingImg] = useState(false);
 
   const fetchArticles = async () => {
     setLoading(true);
@@ -148,6 +149,55 @@ const ArticleManagement: React.FC = () => {
       textarea.focus();
       textarea.setSelectionRange(start + tagOpen.length, start + tagOpen.length + selected.length);
     }, 50);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingImg(true);
+    setErrorMsg('');
+    setInfoMsg('');
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `article_${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `articles/${fileName}`;
+
+      // Upload to 'banners' bucket
+      const { data, error: uploadError } = await supabase.storage
+        .from('banners')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage.from('banners').getPublicUrl(data.path);
+
+      // Insert image HTML tag at cursor
+      const imageTag = `\n<img src="${publicUrl}" alt="${file.name}" class="rounded-3xl my-8 w-full shadow-lg border border-gray-100 object-cover" />\n`;
+      
+      const textarea = document.getElementById('article-content-textarea') as HTMLTextAreaElement;
+      if (textarea) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        setContent(text.substring(0, start) + imageTag + text.substring(end));
+        
+        setTimeout(() => {
+          textarea.focus();
+          textarea.setSelectionRange(start + imageTag.length, start + imageTag.length);
+        }, 50);
+      } else {
+        setContent(prev => prev + imageTag);
+      }
+
+      setInfoMsg('Gambar berhasil diunggah!');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Gagal mengunggah gambar.');
+    } finally {
+      setIsUploadingImg(false);
+      e.target.value = '';
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -471,6 +521,23 @@ const ArticleManagement: React.FC = () => {
                   >
                     List
                   </button>
+                  <input
+                    type="file"
+                    id="article-image-upload"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageUpload}
+                  />
+                  <button 
+                    type="button"
+                    title="Unggah Gambar"
+                    disabled={isUploadingImg}
+                    onClick={() => document.getElementById('article-image-upload')?.click()}
+                    className="px-2.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg text-[10px] font-black border border-orange-200 flex items-center gap-1 transition-all disabled:opacity-50"
+                  >
+                    <Image className="w-3.5 h-3.5" />
+                    {isUploadingImg ? 'Mengunggah...' : 'Unggah Gambar'}
+                  </button>
                 </div>
               )}
             </div>
@@ -638,14 +705,15 @@ const ArticleManagement: React.FC = () => {
       )}
 
       {/* SQL SCHEMA PANDUAN */}
-      <div className="mt-12 border-t border-gray-100 pt-8 space-y-4">
-        <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
-          <Code className="w-4 h-4 text-orange-500" /> Skema Migrasi SQL Supabase
-        </h3>
-        <p className="text-xs text-gray-500 font-medium leading-relaxed">
-          Agar CMS ini dapat menyimpan data secara persisten ke database Supabase Anda, buka menu **SQL Editor** di dashboard Supabase lalu salin dan jalankan skrip berikut:
-        </p>
-        <pre className="bg-gray-900 text-gray-300 p-5 rounded-2xl text-xs font-mono overflow-x-auto leading-relaxed border border-white/5 max-h-[300px]">
+      <details className="mt-12 border-t border-gray-100 pt-8 group">
+        <summary className="text-[10px] font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest cursor-pointer list-none flex items-center gap-1.5 selection:bg-transparent">
+          <Code className="w-4 h-4 text-orange-500" /> Skema Migrasi SQL Supabase (Klik untuk membuka)
+        </summary>
+        <div className="mt-4 space-y-4 animate-in slide-in-from-top-2 duration-300">
+          <p className="text-xs text-gray-500 font-medium leading-relaxed">
+            Agar CMS ini dapat menyimpan data secara persisten ke database Supabase Anda, buka menu **SQL Editor** di dashboard Supabase lalu salin dan jalankan skrip berikut:
+          </p>
+          <pre className="bg-gray-900 text-gray-300 p-5 rounded-2xl text-xs font-mono overflow-x-auto leading-relaxed border border-white/5 max-h-[300px]">
 {`-- 1. Buat Tabel Articles
 CREATE TABLE IF NOT EXISTS public.articles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -680,8 +748,9 @@ ON public.articles
 FOR ALL
 USING (auth.role() = 'authenticated')
 WITH CHECK (auth.role() = 'authenticated');`}
-        </pre>
-      </div>
+          </pre>
+        </div>
+      </details>
 
     </div>
   );
