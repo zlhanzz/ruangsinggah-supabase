@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabase';
 import { Plus, Edit2, Trash2, Eye, FileText, CheckCircle, AlertCircle, RefreshCcw, Save, X, HelpCircle, Code } from 'lucide-react';
-import ReactQuill from 'react-quill-new';
-import 'react-quill-new/dist/quill.snow.css';
+import { Editor } from '@tinymce/tinymce-react';
 
 interface ArticleDb {
   id?: string;
@@ -54,7 +53,7 @@ const ArticleManagement: React.FC = () => {
   // Editor view
   const [editorTab, setEditorTab] = useState<'write' | 'preview'>('write');
   const [isUploadingImg, setIsUploadingImg] = useState(false);
-  const reactQuillRef = useRef<ReactQuill>(null);
+  const editorRef = useRef<any>(null);
 
   const fetchArticles = async () => {
     setLoading(true);
@@ -135,22 +134,11 @@ const ArticleManagement: React.FC = () => {
     setShowForm(true);
   };
 
-  const handleImageUploadQuill = () => {
-    const input = document.createElement('input');
-    input.setAttribute('type', 'file');
-    input.setAttribute('accept', 'image/*');
-    input.click();
-
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-
-      setIsUploadingImg(true);
-      setErrorMsg('');
-      setInfoMsg('');
-
+  const handleImageUploadTinyMCE = (blobInfo: any, progress: any): Promise<string> => {
+    return new Promise(async (resolve, reject) => {
       try {
-        const fileExt = file.name.split('.').pop();
+        const file = blobInfo.blob();
+        const fileExt = file.name ? file.name.split('.').pop() : 'png';
         const fileName = `article_${Math.random().toString(36).substring(2)}.${fileExt}`;
         const filePath = `articles/${fileName}`;
 
@@ -159,42 +147,18 @@ const ArticleManagement: React.FC = () => {
           .from('banners')
           .upload(filePath, file);
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          reject('Gagal mengunggah gambar: ' + uploadError.message);
+          return;
+        }
 
         const { data: { publicUrl } } = supabase.storage.from('banners').getPublicUrl(data.path);
-
-        // Get Quill instance and insert image
-        const quill = reactQuillRef.current?.getEditor();
-        if (quill) {
-          const range = quill.getSelection();
-          const insertIdx = range?.index ?? quill.getLength();
-          quill.insertEmbed(insertIdx, 'image', publicUrl);
-          quill.setSelection(insertIdx + 1);
-        }
-        
-        setInfoMsg('Gambar berhasil diunggah!');
+        resolve(publicUrl);
       } catch (err: any) {
-        setErrorMsg(err.message || 'Gagal mengunggah gambar.');
-      } finally {
-        setIsUploadingImg(false);
+        reject(err.message || 'Gagal mengunggah gambar.');
       }
-    };
+    });
   };
-
-  const modules = useMemo(() => ({
-    toolbar: {
-      container: [
-        [{ 'header': [2, 3, false] }],
-        ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-        ['link', 'image'],
-        ['clean']
-      ],
-      handlers: {
-        image: handleImageUploadQuill
-      }
-    }
-  }), []);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -451,27 +415,6 @@ const ArticleManagement: React.FC = () => {
 
           {/* EDITING INTERACTIVE CONTENT BOX */}
           <div className="space-y-3">
-            <style>{`
-              .ql-editor {
-                min-height: 380px;
-                font-family: inherit;
-                font-size: 0.875rem;
-                line-height: 1.7;
-              }
-              .ql-toolbar {
-                border-top-left-radius: 1.5rem !important;
-                border-top-right-radius: 1.5rem !important;
-                border-color: #e2e8f0 !important;
-                background-color: #f8fafc;
-              }
-              .ql-container {
-                border-bottom-left-radius: 1.5rem !important;
-                border-bottom-right-radius: 1.5rem !important;
-                border-color: #e2e8f0 !important;
-                border-top: none !important;
-              }
-            `}</style>
-
             <div className="flex items-center justify-between bg-gray-100 p-2 rounded-2xl">
               <div className="flex items-center gap-1">
                 <button
@@ -479,7 +422,7 @@ const ArticleManagement: React.FC = () => {
                   onClick={() => setEditorTab('write')}
                   className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${editorTab === 'write' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                 >
-                  📝 Editor Visual
+                  📝 Editor Visual (TinyMCE)
                 </button>
                 <button
                   type="button"
@@ -498,14 +441,29 @@ const ArticleManagement: React.FC = () => {
 
             {/* Writer area */}
             {editorTab === 'write' ? (
-              <div className="bg-white rounded-3xl overflow-hidden">
-                <ReactQuill
-                  ref={reactQuillRef}
-                  theme="snow"
+              <div className="bg-white rounded-3xl overflow-hidden border border-gray-200">
+                <Editor
+                  tinymceScriptSrc="https://cdn.jsdelivr.net/npm/tinymce@6/tinymce.min.js"
+                  onInit={(evt, editor) => editorRef.current = editor}
                   value={content}
-                  onChange={setContent}
-                  modules={modules}
-                  placeholder="Tulis konten artikel Anda di sini..."
+                  onEditorChange={(newContent) => setContent(newContent)}
+                  init={{
+                    height: 500,
+                    menubar: false,
+                    plugins: [
+                      'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+                      'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                      'insertdatetime', 'media', 'table', 'help', 'wordcount'
+                    ],
+                    toolbar: 'undo redo | blocks fontfamily fontsize | ' +
+                      'bold italic forecolor backcolor | alignleft aligncenter ' +
+                      'alignright alignjustify | bullist numlist outdent indent | ' +
+                      'table link image | removeformat | help',
+                    content_style: 'body { font-family:Inter,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.6; color:#1f2937; } img { max-width: 100%; height: auto; border-radius: 1.5rem; margin: 1.5rem 0; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }',
+                    images_upload_handler: handleImageUploadTinyMCE,
+                    automatic_uploads: true,
+                    paste_data_images: true
+                  }}
                 />
               </div>
             ) : (
