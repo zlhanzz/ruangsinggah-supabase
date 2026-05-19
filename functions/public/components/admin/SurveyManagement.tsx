@@ -1105,7 +1105,6 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                                                                              {isUploadingSurveyPhoto === field.id ? 'Uploading...' : 'Tambah Foto'}
                                                                              <input 
                                                                                  type="file" 
-                                                                                 multiple 
                                                                                  accept="image/*" 
                                                                                  className="hidden" 
                                                                                  disabled={isUploadingSurveyPhoto === field.id}

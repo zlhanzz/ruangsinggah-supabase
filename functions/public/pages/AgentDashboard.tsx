@@ -1333,8 +1333,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                     )}
                                                                     <input 
                                                                         type="file" 
-                                                                        multiple 
-                                                                        accept="image/*" 
+                                                                                                                                                accept="image/*" 
                                                                         className="hidden" 
                                                                         disabled={isUploadingSurveyPhoto === field.id}
                                                                         onChange={(e) => handleSurveyPhotoUpload(field.id, e.target.files)} 
