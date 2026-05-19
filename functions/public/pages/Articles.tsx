@@ -312,6 +312,63 @@ const Articles: React.FC = () => {
             {/* Content Body */}
             <div className="px-6 sm:px-12 py-10 sm:py-16 prose prose-orange max-w-none rs-article-content">
               <style>{`
+                .rs-article-content h1 {
+                  font-size: 2rem !important;
+                  font-weight: 900 !important;
+                  line-height: 1.25 !important;
+                  margin-top: 2.25rem !important;
+                  margin-bottom: 1rem !important;
+                  color: #0f172a !important;
+                  text-transform: uppercase !important;
+                  letter-spacing: -0.025em !important;
+                }
+                .rs-article-content h2 {
+                  font-size: 1.5rem !important;
+                  font-weight: 800 !important;
+                  line-height: 1.35 !important;
+                  margin-top: 1.75rem !important;
+                  margin-bottom: 0.85rem !important;
+                  color: #1e293b !important;
+                  text-transform: uppercase !important;
+                  letter-spacing: -0.02em !important;
+                }
+                .rs-article-content h3 {
+                  font-size: 1.25rem !important;
+                  font-weight: 700 !important;
+                  line-height: 1.4 !important;
+                  margin-top: 1.5rem !important;
+                  margin-bottom: 0.75rem !important;
+                  color: #334155 !important;
+                }
+                .rs-article-content h4 {
+                  font-size: 1.125rem !important;
+                  font-weight: 700 !important;
+                  line-height: 1.4 !important;
+                  margin-top: 1.25rem !important;
+                  margin-bottom: 0.5rem !important;
+                  color: #475569 !important;
+                }
+                .rs-article-content h5 {
+                  font-size: 1rem !important;
+                  font-weight: 700 !important;
+                  margin-top: 1.25rem !important;
+                  margin-bottom: 0.5rem !important;
+                  color: #64748b !important;
+                }
+                .rs-article-content h6 {
+                  font-size: 0.875rem !important;
+                  font-weight: 700 !important;
+                  margin-top: 1.25rem !important;
+                  margin-bottom: 0.5rem !important;
+                  color: #64748b !important;
+                }
+                .rs-article-content p {
+                  margin-top: 0 !important;
+                  margin-bottom: 1.25rem !important;
+                  line-height: 1.8 !important;
+                  color: #334155 !important;
+                  font-size: 0.95rem !important;
+                }
                 .rs-article-content img {
                   border-radius: 1.5rem;
                   margin: 2rem auto;
@@ -341,12 +398,20 @@ const Articles: React.FC = () => {
                   font-style: italic;
                 }
                 .rs-article-content ul {
-                  list-style-type: disc;
-                  padding-left: 1.5rem;
+                  list-style-type: disc !important;
+                  padding-left: 1.75rem !important;
+                  margin-bottom: 1.25rem !important;
                 }
                 .rs-article-content ol {
-                  list-style-type: decimal;
-                  padding-left: 1.5rem;
+                  list-style-type: decimal !important;
+                  padding-left: 1.75rem !important;
+                  margin-bottom: 1.25rem !important;
+                }
+                .rs-article-content li {
+                  margin-bottom: 0.5rem !important;
+                  line-height: 1.7 !important;
+                  color: #334155 !important;
+                  font-size: 0.95rem !important;
                 }
               `}</style>
               {typeof currentArticle.content === 'string' ? (
