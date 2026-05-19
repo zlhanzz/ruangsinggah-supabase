@@ -166,8 +166,8 @@ const ArticleManagement: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !slug || !content || !description) {
-      alert('Harap isi semua kolom wajib (Judul, Ringkasan, Konten).');
+    if (!title || !slug || !content || !description || !imageUrl) {
+      alert('Harap isi semua kolom wajib (Judul, Ringkasan, Cover Gambar, Konten).');
       return;
     }
 
@@ -326,7 +326,7 @@ const ArticleManagement: React.FC = () => {
 
             {/* Cover/Thumbnail Image */}
             <div className="bg-white p-4 rounded-2xl border border-gray-200 space-y-3">
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Gambar Thumbnail Cover Artikel (Standard Industri)</label>
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Gambar Thumbnail Cover Artikel (Standard Industri) *</label>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <input
                   type="text"
@@ -383,7 +383,7 @@ const ArticleManagement: React.FC = () => {
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Kategori */}
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Kategori</label>
@@ -398,35 +398,6 @@ const ArticleManagement: React.FC = () => {
                 </select>
               </div>
 
-              {/* Cover Gradient */}
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Tampilan Warna Cover</label>
-                <select
-                  className="w-full bg-white p-3.5 rounded-2xl border border-gray-200 outline-none text-xs font-bold text-gray-800 focus:border-orange-500 transition-colors"
-                  value={gradient}
-                  onChange={e => setGradient(e.target.value)}
-                >
-                  {GRADIENTS.map(grad => (
-                    <option key={grad.class} value={grad.class}>{grad.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Icon / Emoji */}
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Icon / Emoji Cover</label>
-                <input
-                  type="text"
-                  placeholder="🏢"
-                  maxLength={5}
-                  className="w-full bg-white p-3.5 rounded-2xl border border-gray-200 outline-none text-xs font-bold text-gray-800 focus:border-orange-500 transition-colors text-center"
-                  value={icon}
-                  onChange={e => setIcon(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Penulis */}
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Penulis / Author</label>
@@ -437,7 +408,9 @@ const ArticleManagement: React.FC = () => {
                   onChange={e => setAuthor(e.target.value)}
                 />
               </div>
+            </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Status */}
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Status Publikasi</label>
