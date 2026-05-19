@@ -3088,7 +3088,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                                         {isChecked ? '✓' : '✗'}
                                                                     </span>
                                                                     <div className="flex flex-col min-w-0">
-                                                                        <span className={`text-[9px] font-bold uppercase tracking-tight truncate ${isChecked ? 'text-gray-900' : 'text-gray-400'}`}>
+                                                                        <span className={`text-[9px] font-bold uppercase tracking-tight leading-normal whitespace-normal break-words ${isChecked ? 'text-gray-900' : 'text-gray-400'}`}>
                                                                             {option}
                                                                         </span>
                                                                         {isChecked && (dist || name) && (
