@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { SurveyRequest } from '../../types';
 import { FORMAT_CURRENCY } from '../../constants';
 import { supabase } from '../../supabaseClient';
@@ -74,6 +74,9 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
     );
 
     // --- LOCAL UI STATE ---
+    const [uploadSourceFieldId, setUploadSourceFieldId] = useState<string | null>(null);
+    const cameraInputRef = useRef<HTMLInputElement>(null);
+    const galleryInputRef = useRef<HTMLInputElement>(null);
     const [adminSurveyTab, setAdminSurveyTab] = useState<'all' | 'pending' | 'active' | 'completed'>('all');
     const [agentTab, setAgentTab] = useState<'pending' | 'active' | 'history'>('pending');
     const [selectedSurveyIds, setSelectedSurveyIds] = useState<string[]>([]);
@@ -1101,17 +1104,15 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                                                                   <div className="flex items-center justify-between">
                                                                       <span className="text-[9px] font-black text-gray-700 uppercase tracking-widest">Bukti Foto</span>
                                                                        {isAgent && (
-                                                                         <label className={`text-[9px] font-black uppercase px-2.5 py-1.5 rounded-lg bg-orange-50 text-orange-600 cursor-pointer hover:bg-orange-100 flex items-center gap-1.5 ${isUploadingSurveyPhoto === field.id ? 'opacity-50' : ''}`}>
-                                                                             {isUploadingSurveyPhoto === field.id ? 'Uploading...' : 'Tambah Foto'}
-                                                                             <input 
-                                                                                 type="file" 
-                                                                                 accept="image/*" 
-                                                                                 className="hidden" 
-                                                                                 disabled={isUploadingSurveyPhoto === field.id}
-                                                                                 onChange={(e) => handleSurveyPhotoUploadLocal(field.id, e.target.files)} 
-                                                                             />
-                                                                         </label>
-                                                                       )}
+                                                                          <button 
+                                                                              type="button"
+                                                                              onClick={() => setUploadSourceFieldId(field.id)}
+                                                                              disabled={isUploadingSurveyPhoto === field.id}
+                                                                              className={`text-[9px] font-black uppercase px-2.5 py-1.5 rounded-lg bg-orange-50 text-orange-600 cursor-pointer hover:bg-orange-100 flex items-center gap-1.5 ${isUploadingSurveyPhoto === field.id ? 'opacity-50' : ''}`}
+                                                                          >
+                                                                              {isUploadingSurveyPhoto === field.id ? 'Uploading...' : 'Tambah Foto'}
+                                                                          </button>
+                                                                        )}
                                                                   </div>
                                                                   <div className="grid grid-cols-5 gap-2">
                                                                       {((surveyForm.evaluation_summary as any)?.[`${field.id}_photos`] || []).map((url: string, idx: number) => (
@@ -1214,6 +1215,73 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                             className="w-full py-4 bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all disabled:opacity-50"
                         >
                             {isSubmitting ? 'Mengirim...' : 'Kirim Penilaian'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Hidden Inputs for Camera and Gallery */}
+            <input 
+                ref={cameraInputRef}
+                type="file" 
+                accept="image/*" 
+                capture="environment" 
+                className="hidden" 
+                onChange={(e) => {
+                    if (uploadSourceFieldId) {
+                        handleSurveyPhotoUploadLocal(uploadSourceFieldId, e.target.files);
+                        setUploadSourceFieldId(null);
+                    }
+                }} 
+            />
+            <input 
+                ref={galleryInputRef}
+                type="file" 
+                accept="image/*" 
+                multiple
+                className="hidden" 
+                onChange={(e) => {
+                    if (uploadSourceFieldId) {
+                        handleSurveyPhotoUploadLocal(uploadSourceFieldId, e.target.files);
+                        setUploadSourceFieldId(null);
+                    }
+                }} 
+            />
+
+            {/* Native Source Selection Action Sheet */}
+            {uploadSourceFieldId && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-end justify-center" onClick={() => setUploadSourceFieldId(null)}>
+                    <div className="bg-white w-full max-w-md rounded-t-[2.5rem] p-6 space-y-5 animate-in slide-in-from-bottom duration-200 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-2"></div>
+                        <h3 className="text-sm font-bold text-gray-800 text-center uppercase tracking-widest">Pilih Sumber Foto</h3>
+                        <div className="grid grid-cols-2 gap-4 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    cameraInputRef.current?.click();
+                                }}
+                                className="flex flex-col items-center justify-center p-5 bg-orange-50 hover:bg-orange-100 border border-orange-100 rounded-3xl transition-all active:scale-95 shadow-sm"
+                            >
+                                <span className="text-3xl mb-2">📸</span>
+                                <span className="text-xs font-black text-orange-600 tracking-wider">KAMERA HP</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    galleryInputRef.current?.click();
+                                }}
+                                className="flex flex-col items-center justify-center p-5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-3xl transition-all active:scale-95 shadow-sm"
+                            >
+                                <span className="text-3xl mb-2">🖼️</span>
+                                <span className="text-xs font-black text-gray-700 tracking-wider">GALERI / FILE</span>
+                            </button>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setUploadSourceFieldId(null)}
+                            className="w-full py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl text-xs font-black uppercase tracking-widest transition-all"
+                        >
+                            Batal
                         </button>
                     </div>
                 </div>
