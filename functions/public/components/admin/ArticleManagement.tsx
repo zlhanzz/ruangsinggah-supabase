@@ -17,6 +17,7 @@ interface ArticleDb {
   content: string;
   status: 'draft' | 'published';
   created_at?: string;
+  image_url?: string;
 }
 
 const GRADIENTS = [
@@ -53,6 +54,7 @@ const ArticleManagement: React.FC = () => {
   // Editor view
   const [editorTab, setEditorTab] = useState<'write' | 'preview'>('write');
   const [isUploadingImg, setIsUploadingImg] = useState(false);
+  const [imageUrl, setImageUrl] = useState('');
   const editorRef = useRef<any>(null);
 
   const fetchArticles = async () => {
@@ -115,6 +117,7 @@ const ArticleManagement: React.FC = () => {
     setGradient('from-orange-500 to-amber-400');
     setContent('');
     setStatus('draft');
+    setImageUrl('');
     setEditorTab('write');
     setShowForm(true);
   };
@@ -130,6 +133,7 @@ const ArticleManagement: React.FC = () => {
     setGradient(art.gradient);
     setContent(art.content);
     setStatus(art.status);
+    setImageUrl(art.image_url || '');
     setEditorTab('write');
     setShowForm(true);
   };
@@ -182,7 +186,8 @@ const ArticleManagement: React.FC = () => {
       icon,
       gradient,
       content,
-      status
+      status,
+      image_url: imageUrl
     };
 
     try {
@@ -317,6 +322,65 @@ const ArticleManagement: React.FC = () => {
                   required
                 />
               </div>
+            </div>
+
+            {/* Cover/Thumbnail Image */}
+            <div className="bg-white p-4 rounded-2xl border border-gray-200 space-y-3">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Gambar Thumbnail Cover Artikel (Standard Industri)</label>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <input
+                  type="text"
+                  placeholder="Masukkan URL gambar atau klik tombol di samping untuk mengunggah..."
+                  className="flex-1 bg-gray-50 p-3.5 rounded-2xl border border-gray-200 outline-none text-xs font-bold text-gray-800 focus:border-orange-500 focus:bg-white transition-all"
+                  value={imageUrl}
+                  onChange={e => setImageUrl(e.target.value)}
+                />
+                <input
+                  type="file"
+                  id="article-cover-uploader"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setIsUploadingImg(true);
+                    try {
+                      const fileExt = file.name.split('.').pop();
+                      const fileName = `cover_${Math.random().toString(36).substring(2)}.${fileExt}`;
+                      const filePath = `articles/covers/${fileName}`;
+                      const { data, error } = await supabase.storage.from('banners').upload(filePath, file);
+                      if (error) throw error;
+                      const { data: { publicUrl } } = supabase.storage.from('banners').getPublicUrl(data.path);
+                      setImageUrl(publicUrl);
+                    } catch (err: any) {
+                      alert('Gagal mengunggah gambar: ' + err.message);
+                    } finally {
+                      setIsUploadingImg(false);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('article-cover-uploader')?.click()}
+                  className="px-5 py-3.5 bg-gray-900 hover:bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-colors shrink-0"
+                >
+                  {isUploadingImg ? 'Mengunggah...' : 'Unggah Gambar'}
+                </button>
+              </div>
+              
+              {imageUrl && (
+                <div className="relative rounded-2xl overflow-hidden border border-gray-200 max-h-[160px] w-full max-w-xs">
+                  <img src={imageUrl} alt="Cover Preview" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setImageUrl('')}
+                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full text-xs font-bold shadow-md transition-colors"
+                    title="Hapus Cover"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -554,9 +618,15 @@ const ArticleManagement: React.FC = () => {
                     <tr key={art.slug} className="hover:bg-gray-50/50 transition-colors">
                       {/* Visual Cover preview */}
                       <td className="py-4 px-3">
-                        <div className={`w-10 h-10 bg-gradient-to-br ${art.gradient} rounded-lg flex items-center justify-center text-lg text-white`}>
-                          {art.icon}
-                        </div>
+                        {art.image_url ? (
+                          <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 shrink-0">
+                            <img src={art.image_url} alt="Cover" className="w-full h-full object-cover" />
+                          </div>
+                        ) : (
+                          <div className={`w-10 h-10 bg-gradient-to-br ${art.gradient} rounded-lg flex items-center justify-center text-lg text-white`}>
+                            {art.icon}
+                          </div>
+                        )}
                       </td>
                       {/* Judul & Slug */}
                       <td className="py-4 px-3">
@@ -639,9 +709,13 @@ CREATE TABLE IF NOT EXISTS public.articles (
     gradient TEXT NOT NULL,
     content TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'draft',
+    image_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- 1b. Jalankan ALTER TABLE jika tabel sudah ada untuk menambahkan kolom baru
+ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS image_url TEXT;
 
 -- 2. Aktifkan Row Level Security (RLS)
 ALTER TABLE public.articles ENABLE ROW LEVEL SECURITY;

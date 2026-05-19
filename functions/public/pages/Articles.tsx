@@ -15,6 +15,7 @@ interface ArticleData {
   icon: string;
   gradient: string;
   content: React.ReactNode | string;
+  imageUrl?: string;
 }
 
 const articles: ArticleData[] = [
@@ -174,7 +175,8 @@ const Articles: React.FC = () => {
             readTime: d.read_time,
             icon: d.icon,
             gradient: d.gradient,
-            content: d.content
+            content: d.content,
+            imageUrl: d.image_url
           }));
           setDbArticles(mapped);
         }
@@ -216,7 +218,7 @@ const Articles: React.FC = () => {
         '@type': 'Article',
         'headline': currentArticle.title,
         'description': currentArticle.description,
-        'image': 'https://ruangsinggah.id/logo.png',
+        'image': currentArticle.imageUrl || 'https://ruangsinggah.id/logo.png',
         'datePublished': '2026-05-19T00:00:00Z',
         'dateModified': '2026-05-19T00:00:00Z',
         'author': {
@@ -274,8 +276,11 @@ const Articles: React.FC = () => {
         {currentArticle ? (
           <article className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden animate-in fade-in duration-500">
             {/* Header / Hero Cover */}
-            <div className={`bg-gradient-to-br ${currentArticle.gradient} px-6 sm:px-12 py-16 sm:py-20 text-white relative overflow-hidden`}>
-              <div className="absolute inset-0 bg-black/10 backdrop-blur-[2px]" />
+            <div 
+              className={`px-6 sm:px-12 py-16 sm:py-20 text-white relative overflow-hidden bg-cover bg-center ${!currentArticle.imageUrl ? `bg-gradient-to-br ${currentArticle.gradient}` : ''}`}
+              style={currentArticle.imageUrl ? { backgroundImage: `url(${currentArticle.imageUrl})` } : undefined}
+            >
+              <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px]" />
               {/* Pattern */}
               <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'30\' height=\'30\' viewBox=\'0 0 30 30\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M15 0C6.716 0 0 6.716 0 15c0 8.284 6.716 15 15 15 8.284 0 15-6.716 15-15C30 6.716 23.284 0 15 0zm0 28C7.82 28 2 22.18 2 15S7.82 2 15 2s13 5.82 13 13-5.82 13-13 13z\' fill=\'%23ffffff\' fill-rule=\'evenodd\'/%3E%3C/svg%3E")' }} />
               
@@ -305,7 +310,45 @@ const Articles: React.FC = () => {
             </div>
 
             {/* Content Body */}
-            <div className="px-6 sm:px-12 py-10 sm:py-16 prose prose-orange max-w-none">
+            <div className="px-6 sm:px-12 py-10 sm:py-16 prose prose-orange max-w-none rs-article-content">
+              <style>{`
+                .rs-article-content img {
+                  border-radius: 1.5rem;
+                  margin: 2rem auto;
+                  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+                  max-width: 100%;
+                  display: block;
+                }
+                .rs-article-content table {
+                  width: 100%;
+                  border-collapse: collapse;
+                  margin: 2rem 0;
+                }
+                .rs-article-content th, .rs-article-content td {
+                  border: 1px solid #e2e8f0;
+                  padding: 0.75rem 1rem;
+                  text-align: left;
+                }
+                .rs-article-content th {
+                  background-color: #f8fafc;
+                  font-weight: 700;
+                }
+                .rs-article-content blockquote {
+                  border-left-color: #f97316;
+                  background-color: #fff7ed;
+                  padding: 1rem 1.5rem;
+                  border-radius: 0 1rem 1rem 0;
+                  font-style: italic;
+                }
+                .rs-article-content ul {
+                  list-style-type: disc;
+                  padding-left: 1.5rem;
+                }
+                .rs-article-content ol {
+                  list-style-type: decimal;
+                  padding-left: 1.5rem;
+                }
+              `}</style>
               {typeof currentArticle.content === 'string' ? (
                 <div dangerouslySetInnerHTML={{ __html: currentArticle.content }} />
               ) : (
@@ -369,10 +412,21 @@ const Articles: React.FC = () => {
                     onClick={() => navigate(`/artikel/${art.slug}`)}
                   >
                     {/* Visual Card Cover */}
-                    <div className={`bg-gradient-to-br ${art.gradient} w-full md:w-48 shrink-0 flex items-center justify-center p-8 text-6xl text-white relative`}>
-                      <span className="relative z-10 group-hover:scale-110 transition-transform">{art.icon}</span>
-                      <div className="absolute inset-0 bg-black/5" />
-                    </div>
+                    {art.imageUrl ? (
+                      <div className="w-full md:w-48 shrink-0 relative overflow-hidden bg-gray-100 min-h-[160px] md:min-h-0">
+                        <img 
+                          src={art.imageUrl} 
+                          alt={art.title} 
+                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                        />
+                        <div className="absolute inset-0 bg-black/5" />
+                      </div>
+                    ) : (
+                      <div className={`bg-gradient-to-br ${art.gradient} w-full md:w-48 shrink-0 flex items-center justify-center p-8 text-6xl text-white relative`}>
+                        <span className="relative z-10 group-hover:scale-110 transition-transform">{art.icon}</span>
+                        <div className="absolute inset-0 bg-black/5" />
+                      </div>
+                    )}
 
                     {/* Meta Card Info */}
                     <div className="p-6 sm:p-8 flex-1 flex flex-col justify-between">
