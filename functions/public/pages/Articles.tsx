@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock, Calendar, User, Share2, Search, ArrowRight, BookOpen } from 'lucide-react';
+import { 
+  ArrowLeft, Clock, Calendar, User, Share2, Search, ArrowRight, BookOpen, 
+  Newspaper, ChevronRight, Send, Mail, Bookmark, ExternalLink, Flame
+} from 'lucide-react';
 import { Page } from '../types';
 import { supabase } from '../supabase';
 
@@ -148,12 +151,17 @@ const articles: ArticleData[] = [
   }
 ];
 
+const CATEGORIES = ['Semua', 'Edukasi', 'Panduan', 'Berita', 'Tips', 'Bisnis', 'Mitra Kost'];
+
 const Articles: React.FC = () => {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug?: string }>();
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('Semua');
   const [dbArticles, setDbArticles] = useState<ArticleData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [emailSub, setEmailSub] = useState('');
+  const [isSubscribed, setIsSubscribed] = useState(false);
 
   useEffect(() => {
     const fetchArticles = async () => {
@@ -195,7 +203,7 @@ const Articles: React.FC = () => {
   // SEO & Schema injection dynamic handling
   useEffect(() => {
     if (currentArticle) {
-      document.title = `${currentArticle.title} - RuangSinggah.id`;
+      document.title = `${currentArticle.title} - RuangSinggah.id Editorial`;
       
       // Update meta description
       let metaDesc = document.querySelector('meta[name="description"]');
@@ -215,16 +223,15 @@ const Articles: React.FC = () => {
 
       const articleSchema = {
         '@context': 'https://schema.org',
-        '@type': 'Article',
+        '@type': 'NewsArticle',
         'headline': currentArticle.title,
         'description': currentArticle.description,
         'image': currentArticle.imageUrl || 'https://ruangsinggah.id/logo.png',
         'datePublished': '2026-05-19T00:00:00Z',
         'dateModified': '2026-05-19T00:00:00Z',
         'author': {
-          '@type': 'Organization',
-          'name': 'RuangSinggah',
-          'url': 'https://ruangsinggah.id'
+          '@type': 'Person',
+          'name': currentArticle.author
         },
         'publisher': {
           '@type': 'Organization',
@@ -243,7 +250,6 @@ const Articles: React.FC = () => {
       scriptTag.innerHTML = JSON.stringify(articleSchema);
 
       return () => {
-        // Reset dynamic title/meta on unmount
         document.title = 'RuangSinggah - Cari Kost Mahasiswa Terverifikasi di Makassar';
         const defaultDesc = 'Cari kost mahasiswa terverifikasi di Makassar dengan mudah! Database kost putra, putri & campur dekat Unhas, UNM, UIN, Unismuh. Harga terjangkau, data valid dari lapangan. Jasa survey kost tersedia. Booking online sekarang!';
         if (metaDesc) metaDesc.setAttribute('content', defaultDesc);
@@ -251,276 +257,560 @@ const Articles: React.FC = () => {
         if (scriptToRemove) scriptToRemove.remove();
       };
     } else {
-      document.title = 'Edukasi & Artikel Pilihan - RuangSinggah.id';
+      document.title = 'RuangSinggah Media - Portal Berita, Tips & Edukasi Properti';
     }
   }, [currentArticle]);
 
-  // Filter catalog
-  const filteredArticles = allArticles.filter(a => 
-    a.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    a.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    a.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter logic
+  const filteredArticles = allArticles.filter(a => {
+    const matchesSearch = 
+      a.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      a.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      a.category.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesCategory = selectedCategory === 'Semua' || a.category.toLowerCase() === selectedCategory.toLowerCase();
+    
+    return matchesSearch && matchesCategory;
+  });
+
+  // Extract featured post (the latest post in the filtered list, or first overall if none selected)
+  const featuredPost = filteredArticles.length > 0 ? filteredArticles[0] : null;
+  const gridArticles = filteredArticles.length > 1 ? filteredArticles.slice(1) : [];
+
+  // Sidebar recommendations (3 articles excluding the current one)
+  const popularArticles = allArticles
+    .filter(a => a.slug !== (currentArticle?.slug || ''))
+    .slice(0, 4);
+
+  const handleSubscribe = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailSub) return;
+    setIsSubscribed(true);
+    setEmailSub('');
+  };
+
+  const getTodayDateString = () => {
+    return new Date().toLocaleDateString('id-ID', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+  };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans">
-      {/* Background Ornaments */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[10%] -left-[10%] w-[35%] h-[35%] bg-orange-100/30 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[10%] -right-[10%] w-[35%] h-[35%] bg-blue-100/20 rounded-full blur-[120px]" />
+    <div className="min-h-screen bg-[#FBFBFD] text-slate-800 font-sans antialiased">
+      {/* Editorial Top bar */}
+      <div className="border-b border-gray-200/80 bg-white sticky top-0 z-40 backdrop-blur-md bg-white/95">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => {
+                if (currentArticle) {
+                  navigate(Page.ARTICLES);
+                } else {
+                  navigate('/');
+                }
+              }}
+              className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="h-6 w-px bg-slate-200" />
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest leading-none">RuangSinggah</span>
+              <span className="text-sm font-black tracking-tight text-slate-900 flex items-center gap-1 uppercase">
+                <Newspaper className="w-4 h-4 text-slate-800" /> Editorial & News
+              </span>
+            </div>
+          </div>
+          
+          <div className="text-right hidden sm:block">
+            <span className="text-xs font-bold text-slate-400">{getTodayDateString()}</span>
+          </div>
+        </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-12 relative z-10">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 relative">
         
-        {/* ARTICLE DETAIL VIEW */}
+        {/* ========================================================================= */}
+        {/* 1. DETAIL VIEW */}
+        {/* ========================================================================= */}
         {currentArticle ? (
-          <article className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden animate-in fade-in duration-500">
-            {/* Header / Hero Cover */}
-            <div 
-              className={`px-6 sm:px-12 py-16 sm:py-20 text-white relative overflow-hidden bg-cover bg-center ${!currentArticle.imageUrl ? `bg-gradient-to-br ${currentArticle.gradient}` : ''}`}
-              style={currentArticle.imageUrl ? { backgroundImage: `url(${currentArticle.imageUrl})` } : undefined}
-            >
-              <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px]" />
-              {/* Pattern */}
-              <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'30\' height=\'30\' viewBox=\'0 0 30 30\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M15 0C6.716 0 0 6.716 0 15c0 8.284 6.716 15 15 15 8.284 0 15-6.716 15-15C30 6.716 23.284 0 15 0zm0 28C7.82 28 2 22.18 2 15S7.82 2 15 2s13 5.82 13 13-5.82 13-13 13z\' fill=\'%23ffffff\' fill-rule=\'evenodd\'/%3E%3C/svg%3E")' }} />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            
+            {/* Main content area */}
+            <article className="lg:col-span-8 bg-white rounded-3xl border border-slate-100 shadow-sm p-6 sm:p-10">
               
-              <div className="relative z-10">
-                <button 
-                  onClick={() => navigate(Page.ARTICLES)} 
-                  className="mb-8 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95 border border-white/10"
-                >
-                  <ArrowLeft className="w-4 h-4" /> Kembali ke Artikel
-                </button>
+              {/* Breadcrumbs */}
+              <nav className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-6">
+                <span className="hover:text-slate-600 cursor-pointer" onClick={() => navigate('/')}>Home</span>
+                <ChevronRight className="w-3 h-3 text-slate-300" />
+                <span className="hover:text-slate-600 cursor-pointer" onClick={() => navigate(Page.ARTICLES)}>Artikel</span>
+                <ChevronRight className="w-3 h-3 text-slate-300" />
+                <span className="text-orange-500">{currentArticle.category}</span>
+              </nav>
 
-                <div className="inline-block bg-white/20 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-4 border border-white/10">
-                  {currentArticle.category}
-                </div>
-                
-                <h1 className="text-2xl sm:text-4xl md:text-5xl font-black leading-tight sm:leading-none tracking-tight text-white mb-6">
-                  {currentArticle.title}
-                </h1>
-
-                {/* Author / Date Info */}
-                <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-xs text-white/95">
-                  <span className="flex items-center gap-1.5"><User className="w-4 h-4 text-orange-200" /> {currentArticle.author}</span>
-                  <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-orange-200" /> {currentArticle.date}</span>
-                  <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-orange-200" /> {currentArticle.readTime} Baca</span>
-                </div>
+              {/* Tag Category */}
+              <div className="inline-block bg-orange-50 text-orange-600 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-4 border border-orange-100">
+                {currentArticle.category}
               </div>
-            </div>
 
-            {/* Content Body */}
-            <div className="px-6 sm:px-12 py-10 sm:py-16 prose prose-orange max-w-none rs-article-content">
-              <style>{`
-                .rs-article-content h1 {
-                  font-size: 2rem !important;
-                  font-weight: 900 !important;
-                  line-height: 1.25 !important;
-                  margin-top: 2.25rem !important;
-                  margin-bottom: 1rem !important;
-                  color: #0f172a !important;
-                  text-transform: uppercase !important;
-                  letter-spacing: -0.025em !important;
-                }
-                .rs-article-content h2 {
-                  font-size: 1.5rem !important;
-                  font-weight: 800 !important;
-                  line-height: 1.35 !important;
-                  margin-top: 1.75rem !important;
-                  margin-bottom: 0.85rem !important;
-                  color: #1e293b !important;
-                  text-transform: uppercase !important;
-                  letter-spacing: -0.02em !important;
-                }
-                .rs-article-content h3 {
-                  font-size: 1.25rem !important;
-                  font-weight: 700 !important;
-                  line-height: 1.4 !important;
-                  margin-top: 1.5rem !important;
-                  margin-bottom: 0.75rem !important;
-                  color: #334155 !important;
-                }
-                .rs-article-content h4 {
-                  font-size: 1.125rem !important;
-                  font-weight: 700 !important;
-                  line-height: 1.4 !important;
-                  margin-top: 1.25rem !important;
-                  margin-bottom: 0.5rem !important;
-                  color: #475569 !important;
-                }
-                .rs-article-content h5 {
-                  font-size: 1rem !important;
-                  font-weight: 700 !important;
-                  margin-top: 1.25rem !important;
-                  margin-bottom: 0.5rem !important;
-                  color: #64748b !important;
-                }
-                .rs-article-content h6 {
-                  font-size: 0.875rem !important;
-                  font-weight: 700 !important;
-                  margin-top: 1.25rem !important;
-                  margin-bottom: 0.5rem !important;
-                  color: #64748b !important;
-                }
-                .rs-article-content p {
-                  margin-top: 0 !important;
-                  margin-bottom: 1.25rem !important;
-                  line-height: 1.8 !important;
-                  color: #334155 !important;
-                  font-size: 0.95rem !important;
-                }
-                .rs-article-content img {
-                  border-radius: 1.5rem;
-                  margin: 2rem auto;
-                  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-                  max-width: 100%;
-                  display: block;
-                }
-                .rs-article-content table {
-                  width: 100%;
-                  border-collapse: collapse;
-                  margin: 2rem 0;
-                }
-                .rs-article-content th, .rs-article-content td {
-                  border: 1px solid #e2e8f0;
-                  padding: 0.75rem 1rem;
-                  text-align: left;
-                }
-                .rs-article-content th {
-                  background-color: #f8fafc;
-                  font-weight: 700;
-                }
-                .rs-article-content blockquote {
-                  border-left-color: #f97316;
-                  background-color: #fff7ed;
-                  padding: 1rem 1.5rem;
-                  border-radius: 0 1rem 1rem 0;
-                  font-style: italic;
-                }
-                .rs-article-content ul {
-                  list-style-type: disc !important;
-                  padding-left: 1.75rem !important;
-                  margin-bottom: 1.25rem !important;
-                }
-                .rs-article-content ol {
-                  list-style-type: decimal !important;
-                  padding-left: 1.75rem !important;
-                  margin-bottom: 1.25rem !important;
-                }
-                .rs-article-content li {
-                  margin-bottom: 0.5rem !important;
-                  line-height: 1.7 !important;
-                  color: #334155 !important;
-                  font-size: 0.95rem !important;
-                }
-              `}</style>
-              {typeof currentArticle.content === 'string' ? (
-                <div dangerouslySetInnerHTML={{ __html: currentArticle.content }} />
-              ) : (
-                currentArticle.content
-              )}
-            </div>
-
-            {/* Share / Footer */}
-            <div className="px-6 sm:px-12 py-6 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
-              <div className="text-xs text-gray-500 font-bold">
-                Dipublikasikan oleh: <strong>PT Ruang Singgah Nusantara</strong>
-              </div>
-              <button 
-                onClick={() => {
-                  navigator.clipboard.writeText(window.location.href);
-                  alert('Tautan artikel disalin ke papan klip!');
-                }}
-                className="px-5 py-2.5 bg-white border border-gray-200 hover:border-orange-500 text-gray-700 hover:text-orange-500 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 active:scale-95 shadow-sm"
-              >
-                <Share2 className="w-4 h-4" /> Bagikan Artikel
-              </button>
-            </div>
-          </article>
-        ) : (
-          
-          /* CATALOG LIST VIEW */
-          <div className="space-y-12 animate-in fade-in duration-500">
-            {/* Header Catalog */}
-            <div className="text-center max-w-2xl mx-auto space-y-4">
-              <div className="inline-flex items-center gap-2 bg-orange-100 text-orange-700 px-4 py-2 rounded-full text-xs font-bold border border-orange-200">
-                <BookOpen className="w-4 h-4" />
-                RuangSinggah Edukasi
-              </div>
-              <h1 className="text-4xl sm:text-5xl font-black text-gray-900 tracking-tight leading-none uppercase">
-                Artikel & Berita Pilihan
+              {/* Article Main Titles */}
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-black leading-tight tracking-tight text-slate-900 mb-4">
+                {currentArticle.title}
               </h1>
-              <p className="text-gray-500 font-medium text-sm sm:text-base">
-                Kumpulan panduan, penjelasan entitas bisnis, dan teknologi properti yang dikembangkan oleh RuangSinggah.id untuk membantu mahasiswa Indonesia mencari hunian tepercaya.
+
+              <p className="text-sm sm:text-base text-slate-500 font-medium leading-relaxed mb-6 border-l-2 border-slate-200 pl-4 italic">
+                {currentArticle.description}
+              </p>
+
+              {/* Author & Info Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-4 border-y border-slate-100 py-4 mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center text-sm font-black text-orange-600 shadow-inner">
+                    {currentArticle.author.charAt(0)}
+                  </div>
+                  <div>
+                    <span className="block text-xs font-black text-slate-900">{currentArticle.author}</span>
+                    <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 mt-0.5">
+                      <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {currentArticle.date}</span>
+                      <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {currentArticle.readTime} Baca</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(window.location.href);
+                      alert('Tautan artikel disalin ke papan klip!');
+                    }}
+                    className="p-2.5 bg-slate-50 hover:bg-orange-50 text-slate-500 hover:text-orange-500 border border-slate-200/60 rounded-xl transition-all active:scale-95 shadow-sm"
+                    title="Bagikan Artikel"
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Cover Image */}
+              {currentArticle.imageUrl ? (
+                <div className="w-full aspect-[21/10] rounded-2xl overflow-hidden border border-slate-100 shadow-md mb-8">
+                  <img src={currentArticle.imageUrl} alt={currentArticle.title} className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className={`w-full aspect-[21/10] bg-gradient-to-br ${currentArticle.gradient} rounded-2xl flex flex-col items-center justify-center p-8 text-7xl text-white shadow-inner mb-8 relative overflow-hidden`}>
+                  <div className="absolute inset-0 bg-black/10 backdrop-blur-[2px]" />
+                  <span className="relative z-10 text-8xl">{currentArticle.icon}</span>
+                </div>
+              )}
+
+              {/* Dynamic HTML Content Body */}
+              <div className="prose prose-orange max-w-none rs-article-content">
+                <style>{`
+                  .rs-article-content h1 {
+                    font-size: 2rem !important;
+                    font-weight: 900 !important;
+                    line-height: 1.25 !important;
+                    margin-top: 2.25rem !important;
+                    margin-bottom: 1rem !important;
+                    color: #0f172a !important;
+                    text-transform: uppercase !important;
+                    letter-spacing: -0.025em !important;
+                  }
+                  .rs-article-content h2 {
+                    font-size: 1.5rem !important;
+                    font-weight: 800 !important;
+                    line-height: 1.35 !important;
+                    margin-top: 1.75rem !important;
+                    margin-bottom: 0.85rem !important;
+                    color: #1e293b !important;
+                    text-transform: uppercase !important;
+                    letter-spacing: -0.02em !important;
+                  }
+                  .rs-article-content h3 {
+                    font-size: 1.25rem !important;
+                    font-weight: 700 !important;
+                    line-height: 1.4 !important;
+                    margin-top: 1.5rem !important;
+                    margin-bottom: 0.75rem !important;
+                    color: #334155 !important;
+                  }
+                  .rs-article-content h4 {
+                    font-size: 1.125rem !important;
+                    font-weight: 700 !important;
+                    line-height: 1.4 !important;
+                    margin-top: 1.25rem !important;
+                    margin-bottom: 0.5rem !important;
+                    color: #475569 !important;
+                  }
+                  .rs-article-content p {
+                    margin-top: 0 !important;
+                    margin-bottom: 1.25rem !important;
+                    line-height: 1.8 !important;
+                    color: #334155 !important;
+                    font-size: 0.95rem !important;
+                  }
+                  .rs-article-content img {
+                    border-radius: 1.5rem;
+                    margin: 2rem auto;
+                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+                    max-width: 100%;
+                    display: block;
+                  }
+                  .rs-article-content table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 2rem 0;
+                  }
+                  .rs-article-content th, .rs-article-content td {
+                    border: 1px solid #e2e8f0;
+                    padding: 0.75rem 1rem;
+                    text-align: left;
+                  }
+                  .rs-article-content th {
+                    background-color: #f8fafc;
+                    font-weight: 700;
+                  }
+                  .rs-article-content blockquote {
+                    border-left-color: #f97316;
+                    background-color: #fff7ed;
+                    padding: 1rem 1.5rem;
+                    border-radius: 0 1rem 1rem 0;
+                    font-style: italic;
+                  }
+                  .rs-article-content ul {
+                    list-style-type: disc !important;
+                    padding-left: 1.75rem !important;
+                    margin-bottom: 1.25rem !important;
+                  }
+                  .rs-article-content ol {
+                    list-style-type: decimal !important;
+                    padding-left: 1.75rem !important;
+                    margin-bottom: 1.25rem !important;
+                  }
+                  .rs-article-content li {
+                    margin-bottom: 0.5rem !important;
+                    line-height: 1.7 !important;
+                    color: #334155 !important;
+                    font-size: 0.95rem !important;
+                  }
+                `}</style>
+                {typeof currentArticle.content === 'string' ? (
+                  <div dangerouslySetInnerHTML={{ __html: currentArticle.content }} />
+                ) : (
+                  currentArticle.content
+                )}
+              </div>
+
+              {/* Author Box */}
+              <div className="mt-12 p-6 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col sm:flex-row gap-4 items-center sm:items-start text-center sm:text-left">
+                <div className="w-14 h-14 bg-orange-500 rounded-full flex items-center justify-center text-lg font-black text-white shrink-0 shadow-md">
+                  {currentArticle.author.charAt(0)}
+                </div>
+                <div>
+                  <span className="block font-black text-slate-800 text-sm mb-1 uppercase tracking-wider">Tentang Penulis: {currentArticle.author}</span>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Kontributor kolom edukasi dan produk di RuangSinggah.id. Berkomitmen menghadirkan informasi transparan seputar kos-kosan mahasiswa, tips finansial sewa properti, dan panduan survey lapangan tepercaya di wilayah Sulawesi Selatan.
+                  </p>
+                </div>
+              </div>
+
+              {/* Footer Share */}
+              <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs font-bold text-slate-400 uppercase tracking-widest">
+                <span>Diterbitkan Oleh: PT Ruang Singgah Nusantara</span>
+                <button 
+                  onClick={() => {
+                    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(window.location.href)}`, '_blank');
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-xl tracking-wider transition-colors active:scale-95 shadow-sm"
+                >
+                  <Share2 className="w-3.5 h-3.5" /> Bagikan ke WA
+                </button>
+              </div>
+
+            </article>
+
+            {/* Sidebar Column */}
+            <aside className="lg:col-span-4 space-y-6 lg:sticky lg:top-24">
+              
+              {/* Popular Articles widget */}
+              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-4">
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-3">
+                  <Flame className="w-4 h-4 text-orange-500 animate-pulse" /> Artikel Terpopuler
+                </h3>
+                
+                <div className="space-y-4 divide-y divide-slate-50">
+                  {popularArticles.map((art, idx) => (
+                    <div 
+                      key={art.slug} 
+                      onClick={() => navigate(`/artikel/${art.slug}`)}
+                      className={`group flex items-start gap-3 cursor-pointer transition-colors hover:text-orange-500 ${idx > 0 ? 'pt-4' : ''}`}
+                    >
+                      {art.imageUrl ? (
+                        <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 border border-slate-100 bg-slate-50">
+                          <img src={art.imageUrl} alt={art.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        </div>
+                      ) : (
+                        <div className={`w-16 h-16 bg-gradient-to-br ${art.gradient} rounded-xl shrink-0 flex items-center justify-center text-2xl text-white relative`}>
+                          <span className="relative z-10">{art.icon}</span>
+                        </div>
+                      )}
+                      
+                      <div className="flex-1 space-y-1">
+                        <span className="text-[9px] font-black text-orange-500 uppercase tracking-wider leading-none block">{art.category}</span>
+                        <h4 className="text-xs font-bold leading-snug line-clamp-2 text-slate-800 group-hover:text-orange-500 transition-colors">
+                          {art.title}
+                        </h4>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Direct Survey Booking Banner */}
+              <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
+                <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'20\' height=\'20\' viewBox=\'0 0 20 20\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M0 0h20v20H0V0zm10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14z\' fill=\'%23ffffff\'/%3E%3C/svg%3E")' }} />
+                
+                <div className="relative z-10 space-y-4">
+                  <span className="inline-block bg-orange-500/20 text-orange-400 border border-orange-500/30 text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full">Layanan Khusus</span>
+                  <h3 className="text-lg font-black uppercase tracking-tight leading-tight">Takut Kost Zonk?<br />Survey Pake Agen Aja!</h3>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Agen surveyor independen kami akan mendatangi kos target Anda, mengirimkan ulasan jujur, visual real-time, dan Google Drive laporan detil.
+                  </p>
+                  <button 
+                    onClick={() => navigate('/survey')}
+                    className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 shadow-lg shadow-orange-500/20"
+                  >
+                    Booking Survey Kost <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+            </aside>
+          </div>
+        ) : (
+          <div className="space-y-12 animate-in fade-in duration-500">
+            
+            {/* Hero Heading Portal */}
+            <div className="text-center max-w-3xl mx-auto space-y-4 py-4">
+              <div className="inline-flex items-center gap-1.5 bg-orange-50 border border-orange-200/60 text-orange-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">
+                <BookOpen className="w-3.5 h-3.5" /> RuangSinggah Newsroom & Journal
+              </div>
+              <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-slate-900 tracking-tight leading-none uppercase">
+                Pusat Edukasi & Publikasi
+              </h1>
+              <p className="text-slate-500 font-medium text-xs sm:text-sm md:text-base max-w-2xl mx-auto leading-relaxed">
+                Panduan praktis, ulasan mendalam, penjelasan entitas legal, serta inovasi teknologi properti yang dirancang khusus oleh <strong>PT Ruang Singgah Nusantara</strong>.
               </p>
             </div>
 
-            {/* Search Bar */}
-            <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-lg shadow-gray-200/50 max-w-md mx-auto flex items-center gap-2">
-              <Search className="w-5 h-5 text-gray-400 ml-3" />
-              <input 
-                type="text" 
-                placeholder="Cari topik artikel..." 
-                className="w-full bg-transparent outline-none text-sm font-bold text-gray-800 placeholder-gray-400"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-              />
+            {/* Categories Navigation & Search Row */}
+            <div className="space-y-4 bg-white border border-slate-100 p-4 rounded-3xl shadow-sm">
+              <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                
+                {/* Horizontal Category Pill Scroll */}
+                <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-none selection:bg-transparent">
+                  {CATEGORIES.map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`px-4 py-2 rounded-full text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap shrink-0 ${
+                        selectedCategory === cat 
+                          ? 'bg-orange-500 text-white shadow-md shadow-orange-500/10' 
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-500 border border-slate-200/40'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Compact Search Bar */}
+                <div className="bg-slate-50 p-1.5 rounded-full border border-slate-200/50 w-full md:w-80 flex items-center gap-2 shrink-0">
+                  <Search className="w-4 h-4 text-slate-400 ml-3" />
+                  <input 
+                    type="text" 
+                    placeholder="Cari berita & artikel..." 
+                    className="w-full bg-transparent outline-none text-xs font-bold text-slate-700 placeholder-slate-400"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                  />
+                </div>
+
+              </div>
             </div>
 
-            {/* Catalog Grid */}
-            <div className="grid grid-cols-1 gap-6">
-              {filteredArticles.length > 0 ? (
-                filteredArticles.map(art => (
+            {/* Catalog content */}
+            {filteredArticles.length > 0 ? (
+              <div className="space-y-8">
+                
+                {/* FEATURED POST (Latest Article in list) */}
+                {featuredPost && (
                   <div 
-                    key={art.slug} 
-                    className="group bg-white rounded-3xl border border-gray-100 shadow-xl hover:shadow-2xl hover:border-orange-200 transition-all duration-300 overflow-hidden flex flex-col md:flex-row cursor-pointer"
-                    onClick={() => navigate(`/artikel/${art.slug}`)}
+                    onClick={() => navigate(`/artikel/${featuredPost.slug}`)}
+                    className="group bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:border-orange-200/80 transition-all duration-500 overflow-hidden grid grid-cols-1 lg:grid-cols-12 cursor-pointer"
                   >
-                    {/* Visual Card Cover */}
-                    {art.imageUrl ? (
-                      <div className="w-full md:w-48 shrink-0 relative overflow-hidden bg-gray-100 min-h-[160px] md:min-h-0">
+                    {/* Visual Cover */}
+                    <div className="lg:col-span-7 relative overflow-hidden bg-slate-50 aspect-video lg:aspect-auto min-h-[260px]">
+                      {featuredPost.imageUrl ? (
                         <img 
-                          src={art.imageUrl} 
-                          alt={art.title} 
-                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                          src={featuredPost.imageUrl} 
+                          alt={featuredPost.title} 
+                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-102 transition-transform duration-700" 
                         />
-                        <div className="absolute inset-0 bg-black/5" />
-                      </div>
-                    ) : (
-                      <div className={`bg-gradient-to-br ${art.gradient} w-full md:w-48 shrink-0 flex items-center justify-center p-8 text-6xl text-white relative`}>
-                        <span className="relative z-10 group-hover:scale-110 transition-transform">{art.icon}</span>
-                        <div className="absolute inset-0 bg-black/5" />
-                      </div>
-                    )}
-
-                    {/* Meta Card Info */}
-                    <div className="p-6 sm:p-8 flex-1 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center gap-3 mb-3">
-                          <span className="text-[10px] font-black text-orange-500 bg-orange-50 border border-orange-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider">{art.category}</span>
-                          <span className="text-[10px] text-gray-400 font-bold flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {art.readTime} baca</span>
+                      ) : (
+                        <div className={`absolute inset-0 bg-gradient-to-br ${featuredPost.gradient} flex items-center justify-center text-8xl text-white`}>
+                          <span className="group-hover:scale-110 transition-transform">{featuredPost.icon}</span>
                         </div>
-                        <h2 className="text-xl font-black text-gray-900 group-hover:text-orange-500 transition-colors uppercase leading-tight mb-2">
-                          {art.title}
+                      )}
+                      <div className="absolute top-4 left-4 bg-orange-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg">
+                        Laporan Utama
+                      </div>
+                    </div>
+
+                    {/* Meta Info */}
+                    <div className="lg:col-span-5 p-6 sm:p-10 flex flex-col justify-between">
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] font-black text-orange-500 bg-orange-50 border border-orange-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider">{featuredPost.category}</span>
+                          <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {featuredPost.readTime} baca</span>
+                        </div>
+                        <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 group-hover:text-orange-500 transition-colors uppercase leading-tight">
+                          {featuredPost.title}
                         </h2>
-                        <p className="text-xs text-gray-500 font-medium leading-relaxed line-clamp-2">
-                          {art.description}
+                        <p className="text-xs sm:text-sm text-slate-500 font-medium leading-relaxed line-clamp-4">
+                          {featuredPost.description}
                         </p>
                       </div>
-                      <div className="mt-5 pt-4 border-t border-gray-50 flex justify-between items-center">
-                        <span className="text-[10px] text-gray-400 font-bold">{art.date}</span>
-                        <span className="text-[10px] font-black text-gray-900 uppercase tracking-widest flex items-center gap-1 group-hover:text-orange-500 transition-colors">
-                          Baca Lengkap <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+
+                      <div className="mt-6 pt-6 border-t border-slate-50 flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-black text-slate-500 uppercase">
+                            {featuredPost.author.charAt(0)}
+                          </div>
+                          <div>
+                            <span className="block text-[10px] font-black text-slate-800 leading-none">{featuredPost.author}</span>
+                            <span className="text-[9px] text-slate-400 font-bold">{featuredPost.date}</span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-1 group-hover:text-orange-500 transition-colors">
+                          Baca Utama <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                         </span>
                       </div>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-12 bg-white rounded-3xl border border-gray-100">
-                  <p className="text-gray-400 font-bold italic">Topik artikel tidak ditemukan.</p>
+                )}
+
+                {/* GRID FOR SECONDARY ARTICLES */}
+                {gridArticles.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {gridArticles.map(art => (
+                      <div 
+                        key={art.slug} 
+                        onClick={() => navigate(`/artikel/${art.slug}`)}
+                        className="group bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-lg hover:border-orange-100 transition-all duration-300 overflow-hidden flex flex-col justify-between cursor-pointer"
+                      >
+                        <div>
+                          {/* Visual Card Cover */}
+                          <div className="relative aspect-[16/10] overflow-hidden bg-slate-50">
+                            {art.imageUrl ? (
+                              <img 
+                                src={art.imageUrl} 
+                                alt={art.title} 
+                                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                              />
+                            ) : (
+                              <div className={`absolute inset-0 bg-gradient-to-br ${art.gradient} flex items-center justify-center text-5xl text-white`}>
+                                <span className="group-hover:scale-110 transition-transform">{art.icon}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Card Body */}
+                          <div className="p-6 space-y-3">
+                            <div className="flex items-center gap-3">
+                              <span className="text-[9px] font-black text-orange-500 bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-full uppercase tracking-wider">{art.category}</span>
+                              <span className="text-[9px] text-slate-400 font-bold flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {art.readTime}</span>
+                            </div>
+                            <h3 className="text-base font-black text-slate-900 group-hover:text-orange-500 transition-colors uppercase leading-snug line-clamp-2">
+                              {art.title}
+                            </h3>
+                            <p className="text-xs text-slate-500 font-medium leading-relaxed line-clamp-3">
+                              {art.description}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Card Footer */}
+                        <div className="p-6 pt-0 mt-4">
+                          <div className="border-t border-slate-50 pt-4 flex justify-between items-center">
+                            <span className="text-[9px] text-slate-400 font-bold">{art.date}</span>
+                            <span className="text-[9px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-1 group-hover:text-orange-500 transition-colors">
+                              Baca <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+              </div>
+            ) : (
+              <div className="text-center py-16 bg-white rounded-3xl border border-slate-100 shadow-sm">
+                <BookOpen className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                <p className="text-slate-400 font-bold italic">Topik atau kategori artikel tidak ditemukan.</p>
+              </div>
+            )}
+
+            {/* Newsletter Subscription Box */}
+            <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-orange-950 rounded-[2.5rem] p-8 sm:p-12 text-white shadow-xl relative overflow-hidden border border-white/5">
+              {/* background lighting */}
+              <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-orange-600/20 rounded-full blur-[80px] pointer-events-none" />
+              <div className="absolute -left-20 -top-20 w-80 h-80 bg-slate-500/10 rounded-full blur-[80px] pointer-events-none" />
+              
+              <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                <div className="lg:col-span-7 space-y-4 text-center lg:text-left">
+                  <div className="inline-flex items-center gap-1.5 bg-white/10 text-orange-400 border border-white/10 text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
+                    <Mail className="w-3.5 h-3.5" /> Newsletter Mingguan
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl md:text-4xl font-black uppercase tracking-tight leading-none">
+                    Dapatkan Update Berita & Tips Kost Terbaik
+                  </h2>
+                  <p className="text-slate-400 font-medium text-xs sm:text-sm leading-relaxed max-w-xl mx-auto lg:mx-0">
+                    Gabung dengan ribuan mahasiswa dan pemilik kost di Makassar. Kami mengirimi Anda tips sewa properti, pembaruan aplikasi, dan artikel pilar mingguan langsung ke email Anda.
+                  </p>
                 </div>
-              )}
+
+                <div className="lg:col-span-5">
+                  {isSubscribed ? (
+                    <div className="bg-white/5 border border-white/10 p-6 rounded-2xl text-center space-y-3 animate-in zoom-in duration-300">
+                      <span className="text-3xl">🎉</span>
+                      <h4 className="text-sm font-black uppercase tracking-wider text-orange-400">Pendaftaran Berhasil!</h4>
+                      <p className="text-xs text-slate-300 leading-relaxed">Terima kasih telah berlangganan. Kami akan mengirimkan buletin pertama Anda di hari Senin depan.</p>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSubscribe} className="bg-white/5 p-2 rounded-2xl border border-white/10 flex flex-col sm:flex-row gap-2">
+                      <input 
+                        type="email" 
+                        placeholder="Alamat email Anda..." 
+                        required
+                        className="w-full bg-transparent border-0 outline-none text-xs font-bold text-white px-4 py-3 placeholder-slate-400"
+                        value={emailSub}
+                        onChange={e => setEmailSub(e.target.value)}
+                      />
+                      <button 
+                        type="submit"
+                        className="py-3 px-6 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors shrink-0 flex items-center justify-center gap-2 active:scale-95 shadow-md shadow-orange-500/10"
+                      >
+                        Langganan <Send className="w-3.5 h-3.5" />
+                      </button>
+                    </form>
+                  )}
+                </div>
+              </div>
             </div>
 
           </div>
