@@ -81,6 +81,10 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
     const [isEditingSurvey, setIsEditingSurvey] = useState<SurveyRequest | null>(null);
     const [surveyForm, setSurveyForm] = useState<Partial<SurveyRequest>>({});
     
+    // [NEW] Order-level management state
+    const [isEditingOrder, setIsEditingOrder] = useState<any>(null);
+    const [orderForm, setOrderForm] = useState<{ assigned_agent_id?: string; drive_links: Record<string, string> }>({ drive_links: {} });
+
     const [isReschedulingSurvey, setIsReschedulingSurvey] = useState<SurveyRequest | null>(null);
     const [newSurveyDate, setNewSurveyDate] = useState('');
     const [newSurveyTime, setNewSurveyTime] = useState('');
@@ -108,6 +112,60 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
         } catch (error) {
             console.error(error);
             alert('Gagal menghapus survey');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleUpdateOrder = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!isEditingOrder) return;
+        setIsSubmitting(true);
+        try {
+            const agent = surveyAgents.find(a => a.id === orderForm.assigned_agent_id);
+            
+            // Loop all surveys in the order and update them
+            for (const req of isEditingOrder.surveys) {
+                const updates: any = {};
+                if (agent) {
+                    updates.assigned_agent_id = agent.id;
+                    updates.agent_name = agent.name;
+                    updates.agent_phone = agent.phone;
+                    updates.agent_photo_url = agent.photo_url;
+                    if (req.status === 'AWAITING_PAYMENT' || req.status === 'PENDING_ASSIGNMENT') {
+                        updates.status = 'AGENT_ASSIGNED';
+                    }
+                } else if (orderForm.assigned_agent_id === '') {
+                    // Cleared agent
+                    updates.assigned_agent_id = null;
+                    updates.agent_name = null;
+                    updates.agent_phone = null;
+                    updates.agent_photo_url = null;
+                    if (req.status === 'AGENT_ASSIGNED') {
+                        updates.status = 'PENDING_ASSIGNMENT';
+                    }
+                }
+
+                // Update drive link if changed
+                if (orderForm.drive_links[req.id] !== undefined) {
+                    updates.result_drive_link = orderForm.drive_links[req.id];
+                }
+
+                if (Object.keys(updates).length > 0) {
+                    await updateSurveyRequest(req.id, updates);
+                    // Notify agent if assigned
+                    if (updates.assigned_agent_id && !req.assigned_agent_id) {
+                        await notifySurveyStatusUpdate(req.id, 'ASSIGNED_TO_AGENT');
+                    }
+                }
+            }
+
+            alert('Order survey berhasil diperbarui');
+            setIsEditingOrder(null);
+            refreshData();
+        } catch (error) {
+            console.error(error);
+            alert('Gagal mengupdate order survey');
         } finally {
             setIsSubmitting(false);
         }
@@ -344,118 +402,222 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                 </div>
             )}
 
-            <div className="grid grid-cols-1 gap-6">
-                {filteredRequests.map((req) => (
-                    <div key={req.id} className="bg-white border border-gray-100 rounded-[2rem] p-8 hover:shadow-xl transition-all relative group overflow-hidden">
-                        <div className="flex flex-col lg:flex-row justify-between gap-8">
-                            <div className="flex-grow space-y-6">
-                                <div className="flex items-center gap-4 flex-wrap">
-                                    <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${req.status === 'COMPLETED' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>
-                                        {req.status}
-                                    </span>
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{new Date(req.created_at).toLocaleDateString()}</span>
-                                    {isAdmin && (
-                                        <div className="flex items-center gap-2">
-                                            <input 
-                                                type="checkbox" 
-                                                className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500" 
-                                                checked={selectedSurveyIds.includes(req.id)}
-                                                onChange={(e) => {
-                                                    if (e.target.checked) setSelectedSurveyIds([...selectedSurveyIds, req.id]);
-                                                    else setSelectedSurveyIds(selectedSurveyIds.filter(id => id !== req.id));
-                                                }}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
+            <div className="grid grid-cols-1 gap-8">
+                {(() => {
+                    // Grouping surveyRequests by transaction_id
+                    const groups: Record<string, SurveyRequest[]> = {};
+                    filteredRequests.forEach(req => {
+                        const key = req.transaction_id || req.id;
+                        if (!groups[key]) groups[key] = [];
+                        groups[key].push(req);
+                    });
 
-                                <div>
-                                    <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tight mb-2">{req.kost_name}</h3>
-                                    <p className="text-sm text-gray-500 font-medium max-w-xl">{req.kost_address}</p>
-                                </div>
+                    const groupedOrders = Object.entries(groups).map(([txId, list]) => {
+                        const first = list[0];
+                        const dateObj = new Date(first.created_at);
+                        const doneCount = list.filter(r => ['SUBMITTED', 'COMPLETED'].includes(r.status)).length;
+                        const allDone = list.every(r => r.status === 'COMPLETED');
+                        return {
+                            transactionId: txId,
+                            surveys: list,
+                            user: first.user,
+                            createdAt: dateObj,
+                            doneCount,
+                            totalCount: list.length,
+                            allDone,
+                            first
+                        };
+                    }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-gray-50">
-                                    <div className="space-y-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-xl">👤</div>
-                                            <div>
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pemesan</p>
-                                                <p className="text-sm font-bold text-gray-900">{req.user?.name || 'User'}</p>
-                                            </div>
+                    return groupedOrders.map((order) => (
+                        <div key={order.transactionId} className="bg-white border border-gray-100 rounded-[2.5rem] p-6 sm:p-8 hover:shadow-xl transition-all duration-500 relative group overflow-hidden shadow-sm">
+                            {/* Accent Background */}
+                            <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-orange-500/5 to-transparent rounded-full blur-3xl -mr-24 -mt-24 pointer-events-none" />
+
+                            {/* Order Header */}
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-6 border-b border-gray-100 mb-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-14 h-14 bg-orange-50 rounded-[1.2rem] flex items-center justify-center border border-orange-100/50 shrink-0 text-2xl">
+                                        📦
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                                            <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest">Order Survey</span>
+                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">• ID: {order.transactionId.substring(0, 8)}...</span>
+                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">• {order.createdAt.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                                         </div>
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-xl">📅</div>
-                                            <div>
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jadwal Survey</p>
-                                                <p className="text-sm font-bold text-gray-900">{req.survey_date} @ {req.survey_time}</p>
-                                            </div>
+                                            <h3 className="text-lg font-black text-gray-900 leading-tight">Pemesan: {order.user?.name || 'User'}</h3>
+                                            {order.user?.phone && (
+                                                <a 
+                                                    href={`https://wa.me/${order.user.phone.replace(/\D/g, '')}`} 
+                                                    target="_blank" 
+                                                    rel="noreferrer"
+                                                    className="px-2.5 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100 transition-colors text-[9px] font-black uppercase rounded-lg tracking-wider"
+                                                >
+                                                    📱 Chat User
+                                                </a>
+                                            )}
                                         </div>
                                     </div>
-                                    <div className="space-y-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-xl">🕵️</div>
-                                            <div>
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Agen Surveyor</p>
-                                                <p className="text-sm font-bold text-gray-900">{req.agent_name || 'Menunggu Penugasan'}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-xl">📁</div>
-                                            <div>
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Link Hasil</p>
-                                                {req.result_drive_link ? (
-                                                    <a href={req.result_drive_link} target="_blank" rel="noreferrer" className="text-sm font-bold text-blue-600 hover:underline">Buka Folder Drive</a>
-                                                ) : (
-                                                    <p className="text-sm font-bold text-gray-400 italic">Belum tersedia</p>
-                                                )}
-                                            </div>
-                                        </div>
+                                </div>
+
+                                {/* Order Progress Info */}
+                                <div className="flex flex-col md:flex-row items-end md:items-center gap-4 shrink-0 w-full md:w-auto mt-4 md:mt-0">
+                                    {isAdmin && !isAgent && (
+                                        <button
+                                            onClick={() => {
+                                                setIsEditingOrder(order);
+                                                const links: Record<string, string> = {};
+                                                order.surveys.forEach(s => {
+                                                    if (s.result_drive_link) links[s.id] = s.result_drive_link;
+                                                });
+                                                setOrderForm({
+                                                    assigned_agent_id: order.first.assigned_agent_id || '',
+                                                    drive_links: links
+                                                });
+                                            }}
+                                            className="px-5 py-2.5 bg-gray-900 hover:bg-black text-white shadow-xl shadow-gray-200 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 border border-gray-800"
+                                        >
+                                            👔 Kelola Order
+                                        </button>
+                                    )}
+                                    <div className="flex-1 md:text-right w-full md:w-auto">
+                                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border inline-flex items-center gap-1.5 ${
+                                            order.allDone 
+                                                ? 'bg-green-50 text-green-600 border-green-100' 
+                                                : 'bg-amber-50 text-amber-600 border-amber-100'
+                                        }`}>
+                                            <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                                            {order.allDone ? 'Selesai 100%' : 'Dalam Proses'}
+                                        </span>
+                                        <p className="text-[10px] font-bold text-gray-400 mt-1">{order.doneCount}/{order.totalCount} Kost Disurvey</p>
+                                    </div>
+                                    <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden shrink-0">
+                                        <div 
+                                            className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full transition-all duration-700" 
+                                            style={{ width: `${(order.doneCount / order.totalCount) * 100}%` }}
+                                        />
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="lg:w-72 flex flex-col gap-3 justify-center">
-                                <button
-                                    onClick={() => {
-                                        setIsEditingSurvey(req);
-                                        setSurveyForm(req);
-                                    }}
-                                    className="w-full py-4 bg-gray-900 hover:bg-black text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-xl active:scale-95"
-                                >
-                                    {isAdmin ? '📝 Kelola Survey' : '📋 Lihat Detail'}
-                                </button>
-                                
-                                <button
-                                    onClick={() => setIsReschedulingSurvey(req)}
-                                    className="w-full py-4 bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
-                                >
-                                    🗓️ Reschedule
-                                </button>
-                                
-                                {isAdmin && (
-                                    <button
-                                        onClick={() => handleDeleteSurveyLocal(req.id, req.kost_name)}
-                                        className="w-full py-4 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
-                                    >
-                                        🗑️ Hapus
-                                    </button>
-                                )}
+                            {/* Kost List */}
+                            <div className="space-y-4">
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Daftar Kost Target Survey ({order.totalCount} Unit)</p>
+                                {order.surveys.map((req, idx) => {
+                                    const isDone = req.status === 'COMPLETED';
+                                    const isSubmitted = req.status === 'SUBMITTED';
+                                    const isAwaiting = req.status === 'PENDING_ASSIGNMENT';
+                                    
+                                    return (
+                                        <div key={req.id} className={`rounded-2xl border p-4 sm:p-5 transition-all duration-300 ${
+                                            isDone ? 'bg-green-50/20 border-green-100/50' : 
+                                            isSubmitted ? 'bg-emerald-50/20 border-emerald-100/50' : 
+                                            'bg-gray-50/40 border-gray-100'
+                                        } hover:border-gray-200`}>
+                                            <div className="flex flex-col lg:flex-row justify-between gap-4">
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                                        <div className="flex items-center gap-2">
+                                                            {isAdmin && (
+                                                                <input 
+                                                                    type="checkbox" 
+                                                                    className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer" 
+                                                                    checked={selectedSurveyIds.includes(req.id)}
+                                                                    onChange={(e) => {
+                                                                        if (e.target.checked) setSelectedSurveyIds([...selectedSurveyIds, req.id]);
+                                                                        else setSelectedSurveyIds(selectedSurveyIds.filter(id => id !== req.id));
+                                                                    }}
+                                                                />
+                                                            )}
+                                                            <span className="w-5 h-5 bg-gray-200 text-gray-600 rounded-lg flex items-center justify-center text-[10px] font-black">
+                                                                {idx + 1}
+                                                            </span>
+                                                        </div>
+                                                        <h4 className="text-base font-black text-gray-900 truncate uppercase">{req.kost_name || `Kost #${idx + 1}`}</h4>
+                                                        <span className={`px-2.5 py-0.5 rounded-lg text-[8px] font-black tracking-widest border uppercase ${
+                                                            isDone ? 'bg-green-50 text-green-600 border-green-100' :
+                                                            isSubmitted ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                                            isAwaiting ? 'bg-amber-50 text-amber-600 border-amber-100 animate-pulse' :
+                                                            'bg-blue-50 text-blue-600 border-blue-100'
+                                                        }`}>
+                                                            {req.status}
+                                                        </span>
+                                                        {req.survey_date && (
+                                                            <span className="text-[9px] font-bold text-gray-400 italic">
+                                                                Jadwal: {req.survey_date} @ {req.survey_time || '-'}
+                                                            </span>
+                                                        )}
+                                                    </div>
 
-                                {req.status === 'COMPLETED' && isAdmin && !req.user_rating && (
-                                    <button 
-                                        onClick={() => {
-                                            setIsEditingSurvey(req);
-                                            setUserRating(1);
-                                        }}
-                                        className="w-full py-4 bg-orange-50 text-orange-600 rounded-2xl text-[10px] font-black uppercase tracking-widest"
-                                    >
-                                        Beri Penilaian
-                                    </button>
-                                )}
+                                                    <p className="text-xs text-gray-500 font-medium ml-7 mb-3 leading-relaxed">{req.kost_address}</p>
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 ml-7 text-[11px] pt-3 border-t border-gray-100/50">
+                                                        <div>
+                                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">WhatsApp Owner</p>
+                                                            {req.owner_phone && req.owner_phone !== '-' ? (
+                                                                <a 
+                                                                    href={`https://wa.me/${req.owner_phone.replace(/\D/g, '')}`} 
+                                                                    target="_blank" 
+                                                                    rel="noreferrer"
+                                                                    className="font-bold text-emerald-600 hover:underline flex items-center gap-1 mt-0.5"
+                                                                >
+                                                                    🟢 {req.owner_phone}
+                                                                </a>
+                                                            ) : (
+                                                                <p className="font-bold text-gray-400 italic mt-0.5">Belum ada</p>
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Surveyor Lapangan</p>
+                                                            <p className="font-bold text-gray-800 mt-0.5">{req.agent_name || 'Belum ditugaskan'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Drive Folder</p>
+                                                            {req.result_drive_link ? (
+                                                                <a href={req.result_drive_link} target="_blank" rel="noreferrer" className="font-bold text-blue-600 hover:underline flex items-center gap-1 mt-0.5">
+                                                                    📂 Buka Folder
+                                                                </a>
+                                                            ) : (
+                                                                <p className="font-bold text-gray-400 italic mt-0.5">Belum tersedia</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Actions */}
+                                                <div className="flex flex-wrap sm:flex-nowrap lg:flex-col items-center justify-end gap-2 lg:w-44 shrink-0 pt-3 lg:pt-0 border-t lg:border-t-0 border-dashed border-gray-100 lg:pl-3">
+                                                    {(!isAdmin || isAgent || isDone || isSubmitted) && (
+                                                        <button
+                                                            onClick={() => {
+                                                                setIsEditingSurvey(req);
+                                                                setSurveyForm(req);
+                                                            }}
+                                                            className="flex-1 lg:w-full py-2 bg-gray-900 hover:bg-black text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-95 text-center flex items-center justify-center gap-1.5"
+                                                        >
+                                                            {isAgent ? '📝 Proses' : '📋 Hasil Survey'}
+                                                        </button>
+                                                    )}
+                                                    
+                                                    {isAdmin && (
+                                                        <button
+                                                            onClick={() => handleDeleteSurveyLocal(req.id, req.kost_name)}
+                                                            className="flex-1 lg:w-full py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-95 text-center flex items-center justify-center gap-1.5 border border-red-100"
+                                                        >
+                                                            🗑️ Hapus
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
-                    </div>
-                ))}
+                    ));
+                })()}
+
                 {filteredRequests.length === 0 && (
                     <div className="py-20 text-center bg-gray-50 rounded-3xl border-2 border-dashed border-gray-100">
                         <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Belum ada data survey.</p>
@@ -552,6 +714,70 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                         <div className="p-10 border-t border-gray-50 bg-gray-50/50 flex gap-4 shrink-0">
                             <button onClick={() => setViewingSurveyInvoice(null)} className="flex-1 py-4 bg-white border border-gray-200 text-gray-500 rounded-2xl text-[10px] font-black uppercase tracking-widest">Tutup</button>
                             <button onClick={() => window.print()} className="flex-1 py-4 bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl">Cetak</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL: EDIT ORDER (ALL UNITS) */}
+            {isEditingOrder && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsEditingOrder(null)}></div>
+                    <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95">
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                            <div><h2 className="text-xl font-black uppercase text-gray-900">Kelola Order Survey</h2><p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">{isEditingOrder.totalCount} Unit Kost • ID: {isEditingOrder.transactionId.substring(0, 8)}</p></div>
+                            <button onClick={() => setIsEditingOrder(null)} className="w-8 h-8 flex items-center justify-center border rounded-full hover:bg-white transition-colors">&times;</button>
+                        </div>
+                        <form onSubmit={handleUpdateOrder} className="flex-grow overflow-y-auto p-6 space-y-6">
+                            
+                            {/* PENETAPAN AGEN */}
+                            <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-5">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2 mb-3">
+                                    <span>👔</span> Penetapan Agen Surveyor (Terapkan ke semua unit)
+                                </label>
+                                <select 
+                                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-orange-500 transition-all outline-none"
+                                    value={orderForm.assigned_agent_id || ''}
+                                    onChange={e => setOrderForm({ ...orderForm, assigned_agent_id: e.target.value })}
+                                >
+                                    <option value="">-- Belum Ada Agen --</option>
+                                    {surveyAgents.map(a => (
+                                        <option key={a.id} value={a.id}>{a.name} (⭐ {a.rating || '0.0'})</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* LINK DRIVE PER UNIT */}
+                            <div>
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2 mb-3">
+                                    <span>📂</span> Link Drive Folder (Per Unit Kost)
+                                </label>
+                                <div className="space-y-3">
+                                    {isEditingOrder.surveys.map((req: any, idx: number) => (
+                                        <div key={req.id} className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                            <span className="w-6 h-6 bg-white text-gray-400 rounded flex items-center justify-center text-[10px] font-black shrink-0 border border-gray-100">{idx + 1}</span>
+                                            <div className="flex-1">
+                                                <p className="text-[10px] font-black text-gray-900 uppercase truncate max-w-[120px] sm:max-w-[200px] mb-1">{req.kost_name}</p>
+                                                <input 
+                                                    type="url"
+                                                    placeholder="Masukkan link Google Drive..."
+                                                    className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    value={orderForm.drive_links[req.id] || ''}
+                                                    onChange={e => {
+                                                        const newLinks = { ...orderForm.drive_links, [req.id]: e.target.value };
+                                                        setOrderForm({ ...orderForm, drive_links: newLinks });
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </form>
+                        <div className="p-6 border-t border-gray-100 bg-gray-50/50">
+                            <button type="submit" disabled={isSubmitting} onClick={handleUpdateOrder} className="w-full py-4 bg-gray-900 hover:bg-black text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                                {isSubmitting ? '🔄 Menyimpan...' : '💾 Simpan Perubahan Order'}
+                            </button>
                         </div>
                     </div>
                 </div>

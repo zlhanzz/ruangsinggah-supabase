@@ -10,6 +10,8 @@ interface CatalogManagementProps {
     setVerifikasiDiscount: (discount: number) => void;
     verifikasiDescription: string;
     setVerifikasiDescription: (desc: string) => void;
+    verifikasiPricePerKost: number;
+    setVerifikasiPricePerKost: (price: number) => void;
     isSavingVerifikasi: boolean;
     setIsSavingVerifikasi: (isSaving: boolean) => void;
     // Database Props
@@ -28,6 +30,8 @@ const CatalogManagement: React.FC<CatalogManagementProps> = ({
     setVerifikasiDiscount,
     verifikasiDescription,
     setVerifikasiDescription,
+    verifikasiPricePerKost,
+    setVerifikasiPricePerKost,
     isSavingVerifikasi,
     setIsSavingVerifikasi,
     dbProducts,
@@ -171,6 +175,22 @@ const CatalogManagement: React.FC<CatalogManagementProps> = ({
                                 </div>
                                 <p className="text-xs text-gray-400 font-medium">Jika diisi, harga normal akan dicoret pada antarmuka Klien.</p>
                             </div>
+                            <div className="space-y-3 md:col-span-2">
+                                <label className="text-[10px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-1">
+                                    Harga Per Kost (Multi-Kost Checkout)
+                                </label>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">Rp</span>
+                                    <input
+                                        type="number"
+                                        value={verifikasiPricePerKost}
+                                        onChange={(e) => setVerifikasiPricePerKost(Number(e.target.value))}
+                                        className="w-full bg-blue-50/30 border border-blue-100 rounded-xl pl-12 pr-4 py-4 text-blue-900 font-bold text-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
+                                        placeholder="Misal: 35000"
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-400 font-medium">Harga per lokasi jika user memesan lebih dari 1 kost sekaligus (maks. 5 kost). Contoh: 2 kost = 2 × Rp 35.000 = Rp 70.000.</p>
+                            </div>
                         </div>
                     </div>
 
@@ -208,6 +228,7 @@ const CatalogManagement: React.FC<CatalogManagementProps> = ({
                                             price: verifikasiPrice,
                                             discount_price: verifikasiDiscount,
                                             description: verifikasiDescription,
+                                            price_per_kost: verifikasiPricePerKost,
                                         });
                                         alert('✅ Katalog berhasil disimpan! Harga baru akan aktif untuk semua order baru.');
                                     } catch (err: any) {

@@ -486,13 +486,8 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
                   onPageChange(Page.LOGIN);
                   return;
                 }
-                
-                if (validateProfile) {
-                  const isValid = validateProfile();
-                  if (!isValid) return;
-                }
-                
-                setIsModalOpen(true);
+                // Navigasi langsung ke checkout — ProtectedRoute & validasi profil ditangani di sana
+                onPageChange(Page.SURVEY_CHECKOUT);
               }}
               className="w-full py-4 bg-orange-500 text-white rounded-xl font-bold text-lg hover:bg-orange-600 hover:scale-[1.02] transition-all shadow-lg shadow-orange-500/30"
             >

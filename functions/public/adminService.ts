@@ -864,10 +864,8 @@ export async function syncSurveyRequest(transactionId: string, transactionOverri
         const status = (trx.status || '').toUpperCase();
         const productType = (trx.product_type || trx.type || '').toLowerCase();
 
-        console.log(`SYNC_SURVEY: [DEBUG] Trx ${transactionId} Status: ${status}, Type: ${productType}`);
-
-        // Only sync if PAID or SUCCESS
-        if (status !== 'PAID' && status !== 'SUCCESS' && status !== 'SELESAI') {
+        const PAID_STATUS_LIST = ['PAID', 'SUCCESS', 'SELESAI', 'SETTLEMENT', 'CAPTURE', 'BERHASIL'];
+        if (!PAID_STATUS_LIST.includes(status)) {
             console.log(`SYNC_SURVEY: [DEBUG] Skipping. Status is ${status}.`);
             return;
         }
@@ -878,63 +876,98 @@ export async function syncSurveyRequest(transactionId: string, transactionOverri
         }
 
         const meta = trx.metadata || {};
-        
-        // 1. Check existing record to avoid status regression or overwriting drive links
-        const { data: existing } = await supabase
-            .from('survey_requests')
-            .select('*')
-            .eq('transaction_id', transactionId)
-            .maybeSingle();
 
-        const currentStatus = (existing?.status || 'AWAITING_PAYMENT').toUpperCase();
-        
-        // Determine the safest status to set
-        // If it's already more advanced than PENDING_ASSIGNMENT (like AGENT_ASSIGNED), keep it.
-        let targetStatus = 'PENDING_ASSIGNMENT';
-        if (existing && currentStatus !== 'AWAITING_PAYMENT') {
-            targetStatus = existing.status; 
-        }
-
-        const payload: any = {
-            user_id: trx.user_id,
-            transaction_id: transactionId,
-            status: targetStatus,
-            kost_name: meta.kostName || meta.title || existing?.kost_name || 'Kost Terdaftar',
-            kost_address: meta.kostAddress || meta.address || existing?.kost_address || '-',
-            owner_phone: meta.ownerPhone || meta.owner_phone || existing?.owner_phone || '-',
-            survey_date: meta.surveyDate || meta.date || existing?.survey_date || getCurrentDate().toISOString().split('T')[0],
-            survey_time: meta.surveyTime || meta.time || existing?.survey_time || '10:00',
-            notes: meta.notes || existing?.notes || '',
-            updated_at: getCurrentDate().toISOString()
+        // Normalize phone helper
+        const normalizePhone = (p: string) => {
+            if (!p || p === '-') return '-';
+            let clean = p.replace(/\D/g, '');
+            if (clean.startsWith('0')) clean = clean.substring(1);
+            if (clean.startsWith('62')) clean = clean.substring(2);
+            return `+62${clean}`;
         };
 
-        // NEVER overwrite result_drive_link with null if it already exists
-        if (existing?.result_drive_link) {
-            payload.result_drive_link = existing.result_drive_link;
+        // Fetch ALL existing records for this transaction (bisa N records)
+        const { data: existingRecords } = await supabase
+            .from('survey_requests')
+            .select('*')
+            .eq('transaction_id', transactionId);
+
+        // Sort existing records so they are index-aligned with the kostList order
+        const sortedExisting = existingRecords 
+            ? [...existingRecords].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+            : [];
+
+        const kostList: any[] = Array.isArray(meta.kostList) && meta.kostList.length > 0
+            ? meta.kostList
+            : [{ // Fallback untuk order lama (1 kost)
+                kostName: meta.kostName || meta.title || 'Kost Terdaftar',
+                kostAddress: meta.kostAddress || meta.address || '-',
+                ownerPhone: meta.ownerPhone || meta.owner_phone || '-',
+            }];
+
+        console.log(`SYNC_SURVEY: [DEBUG] Processing ${kostList.length} kost(s) for transaction ${transactionId}`);
+
+        for (let i = 0; i < kostList.length; i++) {
+            const kost = kostList[i];
+            // Match based on index in sorted existing records
+            const existing = sortedExisting[i] || null;
+
+            const currentStatus = (existing?.status || 'AWAITING_PAYMENT').toUpperCase();
+            let targetStatus = 'PENDING_ASSIGNMENT';
+            if (existing && currentStatus !== 'AWAITING_PAYMENT') {
+                targetStatus = existing.status;
+            }
+
+            const payload: any = {
+                user_id: trx.user_id,
+                transaction_id: transactionId,
+                status: targetStatus,
+                kost_name: kost.kostName || `Kost #${i + 1}`,
+                kost_address: kost.kostAddress || '-',
+                owner_phone: normalizePhone(kost.ownerPhone || kost.owner_phone || ''),
+                survey_date: meta.surveyDate || existing?.survey_date || getCurrentDate().toISOString().split('T')[0],
+                survey_time: meta.surveyTime || existing?.survey_time || '10:00',
+                notes: meta.notes || existing?.notes || '',
+                updated_at: getCurrentDate().toISOString(),
+            };
+
+            // Jangan timpa result_drive_link jika sudah ada
+            if (existing?.result_drive_link) {
+                payload.result_drive_link = existing.result_drive_link;
+            }
+            // Jangan timpa evaluation_summary jika sudah ada
+            if (existing?.evaluation_summary) {
+                payload.evaluation_summary = existing.evaluation_summary;
+            }
+            // Jangan timpa assigned_agent_id jika sudah ada
+            if (existing?.assigned_agent_id) {
+                payload.assigned_agent_id = existing.assigned_agent_id;
+            }
+
+            if (existing) {
+                console.log(`SYNC_SURVEY: [DEBUG] Updating kost #${i + 1} (ID: ${existing.id})`);
+                const { error: updateErr } = await supabase
+                    .from('survey_requests')
+                    .update(payload)
+                    .eq('id', existing.id);
+                if (updateErr) console.error(`SYNC_SURVEY: Update error for kost #${i + 1}:`, updateErr);
+            } else {
+                console.log(`SYNC_SURVEY: [DEBUG] Creating NEW record for kost #${i + 1}: ${kost.kostName}`);
+                payload.created_at = trx.created_at || getCurrentDate().toISOString();
+                const { error: insertErr } = await supabase
+                    .from('survey_requests')
+                    .insert([payload]);
+                if (insertErr) console.error(`SYNC_SURVEY: Insert error for kost #${i + 1}:`, insertErr);
+            }
         }
 
-        if (existing) {
-            console.log(`SYNC_SURVEY: [DEBUG] Record already exists (ID: ${existing.id}). Performing UPDATE.`);
-            const { error: updateErr } = await supabase
-                .from('survey_requests')
-                .update(payload)
-                .eq('id', existing.id);
-            if (updateErr) throw updateErr;
-        } else {
-            console.log("SYNC_SURVEY: [DEBUG] Creating NEW survey request record.");
-            (payload as any).created_at = trx.created_at || getCurrentDate().toISOString();
-            const { error: insertErr } = await supabase
-                .from('survey_requests')
-                .insert([payload]);
-            if (insertErr) throw insertErr;
-        }
-        console.log("SYNC_SURVEY: [SUCCESS] Survey request record synchronized.");
-        // Removed triggerCrossTabRefresh() to prevent infinite reload loops during auto-sync
+        console.log(`SYNC_SURVEY: [SUCCESS] ${kostList.length} kost record(s) synchronized for transaction ${transactionId}`);
 
     } catch (err) {
         console.error("SYNC_SURVEY_ERROR:", err);
     }
 }
+
 
 /**
  * autoSyncPaidSurveys: Scans for PAID survey transactions that are missing from survey_requests.
@@ -948,7 +981,10 @@ export async function autoSyncPaidSurveys(userId?: string) {
             .from('transactions')
             .select('*')
             .eq('product_type', 'survey')
-            .in('status', ['PAID', 'SUCCESS', 'SELESAI']);
+            .in('status', [
+                'PAID', 'SUCCESS', 'SELESAI', 'SETTLEMENT', 'CAPTURE', 'BERHASIL',
+                'paid', 'success', 'selesai', 'settlement', 'capture', 'berhasil'
+            ]);
             
         if (userId) {
             query = query.eq('user_id', userId);
@@ -2642,6 +2678,7 @@ export interface SurveyCatalogSettings {
   price: number;
   discount_price: number;
   description: string;
+  price_per_kost: number;
 }
 
 /**
@@ -2653,6 +2690,7 @@ export async function getSurveyCatalogSettings(): Promise<SurveyCatalogSettings>
     price: 70000,
     discount_price: 50000,
     description: 'Dapatkan bantuan profesional untuk mengecek kondisi kost impian Anda secara langsung via Video Call. Hemat waktu, tenaga, dan hindari penipuan ZONK!',
+    price_per_kost: 35000,
   };
 
   try {
@@ -2671,6 +2709,7 @@ export async function getSurveyCatalogSettings(): Promise<SurveyCatalogSettings>
       price: Number(data.value?.price ?? DEFAULT.price),
       discount_price: Number(data.value?.discount_price ?? DEFAULT.discount_price),
       description: String(data.value?.description ?? DEFAULT.description),
+      price_per_kost: Number(data.value?.price_per_kost ?? DEFAULT.price_per_kost),
     };
   } catch (err) {
     console.error('getSurveyCatalogSettings error:', err);
@@ -2698,6 +2737,7 @@ export async function saveSurveyCatalogSettings(settings: SurveyCatalogSettings)
           price: settings.price,
           discount_price: settings.discount_price,
           description: settings.description,
+          price_per_kost: settings.price_per_kost,
         },
         updated_at: new Date().toISOString(),
       },

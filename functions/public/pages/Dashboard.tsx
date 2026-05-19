@@ -342,6 +342,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
     const [verifikasiPrice, setVerifikasiPrice] = useState(70000);
     const [verifikasiDiscount, setVerifikasiDiscount] = useState(50000);
     const [verifikasiDescription, setVerifikasiDescription] = useState("Dapatkan bantuan profesional untuk mengecek kondisi kost impian Anda secara langsung via Video Call. Hemat waktu, tenaga, dan hindari penipuan ZONK!");
+    const [verifikasiPricePerKost, setVerifikasiPricePerKost] = useState(35000);
     const [isSavingVerifikasi, setIsSavingVerifikasi] = useState(false);
 
     // Load survey catalog settings dari Supabase saat admin mount
@@ -351,6 +352,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
             setVerifikasiPrice(settings.price);
             setVerifikasiDiscount(settings.discount_price);
             setVerifikasiDescription(settings.description);
+            setVerifikasiPricePerKost(settings.price_per_kost ?? 35000);
         }).catch((err) => {
             console.error('Gagal load survey catalog settings:', err);
         });
@@ -2791,6 +2793,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                             setVerifikasiDiscount={setVerifikasiDiscount}
                                             verifikasiDescription={verifikasiDescription}
                                             setVerifikasiDescription={setVerifikasiDescription}
+                                            verifikasiPricePerKost={verifikasiPricePerKost}
+                                            setVerifikasiPricePerKost={setVerifikasiPricePerKost}
                                             isSavingVerifikasi={isSavingVerifikasi}
                                             setIsSavingVerifikasi={setIsSavingVerifikasi}
                                             dbProducts={[]} // Not used for verification tab
@@ -2849,6 +2853,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                             setVerifikasiDiscount={() => {}}
                                             verifikasiDescription=""
                                             setVerifikasiDescription={() => {}}
+                                            verifikasiPricePerKost={0}
+                                            setVerifikasiPricePerKost={() => {}}
                                             isSavingVerifikasi={false}
                                             setIsSavingVerifikasi={() => {}}
                                         />

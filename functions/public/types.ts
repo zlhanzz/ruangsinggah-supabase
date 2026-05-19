@@ -181,6 +181,7 @@ export enum Page {
   PROFILE = '/profile',
   MITRA_PROFILE = '/mitra-profile',
   SURVEY_SERVICE = '/survey-service',
+  SURVEY_CHECKOUT = '/survey-checkout',
   TERMS = '/syarat-ketentuan'
 }
 

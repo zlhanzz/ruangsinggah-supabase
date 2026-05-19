@@ -18,6 +18,7 @@ const Profile = lazy(() => import('./pages/Profile'));
 const KostDetail = lazy(() => import('./pages/KostDetail'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const SurveyService = lazy(() => import('./pages/SurveyService'));
+const SurveyCheckout = lazy(() => import('./pages/SurveyCheckout'));
 const MyKost = lazy(() => import('./pages/MyKost'));
 const Chat = lazy(() => import('./pages/Chat'));
 const MitraDashboard = lazy(() => import('./pages/MitraDashboard'));
@@ -51,7 +52,7 @@ const ProtectedRoute: React.FC<{
   }
   
   if (!user) {
-    return <Navigate to={Page.HOME} replace />;
+    return <Navigate to={Page.LOGIN} replace />;
   }
   
   if (requiredRole) {
@@ -502,6 +503,26 @@ const App: React.FC = () => {
               />
             } />
             <Route path={Page.TERMS} element={<Terms />} />
+            <Route path={Page.SURVEY_CHECKOUT} element={
+              <ProtectedRoute user={user} loadingAuth={loadingAuth}>
+                <SurveyCheckout
+                  user={user}
+                  onPageChange={(p: Page) => navigate(p)}
+                  validateProfile={() => {
+                    if (!isProfileComplete(user)) {
+                      alert('Silahkan lengkapi profile sebelum menggunakan layanan survey.');
+                      navigate(Page.PROFILE);
+                      return false;
+                    }
+                    if (calculateAge(user.birth_date) < 17) {
+                      alert('Mohon maaf, usia minimal untuk menggunakan layanan survey adalah 17 tahun.');
+                      return false;
+                    }
+                    return true;
+                  }}
+                />
+              </ProtectedRoute>
+            } />
             <Route path={`${Page.MY_BOOKINGS}/*`} element={
               <ProtectedRoute user={user} loadingAuth={loadingAuth}>
                 <MyKost user={user} />
