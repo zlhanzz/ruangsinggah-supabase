@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { SurveyRequest } from '../types';
 import { FORMAT_CURRENCY } from '../constants';
 import { 
@@ -62,9 +63,45 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const [uploadSourceFieldId, setUploadSourceFieldId] = useState<string | null>(null);
     const cameraInputRef = useRef<HTMLInputElement>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
-    const [agentTab, setAgentTab] = useState<'pending' | 'active' | 'history'>('pending');
+    const [searchParams, setSearchParams] = useSearchParams();
+    const agentTab = (searchParams.get('status') as 'pending' | 'active' | 'history') || 'pending';
+    const setAgentTab = (newTab: 'pending' | 'active' | 'history') => {
+        setSearchParams({ status: newTab });
+    };
     const [profileImgError, setProfileImgError] = useState(false);
     
+    // Auto-save draft effect
+    useEffect(() => {
+        if (isEditingSurvey && surveyForm && Object.keys(surveyForm).length > 0) {
+            const draftKey = `survey_draft_${isEditingSurvey.id}`;
+            localStorage.setItem(draftKey, JSON.stringify(surveyForm));
+        }
+    }, [surveyForm, isEditingSurvey]);
+
+    const openSurveyEditor = (req: SurveyRequest, defaultStatus: string) => {
+        setIsEditingSurvey(req);
+        const defaultForm = {
+            status: defaultStatus,
+            assigned_agent_id: req.assigned_agent_id,
+            agent_name: req.agent_name,
+            agent_phone: req.agent_phone,
+            result_drive_link: req.result_drive_link,
+            evaluation_summary: req.evaluation_summary || {}
+        };
+        const draftKey = `survey_draft_${req.id}`;
+        const savedDraft = localStorage.getItem(draftKey);
+        if (savedDraft) {
+            try {
+                const parsed = JSON.parse(savedDraft);
+                setSurveyForm(parsed);
+            } catch (e) {
+                setSurveyForm(defaultForm);
+            }
+        } else {
+            setSurveyForm(defaultForm);
+        }
+    };
+
     // Wallet State
     const [walletView, setWalletView] = useState<'balance' | 'history' | 'bank'>('balance');
     const [isWithdrawing, setIsWithdrawing] = useState(false);
@@ -146,6 +183,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             };
             await updateSurveyRequest(isEditingSurvey.id, finalForm);
             await notifySurveyStatusUpdate(isEditingSurvey.id, 'SUBMITTED');
+            localStorage.removeItem(`survey_draft_${isEditingSurvey.id}`);
             setIsEditingSurvey(null);
             alert('Laporan berhasil dikirim! Menunggu konfirmasi dari User.');
             await loadSurveyRequests();
@@ -670,17 +708,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         </button>
 
                                         <button 
-                                            onClick={() => {
-                                                setIsEditingSurvey(req);
-                                                setSurveyForm({
-                                                    status: 'COMPLETED',
-                                                    assigned_agent_id: req.assigned_agent_id,
-                                                    agent_name: req.agent_name,
-                                                    agent_phone: req.agent_phone,
-                                                    result_drive_link: req.result_drive_link,
-                                                    evaluation_summary: req.evaluation_summary || {}
-                                                });
-                                            }} 
+                                            onClick={() => openSurveyEditor(req, 'COMPLETED')} 
                                             className="w-full bg-orange-600 hover:bg-orange-700 text-white py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-md animate-pulse active:scale-95 transition-all flex justify-center items-center gap-2"
                                         >
                                             📝 Buat Laporan
@@ -691,17 +719,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                 {agentTab === 'history' && (
                                     <>
                                         <button 
-                                            onClick={() => {
-                                                setIsEditingSurvey(req);
-                                                setSurveyForm({
-                                                    status: req.status,
-                                                    assigned_agent_id: req.assigned_agent_id,
-                                                    agent_name: req.agent_name,
-                                                    agent_phone: req.agent_phone,
-                                                    result_drive_link: req.result_drive_link,
-                                                    evaluation_summary: req.evaluation_summary || {}
-                                                });
-                                            }} 
+                                            onClick={() => openSurveyEditor(req, req.status)} 
                                             className="w-full bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex justify-center items-center gap-2"
                                         >
                                             {req.evaluation_summary?.room_facilities ? '✅ Lihat Laporan' : '📝 Detail Progress'}
@@ -1110,6 +1128,30 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             </div>
                             <form onSubmit={handleUpdateSurvey} className="flex-grow overflow-y-auto p-0 m-0">
                                 <div className="p-6 space-y-5">
+                                    {localStorage.getItem(`survey_draft_${isEditingSurvey.id}`) && (
+                                        <div className="bg-orange-50 text-orange-800 text-[11px] font-bold px-4 py-3 rounded-2xl border border-orange-100 flex items-center justify-between gap-2 mb-4 animate-in slide-in-from-top duration-200">
+                                            <span>🔄 Memulihkan draf laporan otomatis.</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (window.confirm("Hapus draf laporan ini dan mulai ulang dari awal?")) {
+                                                        localStorage.removeItem(`survey_draft_${isEditingSurvey.id}`);
+                                                        setSurveyForm({
+                                                            status: isEditingSurvey.status === 'COMPLETED' ? 'COMPLETED' : isEditingSurvey.status,
+                                                            assigned_agent_id: isEditingSurvey.assigned_agent_id,
+                                                            agent_name: isEditingSurvey.agent_name,
+                                                            agent_phone: isEditingSurvey.agent_phone,
+                                                            result_drive_link: isEditingSurvey.result_drive_link,
+                                                            evaluation_summary: isEditingSurvey.evaluation_summary || {}
+                                                        });
+                                                    }
+                                                }}
+                                                className="text-[9px] font-black uppercase px-2 py-1 bg-white hover:bg-orange-100 text-orange-700 rounded-lg border border-orange-200 transition-colors shadow-sm"
+                                            >
+                                                Mulai Ulang
+                                            </button>
+                                        </div>
+                                    )}
                                     <div>
                                         <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-2">
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>

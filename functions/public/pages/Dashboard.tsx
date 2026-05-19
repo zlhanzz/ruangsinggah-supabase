@@ -202,12 +202,18 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         (tab as DashboardMenu) || (isAgent ? 'overview' : (isOwner ? 'properties' : 'analytics'))
     );
 
-    // Sync state with URL
+    // Sync state with URL & Redirect empty wildcard to default menu
     useEffect(() => {
-        if (tab && tab !== activeMenu) {
-            setActiveMenu(tab as DashboardMenu);
+        if (tab) {
+            if (tab !== activeMenu) {
+                setActiveMenu(tab as DashboardMenu);
+            }
+        } else {
+            const basePath = isAdmin ? Page.DASHBOARD_ADMIN : (isAgent ? Page.DASHBOARD_AGENT : Page.DASHBOARD_MITRA);
+            const defaultMenu = isAgent ? 'overview' : (isOwner ? 'properties' : 'analytics');
+            navigate(`${basePath}/${defaultMenu}`, { replace: true });
         }
-    }, [tab]);
+    }, [tab, activeMenu, isAdmin, isAgent, isOwner, navigate]);
 
     const handleMenuChange = (menu: DashboardMenu) => {
         const basePath = isAdmin ? Page.DASHBOARD_ADMIN : (isAgent ? Page.DASHBOARD_AGENT : Page.DASHBOARD_MITRA);
