@@ -54,8 +54,19 @@
 ### 8. Penyederhanaan Kategori Jenis Kost pada Evaluasi Survey (Mei 2026)
 - **Hanya Checkbox**: Menyederhanakan kategori **Jenis Kost** pada form evaluasi survey dengan menyembunyikan input bintang penilaian keseluruhan, catatan teks/ulasan, dan bukti foto. Kategori ini sekarang murni hanya menampilkan checkbox pilihan tipe kost (Putra, Putri, Campur, Pasutri).
 
-### 9. Dukungan Kamera HP & Galeri secara Native (Latar Belakang) (Mei 2026)
-- **Penghapusan Atribut Multiple**: Menghilangkan atribut `multiple` pada input berkas bukti foto survey baik di `SurveyManagement.tsx` (Admin) maupun `AgentDashboard.tsx` (Agen). Ini secara otomatis (di latar belakang) memicu lembar dialog sistem operasi (native chooser sheet) pada HP agar memunculkan pilihan Kamera (ambil foto langsung), Galeri (pilih foto), atau File Dokumen secara lancar di semua browser seluler.
+### 9. Pilihan Kamera HP vs Galeri via Action Sheet (Mei 2026)
+- **Menu Pilihan Bawah Layar**: Mengganti trigger input langsung dengan Action Sheet (bottom sheet dialog) bergaya native iOS/Android. Ketika Agen mengklik tombol "Tambah Foto", muncul pilihan:
+  - **Kamera HP**: Membuka kamera bawaan secara langsung menggunakan atribut `capture="environment"`, memaksa sistem Android/iOS (termasuk Google Pixel) untuk mengambil foto instan.
+  - **Galeri / File**: Membuka galeri foto untuk memilih berkas yang sudah ada dengan dukungan banyak berkas (`multiple`).
+
+### 10. Perizinan Folder Google Drive Tulis (Writer) (Mei 2026)
+- **Akses Tulis Publik (Anyone with Link can Edit)**: Mengubah perizinan folder Google Drive yang terbuat otomatis untuk setiap survei dari `reader` menjadi `writer`. Hal ini memungkinkan Agen lapangan mengunggah berkas foto/dokumentasi survei secara langsung menggunakan akun Google pribadi mereka tanpa terhambat status hak akses privat folder.
+
+### 11. Sinkronisasi Perutean (Routing) & Auto-Draft Laporan (Mei 2026)
+- **Wildcard Redirect**: Menambahkan pengalihan otomatis di `Dashboard.tsx` agar ketika pengguna mengakses URL dasar `/dashboard-agent` langsung, URL secara bersih dialihkan ke `/dashboard-agent/overview`.
+- **Search Parameter Sync**: Menyinkronkan sub-tab tugas ("Permintaan", "Aktif", "Riwayat") di dashboard agen dengan URL parameter `?status=pending/active/history` via `useSearchParams`. Melindungi kondisi aktif tab agar tidak ter-reset kembali ke tab "Permintaan" saat browser direfresh secara tidak sengaja.
+- **Auto-Draft via LocalStorage**: Menyimpan data isian formulir laporan survei (`surveyForm`) secara otomatis di latar belakang menggunakan `localStorage` dengan kunci unik `survey_draft_${surveyId}`.
+- **Auto-Restore & Reset Banner**: Draf laporan yang belum terkirim otomatis dipulihkan saat Agen membuka kembali modal pengisian laporan. Ditambahkan banner visual elegan "Memulihkan draf laporan otomatis" beserta tombol **Mulai Ulang** untuk menghapus draf lama jika surveyor ingin mengisi form kembali dari awal. Draf otomatis dihapus dari memori begitu laporan berhasil dikirim ke database.
 
 ## Fitur Dalam Pengerjaan (In Progress)
 -   Monitoring konsistensi Webhook Midtrans vs Supabase untuk transaksi multi-kost.
