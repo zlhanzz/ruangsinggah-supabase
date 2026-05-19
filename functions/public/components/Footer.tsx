@@ -37,6 +37,7 @@ const Footer: React.FC<FooterProps> = ({ onPageChange }) => {
               <li><button onClick={() => onPageChange(Page.ABOUT)} className="hover:text-orange-500">Tentang Kami</button></li>
               <li><button onClick={() => onPageChange(Page.CONTACT)} className="hover:text-orange-500">Kontak</button></li>
               <li><button onClick={() => onPageChange(Page.TERMS)} className="hover:text-orange-500">Syarat & Ketentuan</button></li>
+              <li><button onClick={() => onPageChange(Page.ARTICLES)} className="hover:text-orange-500">Edukasi & Artikel</button></li>
             </ul>
           </div>
 

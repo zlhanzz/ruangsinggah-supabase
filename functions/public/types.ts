@@ -182,7 +182,9 @@ export enum Page {
   MITRA_PROFILE = '/mitra-profile',
   SURVEY_SERVICE = '/survey-service',
   SURVEY_CHECKOUT = '/survey-checkout',
-  TERMS = '/syarat-ketentuan'
+  TERMS = '/syarat-ketentuan',
+  ARTICLES = '/artikel',
+  ARTICLE_DETAIL = '/artikel/:slug'
 }
 
 export interface SurveyRequest {
