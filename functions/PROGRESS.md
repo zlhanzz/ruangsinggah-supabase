@@ -54,6 +54,9 @@
 ### 8. Penyederhanaan Kategori Jenis Kost pada Evaluasi Survey (Mei 2026)
 - **Hanya Checkbox**: Menyederhanakan kategori **Jenis Kost** pada form evaluasi survey dengan menyembunyikan input bintang penilaian keseluruhan, catatan teks/ulasan, dan bukti foto. Kategori ini sekarang murni hanya menampilkan checkbox pilihan tipe kost (Putra, Putri, Campur, Pasutri).
 
+### 9. Dukungan Kamera HP & Galeri secara Native (Latar Belakang) (Mei 2026)
+- **Penghapusan Atribut Multiple**: Menghilangkan atribut `multiple` pada input berkas bukti foto survey baik di `SurveyManagement.tsx` (Admin) maupun `AgentDashboard.tsx` (Agen). Ini secara otomatis (di latar belakang) memicu lembar dialog sistem operasi (native chooser sheet) pada HP agar memunculkan pilihan Kamera (ambil foto langsung), Galeri (pilih foto), atau File Dokumen secara lancar di semua browser seluler.
+
 ## Fitur Dalam Pengerjaan (In Progress)
 -   Monitoring konsistensi Webhook Midtrans vs Supabase untuk transaksi multi-kost.
 -   Uji E2E transaksi nyata di Production (Smallest Amount).
