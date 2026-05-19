@@ -33,6 +33,7 @@ import UserManagement from '../components/admin/UserManagement';
 import SurveyManagement from '../components/admin/SurveyManagement';
 import BannerManagement from '../components/admin/BannerManagement';
 import ComplaintManagement from '../components/admin/ComplaintManagement';
+import ArticleManagement from '../components/admin/ArticleManagement';
 import CatalogManagement from '../components/admin/CatalogManagement';
 import RentTransactionManagement from '../components/admin/RentTransactionManagement';
 import ExtensionTransactionManagement from '../components/admin/ExtensionTransactionManagement';
@@ -187,7 +188,7 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
 
 
 
-type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_extension' | 'transactions_db' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'tenants' | 'active_tenants' | 'agent_verification' | 'banners';
+type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_extension' | 'transactions_db' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'tenants' | 'active_tenants' | 'agent_verification' | 'banners' | 'articles';
 
 const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, listings = [], onAdd, onEdit, onDelete, onRefreshListings, verificationStatus }) => {
     const isAdmin = role === 'admin';
@@ -2141,6 +2142,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                         <SidebarItem icon="🤝" label="Kelola Mitra" isActive={activeMenu === 'mitra'} onClick={() => handleMenuChange('mitra')} />
                         <SidebarItem icon="🛡️" label="Kelola Agen" isActive={activeMenu === 'agent_verification'} onClick={() => handleMenuChange('agent_verification')} />
                         <SidebarItem icon="🖼️" label="Banner Promo" isActive={activeMenu === 'banners'} onClick={() => handleMenuChange('banners')} />
+                        <SidebarItem icon="📝" label="Kelola Artikel" isActive={activeMenu === 'articles'} onClick={() => handleMenuChange('articles')} />
                     </>
                 )}
 
@@ -2917,6 +2919,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                             banners={banners}
                                             refreshData={loadBanners}
                                         />
+                                    )}
+                                    {activeMenu === 'articles' && isAdmin && (
+                                        <ArticleManagement />
                                     )}
                                     {activeMenu === 'complaints' && (isAdmin || isOwner) && (
                                         <ComplaintManagement 

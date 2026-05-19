@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Clock, Calendar, User, Share2, Search, ArrowRight, BookOpen } from 'lucide-react';
 import { Page } from '../types';
+import { supabase } from '../supabase';
 
 interface ArticleData {
   slug: string;
@@ -13,7 +14,7 @@ interface ArticleData {
   readTime: string;
   icon: string;
   gradient: string;
-  content: React.ReactNode;
+  content: React.ReactNode | string;
 }
 
 const articles: ArticleData[] = [
@@ -150,8 +151,44 @@ const Articles: React.FC = () => {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug?: string }>();
   const [searchTerm, setSearchTerm] = useState('');
-  
-  const currentArticle = slug ? articles.find(a => a.slug === slug) : null;
+  const [dbArticles, setDbArticles] = useState<ArticleData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchArticles = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('articles')
+          .select('*')
+          .eq('status', 'published')
+          .order('created_at', { ascending: false });
+        
+        if (!error && data) {
+          const mapped: ArticleData[] = data.map((d: any) => ({
+            slug: d.slug,
+            title: d.title,
+            description: d.description,
+            category: d.category,
+            author: d.author,
+            date: d.date,
+            readTime: d.read_time,
+            icon: d.icon,
+            gradient: d.gradient,
+            content: d.content
+          }));
+          setDbArticles(mapped);
+        }
+      } catch (err) {
+        console.warn("Table articles not found or query error, using static fallbacks:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchArticles();
+  }, []);
+
+  const allArticles = [...dbArticles, ...articles.filter(a => !dbArticles.some(da => da.slug === a.slug))];
+  const currentArticle = slug ? allArticles.find(a => a.slug === slug) : null;
 
   // SEO & Schema injection dynamic handling
   useEffect(() => {
@@ -217,7 +254,7 @@ const Articles: React.FC = () => {
   }, [currentArticle]);
 
   // Filter catalog
-  const filteredArticles = articles.filter(a => 
+  const filteredArticles = allArticles.filter(a => 
     a.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     a.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
     a.category.toLowerCase().includes(searchTerm.toLowerCase())
@@ -269,7 +306,11 @@ const Articles: React.FC = () => {
 
             {/* Content Body */}
             <div className="px-6 sm:px-12 py-10 sm:py-16 prose prose-orange max-w-none">
-              {currentArticle.content}
+              {typeof currentArticle.content === 'string' ? (
+                <div dangerouslySetInnerHTML={{ __html: currentArticle.content }} />
+              ) : (
+                currentArticle.content
+              )}
             </div>
 
             {/* Share / Footer */}
