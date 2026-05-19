@@ -2445,3 +2445,68 @@ export const sendSurveyStatusEmail = functions.https.onRequest({ cors: true }, a
     res.status(500).send({ message: err.message });
   }
 });
+
+/**
+ * sitemap: Menghasilkan sitemap.xml secara dinamis dengan query ke Supabase
+ */
+export const sitemap = functions.https.onRequest(async (req, res) => {
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const supabaseClient = createClient(supabaseUrlParam.value(), supabaseKeyParam.value());
+
+    // Ambil artikel yang berstatus published
+    const { data: articles, error } = await supabaseClient
+      .from('articles')
+      .select('slug, updated_at')
+      .eq('status', 'published');
+
+    if (error) {
+      console.error("CF_LOG: Error fetching articles for sitemap:", error);
+    }
+
+    // Daftar halaman statis utama
+    const staticPages = [
+      '',
+      '/survey',
+      '/about',
+      '/faq',
+      '/hubungi-kami',
+      '/artikel'
+    ];
+
+    const baseUrl = 'https://ruangsinggah.id';
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+    xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+
+    // 1. Tambahkan halaman statis
+    for (const page of staticPages) {
+      xml += `  <url>\n`;
+      xml += `    <loc>${baseUrl}${page}</loc>\n`;
+      xml += `    <changefreq>weekly</changefreq>\n`;
+      xml += `    <priority>${page === '' ? '1.0' : '0.8'}</priority>\n`;
+      xml += `  </url>\n`;
+    }
+
+    // 2. Tambahkan halaman artikel dinamis
+    if (articles && Array.isArray(articles)) {
+      for (const art of articles) {
+        const lastMod = art.updated_at ? new Date(art.updated_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+        xml += `  <url>\n`;
+        xml += `    <loc>${baseUrl}/artikel/${art.slug}</loc>\n`;
+        xml += `    <lastmod>${lastMod}</lastmod>\n`;
+        xml += `    <changefreq>monthly</changefreq>\n`;
+        xml += `    <priority>0.7</priority>\n`;
+        xml += `  </url>\n`;
+      }
+    }
+
+    xml += `</urlset>`;
+
+    res.set('Content-Type', 'text/xml; charset=utf-8');
+    res.status(200).send(xml);
+  } catch (err: any) {
+    console.error("CF_LOG: Sitemap generation error:", err);
+    res.status(500).send("Error generating sitemap");
+  }
+});
+

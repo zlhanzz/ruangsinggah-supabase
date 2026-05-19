@@ -1,7 +1,7 @@
+# https://www.robotstxt.org/robotstxt.html
+# Mengizinkan semua crawler umum untuk merayap situs kecuali halaman privat
 User-agent: *
 Allow: /
-
-# Blokir halaman privat dari crawling
 Disallow: /dashboard
 Disallow: /admin
 Disallow: /mitra-dashboard
@@ -11,5 +11,58 @@ Disallow: /my-bookings
 Disallow: /payment-status/
 Disallow: /payment-callback
 
-# Sitemap
+# Mengizinkan Crawler AI (GEO Optimization) secara eksplisit untuk membaca konten artikel & halaman publik
+User-agent: GPTBot
+Allow: /
+Allow: /artikel
+Allow: /artikel/*
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /mitra-dashboard
+Disallow: /agent-dashboard
+Disallow: /profile
+Disallow: /my-bookings
+Disallow: /payment-status/
+Disallow: /payment-callback
+
+User-agent: Google-Extended
+Allow: /
+Allow: /artikel
+Allow: /artikel/*
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /mitra-dashboard
+Disallow: /agent-dashboard
+Disallow: /profile
+Disallow: /my-bookings
+Disallow: /payment-status/
+Disallow: /payment-callback
+
+User-agent: ClaudeBot
+Allow: /
+Allow: /artikel
+Allow: /artikel/*
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /mitra-dashboard
+Disallow: /agent-dashboard
+Disallow: /profile
+Disallow: /my-bookings
+Disallow: /payment-status/
+Disallow: /payment-callback
+
+User-agent: PerplexityBot
+Allow: /
+Allow: /artikel
+Allow: /artikel/*
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /mitra-dashboard
+Disallow: /agent-dashboard
+Disallow: /profile
+Disallow: /my-bookings
+Disallow: /payment-status/
+Disallow: /payment-callback
+
+# Sitemap dinamis
 Sitemap: https://ruangsinggah.id/sitemap.xml

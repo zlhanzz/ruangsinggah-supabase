@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Page } from '../types';
 import { supabase } from '../supabase';
+import { Helmet } from 'react-helmet-async';
 
 interface ArticleData {
   slug: string;
@@ -19,6 +20,7 @@ interface ArticleData {
   gradient: string;
   content: React.ReactNode | string;
   imageUrl?: string;
+  imageAlt?: string;
 }
 
 const articles: ArticleData[] = [
@@ -184,7 +186,8 @@ const Articles: React.FC = () => {
             icon: d.icon,
             gradient: d.gradient,
             content: d.content,
-            imageUrl: d.image_url
+            imageUrl: d.image_url,
+            imageAlt: d.image_alt
           }));
           setDbArticles(mapped);
         }
@@ -199,67 +202,6 @@ const Articles: React.FC = () => {
 
   const allArticles = [...dbArticles, ...articles.filter(a => !dbArticles.some(da => da.slug === a.slug))];
   const currentArticle = slug ? allArticles.find(a => a.slug === slug) : null;
-
-  // SEO & Schema injection dynamic handling
-  useEffect(() => {
-    if (currentArticle) {
-      document.title = `${currentArticle.title} - RuangSinggah.id Editorial`;
-      
-      // Update meta description
-      let metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc) {
-        metaDesc.setAttribute('content', currentArticle.description);
-      }
-
-      // Inject JSON-LD Article Schema
-      const schemaId = 'article-ld-json';
-      let scriptTag = document.getElementById(schemaId);
-      if (!scriptTag) {
-        scriptTag = document.createElement('script');
-        scriptTag.id = schemaId;
-        scriptTag.setAttribute('type', 'application/ld+json');
-        document.head.appendChild(scriptTag);
-      }
-
-      const articleSchema = {
-        '@context': 'https://schema.org',
-        '@type': 'NewsArticle',
-        'headline': currentArticle.title,
-        'description': currentArticle.description,
-        'image': currentArticle.imageUrl || 'https://ruangsinggah.id/logo.png',
-        'datePublished': '2026-05-19T00:00:00Z',
-        'dateModified': '2026-05-19T00:00:00Z',
-        'author': {
-          '@type': 'Person',
-          'name': currentArticle.author
-        },
-        'publisher': {
-          '@type': 'Organization',
-          'name': 'PT Ruang Singgah Nusantara',
-          'logo': {
-            '@type': 'ImageObject',
-            'url': 'https://ruangsinggah.id/logo.png'
-          }
-        },
-        'mainEntityOfPage': {
-          '@type': 'WebPage',
-          '@id': `https://ruangsinggah.id/artikel/${currentArticle.slug}`
-        }
-      };
-
-      scriptTag.innerHTML = JSON.stringify(articleSchema);
-
-      return () => {
-        document.title = 'RuangSinggah - Cari Kost Mahasiswa Terverifikasi di Makassar';
-        const defaultDesc = 'Cari kost mahasiswa terverifikasi di Makassar dengan mudah! Database kost putra, putri & campur dekat Unhas, UNM, UIN, Unismuh. Harga terjangkau, data valid dari lapangan. Jasa survey kost tersedia. Booking online sekarang!';
-        if (metaDesc) metaDesc.setAttribute('content', defaultDesc);
-        const scriptToRemove = document.getElementById(schemaId);
-        if (scriptToRemove) scriptToRemove.remove();
-      };
-    } else {
-      document.title = 'RuangSinggah Media - Portal Berita, Tips & Edukasi Properti';
-    }
-  }, [currentArticle]);
 
   // Filter logic
   const filteredArticles = allArticles.filter(a => {
@@ -300,6 +242,80 @@ const Articles: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#FBFBFD] text-slate-800 font-sans antialiased">
+      <Helmet>
+        <title>{currentArticle ? `${currentArticle.title} - RuangSinggah.id Editorial` : 'RuangSinggah Media - Portal Berita, Tips & Edukasi Properti'}</title>
+        <meta name="description" content={currentArticle ? currentArticle.description : 'Cari kost mahasiswa terverifikasi di Makassar dengan mudah! Database kost putra, putri & campur dekat Unhas, UNM, UIN, Unismuh. Harga terjangkau, data valid dari lapangan. Jasa survey kost tersedia. Booking online sekarang!'} />
+        
+        {/* Open Graph Meta Tags */}
+        <meta property="og:title" content={currentArticle ? currentArticle.title : 'RuangSinggah Media - Portal Berita, Tips & Edukasi Properti'} />
+        <meta property="og:description" content={currentArticle ? currentArticle.description : 'Cari kost mahasiswa terverifikasi di Makassar dengan mudah! Database kost putra, putri & campur dekat Unhas, UNM, UIN, Unismuh.'} />
+        <meta property="og:image" content={currentArticle?.imageUrl || 'https://ruangsinggah.id/logo.png'} />
+        <meta property="og:url" content={currentArticle ? `https://ruangsinggah.id/artikel/${currentArticle.slug}` : 'https://ruangsinggah.id/artikel'} />
+        <meta property="og:type" content={currentArticle ? 'article' : 'website'} />
+        
+        {/* Twitter Card Meta Tags */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={currentArticle ? currentArticle.title : 'RuangSinggah Media - Portal Berita, Tips & Edukasi Properti'} />
+        <meta name="twitter:description" content={currentArticle ? currentArticle.description : 'Cari kost mahasiswa terverifikasi di Makassar dengan mudah!'} />
+        <meta name="twitter:image" content={currentArticle?.imageUrl || 'https://ruangsinggah.id/logo.png'} />
+
+        {currentArticle && (
+          <script type="application/ld+json">
+            {JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'NewsArticle',
+              'headline': currentArticle.title,
+              'description': currentArticle.description,
+              'image': currentArticle.imageUrl || 'https://ruangsinggah.id/logo.png',
+              'datePublished': '2026-05-19T00:00:00Z',
+              'dateModified': '2026-05-19T00:00:00Z',
+              'author': {
+                '@type': 'Person',
+                'name': currentArticle.author
+              },
+              'publisher': {
+                '@type': 'Organization',
+                'name': 'PT Ruang Singgah Nusantara',
+                'logo': {
+                  '@type': 'ImageObject',
+                  'url': 'https://ruangsinggah.id/logo.png'
+                }
+              },
+              'mainEntityOfPage': {
+                '@type': 'WebPage',
+                '@id': `https://ruangsinggah.id/artikel/${currentArticle.slug}`
+              }
+            })}
+          </script>
+        )}
+        <script type="application/ld+json">
+          {JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'BreadcrumbList',
+            'itemListElement': [
+              {
+                '@type': 'ListItem',
+                'position': 1,
+                'name': 'Home',
+                'item': 'https://ruangsinggah.id'
+              },
+              {
+                '@type': 'ListItem',
+                'position': 2,
+                'name': 'Artikel',
+                'item': 'https://ruangsinggah.id/artikel'
+              },
+              ...(currentArticle ? [{
+                '@type': 'ListItem',
+                'position': 3,
+                'name': currentArticle.title,
+                'item': `https://ruangsinggah.id/artikel/${currentArticle.slug}`
+              }] : [])
+            ]
+          })}
+        </script>
+      </Helmet>
+
       {/* Editorial Top bar */}
       <div className="border-b border-gray-200/80 bg-white sticky top-0 z-40 backdrop-blur-md bg-white/95">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
@@ -397,7 +413,7 @@ const Articles: React.FC = () => {
               {/* Cover Image */}
               {currentArticle.imageUrl ? (
                 <div className="w-full aspect-[21/10] rounded-2xl overflow-hidden border border-slate-100 shadow-md mb-8">
-                  <img src={currentArticle.imageUrl} alt={currentArticle.title} className="w-full h-full object-cover" />
+                  <img src={currentArticle.imageUrl} alt={currentArticle.imageAlt || currentArticle.title} className="w-full h-full object-cover" />
                 </div>
               ) : (
                 <div className={`w-full aspect-[21/10] bg-gradient-to-br ${currentArticle.gradient} rounded-2xl flex flex-col items-center justify-center p-8 text-7xl text-white shadow-inner mb-8 relative overflow-hidden`}>
@@ -550,7 +566,7 @@ const Articles: React.FC = () => {
                     >
                       {art.imageUrl ? (
                         <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 border border-slate-100 bg-slate-50">
-                          <img src={art.imageUrl} alt={art.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          <img src={art.imageUrl} alt={art.imageAlt || art.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                         </div>
                       ) : (
                         <div className={`w-16 h-16 bg-gradient-to-br ${art.gradient} rounded-xl shrink-0 flex items-center justify-center text-2xl text-white relative`}>
@@ -657,7 +673,7 @@ const Articles: React.FC = () => {
                       {featuredPost.imageUrl ? (
                         <img 
                           src={featuredPost.imageUrl} 
-                          alt={featuredPost.title} 
+                          alt={featuredPost.imageAlt || featuredPost.title} 
                           className="absolute inset-0 w-full h-full object-cover group-hover:scale-102 transition-transform duration-700" 
                         />
                       ) : (
@@ -718,7 +734,7 @@ const Articles: React.FC = () => {
                             {art.imageUrl ? (
                               <img 
                                 src={art.imageUrl} 
-                                alt={art.title} 
+                                alt={art.imageAlt || art.title} 
                                 className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                               />
                             ) : (

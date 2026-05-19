@@ -18,6 +18,7 @@ interface ArticleDb {
   status: 'draft' | 'published';
   created_at?: string;
   image_url?: string;
+  image_alt?: string;
 }
 
 const GRADIENTS = [
@@ -55,6 +56,7 @@ const ArticleManagement: React.FC = () => {
   const [editorTab, setEditorTab] = useState<'write' | 'preview'>('write');
   const [isUploadingImg, setIsUploadingImg] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
+  const [imageAlt, setImageAlt] = useState('');
   const editorRef = useRef<any>(null);
 
   const fetchArticles = async () => {
@@ -118,6 +120,7 @@ const ArticleManagement: React.FC = () => {
     setContent('');
     setStatus('draft');
     setImageUrl('');
+    setImageAlt('');
     setEditorTab('write');
     setShowForm(true);
   };
@@ -134,6 +137,7 @@ const ArticleManagement: React.FC = () => {
     setContent(art.content);
     setStatus(art.status);
     setImageUrl(art.image_url || '');
+    setImageAlt(art.image_alt || '');
     setEditorTab('write');
     setShowForm(true);
   };
@@ -187,7 +191,8 @@ const ArticleManagement: React.FC = () => {
       gradient,
       content,
       status,
-      image_url: imageUrl
+      image_url: imageUrl,
+      image_alt: imageAlt
     };
 
     try {
@@ -369,16 +374,33 @@ const ArticleManagement: React.FC = () => {
               </div>
               
               {imageUrl && (
-                <div className="relative rounded-2xl overflow-hidden border border-gray-200 max-h-[160px] w-full max-w-xs">
-                  <img src={imageUrl} alt="Cover Preview" className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => setImageUrl('')}
-                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full text-xs font-bold shadow-md transition-colors"
-                    title="Hapus Cover"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                <div className="space-y-3 pt-2">
+                  <div className="relative rounded-2xl overflow-hidden border border-gray-200 max-h-[160px] w-full max-w-xs bg-gray-50">
+                    <img src={imageUrl} alt="Cover Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImageUrl('');
+                        setImageAlt('');
+                      }}
+                      className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full text-xs font-bold shadow-md transition-colors"
+                      title="Hapus Cover"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  
+                  <div className="max-w-2xl">
+                    <label className="block text-[9px] font-black text-orange-600 uppercase tracking-widest mb-1.5">Alt-Text Deskripsi Gambar (Penting untuk Google Images & AI Search) *</label>
+                    <input
+                      type="text"
+                      placeholder="Misal: Gedung kantor PT Ruang Singgah Nusantara di Makassar sebagai kantor utama survey kost"
+                      className="w-full bg-white p-3 rounded-2xl border border-gray-200 outline-none text-xs font-bold text-gray-800 focus:border-orange-500 transition-colors"
+                      value={imageAlt}
+                      onChange={e => setImageAlt(e.target.value)}
+                      required={!!imageUrl}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -683,12 +705,14 @@ CREATE TABLE IF NOT EXISTS public.articles (
     content TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'draft',
     image_url TEXT,
+    image_alt TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 -- 1b. Jalankan ALTER TABLE jika tabel sudah ada untuk menambahkan kolom baru
 ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS image_alt TEXT;
 
 -- 2. Aktifkan Row Level Security (RLS)
 ALTER TABLE public.articles ENABLE ROW LEVEL SECURITY;

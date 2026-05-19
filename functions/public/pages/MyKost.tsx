@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../supabase';
-import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity } from 'lucide-react';
 import { Page } from '../types';
 import { addPropertyReview, getExtraBills, settlePendingBills, cancelBookingRequest } from '../userService';
 import PaymentGateway from '../components/PaymentGateway';
@@ -129,6 +129,8 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const [selectedKost, setSelectedKost] = useState<any>(null);
     const [selectedSurvey, setSelectedSurvey] = useState<any>(null);
     const [showSurveySummaryModal, setShowSurveySummaryModal] = useState(false);
+    const [selectedTrackingSurvey, setSelectedTrackingSurvey] = useState<any>(null);
+    const [showTrackingModal, setShowTrackingModal] = useState(false);
 
     // Rating form state
     const [ratingValue, setRatingValue] = useState(5);
@@ -1164,7 +1166,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                             <button
                                                 onClick={() => {
                                                     let parsed = survey.evaluation_summary;
-                                                    if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch { parsed = {}; } }
+                                                    if (typeof parsed === 'string') { try { try { parsed = JSON.parse(parsed); } catch { parsed = {}; } } catch { parsed = {}; } }
                                                     setSelectedSurvey({ ...survey, evaluation_summary: parsed });
                                                     setShowSurveySummaryModal(true);
                                                 }}
@@ -1173,11 +1175,16 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                 <FileText className="w-3.5 h-3.5 text-orange-400" /> Laporan
                                             </button>
                                         )}
-                                        {!isSubmitted && !isDone && isActive && (
-                                            <span className="px-3 py-2 bg-white rounded-xl text-[9px] font-black text-gray-400 border border-gray-100">Menunggu</span>
-                                        )}
-                                        {!isSubmitted && !isDone && !isActive && survey.status === 'PENDING_ASSIGNMENT' && (
-                                            <span className="px-3 py-2 bg-white rounded-xl text-[9px] font-black text-amber-500 border border-amber-100">Cari Agen</span>
+                                        {survey.status !== 'CANCELLED' && (
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedTrackingSurvey(survey);
+                                                    setShowTrackingModal(true);
+                                                }}
+                                                className="px-3 py-2 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200/40 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 shadow-sm"
+                                            >
+                                                <Activity className="w-3.5 h-3.5 text-orange-500 animate-pulse" /> Lacak
+                                            </button>
                                         )}
                                     </div>
                                 </div>
@@ -1911,7 +1918,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
                                                 // [NEW] NAME-BASED FALLBACK: If date doesn't match, check if the month name is in the bill name
                                                 if (!isSameMonth) {
-                                                    const monthMap: any = { 'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11, 'january': 0, 'february': 1, 'march': 2, 'april': 3, 'may': 4, 'june': 5, 'july': 6, 'august': 7, 'september': 8, 'october': 9, 'november': 10, 'december': 11 };
+                                                    const monthMap: any = { 'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11, 'january': 0, 'february': 1, 'march': 2, 'may': 4, 'june': 5, 'july': 6, 'august': 7, 'october': 9, 'december': 11 };
                                                     const targetYear = targetDate.getFullYear();
                                                     const targetMonthIdx = targetDate.getMonth();
                                                     
@@ -2114,7 +2121,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                 let isSameMonth = bDate && bDate.getMonth() === targetDate.getMonth() && bDate.getFullYear() === targetDate.getFullYear();
 
                                                 if (!isSameMonth) {
-                                                    const monthMap: any = { 'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11, 'january': 0, 'february': 1, 'march': 2, 'april': 3, 'may': 4, 'june': 5, 'july': 6, 'august': 7, 'september': 8, 'october': 9, 'november': 10, 'december': 11 };
+                                                    const monthMap: any = { 'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11, 'january': 0, 'february': 1, 'march': 2, 'may': 4, 'june': 5, 'july': 6, 'august': 7, 'october': 9, 'december': 11 };
                                                     const targetYear = targetDate.getFullYear();
                                                     const targetMonthIdx = targetDate.getMonth();
                                                     
@@ -2158,7 +2165,6 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                             bill_name: billNameStr,
                                             billName: billNameStr,
                                             original_due_date: targetDate.toISOString(),
-                                            existing_facility_id: existingFacilityId,
                                             composition: {
                                                 baseRent: bp * extensionPeriod,
                                                 extraPersonFee: ep * extensionPeriod,
@@ -2484,7 +2490,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
                                         // [NEW] NAME-BASED FALLBACK: If date doesn't match, check if the month name is in the bill name
                                         if (!isSameMonth) {
-                                            const monthMap: any = { 'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11, 'january': 0, 'february': 1, 'march': 2, 'april': 3, 'may': 4, 'june': 5, 'july': 6, 'august': 7, 'september': 8, 'october': 9, 'november': 10, 'december': 11 };
+                                            const monthMap: any = { 'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11, 'january': 0, 'february': 1, 'march': 2, 'may': 4, 'june': 5, 'july': 6, 'august': 7, 'october': 9, 'december': 11 };
                                             const targetYear = currentBillDate.getFullYear();
                                             const targetMonthIdx = currentBillDate.getMonth();
                                             
@@ -3248,6 +3254,237 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                 className="w-full py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all"
                             >
                                 Selesai Membaca
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* 2. Modal Pelacakan Real-time Survey Kost */}
+            {showTrackingModal && selectedTrackingSurvey && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/80 backdrop-blur-sm overflow-y-auto">
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-lg my-auto relative shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-100">
+                        {/* Header */}
+                        <div className="bg-white px-8 pt-8 pb-6 border-b border-gray-100 relative">
+                            <button 
+                                onClick={() => setShowTrackingModal(false)} 
+                                className="absolute top-6 right-6 text-gray-400 hover:text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-full p-2 transition-colors border border-gray-100"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center border border-orange-100 shrink-0">
+                                    <Activity className="w-6 h-6 text-orange-500 animate-pulse" />
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-[10px] font-black text-orange-500 uppercase tracking-[0.2em] mb-0.5">Pelacakan Survey</p>
+                                    <h3 className="text-xl font-black text-gray-900 tracking-tight uppercase truncate max-w-[280px]">
+                                        {selectedTrackingSurvey.kost_name}
+                                    </h3>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-8 max-h-[60vh] overflow-y-auto scrollbar-thin">
+                            {/* Surveyor Card (jika sudah ada) */}
+                            {(() => {
+                                const s = selectedTrackingSurvey;
+                                if (!s.agent_name) return null;
+                                return (
+                                    <div className="mb-8 p-5 bg-gray-50/50 rounded-[2rem] border border-gray-100 flex items-center gap-4 shadow-sm">
+                                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center overflow-hidden shrink-0 border border-gray-200/60 shadow-inner">
+                                            {s.agent_photo_url ? (
+                                                <img src={s.agent_photo_url} alt={s.agent_name} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <span className="text-lg font-black text-gray-400">{s.agent_name.charAt(0)}</span>
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Petugas Lapangan</p>
+                                            <p className="text-sm font-black text-gray-900 truncate">{s.agent_name}</p>
+                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                                                    {s.status === 'AGENT_ASSIGNED' && 'Sudah ditugaskan'}
+                                                    {s.status === 'HEADING_TO_LOCATION' && 'Menuju lokasi'}
+                                                    {s.status === 'SURVEYING' && 'Sedang memeriksa kost'}
+                                                    {['SUBMITTED', 'COMPLETED'].includes(s.status) && 'Tugas selesai'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {s.agent_phone && (
+                                            <button
+                                                onClick={() => {
+                                                    const clean = s.agent_phone.replace(/\D/g, '');
+                                                    const num = clean.startsWith('0') ? '62' + clean.substring(1) : clean;
+                                                    window.open(`https://wa.me/${num}`, '_blank');
+                                                }}
+                                                className="p-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl transition-all shadow-md shadow-emerald-100 hover:shadow-emerald-200 active:scale-95 shrink-0"
+                                                title="Hubungi Surveyor"
+                                            >
+                                                <MessageSquare className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Stepper Timeline */}
+                            {(() => {
+                                const currentStatus = selectedTrackingSurvey.status;
+                                const getActiveStepIndex = (status: string) => {
+                                    switch (status) {
+                                        case 'AWAITING_PAYMENT': return 0;
+                                        case 'PENDING_ASSIGNMENT': return 1;
+                                        case 'AGENT_ASSIGNED': return 2;
+                                        case 'HEADING_TO_LOCATION': return 3;
+                                        case 'SURVEYING': return 4;
+                                        case 'SUBMITTED': return 5;
+                                        case 'COMPLETED': return 5;
+                                        default: return 0;
+                                    }
+                                };
+                                const activeIndex = getActiveStepIndex(currentStatus);
+
+                                const trackingSteps = [
+                                    {
+                                        title: 'Menunggu Pembayaran',
+                                        description: 'Selesaikan transaksi survey.',
+                                        subtext: 'Menunggu pembayaran via Midtrans.',
+                                        icon: Receipt,
+                                    },
+                                    {
+                                        title: 'Mencari Agen Surveyor',
+                                        description: 'Mencocokkan pesanan Anda.',
+                                        subtext: 'Sistem sedang menugaskan agen surveyor terdekat.',
+                                        icon: Search,
+                                    },
+                                    {
+                                        title: 'Agen Surveyor Ditetapkan',
+                                        description: 'Surveyor ditugaskan.',
+                                        subtext: 'Nama dan kontak agen lapangan sudah terdaftar.',
+                                        icon: Smartphone,
+                                    },
+                                    {
+                                        title: 'Menuju Lokasi Kost',
+                                        description: 'Surveyor berkendara ke lokasi.',
+                                        subtext: 'Agen sedang di perjalanan menuju kost target.',
+                                        icon: MapPin,
+                                    },
+                                    {
+                                        title: 'Proses Audit Lapangan',
+                                        description: 'Pengecekan fasilitas kost.',
+                                        subtext: 'Pemeriksaan listrik, air, kebersihan, dan wawancara.',
+                                        icon: Activity,
+                                    },
+                                    {
+                                        title: 'Laporan Hasil Survey',
+                                        description: 'Laporan siap dibaca.',
+                                        subtext: 'Dokumentasi dan review jujur siap diakses.',
+                                        icon: CheckCircle,
+                                    }
+                                ];
+
+                                return (
+                                    <div className="space-y-6">
+                                        {trackingSteps.map((step, idx) => {
+                                            const StepIcon = step.icon;
+                                            const isCompleted = idx < activeIndex;
+                                            const isActive = idx === activeIndex;
+
+                                            return (
+                                                <div key={idx} className="flex gap-4">
+                                                    {/* Vertical indicator column */}
+                                                    <div className="flex flex-col items-center shrink-0">
+                                                        {/* Circle Marker */}
+                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-500 z-10 ${
+                                                            isCompleted 
+                                                                ? 'bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-100' 
+                                                                : isActive 
+                                                                    ? 'bg-orange-500 border-orange-500 text-white shadow-md shadow-orange-100 ring-4 ring-orange-500/20' 
+                                                                    : 'bg-white border-gray-200 text-gray-400'
+                                                        }`}>
+                                                            {isCompleted ? (
+                                                                <Check className="w-4 h-4" />
+                                                            ) : (
+                                                                <StepIcon className="w-4 h-4" />
+                                                            )}
+                                                        </div>
+                                                        
+                                                        {/* Connector line below the circle */}
+                                                        {idx < trackingSteps.length - 1 && (
+                                                            <div className={`w-0.5 h-12 my-1 ${
+                                                                isCompleted ? 'bg-emerald-500' : 'bg-gray-200'
+                                                            }`} />
+                                                        )}
+                                                    </div>
+
+                                                    {/* Text content column */}
+                                                    <div className="flex-1 pt-0.5 min-w-0">
+                                                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider mb-1.5 ${
+                                                            isCompleted 
+                                                                ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                                                                : isActive 
+                                                                    ? 'bg-orange-50 text-orange-600 border border-orange-100 animate-pulse' 
+                                                                    : 'bg-gray-50 text-gray-400 border border-gray-100'
+                                                        }`}>
+                                                            {isCompleted ? 'Selesai' : isActive ? 'Progres' : 'Mendatang'}
+                                                        </span>
+                                                        <h4 className={`text-xs font-black uppercase tracking-wider ${
+                                                            isCompleted ? 'text-gray-700' : isActive ? 'text-orange-600' : 'text-gray-400'
+                                                        }`}>
+                                                            {step.title}
+                                                        </h4>
+                                                        <p className={`text-xs font-bold mt-1 leading-relaxed ${isActive ? 'text-gray-800' : 'text-gray-500'}`}>
+                                                            {step.description}
+                                                        </p>
+                                                        <p className="text-[10px] text-gray-400 font-medium mt-0.5 italic">
+                                                            {step.subtext}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        {/* Footer / Contextual Action Button */}
+                        <div className="p-8 bg-gray-50 border-t border-gray-100 flex flex-col gap-3">
+                            {selectedTrackingSurvey.status === 'SUBMITTED' && (
+                                <button
+                                    onClick={() => {
+                                        handleConfirmSurvey(selectedTrackingSurvey.id);
+                                        setShowTrackingModal(false);
+                                    }}
+                                    disabled={isSubmitting}
+                                    className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-emerald-200 active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    <CheckCircle className="w-4 h-4" /> Konfirmasi Selesai & Laporan Oke
+                                </button>
+                            )}
+
+                            {selectedTrackingSurvey.status === 'COMPLETED' && selectedTrackingSurvey.evaluation_summary && (
+                                <button
+                                    onClick={() => {
+                                        let parsed = selectedTrackingSurvey.evaluation_summary;
+                                        if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch { parsed = {}; } }
+                                        setSelectedSurvey({ ...selectedTrackingSurvey, evaluation_summary: parsed });
+                                        setShowTrackingModal(false);
+                                        setShowSurveySummaryModal(true);
+                                    }}
+                                    className="w-full py-4 bg-gray-900 hover:bg-gray-800 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    <FileText className="w-4 h-4 text-orange-400" /> Buka Laporan Audit
+                                </button>
+                            )}
+
+                            <button
+                                onClick={() => setShowTrackingModal(false)}
+                                className="w-full py-4 bg-white hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
+                            >
+                                Tutup Pelacakan
                             </button>
                         </div>
                     </div>
