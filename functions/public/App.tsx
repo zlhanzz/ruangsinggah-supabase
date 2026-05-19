@@ -22,6 +22,7 @@ const SurveyCheckout = lazy(() => import('./pages/SurveyCheckout'));
 const MyKost = lazy(() => import('./pages/MyKost'));
 const Chat = lazy(() => import('./pages/Chat'));
 const MitraDashboard = lazy(() => import('./pages/MitraDashboard'));
+const OrderPaymentStatus = lazy(() => import('./pages/OrderPaymentStatus'));
 const Terms = lazy(() => import('./pages/Terms'));
 const Articles = lazy(() => import('./pages/Articles'));
 
