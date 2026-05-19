@@ -1278,6 +1278,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                         </div>
                                                     )}
 
+                                                     {field.id !== 'kost_type' && (
+                                                         <>
                                                     <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-gray-100 pt-3">
                                                         <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Penilaian Keseluruhan</label>
                                                         <StarRatingInput 
@@ -1359,6 +1361,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                             ))}
                                                         </div>
                                                     </div>
+                                                         </>
+                                                     )}
                                                 </div>
                                             ))}
                                         </div>

@@ -132,8 +132,8 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                     updates.agent_name = agent.name;
                     updates.agent_phone = agent.phone;
                     updates.agent_photo_url = agent.photo_url;
-                    if (req.status === 'AWAITING_PAYMENT' || req.status === 'PENDING_ASSIGNMENT') {
-                        updates.status = 'AGENT_ASSIGNED';
+                    if (req.status === 'AWAITING_PAYMENT') {
+                        updates.status = 'PENDING_ASSIGNMENT';
                     }
                 } else if (orderForm.assigned_agent_id === '') {
                     // Cleared agent
@@ -267,6 +267,26 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
         try {
             const driveLink = await generateManualDriveFolder(isEditingSurvey.id);
             setSurveyForm(prev => ({ ...prev, result_drive_link: driveLink }));
+            alert('Folder Drive berhasil dibuat!');
+            refreshData();
+        } catch (error: any) {
+            alert(error.message || 'Gagal generate folder');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleGenerateDriveFolderForOrderUnit = async (surveyId: string) => {
+        setIsSubmitting(true);
+        try {
+            const driveLink = await generateManualDriveFolder(surveyId);
+            setOrderForm(prev => ({
+                ...prev,
+                drive_links: {
+                    ...prev.drive_links,
+                    [surveyId]: driveLink
+                }
+            }));
             alert('Folder Drive berhasil dibuat!');
             refreshData();
         } catch (error: any) {
@@ -754,10 +774,22 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                                 </label>
                                 <div className="space-y-3">
                                     {isEditingOrder.surveys.map((req: any, idx: number) => (
-                                        <div key={req.id} className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl border border-gray-100">
-                                            <span className="w-6 h-6 bg-white text-gray-400 rounded flex items-center justify-center text-[10px] font-black shrink-0 border border-gray-100">{idx + 1}</span>
-                                            <div className="flex-1">
-                                                <p className="text-[10px] font-black text-gray-900 uppercase truncate max-w-[120px] sm:max-w-[200px] mb-1">{req.kost_name}</p>
+                                        <div key={req.id} className="flex items-start gap-3 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                            <span className="w-6 h-6 bg-white text-gray-400 rounded flex items-center justify-center text-[10px] font-black shrink-0 border border-gray-100 mt-1">{idx + 1}</span>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <p className="text-[10px] font-black text-gray-900 uppercase truncate max-w-[120px] sm:max-w-[200px]">{req.kost_name}</p>
+                                                    {!orderForm.drive_links[req.id] && (
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => handleGenerateDriveFolderForOrderUnit(req.id)}
+                                                            className="text-[9px] font-black text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2 py-0.5 rounded border border-orange-200 transition-all uppercase tracking-widest active:scale-95 disabled:opacity-50"
+                                                            disabled={isSubmitting}
+                                                        >
+                                                            {isSubmitting ? '...' : '📂 Buat Folder'}
+                                                        </button>
+                                                    )}
+                                                </div>
                                                 <input 
                                                     type="url"
                                                     placeholder="Masukkan link Google Drive..."
@@ -1025,83 +1057,87 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
                                                          </div>
                                                      )}
 
-                                                     <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-gray-100 pt-3">
-                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Penilaian Keseluruhan</label>
-                                                        {isAdmin ? (
-                                                            <StarRatingDisplay rating={(surveyForm.evaluation_summary as any)?.[`${field.id}_rating`]} />
-                                                        ) : (
-                                                            <StarRatingInput 
-                                                                value={(surveyForm.evaluation_summary as any)?.[`${field.id}_rating`] || 0} 
-                                                                onChange={(val) => {
-                                                                    setSurveyForm({
-                                                                        ...surveyForm,
-                                                                        evaluation_summary: {
-                                                                            ...(surveyForm.evaluation_summary || {}),
-                                                                            [`${field.id}_rating`]: val
-                                                                        }
-                                                                    });
-                                                                }}
-                                                            />
-                                                        )}
-                                                     </div>
+                                                      {field.id !== 'kost_type' && (
+                                                          <>
+                                                              <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-gray-100 pt-3">
+                                                                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Penilaian Keseluruhan</label>
+                                                                 {isAdmin ? (
+                                                                     <StarRatingDisplay rating={(surveyForm.evaluation_summary as any)?.[`${field.id}_rating`]} />
+                                                                 ) : (
+                                                                     <StarRatingInput 
+                                                                         value={(surveyForm.evaluation_summary as any)?.[`${field.id}_rating`] || 0} 
+                                                                         onChange={(val) => {
+                                                                             setSurveyForm({
+                                                                                 ...surveyForm,
+                                                                                 evaluation_summary: {
+                                                                                     ...(surveyForm.evaluation_summary || {}),
+                                                                                     [`${field.id}_rating`]: val
+                                                                                 }
+                                                                             });
+                                                                         }}
+                                                                     />
+                                                                 )}
+                                                              </div>
 
-                                                      <textarea 
-                                                          readOnly={isAdmin && !isAgent}
-                                                          className={`w-full ${isAdmin && !isAgent ? 'bg-gray-50/50 cursor-default' : 'bg-gray-50'} border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-orange-500 transition-all outline-none mb-3`}
-                                                          rows={2}
-                                                          value={(surveyForm.evaluation_summary as any)?.[field.id] || ''}
-                                                          onChange={e => {
-                                                              if (isAdmin && !isAgent) return;
-                                                              setSurveyForm({ 
-                                                                  ...surveyForm, 
-                                                                  evaluation_summary: { 
-                                                                      ...(surveyForm.evaluation_summary || {}), 
-                                                                      [field.id]: e.target.value 
-                                                                  } 
-                                                              });
-                                                          }}
-                                                          placeholder={isAdmin && !isAgent ? 'Belum ada catatan...' : `Tulis hasil pengecekan ${field.label.toLowerCase()}...`}
-                                                      />
+                                                              <textarea 
+                                                                  readOnly={isAdmin && !isAgent}
+                                                                  className={`w-full ${isAdmin && !isAgent ? 'bg-gray-50/50 cursor-default' : 'bg-gray-50'} border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-orange-500 transition-all outline-none mb-3`}
+                                                                  rows={2}
+                                                                  value={(surveyForm.evaluation_summary as any)?.[field.id] || ''}
+                                                                  onChange={e => {
+                                                                      if (isAdmin && !isAgent) return;
+                                                                      setSurveyForm({ 
+                                                                          ...surveyForm, 
+                                                                          evaluation_summary: { 
+                                                                              ...(surveyForm.evaluation_summary || {}), 
+                                                                              [field.id]: e.target.value 
+                                                                          } 
+                                                                      });
+                                                                  }}
+                                                                  placeholder={isAdmin && !isAgent ? 'Belum ada catatan...' : `Tulis hasil pengecekan ${field.label.toLowerCase()}...`}
+                                                              />
 
-                                                     <div className="space-y-2">
-                                                         <div className="flex items-center justify-between">
-                                                             <span className="text-[9px] font-black text-gray-700 uppercase tracking-widest">Bukti Foto</span>
-                                                              {isAgent && (
-                                                                <label className={`text-[9px] font-black uppercase px-2.5 py-1.5 rounded-lg bg-orange-50 text-orange-600 cursor-pointer hover:bg-orange-100 flex items-center gap-1.5 ${isUploadingSurveyPhoto === field.id ? 'opacity-50' : ''}`}>
-                                                                    {isUploadingSurveyPhoto === field.id ? 'Uploading...' : 'Tambah Foto'}
-                                                                    <input 
-                                                                        type="file" 
-                                                                        multiple 
-                                                                        accept="image/*" 
-                                                                        className="hidden" 
-                                                                        disabled={isUploadingSurveyPhoto === field.id}
-                                                                        onChange={(e) => handleSurveyPhotoUploadLocal(field.id, e.target.files)} 
-                                                                    />
-                                                                </label>
-                                                              )}
-                                                         </div>
-                                                         <div className="grid grid-cols-5 gap-2">
-                                                             {((surveyForm.evaluation_summary as any)?.[`${field.id}_photos`] || []).map((url: string, idx: number) => (
-                                                                 <div key={idx} className="relative aspect-square rounded-xl overflow-hidden group shadow-sm bg-gray-50">
-                                                                     <img src={url} alt="Proof" className="w-full h-full object-cover" />
-                                                                     {isAgent && (
-                                                                        <button 
-                                                                            type="button"
-                                                                            onClick={() => handleRemoveSurveyPhotoLocal(field.id, url)}
-                                                                            className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
-                                                                        >
-                                                                            &times;
-                                                                        </button>
-                                                                     )}
-                                                                 </div>
-                                                             ))}
-                                                             {((surveyForm.evaluation_summary as any)?.[`${field.id}_photos`] || []).length === 0 && (
-                                                                <div className="col-span-5 py-3 border border-dashed border-gray-100 rounded-xl flex items-center justify-center">
-                                                                    <span className="text-[10px] font-bold text-gray-300 italic">Tidak ada foto</span>
-                                                                </div>
-                                                             )}
-                                                         </div>
-                                                     </div>
+                                                              <div className="space-y-2">
+                                                                  <div className="flex items-center justify-between">
+                                                                      <span className="text-[9px] font-black text-gray-700 uppercase tracking-widest">Bukti Foto</span>
+                                                                       {isAgent && (
+                                                                         <label className={`text-[9px] font-black uppercase px-2.5 py-1.5 rounded-lg bg-orange-50 text-orange-600 cursor-pointer hover:bg-orange-100 flex items-center gap-1.5 ${isUploadingSurveyPhoto === field.id ? 'opacity-50' : ''}`}>
+                                                                             {isUploadingSurveyPhoto === field.id ? 'Uploading...' : 'Tambah Foto'}
+                                                                             <input 
+                                                                                 type="file" 
+                                                                                 multiple 
+                                                                                 accept="image/*" 
+                                                                                 className="hidden" 
+                                                                                 disabled={isUploadingSurveyPhoto === field.id}
+                                                                                 onChange={(e) => handleSurveyPhotoUploadLocal(field.id, e.target.files)} 
+                                                                             />
+                                                                         </label>
+                                                                       )}
+                                                                  </div>
+                                                                  <div className="grid grid-cols-5 gap-2">
+                                                                      {((surveyForm.evaluation_summary as any)?.[`${field.id}_photos`] || []).map((url: string, idx: number) => (
+                                                                          <div key={idx} className="relative aspect-square rounded-xl overflow-hidden group shadow-sm bg-gray-50">
+                                                                              <img src={url} alt="Proof" className="w-full h-full object-cover" />
+                                                                              {isAgent && (
+                                                                                 <button 
+                                                                                     type="button"
+                                                                                     onClick={() => handleRemoveSurveyPhotoLocal(field.id, url)}
+                                                                                     className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                                                                                 >
+                                                                                     &times;
+                                                                                 </button>
+                                                                              )}
+                                                                          </div>
+                                                                      ))}
+                                                                      {((surveyForm.evaluation_summary as any)?.[`${field.id}_photos`] || []).length === 0 && (
+                                                                         <div className="col-span-5 py-3 border border-dashed border-gray-100 rounded-xl flex items-center justify-center">
+                                                                             <span className="text-[10px] font-bold text-gray-300 italic">Tidak ada foto</span>
+                                                                         </div>
+                                                                      )}
+                                                                  </div>
+                                                              </div>
+                                                          </>
+                                                      )}
                                                  </div>
                                              ))}
                                          </div>

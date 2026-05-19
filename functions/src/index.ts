@@ -797,37 +797,7 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
     // This must happen OUTSIDE the 'if (!order)' block to handle resumed transactions
     if (productType === 'survey') {
         console.log(`CREATE_PAYMENT: Recording/Updating survey_request for order ${order.id}`);
-        
-        const { data: existingSrv } = await supabase
-          .from('survey_requests')
-          .select('id, status')
-          .eq('transaction_id', order.id)
-          .maybeSingle();
-
-        const surveyData: any = {
-          transaction_id: order.id,
-          user_id: userId,
-          kost_name: metadata.kostName || 'Survey Kost',
-          kost_address: metadata.kostAddress || '-',
-          owner_phone: metadata.ownerPhone || '',
-          survey_date: metadata.surveyDate || null,
-          survey_time: metadata.surveyTime || null,
-          notes: `${metadata.notes || ''}\n[Sync]`.trim(),
-        };
-
-        // If transaction is already PAID but survey_request was missing or stuck in AWAITING_PAYMENT, 
-        // set it to PENDING_ASSIGNMENT so it shows up in "Aktif" or "Diajukan" correctly.
-        if (order.status === 'PAID') {
-            surveyData.status = 'PENDING_ASSIGNMENT';
-        } else if (!existingSrv || existingSrv.status === 'AWAITING_PAYMENT') {
-            surveyData.status = 'AWAITING_PAYMENT';
-        }
-
-        if (existingSrv) {
-          await supabase.from('survey_requests').update(surveyData).eq('id', existingSrv.id);
-        } else {
-          await supabase.from('survey_requests').insert([surveyData]);
-        }
+        await syncSurveyRequestsBackend(supabase, order);
         
         // Send Admin Notification about NEW survey request
         try {
@@ -837,7 +807,7 @@ export const createPakasirPayment = functions.https.onRequest({ cors: true }, as
               await supabase.from('notifications').insert({
                 user_id: admin.id,
                 title: 'Survey Baru Terdeteksi',
-                message: `Ada pesanan survey baru untuk Kost: ${metadata.kostName}. Status: ${order.status}.`,
+                message: `Ada pesanan survey baru untuk Kost: ${metadata.kostName || 'Survey Kost'}. Status: ${order.status}.`,
                 type: 'assignment'
               });
             }
@@ -1009,6 +979,114 @@ export const simulatePaymentSuccess = functions.https.onRequest({ cors: true }, 
 
 
 /**
+ * syncSurveyRequestsBackend: Synchronizes a survey transaction with the survey_requests table.
+ * Handled entirely in the backend to ensure reliable multi-kost entries.
+ */
+async function syncSurveyRequestsBackend(supabase: any, order: any) {
+  try {
+    const orderId = order.id;
+    const userId = order.user_id;
+    const metadata = order.metadata || {};
+    
+    console.log(`SYNC_SURVEY_BACKEND: [DEBUG] Starting for Order ${orderId}`);
+
+    const normalizePhone = (p: string) => {
+      if (!p || p === '-') return '-';
+      let clean = p.replace(/\D/g, '');
+      if (clean.startsWith('0')) clean = clean.substring(1);
+      if (clean.startsWith('62')) clean = clean.substring(2);
+      return `+62${clean}`;
+    };
+
+    // Fetch ALL existing records for this transaction (bisa N records)
+    const { data: existingRecords, error: fetchErr } = await supabase
+      .from('survey_requests')
+      .select('*')
+      .eq('transaction_id', orderId);
+
+    if (fetchErr) {
+      console.error("SYNC_SURVEY_BACKEND: [ERROR] Failed to fetch existing survey requests", fetchErr);
+      return;
+    }
+
+    // Sort existing records so they are index-aligned with the kostList order
+    const sortedExisting = existingRecords 
+      ? [...existingRecords].sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      : [];
+
+    const kostList: any[] = Array.isArray(metadata.kostList) && metadata.kostList.length > 0
+      ? metadata.kostList
+      : [{ // Fallback untuk order lama (1 kost)
+          kostName: metadata.kostName || metadata.title || 'Kost Terdaftar',
+          kostAddress: metadata.kostAddress || metadata.address || '-',
+          ownerPhone: metadata.ownerPhone || metadata.owner_phone || '-',
+        }];
+
+    console.log(`SYNC_SURVEY_BACKEND: [DEBUG] Syncing ${kostList.length} kost(s) for order ${orderId}`);
+
+    for (let i = 0; i < kostList.length; i++) {
+      const kost = kostList[i];
+      // Match based on index in sorted existing records
+      const existing = sortedExisting[i] || null;
+
+      const currentStatus = (existing?.status || 'AWAITING_PAYMENT').toUpperCase();
+      let targetStatus = 'AWAITING_PAYMENT';
+      if (order.status === 'PAID') {
+        targetStatus = 'PENDING_ASSIGNMENT';
+      } else if (existing && currentStatus !== 'AWAITING_PAYMENT') {
+        targetStatus = existing.status;
+      }
+
+      const payload: any = {
+        user_id: userId,
+        transaction_id: orderId,
+        status: targetStatus,
+        kost_name: kost.kostName || `Kost #${i + 1}`,
+        kost_address: kost.kostAddress || '-',
+        owner_phone: normalizePhone(kost.ownerPhone || kost.owner_phone || ''),
+        survey_date: metadata.surveyDate || existing?.survey_date || null,
+        survey_time: metadata.surveyTime || existing?.survey_time || null,
+        notes: `${metadata.notes || ''}\n[Sync]`.trim(),
+        updated_at: new Date().toISOString(),
+      };
+
+      // Jangan timpa result_drive_link jika sudah ada
+      if (existing?.result_drive_link) {
+        payload.result_drive_link = existing.result_drive_link;
+      }
+      // Jangan timpa evaluation_summary jika sudah ada
+      if (existing?.evaluation_summary) {
+        payload.evaluation_summary = existing.evaluation_summary;
+      }
+      // Jangan timpa assigned_agent_id jika sudah ada
+      if (existing?.assigned_agent_id) {
+        payload.assigned_agent_id = existing.assigned_agent_id;
+      }
+
+      if (existing) {
+        console.log(`SYNC_SURVEY_BACKEND: [DEBUG] Updating kost #${i + 1} (ID: ${existing.id})`);
+        const { error: updateErr } = await supabase
+          .from('survey_requests')
+          .update(payload)
+          .eq('id', existing.id);
+        if (updateErr) console.error(`SYNC_SURVEY_BACKEND: Update error for kost #${i + 1}:`, updateErr);
+      } else {
+        console.log(`SYNC_SURVEY_BACKEND: [DEBUG] Creating NEW record for kost #${i + 1}: ${kost.kostName}`);
+        payload.created_at = order.created_at || new Date().toISOString();
+        const { error: insertErr } = await supabase
+          .from('survey_requests')
+          .insert([payload]);
+        if (insertErr) console.error(`SYNC_SURVEY_BACKEND: Insert error for kost #${i + 1}:`, insertErr);
+      }
+    }
+
+    console.log(`SYNC_SURVEY_BACKEND: [SUCCESS] ${kostList.length} kost record(s) synchronized for order ${orderId}`);
+  } catch (err) {
+    console.error("SYNC_SURVEY_BACKEND_ERROR:", err);
+  }
+}
+
+/**
  * completeSurveyProcess: Helper to move survey from AWAITING_PAYMENT to PENDING_ASSIGNMENT.
  * Creates Drive folder and updates status. Shared by webhook and simulation.
  */
@@ -1016,50 +1094,77 @@ async function completeSurveyProcess(supabase: any, orderId: string, productType
   if (productType !== 'survey') return;
   console.log(`COMPLETE_SURVEY: Starting for Order ${orderId}`);
   try {
-    const { data: srvData } = await supabase
-      .from('survey_requests')
-      .select('kost_name, status')
-      .eq('transaction_id', orderId)
+    // 1. Ensure all survey requests for this transaction are in sync and marked appropriately
+    const { data: order } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('id', orderId)
       .maybeSingle();
 
-    if (!srvData) {
-      console.warn(`COMPLETE_SURVEY: No survey_request found for transaction ${orderId}`);
+    if (order) {
+      await syncSurveyRequestsBackend(supabase, order);
+    }
+
+    // 2. Fetch all survey requests for this transaction
+    const { data: surveys, error: fetchErr } = await supabase
+      .from('survey_requests')
+      .select('id, kost_name, status, result_drive_link')
+      .eq('transaction_id', orderId);
+
+    if (fetchErr || !surveys || surveys.length === 0) {
+      console.warn(`COMPLETE_SURVEY: No survey_requests found for transaction ${orderId}`);
       return;
     }
 
-    // Relaxed guard: Create folder if missing, as long as it's not finished/cancelled
-    if (srvData.result_drive_link) {
-        console.log(`COMPLETE_SURVEY: Survey ${orderId} already has a Drive link. Skipping.`);
-        return;
-    }
+    console.log(`COMPLETE_SURVEY: Found ${surveys.length} survey_requests to process.`);
 
-    if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(srvData.status?.toUpperCase())) {
-        console.log(`COMPLETE_SURVEY: Survey ${orderId} is in final state (${srvData.status}). Skipping.`);
-        return;
-    }
-
-    const folderName = `Survey - ${srvData.kost_name || 'Kost'} - ${orderId.substring(0,8).toUpperCase()}`;
     const ROOT_FOLDER_ID = '1KS-uAMJZg7deddNCB4XxRrPpXsQjq1tk';
     const { createSurveyFolder } = require('./googleDriveUtils');
-    const driveLink = await createSurveyFolder(folderName, ROOT_FOLDER_ID, {
-      privateKey: googlePrivateKeyParam.value(),
-      clientEmail: googleClientEmailParam.value()
-    });
 
-    await supabase
-      .from('survey_requests')
-      .update({ 
-        status: 'PENDING_ASSIGNMENT', 
-        result_drive_link: driveLink,
-        updated_at: new Date().toISOString() 
-      })
-      .eq('transaction_id', orderId);
-      
-    console.log(`COMPLETE_SURVEY: Success. Drive: ${driveLink}`);
+    for (const srvData of surveys) {
+      try {
+        if (srvData.result_drive_link) {
+          console.log(`COMPLETE_SURVEY: Survey ${srvData.id} already has a Drive link. Skipping.`);
+          continue;
+        }
+
+        if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(srvData.status?.toUpperCase())) {
+          console.log(`COMPLETE_SURVEY: Survey ${srvData.id} is in final state (${srvData.status}). Skipping.`);
+          continue;
+        }
+
+        const folderName = `Survey - ${srvData.kost_name || 'Kost'} - ${srvData.id.substring(0,8).toUpperCase()}`;
+        console.log(`COMPLETE_SURVEY: Creating Drive folder: "${folderName}"`);
+        
+        const driveLink = await createSurveyFolder(folderName, ROOT_FOLDER_ID, {
+          privateKey: googlePrivateKeyParam.value(),
+          clientEmail: googleClientEmailParam.value()
+        });
+
+        await supabase
+          .from('survey_requests')
+          .update({ 
+            status: 'PENDING_ASSIGNMENT', 
+            result_drive_link: driveLink,
+            updated_at: new Date().toISOString() 
+          })
+          .eq('id', srvData.id);
+          
+        console.log(`COMPLETE_SURVEY: Success for Survey ${srvData.id}. Drive: ${driveLink}`);
+      } catch (itemErr) {
+        console.error(`COMPLETE_SURVEY_ITEM_ERROR for Survey ${srvData.id}:`, itemErr);
+        await supabase
+          .from('survey_requests')
+          .update({ status: 'PENDING_ASSIGNMENT' })
+          .eq('id', srvData.id);
+      }
+    }
   } catch (err) {
     console.error("COMPLETE_SURVEY_ERROR:", err);
-    // Minimal fallback: at least update the status
-    await supabase.from('survey_requests').update({ status: 'PENDING_ASSIGNMENT' }).eq('transaction_id', orderId);
+    await supabase
+      .from('survey_requests')
+      .update({ status: 'PENDING_ASSIGNMENT' })
+      .eq('transaction_id', orderId);
   }
 }
 
@@ -2246,7 +2351,8 @@ export const manualCreateSurveyFolder = functions.https.onRequest({ cors: true }
     
     const { data: survey } = await supabase.from('survey_requests').select('kost_name').eq('id', surveyId).single();
     const { createSurveyFolder } = require('./googleDriveUtils');
-    const driveLink = await createSurveyFolder(`Survey - ${survey.kost_name}`, '1KS-uAMJZg7deddNCB4XxRrPpXsQjq1tk', {
+    const folderName = `Survey - ${survey.kost_name || 'Kost'} - ${surveyId.substring(0,8).toUpperCase()}`;
+    const driveLink = await createSurveyFolder(folderName, '1KS-uAMJZg7deddNCB4XxRrPpXsQjq1tk', {
       privateKey: googlePrivateKeyParam.value(),
       clientEmail: googleClientEmailParam.value()
     });
