@@ -1,9 +1,32 @@
+import { supabase } from './supabase';
+
 export async function notifyAdminTransaction(type: string, details: Record<string, any>) {
   try {
-    const adminEmail = 'sulhan77777@gmail.com';
-    const formSubmitUrl = `https://formsubmit.co/ajax/${adminEmail}`;
-    
-    // Create professional formatted object
+    // 1. Dapatkan semua email admin secara dinamis
+    let adminEmails: string[] = [];
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('email, role, is_admin');
+        
+      if (!error && data) {
+        const admins = data.filter(u => 
+          u.role === 'admin' || u.is_admin === true || u.is_admin === 1
+        );
+        adminEmails = admins.map(u => u.email).filter(Boolean);
+      }
+    } catch (dbErr) {
+      console.warn("Gagal mengambil email admin dari database:", dbErr);
+    }
+
+    // Gunakan fallback email jika tidak ditemukan admin
+    if (adminEmails.length === 0) {
+      adminEmails = ['sulhan77777@gmail.com'];
+    } else {
+      adminEmails = Array.from(new Set(adminEmails));
+    }
+
+    // Buat objek payload dengan format profesional
     const payload: any = {
       _subject: `Transaksi Baru - ${type}!`,
       "Tipe Transaksi": type,
@@ -11,22 +34,30 @@ export async function notifyAdminTransaction(type: string, details: Record<strin
       "Waktu": new Date().toLocaleString('id-ID')
     };
 
-    const response = await fetch(formSubmitUrl, {
-      method: "POST",
-      headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
+    // 2. Kirim email ke setiap admin menggunakan FormSubmit
+    for (const email of adminEmails) {
+      const formSubmitUrl = `https://formsubmit.co/ajax/${email}`;
+      try {
+        const response = await fetch(formSubmitUrl, {
+          method: "POST",
+          headers: { 
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
 
-    if (!response.ok) {
-      console.warn("Email notification returned:", await response.text());
-    } else {
-      console.log("Admin notification sent successfully via FormSubmit.");
+        if (!response.ok) {
+          console.warn(`Notifikasi email ke ${email} mengembalikan status:`, await response.text());
+        } else {
+          console.log(`Notifikasi admin berhasil dikirim ke ${email} via FormSubmit.`);
+        }
+      } catch (sendErr) {
+        console.warn(`Gagal mengirim notifikasi email ke ${email} (wajar dalam pengembangan lokal):`, sendErr);
+      }
     }
   } catch (err) {
-    console.error("Failed to notify admin:", err);
+    console.warn("Gagal memproses notifikasi admin:", err);
   }
 }
 

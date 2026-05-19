@@ -230,6 +230,12 @@ export interface SurveyRequest {
     environmental_conditions?: string;
     environmental_conditions_photos?: string[];
     environmental_conditions_rating?: number;
+    reschedule_history?: Array<{
+      date: string;
+      time: string;
+      reason: string;
+      updatedAt: string;
+    }>;
   };
   user_rating?: number;
   user_comment?: string;

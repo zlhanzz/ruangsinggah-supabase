@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { FORMAT_CURRENCY } from '../constants';
 import { supabase } from '../supabase';
 import { notificationService } from '../notificationService';
-import { notifyAdminStatusUpdate } from '../emailService';
+import { notifyAdminStatusUpdate, notifyAdminTransaction } from '../emailService';
 import { syncResidentStatus, syncSurveyRequest } from '../adminService';
 import { Transaction } from '../types';
 
@@ -367,6 +367,18 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
       }
       
       const result = await response.json();
+
+      // Notify Admin of transaction creation via FormSubmit
+      const targetOrderId = result.orderId || result.order?.id || orderId;
+      if (targetOrderId) {
+        notifyAdminTransaction(`Pembuatan Transaksi (${productType})`, {
+          "Order ID": targetOrderId,
+          "Tipe Produk": productType,
+          "Total Bayar": `Rp ${amount.toLocaleString('id-ID')}`,
+          "Email Pembeli": metadata?.userEmail || metadata?.email || 'Customer',
+          "Status": "PENDING (Menunggu Pembayaran)"
+        }).catch(e => console.warn("Admin notify error:", e));
+      }
 
       if (result.directPayment) {
         console.log("[DEBUG] Received Direct Payment Data");

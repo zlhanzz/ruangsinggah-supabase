@@ -132,6 +132,16 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const [selectedTrackingSurvey, setSelectedTrackingSurvey] = useState<any>(null);
     const [showTrackingModal, setShowTrackingModal] = useState(false);
 
+    // Sync selectedTrackingSurvey with updated list to reflect real-time updates
+    useEffect(() => {
+        if (selectedTrackingSurvey) {
+            const updated = surveyRequests.find(s => s.id === selectedTrackingSurvey.id);
+            if (updated) {
+                setSelectedTrackingSurvey(updated);
+            }
+        }
+    }, [surveyRequests]);
+
     // Rating form state
     const [ratingValue, setRatingValue] = useState(5);
     const [ratingComment, setRatingComment] = useState('');
@@ -182,8 +192,23 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                 })
                 .subscribe();
 
+            // Realtime subscription for survey requests
+            const surveyChannel = supabase
+                .channel('tenant-survey-requests')
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'survey_requests',
+                    filter: `user_id=eq.${user.uid}`
+                }, () => {
+                    console.log('Survey requests changed, refreshing...');
+                    fetchMyKosts();
+                })
+                .subscribe();
+
             return () => {
                 supabase.removeChannel(channel);
+                supabase.removeChannel(surveyChannel);
             };
         } else {
             setLoading(false);
@@ -3286,6 +3311,62 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
                         {/* Content */}
                         <div className="p-8 max-h-[60vh] overflow-y-auto scrollbar-thin">
+                            {/* Reschedule Banner */}
+                            {selectedTrackingSurvey.status === 'RESCHEDULED' && (
+                                <div className="mb-6 bg-amber-50 rounded-[2rem] p-5 border border-amber-100 flex items-start gap-3.5 shadow-sm animate-in fade-in duration-300">
+                                    <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center text-amber-500 shadow-sm shrink-0">⚠️</div>
+                                    <div className="flex-1">
+                                        <h4 className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-1">Pemberitahuan Penjadwalan Ulang</h4>
+                                        <p className="text-xs text-amber-800 font-bold mb-1">
+                                            Jadwal Terbaru: <span className="underline">{selectedTrackingSurvey.survey_date} pukul {selectedTrackingSurvey.survey_time}</span>
+                                        </p>
+                                        <p className="text-xs text-amber-700 font-medium leading-relaxed italic">
+                                            Alasan: "{selectedTrackingSurvey.notes || 'Penyesuaian jadwal lapangan oleh Surveyor.'}"
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Riwayat Reschedule */}
+                            {(() => {
+                                const summary = selectedTrackingSurvey.evaluation_summary;
+                                let parsedSummary = summary;
+                                if (typeof summary === 'string') {
+                                    try {
+                                        parsedSummary = JSON.parse(summary);
+                                    } catch {
+                                        parsedSummary = {};
+                                    }
+                                }
+                                const history = parsedSummary?.reschedule_history;
+                                if (!Array.isArray(history) || history.length === 0) return null;
+
+                                return (
+                                    <div className="mb-6 bg-gray-50 rounded-[2rem] p-5 border border-gray-200/60 shadow-sm animate-in fade-in duration-300">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <span className="text-sm">🗓️</span>
+                                            <h4 className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Riwayat Penjadwalan Ulang</h4>
+                                        </div>
+                                        <div className="space-y-3 relative before:absolute before:inset-y-1 before:left-3 before:w-0.5 before:bg-gray-200">
+                                            {history.slice().reverse().map((item: any, idx: number) => (
+                                                <div key={idx} className="relative pl-7 text-xs">
+                                                    <div className="absolute left-[9px] top-1.5 w-2 h-2 rounded-full bg-gray-400 border border-white shadow-sm" />
+                                                    <p className="font-bold text-gray-800">
+                                                        Jadwal: {item.date} pukul {item.time}
+                                                    </p>
+                                                    <p className="text-gray-500 italic mt-0.5">
+                                                        Alasan: "{item.reason || 'Penyesuaian jadwal lapangan.'}"
+                                                    </p>
+                                                    <p className="text-[9px] text-gray-400 font-medium mt-0.5">
+                                                        Diajukan pada: {new Date(item.updatedAt).toLocaleString('id-ID')}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
                             {/* Surveyor Card (jika sudah ada) */}
                             {(() => {
                                 const s = selectedTrackingSurvey;
@@ -3306,6 +3387,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
                                                 <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
                                                     {s.status === 'AGENT_ASSIGNED' && 'Sudah ditugaskan'}
+                                                    {s.status === 'RESCHEDULED' && 'Jadwal Diperbarui'}
                                                     {s.status === 'HEADING_TO_LOCATION' && 'Menuju lokasi'}
                                                     {s.status === 'SURVEYING' && 'Sedang memeriksa kost'}
                                                     {['SUBMITTED', 'COMPLETED'].includes(s.status) && 'Tugas selesai'}
@@ -3337,6 +3419,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                         case 'AWAITING_PAYMENT': return 0;
                                         case 'PENDING_ASSIGNMENT': return 1;
                                         case 'AGENT_ASSIGNED': return 2;
+                                        case 'RESCHEDULED': return 2;
                                         case 'HEADING_TO_LOCATION': return 3;
                                         case 'SURVEYING': return 4;
                                         case 'SUBMITTED': return 5;

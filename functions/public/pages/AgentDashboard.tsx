@@ -88,6 +88,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const [isReschedulingSurvey, setIsReschedulingSurvey] = useState<SurveyRequest | null>(null);
     const [newSurveyDate, setNewSurveyDate] = useState('');
     const [newSurveyTime, setNewSurveyTime] = useState('');
+    const [rescheduleReason, setRescheduleReason] = useState('');
 
     // Auto-save draft effect
     useEffect(() => {
@@ -256,11 +257,31 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         if (!isReschedulingSurvey) return;
         setIsSubmitting(true);
         try {
+            // Build reschedule history
+            const currentSummary = isReschedulingSurvey.evaluation_summary || {};
+            const newHistoryItem = {
+                date: newSurveyDate,
+                time: newSurveyTime,
+                reason: rescheduleReason,
+                updatedAt: new Date().toISOString()
+            };
+            const rescheduleHistory = Array.isArray((currentSummary as any).reschedule_history)
+                ? [...(currentSummary as any).reschedule_history, newHistoryItem]
+                : [newHistoryItem];
+            
+            const updatedSummary = {
+                ...currentSummary,
+                reschedule_history: rescheduleHistory
+            };
+
             await updateSurveyRequest(isReschedulingSurvey.id, {
                 status: 'RESCHEDULED',
                 survey_date: newSurveyDate,
-                survey_time: newSurveyTime
+                survey_time: newSurveyTime,
+                notes: rescheduleReason,
+                evaluation_summary: updatedSummary
             });
+            await notifySurveyStatusUpdate(isReschedulingSurvey.id, 'RESCHEDULED');
             setIsReschedulingSurvey(null);
             await loadSurveyRequests();
         } catch (error) {
@@ -703,6 +724,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                 setIsReschedulingSurvey(req);
                                                 setNewSurveyDate(req.survey_date || '');
                                                 setNewSurveyTime(req.survey_time || '');
+                                                setRescheduleReason(req.notes && req.status === 'RESCHEDULED' ? req.notes : '');
                                             }} 
                                             className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
                                         >
@@ -1492,6 +1514,72 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     }
                 }} 
             />
+
+            {/* ── MODAL RESCHEDULE SURVEY (AGENT) ────────────────────────── */}
+            {isReschedulingSurvey && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setIsReschedulingSurvey(null)}></div>
+                    <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl relative z-10 flex flex-col overflow-hidden animate-in zoom-in-95">
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                            <div>
+                                <h2 className="text-lg font-black uppercase text-gray-900">Jadwal Ulang Survey</h2>
+                                <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Kost: {isReschedulingSurvey.kost_name}</p>
+                            </div>
+                            <button onClick={() => setIsReschedulingSurvey(null)} className="w-8 h-8 flex items-center justify-center border rounded-full hover:bg-white transition-colors">&times;</button>
+                        </div>
+                        <form onSubmit={(e) => { e.preventDefault(); handleRequestReschedule(); }} className="p-6 space-y-4">
+                            <div>
+                                <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest block mb-2">Tanggal Baru</label>
+                                <input 
+                                    type="date"
+                                    required
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold text-gray-800 focus:bg-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all"
+                                    value={newSurveyDate}
+                                    onChange={e => setNewSurveyDate(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest block mb-2">Waktu Baru</label>
+                                <input 
+                                    type="time"
+                                    required
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold text-gray-800 focus:bg-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all"
+                                    value={newSurveyTime}
+                                    onChange={e => setNewSurveyTime(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest block mb-2">Alasan Penjadwalan Ulang</label>
+                                <textarea
+                                    required
+                                    rows={3}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs font-bold text-gray-800 focus:bg-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all resize-none"
+                                    placeholder="Tulis alasan reschedule agar pemesan dapat memahaminya..."
+                                    value={rescheduleReason}
+                                    onChange={e => setRescheduleReason(e.target.value)}
+                                />
+                            </div>
+                            
+                            <div className="flex gap-3 pt-4">
+                                <button 
+                                    type="button"
+                                    onClick={() => setIsReschedulingSurvey(null)}
+                                    className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                                >
+                                    Batal
+                                </button>
+                                <button 
+                                    type="submit" 
+                                    disabled={isSubmitting}
+                                    className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+                                >
+                                    {isSubmitting ? 'Mengirim...' : 'Simpan Jadwal'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* Native Source Selection Action Sheet */}
             {uploadSourceFieldId && (

@@ -125,7 +125,7 @@ export const notifySurveyStatusUpdate = async (surveyId: string, newStatus: stri
     // 1. Ambil detail survey untuk mendapatkan ID User & ID Agent
     const { data: survey, error } = await supabase
       .from('survey_requests')
-      .select('user_id, assigned_agent_id, kost_name, survey_date, survey_time')
+      .select('user_id, assigned_agent_id, kost_name, survey_date, survey_time, notes')
       .eq('id', surveyId)
       .single();
 
@@ -145,7 +145,7 @@ export const notifySurveyStatusUpdate = async (surveyId: string, newStatus: stri
       userMsg = `Surveyor kami sedang dalam perjalanan menuju ${kost_name}. Mohon pastikan akses tersedia.`;
     } else if (newStatus === 'RESCHEDULED') {
       userTitle = 'Jadwal Survey Diperbarui 🗓️';
-      userMsg = `Jadwal survey untuk ${kost_name} telah diubah. Cek detail jadwal terbaru Anda.`;
+      userMsg = `Jadwal survey untuk ${kost_name} diubah menjadi ${survey.survey_date} pukul ${survey.survey_time} dengan alasan: "${survey.notes || 'Penyesuaian jadwal lapangan oleh Surveyor.'}"`;
     } else if (newStatus === 'SURVEYING') {
       userTitle = 'Survey Sedang Berlangsung ⚡';
       userMsg = `Surveyor sedang berada di lokasi ${kost_name} untuk melakukan pengecekan.`;
