@@ -70,6 +70,25 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     };
     const [profileImgError, setProfileImgError] = useState(false);
     
+
+
+    // Wallet State
+    const [walletView, setWalletView] = useState<'balance' | 'history' | 'bank'>('balance');
+    const [isWithdrawing, setIsWithdrawing] = useState(false);
+    const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
+    const [agentBankName, setAgentBankName] = useState('BCA');
+    const [agentBankAccount, setAgentBankAccount] = useState('1234567890');
+    const [agentAccountName, setAgentAccountName] = useState('Arif (Surveyor)');
+    
+    // Modal State
+    const [isEditingSurvey, setIsEditingSurvey] = useState<SurveyRequest | null>(null);
+    const [surveyForm, setSurveyForm] = useState<any>({});
+    const [isUploadingSurveyPhoto, setIsUploadingSurveyPhoto] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isReschedulingSurvey, setIsReschedulingSurvey] = useState<SurveyRequest | null>(null);
+    const [newSurveyDate, setNewSurveyDate] = useState('');
+    const [newSurveyTime, setNewSurveyTime] = useState('');
+
     // Auto-save draft effect
     useEffect(() => {
         if (isEditingSurvey && surveyForm && Object.keys(surveyForm).length > 0) {
@@ -101,23 +120,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             setSurveyForm(defaultForm);
         }
     };
-
-    // Wallet State
-    const [walletView, setWalletView] = useState<'balance' | 'history' | 'bank'>('balance');
-    const [isWithdrawing, setIsWithdrawing] = useState(false);
-    const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
-    const [agentBankName, setAgentBankName] = useState('BCA');
-    const [agentBankAccount, setAgentBankAccount] = useState('1234567890');
-    const [agentAccountName, setAgentAccountName] = useState('Arif (Surveyor)');
-    
-    // Modal State
-    const [isEditingSurvey, setIsEditingSurvey] = useState<SurveyRequest | null>(null);
-    const [surveyForm, setSurveyForm] = useState<any>({});
-    const [isUploadingSurveyPhoto, setIsUploadingSurveyPhoto] = useState<string | null>(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isReschedulingSurvey, setIsReschedulingSurvey] = useState<SurveyRequest | null>(null);
-    const [newSurveyDate, setNewSurveyDate] = useState('');
-    const [newSurveyTime, setNewSurveyTime] = useState('');
 
     const stats = {
         total: surveyRequests.length,
