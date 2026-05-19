@@ -777,7 +777,7 @@ const Articles: React.FC = () => {
                     <Mail className="w-3.5 h-3.5" /> Newsletter Mingguan
                   </div>
                   <h2 className="text-2xl sm:text-3xl md:text-4xl font-black uppercase tracking-tight leading-none">
-                    Dapatkan Update Berita & Tips Kost Terbaik
+                    Dapatkan Update Berita Seputar Properti Terbaru
                   </h2>
                   <p className="text-slate-400 font-medium text-xs sm:text-sm leading-relaxed max-w-xl mx-auto lg:mx-0">
                     Gabung dengan ribuan mahasiswa dan pemilik kost di Makassar. Kami mengirimi Anda tips sewa properti, pembaruan aplikasi, dan artikel pilar mingguan langsung ke email Anda.
