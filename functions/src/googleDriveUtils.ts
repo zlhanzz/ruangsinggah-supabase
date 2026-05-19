@@ -69,12 +69,12 @@ export async function createSurveyFolder(
 
     if (!fileId) throw new Error('Failed to create folder');
 
-    // Make the folder accessible (anyone with the link can view)
-    // ONLY change this to 'reader' so Users can only view.
+    // Make the folder accessible (anyone with the link can view & edit)
+    // Change this to 'writer' so Agents can upload files.
     await drive.permissions.create({
       fileId: fileId,
       requestBody: {
-        role: 'reader',
+        role: 'writer',
         type: 'anyone',
       },
     });
