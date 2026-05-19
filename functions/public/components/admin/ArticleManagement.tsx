@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../../supabase';
-import { Plus, Edit2, Trash2, Eye, FileText, CheckCircle, AlertCircle, RefreshCcw, Save, X, HelpCircle, Code, Image } from 'lucide-react';
+import { Plus, Edit2, Trash2, Eye, FileText, CheckCircle, AlertCircle, RefreshCcw, Save, X, HelpCircle, Code } from 'lucide-react';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 
 interface ArticleDb {
   id?: string;
@@ -52,6 +54,7 @@ const ArticleManagement: React.FC = () => {
   // Editor view
   const [editorTab, setEditorTab] = useState<'write' | 'preview'>('write');
   const [isUploadingImg, setIsUploadingImg] = useState(false);
+  const reactQuillRef = useRef<ReactQuill>(null);
 
   const fetchArticles = async () => {
     setLoading(true);
@@ -132,73 +135,66 @@ const ArticleManagement: React.FC = () => {
     setShowForm(true);
   };
 
-  const handleInsertTag = (tagOpen: string, tagClose: string = '') => {
-    const textarea = document.getElementById('article-content-textarea') as HTMLTextAreaElement;
-    if (!textarea) return;
+  const handleImageUploadQuill = () => {
+    const input = document.createElement('input');
+    input.setAttribute('type', 'file');
+    input.setAttribute('accept', 'image/*');
+    input.click();
 
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = textarea.value;
-    const selected = text.substring(start, end);
-    const replacement = tagOpen + selected + tagClose;
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
 
-    setContent(text.substring(0, start) + replacement + text.substring(end));
-    
-    // Restore focus
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + tagOpen.length, start + tagOpen.length + selected.length);
-    }, 50);
-  };
+      setIsUploadingImg(true);
+      setErrorMsg('');
+      setInfoMsg('');
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `article_${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `articles/${fileName}`;
 
-    setIsUploadingImg(true);
-    setErrorMsg('');
-    setInfoMsg('');
+        // Upload to 'banners' bucket
+        const { data, error: uploadError } = await supabase.storage
+          .from('banners')
+          .upload(filePath, file);
 
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `article_${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `articles/${fileName}`;
+        if (uploadError) throw uploadError;
 
-      // Upload to 'banners' bucket
-      const { data, error: uploadError } = await supabase.storage
-        .from('banners')
-        .upload(filePath, file);
+        const { data: { publicUrl } } = supabase.storage.from('banners').getPublicUrl(data.path);
 
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage.from('banners').getPublicUrl(data.path);
-
-      // Insert image HTML tag at cursor
-      const imageTag = `\n<img src="${publicUrl}" alt="${file.name}" class="rounded-3xl my-8 w-full shadow-lg border border-gray-100 object-cover" />\n`;
-      
-      const textarea = document.getElementById('article-content-textarea') as HTMLTextAreaElement;
-      if (textarea) {
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const text = textarea.value;
-        setContent(text.substring(0, start) + imageTag + text.substring(end));
+        // Get Quill instance and insert image
+        const quill = reactQuillRef.current?.getEditor();
+        if (quill) {
+          const range = quill.getSelection();
+          const insertIdx = range?.index ?? quill.getLength();
+          quill.insertEmbed(insertIdx, 'image', publicUrl);
+          quill.setSelection(insertIdx + 1);
+        }
         
-        setTimeout(() => {
-          textarea.focus();
-          textarea.setSelectionRange(start + imageTag.length, start + imageTag.length);
-        }, 50);
-      } else {
-        setContent(prev => prev + imageTag);
+        setInfoMsg('Gambar berhasil diunggah!');
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Gagal mengunggah gambar.');
+      } finally {
+        setIsUploadingImg(false);
       }
-
-      setInfoMsg('Gambar berhasil diunggah!');
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Gagal mengunggah gambar.');
-    } finally {
-      setIsUploadingImg(false);
-      e.target.value = '';
-    }
+    };
   };
+
+  const modules = useMemo(() => ({
+    toolbar: {
+      container: [
+        [{ 'header': [2, 3, false] }],
+        ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+        ['link', 'image'],
+        ['clean']
+      ],
+      handlers: {
+        image: handleImageUploadQuill
+      }
+    }
+  }), []);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -455,15 +451,35 @@ const ArticleManagement: React.FC = () => {
 
           {/* EDITING INTERACTIVE CONTENT BOX */}
           <div className="space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-100 p-2 rounded-2xl">
-              {/* Tab selector */}
+            <style>{`
+              .ql-editor {
+                min-height: 380px;
+                font-family: inherit;
+                font-size: 0.875rem;
+                line-height: 1.7;
+              }
+              .ql-toolbar {
+                border-top-left-radius: 1.5rem !important;
+                border-top-right-radius: 1.5rem !important;
+                border-color: #e2e8f0 !important;
+                background-color: #f8fafc;
+              }
+              .ql-container {
+                border-bottom-left-radius: 1.5rem !important;
+                border-bottom-right-radius: 1.5rem !important;
+                border-color: #e2e8f0 !important;
+                border-top: none !important;
+              }
+            `}</style>
+
+            <div className="flex items-center justify-between bg-gray-100 p-2 rounded-2xl">
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => setEditorTab('write')}
                   className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${editorTab === 'write' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                 >
-                  📝 Editor HTML/Markdown
+                  📝 Editor Visual
                 </button>
                 <button
                   type="button"
@@ -473,86 +489,23 @@ const ArticleManagement: React.FC = () => {
                   👁️ Real-time Preview
                 </button>
               </div>
-
-              {/* Helper Buttons (Only in write tab) */}
-              {editorTab === 'write' && (
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <button 
-                    type="button"
-                    title="Bold"
-                    onClick={() => handleInsertTag('<strong>', '</strong>')}
-                    className="p-2 bg-white hover:bg-gray-50 rounded-lg text-xs font-bold border border-gray-200"
-                  >
-                    B
-                  </button>
-                  <button 
-                    type="button"
-                    title="Italic"
-                    onClick={() => handleInsertTag('<em>', '</em>')}
-                    className="p-2 bg-white hover:bg-gray-50 rounded-lg text-xs italic border border-gray-200"
-                  >
-                    I
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => handleInsertTag('<h2 class="text-2xl font-black text-gray-900 mt-10 mb-4 uppercase tracking-tight">', '</h2>')}
-                    className="px-2 py-1.5 bg-white hover:bg-gray-50 rounded-lg text-[10px] font-black border border-gray-200"
-                  >
-                    H2
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => handleInsertTag('<p class="leading-relaxed text-gray-700 mb-6">', '</p>')}
-                    className="px-2 py-1.5 bg-white hover:bg-gray-50 rounded-lg text-[10px] font-bold border border-gray-200"
-                  >
-                    Paragraf
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => handleInsertTag('<blockquote class="border-l-4 border-orange-500 pl-4 py-2 my-6 bg-orange-50/50 rounded-r-xl">\n  <p class="italic font-bold text-gray-800">', '</p>\n</blockquote>')}
-                    className="px-2 py-1.5 bg-white hover:bg-gray-50 rounded-lg text-[10px] font-bold border border-gray-200"
-                  >
-                    Quote
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => handleInsertTag('<ul class="list-disc pl-6 space-y-3 text-gray-700 mb-6">\n  <li><strong>', '</strong>: penjelasan</li>\n</ul>')}
-                    className="px-2 py-1.5 bg-white hover:bg-gray-50 rounded-lg text-[10px] font-bold border border-gray-200"
-                  >
-                    List
-                  </button>
-                  <input
-                    type="file"
-                    id="article-image-upload"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageUpload}
-                  />
-                  <button 
-                    type="button"
-                    title="Unggah Gambar"
-                    disabled={isUploadingImg}
-                    onClick={() => document.getElementById('article-image-upload')?.click()}
-                    className="px-2.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg text-[10px] font-black border border-orange-200 flex items-center gap-1 transition-all disabled:opacity-50"
-                  >
-                    <Image className="w-3.5 h-3.5" />
-                    {isUploadingImg ? 'Mengunggah...' : 'Unggah Gambar'}
-                  </button>
-                </div>
+              {isUploadingImg && (
+                <span className="text-[10px] font-black text-orange-600 animate-pulse uppercase tracking-widest mr-3">
+                  Mengunggah gambar...
+                </span>
               )}
             </div>
 
             {/* Writer area */}
             {editorTab === 'write' ? (
-              <div>
-                <textarea
-                  id="article-content-textarea"
-                  rows={15}
-                  placeholder="Tulis artikel Anda menggunakan tag HTML semantik (gunakan helper buttons di atas)..."
-                  className="w-full bg-white p-6 rounded-3xl border border-gray-200 outline-none text-sm font-medium text-gray-800 focus:border-orange-500 transition-colors font-mono leading-relaxed"
+              <div className="bg-white rounded-3xl overflow-hidden">
+                <ReactQuill
+                  ref={reactQuillRef}
+                  theme="snow"
                   value={content}
-                  onChange={e => setContent(e.target.value)}
-                  required
+                  onChange={setContent}
+                  modules={modules}
+                  placeholder="Tulis konten artikel Anda di sini..."
                 />
               </div>
             ) : (

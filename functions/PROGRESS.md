@@ -15,6 +15,7 @@
 - **Injeksi Data Terstruktur JSON-LD Dinamis**: Menyuntikkan schema `Article` terstruktur secara dinamis di `<head>` dokumen saat artikel tertentu dibaca untuk kemudahan web crawling dan AI search crawlers.
 - **Pilar Artikel Kontekstual (Entity-Rich)**: Menulis 3 artikel penjelasan entitas (Mengenal RuangSinggah.id / PT Ruang Singgah Nusantara, Panduan Jasa Survey Kost, dan optimasi KostManager) untuk memperkaya pemahaman mesin pencari dan AI (SGE/Gemini/SearchGPT).
 - **Sistem CMS Editor Visual Admin (`ArticleManagement.tsx`)**: Menambahkan panel manajemen artikel interaktif di dashboard admin dengan real-time rendering, editing format visual HTML/Markdown, auto-slug generator, dan kalkulator waktu baca otomatis.
+- **Integrasi Editor Rich Text WYSIWYG (`react-quill-new`)**: Mengganti input textarea manual dengan library visual editor standard industri yang kompatibel dengan React 19. Dilengkapi dengan custom image handler yang mengunggah berkas gambar langsung ke Supabase Storage (bucket `banners` di folder `articles/`) dan menyematkan link publiknya secara dinamis, serta merapikan panduan migrasi SQL ke dalam akordion details yang tersembunyi secara default.
 
 ### 3. Optimalisasi Pembayaran Midtrans Production (Mei 2026)
 -   **DANA & GoPay Professional Flow**: Implementasi Snap Redirect untuk DANA dan Direct Charge Deeplink untuk GoPay.
