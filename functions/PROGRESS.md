@@ -95,6 +95,13 @@
 - **Internal Linking Populer di Footer**: Menambahkan daftar tautan Kampus Populer dan Area Populer di `Footer.tsx` untuk meningkatkan otoritas penjelajahan robot pencari.
 - **Penyuntingan Sitemap XML Dinamis**: Memperbarui Cloud Function `sitemap` di `index.ts` untuk mengueri data kampus & area aktif properti unik dan merendernya sebagai URL sitemap resmi.
 
+### 16. Potongan 30% Jasa Survey untuk Pembeli Database Kost (Juni 2026)
+- **Verifikasi Kepemilikan Database**: Mengintegrasikan `getUserTransactions` di `SurveyCheckout.tsx` untuk mendeteksi transaksi database berstatus `'PAID'` milik pengguna.
+- **Diskon Dinamis Per Unit Kost**: Menghitung `totalPrice` menggunakan reducer dinamis, menerapkan potongan 30% (`unitPrice * 0.7`) khusus pada unit kost yang bersumber dari `'database'` bagi pengguna yang berhak.
+- **Banner Edukasi & Promosi UI**: Menambahkan banner hijau pemberitahuan diskon aktif serta banner kuning edukatif di Step 2 untuk pengguna yang belum memiliki database properti.
+- **Rincian Harga Ringkasan & Sukses**: Memperbarui breakdown rincian harga di Step 4 dan halaman sukses pembayaran agar transparan menampilkan potongan harga.
+- **Metadata Transaksi Pembayaran**: Menyinkronkan bendera `has_database_discount` dan nilai `discount_amount` ke dalam `paymentMetadata` transaksi di Supabase/Midtrans.
+
 ## Fitur Dalam Pengerjaan (In Progress)
 -   Monitoring konsistensi Webhook Midtrans vs Supabase untuk transaksi multi-kost.
 -   Uji E2E transaksi nyata di Production (Smallest Amount).

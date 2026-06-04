@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Page } from '../types';
 import { getSurveyCatalogSettings } from '../adminService';
+import { getUserTransactions } from '../userService';
 import PaymentGateway from '../components/PaymentGateway';
 import { Plus, Trash2, MapPin, Calendar, ShieldCheck, ArrowRight, ArrowLeft, CheckCircle, AlertTriangle, ChevronRight } from 'lucide-react';
 
@@ -43,6 +44,7 @@ const SurveyCheckout: React.FC<SurveyCheckoutProps> = ({ user, onPageChange, val
   const [showPayment, setShowPayment] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [paymentMetadata, setPaymentMetadata] = useState<any>(null);
+  const [hasBoughtDatabase, setHasBoughtDatabase] = useState(false);
 
   const [formInfo, setFormInfo] = useState({
     name: '',
@@ -76,11 +78,33 @@ const SurveyCheckout: React.FC<SurveyCheckoutProps> = ({ user, onPageChange, val
         phone: (user.phone || '').replace(/^(\+62|62|0)/, ''),
         email: user.email || '',
       });
+
+      // Check if user has bought a database product
+      const uid = user.uid || user.id;
+      if (uid) {
+        getUserTransactions(uid).then(transactions => {
+          const hasDbPurchase = transactions.some(t => 
+            t.product_type === 'database' && 
+            (t.status?.toUpperCase() === 'PAID' || t.status?.toLowerCase() === 'paid')
+          );
+          console.log('[SurveyCheckout] User database purchase status:', hasDbPurchase);
+          setHasBoughtDatabase(hasDbPurchase);
+        }).catch(err => {
+          console.error('[SurveyCheckout] Gagal check transaksi database:', err);
+        });
+      }
     }
   }, [user]);
 
-  // Total = jumlah kost × harga per kost (sama dengan harga yang tampil di landing page)
-  const totalPrice = kostList.length * unitPrice;
+  // Total = sum of each kost unit price (discount 30% if source is database and user has bought database)
+  const totalPrice = useMemo(() => {
+    return kostList.reduce((sum, k) => {
+      if (hasBoughtDatabase && k.source === 'database') {
+        return sum + (unitPrice * 0.7);
+      }
+      return sum + unitPrice;
+    }, 0);
+  }, [kostList, unitPrice, hasBoughtDatabase]);
 
   const addKost = () => {
     if (kostList.length >= MAX_KOST) return;
@@ -145,6 +169,8 @@ const SurveyCheckout: React.FC<SurveyCheckoutProps> = ({ user, onPageChange, val
         package_price: totalPrice,
         kost_count: kostList.length,
         price_per_kost: unitPrice,
+        has_database_discount: hasBoughtDatabase && kostList.some(k => k.source === 'database'),
+        discount_amount: (kostList.length * unitPrice) - totalPrice,
       };
       setPaymentMetadata(meta);
       setShowPayment(true);
@@ -175,7 +201,7 @@ const SurveyCheckout: React.FC<SurveyCheckoutProps> = ({ user, onPageChange, val
               <span className="text-gray-500 font-bold">Jadwal:</span>
               <span className="text-gray-900 font-black">{surveyDate} @ {surveyTime} WIB</span>
             </div>
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between text-sm border-t border-orange-100/50 pt-2">
               <span className="text-gray-500 font-bold">Total:</span>
               <span className="text-orange-600 font-black">{formatRupiah(totalPrice)}</span>
             </div>
@@ -275,12 +301,42 @@ const SurveyCheckout: React.FC<SurveyCheckoutProps> = ({ user, onPageChange, val
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-black">{formatRupiah(totalPrice)}</span>
                   </div>
-                  <p className="text-xs opacity-80 mt-1">
-                    {kostList.length} kost × {formatRupiah(unitPrice)}/kost
-                  </p>
+                  <div className="text-xs opacity-90 mt-2 space-y-1">
+                    {kostList.map((k, i) => {
+                      const isDiscounted = hasBoughtDatabase && k.source === 'database';
+                      return (
+                        <div key={k.id} className="flex justify-between">
+                          <span>Kost #{i + 1} ({k.source === 'database' ? 'Database' : k.source ? 'Lainnya' : 'Belum dipilih'}):</span>
+                          <span>
+                            {isDiscounted ? (
+                              <span>
+                                <span className="line-through opacity-60 mr-1.5">{formatRupiah(unitPrice)}</span>
+                                <span className="font-bold text-green-300">{formatRupiah(unitPrice * 0.7)}</span>
+                              </span>
+                            ) : (
+                              formatRupiah(unitPrice)
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </>
               )}
             </div>
+
+            {hasBoughtDatabase && kostList.some(k => k.source === 'database') && (
+              <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-xs text-green-800 flex items-center gap-2 animate-in fade-in">
+                <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+                <span>Selamat! Anda mendapatkan <strong>potongan 30%</strong> untuk unit kost yang bersumber dari database Ruang Singgah.</span>
+              </div>
+            )}
+            {!hasBoughtDatabase && kostList.some(k => k.source === 'database') && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-center gap-2 animate-in fade-in">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Beli produk <strong>database kost</strong> kami terlebih dahulu untuk mendapatkan diskon 30% Jasa Survey.</span>
+              </div>
+            )}
 
             {kostList.map((kost, idx) => (
               <div key={kost.id} className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
@@ -317,7 +373,7 @@ const SurveyCheckout: React.FC<SurveyCheckoutProps> = ({ user, onPageChange, val
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Sumber Info</label>
                   <select className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 outline-none bg-white" value={kost.source} onChange={e => updateKost(kost.id, 'source', e.target.value)}>
                     <option value="" disabled>Pilih Sumber Info</option>
-                    <option value="database">Database Properti</option>
+                    <option value="database">Database Ruang Singgah</option>
                     <option value="social_media">Sosial Media</option>
                     <option value="google_maps">Google Maps</option>
                     <option value="other">Lainnya</option>
@@ -408,11 +464,23 @@ const SurveyCheckout: React.FC<SurveyCheckoutProps> = ({ user, onPageChange, val
                 <span className="text-gray-400 font-bold uppercase">Jadwal</span>
                 <span className="text-gray-900 font-black">{surveyDate} @ {surveyTime} WIB</span>
               </div>
-              <div className="flex justify-between text-sm pt-2">
+              <div className="flex justify-between text-sm pt-2 border-t border-gray-100">
                 <span className="text-gray-900 font-black uppercase">Total Bayar</span>
                 <span className="text-orange-600 font-black text-lg">{formatRupiah(totalPrice)}</span>
               </div>
-              <p className="text-xs text-gray-400 italic">{kostList.length} kost × {formatRupiah(unitPrice)}/kost</p>
+              <div className="text-[10px] text-gray-400 italic space-y-1">
+                {kostList.map((k, i) => {
+                  const isDiscounted = hasBoughtDatabase && k.source === 'database';
+                  return (
+                    <div key={k.id} className="flex justify-between">
+                      <span>Kost #{i + 1} ({k.source === 'database' ? 'Database Ruang Singgah' : 'Sumber Lain'}):</span>
+                      <span className={isDiscounted ? 'text-green-600 font-black' : 'font-medium'}>
+                        {isDiscounted ? `${formatRupiah(unitPrice * 0.7)} (Diskon 30%)` : formatRupiah(unitPrice)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="flex items-start gap-3 p-4 bg-orange-50 rounded-xl border border-orange-100">
