@@ -2561,22 +2561,35 @@ export const sitemap = functions.https.onRequest(async (req, res) => {
     const supabaseClient = createClient(supabaseUrlParam.value(), supabaseKeyParam.value());
 
     // Ambil artikel yang berstatus published
-    const { data: articles, error } = await supabaseClient
+    const { data: articles, error: articlesError } = await supabaseClient
       .from('articles')
       .select('slug, updated_at')
       .eq('status', 'published');
 
-    if (error) {
-      console.error("CF_LOG: Error fetching articles for sitemap:", error);
+    if (articlesError) {
+      console.error("CF_LOG: Error fetching articles for sitemap:", articlesError);
     }
 
-    // Daftar halaman statis utama
+    // Ambil properti/kost yang berstatus published
+    const { data: properties, error: propertiesError } = await supabaseClient
+      .from('properties')
+      .select('id, updated_at')
+      .eq('status', 'published');
+
+    if (propertiesError) {
+      console.error("CF_LOG: Error fetching properties for sitemap:", propertiesError);
+    }
+
+    // Daftar halaman statis utama yang valid dari React Router
     const staticPages = [
       '',
-      '/survey',
+      '/listings',
+      '/products',
+      '/owner',
       '/about',
-      '/faq',
-      '/hubungi-kami',
+      '/contact',
+      '/survey-service',
+      '/syarat-ketentuan',
       '/artikel'
     ];
 
@@ -2602,6 +2615,19 @@ export const sitemap = functions.https.onRequest(async (req, res) => {
         xml += `    <lastmod>${lastMod}</lastmod>\n`;
         xml += `    <changefreq>monthly</changefreq>\n`;
         xml += `    <priority>0.7</priority>\n`;
+        xml += `  </url>\n`;
+      }
+    }
+
+    // 3. Tambahkan halaman properti kost dinamis
+    if (properties && Array.isArray(properties)) {
+      for (const prop of properties) {
+        const lastMod = prop.updated_at ? new Date(prop.updated_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+        xml += `  <url>\n`;
+        xml += `    <loc>${baseUrl}/kost/${prop.id}</loc>\n`;
+        xml += `    <lastmod>${lastMod}</lastmod>\n`;
+        xml += `    <changefreq>weekly</changefreq>\n`;
+        xml += `    <priority>0.9</priority>\n`;
         xml += `  </url>\n`;
       }
     }

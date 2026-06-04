@@ -50,7 +50,10 @@
     "rewrites": [
       {
         "source": "/sitemap.xml",
-        "function": "sitemap"
+        "function": {
+          "functionId": "sitemap",
+          "region": "us-central1"
+        }
       },
       {
         "source": "**",
