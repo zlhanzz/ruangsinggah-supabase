@@ -458,6 +458,8 @@ const App: React.FC = () => {
              <Route path="/payment-status/:orderId" element={<OrderPaymentStatus user={user} />} />
               <Route path={Page.HOME} element={<Home onPageChange={(p: Page | string) => navigate(p)} onKostSelect={handleKostSelect} user={user} listings={listings} loading={loadingListings} />} />
               <Route path={Page.LISTINGS} element={<Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} onFilterToggle={setHideNavbar} />} />
+              <Route path="/kost-dekat/:campusSlug" element={<Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} onFilterToggle={setHideNavbar} />} />
+              <Route path="/kost-area/:areaSlug" element={<Listings onKostClick={handleKostSelect} listings={listings} loading={loadingListings} user={user} onFilterToggle={setHideNavbar} />} />
             <Route path="/products/*" element={
               <Products
                 user={user}

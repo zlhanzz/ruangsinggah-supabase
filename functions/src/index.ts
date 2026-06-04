@@ -2570,10 +2570,23 @@ export const sitemap = functions.https.onRequest(async (req, res) => {
       console.error("CF_LOG: Error fetching articles for sitemap:", articlesError);
     }
 
-    // Ambil properti/kost yang berstatus published
+    // helper to slugify text in sitemap
+    function slugify(text: string): string {
+      return text
+        .toString()
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w\-]+/g, '')
+        .replace(/\-\-+/g, '-')
+        .replace(/^-+/, '')
+        .replace(/-+$/, '');
+    }
+
+    // Ambil properti/kost yang berstatus published beserta kampus & area (pSEO)
     const { data: properties, error: propertiesError } = await supabaseClient
       .from('properties')
-      .select('id, updated_at')
+      .select('id, updated_at, campuses, area')
       .eq('status', 'published');
 
     if (propertiesError) {
@@ -2630,6 +2643,42 @@ export const sitemap = functions.https.onRequest(async (req, res) => {
         xml += `    <priority>0.9</priority>\n`;
         xml += `  </url>\n`;
       }
+    }
+
+    // 4. Tambahkan rute Kampus Dinamis (pSEO) jika ada datanya
+    const uniqueCampuses = new Set<string>();
+    const uniqueAreas = new Set<string>();
+
+    if (properties && Array.isArray(properties)) {
+      for (const prop of properties) {
+        if (prop.campuses && Array.isArray(prop.campuses)) {
+          for (const c of prop.campuses) {
+            if (c.name && c.name.trim() !== '') {
+              uniqueCampuses.add(c.name);
+            }
+          }
+        }
+        if (prop.area && prop.area.trim() !== '') {
+          uniqueAreas.add(prop.area);
+        }
+      }
+    }
+
+    for (const campus of uniqueCampuses) {
+      xml += `  <url>\n`;
+      xml += `    <loc>${baseUrl}/kost-dekat/${slugify(campus)}</loc>\n`;
+      xml += `    <changefreq>weekly</changefreq>\n`;
+      xml += `    <priority>0.8</priority>\n`;
+      xml += `  </url>\n`;
+    }
+
+    // 5. Tambahkan rute Area Dinamis (pSEO) jika ada datanya
+    for (const area of uniqueAreas) {
+      xml += `  <url>\n`;
+      xml += `    <loc>${baseUrl}/kost-area/${slugify(area)}</loc>\n`;
+      xml += `    <changefreq>weekly</changefreq>\n`;
+      xml += `    <priority>0.8</priority>\n`;
+      xml += `  </url>\n`;
     }
 
     xml += `</urlset>`;

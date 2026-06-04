@@ -1,11 +1,24 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { Kost } from '../types';
 import KostCard from '../components/KostCard';
 import { getRoomEffectivePrice } from '../userService';
 import FilterDrawer from '../components/FilterDrawer';
 import FilterControls, { FilterState } from '../components/FilterControls';
+
+const slugify = (text: string) => {
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w\-]+/g, '')
+    .replace(/\-\-+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+};
 
 interface ListingsProps {
   onKostClick?: (id: string) => void;
@@ -18,6 +31,7 @@ interface ListingsProps {
 
 const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading = false, onDelete, user, onFilterToggle }) => {
   const { search } = useLocation();
+  const { campusSlug, areaSlug } = useParams<{ campusSlug?: string; areaSlug?: string }>();
   const queryParams = useMemo(() => new URLSearchParams(search), [search]);
 
   const [filters, setFilters] = useState<FilterState>({
@@ -30,7 +44,7 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
   
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   
-  // Initialize and sync with URL query parameters
+  // Initialize and sync with URL query parameters & dynamic route parameters (pSEO)
   useEffect(() => {
     const qSearch = queryParams.get('search');
     const qCity = queryParams.get('city');
@@ -38,15 +52,53 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
     const qType = queryParams.get('type');
     const qMaxPrice = queryParams.get('maxPrice');
 
+    let finalCampus = qCampus || 'Semua';
+    let finalSearch = qSearch || '';
+
+    if (campusSlug && listings.length > 0) {
+      const matched = listings.reduce((found, k) => {
+        if (found) return found;
+        if (k.campuses) {
+          const c = k.campuses.find(c => slugify(c.name) === campusSlug.toLowerCase());
+          if (c) return c.name;
+        }
+        return null;
+      }, null as string | null);
+
+      if (matched) {
+        finalCampus = matched;
+      } else {
+        const campusMap: Record<string, string> = {
+          unhas: 'Unhas',
+          unm: 'UNM',
+          umi: 'UMI',
+          unibos: 'Unibos',
+          uin: 'UIN Alauddin',
+          pnup: 'PNUP',
+          unismuh: 'Unismuh'
+        };
+        finalCampus = campusMap[campusSlug.toLowerCase()] || campusSlug;
+      }
+    }
+
+    if (areaSlug && listings.length > 0) {
+      const matchedArea = listings.find(k => k.area && slugify(k.area) === areaSlug.toLowerCase())?.area;
+      if (matchedArea) {
+        finalSearch = matchedArea;
+      } else {
+        finalSearch = areaSlug.replace(/-/g, ' ');
+      }
+    }
+
     setFilters(prev => ({
       ...prev,
-      searchTerm: qSearch || prev.searchTerm,
+      searchTerm: finalSearch || prev.searchTerm,
       selectedCity: qCity || prev.selectedCity,
-      selectedCampus: qCampus || prev.selectedCampus,
+      selectedCampus: finalCampus !== 'Semua' ? finalCampus : (qCampus || prev.selectedCampus),
       typeFilter: qType || prev.typeFilter,
       maxPrice: qMaxPrice ? parseInt(qMaxPrice) : prev.maxPrice,
     }));
-  }, [queryParams]);
+  }, [queryParams, campusSlug, areaSlug, listings]);
 
   useEffect(() => {
     if (onFilterToggle) onFilterToggle(isMobileFilterOpen);
@@ -88,9 +140,11 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
     let result = [...listings];
 
     if (filters.searchTerm) {
+      const searchLower = filters.searchTerm.toLowerCase();
       result = result.filter(k => 
-        k.title.toLowerCase().includes(filters.searchTerm.toLowerCase()) || 
-        k.address.toLowerCase().includes(filters.searchTerm.toLowerCase())
+        k.title.toLowerCase().includes(searchLower) || 
+        k.address.toLowerCase().includes(searchLower) ||
+        (k.area && k.area.toLowerCase().includes(searchLower))
       );
     }
 
@@ -148,8 +202,74 @@ const Listings: React.FC<ListingsProps> = ({ onKostClick, listings = [], loading
     });
   };
 
+  const seoMetadata = useMemo(() => {
+    let title = "Cari Kost Murah Makassar Terverifikasi - RuangSinggah.id";
+    let description = "Cari kost murah terdekat di Makassar dengan mudah! Kamar kost putra, putri, dan campur terverifikasi lapangan 100%. Booking online aman & survey jujur di RuangSinggah.id.";
+    let canonical = "https://ruangsinggah.id/listings";
+
+    if (campusSlug) {
+      const campusMap: Record<string, string> = {
+        unhas: 'Unhas (Universitas Hasanuddin)',
+        unm: 'UNM (Universitas Negeri Makassar)',
+        umi: 'UMI (Universitas Muslim Indonesia)',
+        unibos: 'Unibos (Universitas Bosowa)',
+        uin: 'UIN Alauddin',
+        pnup: 'PNUP (Politeknik Negeri Ujung Pandang)',
+        unismuh: 'Unismuh (Universitas Muhammadiyah Makassar)'
+      };
+      // Get readable name
+      let campusName = campusSlug;
+      if (filters.selectedCampus && filters.selectedCampus !== 'Semua') {
+        campusName = filters.selectedCampus;
+      } else {
+        campusName = campusMap[campusSlug.toLowerCase()] || campusSlug.toUpperCase();
+      }
+
+      title = `Kost Dekat ${campusName} Makassar Murah Terverifikasi - RuangSinggah.id`;
+      description = `Cari kost dekat kampus ${campusName} Makassar murah dan terverifikasi 100% bebas zonk. Dapatkan pilihan kost putra, putri, dan campur terbaik dengan fasilitas lengkap di RuangSinggah.id.`;
+      canonical = `https://ruangsinggah.id/kost-dekat/${campusSlug.toLowerCase()}`;
+    } else if (areaSlug) {
+      let areaName = areaSlug.replace(/-/g, ' ');
+      if (filters.searchTerm) {
+        areaName = filters.searchTerm;
+      }
+      // Capitalize
+      areaName = areaName.replace(/\b\w/g, c => c.toUpperCase());
+
+      title = `Kost Area ${areaName} Makassar Murah Terverifikasi - RuangSinggah.id`;
+      description = `Daftar kost murah terdekat di area ${areaName} Makassar. Temukan hunian kos putra, putri, campur dengan fasilitas lengkap dan terverifikasi lapangan di RuangSinggah.id.`;
+      canonical = `https://ruangsinggah.id/kost-area/${areaSlug.toLowerCase()}`;
+    } else if (filters.selectedCampus !== 'Semua') {
+      title = `Kost Dekat Kampus ${filters.selectedCampus} Makassar Murah - RuangSinggah.id`;
+      description = `Cari kost dekat kampus ${filters.selectedCampus} Makassar. Dapatkan kos putra, putri, campur terverifikasi lapangan di RuangSinggah.id.`;
+    } else if (filters.searchTerm) {
+      title = `Kost Dekat ${filters.searchTerm} Makassar Murah - RuangSinggah.id`;
+      description = `Temukan kost murah terdekat di sekitar ${filters.searchTerm} Makassar. Ulasan jujur, bebas penipuan, verifikasi lapangan 100% di RuangSinggah.id.`;
+    }
+
+    return { title, description, canonical };
+  }, [campusSlug, areaSlug, filters.selectedCampus, filters.searchTerm]);
+
   return (
     <div className="min-h-screen bg-white">
+      <Helmet>
+        <title>{seoMetadata.title}</title>
+        <meta name="description" content={seoMetadata.description} />
+        <link rel="canonical" href={seoMetadata.canonical} />
+        
+        {/* Open Graph */}
+        <meta property="og:title" content={seoMetadata.title} />
+        <meta property="og:description" content={seoMetadata.description} />
+        <meta property="og:url" content={seoMetadata.canonical} />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://ruangsinggah.id/logo.png" />
+        
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content={seoMetadata.title} />
+        <meta name="twitter:description" content={seoMetadata.description} />
+        <meta name="twitter:image" content="https://ruangsinggah.id/logo.png" />
+      </Helmet>
        {/* MOBILE STICKY FILTER BAR */}
       <div className="lg:hidden sticky top-[80px] z-40 bg-white/95 backdrop-blur-md px-4 py-3 border-b border-gray-100 shadow-sm transition-all">
         <button 
