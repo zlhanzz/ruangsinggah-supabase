@@ -109,6 +109,9 @@
 ### 18. Perbaikan Visibilitas Pesanan Survey untuk Akun Biasa (Juni 2026)
 - **Eliminasi Dini Return pada `fetchMyKosts`**: Memperbaiki bug di mana pesanan survey tidak dimuat bagi pengguna biasa yang belum memiliki hunian aktif. Masalah diselesaikan dengan membungkus logika pemrosesan data hunian dalam kondisi `if (data && data.length > 0)` dan menghapus interupsi `return;` awal agar pengambilan data rekomendasi dan `survey_requests` tetap dieksekusi secara sukses untuk semua pengguna.
 
+### 19. Perbaikan Status Pesanan Survey yang Reset Kembali ke Diajukan (Juni 2026)
+- **Persistensi Status Progres**: Memperbaiki logika `targetStatus` di fungsi `syncSurveyRequest` agar mempertahankan status berjalan (`existing.status`) yang berada di database. Hal ini mencegah background auto-sync (`autoSyncAllSurveys`) menimpa status aktif/selesai kembali ke status `'PENDING_ASSIGNMENT'` (tab Diajukan) secara terus-menerus.
+
 ## Fitur Dalam Pengerjaan (In Progress)
 -   Monitoring konsistensi Webhook Midtrans vs Supabase untuk transaksi multi-kost.
 -   Uji E2E transaksi nyata di Production (Smallest Amount).

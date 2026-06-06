@@ -909,12 +909,19 @@ export async function syncSurveyRequest(transactionId: string, transactionOverri
             // Match based on index in sorted existing records
             const existing = sortedExisting[i] || null;
 
-            const currentStatus = (existing?.status || 'AWAITING_PAYMENT').toUpperCase();
             let targetStatus = 'AWAITING_PAYMENT';
-            if (isPaid) {
-                targetStatus = 'PENDING_ASSIGNMENT';
-            } else if (existing && currentStatus !== 'AWAITING_PAYMENT') {
-                targetStatus = existing.status;
+            if (existing && existing.status) {
+                if (isPaid && existing.status === 'AWAITING_PAYMENT') {
+                    targetStatus = 'PENDING_ASSIGNMENT';
+                } else {
+                    targetStatus = existing.status;
+                }
+            } else {
+                if (isPaid) {
+                    targetStatus = 'PENDING_ASSIGNMENT';
+                } else {
+                    targetStatus = 'AWAITING_PAYMENT';
+                }
             }
 
             const payload: any = {
