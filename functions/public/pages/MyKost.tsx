@@ -345,14 +345,11 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                     console.log(`DEBUG_MYKOST: TrxID: ${t.id}, Status: ${t.status}, Type: ${t.product_type || t.type}`);
                     console.log(`DEBUG_MYKOST: Metadata:`, t.metadata);
                 });
-            } else {
-                setActiveKosts([]);
-                setLoading(false);
-                return;
             }
 
-            // Batch fetch unique properties since join might fail due to FK issues
-            const productIds = Array.from(new Set(data?.map(d => d.product_id || d.kost_id).filter(id => !!id)));
+            if (data && data.length > 0) {
+                // Batch fetch unique properties since join might fail due to FK issues
+                const productIds = Array.from(new Set(data?.map(d => d.product_id || d.kost_id).filter(id => !!id)));
             const { data: propertiesData } = await supabase
                 .from('properties')
                 .select('id, title, image_urls, owner_uid, city, area, additional_fee_name, additional_fee_price, additional_fee_starts_from, room_types, location')
@@ -721,8 +718,12 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                 return acc;
             }, []);
 
-            setResidentStatus(uniqueActive);
-            setActiveKosts(activeWithBills);
+                setResidentStatus(uniqueActive);
+                setActiveKosts(activeWithBills);
+            } else {
+                setResidentStatus([]);
+                setActiveKosts([]);
+            }
 
             // Recommendations
             const { data: recData } = await supabase.from('properties').select('id, title, price, city, image_urls, type, rating').eq('status', 'published').limit(3);

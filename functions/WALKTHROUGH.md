@@ -1,51 +1,31 @@
-# WALKTHROUGH - Perbaikan Visibilitas Pesanan Survey Pending di Menu Kost Saya
+# WALKTHROUGH - Perbaikan Visibilitas Pesanan Survey pada Halaman Kost Saya
 
-Dokumen ini menjelaskan perubahan yang dilakukan untuk memperbaiki masalah pesanan survey pending/menunggu pembayaran yang tidak muncul di menu "Kost Saya" bagi pengguna.
+Dokumen ini mendokumentasikan perubahan yang telah dilakukan untuk menyelesaikan masalah di mana pesanan survey tidak muncul bagi pengguna biasa yang belum memiliki hunian aktif atau transaksi sewa kost.
 
 ## 1. Daftar Perubahan
-
-Secara mendetail, berikut adalah modifikasi yang telah dilakukan:
-
-### 1. **`functions/public/adminService.ts`**
-- **Logika Sinkronisasi (`syncSurveyRequest`)**:
-  - Menghapus pembatasan sinkronisasi dini yang menolak transaksi jika statusnya belum lunas (PAID/SUCCESS/dll).
-  - Menyinkronkan transaksi non-paid (misal `pending` atau `awaiting_payment`) dengan menetapkan status targetnya di tabel `survey_requests` sebagai `'AWAITING_PAYMENT'`. Hal ini menyelaraskan logika client-side dengan backend (`syncSurveyRequestsBackend`).
-- **Pembersihan Scan Otomatis (`autoSyncAllSurveys`)**:
-  - Mengubah nama fungsi `autoSyncPaidSurveys` menjadi `autoSyncAllSurveys`.
-  - Mengubah query pencarian transaksi agar mengambil seluruh transaksi bertipe `'survey'` tanpa membatasi hanya yang berstatus lunas.
-  - Memperbarui pemanggilan internal background sync di `getAdminSurveyRequests` agar menggunakan `autoSyncAllSurveys`.
-
-### 2. **`functions/public/pages/MyKost.tsx`**
-- **Impor & Integrasi**:
-  - Mengganti impor `autoSyncPaidSurveys` dari `../adminService` menjadi `autoSyncAllSurveys`.
-  - Mengubah pemanggilan di dalam `fetchMyKosts` agar memicu `autoSyncAllSurveys(user.uid)` pada saat memuat halaman, memastikan pesanan survey pending langsung disinkronkan ke tabel `survey_requests` di browser.
-
----
+### Halaman Kost Saya (`functions/public/pages/MyKost.tsx`)
+- **Penghapusan Early Return**:
+  - Menghapus baris logika `else { setActiveKosts([]); setLoading(false); return; }` yang dieksekusi ketika pengguna tidak memiliki data hunian/booking (`data.length === 0`).
+- **Pelekatan Blok Kondisional**:
+  - Membungkus seluruh logika pemrosesan data sewa kost, pemetaan properti, dan resident status dalam block `if (data && data.length > 0)`.
+  - Jika `data` kosong, status hunian dan kost aktif di-reset ke array kosong (`setActiveKosts([])` dan `setResidentStatus([])`), lalu eksekusi dilanjutkan ke query rekomendasi kost dan pengambilan pesanan survey (`survey_requests`).
 
 ## 2. Hasil Pengujian
+- **Keberhasilan Kompilasi**:
+  - Proyek telah dibangun untuk lingkungan produksi menggunakan `npm run build` dan berhasil tanpa kesalahan kompilasi/type-checking.
+- **Analisis Alur Eksekusi**:
+  - Pengguna dengan transaksi booking/sewa kosong tidak lagi terhenti prosesnya di tengah jalan.
+  - Pemuatan `survey_requests` sekarang berjalan normal di akhir fungsi `fetchMyKosts` bagi semua jenis akun, baik yang sudah menyewa maupun yang baru mengajukan pesanan survey.
 
-- **Kompilasi Sukses**:
-  Proses build produksi lokal menggunakan `npm run build` di dalam folder `functions/public` telah dijalankan dan selesai secara sukses tanpa ada error linting maupun TypeScript.
-  ```bash
-  vite v6.4.1 building for production...
-  transforming...
-  ✓ 2520 modules transformed.
-  rendering chunks...
-  ✓ built in 32.64s
-  ```
+## 3. Petunjuk Deploy / Menjalankan Aplikasi
+Untuk menjalankan proyek di lingkungan pengembangan lokal:
+```bash
+cd functions/public
+npm run dev
+```
 
----
-
-## 3. Petunjuk Deploy
-
-Untuk menerapkan perubahan ini ke lingkungan produksi, silakan jalankan perintah berikut:
-
-1. **Build Frontend**:
-   ```bash
-   cd "functions/public"
-   npm run build
-   ```
-2. **Deploy Ke Firebase Hosting**:
-   ```bash
-   firebase deploy --only hosting
-   ```
+Untuk membangun ulang bundel produksi:
+```bash
+cd functions/public
+npm run build
+```
