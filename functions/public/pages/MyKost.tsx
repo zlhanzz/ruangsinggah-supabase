@@ -749,6 +749,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                 `)
                 .eq('user_id', user.uid);
 
+            console.log("DEBUG_MYKOST: Raw surveysData from DB:", surveysData, "Error:", surveysError);
             if (surveysError) {
                 console.error('fetchSurveys error:', surveysError);
             } else {
@@ -759,6 +760,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                     agent_phone: s.agent_phone || s.agent?.phone,
                     agent_photo_url: s.agent_photo_url || s.agent?.photo_url
                 }));
+                console.log("DEBUG_MYKOST: processedSurveys set to state:", processedSurveys);
                 setSurveyRequests(processedSurveys);
             }
 
@@ -1345,6 +1347,12 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
         surveyOrdersTabMap[tab as keyof typeof surveyOrdersTabMap]++;
         return activeTab === tab;
     });
+
+    console.log("DEBUG_MYKOST_RENDER: surveyRequests state:", surveyRequests);
+    console.log("DEBUG_MYKOST_RENDER: groupedSurveyOrders:", groupedSurveyOrders);
+    console.log("DEBUG_MYKOST_RENDER: filteredSurveyOrders:", filteredSurveyOrders);
+    console.log("DEBUG_MYKOST_RENDER: surveyOrdersTabMap:", surveyOrdersTabMap);
+    console.log("DEBUG_MYKOST_RENDER: activeTab:", activeTab);
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] pt-8 pb-12 font-outfitSelection">

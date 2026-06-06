@@ -1,33 +1,22 @@
-# IMPLEMENTATION PLAN - Sinkronisasi Transaksi Survey Pending ke Survey Requests
+# IMPLEMENTATION PLAN - Diagnostik Visibilitas Pesanan Survey Akun Biasa
 
-Rencana ini dibuat untuk memastikan bahwa pesanan survey dengan status pembayaran pending/belum lunas tetap sinkron ke tabel `survey_requests` agar dapat muncul di menu "Kost Saya" bagian tab "Diajukan" milik user.
+Rencana ini dibuat untuk menambahkan log diagnostik di `MyKost.tsx` guna mengidentifikasi kenapa pesanan survey tidak muncul pada akun dengan role `user` biasa, sementara pada akun `admin` muncul.
 
 ## 1. Analisis Masalah
 - **Masalah Utama**:
-  - `syncSurveyRequest` pada `adminService.ts` menolak sinkronisasi jika status transaksi tidak lunas (bukan PAID/SUCCESS/SELESAI/dll). Akibatnya, transaksi survey yang baru diajukan (status `pending` atau `awaiting_payment`) tidak dimasukkan ke dalam tabel `survey_requests`.
-  - `autoSyncPaidSurveys` hanya mendeteksi transaksi survey yang sudah berstatus PAID/lunas, sehingga mengabaikan transaksi pending.
-  - Halaman `MyKost.tsx` hanya menampilkan daftar survey berdasarkan data dari tabel `survey_requests`, sehingga pesanan survey pending tersebut tidak pernah muncul bagi user.
+  - Di browser, akun dengan role `user` biasa tidak melihat pesanan survey pada menu "Kost Saya".
+  - Logika sinkronisasi (`autoSyncAllSurveys`) berhasil menemukan transaksi dan melakukan sinkronisasi di database.
+  - Pengujian kueri langsung via Node.js dengan hak akses user anonim/biasa mengindikasikan bahwa data pesanan survey ada di database dan secara teori dapat diakses.
+  - Perlu dipastikan apakah data yang diterima browser dari `survey_requests` kosong (masalah RLS/koneksi) atau disaring keluar oleh filter UI di frontend.
 
-- **Solusi**:
-  - Ubah logika `syncSurveyRequest` di `adminService.ts` agar memproses semua status transaksi survey. Jika transaksi belum lunas, status target di `survey_requests` akan diset sebagai `AWAITING_PAYMENT`.
-  - Ubah/perluas `autoSyncPaidSurveys` menjadi `autoSyncAllSurveys` untuk memindai seluruh transaksi survey (lunas dan pending) milik user.
-  - Perbarui impor dan pemanggilan fungsi sinkronisasi di `MyKost.tsx` dan internal `adminService.ts` dari `autoSyncPaidSurveys` menjadi `autoSyncAllSurveys`.
+- **Solusi Diagnostik**:
+  - Tambahkan `console.log` di `MyKost.tsx` untuk memantau nilai `surveysData` hasil query langsung dari Supabase.
+  - Tambahkan `console.log` untuk memantau nilai `surveyRequests`, `groupedSurveyOrders`, dan `filteredSurveyOrders` sebelum komponen dirender.
 
 ## 2. Dampak Perubahan
 File yang akan diubah:
-1. **`functions/public/adminService.ts`**:
-   - Modifikasi `syncSurveyRequest` agar tidak melakukan `return` dini jika transaksi belum lunas.
-   - Ubah `autoSyncPaidSurveys` menjadi `autoSyncAllSurveys` yang mencari semua transaksi dengan tipe `survey` tanpa memfilter status pembayaran.
-2. **`functions/public/pages/MyKost.tsx`**:
-   - Ubah impor `autoSyncPaidSurveys` menjadi `autoSyncAllSurveys`.
-   - Ubah pemanggilan fungsi di dalam `fetchMyKosts` menjadi `autoSyncAllSurveys`.
+1. **`functions/public/pages/MyKost.tsx`**:
+   - Menambahkan log pencetakan variabel state query survey.
 
-## 3. Langkah-Langkah Eksekusi
-1. Membuat dokumen `IMPLEMENTATION_PLAN.md` (langkah ini).
-2. Memperbarui `functions/public/adminService.ts`.
-3. Memperbarui `functions/public/pages/MyKost.tsx`.
-4. Memverifikasi hasil build TypeScript dengan menjalankan `npm run build` di folder `functions/public` atau root.
-5. Membuat dokumen `WALKTHROUGH.md` dan memperbarui `PROGRESS.md`.
-
-## 4. Rencana Verifikasi
-- Memastikan tidak ada error kompilasi TypeScript setelah modifikasi dilakukan.
+## 3. Rencana Verifikasi
+- Memeriksa output log di konsol browser (F12) untuk melihat data mentah hasil kueri.
