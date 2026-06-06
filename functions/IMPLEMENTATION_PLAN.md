@@ -1,32 +1,33 @@
-# IMPLEMENTATION PLAN - Notifikasi Transaksi Admin Menggunakan FormSubmit
+# IMPLEMENTATION PLAN - Sinkronisasi Transaksi Survey Pending ke Survey Requests
 
-Rencana ini dibuat untuk memindahkan notifikasi transaksi admin (sewa kost, database, dan jasa survey) sepenuhnya menggunakan FormSubmit (`formsubmit.co`) guna menghemat penggunaan kuota Brevo yang diprioritaskan untuk pengguna (customer).
+Rencana ini dibuat untuk memastikan bahwa pesanan survey dengan status pembayaran pending/belum lunas tetap sinkron ke tabel `survey_requests` agar dapat muncul di menu "Kost Saya" bagian tab "Diajukan" milik user.
 
 ## 1. Analisis Masalah
-- **Kebutuhan**: Admin perlu menerima email notifikasi setiap ada transaksi baru (baik dibuat maupun berhasil dibayar) untuk sewa kost, database, dan jasa survey.
-- **Batasan**: Notifikasi ini dikirim ke semua akun yang memiliki role `admin` (atau `is_admin = true`), menggunakan FormSubmit alih-alih Brevo.
+- **Masalah Utama**:
+  - `syncSurveyRequest` pada `adminService.ts` menolak sinkronisasi jika status transaksi tidak lunas (bukan PAID/SUCCESS/SELESAI/dll). Akibatnya, transaksi survey yang baru diajukan (status `pending` atau `awaiting_payment`) tidak dimasukkan ke dalam tabel `survey_requests`.
+  - `autoSyncPaidSurveys` hanya mendeteksi transaksi survey yang sudah berstatus PAID/lunas, sehingga mengabaikan transaksi pending.
+  - Halaman `MyKost.tsx` hanya menampilkan daftar survey berdasarkan data dari tabel `survey_requests`, sehingga pesanan survey pending tersebut tidak pernah muncul bagi user.
+
 - **Solusi**:
-  - Ubah `notifyAdminTransaction` di `emailService.ts` agar mengambil seluruh daftar email admin secara dinamis dari database Supabase (`users` table).
-  - Kirim email notifikasi secara asinkron ke masing-masing email admin melalui `https://formsubmit.co/ajax/{email}`.
-  - Tambahkan pemanggilan `notifyAdminTransaction` di `PaymentGateway.tsx` saat transaksi berhasil dibuat/diinisiasi agar mencakup database, survey, dan sewa kost yang dibuat via checkout.
+  - Ubah logika `syncSurveyRequest` di `adminService.ts` agar memproses semua status transaksi survey. Jika transaksi belum lunas, status target di `survey_requests` akan diset sebagai `AWAITING_PAYMENT`.
+  - Ubah/perluas `autoSyncPaidSurveys` menjadi `autoSyncAllSurveys` untuk memindai seluruh transaksi survey (lunas dan pending) milik user.
+  - Perbarui impor dan pemanggilan fungsi sinkronisasi di `MyKost.tsx` dan internal `adminService.ts` dari `autoSyncPaidSurveys` menjadi `autoSyncAllSurveys`.
 
 ## 2. Dampak Perubahan
 File yang akan diubah:
-1. **`functions/public/emailService.ts`**:
-   - Impor `supabase`.
-   - Kueri dinamis untuk mendapatkan email pengguna dengan `role = 'admin'` atau `is_admin = true`.
-   - Iterasi pengiriman FormSubmit AJAX ke semua email admin tersebut.
-   - Sediakan fallback email default `sulhan77777@gmail.com`.
-2. **`functions/public/components/PaymentGateway.tsx`**:
-   - Impor `notifyAdminTransaction`.
-   - Panggil `notifyAdminTransaction` di dalam `handlePay` saat transaksi baru berhasil dibuat dengan status `PENDING`.
+1. **`functions/public/adminService.ts`**:
+   - Modifikasi `syncSurveyRequest` agar tidak melakukan `return` dini jika transaksi belum lunas.
+   - Ubah `autoSyncPaidSurveys` menjadi `autoSyncAllSurveys` yang mencari semua transaksi dengan tipe `survey` tanpa memfilter status pembayaran.
+2. **`functions/public/pages/MyKost.tsx`**:
+   - Ubah impor `autoSyncPaidSurveys` menjadi `autoSyncAllSurveys`.
+   - Ubah pemanggilan fungsi di dalam `fetchMyKosts` menjadi `autoSyncAllSurveys`.
 
 ## 3. Langkah-Langkah Eksekusi
-1. Menulis file `IMPLEMENTATION_PLAN.md` ini.
-2. Memperbarui file `functions/public/emailService.ts` dengan logika pengiriman dinamis ke semua admin.
-3. Memperbarui file `functions/public/components/PaymentGateway.tsx` untuk memicu notifikasi ketika transaksi baru dibuat.
-4. Memvalidasi kode dengan menjalankan proses build lokal (`npm run build`).
+1. Membuat dokumen `IMPLEMENTATION_PLAN.md` (langkah ini).
+2. Memperbarui `functions/public/adminService.ts`.
+3. Memperbarui `functions/public/pages/MyKost.tsx`.
+4. Memverifikasi hasil build TypeScript dengan menjalankan `npm run build` di folder `functions/public` atau root.
 5. Membuat dokumen `WALKTHROUGH.md` dan memperbarui `PROGRESS.md`.
 
 ## 4. Rencana Verifikasi
-- Memastikan build produksi berjalan sukses tanpa error linting atau TypeScript (`npm run build`).
+- Memastikan tidak ada error kompilasi TypeScript setelah modifikasi dilakukan.

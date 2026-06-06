@@ -864,16 +864,13 @@ export async function syncSurveyRequest(transactionId: string, transactionOverri
         const status = (trx.status || '').toUpperCase();
         const productType = (trx.product_type || trx.type || '').toLowerCase();
 
-        const PAID_STATUS_LIST = ['PAID', 'SUCCESS', 'SELESAI', 'SETTLEMENT', 'CAPTURE', 'BERHASIL'];
-        if (!PAID_STATUS_LIST.includes(status)) {
-            console.log(`SYNC_SURVEY: [DEBUG] Skipping. Status is ${status}.`);
-            return;
-        }
-
         if (productType !== 'survey') {
             console.log(`SYNC_SURVEY: [DEBUG] Skipping. Product type is ${productType}.`);
             return;
         }
+
+        const PAID_STATUS_LIST = ['PAID', 'SUCCESS', 'SELESAI', 'SETTLEMENT', 'CAPTURE', 'BERHASIL'];
+        const isPaid = PAID_STATUS_LIST.includes(status);
 
         const meta = trx.metadata || {};
 
@@ -913,8 +910,10 @@ export async function syncSurveyRequest(transactionId: string, transactionOverri
             const existing = sortedExisting[i] || null;
 
             const currentStatus = (existing?.status || 'AWAITING_PAYMENT').toUpperCase();
-            let targetStatus = 'PENDING_ASSIGNMENT';
-            if (existing && currentStatus !== 'AWAITING_PAYMENT') {
+            let targetStatus = 'AWAITING_PAYMENT';
+            if (isPaid) {
+                targetStatus = 'PENDING_ASSIGNMENT';
+            } else if (existing && currentStatus !== 'AWAITING_PAYMENT') {
                 targetStatus = existing.status;
             }
 
@@ -970,21 +969,17 @@ export async function syncSurveyRequest(transactionId: string, transactionOverri
 
 
 /**
- * autoSyncPaidSurveys: Scans for PAID survey transactions that are missing from survey_requests.
+ * autoSyncAllSurveys: Scans for survey transactions that are missing from survey_requests.
  */
-export async function autoSyncPaidSurveys(userId?: string) {
+export async function autoSyncAllSurveys(userId?: string) {
     try {
         console.log("AUTO_SYNC_SURVEY: [DEBUG] Starting comprehensive scan...");
         
-        // Query transactions of type survey that are PAID
+        // Query transactions of type survey
         let query = supabase
             .from('transactions')
             .select('*')
-            .eq('product_type', 'survey')
-            .in('status', [
-                'PAID', 'SUCCESS', 'SELESAI', 'SETTLEMENT', 'CAPTURE', 'BERHASIL',
-                'paid', 'success', 'selesai', 'settlement', 'capture', 'berhasil'
-            ]);
+            .eq('product_type', 'survey');
             
         if (userId) {
             query = query.eq('user_id', userId);
@@ -994,11 +989,11 @@ export async function autoSyncPaidSurveys(userId?: string) {
         if (error) throw error;
 
         if (!transactions || transactions.length === 0) {
-            console.log("AUTO_SYNC_SURVEY: [DEBUG] No paid survey transactions found.");
+            console.log("AUTO_SYNC_SURVEY: [DEBUG] No survey transactions found.");
             return;
         }
 
-        console.log(`AUTO_SYNC_SURVEY: [DEBUG] Found ${transactions.length} paid survey transactions. Processing sync for each...`);
+        console.log(`AUTO_SYNC_SURVEY: [DEBUG] Found ${transactions.length} survey transactions. Processing sync for each...`);
 
         // Process all found transactions to ensure they exist in survey_requests
         for (const trx of transactions) {
@@ -1967,9 +1962,9 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
 
   // Auto-sync missing requests in background
   if (isAdmin) {
-    autoSyncPaidSurveys().catch(console.error);
+    autoSyncAllSurveys().catch(console.error);
   } else {
-    autoSyncPaidSurveys(user.id).catch(console.error);
+    autoSyncAllSurveys(user.id).catch(console.error);
   }
 
   let query = supabase

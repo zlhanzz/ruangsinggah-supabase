@@ -1,6 +1,5 @@
 
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { Page } from '../types';
 
 interface FooterProps {
@@ -93,31 +92,6 @@ const Footer: React.FC<FooterProps> = ({ onPageChange }) => {
                   </a>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="pt-8 mt-8 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-8 text-xs text-gray-500 mb-8">
-          <div>
-            <h5 className="font-extrabold text-gray-900 mb-3 uppercase tracking-wider">Kost Dekat Kampus Populer</h5>
-            <div className="flex flex-wrap gap-x-4 gap-y-2 font-semibold">
-              <Link to="/kost-dekat/unhas" className="hover:text-orange-500 transition-colors">Kost Dekat Unhas</Link>
-              <Link to="/kost-dekat/unm" className="hover:text-orange-500 transition-colors">Kost Dekat UNM</Link>
-              <Link to="/kost-dekat/umi" className="hover:text-orange-500 transition-colors">Kost Dekat UMI</Link>
-              <Link to="/kost-dekat/uin" className="hover:text-orange-500 transition-colors">Kost Dekat UIN</Link>
-              <Link to="/kost-dekat/unibos" className="hover:text-orange-500 transition-colors">Kost Dekat Unibos</Link>
-              <Link to="/kost-dekat/pnup" className="hover:text-orange-500 transition-colors">Kost Dekat PNUP</Link>
-              <Link to="/kost-dekat/unismuh" className="hover:text-orange-500 transition-colors">Kost Dekat Unismuh</Link>
-            </div>
-          </div>
-          <div>
-            <h5 className="font-extrabold text-gray-900 mb-3 uppercase tracking-wider">Kost Area Populer Makassar</h5>
-            <div className="flex flex-wrap gap-x-4 gap-y-2 font-semibold">
-              <Link to="/kost-area/jl-sahabat" className="hover:text-orange-500 transition-colors">Kost Jl Sahabat</Link>
-              <Link to="/kost-area/tamalanrea" className="hover:text-orange-500 transition-colors">Kost Tamalanrea</Link>
-              <Link to="/kost-area/panakkukang" className="hover:text-orange-500 transition-colors">Kost Panakkukang</Link>
-              <Link to="/kost-area/rappocini" className="hover:text-orange-500 transition-colors">Kost Rappocini</Link>
-              <Link to="/kost-area/paropo" className="hover:text-orange-500 transition-colors">Kost Paropo</Link>
             </div>
           </div>
         </div>

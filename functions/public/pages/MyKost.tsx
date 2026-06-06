@@ -10,7 +10,7 @@ import { notifyAdminTransaction } from '../emailService';
 import { FORMAT_CURRENCY } from '../constants';
 import { getCurrentDate, setMockDate, getMockDateStr, parseDateSafely, calculateDaysRemaining } from '../utils/timeUtils';
 import TimeSimulator from '../components/TimeSimulator';
-import { getResidentStatus, syncResidentStatus, autoSyncPaidSurveys } from '../adminService';
+import { getResidentStatus, syncResidentStatus, autoSyncAllSurveys } from '../adminService';
 
 interface MyKostProps {
     user: any;
@@ -288,7 +288,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const fetchMyKosts = async () => {
         setLoading(true);
         // Auto-sync missing survey requests in background
-        autoSyncPaidSurveys(user.uid).catch(console.error);
+        autoSyncAllSurveys(user.uid).catch(console.error);
         try {
             // 1. Fetch Resident Status first to get the IDs for history matching
             const { data: statusData, error: statusError } = await supabase
