@@ -1,25 +1,22 @@
-# IMPLEMENTATION PLAN - Perbaikan Impor Supabase di AgentDashboard
+# IMPLEMENTATION PLAN - Dropdown Pilihan Bank pada Dashboard Agen
 
-Rencana ini dibuat untuk menambahkan impor `supabase` yang hilang di `AgentDashboard.tsx` agar fungsi penarikan saldo dan pemuatan riwayat penarikan dari database berjalan lancar tanpa error `ReferenceError: supabase is not defined`.
+Rencana ini dibuat untuk mengganti input teks "Bank" pada tab Rekening dashboard agen dengan dropdown seleksi berbasis daftar bank resmi Indonesia yang didukung (diimpor dari konstanta yang ada).
 
 ## 1. Analisis Masalah
 - **Masalah Utama**:
-  - Pada perubahan sebelumnya, kita memfungsikan tabel database `withdrawal_requests` untuk mencatat transaksi penarikan saldo agen.
-  - Kita menggunakan objek `supabase` untuk query data: `supabase.from('withdrawal_requests')`.
-  - Namun, objek `supabase` belum diimpor di bagian atas berkas [AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx), sehingga memicu error runtime: `ReferenceError: supabase is not defined`.
+  - Input bank pada tab Rekening di `AgentDashboard.tsx` saat ini berupa kolom input teks bebas (`<input>`). Agen harus mengetik manual nama bank mereka, yang rentan terhadap kesalahan ketik (typo) atau ketidaksesuaian format.
+  - Untuk kelancaran transfer manual oleh admin atau integrasi masa depan, format nama bank harus konsisten.
 
 - **Solusi**:
-  - Tambahkan baris impor `import { supabase } from '../supabase';` pada bagian awal impor di berkas `AgentDashboard.tsx`.
+  - Impor konstanta `INDONESIAN_BANKS` dari [constants.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants.tsx) yang berisi daftar bank utama terintegrasi (BCA, Mandiri, BNI, BRI, Danamon, dst.).
+  - Ganti elemen `<input>` untuk nama bank di [AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx) menjadi `<select>` dengan opsi dari `INDONESIAN_BANKS`.
 
 ## 2. Dampak Perubahan
 File yang akan disentuh:
 1. **`functions/public/pages/AgentDashboard.tsx`**:
-   - Menambahkan deklarasi impor `supabase`.
+   - Impor `INDONESIAN_BANKS`.
+   - Ubah rendering form input Bank menjadi selector dropdown.
 
-## 3. Langkah-Langkah Eksekusi
-1. Buka [AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx).
-2. Tambahkan `import { supabase } from '../supabase';` di baris atas.
-3. Jalankan `npm run build` menggunakan CMD untuk verifikasi.
-
-## 4. Rencana Verifikasi
-- Memastikan build berhasil.
+## 3. Rencana Verifikasi
+- Memastikan build Vite berhasil tanpa kesalahan kompilasi.
+- Meninjau tab Rekening di dashboard agen untuk memastikan dropdown bank muncul dan pilihan bank BCA terpilih secara default.

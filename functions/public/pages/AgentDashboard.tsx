@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { SurveyRequest } from '../types';
-import { FORMAT_CURRENCY } from '../constants';
+import { FORMAT_CURRENCY, INDONESIAN_BANKS } from '../constants';
 import { 
     updateSurveyRequest, 
     uploadSurveyPhoto, 
@@ -1007,7 +1007,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         <div className="space-y-6 max-w-md mx-auto">
                             <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100">
                                 <div className="space-y-4">
-                                    <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Bank</label><input className="w-full mt-1.5 bg-white border border-gray-200 rounded-2xl px-5 py-3.5 text-sm font-bold focus:ring-2 focus:ring-orange-600 outline-none transition-all" value={agentBankName} onChange={e => setAgentBankName(e.target.value)} /></div>
+                                    <div>
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Bank</label>
+                                        <select 
+                                            className="w-full mt-1.5 bg-white border border-gray-200 rounded-2xl px-5 py-3.5 text-sm font-bold focus:ring-2 focus:ring-orange-600 outline-none transition-all cursor-pointer" 
+                                            value={agentBankName} 
+                                            onChange={e => setAgentBankName(e.target.value)}
+                                        >
+                                            {INDONESIAN_BANKS.map((bank, index) => (
+                                                <option key={index} value={bank}>{bank}</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                     <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">No. Rekening</label><input className="w-full mt-1.5 bg-white border border-gray-200 rounded-2xl px-5 py-3.5 text-sm font-bold focus:ring-2 focus:ring-orange-600 outline-none transition-all" value={agentBankAccount} onChange={e => setAgentBankAccount(e.target.value)} /></div>
                                     <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Atas Nama</label><input className="w-full mt-1.5 bg-white border border-gray-200 rounded-2xl px-5 py-3.5 text-sm font-bold focus:ring-2 focus:ring-orange-600 outline-none transition-all" value={agentAccountName} onChange={e => setAgentAccountName(e.target.value)} /></div>
                                 </div>
