@@ -77,8 +77,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const [isWithdrawing, setIsWithdrawing] = useState(false);
     const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
     const [agentBankName, setAgentBankName] = useState('BCA');
-    const [agentBankAccount, setAgentBankAccount] = useState('1234567890');
-    const [agentAccountName, setAgentAccountName] = useState('Arif (Surveyor)');
+    const [agentBankAccount, setAgentBankAccount] = useState('');
+    const [agentAccountName, setAgentAccountName] = useState('');
+    const [withdrawalHistory, setWithdrawalHistory] = useState<any[]>([]);
+    const [isLoadingWallet, setIsLoadingWallet] = useState(false);
     
     // Modal State
     const [isEditingSurvey, setIsEditingSurvey] = useState<SurveyRequest | null>(null);
@@ -89,6 +91,65 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const [newSurveyDate, setNewSurveyDate] = useState('');
     const [newSurveyTime, setNewSurveyTime] = useState('');
     const [rescheduleReason, setRescheduleReason] = useState('');
+
+    // Load bank settings from user metadata
+    useEffect(() => {
+        if (user?.user_metadata) {
+            const meta = user.user_metadata;
+            if (meta.bank_name) setAgentBankName(meta.bank_name);
+            if (meta.bank_account) setAgentBankAccount(meta.bank_account);
+            if (meta.bank_account_name) setAgentAccountName(meta.bank_account_name);
+        }
+    }, [user]);
+
+    // Load withdrawal history from database
+    const loadWalletData = async () => {
+        if (!uid) return;
+        setIsLoadingWallet(true);
+        try {
+            const { data, error } = await supabase
+                .from('withdrawal_requests')
+                .select('*')
+                .eq('agent_id', uid)
+                .order('created_at', { ascending: false });
+            if (error) throw error;
+            setWithdrawalHistory(data || []);
+        } catch (error) {
+            console.error('Error loading withdrawal history:', error);
+        } finally {
+            setIsLoadingWallet(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeMenu === 'wallet') {
+            loadWalletData();
+        }
+    }, [activeMenu, uid]);
+
+    const saveBankSettings = async () => {
+        if (!agentBankName || !agentBankAccount || !agentAccountName) {
+            alert('Mohon lengkapi data rekening.');
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            const { error } = await supabase.auth.updateUser({
+                data: {
+                    bank_name: agentBankName,
+                    bank_account: agentBankAccount,
+                    bank_account_name: agentAccountName
+                }
+            });
+            if (error) throw error;
+            alert('Data rekening berhasil disimpan!');
+        } catch (error) {
+            console.error(error);
+            alert('Gagal menyimpan data rekening.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     // Auto-save draft effect
     useEffect(() => {
@@ -122,12 +183,72 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         }
     };
 
+    // Dynamic earnings and balance calculations based on 70% share from real transactions
+    const completedSurveys = surveyRequests.filter(r => r.status === 'COMPLETED');
+    const ratings = completedSurveys.map(r => r.user_rating || 0).filter(r => r > 0);
+    const avgRating = ratings.length > 0 
+        ? Number((ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1)) 
+        : 5.0;
+
+    const totalEarnings = completedSurveys.reduce((sum, r) => {
+        // Find how many requests share this transaction ID
+        const siblingRequests = surveyRequests.filter(sr => sr.transaction_id === r.transaction_id);
+        const count = siblingRequests.length > 0 ? siblingRequests.length : 1;
+        const trxAmount = r.transaction?.amount || 100000;
+        const unitPrice = trxAmount / count;
+        return sum + (unitPrice * 0.7);
+    }, 0);
+
+    const totalWithdrawn = withdrawalHistory
+        .filter(w => w.status !== 'rejected')
+        .reduce((sum, w) => sum + Number(w.amount), 0);
+
+    const availableBalance = Math.max(0, totalEarnings - totalWithdrawn);
+
     const stats = {
         total: surveyRequests.length,
-        completed: surveyRequests.filter(r => r.status === 'COMPLETED').length,
-        rating: 4.8,
-        earnings: surveyRequests.filter(r => r.status === 'COMPLETED').length * 70000,
-        availableBalance: 420000 // Dummy available
+        completed: completedSurveys.length,
+        rating: avgRating,
+        earnings: totalEarnings,
+        availableBalance: availableBalance
+    };
+
+    const handleWithdraw = async () => {
+        if (availableBalance < 50000) {
+            alert('Saldo minimal untuk penarikan adalah Rp 50.000');
+            return;
+        }
+        if (!agentBankName || !agentBankAccount || !agentAccountName) {
+            alert('Silakan lengkapi dan simpan data rekening Anda terlebih dahulu.');
+            return;
+        }
+        setIsWithdrawing(true);
+        try {
+            const { error } = await supabase
+                .from('withdrawal_requests')
+                .insert([{
+                    agent_id: uid,
+                    amount: availableBalance,
+                    bank_name: agentBankName,
+                    bank_account: agentBankAccount,
+                    bank_account_name: agentAccountName,
+                    status: 'pending'
+                }]);
+            if (error) throw error;
+
+            alert('Pengajuan penarikan berhasil dikirim!');
+            setShowWithdrawConfirm(false);
+            await loadWalletData();
+
+            // WhatsApp admin notification redirection
+            const waText = `Halo Admin, saya agen ${user?.displayName || user?.name || 'Surveyor'} ingin mengajukan pencairan dana sebesar ${FORMAT_CURRENCY(availableBalance)} dari akun saya.\n\nDetail Rekening:\nBank: ${agentBankName}\nNo Rekening: ${agentBankAccount}\nAtas Nama: ${agentAccountName}`;
+            window.open(`https://wa.me/6281234567890?text=${encodeURIComponent(waText)}`, '_blank');
+        } catch (error) {
+            console.error('Error submitting withdrawal:', error);
+            alert('Gagal mengirim pengajuan penarikan.');
+        } finally {
+            setIsWithdrawing(false);
+        }
     };
 
     const weeklyData = [
@@ -826,18 +947,25 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             <div>
                                 <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 ml-1">Transaksi Terakhir</h5>
                                 <div className="space-y-3">
-                                    {surveyRequests.filter(r => r.status === 'COMPLETED').slice(0, 3).map((r, i) => (
-                                        <div key={i} className="flex justify-between items-center p-4 rounded-2xl bg-gray-50 border border-gray-50 hover:bg-white hover:border-orange-100 transition-all group">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 rounded-xl bg-green-100 text-green-600 flex items-center justify-center font-bold">IN</div>
-                                                <div>
-                                                    <p className="text-xs font-black text-gray-900">{r.kost_name}</p>
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight mt-0.5">{new Date(r.created_at).toLocaleDateString()}</p>
+                                    {surveyRequests.filter(r => r.status === 'COMPLETED').slice(0, 5).map((r, i) => {
+                                        const siblingRequests = surveyRequests.filter(sr => sr.transaction_id === r.transaction_id);
+                                        const count = siblingRequests.length > 0 ? siblingRequests.length : 1;
+                                        const trxAmount = r.transaction?.amount || 100000;
+                                        const unitPrice = trxAmount / count;
+                                        const earned = unitPrice * 0.7;
+                                        return (
+                                            <div key={i} className="flex justify-between items-center p-4 rounded-2xl bg-gray-50 border border-gray-50 hover:bg-white hover:border-orange-100 transition-all group">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-10 h-10 rounded-xl bg-green-100 text-green-600 flex items-center justify-center font-bold">IN</div>
+                                                    <div>
+                                                        <p className="text-xs font-black text-gray-900">{r.kost_name}</p>
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight mt-0.5">{new Date(r.created_at).toLocaleDateString()}</p>
+                                                    </div>
                                                 </div>
+                                                <p className="text-sm font-black text-green-600">+{FORMAT_CURRENCY(earned)}</p>
                                             </div>
-                                            <p className="text-sm font-black text-green-600">+Rp 70.000</p>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>
@@ -845,18 +973,32 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                     {walletView === 'history' && (
                         <div className="space-y-4">
-                            {DUMMY_WITHDRAWAL_DATA.map((wd) => (
-                                <div key={wd.id} className="flex justify-between items-center p-5 rounded-3xl bg-gray-50 border border-gray-50">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-xl shadow-sm">🏧</div>
-                                        <div>
-                                            <p className="text-xs font-black text-gray-900">{FORMAT_CURRENCY(wd.amount)}</p>
-                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{new Date(wd.date).toLocaleDateString()} · {wd.bank_name}</p>
+                            {isLoadingWallet ? (
+                                <div className="text-center py-8 text-gray-400 font-bold text-xs">Memuat riwayat...</div>
+                            ) : withdrawalHistory.length === 0 ? (
+                                <div className="text-center py-8 text-gray-400 font-bold text-xs">Belum ada riwayat penarikan.</div>
+                            ) : (
+                                withdrawalHistory.map((wd) => (
+                                    <div key={wd.id} className="flex justify-between items-center p-5 rounded-3xl bg-gray-50 border border-gray-50">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-xl shadow-sm">🏧</div>
+                                            <div>
+                                                <p className="text-xs font-black text-gray-900">{FORMAT_CURRENCY(Number(wd.amount))}</p>
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{new Date(wd.created_at).toLocaleDateString()} · {wd.bank_name}</p>
+                                            </div>
                                         </div>
+                                        <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${
+                                            wd.status === 'approved' ? 'bg-green-100 text-green-700' :
+                                            wd.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                                            'bg-yellow-100 text-yellow-700'
+                                        }`}>
+                                            {wd.status === 'approved' ? 'Selesai' :
+                                             wd.status === 'rejected' ? 'Ditolak' :
+                                             'Menunggu'}
+                                        </span>
                                     </div>
-                                    <span className="px-3 py-1.5 bg-green-100 text-green-700 rounded-xl text-[10px] font-black uppercase tracking-widest">{wd.status}</span>
-                                </div>
-                            ))}
+                                ))
+                            )}
                         </div>
                     )}
 
@@ -869,7 +1011,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                     <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Atas Nama</label><input className="w-full mt-1.5 bg-white border border-gray-200 rounded-2xl px-5 py-3.5 text-sm font-bold focus:ring-2 focus:ring-orange-600 outline-none transition-all" value={agentAccountName} onChange={e => setAgentAccountName(e.target.value)} /></div>
                                 </div>
                             </div>
-                            <button onClick={() => alert('Data rekening berhasil disimpan!')} className="w-full py-4 bg-gray-900 hover:bg-black text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">Simpan Rekening Default</button>
+                            <button onClick={saveBankSettings} className="w-full py-4 bg-gray-900 hover:bg-black text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">Simpan Rekening Default</button>
                         </div>
                     )}
                 </div>

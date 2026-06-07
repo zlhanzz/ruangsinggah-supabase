@@ -112,6 +112,10 @@
 ### 19. Perbaikan Status Pesanan Survey yang Reset Kembali ke Diajukan (Juni 2026)
 - **Persistensi Status Progres**: Memperbaiki logika `targetStatus` di fungsi `syncSurveyRequest` agar mempertahankan status berjalan (`existing.status`) yang berada di database. Hal ini mencegah background auto-sync (`autoSyncAllSurveys`) menimpa status aktif/selesai kembali ke status `'PENDING_ASSIGNMENT'` (tab Diajukan) secara terus-menerus.
 
+### 20. Integrasi Dompet Dinamis & Penarikan Saldo Agen (Juni 2026)
+- **Kalkulasi Bagi Hasil Otomatis (70/30)**: Mengubah perhitungan pendapatan agen di `AgentDashboard.tsx` agar menggunakan nilai riil transaksi survei (dikali 70% sebagai bagian agen) dari database.
+- **Sistem Penarikan Database**: Menghubungkan formulir penarikan saldo dan data rekening bank agen dengan database melalui tabel `withdrawal_requests` dan metadata autentikasi pengguna, menggantikan data mock/dummy sebelumnya.
+
 ## Fitur Dalam Pengerjaan (In Progress)
 -   Monitoring konsistensi Webhook Midtrans vs Supabase untuk transaksi multi-kost.
 -   Uji E2E transaksi nyata di Production (Smallest Amount).
