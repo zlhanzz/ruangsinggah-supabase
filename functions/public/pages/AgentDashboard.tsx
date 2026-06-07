@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { supabase } from '../supabase';
 import { SurveyRequest } from '../types';
 import { FORMAT_CURRENCY } from '../constants';
 import { 
