@@ -77,16 +77,16 @@ type MenuKey = 'overview' | 'properties' | 'bookings' | 'tenants' | 'chat' | 'wa
 const SideNavItem: React.FC<{ active: boolean; icon: React.ReactNode; label: string; badge?: number; onClick: () => void }> = ({ active, icon, label, badge, onClick }) => (
     <button
         onClick={onClick}
-        className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all group ${
+        className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-semibold transition-all duration-300 group ${
             active
-                ? 'bg-orange-500 text-white shadow-lg shadow-orange-100'
-                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
         }`}
     >
         <span className={`${active ? 'text-white' : 'text-gray-400 group-hover:text-orange-500'} transition-colors`}>{icon}</span>
         <span className="flex-1 text-left">{label}</span>
         {badge !== undefined && badge > 0 && (
-            <span className="min-w-[20px] h-5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1">
+            <span className="min-w-[20px] h-5 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
                 {badge > 9 ? '9+' : badge}
             </span>
         )}
@@ -96,15 +96,15 @@ const SideNavItem: React.FC<{ active: boolean; icon: React.ReactNode; label: str
 // ── Bottom Nav (Mobile) ───────────────────────────────────────────────────────
 const BottomNavItem: React.FC<{ active: boolean; icon: React.ReactNode; label: string; badge?: number; onClick: () => void }> = ({ active, icon, label, badge, onClick }) => (
     <button onClick={onClick} className={`flex flex-col items-center gap-1 flex-1 py-3 transition-all ${active ? 'text-orange-600' : 'text-gray-600'}`}>
-        <div className={`relative w-12 h-12 rounded-[1.25rem] flex items-center justify-center transition-all ${active ? 'bg-orange-500 text-white shadow-lg shadow-orange-200 scale-105' : 'bg-gray-50'}`}>
+        <div className={`relative w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${active ? 'bg-gradient-to-tr from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20 scale-105' : 'bg-gray-50'}`}>
             {React.cloneElement(icon as React.ReactElement, { size: active ? 22 : 20 })}
             {badge !== undefined && badge > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[20px] h-5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1 border-2 border-white shadow-sm">
+                <span className="absolute -top-1 -right-1 min-w-[20px] h-5 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-white shadow-sm">
                     {badge > 9 ? '9+' : badge}
                 </span>
             )}
         </div>
-        <span className={`text-[10px] font-black uppercase tracking-widest mt-0.5 ${active ? 'text-orange-600' : 'text-gray-500'}`}>{label}</span>
+        <span className={`text-[10px] font-bold uppercase tracking-wider mt-0.5 ${active ? 'text-orange-600' : 'text-gray-500'}`}>{label}</span>
     </button>
 );
 
@@ -570,13 +570,13 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             <aside className="hidden lg:flex w-64 xl:w-72 shrink-0 flex-col bg-white border-r border-gray-100 fixed top-20 left-0 h-[calc(100vh-5rem)] z-30">
                 {/* User Info */}
                 <div className="px-4 py-5 border-b border-gray-50">
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl">
-                        <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white font-black text-sm shrink-0">
+                    <div className="flex items-center gap-3 p-3 bg-gray-50/50 rounded-2xl border border-gray-100/40">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-500 to-amber-500 flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-md shadow-orange-500/10">
                             {user?.displayName?.charAt(0) || user?.email?.charAt(0) || 'M'}
                         </div>
                         <div className="overflow-hidden">
-                            <p className="text-sm font-black text-gray-900 truncate">{user?.displayName || 'Pemilik Kost'}</p>
-                            <p className={`text-[10px] font-bold uppercase tracking-wide flex items-center gap-1 ${isVerified ? 'text-green-500' : 'text-orange-500'}`}>
+                            <p className="text-sm font-bold text-gray-900 truncate">{user?.displayName || 'Pemilik Kost'}</p>
+                            <p className={`text-[10px] font-semibold uppercase tracking-wide flex items-center gap-1 ${isVerified ? 'text-green-500' : 'text-orange-500'}`}>
                                 {isVerified ? 'Mitra Terverifikasi ✓' : user?.verification_status === 'pending' ? 'Sedang Ditinjau' : 'Belum Verifikasi'}
                             </p>
                         </div>
@@ -1210,15 +1210,15 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             </div>
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                                 {/* Balance Card */}
-                                <div className="bg-gray-900 p-8 rounded-3xl text-white relative overflow-hidden flex flex-col justify-between min-h-[220px]">
+                                <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-8 rounded-3xl text-white relative overflow-hidden flex flex-col justify-between min-h-[220px] shadow-lg shadow-indigo-950/10 border border-slate-800 animate-in fade-in duration-500">
                                     <div className="relative z-10">
                                         <div className="flex justify-between items-start">
                                             <div>
-                                                <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Saldo Tersedia</p>
-                                                <h3 className="text-3xl font-black tracking-tighter text-orange-400">{FORMAT_CURRENCY(stats.availableBalance)}</h3>
-                                                <p className="text-[10px] font-bold text-white/30 mt-1">Siap ditarik ke rekening Anda</p>
+                                                <p className="text-[10px] font-bold uppercase tracking-wider text-white/40 mb-2">Saldo Tersedia</p>
+                                                <h3 className="text-3xl font-bold tracking-tighter text-orange-400">{FORMAT_CURRENCY(stats.availableBalance)}</h3>
+                                                <p className="text-[10px] font-semibold text-white/30 mt-1">Siap ditarik ke rekening Anda</p>
                                             </div>
-                                            <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/10">
+                                            <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/10 animate-pulse">
                                                 <Wallet size={24} className="text-white" />
                                             </div>
                                         </div>
@@ -1617,12 +1617,12 @@ const COLORS: Record<string, string> = {
 };
 
 const StatCard: React.FC<{ label: string; value: string; sub: string; icon: React.ReactNode; color: string; alert?: boolean }> = ({ label, value, sub, icon, color, alert }) => (
-    <div className={`bg-white rounded-3xl p-4 lg:p-6 border shadow-sm relative overflow-hidden hover:shadow-lg transition-shadow ${alert ? 'border-orange-200 ring-2 ring-orange-100' : 'border-gray-100'}`}>
+    <div className={`bg-white rounded-3xl p-4 lg:p-6 border shadow-[0_8px_30px_rgba(0,0,0,0.01)] relative overflow-hidden hover:shadow-md transition-all duration-300 ${alert ? 'border-orange-200 ring-2 ring-orange-100' : 'border-gray-100'}`}>
         {alert && <span className="absolute top-3 right-3 w-2 h-2 rounded-full bg-orange-500 animate-ping" />}
-        <div className={`w-10 h-10 rounded-2xl ${COLORS[color]} flex items-center justify-center mb-3`}>{icon}</div>
-        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{label}</p>
-        <p className="text-xl lg:text-2xl font-black text-gray-900 tracking-tight mt-0.5 truncate">{value}</p>
-        <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase tracking-wide truncate">{sub}</p>
+        <div className={`w-10 h-10 rounded-2xl ${COLORS[color]} flex items-center justify-center mb-3 shadow-sm`}>{icon}</div>
+        <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">{label}</p>
+        <p className="text-xl lg:text-2xl font-bold text-gray-900 tracking-tight mt-0.5 truncate">{value}</p>
+        <p className="text-[9px] font-medium text-gray-400 mt-1 uppercase tracking-wide truncate">{sub}</p>
     </div>
 );
 

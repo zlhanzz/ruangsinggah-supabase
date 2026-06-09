@@ -2,7 +2,15 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 1. Optimasi Menyeluruh Dashboard Mitra (Owner) (Juni 2026)
+### 1. Peningkatan Desain, Styling, dan Visual Dashboard Mitra (Owner) (Juni 2026)
+- **Desain Tipografi & Hirarki Teks Premium**: Mengurangi penggunaan `font-black` (bobot 900) yang terlalu dominan pada navigasi dan label umum, digantikan dengan kombinasi `font-bold` dan `font-semibold` yang lebih bersih, elegan, dan profesional.
+- **Navigasi Desktop & Mobile yang Estetik**:
+  - Mempercantik sidebar desktop dengan hover transition halus dan warna aktif bergradasi jingga ke amber (`bg-gradient-to-r from-orange-500 to-amber-500`).
+  - Mengoptimalkan mobile bottom nav dengan sudut melengkung `rounded-2xl`, transisi aktif yang menonjol (`scale-105` dan bayangan lembut), serta label teks yang lebih tertata rapi.
+- **Stat Cards & Informasi Pengguna**: Memperbarui visual kartu statistik dengan bayangan ultra-tipis (`shadow-[0_8px_30px_rgba(0,0,0,0.01)]`) dan kontras yang lebih tajam. Box profil pengguna di sidebar kini memiliki border halus `border-gray-100/40`.
+- **Dompet Digital Mewah**: Mendesain ulang kartu saldo utama pada panel Dompet (Wallet) dengan tema gelap bergradasi (`bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900`) untuk memberikan kesan dompet digital yang premium.
+
+### 2. Optimasi Menyeluruh Dashboard Mitra (Owner) (Juni 2026)
 - **Sistem Tarik Dana (Wallet/WD) Pemilik Kost**:
   - Menghubungkan tombol "Tarik Dana Sekarang" pada dashboard pemilik dengan alur penarikan dana terverifikasi.
   - Menambahkan modal konfirmasi penarikan yang menampilkan detail rekening bank (bank, no rek, atas nama) dan total nominal dengan validasi batas saldo minimal Rp 10.000.
@@ -16,14 +24,14 @@
 - **Penanganan Dependensi Hilang (Compile Safety)**:
   - Menambahkan impor `getOrCreateChatSession` yang sebelumnya terlewat untuk menghindari error runtime pada inisiasi chat pemilik kost.
 
-### 2. Verifikasi OTP WhatsApp pada Pendaftaran Mitra & Pemindahan Info Referral (Juni 2026)
+### 3. Verifikasi OTP WhatsApp pada Pendaftaran Mitra & Pemindahan Info Referral (Juni 2026)
 - **Interseptor Pendaftaran Pemilik Kost**: Menambahkan gerbang verifikasi 2-Faktor sebelum pengiriman tautan konfirmasi email.
 - **Pengiriman OTP Otomatis**: Menghasilkan OTP 6-digit acak dan mengirimkannya melalui Meta Cloud API (`sendWhatsAppTemplate`) dengan fallback aman.
 - **UI Premium & Responsif**: Halaman input OTP minimalis yang responsif, lengkap dengan countdown kirim ulang 60 detik dan tombol pembatalan.
 - **Pemindahan Banner Referral Agen**: Menyingkirkan kartu/banner Program Kemitraan Agen (Referral) dari halaman beranda/overview [AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/pages/AgentDashboard.tsx) dan memindahkannya ke dalam tab Profil di [AgentProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/pages/AgentProfile.tsx) dengan tambahan fungsionalitas tombol "Salin" kode referral secara langsung.
 - **Desain Header Rekomendasi Utama Ultra-Kompak**: Merombak total bagian "Kost Pilihan Hari Ini" di [Home.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/pages/Home.tsx) pada layar mobile agar tidak memakan banyak ruang vertikal. Judul dan tombol navigasi disusun berdampingan secara horizontal (*side-by-side*), teks tombol otomatis menyesuaikan menjadi "Lihat Semua" dengan ikon panah minimalis, serta mengurangi tinggi padding bagian tersebut agar tetap keren, simpel, informatif, dan fungsional.
 
-### 3. Perombakan Sistem Survey Multi-Kost (Mei 2026)
+### 4. Perombakan Sistem Survey Multi-Kost (Mei 2026)
 - **Consolidated Order-based Detail Page**: Merombak tampilan model "N-card" yang terpisah menjadi 1 halaman detail pesanan berbasis transaksi yang elegan, bersih, dan premium di `MyKost.tsx`.
 - **Granular Multi-Kost Sync (`adminService.ts`)**: Modifikasi `syncSurveyRequest` untuk secara otomatis mengiterasi dan menyisipkan N baris `survey_requests` unik untuk setiap kost yang didaftarkan (terhubung melalui `transaction_id` yang sama).
 - **Dashboard Petugas Terkonsolidasi (`SurveyManagement.tsx`)**: Mengelompokkan seluruh survey_requests berdasarkan transaksi di panel Admin/Agen, memungkinkan petugas mengelola status, checklist, foto, dan komunikasi per unit kost secara terpadu.
