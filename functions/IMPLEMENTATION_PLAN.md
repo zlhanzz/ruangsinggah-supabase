@@ -1,31 +1,27 @@
-# IMPLEMENTATION PLAN - Perbaikan Grafik Aktivitas Mingguan Surveyor
+# IMPLEMENTATION PLAN - Perbaikan Layout Dompet/Wallet (Responsive Overflow)
 
-Rencana ini dibuat untuk memperbaiki akurasi penanggalan pada grafik "Aktivitas Survey 7 Hari Terakhir" di Dashboard Agen.
+Rencana ini dibuat untuk memperbaiki masalah di mana menu Dompet/Saldo tidak pas (fit) dengan lebar layar dan melimpah (overflow) ke kanan pada perangkat mobile/layar kecil.
 
 ## 1. Analisis Masalah
-- **Penyebab Penanggalan Salah**:
-  - Grafik saat ini menentukan tanggal aktivitas berdasarkan `updated_at` (atau `created_at` sebagai fallback).
-  - Namun, `updated_at` milik survey berstatus `COMPLETED` akan ditimpa dengan waktu saat pengguna/customer memberikan ulasan rating di halaman "Kost Saya".
-  - Jika pengguna mengonfirmasi dan memberi rating pada beberapa survey sekaligus (misal pada hari Senin), maka semua survey tersebut akan tercatat memiliki `updated_at` di hari Senin. Hal ini membuat semua bar aktivitas di grafik menumpuk pada satu hari saja (Senin).
+- **Penyebab Layout Melar (Horizontal Overflow)**:
+  - Pada daftar transaksi (`allTransactions`), properti `tx.title` sering kali memuat string URL peta yang sangat panjang tanpa spasi (misalnya: `https://maps.app.goo.gl/...`).
+  - Karena flexbox secara default tidak memotong kata panjang (`word-break`), string URL ini melebarkan container secara horizontal dan mendorong kolom nominal transaksi keluar dari layar.
+  - Selain itu, tombol tab navigasi Dompet ("DOMPET", "RIWAYAT WD", "REKENING") menggunakan ukuran font `text-xs` dengan `tracking-widest` (letter-spacing lebar) yang melebihi kapasitas lebar layar ponsel kecil, sehingga teks "REKENING" terpotong.
 - **Solusi**:
-  - Tentukan tanggal pengerjaan/pengiriman laporan survei yang sesungguhnya dengan skema penentuan dinamis:
-    1. Jika terdapat `submitted_at` di dalam objek `evaluation_summary` (untuk pengajuan baru), gunakan nilai tersebut.
-    2. Cari nama file foto yang diunggah di dalam `evaluation_summary` (misal: `1780719322976_abc.webp`). Angka epoch timestamp (`1780719322976`) diekstrak untuk mendapatkan tanggal pengunggahan foto laporan.
-    3. Jika tidak ada foto/timestamp, fallback ke `created_at`.
-  - Pada pengisian laporan baru oleh surveyor di `AgentDashboard.tsx` (`handleUpdateSurvey`), tambahkan kolom `submitted_at` ke dalam `evaluation_summary` secara otomatis.
+  - Terapkan `min-w-0` pada container judul transaksi dan tambahkan kelas `truncate` atau `break-all` pada elemen teks `tx.title` agar URL panjang terpotong rapi dengan elipsis (`...`).
+  - Ubah spesifikasi teks tab tombol agar menggunakan `text-[10px] sm:text-xs` dan `tracking-wider` agar muat di semua layar ponsel pintar.
 
 ## 2. Dampak Perubahan
 File yang akan disentuh:
-1. `functions/public/pages/AgentDashboard.tsx` (Update `getWeeklyData` helper and `handleUpdateSurvey` method).
+1. `functions/public/pages/AgentDashboard.tsx` (Update rendering tab header dan layout row transaksi pada `renderWallet`).
 
 ## 3. Langkah-Langkah Eksekusi
 1. **Modifikasi `AgentDashboard.tsx`**:
-   - Definisikan fungsi helper `getSurveyWorkDate` untuk mengekstrak tanggal laporan dari `submitted_at`, timestamp foto, atau `created_at`.
-   - Update `getWeeklyData` agar memanggil `getSurveyWorkDate` saat memfilter jumlah tugas harian.
-   - Di dalam fungsi `handleUpdateSurvey`, sisipkan properti `submitted_at: new Date().toISOString()` di dalam `evaluation_summary` sebelum menyimpan ke database.
+   - Di tab navigasi dompet, ubah `text-xs tracking-widest` menjadi `text-[10px] sm:text-xs tracking-wider`.
+   - Di loop rendering `allTransactions`, bungkus teks info dengan wrapper `min-w-0` dan tambahkan `truncate` ke tag judul agar tidak melebar.
 2. **Verifikasi & Build**:
    - Jalankan `npm run build` untuk memvalidasi keberhasilan kompilasi.
 
 ## 4. Rencana Verifikasi
 - Memastikan build berhasil tanpa kesalahan kompilasi.
-- Buka dashboard agen dan pastikan grafik 7 hari terakhir menampilkan sebaran data penyelesaian survey yang akurat (seperti terbagi ke hari Sabtu dan Senin) sesuai hari kerja riil surveyor.
+- Buka menu Dompet pada mode responsif (ponsel pintar) dan pastikan seluruh elemen (tab navigasi, banner kuning, dan daftar transaksi) muat pas dalam lebar layar dengan rapi tanpa scroll horizontal.

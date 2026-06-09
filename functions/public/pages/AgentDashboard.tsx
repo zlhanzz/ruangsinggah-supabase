@@ -1040,10 +1040,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             </div>
 
             <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden min-h-[400px]">
-                <div className="flex p-2 gap-1 border-b border-gray-50 bg-gray-50/50">
-                    <button onClick={() => setWalletView('balance')} className={`flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${walletView === 'balance' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Dompet</button>
-                    <button onClick={() => setWalletView('history')} className={`flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${walletView === 'history' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Riwayat WD</button>
-                    <button onClick={() => setWalletView('bank')} className={`flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${walletView === 'bank' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Rekening</button>
+                <div className="flex p-1.5 gap-1 border-b border-gray-50 bg-gray-50/50">
+                    <button onClick={() => setWalletView('balance')} className={`flex-1 py-3 rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all ${walletView === 'balance' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Dompet</button>
+                    <button onClick={() => setWalletView('history')} className={`flex-1 py-3 rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all ${walletView === 'history' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Riwayat WD</button>
+                    <button onClick={() => setWalletView('bank')} className={`flex-1 py-3 rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all ${walletView === 'bank' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Rekening</button>
                 </div>
 
                 <div className="p-6">
@@ -1061,24 +1061,24 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         <div className="text-center py-6 text-gray-400 font-bold text-xs">Belum ada transaksi.</div>
                                     ) : (
                                         allTransactions.map((tx) => (
-                                            <div key={tx.id} className="flex justify-between items-center p-4 rounded-2xl bg-gray-50 border border-gray-50 hover:bg-white hover:border-orange-100 transition-all group">
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs ${
+                                            <div key={tx.id} className="flex justify-between items-center p-4 rounded-2xl bg-gray-50 border border-gray-50 hover:bg-white hover:border-orange-100 transition-all group gap-4 min-w-0">
+                                                <div className="flex items-center gap-4 min-w-0 flex-1">
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
                                                         tx.type === 'IN' ? 'bg-green-100 text-green-600' : 'bg-rose-100 text-rose-600'
                                                     }`}>
                                                         {tx.type}
                                                     </div>
-                                                    <div>
-                                                        <p className="text-xs font-black text-gray-900 flex items-center gap-1.5">
-                                                            {tx.title}
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-xs font-black text-gray-900 flex items-center gap-1.5 truncate">
+                                                            <span className="truncate">{tx.title}</span>
                                                             {tx.type === 'OUT' && tx.status === 'pending' && (
-                                                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800 uppercase tracking-wider">Diproses</span>
+                                                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800 uppercase tracking-wider shrink-0">Diproses</span>
                                                             )}
                                                         </p>
                                                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight mt-0.5">{tx.date.toLocaleDateString('id-ID')}</p>
                                                     </div>
                                                 </div>
-                                                <p className={`text-sm font-black ${
+                                                <p className={`text-sm font-black shrink-0 ${
                                                     tx.type === 'IN' ? 'text-green-600' : 'text-rose-600'
                                                 }`}>
                                                     {tx.type === 'IN' ? '+' : '-'}{FORMAT_CURRENCY(tx.amount)}

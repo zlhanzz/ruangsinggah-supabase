@@ -1,20 +1,20 @@
-# WALKTHROUGH - Pembersihan Focus Ring Outline Hitam pada Grafik Recharts
+# WALKTHROUGH - Perbaikan Responsivitas Layout Dompet/Saldo
 
-Dokumen ini berisi rincian perubahan, hasil pengujian, dan instruksi deployment untuk menghilangkan kotak hitam (focus ring/outline) yang muncul ketika grafik Recharts di-click atau di-hover pada Dashboard Agen.
+Dokumen ini berisi rincian perubahan, hasil pengujian, dan instruksi deployment untuk perbaikan masalah layout menu Dompet yang overflow (melimpah keluar layar) pada perangkat mobile/layar kecil.
 
 ## 1. Daftar Perubahan
 - **Berkas yang Diubah**:
   1. [AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx)
-  2. [index.css](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/index.css)
 - **Rincian Modifikasi**:
-  - **`index.css`**:
-    - Menambahkan aturan CSS global untuk me-reset properti `outline` pada Recharts wrapper dan seluruh elemen di dalamnya agar bernilai `none !important`.
   - **`AgentDashboard.tsx`**:
-    - Menambahkan properti `wrapperStyle={{ outline: 'none' }}` dan menyetel `outline: 'none'` pada `contentStyle` komponen `<RechartsTooltip />` untuk memastikan tooltip tidak memicu focus ring bawaan browser.
+    - Membungkus detail transaksi dalam wrapper flexbox dengan kelas `min-w-0` dan `flex-1`.
+    - Menambahkan kelas `truncate` pada judul transaksi (`tx.title`) agar URL Google Maps atau nama kost yang sangat panjang tidak memotong/melebarkan container melainkan terpotong dengan elipsis (`...`).
+    - Menambahkan `shrink-0` pada penanda tipe transaksi (`IN/OUT`) dan nominal harga agar posisinya tetap di tempat.
+    - Menurunkan ukuran font tab dompet menjadi `text-[10px] sm:text-xs` dan melonggarkan letter spacing menjadi `tracking-wider` agar teks "REKENING" tidak terpotong pada lebar layar handphone yang sempit.
 
 ## 2. Hasil Pengujian
 - **Kompilasi TypeScript**: Sukses. Kompilasi build frontend via `cmd.exe /c npm run build` diselesaikan tanpa adanya kesalahan tipe atau modul.
-- **Fungsionalitas**: Outline hitam tebal di sekitar grafik atau tooltip saat di-click/di-hover telah sepenuhnya hilang, meninggalkan tampilan visual tooltip melayang (shadowed card) yang bersih dan modern.
+- **Tampilan Responsif**: Layout dompet, tab navigasi, dan baris daftar transaksi sekarang secara dinamis menyusut menyesuaikan lebar layar ponsel (fit screen) tanpa meluap ke samping.
 
 ## 3. Petunjuk Deploy
 Jalankan perintah berikut pada terminal di dalam direktori `functions` untuk membangun dan meluncurkan aplikasi lokal Anda:
