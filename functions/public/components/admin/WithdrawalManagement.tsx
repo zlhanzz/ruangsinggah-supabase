@@ -30,20 +30,34 @@ const WithdrawalManagement: React.FC<WithdrawalManagementProps> = () => {
     const loadWithdrawals = async () => {
         setLocalLoading(true);
         try {
-            const { data, error } = await supabase
+            const { data: wdData, error: wdError } = await supabase
                 .from('withdrawal_requests')
-                .select(`
-                    *,
-                    agent:users (
-                        name,
-                        email,
-                        phone
-                    )
-                `)
+                .select('*')
                 .order('created_at', { ascending: false });
 
-            if (error) throw error;
-            setWithdrawals(data || []);
+            if (wdError) throw wdError;
+
+            if (wdData && wdData.length > 0) {
+                const agentIds = [...new Set(wdData.map(w => w.agent_id).filter(Boolean))];
+                const { data: usersData, error: usersError } = await supabase
+                    .from('users')
+                    .select('id, name, email, phone')
+                    .in('id', agentIds);
+                
+                if (usersError) {
+                    console.error('Error loading agent users:', usersError);
+                }
+
+                const userMap = new Map(usersData?.map(u => [u.id, u]) || []);
+                const mappedWithdrawals = wdData.map(w => ({
+                    ...w,
+                    agent: userMap.get(w.agent_id) || undefined
+                }));
+
+                setWithdrawals(mappedWithdrawals);
+            } else {
+                setWithdrawals([]);
+            }
         } catch (err) {
             console.error('Error loading withdrawals:', err);
         } finally {

@@ -155,7 +155,10 @@
 - **Visual Bintang Dinamis di Agen Dashboard**: Memperbaiki visualisasi bintang ulasan dan rating rata-rata di dashboard agen (`AgentDashboard.tsx`) agar dinamis mencerminkan penilaian riil database (`user_rating` & `user_comment`) alih-alih data dummy/statis.
 
 ### 30. Perbaikan Loop Render Kelola WD Admin (Juni 2026)
-- **Eliminasi Infinite Render Loop**: Memisahkan status loading global milik parent (`Dashboard.tsx`) dari `WithdrawalManagement.tsx` dengan beralih ke state `localLoading` lokal. Hal ini mencegah siklus unmount/remount tanpa henti yang sebelumnya mengakibatkan glitches/flickering dan loading selamanya ketika mengakses menu Kelola WD di Dashboard Admin.
+- **Eliminasi Infinite Render Loop**: Memisahkan status loading global milik parent (`Dashboard.tsx`) dari `WithdrawalManagement.tsx` with beralih ke state `localLoading` lokal. Hal ini mencegah siklus unmount/remount tanpa henti yang sebelumnya mengakibatkan glitches/flickering dan loading selamanya ketika mengakses menu Kelola WD di Dashboard Admin.
+
+### 31. Perbaikan Relasi Database Kelola WD Admin (Juni 2026)
+- **Manual Mapping/Join di Client-Side**: Mengganti join resource `.select('*, agent:users(...)')` di `WithdrawalManagement.tsx` dengan pemanggilan data bertahap dan melakukan pemetaan (matching) manual berbasis `Map` di frontend. Ini mengatasi error PostgREST `PGRST200` akibat tidak adanya foreign key eksplisit di database antara tabel `withdrawal_requests` dan `users`, sehingga pengajuan penarikan dana agen dapat tampil dengan sukses di dashboard admin.
 
 ## Fitur Dalam Pengerjaan (In Progress)
 -   Monitoring konsistensi Webhook Midtrans vs Supabase untuk transaksi multi-kost.
