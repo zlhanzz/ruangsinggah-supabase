@@ -1,39 +1,26 @@
-# IMPLEMENTATION PLAN - Interseptor Redirect Verifikasi Email Registrasi (Auth) v2
+# IMPLEMENTATION PLAN - Kustomisasi Template Email Autentikasi RuangSinggah.id
 
-Rencana ini dibuat untuk memperbaiki deteksi alur verifikasi email agar berjalan sempurna pada Supabase PKCE flow dengan menangkap parameter URL di awal waktu muat (load time).
+Rencana ini dibuat untuk meningkatkan estetika dan profesionalisme email konfirmasi pendaftaran (signup) dan reset kata sandi (recovery) dengan menggunakan template HTML custom yang responsif, dilengkapi logo/grafis, typography yang modern, serta tombol call-to-action (CTA) yang jelas.
 
 ## 1. Analisis Masalah
-- **Gejala**: Ketika user mengeklik link verifikasi email, mereka masih langsung masuk ke dashboard secara otomatis (interseptor gagal mendeteksi parameter verifikasi).
-- **Penyebab**: Library `supabase-js` secara otomatis menghapus parameter query `code` dari URL (`window.location.search`) saat inisialisasi sesi sebelum event listener `onAuthStateChange` dipanggil. Oleh karena itu, saat event `SIGNED_IN` dipicu, parameter `code` sudah kosong.
-- **Solusi**: Menyimpan parameter `window.location.search` dan `window.location.hash` pada tingkat modul/file (saat aplikasi pertama kali dimuat di browser), kemudian menggunakan nilai yang disimpan tersebut di dalam callback `onAuthStateChange`.
+- **Gejala**: Saat ini email verifikasi registrasi dan reset kata sandi menggunakan plain text atau format HTML yang sangat sederhana (`<p>Halo! Silakan klik link berikut untuk melanjutkan: <a href="...">Klik Di Sini</a></p>`). Tampilan ini kurang profesional dan tidak memiliki identitas visual RuangSinggah.id (orange branding).
+- **Solusi**: Mengganti template email di fungsi Cloud Function `handleCustomAuthEmail` pada `functions/src/index.ts` dengan desain HTML email premium yang konsisten dengan desain web RuangSinggah.id (menggunakan warna oranye `#f97316`, card minimalis dengan bayangan lembut, font yang bersih, tombol CTA yang menonjol, serta fallback link).
 
 ## 2. Dampak Perubahan
 File yang akan diubah:
-1. `functions/public/App.tsx`:
-   - Menyimpan `window.location.search` dan `window.location.hash` ke variabel konstan di luar siklus React.
-   - Menggunakan konstanta tersebut untuk memeriksa kondisi interseptor.
+1. `functions/src/index.ts`:
+   - Memodifikasi payload `htmlContent` di dalam Cloud Function `handleCustomAuthEmail` untuk mengirimkan HTML terformat indah dengan tombol dan logo.
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Modifikasi App.tsx**:
-   - Deklarasikan konstanta deteksi di bagian atas file (di luar komponen `App`):
-     ```typescript
-     const initialSearch = window.location.search;
-     const initialHash = window.location.hash;
-     const isSignupConfirmation = initialHash.includes('type=signup') || 
-       initialSearch.includes('type=signup') || 
-       (initialSearch.includes('code=') && !initialSearch.includes('mode=recovery'));
-     ```
-   - Di dalam `onAuthStateChange`, ganti kondisi pengecekan lama menjadi:
-     ```typescript
-     if (event === 'SIGNED_IN' && isSignupConfirmation) {
-       await supabase.auth.signOut();
-       navigate('/login?verified=true', { replace: true });
-       return;
-     }
-     ```
-2. **Kompilasi & Build Verifikasi**:
-   - Jalankan `cmd.exe /c npm run build` di folder `functions/public`.
+1. **Modifikasi `functions/src/index.ts`**:
+   - Di dalam `handleCustomAuthEmail`, buat konstruktor HTML berdasarkan tipe email (`signup` vs `recovery`).
+   - Implementasikan template HTML dengan header, logo RuangSinggah.id, konten deskriptif, tombol CTA oranye, instruksi keamanan, dan footer.
+2. **Kompilasi Cloud Function**:
+   - Jalankan `npm run build` di direktori `functions` untuk memvalidasi sintaks TypeScript.
+3. **Deploy (jika diperlukan)**:
+   - File siap dideploy oleh pengguna dengan perintah `npm run deploy`.
 
 ## 4. Rencana Verifikasi
-- Melakukan verifikasi build lokal sukses.
-- Push kode ke GitHub, tunggu deploy Cloudflare Pages, lalu uji verifikasi email.
+- Memastikan build lokal sukses tanpa error.
+- Melakukan verifikasi unit test pendaftaran/auth lokal jika memungkinkan.
+- Mendokumentasikan perubahan dalam `WALKTHROUGH.md` dan `PROGRESS.md`.

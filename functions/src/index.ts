@@ -2311,7 +2311,53 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
     if (error) throw error;
     
     const brevoApiKey = brevoApiKeyParam.value();
-    
+    const actionLink = data.properties.action_link;
+    const isSignup = type === 'signup';
+    const titleText = isSignup ? 'Konfirmasi Pendaftaran Akun' : 'Reset Kata Sandi Anda';
+    const subTitleText = isSignup ? 'Selamat datang di RuangSinggah.id! Selangkah lagi untuk mengaktifkan akun Anda.' : 'Kami menerima permintaan untuk mereset kata sandi akun RuangSinggah.id Anda.';
+    const buttonText = isSignup ? 'KONFIRMASI AKUN SEKARANG' : 'ATUR ULANG KATA SANDI';
+    const footerText = isSignup ? 'Jika Anda tidak merasa mendaftar akun di RuangSinggah.id, silakan abaikan email ini.' : 'Jika Anda tidak meminta reset kata sandi, abaikan email ini dan kata sandi Anda akan tetap sama.';
+
+    const emailHtml = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; padding: 40px 20px; text-align: center;">
+        <div style="max-width: 550px; margin: 0 auto; background-color: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.05); text-align: left;">
+          
+          <!-- Header Branding Banner -->
+          <div style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); padding: 40px 30px; text-align: center;">
+            <img src="https://ruangsinggah.id/logo.png" alt="RuangSinggah.id Logo" style="max-height: 45px; margin-bottom: 20px;" onerror="this.style.display='none'">
+            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">${titleText}</h1>
+          </div>
+          
+          <!-- Content Body -->
+          <div style="padding: 40px 35px; color: #374151; line-height: 1.6;">
+            <p style="font-size: 16px; font-weight: 600; margin-top: 0; color: #111827;">Halo,</p>
+            <p style="font-size: 15px; color: #4b5563; margin-bottom: 30px; margin-top: 0;">${subTitleText}</p>
+            
+            <!-- CTA Button Container -->
+            <div style="text-align: center; margin: 35px 0;">
+              <a href="${actionLink}" style="display: inline-block; background-color: #f97316; color: #ffffff; padding: 16px 32px; font-size: 14px; font-weight: bold; text-decoration: none; border-radius: 14px; box-shadow: 0 8px 20px rgba(249, 115, 22, 0.25);">
+                ${buttonText}
+              </a>
+            </div>
+            
+            <!-- Fallback URL -->
+            <div style="background-color: #f9fafb; border: 1px solid #f3f4f6; border-radius: 12px; padding: 15px; margin: 30px 0; word-break: break-all;">
+              <p style="font-size: 12px; color: #9ca3af; margin: 0 0 5px 0;">Jika tombol di atas tidak berfungsi, salin dan tempel link berikut ke browser Anda:</p>
+              <a href="${actionLink}" style="font-size: 12px; color: #f97316; text-decoration: none;">${actionLink}</a>
+            </div>
+            
+            <p style="font-size: 13px; color: #9ca3af; margin: 0; line-height: 1.5;">${footerText}</p>
+          </div>
+          
+          <!-- Footer Branding / Support -->
+          <div style="background-color: #fafafa; border-top: 1px solid #f3f4f6; padding: 25px 35px; text-align: center;">
+            <p style="font-size: 12px; color: #9ca3af; margin: 0;">&copy; ${new Date().getFullYear()} RuangSinggah.id. All rights reserved.</p>
+            <p style="font-size: 11px; color: #d1d5db; margin: 5px 0 0 0;">Layanan Sewa Kost & Jasa Survey Properti Terpercaya</p>
+          </div>
+          
+        </div>
+      </div>
+    `;
 
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -2319,8 +2365,8 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
       body: JSON.stringify({
         sender: { name: "RuangSinggah", email: "system@ruangsinggah.id" },
         to: [{ email }],
-        subject: type === 'signup' ? '🛡️ Konfirmasi Akun RuangSinggah.id' : '🔑 Reset Kata Sandi',
-        htmlContent: `<p>Halo! Silakan klik link berikut untuk melanjutkan: <a href="${data.properties.action_link}">Klik Di Sini</a></p>`
+        subject: isSignup ? '🛡️ Konfirmasi Akun RuangSinggah.id' : '🔑 Reset Kata Sandi',
+        htmlContent: emailHtml
       })
     });
     

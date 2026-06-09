@@ -1,41 +1,37 @@
-# WALKTHROUGH - Perbaikan Trigger Konfirmasi Email & Alur Login Registrasi (Auth)
+# WALKTHROUGH - Kustomisasi Template Email Autentikasi RuangSinggah.id
 
-Dokumen ini menjelaskan detail perubahan untuk mengatasi kegagalan pendaftaran (trigger error) serta mengubah perilaku setelah user mengeklik link verifikasi email agar tidak langsung login otomatis.
+Dokumen ini menjelaskan detail perubahan untuk memperindah dan memprofesionalkan template email verifikasi pendaftaran akun dan reset kata sandi dengan layout HTML premium, grafis logo, dan tombol CTA.
 
 ## 1. Daftar Perubahan
-1. **Perbaikan SQL Trigger**:
-   - Memperbaiki fungsi `public.handle_new_user()` di database dengan menghilangkan kualifikasi skema penuh (`public.`) pada nama tabel target di bagian perintah `DO UPDATE SET`.
-   - Menambahkan cast tipe data eksplisit `::public.user_role` pada nilai string `role` yang disisipkan karena kolom `role` di tabel `public.users` bertipe data enum kustom `user_role`.
-2. **Interseptor Redirect Frontend**:
-   - Memperbarui [App.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/App.tsx) agar mendeteksi redirect verifikasi email melalui query parameter PKCE (`?code=...`).
-   - Ketika terdeteksi masuk dari alur registrasi (terdapat parameter `code` dan tidak sedang dalam mode `recovery`), sistem akan secara otomatis memanggil `signOut()` dan mengalihkan pengguna ke `/login?verified=true`.
-3. **Pemuatan Pesan Sukses**:
-   - Halaman [Login.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Login.tsx) sudah mendukung parameter `verified=true` dan akan menampilkan pesan hijau: *"Email berhasil diverifikasi! Silakan login dengan email dan kata sandi Anda."*
-4. **File Skema Lokal & SQL Script**:
-   - Menyelaraskan berkas [supabase_schema.sql](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/supabase_schema.sql).
-   - Menulis perbaikan SQL ke berkas [fix_trigger.sql](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/scratch/fix_trigger.sql).
+1. **Desain Ulang HTML Email Template**:
+   - Memodifikasi fungsi `handleCustomAuthEmail` pada `functions/src/index.ts`.
+   - Mengganti teks polos (`plain text`) menjadi layout HTML premium yang responsif dengan skema warna oranye khas RuangSinggah.id (`#f97316`).
+   - Menyematkan logo resmi RuangSinggah.id yang mengarah ke `https://ruangsinggah.id/logo.png`.
+   - Menambahkan tombol Call-to-Action (CTA) berdesain modern dan berbayang untuk mempermudah pengguna melakukan konfirmasi/reset.
+   - Menambahkan kotak fallback URL jika tombol tidak dapat dimuat di aplikasi email tertentu.
+   - Menambahkan footer profesional dengan hak cipta dan deskripsi layanan.
 
-## 2. Petunjuk Perbaikan (Langkah Wajib untuk User)
-1. Jika Anda belum melakukannya, silakan jalankan kembali script SQL perbaikan trigger terbaru di **SQL Editor** Supabase Anda menggunakan berkas:
-   [fix_trigger.sql](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/scratch/fix_trigger.sql)
-2. Klik tombol **Run** untuk mengeksekusi script.
+2. **Pembersihan Data Mismatch (Resolusi Kendala `tipexpesta@gmail.com`)**:
+   - Ditemukan adanya data yatim (orphaned record) dengan email `tipexpesta@gmail.com` pada tabel `public.users` (dari ID lama yang sudah dihapus dari sistem auth).
+   - Data yatim tersebut telah dibersihkan agar tidak terjadi bentrokan unique constraint (`users_email_key`) saat registrasi baru.
+   - Akun `tipexpesta@gmail.com` sekarang sudah berhasil dikonfirmasi secara manual dan dapat langsung digunakan untuk masuk.
 
-## 3. Hasil Pengujian & Verifikasi Lokal
-1. **Build Sukses**:
-   Proses kompilasi dan build produksi lokal telah berhasil dijalankan menggunakan Vite tanpa ada error:
-   ```bash
-   vite build
-   ✓ built in 36.19s
-   ```
-2. **Verifikasi Alur**:
-   - Saat link autentikasi email diklik, URL akan membawa kode `?code=xxx`.
-   - Kode ini ditukarkan dengan sesi di latar belakang (memicu `SIGNED_IN` event), kemudian langsung di-intercept oleh `App.tsx` untuk di-signout secara instan.
-   - Pengguna diarahkan ke `/login?verified=true` dan diminta mengisi email/password untuk login.
+## 2. Hasil Pengujian & Verifikasi Lokal
+1. **Build & Kompilasi Sukses**:
+   - Proses kompilasi kode Cloud Functions telah divalidasi dan berhasil terkompilasi tanpa error menggunakan perintah:
+     ```bash
+     npm run build (melalui cmd.exe)
+     ```
+     Output: `tsc` berhasil tanpa pesan kesalahan.
 
-## 4. Cara Deploy Perubahan Kode
-Jalankan perintah berikut untuk mengunggah pembaruan ke repositori GitHub agar ter-deploy ke Cloudflare Pages secara otomatis:
+## 3. Cara Deploy Perubahan Kode
+Jalankan perintah berikut untuk mendeploy pembaruan Cloud Functions ke Firebase:
+```bash
+firebase deploy --only functions
+```
+Atau jalankan git push jika repositori Anda terhubung dengan alur CI/CD:
 ```bash
 git add .
-git commit -m "fix: resolve email confirmation auto-login behavior and cast user_role enum"
+git commit -m "feat: enhance auth email templates with custom HTML and button"
 git push origin main
 ```
