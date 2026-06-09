@@ -195,9 +195,12 @@ const App: React.FC = () => {
       setUser(safeUser);
 
       if (location.pathname === Page.LOGIN) {
-        if (role === 'admin') navigate(Page.DASHBOARD_ADMIN, { replace: true });
-        else if (role === 'survey_agent') navigate(Page.DASHBOARD_AGENT, { replace: true });
-        else if (role === 'owner') navigate(Page.DASHBOARD_MITRA, { replace: true });
+        const isRecovery = new URLSearchParams(window.location.search).get('mode') === 'recovery';
+        if (!isRecovery) {
+          if (role === 'admin') navigate(Page.DASHBOARD_ADMIN, { replace: true });
+          else if (role === 'survey_agent') navigate(Page.DASHBOARD_AGENT, { replace: true });
+          else if (role === 'owner') navigate(Page.DASHBOARD_MITRA, { replace: true });
+        }
       }
     } catch (err) {
       console.error('Error fetching user data:', err);
@@ -217,6 +220,17 @@ const App: React.FC = () => {
       if (event === 'SIGNED_IN' && isSignupConfirmation) {
         await supabase.auth.signOut();
         navigate('/login?verified=true', { replace: true });
+        return;
+      }
+
+      // Intercept password recovery redirect
+      if (event === 'PASSWORD_RECOVERY') {
+        navigate('/login?mode=recovery', { replace: true });
+        if (mounted) {
+          setTimeout(() => {
+            if (mounted) fetchUserData(session?.user ?? null);
+          }, 0);
+        }
         return;
       }
 

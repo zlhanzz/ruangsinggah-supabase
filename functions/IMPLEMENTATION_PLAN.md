@@ -1,26 +1,31 @@
-# IMPLEMENTATION PLAN - Kustomisasi Template Email Autentikasi RuangSinggah.id
+# IMPLEMENTATION PLAN - Perbaikan Alur Reset Sandi (Password Recovery) v2
 
-Rencana ini dibuat untuk meningkatkan estetika dan profesionalisme email konfirmasi pendaftaran (signup) dan reset kata sandi (recovery) dengan menggunakan template HTML custom yang responsif, dilengkapi logo/grafis, typography yang modern, serta tombol call-to-action (CTA) yang jelas.
+Rencana ini dibuat untuk memastikan alur reset kata sandi (password recovery) berjalan dengan benar. Sistem harus mendeteksi event `PASSWORD_RECOVERY` dari Supabase dan mengarahkan pengguna ke form penyetelan kata sandi baru (PASSWORD_UPDATE) alih-alih langsung masuk ke dashboard utama.
 
 ## 1. Analisis Masalah
-- **Gejala**: Saat ini email verifikasi registrasi dan reset kata sandi menggunakan plain text atau format HTML yang sangat sederhana (`<p>Halo! Silakan klik link berikut untuk melanjutkan: <a href="...">Klik Di Sini</a></p>`). Tampilan ini kurang profesional dan tidak memiliki identitas visual RuangSinggah.id (orange branding).
-- **Solusi**: Mengganti template email di fungsi Cloud Function `handleCustomAuthEmail` pada `functions/src/index.ts` dengan desain HTML email premium yang konsisten dengan desain web RuangSinggah.id (menggunakan warna oranye `#f97316`, card minimalis dengan bayangan lembut, font yang bersih, tombol CTA yang menonjol, serta fallback link).
+- **Gejala**: Pengguna yang mengeklik tautan reset sandi di email langsung masuk ke akun mereka (logged in) dan diarahkan ke dashboard utama tanpa melihat halaman pengaturan kata sandi baru.
+- **Penyebab**:
+  1. Callback `onAuthStateChange` di `App.tsx` tidak menangani event `PASSWORD_RECOVERY`.
+  2. Fungsi `fetchUserData` secara otomatis mengalihkan pengguna yang sudah memiliki sesi aktif di halaman `/login` ke dashboard masing-masing peran (`admin`, `owner`, `survey_agent`), sehingga formulir ubah sandi terlewati.
+- **Solusi**:
+  1. Intersepsi event `PASSWORD_RECOVERY` di `onAuthStateChange` pada `App.tsx` dan arahkan ke `/login?mode=recovery`.
+  2. Modifikasi logika pengalihan di `fetchUserData` agar mengecualikan pengalihan ke dashboard jika query parameter `mode=recovery` sedang aktif.
 
 ## 2. Dampak Perubahan
 File yang akan diubah:
-1. `functions/src/index.ts`:
-   - Memodifikasi payload `htmlContent` di dalam Cloud Function `handleCustomAuthEmail` untuk mengirimkan HTML terformat indah dengan tombol dan logo.
+1. `functions/public/App.tsx`:
+   - Tambahkan deteksi `PASSWORD_RECOVERY` di `onAuthStateChange`.
+   - Modifikasi `fetchUserData` agar mengabaikan auto-redirect ke dashboard jika parameter `mode=recovery` ada di URL.
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Modifikasi `functions/src/index.ts`**:
-   - Di dalam `handleCustomAuthEmail`, buat konstruktor HTML berdasarkan tipe email (`signup` vs `recovery`).
-   - Implementasikan template HTML dengan header, logo RuangSinggah.id, konten deskriptif, tombol CTA oranye, instruksi keamanan, dan footer.
-2. **Kompilasi Cloud Function**:
-   - Jalankan `npm run build` di direktori `functions` untuk memvalidasi sintaks TypeScript.
-3. **Deploy (jika diperlukan)**:
-   - File siap dideploy oleh pengguna dengan perintah `npm run deploy`.
+1. **Modifikasi `App.tsx`**:
+   - Sesuaikan bagian logika `onAuthStateChange` untuk menangkap `PASSWORD_RECOVERY`.
+   - Sesuaikan pengkondisian redirect di `fetchUserData`.
+2. **Kompilasi & Build Verifikasi**:
+   - Jalankan `cmd.exe /c npm run build` di folder `functions/public` jika ingin memverifikasi frontend.
+3. **Commit & Push**:
+   - Push perubahan ke repositori git agar ter-deploy ke Cloudflare Pages.
 
 ## 4. Rencana Verifikasi
-- Memastikan build lokal sukses tanpa error.
-- Melakukan verifikasi unit test pendaftaran/auth lokal jika memungkinkan.
-- Mendokumentasikan perubahan dalam `WALKTHROUGH.md` dan `PROGRESS.md`.
+- Memastikan build lokal sukses.
+- Memastikan ketika event `PASSWORD_RECOVERY` terpicu, pengguna dialihkan ke halaman reset password dengan status sesi aktif sehingga input password baru dapat dikirimkan dengan benar.
