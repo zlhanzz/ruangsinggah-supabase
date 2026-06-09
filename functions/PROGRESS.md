@@ -231,6 +231,10 @@
 - **Interseptor Redirect Verifikasi (No Auto-Login)**: Memperbaiki perilaku auto-login otomatis setelah link email diklik pada alur PKCE (`?code=...`). Menambahkan deteksi parameter `code` (tanpa `mode=recovery`) pada interseptor `App.tsx` agar langsung memaksa `signOut()` dan mengalihkan pengguna ke `/login?verified=true` untuk memasukkan email dan password secara manual sesuai dengan alur UX yang diharapkan.
 - **Penyelarasan Berkas Skema**: Menyesuaikan berkas dokumentasi skema lokal `supabase_schema.sql` serta membuat file SQL perbaikan siap-pakai `fix_trigger.sql` agar dapat langsung dieksekusi oleh pemilik database.
 
+### 40. Penyederhanaan Layout Template Email Autentikasi (Juni 2026)
+- **Penghapusan Logo**: Menghapus tag logo `<img>` dari header email pada template email kustom (`handleCustomAuthEmail`) di Cloud Functions untuk menghasilkan tampilan visual yang lebih bersih dan minimalis.
+- **Penyederhanaan CTA**: Menghilangkan bagian kontainer `<!-- Fallback URL -->` yang berisi tautan alternatif mentah di bagian bawah email, menyisakan hanya tombol CTA utama yang rapi dan fungsional.
+
 ## Fitur Dalam Pengerjaan (In Progress)
 -   Monitoring konsistensi Webhook Midtrans vs Supabase untuk transaksi multi-kost.
 -   Uji E2E transaksi nyata di Production (Smallest Amount).
@@ -238,3 +242,4 @@
 ## Rencana Selanjutnya (Future Plans)
 -   Integrasi laporan keuangan otomatis berbasis transaksi Midtrans.
 -   Sistem penarikan dana (payout) otomatis untuk Mitra.
+

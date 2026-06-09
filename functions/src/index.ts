@@ -2324,7 +2324,6 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
           
           <!-- Header Branding Banner -->
           <div style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); padding: 40px 30px; text-align: center;">
-            <img src="https://ruangsinggah.id/logo.png" alt="RuangSinggah.id Logo" style="max-height: 45px; margin-bottom: 20px;" onerror="this.style.display='none'">
             <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">${titleText}</h1>
           </div>
           
@@ -2338,12 +2337,6 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
               <a href="${actionLink}" style="display: inline-block; background-color: #f97316; color: #ffffff; padding: 16px 32px; font-size: 14px; font-weight: bold; text-decoration: none; border-radius: 14px; box-shadow: 0 8px 20px rgba(249, 115, 22, 0.25);">
                 ${buttonText}
               </a>
-            </div>
-            
-            <!-- Fallback URL -->
-            <div style="background-color: #f9fafb; border: 1px solid #f3f4f6; border-radius: 12px; padding: 15px; margin: 30px 0; word-break: break-all;">
-              <p style="font-size: 12px; color: #9ca3af; margin: 0 0 5px 0;">Jika tombol di atas tidak berfungsi, salin dan tempel link berikut ke browser Anda:</p>
-              <a href="${actionLink}" style="font-size: 12px; color: #f97316; text-decoration: none;">${actionLink}</a>
             </div>
             
             <p style="font-size: 13px; color: #9ca3af; margin: 0; line-height: 1.5;">${footerText}</p>
