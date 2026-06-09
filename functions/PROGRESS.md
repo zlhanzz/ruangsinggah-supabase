@@ -167,6 +167,9 @@
 - **Deteksi Tanggal Kerja Dinamis**: Mengubah dasar penentuan tanggal grafik di `AgentDashboard.tsx` dari yang sebelumnya kaku pada `updated_at` (yang ditimpa tanggal konfirmasi pelanggan) menjadi menggunakan pembacaan properti `submitted_at` di `evaluation_summary` atau ekstraksi epoch timestamp dari nama file foto bukti.
 - **Auto-logging `submitted_at`**: Menambahkan penyimpanan tanggal submission secara otomatis (`submitted_at: new Date().toISOString()`) pada skema `evaluation_summary` saat surveyor mengirimkan laporan baru.
 
+### 34. Pembersihan Focus Ring Outline Hitam pada Grafik Recharts (Juni 2026)
+- **Reset Outline Focus**: Menambahkan global CSS reset pada `index.css` dan properti `wrapperStyle` pada `<RechartsTooltip />` di `AgentDashboard.tsx` untuk menghilangkan outline hitam tebal (focus ring) yang mengganggu estetika saat bar grafik di-hover/di-click oleh pengguna.
+
 ## Fitur Dalam Pengerjaan (In Progress)
 -   Monitoring konsistensi Webhook Midtrans vs Supabase untuk transaksi multi-kost.
 -   Uji E2E transaksi nyata di Production (Smallest Amount).

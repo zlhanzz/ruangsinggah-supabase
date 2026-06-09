@@ -19,3 +19,9 @@ body {
 .animate-subtle-bounce {
   animation: subtle-bounce 3s infinite ease-in-out;
 }
+
+/* Recharts Focus Outline Reset */
+.recharts-wrapper:focus,
+.recharts-wrapper *:focus {
+  outline: none !important;
+}

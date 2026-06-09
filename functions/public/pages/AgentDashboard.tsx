@@ -654,7 +654,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#9CA3AF' }} dx={-10} allowDecimals={false} />
                                 <RechartsTooltip 
                                     cursor={{fill: '#F9FAFB'}}
-                                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontWeight: 800, fontSize: '12px' }}
+                                    wrapperStyle={{ outline: 'none' }}
+                                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontWeight: 800, fontSize: '12px', outline: 'none' }}
                                 />
                                 <Bar dataKey="tasks" fill="#f97316" radius={[6, 6, 0, 0]} barSize={24} />
                             </BarChart>
