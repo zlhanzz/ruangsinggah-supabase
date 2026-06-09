@@ -50,6 +50,8 @@ interface AgentDashboardProps {
     onMenuChange: (menu: 'overview' | 'tasks' | 'wallet' | 'profile') => void;
     verificationStatus?: string;
     user?: any;
+    onLogout?: () => void;
+    onPageChange?: (p: Page) => void;
 }
 
 const AgentDashboard: React.FC<AgentDashboardProps> = ({ 
@@ -59,7 +61,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     loadSurveyRequests,
     activeMenu,
     onMenuChange,
-    verificationStatus
+    verificationStatus,
+    onLogout,
+    onPageChange
 }) => {
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [uploadSourceFieldId, setUploadSourceFieldId] = useState<string | null>(null);
@@ -71,8 +75,48 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         setSearchParams({ status: newTab });
     };
     const [profileImgError, setProfileImgError] = useState(false);
-    
+    const [agentReferralCode, setAgentReferralCode] = useState('');
 
+    const generateReferralCode = () => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let code = 'AG-';
+        for (let i = 0; i < 6; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return code;
+    };
+
+    useEffect(() => {
+        const checkAndFetchReferral = async () => {
+            if (user && user.role === 'survey_agent' && uid) {
+                try {
+                    const { data, error } = await supabase
+                        .from('agents')
+                        .select('referral_code')
+                        .eq('user_id', uid)
+                        .maybeSingle();
+                    
+                    if (data?.referral_code) {
+                        setAgentReferralCode(data.referral_code);
+                    } else {
+                        const code = generateReferralCode();
+                        console.log("Generating referral code for agent:", code);
+                        const { error: upsertError } = await supabase
+                            .from('agents')
+                            .upsert({ user_id: uid, referral_code: code }, { onConflict: 'user_id' });
+                        if (upsertError) {
+                            console.warn("Failed to save generated referral code:", upsertError.message);
+                        } else {
+                            setAgentReferralCode(code);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error fetching/generating referral code:", err);
+                }
+            }
+        };
+        checkAndFetchReferral();
+    }, [user, uid]);
 
     // Wallet State
     const [walletView, setWalletView] = useState<'balance' | 'history' | 'bank'>('balance');
@@ -1041,9 +1085,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
             <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden min-h-[400px]">
                 <div className="flex p-1.5 gap-1 border-b border-gray-50 bg-gray-50/50">
-                    <button onClick={() => setWalletView('balance')} className={`flex-1 py-3 rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all ${walletView === 'balance' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Dompet</button>
-                    <button onClick={() => setWalletView('history')} className={`flex-1 py-3 rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all ${walletView === 'history' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Riwayat WD</button>
-                    <button onClick={() => setWalletView('bank')} className={`flex-1 py-3 rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all ${walletView === 'bank' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Rekening</button>
+                    <button onClick={() => setWalletView('balance')} className={`flex-1 py-3 rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-wider truncate whitespace-nowrap px-1 transition-all ${walletView === 'balance' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Dompet</button>
+                    <button onClick={() => setWalletView('history')} className={`flex-1 py-3 rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-wider truncate whitespace-nowrap px-1 transition-all ${walletView === 'history' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Riwayat WD</button>
+                    <button onClick={() => setWalletView('bank')} className={`flex-1 py-3 rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-wider truncate whitespace-nowrap px-1 transition-all ${walletView === 'bank' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Rekening</button>
                 </div>
 
                 <div className="p-6">
@@ -1051,7 +1095,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         <div className="space-y-6">
                              <div className="bg-orange-50 border border-orange-100 rounded-3xl p-6 flex gap-4 items-center">
                                 <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-xl shadow-sm">💡</div>
-                                <p className="text-xs font-bold text-orange-900 leading-relaxed">Pencairan dana diproses setiap hari kerja. Pastikan nomor rekening sudah benar sebelum melakukan penarikan.</p>
+                                <p className="text-xs font-bold text-orange-900 leading-relaxed flex-1 min-w-0">Pencairan dana diproses setiap hari kerja. Pastikan nomor rekening sudah benar sebelum melakukan penarikan.</p>
                             </div>
                             
                             <div>
@@ -1070,7 +1114,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                     </div>
                                                     <div className="min-w-0 flex-1">
                                                         <p className="text-xs font-black text-gray-900 flex items-center gap-1.5 min-w-0">
-                                                            <span className="truncate flex-1">{tx.title}</span>
+                                                            <span className="block truncate flex-1">{tx.title}</span>
                                                             {tx.type === 'OUT' && tx.status === 'pending' && (
                                                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800 uppercase tracking-wider shrink-0">Diproses</span>
                                                             )}
@@ -1198,7 +1242,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
 
     const render = (
-        <div className="min-h-screen bg-gray-50 font-sans flex">
+        <div className="min-h-screen bg-gray-50 font-sans flex flex-col lg:flex-row w-full max-w-full overflow-x-hidden">
 
             {/* ── DESKTOP SIDEBAR ───────────────────────────────────────────── */}
             <aside className="hidden lg:flex w-64 xl:w-72 shrink-0 flex-col bg-white border-r border-gray-100 fixed top-0 left-0 h-full z-30 shadow-sm">
@@ -1254,14 +1298,14 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     ))}
                 </nav>
 
-                {/* Back to Site */}
-                <div className="p-4">
+                {/* Logout */}
+                <div className="p-4 border-t border-gray-50">
                     <button
-                        onClick={() => onPageChange?.(Page.HOME)}
+                        onClick={() => onLogout?.()}
                         className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
                     >
                         <LogOut size={18} />
-                        Kembali ke Beranda
+                        Keluar Akun
                     </button>
                 </div>
             </aside>
@@ -1299,11 +1343,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         </nav>
                         <div className="p-4 border-t border-gray-50">
                             <button
-                                onClick={() => onPageChange?.(Page.HOME)}
+                                onClick={() => { onLogout?.(); setMobileSidebarOpen(false); }}
                                 className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
                             >
                                 <LogOut size={18} />
-                                Kembali ke Beranda
+                                Keluar Akun
                             </button>
                         </div>
                     </aside>

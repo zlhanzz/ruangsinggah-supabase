@@ -232,24 +232,27 @@ const Home: React.FC<HomeProps> = ({ onPageChange, onKostSelect, user, listings 
 
       <QuickActionMenu onAction={(page) => onPageChange(page)} />
 
-      <section className="bg-white py-8 sm:py-16 rounded-t-[3rem] sm:rounded-t-[4rem] -mt-6 relative z-30 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)] border-t border-gray-100">
+      <section className="bg-white py-6 sm:py-16 rounded-t-[2.5rem] sm:rounded-t-[4rem] -mt-6 relative z-30 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)] border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 sm:mb-12">
+          <div className="flex items-end justify-between mb-6 sm:mb-12">
             <div>
-              <div className="flex items-center gap-3 mb-4">
-                <span className="h-[2px] w-8 bg-orange-500"></span>
-                <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Rekomendasi Utama</span>
+              <div className="flex items-center gap-2 mb-2 sm:mb-4">
+                <span className="h-[2px] w-4 sm:w-8 bg-orange-500"></span>
+                <span className="text-[9px] sm:text-[10px] font-black text-orange-500 uppercase tracking-widest">Rekomendasi Utama</span>
               </div>
-              <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black text-gray-900 tracking-tighter uppercase leading-tight">
-                Kost Pilihan <br className="sm:hidden" /> <span className="text-gray-400">Hari Ini</span>
+              <h2 className="text-xl sm:text-4xl lg:text-5xl font-black text-gray-900 tracking-tighter uppercase leading-none">
+                Kost Pilihan <span className="text-gray-400">Hari Ini</span>
               </h2>
             </div>
             <button
               onClick={() => onPageChange(Page.LISTINGS)}
-              className="mt-6 md:mt-0 flex items-center gap-4 bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white px-5 py-3.5 sm:px-6 sm:py-4 rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-widest transition-all active:scale-95 group"
+              className="flex items-center gap-2 bg-orange-50 hover:bg-orange-500 text-orange-600 hover:text-white px-4 py-2.5 sm:px-6 sm:py-4 rounded-xl sm:rounded-2xl font-black text-[9px] sm:text-xs uppercase tracking-widest transition-all active:scale-95 group shrink-0"
             >
-              Lihat Katalog Lengkap
-              <span className="h-2 w-2 rounded-full bg-orange-500 group-hover:bg-white animate-pulse"></span>
+              <span className="hidden sm:inline">Lihat Katalog Lengkap</span>
+              <span className="sm:hidden">Lihat Semua</span>
+              <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
             </button>
           </div>
 

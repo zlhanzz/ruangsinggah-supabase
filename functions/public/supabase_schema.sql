@@ -35,6 +35,33 @@ CREATE TABLE IF NOT EXISTS public.users (
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Tabel AGENTS (Relasi 1-to-1 dengan users)
+CREATE TABLE IF NOT EXISTS public.agents (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id             UUID REFERENCES public.users(id) ON DELETE CASCADE UNIQUE,
+  referral_code       TEXT UNIQUE NOT NULL,
+  verification_status TEXT NOT NULL DEFAULT 'unverified', -- unverified, pending, verified
+  ktp_number          TEXT,
+  ktp_address         TEXT,
+  ktp_photo_url       TEXT,
+  verification_notes  TEXT,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Tabel MITRA (Relasi 1-to-1 dengan users)
+CREATE TABLE IF NOT EXISTS public.mitra (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id             UUID REFERENCES public.users(id) ON DELETE CASCADE UNIQUE,
+  referred_by         TEXT, -- Kode referral agen sponsor (jika ada)
+  business_name       TEXT,
+  business_address    TEXT,
+  subscription_status TEXT NOT NULL DEFAULT 'free', -- free, kostmanager
+  subscription_expires_at TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Pastikan semua kolom ada meskipun tabel sudah existed sebelumnya
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS email               TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS name                TEXT;
@@ -261,6 +288,8 @@ ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.properties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.available_databases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mitra_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.agents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mitra ENABLE ROW LEVEL SECURITY;
 
 
 -- ============================================================
@@ -300,6 +329,17 @@ DROP POLICY IF EXISTS "Siapa saja dapat submit mitra request"         ON public.
 DROP POLICY IF EXISTS "Admin dapat melihat semua mitra requests"      ON public.mitra_requests;
 DROP POLICY IF EXISTS "Admin dapat update status mitra"               ON public.mitra_requests;
 
+-- Drop policies baru untuk agents dan mitra
+DROP POLICY IF EXISTS "agents_select_own" ON public.agents;
+DROP POLICY IF EXISTS "agents_select_public_referral" ON public.agents;
+DROP POLICY IF EXISTS "agents_update_own" ON public.agents;
+DROP POLICY IF EXISTS "agents_insert_own" ON public.agents;
+DROP POLICY IF EXISTS "agents_admin_all" ON public.agents;
+DROP POLICY IF EXISTS "mitra_select_own" ON public.mitra;
+DROP POLICY IF EXISTS "mitra_update_own" ON public.mitra;
+DROP POLICY IF EXISTS "mitra_insert_own" ON public.mitra;
+DROP POLICY IF EXISTS "mitra_admin_all" ON public.mitra;
+
 
 -- ============================================================
 -- STEP 5: POLICIES untuk tabel USERS
@@ -335,6 +375,23 @@ CREATE POLICY "users_update_admin"
 CREATE POLICY "users_select_basic_profile" 
   ON public.users FOR SELECT 
   USING (auth.uid() IS NOT NULL);
+
+-- ============================================================
+-- POLICIES untuk tabel AGENTS
+-- ============================================================
+CREATE POLICY "agents_select_public_referral" ON public.agents FOR SELECT USING (true);
+CREATE POLICY "agents_select_own" ON public.agents FOR SELECT USING (auth.uid() = user_id OR public.is_admin());
+CREATE POLICY "agents_update_own" ON public.agents FOR UPDATE USING (auth.uid() = user_id OR public.is_admin());
+CREATE POLICY "agents_insert_own" ON public.agents FOR INSERT WITH CHECK (auth.uid() = user_id OR public.is_admin());
+CREATE POLICY "agents_admin_all" ON public.agents FOR ALL USING (public.is_admin());
+
+-- ============================================================
+-- POLICIES untuk tabel MITRA
+-- ============================================================
+CREATE POLICY "mitra_select_own" ON public.mitra FOR SELECT USING (auth.uid() = user_id OR public.is_admin());
+CREATE POLICY "mitra_update_own" ON public.mitra FOR UPDATE USING (auth.uid() = user_id OR public.is_admin());
+CREATE POLICY "mitra_insert_own" ON public.mitra FOR INSERT WITH CHECK (auth.uid() = user_id OR public.is_admin());
+CREATE POLICY "mitra_admin_all" ON public.mitra FOR ALL USING (public.is_admin());
 
 
 -- ============================================================
@@ -438,14 +495,25 @@ RETURNS TRIGGER AS $$
 BEGIN
   -- Hanya sinkronisasi ke public.users jika email sudah diverifikasi
   IF (NEW.email_confirmed_at IS NOT NULL) THEN
-    INSERT INTO public.users (id, email, full_name, name, phone, role, is_admin, created_at, updated_at)
+    -- 1. Insert/Update data dasar ke public.users
+    INSERT INTO public.users (
+      id, 
+      email, 
+      full_name, 
+      name, 
+      phone, 
+      role, 
+      is_admin, 
+      created_at, 
+      updated_at
+    )
     VALUES (
       NEW.id,
       NEW.email,
       COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)),
       COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)),
       NEW.raw_user_meta_data->>'phone',
-      'user',
+      COALESCE(NEW.raw_user_meta_data->>'role', 'user'),
       FALSE,
       NOW(),
       NOW()
@@ -455,7 +523,35 @@ BEGIN
       full_name = EXCLUDED.full_name,
       name = EXCLUDED.name,
       phone = EXCLUDED.phone,
+      role = COALESCE(EXCLUDED.role, public.users.role),
       updated_at = NOW();
+
+    -- 2. Jika role adalah owner atau mitra, masukkan ke tabel public.mitra
+    IF (COALESCE(NEW.raw_user_meta_data->>'role', 'user') IN ('owner', 'mitra')) THEN
+      INSERT INTO public.mitra (user_id, referred_by, created_at, updated_at)
+      VALUES (
+        NEW.id,
+        NEW.raw_user_meta_data->>'referred_by',
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT (user_id) DO UPDATE SET
+        referred_by = COALESCE(EXCLUDED.referred_by, public.mitra.referred_by),
+        updated_at = NOW();
+    END IF;
+
+    -- 3. Jika role adalah survey_agent, masukkan ke tabel public.agents
+    IF (COALESCE(NEW.raw_user_meta_data->>'role', 'user') = 'survey_agent') THEN
+      INSERT INTO public.agents (user_id, referral_code, created_at, updated_at)
+      VALUES (
+        NEW.id,
+        COALESCE(NEW.raw_user_meta_data->>'referral_code', 'AG-' || upper(substring(md5(random()::text) from 1 for 6))),
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT (user_id) DO NOTHING;
+    END IF;
+
   END IF;
   RETURN NEW;
 END;
@@ -868,3 +964,34 @@ CREATE POLICY "notifications_insert_system"
 
 -- AKTIFKAN REALTIME
 ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+
+
+-- ============================================================
+-- STEP 17: RETROACTIVE DATA MIGRATION (Lari setelah tabel baru terbuat)
+-- ============================================================
+-- A. Migrasi user dengan role agen ke tabel agents
+INSERT INTO public.agents (user_id, referral_code, verification_status, ktp_number, ktp_address, ktp_photo_url, verification_notes, created_at, updated_at)
+SELECT 
+  id as user_id,
+  COALESCE(referral_code, 'AG-' || upper(substring(md5(random()::text) from 1 for 6))) as referral_code,
+  verification_status,
+  ktp_number,
+  ktp_address,
+  ktp_photo_url,
+  verification_notes,
+  created_at,
+  updated_at
+FROM public.users
+WHERE role IN ('survey_agent', 'agen', 'agent')
+ON CONFLICT (user_id) DO NOTHING;
+
+-- B. Migrasi user dengan role owner/mitra ke tabel mitra
+INSERT INTO public.mitra (user_id, referred_by, created_at, updated_at)
+SELECT 
+  id as user_id,
+  referred_by,
+  created_at,
+  updated_at
+FROM public.users
+WHERE role IN ('owner', 'mitra')
+ON CONFLICT (user_id) DO NOTHING;

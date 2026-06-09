@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { Page } from '../types';
+import { sendWhatsAppTemplate } from '../whatsappService';
 
 interface LoginProps {
   onLoginSuccess?: () => void;
@@ -59,6 +60,15 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
+  const [activeRole, setActiveRole] = useState<'user' | 'owner'>('user');
+  const [referralCode, setReferralCode] = useState('');
+
+  // WhatsApp OTP states
+  const [waOtpCode, setWaOtpCode] = useState('');
+  const [waOtpInput, setWaOtpInput] = useState('');
+  const [isVerifyingWaOtp, setIsVerifyingWaOtp] = useState(false);
+  const [waOtpVerified, setWaOtpVerified] = useState(false);
+  const [waResendTimer, setWaResendTimer] = useState(0);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -88,6 +98,13 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setShowNewPassword(false);
     setShowConfirmPassword(false);
     setResendTimer(0);
+    setActiveRole('user');
+    setReferralCode('');
+    setWaOtpCode('');
+    setWaOtpInput('');
+    setIsVerifyingWaOtp(false);
+    setWaOtpVerified(false);
+    setWaResendTimer(0);
   };
 
   useEffect(() => {
@@ -116,13 +133,14 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
   useEffect(() => {
     let interval: any;
-    if (resendTimer > 0) {
+    if (resendTimer > 0 || waResendTimer > 0) {
       interval = setInterval(() => {
-        setResendTimer((prev) => prev - 1);
+        if (resendTimer > 0) setResendTimer((prev) => prev - 1);
+        if (waResendTimer > 0) setWaResendTimer((prev) => prev - 1);
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [resendTimer]);
+  }, [resendTimer, waResendTimer]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,7 +194,75 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       return;
     }
 
+    // Intersepsi verifikasi OTP WhatsApp jika role adalah owner (Mitra) dan belum diverifikasi
+    if (activeRole === 'owner' && !waOtpVerified) {
+      try {
+        const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+        setWaOtpCode(generatedOtp);
+        
+        // Kirim OTP WhatsApp
+        const res = await sendWhatsAppTemplate({
+          to: finalPhone,
+          templateName: 'otp_verification',
+          languageCode: 'id',
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', text: generatedOtp }
+              ]
+            }
+          ]
+        });
+
+        if (!res.success) {
+          console.warn('Gagal mengirim template otp_verification, mencoba fallback hello_world...', res.error);
+          
+          // Fallback ke hello_world untuk sandbox
+          const fallbackRes = await sendWhatsAppTemplate({
+            to: finalPhone,
+            templateName: 'hello_world',
+            languageCode: 'en_US'
+          });
+
+          if (!fallbackRes.success) {
+            setErrorMsg('Gagal mengirim OTP WhatsApp. Hubungi admin atau coba nomor lain.');
+            setLoading(false);
+            return;
+          }
+          
+          console.log('Sandbox Mode: Gunakan kode OTP yang ter-generate di console atau OTP standar.', generatedOtp);
+        }
+
+        setIsVerifyingWaOtp(true);
+        setWaResendTimer(60);
+      } catch (error: any) {
+        setErrorMsg(`Gagal mengirim OTP: ${error.message}`);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    await executeFinalRegister();
+  };
+
+  const executeFinalRegister = async () => {
+    setLoading(true);
+    setErrorMsg('');
+
+    const normalizePhone = (p: string) => {
+      if (!p) return '';
+      let clean = p.replace(/\D/g, ''); 
+      if (clean.startsWith('0')) clean = clean.substring(1);
+      if (clean.startsWith('62')) clean = clean.substring(2);
+      return `+62${clean}`;
+    };
+
+    const finalPhone = normalizePhone(formData.phone);
+
     try {
+      const trimmedReferral = referralCode.trim().toUpperCase();
       const response = await fetch('https://handlecustomauthemail-hzxlewhsuq-uc.a.run.app', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -187,7 +273,9 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           metadata: {
             full_name: formData.name,
             name: formData.name,
-            phone: finalPhone
+            phone: finalPhone,
+            role: activeRole,
+            referred_by: activeRole === 'owner' && trimmedReferral ? trimmedReferral : undefined
           }
         })
       });
@@ -202,6 +290,80 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       setResendTimer(120);
     } catch (error: any) {
       setErrorMsg(getErrorMessage(error.message || 'unknown'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyWaOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    
+    if (waOtpInput.trim() === waOtpCode) {
+      setWaOtpVerified(true);
+      setIsVerifyingWaOtp(false);
+      // Pemicu pendaftaran email sesungguhnya setelah OTP WA sukses
+      setTimeout(() => {
+        executeFinalRegister();
+      }, 100);
+    } else {
+      setErrorMsg('Kode OTP WhatsApp yang Anda masukkan salah. Silakan periksa kembali.');
+    }
+  };
+
+  const handleResendWaOtp = async () => {
+    if (waResendTimer > 0) return;
+    setErrorMsg('');
+    setSuccessMsg('');
+    setLoading(true);
+
+    const normalizePhone = (p: string) => {
+      if (!p) return '';
+      let clean = p.replace(/\D/g, ''); 
+      if (clean.startsWith('0')) clean = clean.substring(1);
+      if (clean.startsWith('62')) clean = clean.substring(2);
+      return `+62${clean}`;
+    };
+
+    const finalPhone = normalizePhone(formData.phone);
+
+    try {
+      const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+      setWaOtpCode(generatedOtp);
+
+      const res = await sendWhatsAppTemplate({
+        to: finalPhone,
+        templateName: 'otp_verification',
+        languageCode: 'id',
+        components: [
+          {
+            type: 'body',
+            parameters: [
+              { type: 'text', text: generatedOtp }
+            ]
+          }
+        ]
+      });
+
+      if (!res.success) {
+        console.warn('Gagal mengirim template otp_verification, mencoba fallback hello_world...', res.error);
+        const fallbackRes = await sendWhatsAppTemplate({
+          to: finalPhone,
+          templateName: 'hello_world',
+          languageCode: 'en_US'
+        });
+
+        if (!fallbackRes.success) {
+          setErrorMsg('Gagal mengirim ulang OTP WhatsApp.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      setSuccessMsg('Kode OTP baru telah dikirim ke WhatsApp Anda.');
+      setWaResendTimer(60);
+    } catch (error: any) {
+      setErrorMsg(`Gagal mengirim ulang OTP: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -309,6 +471,108 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
   };
 
+  if (isVerifyingWaOtp) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 animate-in fade-in duration-300">
+        <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-xl border border-gray-100 overflow-hidden p-8 text-center animate-in zoom-in-95">
+          <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-10 h-10 text-orange-600" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.717-1.454L0 24zm6.59-4.846c1.6.95 3.167 1.485 4.95 1.486 5.432-.001 9.853-4.425 9.856-9.86.002-2.63-1.023-5.105-2.887-6.97-1.863-1.865-4.343-2.893-6.975-2.894-5.436 0-9.86 4.423-9.863 9.859 0 1.802.474 3.562 1.378 5.124l-.993 3.629 3.734-.974zm11.315-7.3c-.302-.15-1.786-.882-2.062-.983-.277-.1-.478-.15-.679.15-.2.3-.778.983-.954 1.184-.176.2-.352.225-.654.075-.302-.15-1.276-.47-2.43-1.499-.898-.8-1.503-1.79-1.679-2.091-.176-.3-.019-.462.131-.612.135-.135.302-.35.453-.525.151-.175.201-.3.302-.5.101-.2.05-.376-.025-.526-.075-.15-.679-1.636-.93-2.24-.244-.587-.492-.507-.679-.517-.176-.009-.377-.01-.578-.01-.2 0-.528.075-.804.376-.277.301-1.057 1.033-1.057 2.52 0 1.488 1.082 2.922 1.233 3.123.15.201 2.13 3.253 5.16 4.561.72.311 1.282.497 1.719.636.724.23 1.383.197 1.902.12.578-.086 1.786-.73 2.038-1.434.252-.703.252-1.306.176-1.433-.075-.127-.277-.202-.579-.352z"/>
+            </svg>
+          </div>
+          
+          <h2 className="text-2xl font-black text-gray-900 mb-2 leading-tight">Verifikasi OTP WhatsApp</h2>
+          <p className="text-gray-500 mb-6 leading-relaxed text-sm">
+            Kami telah mengirimkan kode OTP 6-digit ke nomor WhatsApp Anda:<br />
+            <strong className="text-gray-800">{formData.phone.startsWith('+62') ? formData.phone : `+62 ${formData.phone}`}</strong>
+          </p>
+
+          {errorMsg && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+              <svg className="w-5 h-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <p className="text-xs font-bold text-red-500 text-left">{errorMsg}</p>
+            </div>
+          )}
+
+          {successMsg && (
+            <div className="mb-6 p-4 bg-green-50 border border-green-100 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+              <svg className="w-5 h-5 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <p className="text-xs font-bold text-green-500 text-left">{successMsg}</p>
+            </div>
+          )}
+
+          {/* Developer Sandbox Testing Helper */}
+          {waOtpCode && (
+            <div className="mb-6 p-4 bg-orange-50 border border-orange-100 rounded-xl text-left animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+                <span className="text-[10px] font-black text-orange-600 uppercase tracking-wider">Mode Pengujian Sandbox</span>
+              </div>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Karena portofolio bisnis Meta Anda sedang dalam verifikasi, masukkan kode OTP pengujian berikut: <strong className="text-orange-600 font-mono text-sm">{waOtpCode}</strong>
+              </p>
+            </div>
+          )}
+
+          <form onSubmit={handleVerifyWaOtp} className="space-y-6">
+            <div>
+              <input
+                type="text"
+                required
+                maxLength={6}
+                placeholder="000000"
+                className="w-full text-center tracking-[1em] font-mono text-3xl bg-gray-50 border border-gray-100 rounded-2xl py-4 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
+                value={waOtpInput}
+                onChange={(e) => setWaOtpInput(e.target.value.replace(/\D/g, ''))}
+              />
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                type="button"
+                onClick={() => { setIsVerifyingWaOtp(false); setErrorMsg(''); setSuccessMsg(''); }}
+                className="flex-1 bg-gray-100 text-gray-700 font-bold py-4 rounded-xl hover:bg-gray-200 transition-all active:scale-95"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={loading || waOtpInput.length !== 6}
+                className={`flex-1 bg-orange-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                  (loading || waOtpInput.length !== 6) ? 'opacity-70 cursor-not-allowed' : 'hover:bg-orange-600'
+                }`}
+              >
+                {loading && (
+                  <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                )}
+                Verifikasi
+              </button>
+            </div>
+          </form>
+
+          <div className="mt-8 text-center">
+            {waResendTimer > 0 ? (
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                Kirim ulang OTP dalam {waResendTimer} detik
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={handleResendWaOtp}
+                className="text-orange-500 font-bold text-sm hover:underline"
+              >
+                Kirim Ulang Kode OTP via WhatsApp
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (verificationSent) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -361,16 +625,50 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-xl border border-gray-100 overflow-hidden">
         <div className="p-8 sm:p-12">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl font-extrabold text-gray-900">
-              {mode === 'LOGIN' && 'Selamat Datang!'}
-              {mode === 'REGISTER' && 'Buat Akun Baru'}
+          
+          {/* Segmented Tab Pemilih Peran di Atas */}
+          {(mode === 'LOGIN' || mode === 'REGISTER') && (
+            <div className="mb-8">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest text-center mb-3">Portal Akses Masuk / Daftar</label>
+              <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-2xl">
+                <button
+                  type="button"
+                  onClick={() => { setActiveRole('user'); setErrorMsg(''); }}
+                  className={`py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                    activeRole === 'user'
+                      ? 'bg-white text-orange-500 shadow-md scale-[1.02]'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                  Pencari Kost
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setActiveRole('owner'); setErrorMsg(''); }}
+                  className={`py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                    activeRole === 'owner'
+                      ? 'bg-white text-orange-500 shadow-md scale-[1.02]'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                  Pemilik Kost
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-extrabold text-gray-900 leading-tight">
+              {mode === 'LOGIN' && (activeRole === 'user' ? 'Masuk Pencari Kost' : 'Masuk Pemilik Kost')}
+              {mode === 'REGISTER' && (activeRole === 'user' ? 'Daftar Pencari Kost' : 'Daftar Pemilik Kost')}
               {mode === 'FORGOT_PASSWORD' && 'Reset Kata Sandi'}
               {mode === 'PASSWORD_UPDATE' && 'Setel Sandi Baru'}
             </h2>
-            <p className="mt-2 text-sm text-gray-500">
-              {mode === 'LOGIN' && 'Masuk dan temukan kost favoritmu'}
-              {mode === 'REGISTER' && 'Daftar & Verifikasi untuk akses penuh'}
+            <p className="mt-2 text-xs text-gray-500">
+              {mode === 'LOGIN' && (activeRole === 'user' ? 'Masuk dan temukan kost favoritmu' : 'Masuk untuk mengelola kost & langganan')}
+              {mode === 'REGISTER' && (activeRole === 'user' ? 'Daftar & Verifikasi untuk akses penuh' : 'Daftar sebagai mitra untuk mengelola properti Anda')}
               {mode === 'FORGOT_PASSWORD' && 'Masukkan email yang terdaftar'}
               {mode === 'PASSWORD_UPDATE' && 'Masukkan kata sandi baru Anda'}
             </p>
@@ -420,7 +718,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                   <input
                     type="text"
                     required
-                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all"
+                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all font-medium"
                     placeholder="Budi Santoso"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -445,6 +743,21 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     />
                   </div>
                 </div>
+                {activeRole === 'owner' && (
+                  <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-xs font-bold text-gray-400 uppercase">Kode Referral Agen (Opsional)</label>
+                      <span className="text-[10px] font-black text-orange-500 bg-orange-50 px-2 py-0.5 rounded-md">Mitra Baru</span>
+                    </div>
+                    <input
+                      type="text"
+                      className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all font-mono placeholder:font-sans uppercase"
+                      placeholder="AG-XXXXXX"
+                      value={referralCode}
+                      onChange={(e) => setReferralCode(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
             )}
 

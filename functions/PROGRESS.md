@@ -2,7 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 1. Perombakan Sistem Survey Multi-Kost (Mei 2026)
+### 1. Optimasi Menyeluruh Dashboard Mitra (Owner) (Juni 2026)
+- **Sistem Tarik Dana (Wallet/WD) Pemilik Kost**:
+  - Menghubungkan tombol "Tarik Dana Sekarang" pada dashboard pemilik dengan alur penarikan dana terverifikasi.
+  - Menambahkan modal konfirmasi penarikan yang menampilkan detail rekening bank (bank, no rek, atas nama) dan total nominal dengan validasi batas saldo minimal Rp 10.000.
+  - Memperbarui fungsi pengiriman data ke database Supabase pada tabel `withdrawal_requests` (mengisi kolom `agent_id` menggunakan UID pemilik) dan mengirim notifikasi email ke Admin via FormSubmit.
+  - Mengubah tampilan saldo dompet agar merujuk ke `stats.availableBalance` secara dinamis (didapat dari total pendapatan sewa dikurangi total penarikan non-rejected).
+- **Penggabungan Riwayat Transaksi Dompet (Unified History)**:
+  - Menggabungkan riwayat pembayaran pesanan sewa (`bookings` berstatus PAID/COMPLETED) sebagai arus masuk (IN) dan pengajuan penarikan dana (`withdrawal_requests`) sebagai arus keluar (OUT) ke dalam satu linimasa transaksi tunggal secara kronologis.
+- **Manajemen Properti/Kost Aktif**:
+  - Menghidupkan tombol "Preview" kost agar mengalihkan pengguna ke halaman detail kost publik `/kost/:id` yang sesuai.
+  - Menambahkan tombol aksi Hapus Kost (ikon `Trash2` berwarna merah) lengkap dengan dialog konfirmasi aman untuk menghapus iklan langsung dari database Supabase (`properties`).
+- **Penanganan Dependensi Hilang (Compile Safety)**:
+  - Menambahkan impor `getOrCreateChatSession` yang sebelumnya terlewat untuk menghindari error runtime pada inisiasi chat pemilik kost.
+
+### 2. Verifikasi OTP WhatsApp pada Pendaftaran Mitra & Pemindahan Info Referral (Juni 2026)
+- **Interseptor Pendaftaran Pemilik Kost**: Menambahkan gerbang verifikasi 2-Faktor sebelum pengiriman tautan konfirmasi email.
+- **Pengiriman OTP Otomatis**: Menghasilkan OTP 6-digit acak dan mengirimkannya melalui Meta Cloud API (`sendWhatsAppTemplate`) dengan fallback aman.
+- **UI Premium & Responsif**: Halaman input OTP minimalis yang responsif, lengkap dengan countdown kirim ulang 60 detik dan tombol pembatalan.
+- **Pemindahan Banner Referral Agen**: Menyingkirkan kartu/banner Program Kemitraan Agen (Referral) dari halaman beranda/overview [AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/pages/AgentDashboard.tsx) dan memindahkannya ke dalam tab Profil di [AgentProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/pages/AgentProfile.tsx) dengan tambahan fungsionalitas tombol "Salin" kode referral secara langsung.
+- **Desain Header Rekomendasi Utama Ultra-Kompak**: Merombak total bagian "Kost Pilihan Hari Ini" di [Home.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/pages/Home.tsx) pada layar mobile agar tidak memakan banyak ruang vertikal. Judul dan tombol navigasi disusun berdampingan secara horizontal (*side-by-side*), teks tombol otomatis menyesuaikan menjadi "Lihat Semua" dengan ikon panah minimalis, serta mengurangi tinggi padding bagian tersebut agar tetap keren, simpel, informatif, dan fungsional.
+
+### 3. Perombakan Sistem Survey Multi-Kost (Mei 2026)
 - **Consolidated Order-based Detail Page**: Merombak tampilan model "N-card" yang terpisah menjadi 1 halaman detail pesanan berbasis transaksi yang elegan, bersih, dan premium di `MyKost.tsx`.
 - **Granular Multi-Kost Sync (`adminService.ts`)**: Modifikasi `syncSurveyRequest` untuk secara otomatis mengiterasi dan menyisipkan N baris `survey_requests` unik untuk setiap kost yang didaftarkan (terhubung melalui `transaction_id` yang sama).
 - **Dashboard Petugas Terkonsolidasi (`SurveyManagement.tsx`)**: Mengelompokkan seluruh survey_requests berdasarkan transaksi di panel Admin/Agen, memungkinkan petugas mengelola status, checklist, foto, dan komunikasi per unit kost secara terpadu.
@@ -173,6 +194,23 @@
 ### 35. Perbaikan Responsivitas Layout Dompet & Pendapatan Agen (Juni 2026)
 - **Pencegahan Horizontal Overflow**: Mengintegrasikan `min-w-0` pada flexbox row transaksi dan menerapkan efek `truncate` pada properti judul transaksi (`tx.title`) yang sering kali diisi oleh URL Google Maps panjang. Ini mencegah container membesar ke kanan.
 - **Penyelarasan Teks Tab Navigasi**: Menurunkan ukuran font tab dompet menjadi `text-[10px] sm:text-xs` dan memperpendek letter spacing menjadi `tracking-wider` agar muat dalam area layar handphone tanpa terpotong.
+
+### 36. Menyembunyikan Footer Global di Halaman Dashboard & Perbaikan Layout Dompet (Juni 2026)
+- **Kondisional Footer di `App.tsx`**: Mengubah variabel `isDashboardPage` agar mencakup Admin (`Page.DASHBOARD_ADMIN`), Agent (`Page.DASHBOARD_AGENT`), Mitra (`Page.DASHBOARD_MITRA`), dan Owner (`Page.DASHBOARD_OWNER`) dashboard, lalu menyembunyikan footer global di halaman-halaman tersebut (`{!isDashboardPage && <Footer ... />}`). Ini menghasilkan dashboard yang bersih dan menghilangkan horizontal overflow yang disebabkan footer global pada viewport seluler.
+- **Integrasi Fitur Logout Agen**: Mengalirkan callback `onLogout` dari `App.tsx` via `Dashboard.tsx` ke `AgentDashboard.tsx`. Menyediakan tombol "Keluar Akun" (penghapusan session login dengan ikon `LogOut`) pada sidebar desktop dan mobile overlay untuk proses sign-out yang aman dari Supabase Auth, serta menghapus opsi "Kembali ke Beranda" agar dashboard tetap fokus pada operasional agen.
+
+### 37. Sistem Kode Referral Khusus Agen Survey (Juni 2026)
+- **Autogenerasi Kode Referral Agen**: Mengimplementasikan autogenerasi kode referral berformat `AG-XXXXXX` pada `AgentDashboard.tsx` apabila profil agen terdeteksi belum memiliki kode referral. Kode ini disimpan otomatis ke dalam database Supabase.
+- **Pembaruan UI Dashboard & Profil**: Menampilkan banner info program kemitraan (referral) dengan gradien warna premium orange-kuning lengkap dengan tombol "Salin Kode" pada dashboard agen, serta menayangkan field non-editable "Kode Referral" pada detail halaman profil agen (`AgentProfile.tsx`).
+- **Skema database**: Menambahkan dokumentasi kolom `referral_code` unik pada file `supabase_schema.sql` untuk memudahkan sinkronisasi struktur tabel.
+
+### 38. Sistem Afiliasi Referral Agen & Pendaftaran Tersegmentasi dengan Tabel Terpisah (Juni 2026)
+- **Desain UI Gateway Switcher Terpadu (`Login.tsx`)**: Mendesain ulang formulir auth dengan switch tab modern dan premium di bagian paling atas kartu utama yang berlaku untuk mode **LOGIN** maupun **REGISTER** guna membagi peran pendaftar secara eksplisit: "Pencari Kost" (peran: `user`) dan "Pemilik Kost" (peran: `owner`).
+- **Judul & Teks Dinamis**: Menyesuaikan judul, subjudul, dan deskripsi formulir secara dinamis berdasarkan peran aktif dan mode auth yang sedang diakses.
+- **Input Kode Referral Kondisional**: Menambahkan field input Kode Referral Agen ("AG-XXXXXX") opsional yang hanya muncul ketika pendaftar memilih peran "Pemilik Kost" (Mitra). Input otomatis diselaraskan ke format huruf kapital (*uppercase*) dan dibersihkan dari spasi berlebih untuk menghindari kesalahan penulisan.
+- **Pelekatan Afiliasi Metadata Registrasi**: Menghubungkan parameter `role` dan `referred_by` ke payload metadata fetch request saat mendaftar lewat API serverless Cloud Function.
+- **Normalisasi Database & Trigger (`supabase_schema.sql`)**: Membuat tabel terpisah `public.agents` dan `public.mitra` yang terhubung 1-to-1 dengan tabel `public.users` lengkap dengan kebijakan keamanan Row Level Security (RLS). Memodifikasi fungsi trigger database `handle_new_user()` agar otomatis memetakan dan menyisipkan data profil ke tabel `agents` atau `mitra` yang sesuai berdasarkan peran akun saat konfirmasi email berhasil, serta mendukung migrasi retroaktif data user lama dengan aman.
+- **Integrasi Dashboard & Profil Agen (`AgentDashboard.tsx` & `AgentProfile.tsx`)**: Menyesuaikan pembacaan dan pembaruan kode referral agar terhubung langsung dengan tabel `public.agents` alih-alih `public.users`.
 
 ## Fitur Dalam Pengerjaan (In Progress)
 -   Monitoring konsistensi Webhook Midtrans vs Supabase untuk transaksi multi-kost.

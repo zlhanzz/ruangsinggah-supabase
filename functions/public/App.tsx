@@ -376,6 +376,8 @@ const App: React.FC = () => {
   const isDashboardPage = [
     Page.DASHBOARD_ADMIN,
     Page.DASHBOARD_AGENT,
+    Page.DASHBOARD_MITRA,
+    Page.DASHBOARD_OWNER,
   ].some(p => location.pathname.startsWith(p));
 
   // --- WRAPPER FOR DEEP LINK DETAIL ---
@@ -582,6 +584,7 @@ const App: React.FC = () => {
                   uid={user?.id} 
                   verificationStatus={user?.verification_status}
                   onPageChange={(p: Page) => navigate(p)} 
+                  onLogout={handleLogout}
                   listings={listings} 
                   onAdd={handleAddKost} 
                   onEdit={handleEditKost} 
@@ -616,6 +619,7 @@ const App: React.FC = () => {
                   uid={user?.id} 
                   verificationStatus={user?.verification_status}
                   onPageChange={(p: Page) => navigate(p)} 
+                  onLogout={handleLogout}
                   listings={listings} 
                   onAdd={handleAddKost} 
                   onEdit={handleEditKost} 
@@ -643,7 +647,7 @@ const App: React.FC = () => {
         )}
       </main>
 
-      <Footer onPageChange={(p: Page) => navigate(p)} />
+      {!isDashboardPage && <Footer onPageChange={(p: Page) => navigate(p)} />}
     </div>
   );
 };

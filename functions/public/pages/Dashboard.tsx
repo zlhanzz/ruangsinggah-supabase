@@ -83,6 +83,7 @@ interface DashboardProps {
     onRefreshListings?: () => void; // Re-fetch public listings setelah admin save
     verificationStatus?: string;
     user?: any;
+    onLogout?: () => void;
 }
 
 // Leaflet Type Definition stub
@@ -191,7 +192,7 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
 
 type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_extension' | 'transactions_db' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'wallet' | 'tenants' | 'active_tenants' | 'agent_verification' | 'banners' | 'articles' | 'withdrawals';
 
-const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, listings = [], onAdd, onEdit, onDelete, onRefreshListings, verificationStatus }) => {
+const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, onLogout, listings = [], onAdd, onEdit, onDelete, onRefreshListings, verificationStatus }) => {
     const isAdmin = role === 'admin';
     const isAgent = role === 'survey_agent' || role === 'agen';
     const isOwner = role === 'owner' || role === 'mitra';
@@ -2673,6 +2674,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                 loadSurveyRequests={loadSurveyRequests}
                 activeMenu={activeMenu as any}
                 onMenuChange={handleMenuChange as any}
+                onLogout={onLogout}
+                onPageChange={onPageChange}
             />
         );
     }

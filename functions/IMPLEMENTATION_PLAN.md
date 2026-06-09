@@ -1,28 +1,51 @@
-# IMPLEMENTATION PLAN - Perbaikan Layout Dompet/Wallet (Responsive Overflow - Tahap 2)
+# IMPLEMENTATION PLAN - Optimasi Menyeluruh Dashboard Mitra (Owner)
 
-Rencana ini dibuat untuk memperbaiki masalah horizontal overflow pada menu Dompet secara tuntas dengan menyetel flex item truncation yang benar dan membatasi lebar main content area.
+Rencana ini dibuat untuk mengoptimalkan fungsionalitas dan kinerja Dashboard Mitra (Overview, Manajemen Kost/Properties, Manajemen Pesanan/Bookings, dan Fitur Tarik Dana/Wallet).
 
 ## 1. Analisis Masalah
-- **Penyebab Layout Melar (Horizontal Overflow)**:
-  - Pada baris transaksi, tag `<p className="text-xs font-black text-gray-900 flex items-center gap-1.5 truncate">` disetel sebagai flex container (`flex`). 
-  - Di dalam flexbox, kelas `truncate` pada parent flex tidak berfungsi, dan child `<span>` yang berisi URL panjang tidak akan terpotong (truncate) karena parent `<p>` tidak memiliki properti `min-w-0`.
-  - Hal ini memaksa elemen baris transaksi melebar melebihi layar ponsel dan merusak seluruh grid halaman.
-- **Solusi**:
-  - Tambahkan properti `min-w-0` pada tag `<p>` flex container transaksi.
-  - Setel `flex-1 truncate` pada tag `<span>` yang membungkus `tx.title` agar text panjang (URL) terpotong dengan benar.
-  - Tambahkan `min-w-0 overflow-x-hidden` pada elemen `<main>` di `AgentDashboard.tsx` sebagai jaring pengaman agar layout halaman tidak akan pernah bisa melar secara horizontal pada layar ponsel.
+- **Fitur Tarik Dana (Wallet/WD)**:
+  - Tombol "Tarik Dana Sekarang" pada menu Dompet saat ini masih berupa tombol statis dan tidak memicu fungsionalitas pengiriman permintaan penarikan dana (`withdrawal_requests`) ke database Supabase.
+  - Perlu ditambahkan modal konfirmasi penarikan dana yang menampilkan detail rekening, nominal yang ditarik, dan validasi saldo (minimal Rp 10.000).
+  - Riwayat penarikan dana belum dimuat dari tabel `withdrawal_requests`.
+- **Manajemen Kost (Properties)**:
+  - Tombol preview kost di halaman "Kost Saya" belum mengarah ke halaman detail kost.
+  - Perlu penambahan fungsionalitas hapus kost (Delete) langsung dari dashboard.
+- **Manajemen Pesanan (Bookings)**:
+  - Desain tombol setuju/tolak dan layout kartu pesanan perlu diselaraskan agar responsif di perangkat mobile dan desktop.
+- **Pembersihan UI & UX**:
+  - Kurang adanya visual loader saat memproses penarikan atau aksi persetujuan pesanan.
 
 ## 2. Dampak Perubahan
-File yang akan disentuh:
-1. `functions/public/pages/AgentDashboard.tsx` (Update main wrapper classes dan class inline pada transaksi).
+File yang akan diubah:
+1. `functions/public/pages/MitraDashboard.tsx`:
+   - Impor `getOrCreateChatSession` dan `notifyAdminWithdrawalRequest` untuk memperbaiki dependensi yang hilang.
+   - Penambahan state `withdrawalHistory`, `isWithdrawing`, `showWithdrawConfirm`, dan nominal penarikan.
+   - Implementasi fungsi `loadData` untuk mengambil riwayat penarikan dari tabel `withdrawal_requests` dan menghitung:
+     - `allTimeRevenue` = jumlah semua bookings yang PAID/COMPLETED.
+     - `totalWithdrawn` = jumlah withdrawal requests dengan status !== 'rejected'.
+     - `availableBalance` = `allTimeRevenue - totalWithdrawn`.
+   - Menyimpan `availableBalance` ke dalam state `stats`.
+   - Implementasi fungsi `handleWithdraw` untuk mengirim pengajuan penarikan ke database Supabase.
+   - Menambahkan modal konfirmasi penarikan dana di menu `wallet` lengkap dengan pengecekan saldo minimal Rp 10.000.
+   - Hubungkan tombol "Tarik Dana Sekarang" ke modal tersebut.
+   - Pengaktifan tombol preview kost agar mengarah ke halaman detail kost `/kost/:id`.
+   - Penambahan aksi hapus kost (`handleDeleteKost`) dengan konfirmasi aman dan penghapusan data dari tabel `properties`.
+   - Penggabungan riwayat transaksi ( bookings PAID dan withdrawals ) secara kronologis berdasarkan waktu.
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Modifikasi `AgentDashboard.tsx`**:
-   - Di bagian `renderWallet`, ubah baris penulisan judul transaksi agar menggunakan `min-w-0` pada flex parent `<p>` dan `flex-1 truncate` pada `<span>` judul.
-   - Di bagian bawah file pada render elemen `<main>`, ubah kelasnya menjadi `flex-1 p-4 lg:p-8 pb-32 min-w-0 overflow-x-hidden`.
-2. **Verifikasi & Build**:
-   - Jalankan `npm run build` untuk memvalidasi keberhasilan kompilasi.
+1. **Modifikasi `MitraDashboard.tsx`**:
+   - Perbarui impor untuk menyertakan `getOrCreateChatSession` dari `../chatService` dan `notifyAdminWithdrawalRequest` dari `../emailService`.
+   - Deklarasikan state hooks baru untuk nominal penarikan, status penarikan, dan modal konfirmasi penarikan.
+   - Perbarui `loadData` untuk memuat riwayat penarikan dan hitung saldo yang tersedia.
+   - Implementasikan fungsi `handleWithdraw` dan modal konfirmasi penarikan.
+   - Implementasikan fungsi `handleDeleteKost` di panel kost saya.
+   - Hubungkan tombol "Preview" kost agar mengarah ke rute `/kost/:id` menggunakan `navigate`.
+   - Satukan riwayat transaksi ( bookings + withdrawals ) lalu urutkan secara descending berdasarkan waktu.
+2. **Kompilasi & Verifikasi**:
+   - Jalankan `cmd.exe /c npm run build` di folder `functions/public` untuk memastikan kompilasi typescript berhasil.
 
 ## 4. Rencana Verifikasi
-- Memastikan build berhasil tanpa kesalahan kompilasi.
-- Buka dashboard agen pada menu Dompet di simulator mobile dan pastikan seluruh kolom, tombol tab, dan daftar transaksi fit dengan lebar layar secara sempurna tanpa ada scroll horizontal.
+- Menguji pengajuan penarikan saldo di dashboard Mitra dan memverifikasi data masuk ke tabel `withdrawal_requests`.
+- Menguji tombol hapus kost dan mengonfirmasi penghapusan data dari tabel `properties`.
+- Menguji tombol preview kost dan mengonfirmasi pengalihan rute ke detail kost yang tepat.
+- Memastikan build production berjalan tanpa ada error typescript.

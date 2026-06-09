@@ -6,8 +6,9 @@ import { Kost, Page } from '../types';
 import { FORMAT_CURRENCY, INDONESIAN_BANKS } from '../constants';
 import { getOwnerProperties, getOwnerBookings, updateBookingStatus } from '../userService';
 import { getResidentStatus } from '../adminService';
-import { getMyChatSessions, ChatSession } from '../chatService';
+import { getMyChatSessions, ChatSession, getOrCreateChatSession } from '../chatService';
 import { getCurrentDate, setMockDate, getMockDateStr, parseDateSafely } from '../utils/timeUtils';
+import { notifyAdminWithdrawalRequest } from '../emailService';
 import TimeSimulator from '../components/TimeSimulator';
 import { 
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer
@@ -16,7 +17,7 @@ import {
     Zap, Home, ClipboardList, Wallet, User, Users,
     Plus, Edit, Eye, Check, MessageSquare, Search, Filter, MoreHorizontal, ArrowUpRight,
     Clock, LogOut, Bell, ChevronRight, TrendingUp, Menu, X, Landmark, CreditCard, Save,
-    Briefcase, GraduationCap, Heart, MapPin
+    Briefcase, GraduationCap, Heart, MapPin, Trash2
 } from 'lucide-react';
 import MitraProfile from './MitraProfile';
 import ChatWindow from '../components/ChatWindow';
@@ -135,10 +136,17 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
     const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [stats, setStats] = useState({ totalRevenue: 0, pendingApprovals: 0, totalViews: 1240, ctr: 4.2 });
+    const [stats, setStats] = useState({ totalRevenue: 0, availableBalance: 0, pendingApprovals: 0, totalViews: 1240, ctr: 4.2, activeTenants: 0 });
     const [showKostForm, setShowKostForm] = useState(false);
     const [editingKost, setEditingKost] = useState<Partial<Kost> | null>(null);
     const [dynamicChartData, setDynamicChartData] = useState<any[]>(CHART_DATA);
+
+    // Withdrawal State
+    const [withdrawalHistory, setWithdrawalHistory] = useState<any[]>([]);
+    const [isWithdrawing, setIsWithdrawing] = useState(false);
+    const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
+    const [withdrawAmount, setWithdrawAmount] = useState('');
+    const [isLoadingWallet, setIsLoadingWallet] = useState(false);
     
     // Withdrawal Bank Info State
     const [withdrawalAccount, setWithdrawalAccount] = useState({
@@ -223,11 +231,12 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         if (!uid) return;
         setLoading(true);
         try {
-            const [propsData, rawBookingsData, statusRecords, chatData] = await Promise.all([
+            const [propsData, rawBookingsData, statusRecords, chatData, withdrawalRequestsData] = await Promise.all([
                 getOwnerProperties(uid),
                 getOwnerBookings(uid),
                 getResidentStatus(uid),
-                getMyChatSessions(uid)
+                getMyChatSessions(uid),
+                supabase.from('withdrawal_requests').select('*').eq('agent_id', uid).order('created_at', { ascending: false })
             ]);
 
             // GROUPING LOGIC: Group split transactions (Rent + Facility) into one card for the Owner
@@ -280,6 +289,9 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 amount: group.total_amount // UI expects 'amount' to be the total
             }));
 
+            const withdrawals = withdrawalRequestsData.data || [];
+            setWithdrawalHistory(withdrawals);
+
             setProperties(propsData);
             setBookings(bookingsData);
             setResidentStatus(statusRecords);
@@ -290,26 +302,29 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             const currentMonth = now.getMonth();
             const currentYear = now.getFullYear();
 
-            // 1. Revenue (Current Month only based on simulated 'now')
-            const revenue = bookingsData
-                .filter(b => {
-                    const isPaid = (b.status || '').toUpperCase() === 'PAID';
-                    if (!isPaid) return false;
-                    const date = new Date(b.created_at);
-                    return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-                })
+            // 1. All-time paid revenue
+            const allTimeRevenue = bookingsData
+                .filter(b => ['PAID', 'COMPLETED'].includes((b.status || '').toUpperCase()))
                 .reduce((a, b) => a + (b.amount || 0), 0);
 
-            // 2. Views (Total views from properties)
+            // 2. Total withdrawn
+            const totalWithdrawn = withdrawals
+                .filter(w => w.status !== 'rejected')
+                .reduce((a, w) => a + Number(w.amount || 0), 0);
+
+            // 3. Available balance
+            const availableBalance = Math.max(0, allTimeRevenue - totalWithdrawn);
+
+            // 4. Views (Total views from properties)
             const totalViews = propsData.reduce((a, p) => a + (p.views || 0), 0);
 
-            // 3. Active Tenants (Direct from Resident Status Table)
+            // 5. Active Tenants (Direct from Resident Status Table)
             const activeCount = statusRecords.filter(r => {
                 const daysLeft = r.end_date ? Math.ceil((new Date(r.end_date).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
                 return daysLeft >= 0;
             }).length;
 
-            // 4. Dynamic Chart Data (Last 7 Days revenue)
+            // 6. Dynamic Chart Data (Last 7 Days revenue)
             const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
             const last7DaysData = [];
             for (let i = 6; i >= 0; i--) {
@@ -332,7 +347,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             setDynamicChartData(last7DaysData);
 
             setStats({
-                totalRevenue: revenue,
+                totalRevenue: allTimeRevenue,
+                availableBalance: availableBalance,
                 pendingApprovals: bookingsData.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL').length,
                 totalViews: totalViews,
                 activeTenants: activeCount,
@@ -423,6 +439,69 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         }
     };
 
+    const handleDeleteKost = async (id: string) => {
+        if (!window.confirm('Apakah Anda yakin ingin menghapus kost ini secara permanen? Tindakan ini tidak dapat dibatalkan.')) return;
+        try {
+            setLoading(true);
+            const { error } = await supabase
+                .from('properties')
+                .delete()
+                .eq('id', id);
+            if (error) throw error;
+            
+            alert('Kost berhasil dihapus.');
+            await loadData();
+        } catch (err: any) {
+            alert('Gagal menghapus kost: ' + err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleWithdraw = async () => {
+        const balance = stats.availableBalance;
+        if (balance < 10000) {
+            alert('Saldo minimal untuk penarikan adalah Rp 10.000');
+            return;
+        }
+        if (!withdrawalAccount.bank_name || !withdrawalAccount.bank_account || !withdrawalAccount.bank_account_name) {
+            alert('Silakan lengkapi dan simpan data rekening Anda terlebih dahulu.');
+            return;
+        }
+        setIsWithdrawing(true);
+        try {
+            const { error } = await supabase
+                .from('withdrawal_requests')
+                .insert([{
+                    agent_id: uid,
+                    amount: balance,
+                    bank_name: withdrawalAccount.bank_name,
+                    bank_account: withdrawalAccount.bank_account,
+                    bank_account_name: withdrawalAccount.bank_account_name,
+                    status: 'pending'
+                }]);
+            if (error) throw error;
+
+            alert('Pengajuan penarikan berhasil dikirim!');
+            setShowWithdrawConfirm(false);
+            await loadData();
+
+            notifyAdminWithdrawalRequest({
+                agent_id: uid,
+                agent_name: user?.displayName || user?.name || 'Mitra (Owner)',
+                amount: balance,
+                bank_name: withdrawalAccount.bank_name,
+                bank_account: withdrawalAccount.bank_account,
+                bank_account_name: withdrawalAccount.bank_account_name
+            });
+        } catch (error: any) {
+            console.error('Error submitting withdrawal:', error);
+            alert('Gagal mengirim pengajuan penarikan: ' + error.message);
+        } finally {
+            setIsWithdrawing(false);
+        }
+    };
+
     const filteredBookings = bookings.filter(b => {
         const s = (b.status || '').toUpperCase();
         if (bookingTab === 'pending') return s === 'PENDING_APPROVAL';
@@ -460,6 +539,29 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             alert('Gagal memulai percakapan: ' + e.message);
         }
     };
+
+    const inTx = bookings
+        .filter(b => ['PAID', 'COMPLETED'].includes((b.status || '').toUpperCase()))
+        .map(b => ({
+            id: `in-${b.id}`,
+            date: new Date(b.created_at),
+            type: 'IN',
+            title: b.metadata?.kostName || b.property?.title || 'Sewa Kost',
+            amount: b.amount,
+            status: 'approved'
+        }));
+
+    const outTx = withdrawalHistory.map(w => ({
+        id: `out-${w.id}`,
+        date: new Date(w.created_at),
+        type: 'OUT',
+        title: `Penarikan Dana (${w.bank_name})`,
+        amount: Number(w.amount),
+        status: w.status
+    }));
+
+    const allTransactions = [...inTx, ...outTx]
+        .sort((a, b) => b.date.getTime() - a.date.getTime());
 
     const render = (
         <div className="min-h-screen bg-gray-50 font-sans flex">
@@ -781,7 +883,12 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                 </div>
                                             </div>
                                             <div className="flex gap-2 mt-4">
-                                                <button className="flex-1 h-11 rounded-xl bg-gray-50 text-gray-700 font-bold text-xs hover:bg-gray-100 transition-colors border border-gray-100">Preview</button>
+                                                <button 
+                                                    onClick={() => navigate(`/kost/${p.id}`)}
+                                                    className="flex-1 h-11 rounded-xl bg-gray-50 text-gray-700 font-bold text-xs hover:bg-gray-100 transition-colors border border-gray-100 flex items-center justify-center gap-1"
+                                                >
+                                                    <Eye size={14} /> Preview
+                                                </button>
                                                 <button
                                                     onClick={() => { 
                                                         if (checkVerification()) {
@@ -789,8 +896,17 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                             setShowKostForm(true); 
                                                         }
                                                     }}
-                                                    className="w-11 h-11 rounded-xl bg-gray-900 text-white flex items-center justify-center hover:bg-orange-500 transition-colors shadow-md">
+                                                    className="w-11 h-11 rounded-xl bg-gray-900 text-white flex items-center justify-center hover:bg-orange-500 transition-colors shadow-md"
+                                                    title="Edit Kost"
+                                                >
                                                     <Edit size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteKost(p.id)}
+                                                    className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors shadow-sm"
+                                                    title="Hapus Kost"
+                                                >
+                                                    <Trash2 size={16} />
                                                 </button>
                                             </div>
                                         </div>
@@ -1098,8 +1214,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     <div className="relative z-10">
                                         <div className="flex justify-between items-start">
                                             <div>
-                                                <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Total Saldo</p>
-                                                <h3 className="text-3xl font-black tracking-tighter text-orange-400">{FORMAT_CURRENCY(stats.totalRevenue)}</h3>
+                                                <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Saldo Tersedia</p>
+                                                <h3 className="text-3xl font-black tracking-tighter text-orange-400">{FORMAT_CURRENCY(stats.availableBalance)}</h3>
                                                 <p className="text-[10px] font-bold text-white/30 mt-1">Siap ditarik ke rekening Anda</p>
                                             </div>
                                             <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/10">
@@ -1108,7 +1224,20 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                         </div>
                                     </div>
                                     <div className="relative z-10 mt-6">
-                                        <button className="h-12 w-full bg-orange-500 rounded-2xl flex items-center justify-center font-black text-xs uppercase tracking-widest shadow-xl shadow-orange-500/20 hover:bg-orange-400 transition-colors active:scale-95">
+                                        <button 
+                                            onClick={() => {
+                                                if (stats.availableBalance < 10000) {
+                                                    alert('Saldo minimal untuk penarikan adalah Rp 10.000');
+                                                    return;
+                                                }
+                                                if (!withdrawalAccount.bank_account || !withdrawalAccount.bank_name) {
+                                                    alert('Silakan isi dan simpan data rekening penarikan terlebih dahulu.');
+                                                    return;
+                                                }
+                                                setShowWithdrawConfirm(true);
+                                            }}
+                                            className="h-12 w-full bg-orange-500 rounded-2xl flex items-center justify-center font-black text-xs uppercase tracking-widest shadow-xl shadow-orange-500/20 hover:bg-orange-400 transition-colors active:scale-95"
+                                        >
                                             Tarik Dana Sekarang
                                         </button>
                                     </div>
@@ -1136,18 +1265,41 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
                                 <h4 className="font-black text-gray-900 mb-5">Riwayat Transaksi</h4>
                                 <div className="space-y-3">
-                                    {bookings.filter(b => b.status === 'PAID').map(b => (
-                                        <div key={b.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center text-green-600 font-black text-sm">{b.user?.name?.charAt(0)}</div>
-                                                <div>
-                                                    <p className="text-xs font-black text-gray-900">{b.user?.name}</p>
-                                                    <p className="text-[10px] font-bold text-gray-400">{b.metadata?.kostName}</p>
+                                    {allTransactions.length === 0 ? (
+                                        <div className="text-center py-6 text-gray-400 font-bold text-xs uppercase tracking-widest">Belum ada transaksi</div>
+                                    ) : (
+                                        allTransactions.map(tx => (
+                                            <div key={tx.id} className="flex justify-between items-center p-4 rounded-2xl bg-gray-50 border border-gray-50 hover:bg-white hover:border-orange-100 transition-all group gap-4 min-w-0">
+                                                <div className="flex items-center gap-4 min-w-0 flex-1">
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                                                        tx.type === 'IN' ? 'bg-green-100 text-green-600' : 'bg-rose-100 text-rose-600'
+                                                    }`}>
+                                                        {tx.type}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-xs font-black text-gray-900 flex items-center gap-1.5 min-w-0">
+                                                            <span className="block truncate flex-1">{tx.title}</span>
+                                                            {tx.type === 'OUT' && tx.status === 'pending' && (
+                                                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800 uppercase tracking-wider shrink-0">Diproses</span>
+                                                            )}
+                                                            {tx.type === 'OUT' && tx.status === 'rejected' && (
+                                                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-800 uppercase tracking-wider shrink-0">Ditolak</span>
+                                                            )}
+                                                            {tx.type === 'OUT' && tx.status === 'approved' && (
+                                                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-800 uppercase tracking-wider shrink-0">Selesai</span>
+                                                            )}
+                                                        </p>
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight mt-0.5">{tx.date.toLocaleDateString('id-ID')}</p>
+                                                    </div>
                                                 </div>
+                                                <p className={`text-sm font-black shrink-0 ${
+                                                    tx.type === 'IN' ? 'text-green-600' : 'text-rose-600'
+                                                }`}>
+                                                    {tx.type === 'IN' ? '+' : '-'}{FORMAT_CURRENCY(tx.amount)}
+                                                </p>
                                             </div>
-                                            <p className="font-black text-green-600 text-sm">+{FORMAT_CURRENCY(b.amount)}</p>
-                                        </div>
-                                    ))}
+                                        ))
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -1285,6 +1437,52 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     )}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showWithdrawConfirm && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowWithdrawConfirm(false)}></div>
+                    <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl relative z-10 p-8 animate-in zoom-in-95 text-center border border-gray-100">
+                        <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-5 text-2xl shadow-inner animate-bounce">💰</div>
+                        <h3 className="text-2xl font-black text-gray-900 tracking-tight mb-1">Konfirmasi Penarikan</h3>
+                        <p className="text-sm text-gray-500 mb-6">Pastikan detail rekening dan nominal di bawah sudah benar.</p>
+                        
+                        <div className="space-y-4 mb-6">
+                            <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-5 text-center">
+                                <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mb-1">Jumlah Tarik</p>
+                                <p className="text-3xl font-black text-orange-600">{FORMAT_CURRENCY(stats.availableBalance)}</p>
+                            </div>
+                            
+                            <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 text-left">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Tujuan Rekening</p>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-white rounded-xl border border-gray-200/80 flex items-center justify-center text-lg shadow-sm">🏦</div>
+                                    <div>
+                                        <p className="font-extrabold text-gray-900 text-sm">{withdrawalAccount.bank_name}</p>
+                                        <p className="text-xs text-gray-500 font-bold mt-0.5">{withdrawalAccount.bank_account}</p>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">a.n. {withdrawalAccount.bank_account_name}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={() => setShowWithdrawConfirm(false)}
+                                className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-[0.98]"
+                            >
+                                Batal
+                            </button>
+                            <button 
+                                onClick={handleWithdraw}
+                                disabled={isWithdrawing}
+                                className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-orange-600/10 active:scale-[0.98] transition-all disabled:opacity-50"
+                            >
+                                {isWithdrawing ? 'Memproses...' : 'Tarik Sekarang'}
+                            </button>
                         </div>
                     </div>
                 </div>

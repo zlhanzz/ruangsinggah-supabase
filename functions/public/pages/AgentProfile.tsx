@@ -26,7 +26,8 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
         ktp_photo_url: '',
         photo_url: '',
         verification_status: 'unverified',
-        verification_notes: ''
+        verification_notes: '',
+        referral_code: ''
     });
 
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -46,13 +47,15 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
     const loadProfile = async () => {
         setLoading(true);
         try {
-            const [profileRes, verifRes] = await Promise.all([
+            const [profileRes, verifRes, agentRes] = await Promise.all([
                 supabase.from('users').select('*').eq('id', uid).maybeSingle(),
-                supabase.from('user_verifications').select('*').eq('user_id', uid).maybeSingle()
+                supabase.from('user_verifications').select('*').eq('user_id', uid).maybeSingle(),
+                supabase.from('agents').select('referral_code').eq('user_id', uid).maybeSingle()
             ]);
 
             const profile = profileRes.data;
             const verif = verifRes.data || {};
+            const agentData = agentRes.data;
 
             if (profile) {
                 setFormData({
@@ -65,7 +68,8 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
                     photo_url: profile.photo_url || '',
                     verification_status: profile.verification_status || 'unverified',
                     verification_notes: verif.verification_notes || '',
-                    name: profile.name || ''
+                    name: profile.name || '',
+                    referral_code: agentData?.referral_code || ''
                 });
             }
         } catch (error) {
@@ -503,6 +507,24 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
                         <div className="space-y-2">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">WhatsApp</label>
                             {isEditing ? <input name="phone" value={formData.phone} onChange={handleInputChange} className="w-full bg-gray-50 p-4 rounded-xl outline-none font-bold" /> : <p className="font-bold">{formData.phone || '-'}</p>}
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Kode Referral (Khusus Agen)</label>
+                            <div className="flex items-center gap-3">
+                                <p className="font-mono font-black text-orange-600 bg-orange-50 px-4 py-2.5 rounded-xl inline-block mt-1">{formData.referral_code || 'Belum Terbuat'}</p>
+                                {formData.referral_code && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(formData.referral_code);
+                                            alert('Kode referral berhasil disalin!');
+                                        }}
+                                        className="mt-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-3 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer"
+                                    >
+                                        Salin
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
