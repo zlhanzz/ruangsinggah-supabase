@@ -180,13 +180,24 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const saveWithdrawalAccount = async () => {
         setIsSavingBank(true);
         try {
-            const { error } = await supabase.from('users').update({
+            const { error } = await supabase.from('user_bank_accounts').upsert({
+                user_id: uid,
                 bank_name: editForm.bank_name,
                 bank_account: editForm.bank_account,
-                bank_account_name: editForm.bank_account_name
-            }).eq('id', uid);
+                bank_account_name: editForm.bank_account_name,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'user_id' });
             if (error) throw error;
             
+            // Also trigger auth metadata update to sync with App.tsx
+            await supabase.auth.updateUser({
+                data: {
+                    bank_name: editForm.bank_name,
+                    bank_account: editForm.bank_account,
+                    bank_account_name: editForm.bank_account_name
+                }
+            });
+
             setWithdrawalAccount({...editForm});
             setIsEditingBank(false);
             alert('Rekening penarikan diperbarui!');

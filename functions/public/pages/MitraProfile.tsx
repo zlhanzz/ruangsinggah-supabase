@@ -48,23 +48,25 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
     const loadProfile = async () => {
         setLoading(true);
         try {
-            const { data: profile, error: profileError } = await supabase
-                .from('users')
-                .select('*')
-                .eq('id', uid)
-                .single();
+            const [profileRes, verifRes] = await Promise.all([
+                supabase.from('users').select('*').eq('id', uid).maybeSingle(),
+                supabase.from('user_verifications').select('*').eq('user_id', uid).maybeSingle()
+            ]);
+
+            const profile = profileRes.data;
+            const verif = verifRes.data || {};
 
             if (profile) {
                 setFormData({
                     display_name: profile.name || '',
                     phone: profile.phone || '',
                     address: profile.address || '',
-                    ktp_number: profile.ktp_number || '',
-                    ktp_address: profile.ktp_address || '',
-                    ktp_photo_url: profile.ktp_photo_url || '',
+                    ktp_number: verif.ktp_number || '',
+                    ktp_address: verif.ktp_address || '',
+                    ktp_photo_url: verif.ktp_photo_url || '',
                     photo_url: profile.photo_url || '',
                     verification_status: profile.verification_status || 'unverified',
-                    verification_notes: profile.verification_notes || '',
+                    verification_notes: verif.verification_notes || '',
                     name: profile.name || ''
                 });
             }
@@ -195,17 +197,24 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
         setIsSubmitting(true);
         try {
             const updatedData = { ...formData, verification_status: 'pending' };
-            await supabase.from('users').update({
-                name: formData.display_name,
-                full_name: formData.display_name,
-                phone: formData.phone,
-                address: formData.address,
-                ktp_number: formData.ktp_number,
-                ktp_address: formData.ktp_address,
-                ktp_photo_url: formData.ktp_photo_url,
-                verification_status: 'pending',
-                updated_at: new Date().toISOString()
-            }).eq('id', uid);
+            await Promise.all([
+                supabase.from('users').update({
+                    name: formData.display_name,
+                    full_name: formData.display_name,
+                    phone: formData.phone,
+                    address: formData.address,
+                    verification_status: 'pending',
+                    updated_at: new Date().toISOString()
+                }).eq('id', uid),
+                supabase.from('user_verifications').upsert({
+                    user_id: uid,
+                    ktp_number: formData.ktp_number,
+                    ktp_address: formData.ktp_address,
+                    ktp_photo_url: formData.ktp_photo_url,
+                    verification_status: 'pending',
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'user_id' })
+            ]);
             setFormData(updatedData as any);
             setIsExpandingVerification(false);
             alert('Permintaan verifikasi dikirim! Mohon tunggu tinjauan admin.');

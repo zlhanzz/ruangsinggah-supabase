@@ -125,20 +125,22 @@ const App: React.FC = () => {
 
     try {
       console.log("Fetching profile for UID:", supabaseUser.id);
-      // Fetch profile from 'users' table
-      const { data: dbData, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', supabaseUser.id)
-        .single();
+      // Fetch profile and private sensitive tables in parallel
+      const [userRes, verificationRes, bankRes] = await Promise.all([
+        supabase.from('users').select('*').eq('id', supabaseUser.id).maybeSingle(),
+        supabase.from('user_verifications').select('*').eq('user_id', supabaseUser.id).maybeSingle(),
+        supabase.from('user_bank_accounts').select('*').eq('user_id', supabaseUser.id).maybeSingle()
+      ]);
         
-      if (error && error.code !== 'PGRST116') {
-        console.warn("Could not fetch user profile from public table:", error.message);
+      if (userRes.error && userRes.error.code !== 'PGRST116') {
+        console.warn("Could not fetch user profile from public table:", userRes.error.message);
       }
       
-      console.log("dbData received:", dbData);
+      console.log("Profile data received:", userRes.data);
 
-      const profile = dbData || {};
+      const profile = userRes.data || {};
+      const verification = verificationRes.data || {};
+      const bank = bankRes.data || {};
       
       // --- PENANGANAN AKUN DIBLOKIR ---
       if (profile.status === 'blocked') {
@@ -178,6 +180,8 @@ const App: React.FC = () => {
         religion: profile.religion || '',
         address: profile.address || '',
         ...profile,
+        ...verification,
+        ...bank,
         role,
       };
 

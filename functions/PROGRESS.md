@@ -116,6 +116,44 @@
 - **Kalkulasi Bagi Hasil Otomatis (70/30)**: Mengubah perhitungan pendapatan agen di `AgentDashboard.tsx` agar menggunakan nilai riil transaksi survei (dikali 70% sebagai bagian agen) dari database.
 - **Sistem Penarikan Database**: Menghubungkan formulir penarikan saldo dan data rekening bank agen dengan database melalui tabel `withdrawal_requests` dan metadata autentikasi pengguna, menggantikan data mock/dummy sebelumnya.
 
+### 21. Perbaikan Profil Rekening Penarikan Agen & Sinkronisasi Database (Juni 2026)
+- **Penyimpanan Dua Arah (Database + Auth)**: Memperbarui fungsi `saveBankSettings` di `AgentDashboard.tsx` agar menyimpan data rekening secara langsung ke tabel `users` publik di database Supabase menggunakan update API, sekaligus memperbarui metadata Auth pengguna untuk memicu event `USER_UPDATED` secara otomatis.
+- **Pemuatan Berbasis Database**: Mengubah inisialisasi pemuatan profil rekening di `AgentDashboard.tsx` dari yang sebelumnya membaca `user.user_metadata` (tidak tersedia pada state parent) menjadi membaca langsung dari properti `user.bank_name`, `user.bank_account`, dan `user.bank_account_name` yang berasal dari database, memastikan data rekening tetap utuh dan konsisten saat halaman di-reload.
+
+### 22. Pemisahan Data Sensitif KTP & Rekening Bank (Juni 2026)
+- **Tabel Baru untuk Data Sensitif**: Membuat tabel privat `user_verifications` (untuk data KTP) dan `user_bank_accounts` (untuk data Rekening Bank) dengan kebijakan RLS ketat agar data sensitif ini tidak dapat dibaca oleh pengguna lain secara tidak sengaja melalui tabel `users` publik.
+- **Konsolidasi Frontend (App.tsx)**: Mengintegrasikan parallel-fetching data dari ketiga tabel saat user melakukan login di `App.tsx` (`fetchUserData`), sehingga component di frontend tetap menerima objek user lengkap tanpa merusak alur state yang ada.
+- **Pembaruan Alur Penyimpanan**: Memperbarui `Profile.tsx`, `MitraProfile.tsx`, `AgentProfile.tsx`, `MitraDashboard.tsx`, dan `AgentDashboard.tsx` agar menyimpan data verifikasi KTP dan data rekening langsung ke tabel privat masing-masing.
+
+### 23. Pembaruan Estetika & Keteraturan Modal Konfirmasi Penarikan (Juni 2026)
+- **Redesain Tata Letak Modal**: Merapikan visual modal konfirmasi penarikan pada `AgentDashboard.tsx` dan `Dashboard.tsx` agar menggunakan tata letak card terstruktur, penempatan ikon bank `🏦`, serta pemisahan visual yang jelas untuk nominal penarikan.
+- **Pembersihan Tipografi**: Menghapus kapitalisasi penuh (screaming text) pada teks judul, deskripsi, dan label, menggantinya dengan casing tulisan yang bersih, modern, dan profesional.
+- **Tombol Aksi Bersanding**: Mengubah susunan tombol aksi utama (Konfirmasi/Batal) menjadi bersanding (side-by-side) dengan penyesuaian efek shadow dan hover yang premium.
+
+### 24. Perbaikan Visibilitas Saldo & Transaksi Dompet Agen (Juni 2026)
+- **Sinkronisasi Rute Wallet**: Menambahkan `'wallet'` ke dalam `DashboardMenu` di `Dashboard.tsx` dan memperbarui event trigger pemuatan data agar memanggil `loadSurveyRequests` saat `activeMenu === 'wallet'`. Ini memperbaiki bug di mana saldo pendapatan agen tiba-tiba menjadi Rp 0 dan riwayat transaksi terakhir kosong setelah halaman ter-reload di menu dompet.
+
+### 25. Otomatisasi Notifikasi Email WD via FormSubmit (Juni 2026)
+- **Notifikasi Tanpa WA**: Menambahkan helper `notifyAdminWithdrawalRequest` di `emailService.ts` untuk mengirim notifikasi rincian pengajuan penarikan dana agen secara langsung ke seluruh admin via FormSubmit.
+- **De-aktivasi WhatsApp Redirect**: Menonaktifkan tautan eksternal WhatsApp pada form pengajuan penarikan dana agen di `AgentDashboard.tsx` sehingga data dikirim di latar belakang secara asinkron tanpa mengalihkan browser pengguna.
+
+### 26. Dashboard Panel Kelola WD Admin (Juni 2026)
+- **Komponen Manajemen Baru (`WithdrawalManagement.tsx`)**: Membuat panel administrasi terpusat untuk menampilkan, memfilter, menyetujui, dan menolak pengajuan penarikan dana dari agen.
+- **Aksi Persetujuan Manual**: Mendukung verifikasi manual (transfer secara mandiri oleh admin) lalu memperbarui status penarikan menjadi Selesai (`approved`) atau Ditolak (`rejected`) dengan satu kali klik.
+- **Menu Navigasi Sidebar**: Menambahkan rute visual navigasi "Kelola WD" 💸 di sidebar admin untuk efisiensi kelola.
+
+### 27. Perbaikan Duplikasi Order Survey & Race Condition (Juni 2026)
+- **ID Deterministik (`generateDeterministicUuid`)**: Membuat generator UUID deterministik berbasis hash string `transactionId_index` untuk mengidentifikasi baris target secara unik.
+- **Eliminasi Ganda di Database**: Memodifikasi fungsi `syncSurveyRequest` agar menetapkan ID deterministik ini sebelum operasi penulisan, yang secara otomatis mencegah terjadinya duplikasi record meskipun fungsi sinkronisasi dipanggil secara asinkron atau konkuren (race condition). Panggilan duplikat/konkuren sekarang akan meng-update baris data yang sama secara aman.
+
+### 28. Grafik Dinamis Aktivitas Survey 7 Hari Terakhir & Desimal Y-Axis (Juni 2026)
+- **Visualisasi Bergulir 7 Hari Terakhir**: Mengubah visualisasi aktivitas survey pada dashboard agen dari yang sebelumnya statis/dummy dan kaku pada Senin-Minggu menjadi rentang bergulir (*rolling*) 7 hari terakhir (H-6 hingga hari ini) agar data yang disajikan lebih relevan dan tidak kosong di awal minggu.
+- **Sumbu Y Non-Desimal**: Menambahkan properti `allowDecimals={false}` pada sumbu Y (`<YAxis>`) agar skala grafik hanya menampilkan bilangan bulat, menghindari nilai desimal yang tidak logis untuk jumlah tugas survey.
+
+### 29. Sistem Penilaian (Rating & Feedback) Agen Survey (Juni 2026)
+- **Alur Modal Konfirmasi Ulasan**: Mengubah konfirmasi instan penyelesaian survey pada User (`MyKost.tsx`) agar memicu modal ulasan interaktif (Rating Bintang 1-5 & Teks Masukan) untuk menilai kepuasan kinerja agen lapangan.
+- **Visual Bintang Dinamis di Agen Dashboard**: Memperbaiki visualisasi bintang ulasan dan rating rata-rata di dashboard agen (`AgentDashboard.tsx`) agar dinamis mencerminkan penilaian riil database (`user_rating` & `user_comment`) alih-alih data dummy/statis.
+
 ## Fitur Dalam Pengerjaan (In Progress)
 -   Monitoring konsistensi Webhook Midtrans vs Supabase untuk transaksi multi-kost.
 -   Uji E2E transaksi nyata di Production (Smallest Amount).
@@ -123,4 +161,3 @@
 ## Rencana Selanjutnya (Future Plans)
 -   Integrasi laporan keuangan otomatis berbasis transaksi Midtrans.
 -   Sistem penarikan dana (payout) otomatis untuk Mitra.
-

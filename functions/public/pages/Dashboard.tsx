@@ -39,6 +39,7 @@ import RentTransactionManagement from '../components/admin/RentTransactionManage
 import ExtensionTransactionManagement from '../components/admin/ExtensionTransactionManagement';
 import DbTransactionManagement from '../components/admin/DbTransactionManagement';
 import ActiveTenantsManagement from '../components/admin/ActiveTenantsManagement';
+import WithdrawalManagement from '../components/admin/WithdrawalManagement';
 
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -188,7 +189,7 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
 
 
 
-type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_extension' | 'transactions_db' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'tenants' | 'active_tenants' | 'agent_verification' | 'banners' | 'articles';
+type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_extension' | 'transactions_db' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'wallet' | 'tenants' | 'active_tenants' | 'agent_verification' | 'banners' | 'articles' | 'withdrawals';
 
 const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, listings = [], onAdd, onEdit, onDelete, onRefreshListings, verificationStatus }) => {
     const isAdmin = role === 'admin';
@@ -632,7 +633,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         if (activeMenu === 'transactions_db') loadDbTransactions();
         if (activeMenu === 'transactions_survey') loadSurveyTransactions();
         if (activeMenu === 'analytics' || activeMenu === 'overview') loadAnalyticsData();
-        if (activeMenu === 'verifikasi' || activeMenu === 'my_surveys' || activeMenu === 'overview' || activeMenu === 'tasks') loadSurveyRequests();
+        if (activeMenu === 'verifikasi' || activeMenu === 'my_surveys' || activeMenu === 'overview' || activeMenu === 'tasks' || activeMenu === 'wallet') loadSurveyRequests();
         if (activeMenu === 'agent_wallet') {
             loadSurveyRequests();
             loadAgentWalletProfile();
@@ -2131,6 +2132,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                         <SidebarItem icon="📦" label="Pembelian DB" isActive={activeMenu === 'transactions_db'} onClick={() => handleMenuChange('transactions_db')} />
                         <SidebarItem icon="📋" label="Pembayaran Survey" isActive={activeMenu === 'transactions_survey'} onClick={() => handleMenuChange('transactions_survey')} />
                         <SidebarItem icon="✅" label="Jasa Survey" isActive={activeMenu === 'verifikasi'} onClick={() => handleMenuChange('verifikasi')} />
+                        <SidebarItem icon="💸" label="Kelola WD" isActive={activeMenu === 'withdrawals'} onClick={() => handleMenuChange('withdrawals')} />
                     </>
                 )}
 
@@ -2608,27 +2610,28 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                 {showWithdrawConfirm && (
                     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
                         <div className="absolute inset-0 bg-gray-900/70 backdrop-blur-sm" onClick={() => setShowWithdrawConfirm(false)} />
-                        <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 animate-in zoom-in-95 fade-in duration-300">
+                        <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 animate-in zoom-in-95 fade-in duration-300 border border-gray-100">
                             <div className="text-center mb-6">
-                                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner animate-bounce">
                                     <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                 </div>
-                                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Konfirmasi Penarikan</h3>
-                                <p className="text-sm text-gray-500 mt-1">Pastikan detail di bawah sudah benar.</p>
+                                <h3 className="text-2xl font-black text-gray-900 tracking-tight mb-1">Konfirmasi Penarikan</h3>
+                                <p className="text-sm text-gray-500 mt-1">Pastikan detail rekening dan nominal di bawah sudah benar.</p>
                             </div>
 
-                            <div className="space-y-4 mb-8">
+                            <div className="space-y-4 mb-6">
                                 <div className="bg-green-50 border border-green-100 rounded-2xl p-5 text-center">
-                                    <p className="text-[10px] font-black text-green-600 uppercase tracking-widest mb-1">Jumlah Penarikan</p>
+                                    <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest mb-1">Jumlah Penarikan</p>
                                     <p className="text-3xl font-black text-green-700">{FORMAT_CURRENCY(netBalance)}</p>
                                 </div>
-                                <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Rekening Tujuan</p>
+                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 text-left">
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Tujuan Rekening</p>
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-white rounded-xl border border-gray-200 flex items-center justify-center text-lg">🏦</div>
+                                        <div className="w-10 h-10 bg-white rounded-xl border border-gray-200/80 flex items-center justify-center text-lg shadow-sm">🏦</div>
                                         <div>
-                                            <p className="font-black text-gray-900">{agentBankName}</p>
-                                            <p className="text-sm text-gray-500 font-bold">{agentBankAccount} • a.n {agentBankAccountName}</p>
+                                            <p className="font-extrabold text-gray-900 text-sm">{agentBankName}</p>
+                                            <p className="text-xs text-gray-500 font-bold mt-0.5">{agentBankAccount}</p>
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">a.n. {agentBankAccountName}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -2900,6 +2903,12 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                              onBlockUser={handleBlockUser}
                                              onDeleteUser={handleDeleteUser}
                                              onViewProfile={handleViewProfile}
+                                         />
+                                     )}
+                                     {activeMenu === 'withdrawals' && isAdmin && (
+                                         <WithdrawalManagement
+                                             loading={loading}
+                                             setLoading={setLoading}
                                          />
                                      )}
                                     {activeMenu === 'tenants' && isAdmin && (

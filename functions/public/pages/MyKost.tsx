@@ -131,6 +131,12 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const [showSurveySummaryModal, setShowSurveySummaryModal] = useState(false);
     const [selectedTrackingSurvey, setSelectedTrackingSurvey] = useState<any>(null);
     const [showTrackingModal, setShowTrackingModal] = useState(false);
+    
+    // Survey rating states
+    const [showSurveyRatingModal, setShowSurveyRatingModal] = useState(false);
+    const [selectedRatingSurvey, setSelectedRatingSurvey] = useState<any>(null);
+    const [surveyRatingValue, setSurveyRatingValue] = useState(5);
+    const [surveyRatingComment, setSurveyRatingComment] = useState('');
 
     // Sync selectedTrackingSurvey with updated list to reflect real-time updates
     useEffect(() => {
@@ -1001,25 +1007,58 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
         }
     };
 
-    const handleConfirmSurvey = async (surveyId: string) => {
-        if (!window.confirm('Apakah Anda puas dengan hasil survey ini dan ingin mengonfirmasi selesai?')) return;
+    const handleConfirmSurvey = (surveyId: string) => {
+        const survey = surveyRequests.find(s => s.id === surveyId);
+        if (survey) {
+            setSelectedRatingSurvey(survey);
+            setSurveyRatingValue(5);
+            setSurveyRatingComment('');
+            setShowSurveyRatingModal(true);
+        }
+    };
 
+    const submitSurveyRating = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedRatingSurvey) return;
+        setIsSubmitting(true);
         try {
-            setIsSubmitting(true);
             const { error } = await supabase
                 .from('survey_requests')
-                .update({ status: 'COMPLETED', updated_at: new Date().toISOString() })
-                .eq('id', surveyId);
+                .update({ 
+                    status: 'COMPLETED', 
+                    user_rating: surveyRatingValue,
+                    user_comment: surveyRatingComment,
+                    updated_at: new Date().toISOString() 
+                })
+                .eq('id', selectedRatingSurvey.id);
 
             if (error) throw error;
 
-            alert('Survey berhasil dikonfirmasi! Terima kasih telah menggunakan layanan RuangSinggah.');
+            alert('Survey berhasil dikonfirmasi! Terima kasih atas ulasan Anda.');
+            setShowSurveyRatingModal(false);
+            
             // Refresh surveys
             const { data } = await supabase
                 .from('survey_requests')
-                .select('*, user:user_id(name, phone)')
+                .select(`
+                    *,
+                    agent:assigned_agent_id (
+                        name,
+                        phone,
+                        photo_url
+                    )
+                `)
                 .eq('user_id', user.uid);
-            if (data) setSurveyRequests(data);
+            
+            if (data) {
+                const processedSurveys = data.map((s: any) => ({
+                    ...s,
+                    agent_name: s.agent_name || s.agent?.name,
+                    agent_phone: s.agent_phone || s.agent?.phone,
+                    agent_photo_url: s.agent_photo_url || s.agent?.photo_url
+                }));
+                setSurveyRequests(processedSurveys);
+            }
         } catch (err) {
             console.error(err);
             alert('Gagal mengonfirmasi survey.');
@@ -2975,6 +3014,65 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                     </div>
                 </div>
             )}
+
+            {/* 4.1 Modal Penilaian Agen Survey */}
+            {showSurveyRatingModal && selectedRatingSurvey && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/80 backdrop-blur-sm overflow-y-auto">
+                    <div className="bg-white rounded-3xl w-full max-w-md my-auto relative shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100">
+                        <div className="bg-orange-500 p-6 text-white text-center">
+                            <button onClick={() => setShowSurveyRatingModal(false)} className="absolute top-4 right-4 text-white/70 hover:text-white bg-black/10 hover:bg-black/20 rounded-full p-2 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-md border border-white/30">
+                                <Star className="w-8 h-8 text-white fill-white" />
+                            </div>
+                            <h3 className="text-xl font-black uppercase tracking-tight">Penilaian Agen Survey</h3>
+                            <p className="text-orange-100 text-xs font-bold mt-1">Bagaimana kinerja {selectedRatingSurvey.agent_name || 'Petugas'} saat survey di {selectedRatingSurvey.kost_name}?</p>
+                        </div>
+
+                        <form onSubmit={submitSurveyRating} className="p-8 space-y-6">
+                            <div className="flex flex-col items-center">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Pilih Kepuasan Anda</label>
+                                <div className="flex gap-2">
+                                    {[1, 2, 3, 4, 5].map((star) => (
+                                        <button
+                                            key={star}
+                                            type="button"
+                                            onClick={() => setSurveyRatingValue(star)}
+                                            className="transition-transform active:scale-90"
+                                        >
+                                            <Star
+                                                className={`w-10 h-10 transition-all ${star <= surveyRatingValue ? 'text-yellow-400 fill-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.4)]' : 'text-gray-200 hover:text-gray-300'}`}
+                                            />
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Feedback Untuk Agen</label>
+                                <textarea
+                                    rows={4}
+                                    required
+                                    value={surveyRatingComment}
+                                    onChange={(e) => setSurveyRatingComment(e.target.value)}
+                                    placeholder="Tulis ulasan mengenai kesopanan, ketelitian, dan detail laporan yang diberikan oleh agen..."
+                                    className="w-full mt-2 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none resize-none"
+                                ></textarea>
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white font-black text-sm uppercase tracking-widest rounded-2xl shadow-xl shadow-orange-100 transition-all active:scale-95 disabled:opacity-50"
+                            >
+                                {isSubmitting ? 'Mengirim...' : 'Konfirmasi & Kirim Penilaian'}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
 
             {showChatWindow && activeChatSession && (
                 <ChatWindow

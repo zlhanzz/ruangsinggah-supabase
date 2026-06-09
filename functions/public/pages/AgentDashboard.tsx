@@ -17,6 +17,7 @@ import {
     Menu, X, LogOut, Bell, MessageSquare, Search
 } from 'lucide-react';
 import { notifySurveyStatusUpdate } from '../notificationService';
+import { notifyAdminWithdrawalRequest } from '../emailService';
 import AgentProfile from './AgentProfile';
 import { Page } from '../types';
 
@@ -93,13 +94,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const [newSurveyTime, setNewSurveyTime] = useState('');
     const [rescheduleReason, setRescheduleReason] = useState('');
 
-    // Load bank settings from user metadata
+    // Load bank settings from user database profile
     useEffect(() => {
-        if (user?.user_metadata) {
-            const meta = user.user_metadata;
-            if (meta.bank_name) setAgentBankName(meta.bank_name);
-            if (meta.bank_account) setAgentBankAccount(meta.bank_account);
-            if (meta.bank_account_name) setAgentAccountName(meta.bank_account_name);
+        if (user) {
+            if (user.bank_name) setAgentBankName(user.bank_name);
+            if (user.bank_account) setAgentBankAccount(user.bank_account);
+            if (user.bank_account_name) setAgentAccountName(user.bank_account_name);
+            else if (user.displayName || user.name) setAgentAccountName(user.displayName || user.name);
         }
     }, [user]);
 
@@ -135,18 +136,33 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         }
         setIsSubmitting(true);
         try {
-            const { error } = await supabase.auth.updateUser({
+            // Update public.user_bank_accounts table in Supabase
+            const { error: dbError } = await supabase
+                .from('user_bank_accounts')
+                .upsert({
+                    user_id: uid,
+                    bank_name: agentBankName,
+                    bank_account: agentBankAccount,
+                    bank_account_name: agentAccountName,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'user_id' });
+            
+            if (dbError) throw dbError;
+
+            // Also update Auth metadata to trigger USER_UPDATED event in App.tsx
+            const { error: authError } = await supabase.auth.updateUser({
                 data: {
                     bank_name: agentBankName,
                     bank_account: agentBankAccount,
                     bank_account_name: agentAccountName
                 }
             });
-            if (error) throw error;
+            if (authError) throw authError;
+
             alert('Data rekening berhasil disimpan!');
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            alert('Gagal menyimpan data rekening.');
+            alert('Gagal menyimpan data rekening: ' + (error.message || error));
         } finally {
             setIsSubmitting(false);
         }
@@ -214,6 +230,35 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         availableBalance: availableBalance
     };
 
+    const inTx = completedSurveys.map(r => {
+        const siblingRequests = surveyRequests.filter(sr => sr.transaction_id === r.transaction_id);
+        const count = siblingRequests.length > 0 ? siblingRequests.length : 1;
+        const trxAmount = r.transaction?.amount || 100000;
+        const unitPrice = trxAmount / count;
+        const earned = unitPrice * 0.7;
+        return {
+            id: `in-${r.id}`,
+            date: new Date(r.created_at),
+            type: 'IN',
+            title: r.kost_name,
+            amount: earned,
+            status: 'approved'
+        };
+    });
+
+    const outTx = withdrawalHistory.filter(w => w.status !== 'rejected').map(w => ({
+        id: `out-${w.id}`,
+        date: new Date(w.created_at),
+        type: 'OUT',
+        title: `Penarikan Dana (${w.bank_name})`,
+        amount: Number(w.amount),
+        status: w.status
+    }));
+
+    const allTransactions = [...inTx, ...outTx]
+        .sort((a, b) => b.date.getTime() - a.date.getTime())
+        .slice(0, 5);
+
     const handleWithdraw = async () => {
         if (availableBalance < 50000) {
             alert('Saldo minimal untuk penarikan adalah Rp 50.000');
@@ -241,9 +286,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             setShowWithdrawConfirm(false);
             await loadWalletData();
 
-            // WhatsApp admin notification redirection
-            const waText = `Halo Admin, saya agen ${user?.displayName || user?.name || 'Surveyor'} ingin mengajukan pencairan dana sebesar ${FORMAT_CURRENCY(availableBalance)} dari akun saya.\n\nDetail Rekening:\nBank: ${agentBankName}\nNo Rekening: ${agentBankAccount}\nAtas Nama: ${agentAccountName}`;
-            window.open(`https://wa.me/6281234567890?text=${encodeURIComponent(waText)}`, '_blank');
+            // Kirim notifikasi email ke Admin via FormSubmit
+            notifyAdminWithdrawalRequest({
+                agent_id: uid,
+                agent_name: user?.displayName || user?.name || 'Surveyor',
+                amount: availableBalance,
+                bank_name: agentBankName,
+                bank_account: agentBankAccount,
+                bank_account_name: agentAccountName
+            });
         } catch (error) {
             console.error('Error submitting withdrawal:', error);
             alert('Gagal mengirim pengajuan penarikan.');
@@ -251,16 +302,42 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             setIsWithdrawing(false);
         }
     };
+    const getWeeklyData = () => {
+        const daysMap = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+        const result = [];
+        const now = new Date();
 
-    const weeklyData = [
-        { day: 'Sen', tasks: 2 },
-        { day: 'Sel', tasks: 5 },
-        { day: 'Rab', tasks: 3 },
-        { day: 'Kam', tasks: 8 },
-        { day: 'Jum', tasks: 4 },
-        { day: 'Sab', tasks: 1 },
-        { day: 'Min', tasks: 0 },
-    ];
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date(now);
+            date.setDate(now.getDate() - i);
+            
+            const startOfDay = new Date(date);
+            startOfDay.setHours(0, 0, 0, 0);
+            
+            const endOfDay = new Date(date);
+            endOfDay.setHours(23, 59, 59, 999);
+
+            const dayLabel = daysMap[date.getDay()];
+            
+            const tasksCount = completedSurveys.filter(r => {
+                const dateStr = (r as any).updated_at || r.created_at;
+                if (dateStr) {
+                    const d = new Date(dateStr);
+                    return d >= startOfDay && d <= endOfDay;
+                }
+                return false;
+            }).length;
+
+            result.push({
+                day: dayLabel,
+                tasks: tasksCount
+            });
+        }
+
+        return result;
+    };
+
+    const weeklyData = getWeeklyData();
 
     const handleUpdateSurvey = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -525,7 +602,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm transition-all hover:shadow-md">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><span className="text-sm">⭐</span> Rating Rata-rata</p>
                     <p className="text-2xl font-black text-orange-600 leading-tight">{stats.rating}</p>
-                    <div className="flex text-yellow-400 text-[10px] mt-1 tracking-tighter">★★★★★</div>
+                    <div className="flex text-yellow-400 text-[10px] mt-1 tracking-tighter">
+                        {[...Array(5)].map((_, idx) => (
+                            <span key={idx}>{idx < Math.round(stats.rating) ? '★' : '☆'}</span>
+                        ))}
+                    </div>
                 </div>
                 <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm transition-all hover:shadow-md">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><span className="text-sm">💰</span> Total Pendapatan</p>
@@ -538,7 +619,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 <div className="md:col-span-2 bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
                     <div className="flex justify-between items-center mb-6">
                         <div>
-                            <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">Aktivitas Survey Minggu Ini</h4>
+                            <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">Aktivitas Survey 7 Hari Terakhir</h4>
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Total {weeklyData.reduce((a, b) => a + b.tasks, 0)} Tugas Berhasil</p>
                         </div>
                     </div>
@@ -547,7 +628,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             <BarChart data={weeklyData}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#9CA3AF' }} dy={10} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#9CA3AF' }} dx={-10} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#9CA3AF' }} dx={-10} allowDecimals={false} />
                                 <RechartsTooltip 
                                     cursor={{fill: '#F9FAFB'}}
                                     contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontWeight: 800, fontSize: '12px' }}
@@ -580,7 +661,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
                                     <p className="text-xs font-black text-gray-900">{r.user?.name || 'User'}</p>
-                                    <div className="flex text-yellow-400 text-[8px]">★★★★★</div>
+                                    <div className="flex text-yellow-400 text-[8px]">
+                                        {[...Array(5)].map((_, idx) => (
+                                            <span key={idx}>{idx < (r.user_rating || 0) ? '★' : '☆'}</span>
+                                        ))}
+                                    </div>
                                 </div>
                                 <p className="text-xs text-gray-600 italic leading-relaxed">"{r.user_comment}"</p>
                             </div>
@@ -948,25 +1033,35 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             <div>
                                 <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 ml-1">Transaksi Terakhir</h5>
                                 <div className="space-y-3">
-                                    {surveyRequests.filter(r => r.status === 'COMPLETED').slice(0, 5).map((r, i) => {
-                                        const siblingRequests = surveyRequests.filter(sr => sr.transaction_id === r.transaction_id);
-                                        const count = siblingRequests.length > 0 ? siblingRequests.length : 1;
-                                        const trxAmount = r.transaction?.amount || 100000;
-                                        const unitPrice = trxAmount / count;
-                                        const earned = unitPrice * 0.7;
-                                        return (
-                                            <div key={i} className="flex justify-between items-center p-4 rounded-2xl bg-gray-50 border border-gray-50 hover:bg-white hover:border-orange-100 transition-all group">
+                                    {allTransactions.length === 0 ? (
+                                        <div className="text-center py-6 text-gray-400 font-bold text-xs">Belum ada transaksi.</div>
+                                    ) : (
+                                        allTransactions.map((tx) => (
+                                            <div key={tx.id} className="flex justify-between items-center p-4 rounded-2xl bg-gray-50 border border-gray-50 hover:bg-white hover:border-orange-100 transition-all group">
                                                 <div className="flex items-center gap-4">
-                                                    <div className="w-10 h-10 rounded-xl bg-green-100 text-green-600 flex items-center justify-center font-bold">IN</div>
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs ${
+                                                        tx.type === 'IN' ? 'bg-green-100 text-green-600' : 'bg-rose-100 text-rose-600'
+                                                    }`}>
+                                                        {tx.type}
+                                                    </div>
                                                     <div>
-                                                        <p className="text-xs font-black text-gray-900">{r.kost_name}</p>
-                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight mt-0.5">{new Date(r.created_at).toLocaleDateString()}</p>
+                                                        <p className="text-xs font-black text-gray-900 flex items-center gap-1.5">
+                                                            {tx.title}
+                                                            {tx.type === 'OUT' && tx.status === 'pending' && (
+                                                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800 uppercase tracking-wider">Diproses</span>
+                                                            )}
+                                                        </p>
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight mt-0.5">{tx.date.toLocaleDateString('id-ID')}</p>
                                                     </div>
                                                 </div>
-                                                <p className="text-sm font-black text-green-600">+{FORMAT_CURRENCY(earned)}</p>
+                                                <p className={`text-sm font-black ${
+                                                    tx.type === 'IN' ? 'text-green-600' : 'text-rose-600'
+                                                }`}>
+                                                    {tx.type === 'IN' ? '+' : '-'}{FORMAT_CURRENCY(tx.amount)}
+                                                </p>
                                             </div>
-                                        );
-                                    })}
+                                        ))
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -1032,36 +1127,43 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             {showWithdrawConfirm && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setShowWithdrawConfirm(false)}></div>
-                    <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl relative z-10 p-8 animate-in zoom-in-95 text-center">
-                        <div className="w-20 h-20 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl">💰</div>
-                        <h3 className="text-xl font-black uppercase text-gray-900 mb-2">Konfirmasi Penarikan</h3>
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-8">Dana akan dikirim ke rekening default Anda.</p>
+                    <div className="bg-white w-full max-w-md rounded-[2rem] shadow-2xl relative z-10 p-8 animate-in zoom-in-95 text-center border border-gray-100">
+                        <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-5 text-2xl shadow-inner animate-bounce">💰</div>
+                        <h3 className="text-2xl font-black text-gray-900 tracking-tight mb-1">Konfirmasi Penarikan</h3>
+                        <p className="text-sm text-gray-500 mb-6">Pastikan detail rekening dan nominal di bawah sudah benar.</p>
                         
-                        <div className="bg-gray-50 rounded-3xl p-6 text-left mb-8 border border-gray-100">
-                             <div className="mb-4">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Jumlah Tarik</p>
-                                <p className="text-xl font-black text-orange-600">{FORMAT_CURRENCY(stats.availableBalance)}</p>
+                        <div className="space-y-4 mb-6">
+                            <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-5 text-center">
+                                <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mb-1">Jumlah Tarik</p>
+                                <p className="text-3xl font-black text-orange-600">{FORMAT_CURRENCY(stats.availableBalance)}</p>
                             </div>
-                            <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Tujuan Rekening</p>
-                                <p className="text-sm font-black text-gray-800">{agentBankName} — {agentBankAccount}</p>
-                                <p className="text-xs font-bold text-gray-500 mt-0.5">{agentAccountName}</p>
+                            
+                            <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-5 text-left">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Tujuan Rekening</p>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-white rounded-xl border border-gray-200/80 flex items-center justify-center text-lg shadow-sm">🏦</div>
+                                    <div>
+                                        <p className="font-extrabold text-gray-900 text-sm">{agentBankName}</p>
+                                        <p className="text-xs text-gray-500 font-bold mt-0.5">{agentBankAccount}</p>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">a.n. {agentAccountName}</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="flex flex-col gap-3">
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={() => setShowWithdrawConfirm(false)}
+                                className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-[0.98]"
+                            >
+                                Batal
+                            </button>
                             <button 
                                 onClick={handleWithdraw}
                                 disabled={isWithdrawing}
-                                className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-orange-100 active:scale-95 transition-all disabled:opacity-50"
+                                className="flex-1 py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-orange-600/10 active:scale-[0.98] transition-all disabled:opacity-50"
                             >
                                 {isWithdrawing ? 'Memproses...' : 'Tarik Sekarang'}
-                            </button>
-                            <button 
-                                onClick={() => setShowWithdrawConfirm(false)}
-                                className="w-full py-3 text-gray-400 hover:text-gray-600 text-[10px] font-black uppercase tracking-widest transition-all"
-                            >
-                                Batalkan
                             </button>
                         </div>
                     </div>

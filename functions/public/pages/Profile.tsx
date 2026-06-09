@@ -201,13 +201,24 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
           birth_date: formData.birthDate || null,
           address: formData.address,
           photo_url: formData.photoURL,
-          ktp_number: isAgent ? formData.ktp_number : undefined,
-          ktp_photo_url: isAgent ? formData.ktp_photo_url : undefined,
-          verification_status: isAgent && (formData.ktp_number !== user.ktp_number || formData.ktp_photo_url !== user.ktp_photo_url) ? 'pending' : formData.verification_status,
           updated_at: new Date().toISOString()
         }, { onConflict: 'id' });
 
       if (dbError) throw dbError;
+
+      // 1.1 Update user_verifications table in Supabase (if agent)
+      if (isAgent) {
+        const { error: verifError } = await supabase
+          .from('user_verifications')
+          .upsert({
+            user_id: user.uid,
+            ktp_number: formData.ktp_number,
+            ktp_photo_url: formData.ktp_photo_url,
+            verification_status: isAgent && (formData.ktp_number !== user.ktp_number || formData.ktp_photo_url !== user.ktp_photo_url) ? 'pending' : formData.verification_status,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'user_id' });
+        if (verifError) throw verifError;
+      }
 
       // 2. Update Supabase Auth user metadata
       await supabase.auth.updateUser({

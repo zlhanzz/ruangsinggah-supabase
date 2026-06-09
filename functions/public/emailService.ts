@@ -68,3 +68,21 @@ export async function notifyAdminStatusUpdate(type: string, targetId: string, ne
     ...details
   });
 }
+
+export async function notifyAdminWithdrawalRequest(details: {
+  agent_id: string;
+  agent_name: string;
+  amount: number;
+  bank_name: string;
+  bank_account: string;
+  bank_account_name: string;
+}) {
+  return notifyAdminTransaction(`Pengajuan Withdrawal Baru`, {
+    "Nama Agen": details.agent_name,
+    "Nominal WD": `Rp ${details.amount.toLocaleString('id-ID')}`,
+    "Bank Tujuan": details.bank_name,
+    "No Rekening": details.bank_account,
+    "Atas Nama": details.bank_account_name,
+    "ID Agen": details.agent_id
+  });
+}

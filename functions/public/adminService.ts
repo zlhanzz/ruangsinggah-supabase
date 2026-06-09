@@ -840,6 +840,34 @@ export async function syncResidentStatus(transactionId: string, metadataOverride
 }
 
 /**
+ * Generates a valid UUID v4 string deterministically based on transactionId and index.
+ */
+export function generateDeterministicUuid(transactionId: string, index: number): string {
+    const str = `${transactionId}_${index}`;
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (let i = 0, ch; i < str.length; i++) {
+        ch = str.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    
+    const hex = ((h1 >>> 0).toString(16).padStart(8, '0') + 
+                 (h2 >>> 0).toString(16).padStart(8, '0') + 
+                 (h1 ^ h2 >>> 0).toString(16).padStart(8, '0') + 
+                 (h1 & h2 >>> 0).toString(16).padStart(8, '0')).substring(0, 32);
+                 
+    const part1 = hex.substring(0, 8);
+    const part2 = hex.substring(8, 12);
+    const part3 = '4' + hex.substring(13, 16); // force version 4
+    const part4 = ((parseInt(hex.substring(16, 18), 16) & 0x3f) | 0x80).toString(16).padStart(2, '0') + hex.substring(18, 20); // force variant
+    const part5 = hex.substring(20, 32);
+    
+    return `${part1}-${part2}-${part3}-${part4}-${part5}`;
+}
+
+/**
  * syncSurveyRequest: Synchronizes a PAID survey transaction with the survey_requests table.
  */
 export async function syncSurveyRequest(transactionId: string, transactionOverride?: any) {
@@ -906,8 +934,9 @@ export async function syncSurveyRequest(transactionId: string, transactionOverri
 
         for (let i = 0; i < kostList.length; i++) {
             const kost = kostList[i];
-            // Match based on index in sorted existing records
-            const existing = sortedExisting[i] || null;
+            const targetId = generateDeterministicUuid(transactionId, i);
+            // Match by deterministic ID first, fallback to index
+            const existing = sortedExisting.find(r => r.id === targetId) || sortedExisting[i] || null;
 
             let targetStatus = 'AWAITING_PAYMENT';
             if (existing && existing.status) {
@@ -925,6 +954,7 @@ export async function syncSurveyRequest(transactionId: string, transactionOverri
             }
 
             const payload: any = {
+                id: targetId, // Force deterministic ID
                 user_id: trx.user_id,
                 transaction_id: transactionId,
                 status: targetStatus,
@@ -951,7 +981,7 @@ export async function syncSurveyRequest(transactionId: string, transactionOverri
             }
 
             if (existing) {
-                console.log(`SYNC_SURVEY: [DEBUG] Updating kost #${i + 1} (ID: ${existing.id})`);
+                console.log(`SYNC_SURVEY: [DEBUG] Updating kost #${i + 1} (Target ID: ${targetId}, Existing ID: ${existing.id})`);
                 const { error: updateErr } = await supabase
                     .from('survey_requests')
                     .update(payload)
@@ -2229,16 +2259,29 @@ export async function updateMitraRequestStatus(
       }
     }
   } else {
-    // Handle Identity Verification (updating users table directly)
+    // Handle Identity Verification (updating users table and user_verifications)
+    const verifStatus = status === 'accepted' ? 'verified' : (status === 'rejected' ? 'rejected' : 'pending');
     const { error: userError } = await supabase
       .from('users')
       .update({ 
-        verification_status: status === 'accepted' ? 'verified' : (status === 'rejected' ? 'rejected' : 'pending'),
+        verification_status: verifStatus,
         updated_at: new Date().toISOString()
       })
       .eq('id', requestId); // For verification, requestId is the userId
 
     if (userError) throw userError;
+
+    // Sync to user_verifications table
+    const { error: verifError } = await supabase
+      .from('user_verifications')
+      .update({
+        verification_status: verifStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', requestId);
+    if (verifError) {
+      console.warn('Failed to sync verification status to user_verifications table:', verifError.message);
+    }
   }
 }
 
@@ -2498,13 +2541,19 @@ export async function getUserFullDetails(userId: string): Promise<any> {
     const isAdmin = await checkIfUserIsAdmin(authUser.id);
     if (!isAdmin) throw new Error('Access Denied');
 
-    const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
+    const [userRes, verifRes, bankRes] = await Promise.all([
+        supabase.from('users').select('*').eq('id', userId).single(),
+        supabase.from('user_verifications').select('*').eq('user_id', userId).maybeSingle(),
+        supabase.from('user_bank_accounts').select('*').eq('user_id', userId).maybeSingle()
+    ]);
 
-    if (userError) throw userError;
+    if (userRes.error) throw userRes.error;
+
+    const userData = {
+        ...userRes.data,
+        ...(verifRes.data || {}),
+        ...(bankRes.data || {})
+    };
 
     // Optional: Get brief history/summary
     // 1. If owner: get properties
