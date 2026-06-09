@@ -37,6 +37,13 @@ const PageLoader = () => (
 );
 
 
+const initialSearch = window.location.search;
+const initialHash = window.location.hash;
+const isSignupConfirmation =
+  initialHash.includes('type=signup') ||
+  initialSearch.includes('type=signup') ||
+  (initialSearch.includes('code=') && !initialSearch.includes('mode=recovery'));
+
 // Improved Protected Route Wrapper for strict access control
 const ProtectedRoute: React.FC<{ 
   user: any, 
@@ -207,14 +214,7 @@ const App: React.FC = () => {
       console.log("Auth event triggered:", event, session);
 
       // Intercept verification redirect (signup)
-      const hash = window.location.hash;
-      const search = window.location.search;
-      if (
-        event === 'SIGNED_IN' &&
-        (hash.includes('type=signup') ||
-          search.includes('type=signup') ||
-          (search.includes('code=') && !search.includes('mode=recovery')))
-      ) {
+      if (event === 'SIGNED_IN' && isSignupConfirmation) {
         await supabase.auth.signOut();
         navigate('/login?verified=true', { replace: true });
         return;
