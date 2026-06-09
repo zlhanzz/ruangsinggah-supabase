@@ -513,7 +513,7 @@ BEGIN
       COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)),
       COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)),
       NEW.raw_user_meta_data->>'phone',
-      COALESCE(NEW.raw_user_meta_data->>'role', 'user'),
+      COALESCE(NEW.raw_user_meta_data->>'role', 'user')::public.user_role,
       FALSE,
       NOW(),
       NOW()
@@ -523,7 +523,7 @@ BEGIN
       full_name = EXCLUDED.full_name,
       name = EXCLUDED.name,
       phone = EXCLUDED.phone,
-      role = COALESCE(EXCLUDED.role, public.users.role),
+      role = COALESCE(EXCLUDED.role, users.role),
       updated_at = NOW();
 
     -- 2. Jika role adalah owner atau mitra, masukkan ke tabel public.mitra
@@ -536,7 +536,7 @@ BEGIN
         NOW()
       )
       ON CONFLICT (user_id) DO UPDATE SET
-        referred_by = COALESCE(EXCLUDED.referred_by, public.mitra.referred_by),
+        referred_by = COALESCE(EXCLUDED.referred_by, mitra.referred_by),
         updated_at = NOW();
     END IF;
 

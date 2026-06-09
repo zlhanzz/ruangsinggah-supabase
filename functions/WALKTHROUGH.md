@@ -1,37 +1,41 @@
-# WALKTHROUGH - Peningkatan Visual & Estetika Dashboard Mitra (Owner)
+# WALKTHROUGH - Perbaikan Trigger Konfirmasi Email & Alur Login Registrasi (Auth)
 
-Dokumen ini menjelaskan detail perubahan desain, styling, dan visual pada Dashboard Mitra (Owner) serta status pengujian.
+Dokumen ini menjelaskan detail perubahan untuk mengatasi kegagalan pendaftaran (trigger error) serta mengubah perilaku setelah user mengeklik link verifikasi email agar tidak langsung login otomatis.
 
 ## 1. Daftar Perubahan
-Modifikasi gaya visual di `functions/public/pages/MitraDashboard.tsx`:
-1. **Navigasi Sidebar Desktop & Bottom Nav Mobile**:
-   - Menu aktif kini menggunakan gradasi jingga yang menawan (`bg-gradient-to-r from-orange-500 to-amber-500`) dengan bayangan halus (`shadow-orange-500/10`).
-   - Mengganti bobot font navigasi dari `font-black` (bobot 900 yang terlalu tebal) menjadi `font-semibold` agar terkesan lebih bersih dan profesional.
-   - Memperbaiki mobile bottom nav item dengan transisi hover/aktif bergradasi premium, sudut tumpul `rounded-2xl`, dan layout label yang lebih seimbang.
-2. **Stat Cards & Informasi Pengguna**:
-   - Memodifikasi `StatCard` agar memiliki bayangan ultra-tipis (`shadow-[0_8px_30px_rgba(0,0,0,0.01)]`) dan perubahan bayangan ketika di-hover (`hover:shadow-md`).
-   - Menyederhanakan tipografi pada kartu statistik dengan menggunakan kombinasi `font-bold` pada angka nilai dan `font-semibold` pada label.
-   - Memperbaiki kotak informasi profil pengguna di sidebar dengan border transparan lembut (`border-gray-100/40`) dan gradien di bagian avatar.
-3. **Dompet Digital (Wallet Card)**:
-   - Mendesain ulang kartu saldo utama menjadi bertema gelap bergradasi mewah (`bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900`) lengkap dengan border tipis premium.
+1. **Perbaikan SQL Trigger**:
+   - Memperbaiki fungsi `public.handle_new_user()` di database dengan menghilangkan kualifikasi skema penuh (`public.`) pada nama tabel target di bagian perintah `DO UPDATE SET`.
+   - Menambahkan cast tipe data eksplisit `::public.user_role` pada nilai string `role` yang disisipkan karena kolom `role` di tabel `public.users` bertipe data enum kustom `user_role`.
+2. **Interseptor Redirect Frontend**:
+   - Memperbarui [App.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/App.tsx) agar mendeteksi redirect verifikasi email melalui query parameter PKCE (`?code=...`).
+   - Ketika terdeteksi masuk dari alur registrasi (terdapat parameter `code` dan tidak sedang dalam mode `recovery`), sistem akan secara otomatis memanggil `signOut()` dan mengalihkan pengguna ke `/login?verified=true`.
+3. **Pemuatan Pesan Sukses**:
+   - Halaman [Login.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Login.tsx) sudah mendukung parameter `verified=true` dan akan menampilkan pesan hijau: *"Email berhasil diverifikasi! Silakan login dengan email dan kata sandi Anda."*
+4. **File Skema Lokal & SQL Script**:
+   - Menyelaraskan berkas [supabase_schema.sql](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/supabase_schema.sql).
+   - Menulis perbaikan SQL ke berkas [fix_trigger.sql](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/scratch/fix_trigger.sql).
 
-## 2. Hasil Pengujian
-Proses kompilasi dan build produksi lokal telah berhasil dijalankan menggunakan Vite tanpa ada error Typescript maupun CSS:
-```bash
-vite v6.4.1 building for production...
-transforming...
-✓ 2521 modules transformed.
-rendering chunks...
-✓ built in 29.59s
-```
-Semua fungsionalitas dan logika state (saldo, riwayat transaksi, chat, dll.) tetap utuh dan berfungsi penuh seperti sebelumnya.
+## 2. Petunjuk Perbaikan (Langkah Wajib untuk User)
+1. Jika Anda belum melakukannya, silakan jalankan kembali script SQL perbaikan trigger terbaru di **SQL Editor** Supabase Anda menggunakan berkas:
+   [fix_trigger.sql](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/scratch/fix_trigger.sql)
+2. Klik tombol **Run** untuk mengeksekusi script.
 
-## 3. Petunjuk Deploy (Untuk Cloudflare Pages)
-Karena Anda menggunakan Cloudflare Pages yang terintegrasi dengan GitHub, silakan jalankan perintah berikut untuk mengunggah perubahan ke produksi secara otomatis:
+## 3. Hasil Pengujian & Verifikasi Lokal
+1. **Build Sukses**:
+   Proses kompilasi dan build produksi lokal telah berhasil dijalankan menggunakan Vite tanpa ada error:
+   ```bash
+   vite build
+   ✓ built in 36.19s
+   ```
+2. **Verifikasi Alur**:
+   - Saat link autentikasi email diklik, URL akan membawa kode `?code=xxx`.
+   - Kode ini ditukarkan dengan sesi di latar belakang (memicu `SIGNED_IN` event), kemudian langsung di-intercept oleh `App.tsx` untuk di-signout secara instan.
+   - Pengguna diarahkan ke `/login?verified=true` dan diminta mengisi email/password untuk login.
 
+## 4. Cara Deploy Perubahan Kode
+Jalankan perintah berikut untuk mengunggah pembaruan ke repositori GitHub agar ter-deploy ke Cloudflare Pages secara otomatis:
 ```bash
 git add .
-git commit -m "style: enhance mitra dashboard visuals and typography"
+git commit -m "fix: resolve email confirmation auto-login behavior and cast user_role enum"
 git push origin main
 ```
-Setelah di-push, Cloudflare Pages akan memulai proses build otomatis dan menyebarkan versi terbaru dalam beberapa menit.

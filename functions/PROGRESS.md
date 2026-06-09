@@ -220,6 +220,12 @@
 - **Normalisasi Database & Trigger (`supabase_schema.sql`)**: Membuat tabel terpisah `public.agents` dan `public.mitra` yang terhubung 1-to-1 dengan tabel `public.users` lengkap dengan kebijakan keamanan Row Level Security (RLS). Memodifikasi fungsi trigger database `handle_new_user()` agar otomatis memetakan dan menyisipkan data profil ke tabel `agents` atau `mitra` yang sesuai berdasarkan peran akun saat konfirmasi email berhasil, serta mendukung migrasi retroaktif data user lama dengan aman.
 - **Integrasi Dashboard & Profil Agen (`AgentDashboard.tsx` & `AgentProfile.tsx`)**: Menyesuaikan pembacaan dan pembaruan kode referral agar terhubung langsung dengan tabel `public.agents` alih-alih `public.users`.
 
+### 39. Perbaikan Trigger Konfirmasi Email & Alur Login Registrasi (Auth) (Juni 2026)
+- **Perbaikan Sintaks SQL pada ON CONFLICT**: Mengatasi error `500 unexpected_failure (Error updating user)` saat verifikasi link email diklik dengan cara memperbaiki sintaks PostgreSQL pada trigger `handle_new_user()`. Kualifikasi nama skema penuh (`public.`) telah dihapus pada bagian `DO UPDATE SET` (`public.users.role` -> `users.role` dan `public.mitra.referred_by` -> `mitra.referred_by`) karena bertentangan dengan aturan standar SQL PostgreSQL dan memicu kegagalan kompilasi/eksekusi runtime.
+- **Explicit Type Casting enum**: Menambahkan casting tipe data `::public.user_role` pada nilai string `role` yang di-insert agar sesuai dengan tipe data kolom asli `role` di tabel `public.users` database.
+- **Interseptor Redirect Verifikasi (No Auto-Login)**: Memperbaiki perilaku auto-login otomatis setelah link email diklik pada alur PKCE (`?code=...`). Menambahkan deteksi parameter `code` (tanpa `mode=recovery`) pada interseptor `App.tsx` agar langsung memaksa `signOut()` dan mengalihkan pengguna ke `/login?verified=true` untuk memasukkan email dan password secara manual sesuai dengan alur UX yang diharapkan.
+- **Penyelarasan Berkas Skema**: Menyesuaikan berkas dokumentasi skema lokal `supabase_schema.sql` serta membuat file SQL perbaikan siap-pakai `fix_trigger.sql` agar dapat langsung dieksekusi oleh pemilik database.
+
 ## Fitur Dalam Pengerjaan (In Progress)
 -   Monitoring konsistensi Webhook Midtrans vs Supabase untuk transaksi multi-kost.
 -   Uji E2E transaksi nyata di Production (Smallest Amount).

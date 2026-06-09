@@ -208,7 +208,13 @@ const App: React.FC = () => {
 
       // Intercept verification redirect (signup)
       const hash = window.location.hash;
-      if (event === 'SIGNED_IN' && hash.includes('type=signup')) {
+      const search = window.location.search;
+      if (
+        event === 'SIGNED_IN' &&
+        (hash.includes('type=signup') ||
+          search.includes('type=signup') ||
+          (search.includes('code=') && !search.includes('mode=recovery')))
+      ) {
         await supabase.auth.signOut();
         navigate('/login?verified=true', { replace: true });
         return;
