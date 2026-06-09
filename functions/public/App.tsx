@@ -200,6 +200,7 @@ const App: React.FC = () => {
           if (role === 'admin') navigate(Page.DASHBOARD_ADMIN, { replace: true });
           else if (role === 'survey_agent') navigate(Page.DASHBOARD_AGENT, { replace: true });
           else if (role === 'owner') navigate(Page.DASHBOARD_MITRA, { replace: true });
+          else navigate(Page.HOME, { replace: true });
         }
       }
     } catch (err) {
@@ -575,9 +576,9 @@ const App: React.FC = () => {
                 } replace />
               ) : (
                 <Login onLoginSuccess={() => {
-                  // Clear recovery URL params to allow App.tsx to redirect
-                  if (window.location.search.includes('mode=recovery')) {
-                    window.history.replaceState({}, document.title, window.location.origin + window.location.pathname);
+                  // Clear recovery URL params to allow App.tsx to redirect (notifying React Router)
+                  if (location.search.includes('mode=recovery')) {
+                    navigate(Page.LOGIN, { replace: true });
                   }
                   supabase.auth.getSession().then(({ data: { session } }) => fetchUserData(session?.user ?? null));
                 }} />
