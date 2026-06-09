@@ -1069,8 +1069,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                         {tx.type}
                                                     </div>
                                                     <div className="min-w-0 flex-1">
-                                                        <p className="text-xs font-black text-gray-900 flex items-center gap-1.5 truncate">
-                                                            <span className="truncate">{tx.title}</span>
+                                                        <p className="text-xs font-black text-gray-900 flex items-center gap-1.5 min-w-0">
+                                                            <span className="truncate flex-1">{tx.title}</span>
                                                             {tx.type === 'OUT' && tx.status === 'pending' && (
                                                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800 uppercase tracking-wider shrink-0">Diproses</span>
                                                             )}
@@ -1400,7 +1400,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 </header>
 
                 {/* ── SCROLLABLE CONTENT ───────────────────────────────────── */}
-                <main className="flex-1 p-4 lg:p-8 pb-32">
+                <main className="flex-1 p-4 lg:p-8 pb-32 min-w-0 overflow-x-hidden">
                     {activeMenu === 'overview' && <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">{renderOverview()}</div>}
                     {activeMenu === 'tasks' && <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">{renderTasks()}</div>}
                     {activeMenu === 'wallet' && <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">{renderWallet()}</div>}

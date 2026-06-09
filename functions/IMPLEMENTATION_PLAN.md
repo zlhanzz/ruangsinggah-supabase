@@ -1,27 +1,28 @@
-# IMPLEMENTATION PLAN - Perbaikan Layout Dompet/Wallet (Responsive Overflow)
+# IMPLEMENTATION PLAN - Perbaikan Layout Dompet/Wallet (Responsive Overflow - Tahap 2)
 
-Rencana ini dibuat untuk memperbaiki masalah di mana menu Dompet/Saldo tidak pas (fit) dengan lebar layar dan melimpah (overflow) ke kanan pada perangkat mobile/layar kecil.
+Rencana ini dibuat untuk memperbaiki masalah horizontal overflow pada menu Dompet secara tuntas dengan menyetel flex item truncation yang benar dan membatasi lebar main content area.
 
 ## 1. Analisis Masalah
 - **Penyebab Layout Melar (Horizontal Overflow)**:
-  - Pada daftar transaksi (`allTransactions`), properti `tx.title` sering kali memuat string URL peta yang sangat panjang tanpa spasi (misalnya: `https://maps.app.goo.gl/...`).
-  - Karena flexbox secara default tidak memotong kata panjang (`word-break`), string URL ini melebarkan container secara horizontal dan mendorong kolom nominal transaksi keluar dari layar.
-  - Selain itu, tombol tab navigasi Dompet ("DOMPET", "RIWAYAT WD", "REKENING") menggunakan ukuran font `text-xs` dengan `tracking-widest` (letter-spacing lebar) yang melebihi kapasitas lebar layar ponsel kecil, sehingga teks "REKENING" terpotong.
+  - Pada baris transaksi, tag `<p className="text-xs font-black text-gray-900 flex items-center gap-1.5 truncate">` disetel sebagai flex container (`flex`). 
+  - Di dalam flexbox, kelas `truncate` pada parent flex tidak berfungsi, dan child `<span>` yang berisi URL panjang tidak akan terpotong (truncate) karena parent `<p>` tidak memiliki properti `min-w-0`.
+  - Hal ini memaksa elemen baris transaksi melebar melebihi layar ponsel dan merusak seluruh grid halaman.
 - **Solusi**:
-  - Terapkan `min-w-0` pada container judul transaksi dan tambahkan kelas `truncate` atau `break-all` pada elemen teks `tx.title` agar URL panjang terpotong rapi dengan elipsis (`...`).
-  - Ubah spesifikasi teks tab tombol agar menggunakan `text-[10px] sm:text-xs` dan `tracking-wider` agar muat di semua layar ponsel pintar.
+  - Tambahkan properti `min-w-0` pada tag `<p>` flex container transaksi.
+  - Setel `flex-1 truncate` pada tag `<span>` yang membungkus `tx.title` agar text panjang (URL) terpotong dengan benar.
+  - Tambahkan `min-w-0 overflow-x-hidden` pada elemen `<main>` di `AgentDashboard.tsx` sebagai jaring pengaman agar layout halaman tidak akan pernah bisa melar secara horizontal pada layar ponsel.
 
 ## 2. Dampak Perubahan
 File yang akan disentuh:
-1. `functions/public/pages/AgentDashboard.tsx` (Update rendering tab header dan layout row transaksi pada `renderWallet`).
+1. `functions/public/pages/AgentDashboard.tsx` (Update main wrapper classes dan class inline pada transaksi).
 
 ## 3. Langkah-Langkah Eksekusi
 1. **Modifikasi `AgentDashboard.tsx`**:
-   - Di tab navigasi dompet, ubah `text-xs tracking-widest` menjadi `text-[10px] sm:text-xs tracking-wider`.
-   - Di loop rendering `allTransactions`, bungkus teks info dengan wrapper `min-w-0` dan tambahkan `truncate` ke tag judul agar tidak melebar.
+   - Di bagian `renderWallet`, ubah baris penulisan judul transaksi agar menggunakan `min-w-0` pada flex parent `<p>` dan `flex-1 truncate` pada `<span>` judul.
+   - Di bagian bawah file pada render elemen `<main>`, ubah kelasnya menjadi `flex-1 p-4 lg:p-8 pb-32 min-w-0 overflow-x-hidden`.
 2. **Verifikasi & Build**:
    - Jalankan `npm run build` untuk memvalidasi keberhasilan kompilasi.
 
 ## 4. Rencana Verifikasi
 - Memastikan build berhasil tanpa kesalahan kompilasi.
-- Buka menu Dompet pada mode responsif (ponsel pintar) dan pastikan seluruh elemen (tab navigasi, banner kuning, dan daftar transaksi) muat pas dalam lebar layar dengan rapi tanpa scroll horizontal.
+- Buka dashboard agen pada menu Dompet di simulator mobile dan pastikan seluruh kolom, tombol tab, dan daftar transaksi fit dengan lebar layar secara sempurna tanpa ada scroll horizontal.
