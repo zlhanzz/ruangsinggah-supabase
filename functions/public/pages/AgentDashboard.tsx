@@ -302,6 +302,29 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             setIsWithdrawing(false);
         }
     };
+    const getSurveyWorkDate = (r: any): Date => {
+        if (r.evaluation_summary?.submitted_at) {
+            return new Date(r.evaluation_summary.submitted_at);
+        }
+        const summary = r.evaluation_summary || {};
+        for (const key in summary) {
+            if (key.endsWith('_photos') && Array.isArray(summary[key])) {
+                for (const url of summary[key]) {
+                    if (typeof url === 'string') {
+                        const match = url.match(/\/(\d+)_[a-zA-Z0-9]+\.webp/);
+                        if (match && match[1]) {
+                            const epoch = parseInt(match[1]);
+                            if (epoch > 1700000000000 && epoch < 2000000000000) {
+                                return new Date(epoch);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return new Date(r.created_at);
+    };
+
     const getWeeklyData = () => {
         const daysMap = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
         const result = [];
@@ -320,12 +343,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             const dayLabel = daysMap[date.getDay()];
             
             const tasksCount = completedSurveys.filter(r => {
-                const dateStr = (r as any).updated_at || r.created_at;
-                if (dateStr) {
-                    const d = new Date(dateStr);
-                    return d >= startOfDay && d <= endOfDay;
-                }
-                return false;
+                const workDate = getSurveyWorkDate(r);
+                return workDate >= startOfDay && workDate <= endOfDay;
             }).length;
 
             result.push({
@@ -381,7 +400,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             // Change status to SUBMITTED for user confirmation
             const finalForm = {
                 ...surveyForm,
-                status: 'SUBMITTED'
+                status: 'SUBMITTED',
+                evaluation_summary: {
+                    ...(surveyForm.evaluation_summary || {}),
+                    submitted_at: new Date().toISOString()
+                }
             };
             await updateSurveyRequest(isEditingSurvey.id, finalForm);
             await notifySurveyStatusUpdate(isEditingSurvey.id, 'SUBMITTED');

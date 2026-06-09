@@ -1,23 +1,25 @@
-# WALKTHROUGH - Batas Minimal Penarikan Saldo Agen Survey (10k)
+# WALKTHROUGH - Perbaikan Akurasi Grafik Aktivitas Mingguan Surveyor
 
-Dokumen ini berisi rincian perubahan, hasil pengujian, dan instruksi deployment untuk penyesuaian batas minimal penarikan saldo (withdraw) agen survey dari Rp 50.000 menjadi Rp 10.000.
+Dokumen ini berisi rincian perubahan, hasil pengujian, dan instruksi deployment untuk perbaikan akurasi penanggalan grafik mingguan di Dashboard Agen.
 
 ## 1. Daftar Perubahan
 - **Berkas yang Diubah**:
   1. [AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx)
-  2. [Dashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Dashboard.tsx)
 - **Rincian Modifikasi**:
   - **`AgentDashboard.tsx`**:
-    - Mengubah kondisi minimal penarikan dari `availableBalance < 50000` menjadi `availableBalance < 10000` di fungsi `handleWithdraw`.
-    - Menyesuaikan pesan alert menjadi: `'Saldo minimal untuk penarikan adalah Rp 10.000'`.
-  - **`Dashboard.tsx`**:
-    - Mengubah pengecekan `netEarnings < 50000` menjadi `netEarnings < 10000` di fungsi `handleWithdraw`.
-    - Mengubah pengecekan `netBalance < 50000` menjadi `netBalance < 10000` di tombol aksi Tarik Saldo.
-    - Menyesuaikan pesan kesalahan alert di kedua tempat agar menampilkan Rp 10.000.
+    - Menambahkan fungsi helper `getSurveyWorkDate` untuk mendeteksi tanggal pengiriman laporan survei yang sesungguhnya secara dinamis:
+      1. Membaca `submitted_at` di dalam `evaluation_summary` (jika tersedia).
+      2. Mengekstrak epoch timestamp dari URL foto bukti laporan survei (misal: `1780719322976_abc.webp` menjadi `June 7`) jika data historis belum merekam `submitted_at`.
+      3. Fallback ke `created_at` jika tidak ada foto/timestamp.
+    - Mengubah `getWeeklyData` agar memanggil `getSurveyWorkDate` saat memfilter sebaran tugas harian.
+    - Mengubah `handleUpdateSurvey` agar menyisipkan properti `submitted_at: new Date().toISOString()` di dalam `evaluation_summary` ketika surveyor mengirimkan laporan baru.
 
 ## 2. Hasil Pengujian
-- **Kompilasi TypeScript**: Sukses. Kompilasi build frontend via `cmd.exe /c npm run build` diselesaikan tanpa adanya kesalahan tipe atau modul.
-- **Fungsionalitas**: Agen kini dapat memicu pengajuan penarikan dana dengan saldo minimal Rp 10.000.
+- **Kompilasi TypeScript**: Sukses. Kompilasi frontend via `cmd.exe /c npm run build` diselesaikan tanpa kesalahan tipe atau modul.
+- **Validasi Distribusi Tanggal**:
+  - Tugas yang diselesaikan pada hari Sabtu terpetakan dengan benar ke hari Sabtu ("Sab").
+  - Tugas yang diselesaikan pada hari Senin terpetakan dengan benar ke hari Senin ("Sen").
+  - Grafik tidak lagi menampilkan seluruh tugas menumpuk di hari Senin saja.
 
 ## 3. Petunjuk Deploy
 Jalankan perintah berikut pada terminal di dalam direktori `functions` untuk membangun dan meluncurkan aplikasi lokal Anda:
