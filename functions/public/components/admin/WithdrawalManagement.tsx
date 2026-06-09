@@ -19,21 +19,16 @@ interface WithdrawalRequest {
     };
 }
 
-interface WithdrawalManagementProps {
-    loading: boolean;
-    setLoading: (loading: boolean) => void;
-}
+interface WithdrawalManagementProps {}
 
-const WithdrawalManagement: React.FC<WithdrawalManagementProps> = ({
-    loading,
-    setLoading
-}) => {
+const WithdrawalManagement: React.FC<WithdrawalManagementProps> = () => {
+    const [localLoading, setLocalLoading] = useState(false);
     const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [tab, setTab] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
 
     const loadWithdrawals = async () => {
-        setLoading(true);
+        setLocalLoading(true);
         try {
             const { data, error } = await supabase
                 .from('withdrawal_requests')
@@ -52,7 +47,7 @@ const WithdrawalManagement: React.FC<WithdrawalManagementProps> = ({
         } catch (err) {
             console.error('Error loading withdrawals:', err);
         } finally {
-            setLoading(false);
+            setLocalLoading(false);
         }
     };
 
@@ -64,7 +59,7 @@ const WithdrawalManagement: React.FC<WithdrawalManagementProps> = ({
         const action = newStatus === 'approved' ? 'menyetujui' : 'menolak';
         if (!window.confirm(`Apakah Anda yakin ingin ${action} pengajuan penarikan ini?`)) return;
 
-        setLoading(true);
+        setLocalLoading(true);
         try {
             const { error } = await supabase
                 .from('withdrawal_requests')
@@ -82,7 +77,7 @@ const WithdrawalManagement: React.FC<WithdrawalManagementProps> = ({
             console.error('Error updating withdrawal status:', err);
             alert('Gagal memperbarui status penarikan.');
         } finally {
-            setLoading(false);
+            setLocalLoading(false);
         }
     };
 
@@ -151,7 +146,7 @@ const WithdrawalManagement: React.FC<WithdrawalManagementProps> = ({
                 </button>
             </div>
 
-            {loading ? (
+            {localLoading ? (
                 <div className="py-20 text-center font-bold text-gray-400 uppercase tracking-widest animate-pulse">Memuat Pengajuan WD...</div>
             ) : (
                 <div className="bg-white border border-gray-100 rounded-3xl overflow-hidden shadow-sm">

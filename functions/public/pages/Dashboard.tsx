@@ -2906,10 +2906,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
                                          />
                                      )}
                                      {activeMenu === 'withdrawals' && isAdmin && (
-                                         <WithdrawalManagement
-                                             loading={loading}
-                                             setLoading={setLoading}
-                                         />
+                                         <WithdrawalManagement />
                                      )}
                                     {activeMenu === 'tenants' && isAdmin && (
                                         <UserManagement
