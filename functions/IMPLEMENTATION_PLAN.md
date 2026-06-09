@@ -1,30 +1,29 @@
-# IMPLEMENTATION PLAN - Perbaikan Relasi Database Kelola WD Admin
+# IMPLEMENTATION PLAN - Batas Minimal Penarikan Saldo Agen Survey (10k)
 
-Rencana ini dibuat untuk memperbaiki masalah di mana pengajuan penarikan dana (withdraw) dari agen tidak muncul di dashboard admin akibat tidak adanya foreign key eksplisit di database antara tabel `withdrawal_requests` dan `users`.
+Rencana ini dibuat untuk menurunkan batas minimum penarikan saldo (withdraw) agen survey dari Rp 50.000 menjadi Rp 10.000.
 
 ## 1. Analisis Masalah
-- **Penyebab Data Tidak Muncul**:
-  - Komponen `WithdrawalManagement.tsx` memanggil Supabase dengan join query: `.select('*, agent:users(...)')`.
-  - Karena tidak ada constraint foreign key resmi di database Supabase antara `withdrawal_requests.agent_id` dan `users.id`, engine PostgREST mengembalikan error `PGRST200` ("Could not find a relationship between...").
-  - Hal ini menyebabkan pemanggilan API gagal (`error` tidak null) dan `withdrawals` state diset/dibiarkan sebagai array kosong `[]`. Akibatnya dashboard admin menampilkan "Tidak ada pengajuan penarikan" (0 data).
-- **Solusi**:
-  - Ubah query di `WithdrawalManagement.tsx` agar melakukan penarikan data secara manual bertahap:
-    1. Ambil data mentah dari `withdrawal_requests`.
-    2. Ekstrak kumpulan `agent_id` unik dari data tersebut.
-    3. Lakukan query ke tabel `users` menggunakan filter `.in('id', agentIds)` untuk mendapatkan informasi nama, email, dan telepon.
-    4. Petakan (mapping) informasi user tersebut ke objek `withdrawal_requests` di frontend sebelum menyimpan ke state `withdrawals`.
+- **Persyaratan**: Batas minimal penarikan saldo diturunkan menjadi Rp 10.000 (10k rupiah).
+- **Lokasi Kode Terkait**:
+  1. `functions/public/pages/AgentDashboard.tsx` (Baris ke-263 & 264)
+  2. `functions/public/pages/Dashboard.tsx` (Baris ke-511 dan 2488)
 
 ## 2. Dampak Perubahan
 File yang akan disentuh:
-1. `functions/public/components/admin/WithdrawalManagement.tsx` (Mengubah fungsi `loadWithdrawals` agar melakukan manual mapping/join).
+1. [AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx)
+2. [Dashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Dashboard.tsx)
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Modifikasi `WithdrawalManagement.tsx`**:
-   - Ganti implementasi query dalam `loadWithdrawals` agar tidak menggunakan join resources `.select('*, agent:users(...)')`.
-   - Implementasikan parallel/sequential query ke tabel `users` menggunakan set of IDs dan lakukan map matching.
-2. **Verifikasi & Build**:
+1. **Modifikasi `AgentDashboard.tsx`**:
+   - Ganti validasi `availableBalance < 50000` menjadi `availableBalance < 10000`.
+   - Ubah pesan alert menjadi `'Saldo minimal untuk penarikan adalah Rp 10.000'`.
+2. **Modifikasi `Dashboard.tsx`**:
+   - Ganti validasi `netEarnings < 50000` menjadi `netEarnings < 10000`.
+   - Ganti validasi `netBalance < 50000` menjadi `netBalance < 10000`.
+   - Sesuaikan pesan alert terkait batas Rp 10.000.
+3. **Verifikasi & Build**:
    - Jalankan `npm run build` untuk memvalidasi keberhasilan kompilasi.
 
 ## 4. Rencana Verifikasi
 - Memastikan build berhasil tanpa kesalahan kompilasi.
-- Buka dashboard admin dan pastikan daftar pengajuan WD dari agen muncul secara lengkap beserta nama, nominal, dan detail bank agen.
+- Verifikasi batas saldo baru saat proses penarikan diuji/diinput.

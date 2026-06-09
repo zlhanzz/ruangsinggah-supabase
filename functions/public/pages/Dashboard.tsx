@@ -508,7 +508,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
         const totalWithdrawn = agentWithdrawalHistory.filter(w => w.status !== 'Ditolak').reduce((sum, item) => sum + (item.amount || 0), 0);
         const netEarnings = totalEarnings - totalWithdrawn;
 
-        if (netEarnings < 50000) return alert('Saldo yang dapat ditarik minimal Rp 50.000');
+        if (netEarnings < 10000) return alert('Saldo yang dapat ditarik minimal Rp 10.000');
         if (!agentBankAccount || !agentBankAccountName) return alert('Silakan simpan profil rekening Anda terlebih dahulu.');
         
         setIsSavingWalletProfile(true);
@@ -2485,7 +2485,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, li
 
                 <button 
                     onClick={() => {
-                        if (netBalance < 50000) return alert('Saldo minimal penarikan adalah Rp 50.000');
+                        if (netBalance < 10000) return alert('Saldo minimal penarikan adalah Rp 10.000');
                         if (!agentBankAccount || !agentBankAccountName) return alert('Silakan simpan profil rekening Anda terlebih dahulu di tab "Rekening Saya".');
                         setShowWithdrawConfirm(true);
                     }}

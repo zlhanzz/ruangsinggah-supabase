@@ -1,20 +1,23 @@
-# WALKTHROUGH - Perbaikan Relasi Database Kelola WD Admin
+# WALKTHROUGH - Batas Minimal Penarikan Saldo Agen Survey (10k)
 
-Dokumen ini berisi rincian perubahan, hasil pengujian, dan instruksi deployment untuk perbaikan masalah pengajuan withdraw dari agen yang tidak terlihat di Dashboard Admin.
+Dokumen ini berisi rincian perubahan, hasil pengujian, dan instruksi deployment untuk penyesuaian batas minimal penarikan saldo (withdraw) agen survey dari Rp 50.000 menjadi Rp 10.000.
 
 ## 1. Daftar Perubahan
 - **Berkas yang Diubah**:
-  1. [WithdrawalManagement.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/WithdrawalManagement.tsx)
+  1. [AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx)
+  2. [Dashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Dashboard.tsx)
 - **Rincian Modifikasi**:
-  - **`WithdrawalManagement.tsx`**:
-    - Mengubah fungsi `loadWithdrawals` yang sebelumnya memanggil join query `.select('*, agent:users(...)')` menjadi dua tahap query bertahap di sisi client.
-    - Tahap 1: Mengambil data mentah dari `withdrawal_requests`.
-    - Tahap 2: Mengambil data user yang sesuai dari tabel `users` berdasarkan kumpulan ID unik `agent_id` menggunakan operator `.in()`.
-    - Tahap 3: Melakukan mapping data user ke masing-masing pengajuan di frontend secara manual. Hal ini mengeliminasi ketergantungan relasi database foreign key eksplisit di PostgREST Supabase.
+  - **`AgentDashboard.tsx`**:
+    - Mengubah kondisi minimal penarikan dari `availableBalance < 50000` menjadi `availableBalance < 10000` di fungsi `handleWithdraw`.
+    - Menyesuaikan pesan alert menjadi: `'Saldo minimal untuk penarikan adalah Rp 10.000'`.
+  - **`Dashboard.tsx`**:
+    - Mengubah pengecekan `netEarnings < 50000` menjadi `netEarnings < 10000` di fungsi `handleWithdraw`.
+    - Mengubah pengecekan `netBalance < 50000` menjadi `netBalance < 10000` di tombol aksi Tarik Saldo.
+    - Menyesuaikan pesan kesalahan alert di kedua tempat agar menampilkan Rp 10.000.
 
 ## 2. Hasil Pengujian
-- **Kompilasi TypeScript**: Sukses. Kompilasi frontend via `cmd.exe /c npm run build` diselesaikan tanpa kesalahan tipe atau modul.
-- **Pengujian Database & Mapping**: Pengetesan manual menggunakan skrip Node.js membuktikan relasi berhasil dijembatani secara terprogram di sisi frontend, data pengajuan WD beserta nama agen "Sulhan" (zhull) berhasil didapatkan dan dimuat secara aman.
+- **Kompilasi TypeScript**: Sukses. Kompilasi build frontend via `cmd.exe /c npm run build` diselesaikan tanpa adanya kesalahan tipe atau modul.
+- **Fungsionalitas**: Agen kini dapat memicu pengajuan penarikan dana dengan saldo minimal Rp 10.000.
 
 ## 3. Petunjuk Deploy
 Jalankan perintah berikut pada terminal di dalam direktori `functions` untuk membangun dan meluncurkan aplikasi lokal Anda:

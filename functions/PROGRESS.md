@@ -160,6 +160,9 @@
 ### 31. Perbaikan Relasi Database Kelola WD Admin (Juni 2026)
 - **Manual Mapping/Join di Client-Side**: Mengganti join resource `.select('*, agent:users(...)')` di `WithdrawalManagement.tsx` dengan pemanggilan data bertahap dan melakukan pemetaan (matching) manual berbasis `Map` di frontend. Ini mengatasi error PostgREST `PGRST200` akibat tidak adanya foreign key eksplisit di database antara tabel `withdrawal_requests` dan `users`, sehingga pengajuan penarikan dana agen dapat tampil dengan sukses di dashboard admin.
 
+### 32. Penurunan Batas Saldo Minimal Penarikan Agen Survey (Juni 2026)
+- **Batas Withdraw 10k**: Mengubah validasi saldo minimal penarikan di `AgentDashboard.tsx` dan `Dashboard.tsx` dari Rp 50.000 menjadi Rp 10.000, serta menyelaraskan notifikasi pesan alert agar sesuai dengan batas minimum baru.
+
 ## Fitur Dalam Pengerjaan (In Progress)
 -   Monitoring konsistensi Webhook Midtrans vs Supabase untuk transaksi multi-kost.
 -   Uji E2E transaksi nyata di Production (Smallest Amount).

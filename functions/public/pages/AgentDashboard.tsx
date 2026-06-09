@@ -260,8 +260,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         .slice(0, 5);
 
     const handleWithdraw = async () => {
-        if (availableBalance < 50000) {
-            alert('Saldo minimal untuk penarikan adalah Rp 50.000');
+        if (availableBalance < 10000) {
+            alert('Saldo minimal untuk penarikan adalah Rp 10.000');
             return;
         }
         if (!agentBankName || !agentBankAccount || !agentAccountName) {
