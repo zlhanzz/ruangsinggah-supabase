@@ -60,8 +60,15 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
-  const [activeRole, setActiveRole] = useState<'user' | 'owner'>('user');
+  const [activeRole, setActiveRole] = useState<'user' | 'owner'>(() => {
+    const saved = localStorage.getItem('portal_view');
+    return (saved === 'owner' || saved === 'user') ? saved : 'user';
+  });
   const [referralCode, setReferralCode] = useState('');
+
+  useEffect(() => {
+    localStorage.setItem('portal_view', activeRole);
+  }, [activeRole]);
 
   // WhatsApp OTP states
   const [waOtpCode, setWaOtpCode] = useState('');
@@ -98,7 +105,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setShowNewPassword(false);
     setShowConfirmPassword(false);
     setResendTimer(0);
-    setActiveRole('user');
     setReferralCode('');
     setWaOtpCode('');
     setWaOtpInput('');
@@ -126,6 +132,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (params.get('error') === 'blocked') {
       setErrorMsg('Akun Anda telah ditangguhkan. Silakan hubungi admin untuk informasi lebih lanjut.');
+      // Clear param from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (params.get('error') === 'role_mismatch') {
+      setErrorMsg('Akun Anda tidak terdaftar sebagai Pemilik Kost. Silakan login sebagai Pencari Kost.');
       // Clear param from URL
       window.history.replaceState({}, document.title, window.location.pathname);
     }
