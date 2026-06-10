@@ -162,6 +162,13 @@ const App: React.FC = () => {
       let role = profile.role || 'user';
       if (profile.is_admin === true && (role === 'user' || role === 'mitra' || role === 'owner')) role = 'admin'; // Admin override
       
+      // Normalize 'mitra' or 'owner' to 'owner' for internal logic consistency
+      const normalizedRole = role.toLowerCase();
+      if (normalizedRole === 'mitra' || normalizedRole === 'owner') role = 'owner';
+      else if (normalizedRole === 'admin') role = 'admin';
+      else if (normalizedRole === 'survey_agent') role = 'survey_agent';
+      else role = 'user';
+
       // --- AKURASI PORTAL LOGIN PER ROLE ---
       const portalView = localStorage.getItem('portal_view') || 'user';
       if (portalView === 'owner' && role !== 'owner' && role !== 'admin') {
@@ -179,6 +186,7 @@ const App: React.FC = () => {
       }
 
       console.log("Determined role:", role);
+
 
       const safeUser = {
         uid: supabaseUser.id,
