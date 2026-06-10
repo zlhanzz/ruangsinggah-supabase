@@ -1,24 +1,21 @@
-# IMPLEMENTATION PLAN - Perbaikan Z-Index Sidebar Overlay Pada Dashboard Mitra
+# IMPLEMENTATION PLAN - Penghapusan Tombol Kembali ke Beranda di Dashboard Mitra
 
-Rencana ini dibuat untuk memperbaiki masalah tumpang tindih (overlap) antara sidebar mobile overlay dengan bar navigasi meluler (mobile bottom nav) di Dashboard Mitra.
+Rencana ini dibuat untuk menghapus tombol "Kembali ke Beranda" dari sidebar Dashboard Mitra (baik desktop maupun mobile overlay), menyisakan hanya tombol "Keluar Akun" (Logout) demi kesederhanaan dan fokus fungsionalitas panel kontrol pemilik kost.
 
 ## 1. Analisis Masalah
-- **Masalah**:
-  1. Kontainer sidebar seluler (`mobileSidebarOpen`) menggunakan kelas `z-50`.
-  2. Komponen bar navigasi bawah seluler (`Bottom Nav`) juga menggunakan kelas `z-50`.
-  3. Ketika sidebar dibuka, keduanya berada pada level tumpukan z-index yang sama, sehingga bar navigasi bawah tetap terlihat menumpuk di atas/bawah sidebar dan menghalangi visual.
-- **Solusi**: Tingkatkan tingkat z-index dari kontainer sidebar mobile overlay menjadi `z-[100]` agar menutupi seluruh komponen navigasi bawah dan tombol simulasi waktu lainnya ketika aktif.
+- **Masalah**: Pengguna merasa tombol "Kembali ke Beranda" tidak diperlukan di dalam menu sidebar Dashboard Mitra.
+- **Solusi**: Hapus elemen button "Kembali ke Beranda" dari bagian bawah sidebar desktop dan sidebar mobile overlay pada [MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx).
 
 ## 2. Dampak Perubahan
 File yang akan diubah:
 1. `functions/public/pages/MitraDashboard.tsx`:
-   - Ubah kelas `z-50` pada div kontainer `mobileSidebarOpen` menjadi `z-[100]`.
+   - Hapus kode render tombol "Kembali ke Beranda" di sidebar desktop dan mobile overlay.
 
 ## 3. Langkah-Langkah Eksekusi
 1. **Modifikasi `functions/public/pages/MitraDashboard.tsx`**:
-   - Cari kontainer `mobileSidebarOpen` dan perbarui z-index-nya.
+   - Cari blok kode tombol "Kembali ke Beranda" dan hapus.
 2. **Kompilasi Frontend**:
-   - Jalankan `npm run build` di folder `functions/public` untuk memastikan build tetap berhasil.
+   - Jalankan `npm run build` di folder `functions/public` untuk memvalidasi build.
 
 ## 4. Rencana Verifikasi
-- Verifikasi bahwa ketika sidebar seluler dibuka, bar navigasi bawah sepenuhnya tertutup di bawah overlay gelap dan sidebar.
+- Verifikasi visual di sidebar desktop dan mobile overlay hanya menampilkan tombol "Keluar Akun".

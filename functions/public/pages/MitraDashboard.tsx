@@ -601,15 +601,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     ))}
                 </nav>
 
-                {/* Back & Logout Options */}
-                <div className="p-4 border-t border-gray-50 space-y-1">
-                    <button
-                        onClick={() => onPageChange?.(Page.HOME)}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-950 transition-colors"
-                    >
-                        <Home size={18} />
-                        Kembali ke Beranda
-                    </button>
+                {/* Logout Option */}
+                <div className="p-4 border-t border-gray-50">
                     <button
                         onClick={() => onLogout?.()}
                         className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors"
@@ -618,6 +611,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                         Keluar Akun
                     </button>
                 </div>
+
 
             </aside>
 
@@ -665,14 +659,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 />
                             ))}
                         </nav>
-                        <div className="p-4 border-t border-gray-50 space-y-1">
-                            <button
-                                onClick={() => onPageChange?.(Page.HOME)}
-                                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-950 transition-colors"
-                            >
-                                <Home size={18} />
-                                Kembali ke Beranda
-                            </button>
+                        <div className="p-4 border-t border-gray-50">
                             <button
                                 onClick={() => { onLogout?.(); setMobileSidebarOpen(false); }}
                                 className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors"
@@ -681,6 +668,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 Keluar Akun
                             </button>
                         </div>
+
 
                     </aside>
                 </div>
