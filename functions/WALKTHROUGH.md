@@ -1,35 +1,35 @@
-# WALKTHROUGH - Batasan Gerbang Login Unik per Role, Perbaikan Normalisasi Peran & Penanganan Chunk Load Error
+# WALKTHROUGH - Hamburger Menu, Fitur Logout, Batasan Gerbang Login, & Penanganan Chunk Load Error
 
-Dokumen ini menjelaskan detail perubahan untuk membatasi akses login berdasarkan peran aktif (portal Pencari Kost vs Pemilik Kost), perbaikan alur normalisasi peran dari database, serta mekanisme otomatisasi refresh halaman saat terjadi kegagalan pemuatan file (chunk load error) pasca deploy baru.
+Dokumen ini menjelaskan detail perubahan untuk menambahkan tombol hamburger menu, memisahkan aksi Kembali ke Beranda dan Logout sesungguhnya di Dashboard Mitra, membatasi login gerbang unik, serta menangani error pemuatan file chunk otomatis.
 
 ## 1. Daftar Perubahan
-1. **Sinkronisasi Tab Login Portal ke `localStorage`**:
-   - Memodifikasi [Login.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Login.tsx).
-   - Menyimpan pilihan tab login (`activeRole` - `'user'` atau `'owner'`) ke `localStorage` dengan key `portal_view` secara dinamis.
-   - Mencegah perubahan tab secara otomatis ketika form di-reset (`resetForm`).
-   - Menambahkan deteksi dan tampilan pesan kesalahan `role_mismatch` apabila pengguna biasa mencoba mengakses portal mitra.
+1. **Pemicu Hamburger Menu (Garis 3) di Tampilan Seluler**:
+   - Memodifikasi [MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx).
+   - Menambahkan elemen `<header className="lg:hidden ...">` di area konten utama untuk merender tombol hamburger garis 3 (ikon `Menu` dari `lucide-react`) saat diakses menggunakan resolusi HP/seluler.
+   - Pemicu ini sukses membuka sidebar mobile overlay (`setMobileSidebarOpen(true)`).
 
-2. **Normalisasi Peran Database & Validasi Gerbang Login**:
-   - Memodifikasi [App.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/App.tsx) di dalam fungsi `fetchUserData`.
-   - Mengembalikan pemetaan dan normalisasi peran (`role`) dari database (mengubah `'mitra'` / `'owner'` menjadi `'owner'`) secara eksplisit sebelum divalidasi.
-   - Mengambil `portal_view` untuk divalidasi dengan peran yang sudah dinormalisasi:
-     - Jika pengguna masuk ke portal Pemilik Kost (`portal_view === 'owner'`) namun peran aslinya bukan `'owner'` atau `'admin'`, maka sesi otentikasi Supabase langsung dibatalkan (`signOut`) dan diarahkan kembali ke halaman login dengan pesan error parameter `role_mismatch`.
-     - Jika pemilik kost masuk ke portal Pencari Kost (`portal_view === 'user'`) namun peran aslinya adalah `'owner'`, perannya secara visual di frontend ditimpa menjadi `'user'`, menyembunyikan akses dashboard mitra dan menyajikan tampilan pencari kost biasa.
-   - Menghapus nilai `portal_view` dari `localStorage` saat pengguna melakukan logout (`handleLogout`).
+2. **Pemberian Fungsi Logout Akun yang Sesungguhnya**:
+   - Memodifikasi [MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx) & [App.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/App.tsx).
+   - Menambahkan prop callback `onLogout` ke dalam properti `MitraDashboardProps` dan menyalurkannya dari fungsi `handleLogout` global di `App.tsx`.
+   - Mengubah navigasi sidebar (baik sidebar desktop maupun mobile overlay) agar memiliki dua pilihan yang terpisah:
+     - **Kembali ke Beranda** (ikon `Home`) - melakukan navigasi biasa ke halaman utama (`Page.HOME`).
+     - **Keluar Akun** (ikon `LogOut` merah) - benar-benar mengakhiri sesi otentikasi di Supabase.
 
-3. **Penanganan Otomatis Chunk Load Error**:
-   - Memodifikasi [index.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/index.tsx).
-   - Menambahkan event listener global (`error` dan `unhandledrejection`) untuk menangkap error pemuatan aset dinamis (seperti `Failed to fetch dynamically imported module` atau `ChunkLoadError`).
-   - Apabila terdeteksi, sistem secara otomatis melakukan refresh halaman penuh (`window.location.reload()`) untuk mengambil berkas HTML dan file manifes manifest yang paling baru dari server tanpa perlu pengguna melakukan hard refresh secara manual.
+3. **Sinkronisasi Tab Login Portal & Normalisasi**:
+   - Menyimpan pilihan tab login ke `localStorage` dengan key `portal_view` untuk memvalidasi gerbang masuk user vs mitra.
+   - Memastikan normalisasi peran database lama (`'mitra'`) menjadi `'owner'` berjalan dengan benar sebelum validasi akses gerbang login.
+
+4. **Penanganan Otomatis Chunk Load Error**:
+   - Menambahkan listener global pada [index.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/index.tsx) untuk me-reload browser otomatis jika terjadi kegagalan modul dynamic import pasca deployment aset baru.
 
 ## 2. Hasil Pengujian & Verifikasi
 1. **Kompilasi Frontend Sukses**:
-   - Menjalankan `npm run build` di folder `functions/public` sukses tanpa error tipe data (`✓ built in 32.85s`).
+   - Menjalankan `npm run build` di folder `functions/public` sukses tanpa error tipe data (`✓ built in 29.89s`).
 
 ## 3. Cara Deploy Perubahan Kode
 Lakukan push commit ke repositori Git untuk mendeploy pembaruan frontend secara otomatis:
 ```bash
 git add .
-git commit -m "fix: reload window on dynamic chunk load errors"
+git commit -m "feat: add mobile hamburger menu and real logout to partner dashboard"
 git push origin main
 ```

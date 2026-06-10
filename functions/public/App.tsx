@@ -642,6 +642,7 @@ const App: React.FC = () => {
                   onAddKost={handleAddKost}
                   onEditKost={handleEditKost}
                   onDeleteKost={handleDeleteKost}
+                  onLogout={handleLogout}
                 />
               </ProtectedRoute>
             } />

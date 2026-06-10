@@ -31,7 +31,9 @@ interface MitraDashboardProps {
     onAddKost?: (newKost: Kost) => void;
     onEditKost?: (updatedKost: Kost) => void;
     onDeleteKost?: (id: string) => void;
+    onLogout?: () => void;
 }
+
 
 // ── Dummy data ────────────────────────────────────────────────────────────────
 const DUMMY_PROPERTIES: Kost[] = [
@@ -111,8 +113,9 @@ const BottomNavItem: React.FC<{ active: boolean; icon: React.ReactNode; label: s
 
 
 // ── Main Component ────────────────────────────────────────────────────────────
-const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange }) => {
+const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange, onLogout }) => {
     const navigate = useNavigate();
+
     const { "*": tab } = useParams();
 
     const [activeMenu, setActiveMenu] = useState<MenuKey>((tab as MenuKey) || 'overview');
@@ -598,16 +601,24 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     ))}
                 </nav>
 
-                {/* Back to Site */}
-                <div className="p-4 border-t border-gray-50">
+                {/* Back & Logout Options */}
+                <div className="p-4 border-t border-gray-50 space-y-1">
                     <button
                         onClick={() => onPageChange?.(Page.HOME)}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-950 transition-colors"
                     >
-                        <LogOut size={18} />
+                        <Home size={18} />
                         Kembali ke Beranda
                     </button>
+                    <button
+                        onClick={() => onLogout?.()}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                    >
+                        <LogOut size={18} />
+                        Keluar Akun
+                    </button>
                 </div>
+
             </aside>
 
             {/* ── MOBILE OVERLAY SIDEBAR ───────────────────────────────────── */}
@@ -654,23 +665,51 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 />
                             ))}
                         </nav>
-                        <div className="p-4 border-t border-gray-50">
+                        <div className="p-4 border-t border-gray-50 space-y-1">
                             <button
                                 onClick={() => onPageChange?.(Page.HOME)}
-                                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-950 transition-colors"
                             >
-                                <LogOut size={18} />
+                                <Home size={18} />
                                 Kembali ke Beranda
                             </button>
+                            <button
+                                onClick={() => { onLogout?.(); setMobileSidebarOpen(false); }}
+                                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                            >
+                                <LogOut size={18} />
+                                Keluar Akun
+                            </button>
                         </div>
+
                     </aside>
                 </div>
             )}
 
             <div className="flex-1 lg:ml-64 xl:ml-72 flex flex-col min-h-screen">
 
+                {/* Mobile Top Header Bar with Hamburger Menu */}
+                <header className="lg:hidden h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 sticky top-0 z-40">
+                    <button 
+                        onClick={() => setMobileSidebarOpen(true)}
+                        className="p-2 rounded-xl hover:bg-gray-50 text-gray-600 focus:outline-none"
+                    >
+                        <Menu size={22} />
+                    </button>
+                    <div className="flex flex-col items-center">
+                        <span className="text-xs font-black text-gray-950 leading-none">
+                            <span className="text-orange-500">RuangSinggah</span>.id
+                        </span>
+                        <span className="text-[8px] font-black text-orange-500 uppercase tracking-widest mt-0.5">Mitra Dashboard</span>
+                    </div>
+                    <div className="w-10 h-10 flex items-center justify-center">
+                        {/* Empty space for alignment */}
+                    </div>
+                </header>
+
                 {/* ── PAGE CONTENT ─────────────────────────────────────────── */}
                 <main className="flex-1 p-4 lg:p-8 pb-28 lg:pb-8 overflow-y-auto">
+
 
                     {/* BERANDA */}
                     {activeMenu === 'overview' && (

@@ -1,21 +1,38 @@
-# IMPLEMENTATION PLAN - Penanganan Kegagalan Memuat Modul Dinamis (Chunk Load Error)
+# IMPLEMENTATION PLAN - Hambuger Menu & Fitur Logout Pada Dashboard Mitra
 
-Rencana ini dibuat untuk mencegah error "Failed to fetch dynamically imported module" atau kegagalan memuat chunk ketika aset web diperbarui pada server (caching / deployment baru).
+Rencana ini dibuat untuk menambahkan tombol hamburger (garis 3) pada Dashboard Mitra untuk aksesibilitas navigasi seluler (mobile) serta menyediakan tombol Logout akun yang sesungguhnya.
 
 ## 1. Analisis Masalah
-- **Masalah**: Ketika kita melakukan build baru dan mendeploy aset baru, hash nama file aset (seperti `MitraDashboard-xxxx.js`) berubah. Browser pengguna yang masih memuat versi lama (cache) akan mencoba memanggil berkas lama yang sudah tidak ada di server, sehingga server membalas dengan fallback `index.html` (MIME `text/html`). Ini menyebabkan error tipe MIME dan crash layar karena modul gagal di-import secara dinamis.
-- **Solusi**: Deteksi error dynamic import secara global di browser (`error` dan `unhandledrejection`), kemudian paksa browser untuk melakukan refresh halaman penuh (`window.location.reload()`) untuk mengambil berkas HTML & manifest manifest terbaru dari server.
+- **Masalah**:
+  1. Pada tampilan seluler (mobile), menu sidebar Dashboard Mitra tersembunyi, namun tidak ada tombol pemicu (hamburger menu/garis 3) di bagian atas halaman untuk membuka sidebar tersebut. Hal ini membuat pengguna mobile terjebak dan tidak dapat membuka menu navigasi penuh (seperti Kost Saya, Dompet, dll).
+  2. Tombol di bagian bawah sidebar saat ini tertulis "Kembali ke Beranda" menggunakan ikon `LogOut`, namun aksi yang dijalankan hanya navigasi biasa ke halaman utama (`Page.HOME`), tidak benar-benar mengeluarkan sesi pengguna (`signOut`) dari Supabase.
+- **Solusi**:
+  1. Tambahkan bar header seluler (`header` dengan kelas `lg:hidden`) di bagian atas area konten utama [MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx) yang berisi tombol hamburger (`Menu` dari `lucide-react`) untuk menyetel `mobileSidebarOpen` menjadi `true`.
+  2. Tambahkan prop callback `onLogout` pada `MitraDashboardProps` dan salurkan fungsi `handleLogout` dari `App.tsx`.
+  3. Desain ulang bagian bawah sidebar (baik desktop maupun mobile overlay) untuk menyajikan dua tombol terpisah:
+     - **Kembali ke Beranda** (menggunakan ikon navigasi/rumah) untuk beralih ke halaman depan.
+     - **Keluar Akun** (menggunakan ikon `LogOut` merah) untuk melakukan logout autentikasi Supabase.
 
 ## 2. Dampak Perubahan
 File yang akan diubah:
-1. `functions/public/index.tsx`:
-   - Tambahkan event listener global untuk `error` dan `unhandledrejection` guna menangani kegagalan import modul dinamis secara anggun.
+1. `functions/public/pages/MitraDashboard.tsx`:
+   - Tambahkan `onLogout?: () => void` ke antarmuka `MitraDashboardProps`.
+   - Sisipkan komponen `<header>` seluler dengan tombol hamburger di atas tag `<main className="flex-1 ...">`.
+   - Ubah footer tombol sidebar untuk mendukung tombol "Kembali ke Beranda" dan "Keluar Akun" secara terpisah.
+2. `functions/public/App.tsx`:
+   - Salurkan properti `onLogout={handleLogout}` ke rendering komponen `<MitraDashboard>`.
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Modifikasi `functions/public/index.tsx`**:
-   - Daftarkan listener global sebelum rendering React dimulai.
-2. **Kompilasi Frontend**:
-   - Jalankan `npm run build` di folder `functions/public` untuk memastikan build tetap sukses.
+1. **Modifikasi `functions/public/pages/MitraDashboard.tsx`**:
+   - Daftarkan `onLogout` di deklarasi props.
+   - Sisipkan `<header className="lg:hidden h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 sticky top-0 z-40">...` sebelum `<main ...>`.
+   - Ganti isi div `p-4 border-t border-gray-50` di sidebar desktop dan sidebar mobile overlay dengan dua tombol terpisah.
+2. **Modifikasi `functions/public/App.tsx`**:
+   - Temukan route `Page.DASHBOARD_MITRA` dan tambahkan `onLogout={handleLogout}` pada tag `<MitraDashboard>`.
+3. **Kompilasi Frontend**:
+   - Jalankan `npm run build` di folder `functions/public` untuk memastikan build tetap berhasil.
 
 ## 4. Rencana Verifikasi
-- Jalankan build dan pastikan tidak ada kesalahan kompilasi.
+- Pastikan build sukses.
+- Periksa tombol hamburger muncul pada layar seluler dan ketika diklik berhasil membuka overlay sidebar.
+- Pastikan tombol "Keluar Akun" berfungsi dan mengakhiri sesi user di Supabase.
