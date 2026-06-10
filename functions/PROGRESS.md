@@ -236,12 +236,13 @@
 - **Penyederhanaan CTA**: Menghilangkan bagian kontainer `<!-- Fallback URL -->` yang berisi tautan alternatif mentah di bagian bawah email, menyisakan hanya tombol CTA utama yang rapi dan fungsional.
 
 ### 41. Batasan Gerbang Login Unik per Role & Menu Dashboard Mitra (Juni 2026)
-- **Pencegahan Login Salah Gerbang**: Membatasi pengguna biasa (`user`) agar tidak bisa masuk ke portal mitra (`owner`). Jika mencoba masuk via tab Pemilik Kost, sesi langsung ditutup (`signOut`) dan diarahkan ke login dengan pesan kesalahan yang sesuai.
+- **Pencegahan Login Salah Gerbang**: Membatasi pengguna biasa (`user`) agar tidak bisa masuk to portal mitra (`owner`). Jika mencoba masuk via tab Pemilik Kost, sesi langsung ditutup (`signOut`) dan diarahkan ke login dengan pesan kesalahan yang sesuai.
 - **Tampilan User Biasa untuk Mitra**: Mengizinkan Pemilik Kost (`owner`) masuk melalui portal user (`user`), tetapi secara visual diatur agar bertindak dengan peran `user` biasa sehingga tidak bisa mengakses menu dashboard mitra.
 - **Normalisasi Peran Database**: Memastikan peran database `'mitra'` dikonversi dengan benar menjadi `'owner'` sebelum pemeriksaan login dilakukan guna mencegah kegagalan login bagi pemilik kost lama.
 - **Pemulihan Otomatis Chunk Load Error**: Mengintegrasikan listener global pada `error` dan `unhandledrejection` untuk mendeteksi kegagalan dynamic import modul (Chunk Load Error) akibat proses build/deploy baru, serta memicu penyegaran halaman (`window.location.reload()`) secara otomatis agar pengguna langsung menerima versi web terbaru.
 - **Hamburger Menu Seluler (Dashboard Mitra)**: Menambahkan header atas khusus seluler di `MitraDashboard.tsx` dengan ikon `Menu` untuk memicu pembukaan overlay sidebar navigasi pada perangkat smartphone.
 - **Pemisahan Aksi Beranda & Logout Akun**: Mengalirkan callback `onLogout` global ke dashboard mitra dan menyediakan tombol "Keluar Akun" (merah, ikon `LogOut`) yang benar-benar mematikan sesi autentikasi Supabase, di samping tombol "Kembali ke Beranda" (ikon `Home`) untuk navigasi biasa.
+- **Perbaikan Resolusi Overlap Z-Index**: Mengubah z-index kontainer sidebar seluler dari `z-50` menjadi `z-[100]` sehingga menutup bar navigasi bawah seluler (`z-50`) sepenuhnya saat sidebar aktif tanpa saling bertumpang tindih.
 
 ## Fitur Dalam Pengerjaan (In Progress)
 -   Monitoring konsistensi Webhook Midtrans vs Supabase untuk transaksi multi-kost.
@@ -250,6 +251,7 @@
 ## Rencana Selanjutnya (Future Plans)
 -   Integrasi laporan keuangan otomatis berbasis transaksi Midtrans.
 -   Sistem penarikan dana (payout) otomatis untuk Mitra.
+
 
 
 

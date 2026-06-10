@@ -1,12 +1,12 @@
 # WALKTHROUGH - Hamburger Menu, Fitur Logout, Batasan Gerbang Login, & Penanganan Chunk Load Error
 
-Dokumen ini menjelaskan detail perubahan untuk menambahkan tombol hamburger menu, memisahkan aksi Kembali ke Beranda dan Logout sesungguhnya di Dashboard Mitra, membatasi login gerbang unik, serta menangani error pemuatan file chunk otomatis.
+Dokumen ini menjelaskan detail perubahan untuk menambahkan tombol hamburger menu, memisahkan aksi Kembali ke Beranda dan Logout sesungguhnya di Dashboard Mitra, membatasi login gerbang unik, serta menangani error pemuatan file chunk otomatis dan perbaikan Z-Index overlap.
 
 ## 1. Daftar Perubahan
-1. **Pemicu Hamburger Menu (Garis 3) di Tampilan Seluler**:
+1. **Pemicu Hamburger Menu (Garis 3) & Penyesuaian Z-Index Overlay**:
    - Memodifikasi [MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx).
    - Menambahkan elemen `<header className="lg:hidden ...">` di area konten utama untuk merender tombol hamburger garis 3 (ikon `Menu` dari `lucide-react`) saat diakses menggunakan resolusi HP/seluler.
-   - Pemicu ini sukses membuka sidebar mobile overlay (`setMobileSidebarOpen(true)`).
+   - Mengubah z-index pada kontainer `mobileSidebarOpen` dari `z-50` menjadi `z-[100]`. Perubahan ini memastikan ketika sidebar mobile dibuka, ia menutupi seluruh komponen navigasi bawah seluler (`z-50`) serta simulator waktu tanpa saling bertumpukan.
 
 2. **Pemberian Fungsi Logout Akun yang Sesungguhnya**:
    - Memodifikasi [MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx) & [App.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/App.tsx).
@@ -24,12 +24,12 @@ Dokumen ini menjelaskan detail perubahan untuk menambahkan tombol hamburger menu
 
 ## 2. Hasil Pengujian & Verifikasi
 1. **Kompilasi Frontend Sukses**:
-   - Menjalankan `npm run build` di folder `functions/public` sukses tanpa error tipe data (`✓ built in 29.89s`).
+   - Menjalankan `npm run build` di folder `functions/public` sukses tanpa error tipe data (`✓ built in 33.78s`).
 
 ## 3. Cara Deploy Perubahan Kode
 Lakukan push commit ke repositori Git untuk mendeploy pembaruan frontend secara otomatis:
 ```bash
 git add .
-git commit -m "feat: add mobile hamburger menu and real logout to partner dashboard"
+git commit -m "fix: adjust mobile sidebar overlay z-index to resolve overlap"
 git push origin main
 ```

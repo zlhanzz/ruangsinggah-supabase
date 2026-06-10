@@ -623,7 +623,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
             {/* ── MOBILE OVERLAY SIDEBAR ───────────────────────────────────── */}
             {mobileSidebarOpen && (
-                <div className="lg:hidden fixed inset-0 z-50 flex">
+                <div className="lg:hidden fixed inset-0 z-[100] flex">
                     <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMobileSidebarOpen(false)} />
                     <aside className="relative w-72 bg-white h-full flex flex-col shadow-2xl z-10">
                         <div className="p-5 border-b border-gray-50 flex items-center justify-between">
