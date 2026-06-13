@@ -120,10 +120,11 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
     const [activeMenu, setActiveMenu] = useState<MenuKey>((tab as MenuKey) || 'overview');
 
-    // Sync state with URL
+    // Sync state with URL — selalu sinkronkan saat tab berubah, termasuk saat tab kosong (fallback ke 'overview')
     useEffect(() => {
-        if (tab && tab !== activeMenu) {
-            setActiveMenu(tab as MenuKey);
+        const targetMenu = (tab as MenuKey) || 'overview';
+        if (targetMenu !== activeMenu) {
+            setActiveMenu(targetMenu);
         }
     }, [tab]);
 
@@ -728,7 +729,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     </div>
                                     {user?.verification_status !== 'pending' && (
                                         <button 
-                                            onClick={() => setActiveMenu('profile')}
+                                            onClick={() => handleMenuChange('profile')}
                                             className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-100 shrink-0"
                                         >
                                             Verifikasi Sekarang
@@ -802,14 +803,14 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                         <div className="mt-8 flex justify-center relative z-10">
                                             {!isVerified ? (
                                                 <button 
-                                                    onClick={() => setActiveMenu('profile')}
+                                                    onClick={() => handleMenuChange('profile')}
                                                     className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-transform active:scale-95 shadow-lg shadow-orange-500/20"
                                                 >
                                                     Verifikasi Identitas Sekarang
                                                 </button>
                                             ) : properties.length === 0 ? (
                                                 <button 
-                                                    onClick={() => setActiveMenu('properties')}
+                                                    onClick={() => handleMenuChange('properties')}
                                                     className="bg-gray-900 hover:bg-black text-white px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md"
                                                 >
                                                     Mulai Upload Kost Sekarang
@@ -935,11 +936,11 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
                             {/* Quick Links — Mobile only */}
                             <div className="grid grid-cols-2 gap-3 lg:hidden">
-                                <button onClick={() => setActiveMenu('bookings')} className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center gap-3 shadow-sm active:scale-95 transition-transform">
+                                <button onClick={() => handleMenuChange('bookings')} className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center gap-3 shadow-sm active:scale-95 transition-transform">
                                     <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500 shrink-0"><ClipboardList size={20} /></div>
                                     <div className="text-left"><p className="text-xs font-black text-gray-900">Pesanan</p><p className="text-[10px] text-gray-400 font-bold">{pendingCount} Baru</p></div>
                                 </button>
-                                <button onClick={() => setActiveMenu('chat')} className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center gap-3 shadow-sm active:scale-95 transition-transform">
+                                <button onClick={() => handleMenuChange('chat')} className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center gap-3 shadow-sm active:scale-95 transition-transform">
                                     <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 shrink-0"><MessageSquare size={20} /></div>
                                     <div className="text-left"><p className="text-xs font-black text-gray-900">Pesan</p><p className="text-[10px] text-gray-400 font-bold">{chatCount} Chat</p></div>
                                 </button>
@@ -1202,7 +1203,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                                     <button 
                                                                         onClick={(e) => { 
                                                                             e.stopPropagation();
-                                                                            setActiveMenu('chat');
+                                                                            handleMenuChange('chat');
                                                                             // Logic to select this specific chat will be handled by chatService/state
                                                                         }}
                                                                         className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-full border border-blue-100 hover:bg-blue-100 transition-all active:scale-95 group shrink-0 w-fit"
@@ -1498,7 +1499,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             <MitraProfile 
                                 uid={uid} 
                                 user={user} 
-                                onBack={() => setActiveMenu('overview')} 
+                                onBack={() => handleMenuChange('overview')} 
                                 onLogout={() => onPageChange?.(Page.HOME)} 
                             />
                         </div>
