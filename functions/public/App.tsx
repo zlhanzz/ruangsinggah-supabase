@@ -268,6 +268,7 @@ const App: React.FC = () => {
       // (mencegah race condition: role belum diupdate di DB tapi user sudah di-redirect)
       if (localStorage.getItem('upgrade_in_progress') === 'true') {
         console.log('[Upgrade] Skipping auth state processing during upgrade flow.');
+        setLoadingAuth(false);
         return;
       }
 
