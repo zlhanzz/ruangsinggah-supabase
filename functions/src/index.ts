@@ -2302,21 +2302,39 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
     const supabase = getSupabase();
     if (!supabase) throw new Error('DB Client error');
 
+    const redirectUrl = req.body.redirectTo || 'https://ruangsinggah.id/login';
     const { data, error } = await supabase.auth.admin.generateLink({
       type,
       email,
       password: password || Math.random().toString(36).slice(-10),
-      options: { data: userMetadata || {}, redirectTo: 'https://ruangsinggah.id/login' }
+      options: { data: userMetadata || {}, redirectTo: redirectUrl }
     });
     if (error) throw error;
     
     const brevoApiKey = brevoApiKeyParam.value();
     const actionLink = data.properties.action_link;
     const isSignup = type === 'signup';
-    const titleText = isSignup ? 'Konfirmasi Pendaftaran Akun' : 'Reset Kata Sandi Anda';
-    const subTitleText = isSignup ? 'Selamat datang di RuangSinggah.id! Selangkah lagi untuk mengaktifkan akun Anda.' : 'Kami menerima permintaan untuk mereset kata sandi akun RuangSinggah.id Anda.';
-    const buttonText = isSignup ? 'KONFIRMASI AKUN SEKARANG' : 'ATUR ULANG KATA SANDI';
-    const footerText = isSignup ? 'Jika Anda tidak merasa mendaftar akun di RuangSinggah.id, silakan abaikan email ini.' : 'Jika Anda tidak meminta reset kata sandi, abaikan email ini dan kata sandi Anda akan tetap sama.';
+    const isUpgrade = type === 'magiclink';
+    const titleText = isUpgrade 
+      ? 'Konfirmasi Upgrade Pemilik Kost'
+      : isSignup 
+        ? 'Konfirmasi Pendaftaran Akun' 
+        : 'Reset Kata Sandi Anda';
+    const subTitleText = isUpgrade
+      ? 'Kami menerima permintaan untuk mengupgrade akun RuangSinggah.id Anda menjadi Pemilik Kost (Owner/Mitra).'
+      : isSignup 
+        ? 'Selamat datang di RuangSinggah.id! Selangkah lagi untuk mengaktifkan akun Anda.' 
+        : 'Kami menerima permintaan untuk mereset kata sandi akun RuangSinggah.id Anda.';
+    const buttonText = isUpgrade
+      ? 'KONFIRMASI UPGRADE SEKARANG'
+      : isSignup 
+        ? 'KONFIRMASI AKUN SEKARANG' 
+        : 'ATUR ULANG KATA SANDI';
+    const footerText = isUpgrade
+      ? 'Jika Anda tidak meminta upgrade akun ini, silakan abaikan email ini.'
+      : isSignup 
+        ? 'Jika Anda tidak merasa mendaftar akun di RuangSinggah.id, silakan abaikan email ini.' 
+        : 'Jika Anda tidak meminta reset kata sandi, abaikan email ini dan kata sandi Anda akan tetap sama.';
 
     const emailHtml = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; padding: 40px 20px; text-align: center;">
@@ -2358,7 +2376,11 @@ export const handleCustomAuthEmail = functions.https.onRequest({ cors: true }, a
       body: JSON.stringify({
         sender: { name: "RuangSinggah", email: "system@ruangsinggah.id" },
         to: [{ email }],
-        subject: isSignup ? '🛡️ Konfirmasi Akun RuangSinggah.id' : '🔑 Reset Kata Sandi',
+        subject: isUpgrade 
+          ? '🏠 Konfirmasi Upgrade Pemilik Kost'
+          : isSignup 
+            ? '🛡️ Konfirmasi Akun RuangSinggah.id' 
+            : '🔑 Reset Kata Sandi',
         htmlContent: emailHtml
       })
     });

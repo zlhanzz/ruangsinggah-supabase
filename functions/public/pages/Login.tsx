@@ -315,18 +315,13 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setUpgradeModalError('');
 
     try {
-      // Flag untuk mencegah App.tsx memproses SIGNED_IN event ini
-      // (yang akan menyebabkan role_mismatch karena role belum diupdate)
-      localStorage.setItem('upgrade_in_progress', 'true');
-
-      // Step 1: Login untuk verifikasi identitas + dapatkan user.id
+      // Step 1: Pertama-tama login untuk memvalidasi password user demi keamanan
       const { data, error: loginError } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
       });
 
       if (loginError || !data.user) {
-        localStorage.removeItem('upgrade_in_progress');
         setUpgradeModalError(
           loginError?.message.includes('Email not confirmed')
             ? 'Email belum diverifikasi. Cek inbox email Anda dulu.'
@@ -335,35 +330,60 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         return;
       }
 
-      // Step 2: Update tabel 'users' di database (sumber kebenaran role)
-      const { error: dbError } = await supabase
-        .from('users')
-        .update({ role: 'owner' })
-        .eq('id', data.user.id);
+      // Sesi langsung kita log out dulu agar tautan konfirmasi nanti memicu log in ulang dengan token baru
+      await supabase.auth.signOut();
 
-      if (dbError) {
-        localStorage.removeItem('upgrade_in_progress');
-        setUpgradeModalError('Gagal update database: ' + dbError.message);
-        await supabase.auth.signOut();
+      // Step 2: Kirim email magiclink konfirmasi upgrade ke pemilik kost
+      const response = await fetch('https://handlecustomauthemail-hzxlewhsuq-uc.a.run.app', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'magiclink',
+          email: formData.email,
+          redirectTo: window.location.origin + Page.LOGIN + '?upgrade_to_owner=true'
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        setUpgradeModalError(errData.message || 'Gagal mengirim email konfirmasi upgrade');
         return;
       }
 
-      // Step 3: Update user_metadata juga untuk konsistensi
-      await supabase.auth.updateUser({ data: { role: 'owner' } });
-
-      // Step 4: Logout → bersihkan flag → tampilkan sukses
-      await supabase.auth.signOut();
-      localStorage.removeItem('upgrade_in_progress');
-
       setShowUpgradeModal(false);
-      setMode('LOGIN');
-      setActiveRole('owner');
-      resetForm();
-      setSuccessMsg('✅ Akun berhasil diupgrade ke Pemilik Kost! Silakan login kembali untuk akses dashboard Mitra.');
-
+      setUpgradeEmailSent(true);
+      setUpgradeResendTimer(120);
     } catch (error: any) {
-      localStorage.removeItem('upgrade_in_progress');
       setUpgradeModalError('Terjadi kesalahan: ' + (error.message || 'unknown'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendUpgradeEmail = async () => {
+    if (upgradeResendTimer > 0) return;
+    setLoading(true);
+    setUpgradeModalError('');
+    try {
+      const response = await fetch('https://handlecustomauthemail-hzxlewhsuq-uc.a.run.app', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'magiclink',
+          email: formData.email,
+          redirectTo: window.location.origin + Page.LOGIN + '?upgrade_to_owner=true'
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        setErrorMsg(errData.message || 'Gagal mengirim ulang email konfirmasi upgrade');
+      } else {
+        setSuccessMsg('Email konfirmasi upgrade berhasil dikirim ulang.');
+        setUpgradeResendTimer(120);
+      }
+    } catch (error: any) {
+      setErrorMsg('Terjadi kesalahan: ' + (error.message || 'unknown'));
     } finally {
       setLoading(false);
     }
@@ -712,14 +732,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             Klik link tersebut untuk menyelesaikan upgrade akun Anda menjadi{' '}
             <span className="text-orange-500 font-bold">Pemilik Kost</span>. Cek folder spam jika tidak muncul di inbox.
           </p>
-
-          {errorMsg && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl flex items-center gap-2 text-left">
-              <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              <p className="text-xs font-bold text-red-500">{errorMsg}</p>
-            </div>
-          )}
-
           <div className="space-y-3">
             {upgradeResendTimer > 0 ? (
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">

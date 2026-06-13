@@ -1,20 +1,26 @@
-# WALKTHROUGH - Perbaikan Tombol Intip Password Ganda & Peningkatan Estetika UI/UX
+# WALKTHROUGH - Integrasi Verifikasi Email untuk Upgrade Peran Pemilik Kost & Perbaikan UI
 
-Dokumen ini menjelaskan daftar perubahan, hasil pengujian, dan petunjuk deploy untuk perbaikan ikon mata ganda pada kolom kata sandi.
+Dokumen ini menjelaskan rincian perubahan, pengujian, dan instruksi deploy untuk implementasi gerbang verifikasi email saat upgrade peran ke Pemilik Kost.
 
 ## 1. Daftar Perubahan
 
-### Frontend (Global Styles)
-- **Pembaruan Berkas CSS (`index.css`)**:
-  - Menambahkan aturan CSS global untuk menonaktifkan selektor bawaan browser Edge, Internet Explorer, dan Chrome modern (`input::-ms-reveal` dan `input::-ms-clear`) dengan menyetel `display: none !important;`.
-  - Ini mengatasi masalah bertumpuknya tombol intip/mata kustom premium (desain RuangSinggah) dengan tombol penampil bawaan browser Microsoft Edge/Windows yang merusak estetika input sandi.
+### Backend (Cloud Functions)
+- **Modifikasi `handleCustomAuthEmail` (`functions/src/index.ts`)**:
+  - Mendukung `type === 'magiclink'` untuk generate auth link khusus upgrade.
+  - Menyesuaikan visual dan copy email Brevo HTML: Judul, Subjudul, subjek, serta tombol CTA khusus untuk konfirmasi upgrade.
+  - Membaca properti `redirectTo` secara dinamis dari payload request, sehingga alur redirect berfungsi dengan andal baik di localhost maupun di server produksi.
+
+### Frontend
+- **Pembaruan Alur Upgrade (`Login.tsx`)**:
+  - Mengubah `handleUpgradeToOwner` agar tidak langsung memperbarui database secara sepihak. Fungsi kini melakukan validasi sandi, melakukan sign out, lalu mengirimkan email konfirmasi upgrade (magic link) via Cloud Function. Setelah itu, antarmuka dialihkan ke layar visual "Verifikasi Email Upgrade Terkirim" dengan penunjuk status yang jelas.
+  - Mengimplementasikan fungsi `handleResendUpgradeEmail` yang sebelumnya belum didefinisikan untuk mengirim ulang email verifikasi upgrade jika pengguna belum menerimanya.
 
 ---
 
 ## 2. Hasil Pengujian
 
-- **Build Vite Frontend**:
-  - Berhasil dikompilasi ke mode production (`npm run build`) dengan sukses tanpa error (Exit Code: 0).
+- **Kompilasi Firebase Functions**: Berhasil dideploy secara utuh ke Firebase.
+- **Build Vite Frontend**: Berhasil dikompilasi ke mode production (`npm run build`) dengan sukses tanpa error (Exit Code: 0).
 
 ---
 
@@ -28,4 +34,4 @@ Dokumen ini menjelaskan daftar perubahan, hasil pengujian, dan petunjuk deploy u
    ```bash
    npm run dev
    ```
-3. Buka halaman login/daftar di Microsoft Edge. Ketika Anda mengetik kata sandi, hanya tombol mata kustom premium dari RuangSinggah yang akan muncul di sisi kanan kolom input. Tombol abu-abu bawaan browser Microsoft Edge sudah dinonaktifkan sepenuhnya.
+3. Lakukan pendaftaran dengan email pencari kost yang sudah terdaftar pada portal Pemilik Kost. Klik **Ya, Upgrade Sekarang**, masukkan password, dan pastikan sistem mengirimkan email konfirmasi. Klik link di kotak masuk email Anda untuk menyelesaikan proses upgrade peran secara aman.

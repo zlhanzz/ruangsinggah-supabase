@@ -251,6 +251,7 @@ const App: React.FC = () => {
 
       // Intercept upgrade role redirect (Pencari Kost → Pemilik Kost)
       if (event === 'SIGNED_IN' && isUpgradeConfirmation && session?.user) {
+        localStorage.setItem('upgrade_in_progress', 'true');
         window.history.replaceState({}, document.title, window.location.pathname);
         // Pakai setTimeout untuk menghindari deadlock Auth Lock Supabase
         setTimeout(async () => {
@@ -262,6 +263,7 @@ const App: React.FC = () => {
           } catch (e) {
             console.error('Upgrade role error:', e);
           } finally {
+            localStorage.removeItem('upgrade_in_progress');
             await supabase.auth.signOut();
             navigate('/login?upgrade_success=true', { replace: true });
           }
