@@ -10,6 +10,7 @@
 ### 2. Manajemen Akun Diblokir & Otorisasi Pemulihan Akses (Unban) Admin (Juni 2026)
 - **Tab Akun Diblokir**: Menambahkan tab khusus "Akun Diblokir" pada switcher halaman Manajemen Mitra di Dashboard Admin untuk mempermudah identifikasi dan monitoring akun-akun mitra/owner yang diblokir permanen.
 - **Otorisasi Unban (Pulihkan Akses)**: Menyediakan tombol "Pulihkan Akses" untuk Admin guna mengaktifkan kembali akun mitra yang diblokir. Alur unban ini akan mengubah `verification_status` kembali ke `'unverified'`, mereset `rejection_count` ke `0`, dan memicu email pemberitahuan otomatis ke pengguna bahwa akses kemitraan mereka telah diaktifkan kembali.
+- **Pemulihan Peran saat Unban**: Memperbaiki logika `unbanMitraRequest` agar turut memulihkan peran (`role`) pengguna kembali menjadi `'owner'` di database `users`. Sebelumnya, pengguna yang di-unban tetap terdaftar sebagai peran `'user'` biasa sehingga memicu penolakan *role mismatch* saat mencoba masuk kembali ke portal Pemilik Kost.
 - **Otomatisasi Email Unbanned**: Mengintegrasikan template email premium "Akses Kemitraan Diaktifkan Kembali" pada Cloud Function `sendMitraStatusEmail` menggunakan Brevo API.
 
 ### 3. Penayangan, Penyeragaman Format Kode Referral, State Sync Global, & Penyempurnaan Wizard Edit Profil Mitra (Juni 2026)

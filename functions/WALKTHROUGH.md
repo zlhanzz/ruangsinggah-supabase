@@ -1,15 +1,18 @@
-# WALKTHROUGH - Perbaikan Visibilitas Pesan Error Login & Pembersihan Alert Native Browser
+# WALKTHROUGH - Perbaikan Pemulihan Peran (Role Restoration) saat Unban & Login Error Visibilitas
 
-Dokumen ini menjelaskan daftar perubahan, hasil pengujian, dan petunjuk deploy untuk perbaikan penanganan error login serta penghapusan alert native browser.
+Dokumen ini menjelaskan daftar perubahan, hasil pengujian, dan petunjuk deploy untuk perbaikan penanganan unban (pemulihan peran owner) serta visibilitas error login.
 
 ## 1. Daftar Perubahan
 
-### Frontend
+### Frontend (Admin Service)
+- **Pembaruan Fungsi `unbanMitraRequest` (`adminService.ts`)**:
+  - Saat melakukan unban pada user, sistem kini tidak hanya mengubah status verifikasi kembali ke `'unverified'`, melainkan juga mengembalikan peran (`role`) pengguna menjadi `'owner'`.
+  - Ini memperbaiki bug di mana pemilik kost yang telah di-unban tetap bertindak sebagai peran `'user'` biasa di database, yang memicu penolakan *role mismatch* saat mereka mencoba login kembali ke portal Pemilik Kost.
+
+### Frontend (Halaman Login)
 - **Pembaruan Halaman Login (`Login.tsx`)**:
-  - **Pencegahan Refresh untuk Parameter URL**: Menggunakan hook `useSearchParams` dari `react-router-dom` dan mendaftarkannya ke dalam dependency array `useEffect` agar error (misalnya role mismatch atau akun diblokir) dapat langsung terdeteksi tanpa perlu refresh halaman secara manual.
-  - **Penghapusan Dialog Popup Browser (`alert`)**:
-    - Menghapus `alert('Berhasil Masuk!...')` pada login sukses agar pengguna langsung dialihkan ke dashboard secara mulus.
-    - Mengganti `alert('Kata sandi berhasil diperbarui!...')` dengan inline banner hijau premium (`setSuccessMsg('Kata sandi berhasil diperbarui!...')`) agar informasi pembaruan password tampil estetis di dalam form login.
+  - Menggunakan hook `useSearchParams` dari `react-router-dom` dan mendaftarkannya ke dalam dependency list `useEffect` agar error (seperti *role mismatch* atau akun diblokir) langsung terdeteksi tanpa perlu refresh halaman secara manual.
+  - Menghapus popup browser native (`alert()`) yang mengganggu estetika pada login sukses (pengalihan langsung secara instan) dan menggantinya dengan inline banner hijau premium pada sukses update kata sandi.
 
 ---
 
@@ -30,4 +33,4 @@ Dokumen ini menjelaskan daftar perubahan, hasil pengujian, dan petunjuk deploy u
    ```bash
    npm run dev
    ```
-3. Lakukan pengujian login. Semua transisi dan dialog status akan berjalan mulus tanpa memunculkan kotak dialog popup native browser.
+3. Lakukan pengujian unban di Dashboard Admin pada tab **Akun Diblokir**, kemudian cobalah login menggunakan akun mitra yang baru di-unban tersebut pada portal Pemilik Kost. Akun akan dapat masuk kembali dengan sukses dan status verifikasinya ter-reset ke `'unverified'` (siap mengisi profil & KTP ulang).

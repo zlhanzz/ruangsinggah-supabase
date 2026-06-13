@@ -1,24 +1,21 @@
-# IMPLEMENTATION PLAN - Penghapusan Alert Native Browser untuk Meningkatkan Estetika UI/UX
+# IMPLEMENTATION PLAN - Perbaikan Pemulihan Peran (Role Restoration) saat Akun Pemilik Kost di-Unban
 
-Rencana ini dibuat untuk menghilangkan kotak dialog native browser (`alert()`) yang mengganggu estetika dan alur pengguna saat login atau mereset kata sandi.
+Rencana ini dibuat untuk memperbaiki masalah di mana akun pemilik kost (mitra/owner) yang telah di-unban oleh admin tidak dapat masuk (login) kembali ke dashboard owner.
 
 ## 1. Analisis Masalah
-- **Penyebab Utama**: Penggunaan fungsi bawaan browser `alert()` saat login berhasil (`alert('Berhasil Masuk!...')`) dan saat kata sandi berhasil diperbarui (`alert('Kata sandi berhasil diperbarui!...')`).
-- **Dampak**: Kotak dialog native browser menampilkan teks seperti "localhost menyatakan" atau "ruangsinggah.id menyatakan" yang menghalangi konten halaman, memaksa pengguna melakukan klik ekstra, dan mengurangi kesan profesional/premium pada aplikasi.
+- **Penyebab Utama**: Ketika admin melakukan blokir (ban) pada mitra melalui fungsi `banMitraRequest`, peran (`role`) pengguna di database diturunkan secara permanen menjadi `'user'`. Namun, ketika admin memulihkan akun tersebut menggunakan fungsi `unbanMitraRequest`, peran pengguna tidak diubah kembali menjadi `'owner'`.
+- **Dampak**: Pengguna yang sudah di-unban tetap memiliki peran `'user'` di database, sehingga ketika mencoba login di portal Pemilik Kost, sistem mendeteksi ketidakcocokan peran (*role mismatch*) dan menolak akses login dengan me-redirect ke `/login?error=role_mismatch`.
 
 ## 2. Solusi & Dampak Perubahan
-- **Login Sukses**: Menghapus total `alert()` saat login berhasil, sehingga pengguna langsung dialihkan secara mulus ke dashboard yang sesuai tanpa interupsi popup.
-- **Penyetelan Sandi Baru Sukses**: Mengganti `alert()` dengan inline `successMsg` (spanduk hijau premium yang sudah ada di halaman login), sehingga pengguna mendapatkan umpan balik visual yang elegan di dalam formulir.
+- **Solusi**: Memperbarui fungsi `unbanMitraRequest` di `adminService.ts` agar turut mengembalikan peran (`role`) pengguna menjadi `'owner'` saat proses unban diproses.
+- **Dampak Perubahan**: Memulihkan otorisasi akses login pengguna ke portal Pemilik Kost secara instan setelah status ban mereka dicabut oleh admin.
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Modifikasi `handleLogin` di `Login.tsx`**:
-   - Menghapus baris `alert('Berhasil Masuk! Selamat datang kembali.');` pada baris 201.
-2. **Modifikasi `handleUpdatePassword` di `Login.tsx`**:
-   - Menghapus baris `alert('Kata sandi berhasil diperbarui! Silakan login kembali.');`.
-   - Menambahkan pemanggilan `setSuccessMsg('Kata sandi berhasil diperbarui! Silakan login kembali.');` setelah pemanggilan `resetForm()` dan penyetelan mode ke `'LOGIN'`.
-3. **Verifikasi Build**:
+1. **Modifikasi `unbanMitraRequest` di `functions/public/adminService.ts`**:
+   - Menambahkan kolom `role: 'owner'` pada objek update untuk tabel `users`.
+2. **Verifikasi Build**:
    - Menjalankan build produksi untuk memastikan tidak ada kesalahan tipe TypeScript.
 
 ## 4. Rencana Verifikasi
-- Melakukan login dan memastikan dashboard langsung terbuka secara instan dan mulus tanpa popup browser.
-- Melakukan pembaruan kata sandi dan memastikan pesan sukses tampil dalam spanduk hijau premium di atas formulir login.
+- Memanggil fungsi unban pada salah satu akun mitra yang diblokir.
+- Memeriksa di database (atau melakukan login) bahwa perannya kembali menjadi `'owner'` dan pengguna bisa masuk ke dashboard mitra dengan status verifikasi `'unverified'` (siap untuk mengajukan ulang verifikasi).

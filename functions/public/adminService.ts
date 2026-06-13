@@ -3094,6 +3094,7 @@ export async function unbanMitraRequest(userId: string): Promise<void> {
   if (!isAdmin) throw new Error('Access Denied');
 
   await supabase.from('users').update({
+    role: 'owner',
     verification_status: 'unverified',
     rejection_count: 0,
     verification_notes: null,
