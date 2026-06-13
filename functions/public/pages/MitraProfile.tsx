@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { User, ShieldCheck, MapPin, Phone, ChevronRight, LogOut, Upload, BadgeCheck, AlertCircle, Clock, Search, X, Mail, Calendar, Gift } from 'lucide-react';
 import Tesseract from 'tesseract.js';
@@ -12,12 +13,16 @@ interface MitraProfileProps {
 }
 
 const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onBack, onLogout }) => {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const isEditingFromUrl = searchParams.get('edit') === 'true';
+    const stepFromUrl = parseInt(searchParams.get('step') || '1', 10);
+
     const [loading, setLoading] = useState(!initialUser);
-    const [isEditing, setIsEditing] = useState(false);
+    const [isEditing, setIsEditing] = useState(isEditingFromUrl);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isUploadingKtp, setIsUploadingKtp] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
-    const [currentStep, setCurrentStep] = useState(1);
+    const [currentStep, setCurrentStep] = useState(stepFromUrl);
     const [hasInitialReferral, setHasInitialReferral] = useState(false);
 
     // WhatsApp OTP states
@@ -47,6 +52,12 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
     });
 
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+    // Sync local state when URL params change (e.g. after background re-render)
+    useEffect(() => {
+        setIsEditing(isEditingFromUrl);
+        setCurrentStep(stepFromUrl);
+    }, [isEditingFromUrl, stepFromUrl]);
 
     useEffect(() => {
         loadProfile();
@@ -109,6 +120,8 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
     const handleCancel = () => {
         setIsEditing(false);
         setCurrentStep(1);
+        // Hapus query params
+        setSearchParams(new URLSearchParams());
         loadProfile();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -425,6 +438,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
             window.dispatchEvent(new Event('RS_USER_UPDATED'));
             setIsEditing(false);
             setCurrentStep(1);
+            setSearchParams(new URLSearchParams());
             alert('Profil dan data verifikasi berhasil disimpan!');
         } catch (error: any) { 
             console.error('Error saving profile:', error);
@@ -717,7 +731,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                                                 return;
                                                             }
                                                             await saveStep1Draft();
-                                                            setCurrentStep(2);
+                                                            setSearchParams({ edit: 'true', step: '2' });
                                                             window.scrollTo({ top: 0, behavior: 'smooth' });
                                                         }}
                                                         className={`w-full sm:w-auto px-10 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all text-center flex items-center justify-center gap-2 ${isStep1Complete
@@ -733,7 +747,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                     </>
                                 ) : (
                                     <>
-                                        <button type="button" onClick={() => { setCurrentStep(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="w-full sm:w-auto px-8 py-4 bg-gray-100 text-gray-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 active:scale-95 transition-all text-center">
+                                        <button type="button" onClick={() => { setSearchParams({ edit: 'true', step: '1' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="w-full sm:w-auto px-8 py-4 bg-gray-100 text-gray-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 active:scale-95 transition-all text-center">
                                             KEMBALI KE DATA PROFIL
                                         </button>
                                         <button type="button" onClick={handleSave} disabled={isSubmitting} className="w-full sm:w-auto px-10 py-4 bg-orange-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all shadow-lg shadow-orange-500/20 text-center">
@@ -749,7 +763,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                 <div className="space-y-6">
                     {/* Verification Section on Top */}
                     {formData.verification_status === 'verified' ? (
-                        <div onClick={() => setIsEditing(true)} className="cursor-pointer bg-green-50 border border-green-100 rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm hover:scale-[1.01] active:scale-[0.99] transition-all">
+                        <div onClick={() => setSearchParams({ edit: 'true', step: '1' })} className="cursor-pointer bg-green-50 border border-green-100 rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm hover:scale-[1.01] active:scale-[0.99] transition-all">
                             <div className="flex items-center gap-5 text-left">
                                 <div className="w-16 h-16 rounded-3xl bg-green-500 text-white flex items-center justify-center shadow-xl shadow-green-100">
                                     <BadgeCheck size={32} />
@@ -761,7 +775,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                             </div>
                         </div>
                     ) : formData.verification_status === 'pending' ? (
-                        <div onClick={() => setIsEditing(true)} className="cursor-pointer bg-orange-500 rounded-[2.5rem] p-8 md:p-10 text-white shadow-xl relative overflow-hidden text-center md:text-left hover:scale-[1.01] active:scale-[0.99] transition-all">
+                        <div onClick={() => setSearchParams({ edit: 'true', step: '1' })} className="cursor-pointer bg-orange-500 rounded-[2.5rem] p-8 md:p-10 text-white shadow-xl relative overflow-hidden text-center md:text-left hover:scale-[1.01] active:scale-[0.99] transition-all">
                             <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
                             <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
                                 <div className="flex items-center gap-6">
@@ -779,7 +793,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                             </div>
                         </div>
                     ) : formData.verification_status === 'rejected' ? (
-                        <div onClick={() => setIsEditing(true)} className="cursor-pointer bg-rose-50 border border-rose-100 rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm hover:scale-[1.01] active:scale-[0.99] transition-all">
+                        <div onClick={() => setSearchParams({ edit: 'true', step: '1' })} className="cursor-pointer bg-rose-50 border border-rose-100 rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm hover:scale-[1.01] active:scale-[0.99] transition-all">
                             <div className="flex items-center gap-5 text-left">
                                 <div className="w-16 h-16 rounded-3xl bg-rose-100 text-rose-600 flex items-center justify-center border border-rose-200">
                                     <AlertCircle size={32} />
@@ -789,10 +803,10 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                     <p className="text-xs font-bold text-rose-600 uppercase mt-1 italic">Alasan: {formData.verification_notes || 'Data tidak sesuai atau buram.'}</p>
                                 </div>
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); setIsEditing(true); }} className="px-10 py-4 bg-rose-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-100">Perbaiki Data</button>
+                            <button onClick={(e) => { e.stopPropagation(); setSearchParams({ edit: 'true', step: '1' }); }} className="px-10 py-4 bg-rose-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-100">Perbaiki Data</button>
                         </div>
                     ) : (
-                        <div onClick={() => setIsEditing(true)} className="cursor-pointer bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 hover:scale-[1.01] active:scale-[0.99] transition-all">
+                        <div onClick={() => setSearchParams({ edit: 'true', step: '1' })} className="cursor-pointer bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 hover:scale-[1.01] active:scale-[0.99] transition-all">
                             <div className="flex items-center gap-4 text-left">
                                 <div className="w-16 h-16 rounded-[1.5rem] bg-orange-50 text-orange-600 flex items-center justify-center border border-orange-100"><ShieldCheck size={32} /></div>
                                 <div>
@@ -800,7 +814,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                     <p className="text-xs font-bold text-gray-400 uppercase mt-1">Verifikasi identitas diperlukan untuk keamanan transaksi</p>
                                 </div>
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); setIsEditing(true); }} className="px-10 py-4 bg-orange-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 transition-all shadow-lg shadow-orange-100">Lengkapi & Verifikasi</button>
+                            <button onClick={(e) => { e.stopPropagation(); setSearchParams({ edit: 'true', step: '1' }); }} className="px-10 py-4 bg-orange-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 transition-all shadow-lg shadow-orange-100">Lengkapi & Verifikasi</button>
                         </div>
                     )}
 
@@ -809,7 +823,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                         <div className="absolute top-0 right-0 w-32 h-32 bg-orange-50 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
                         <div className="flex items-center justify-between mb-8 relative z-10">
                             <h3 className="text-sm font-black uppercase text-gray-900 tracking-widest">Profil Anda</h3>
-                            <button onClick={() => setIsEditing(true)} className="px-5 py-2 text-[10px] font-black uppercase rounded-xl transition-all shadow-sm bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100">
+                            <button onClick={() => setSearchParams({ edit: 'true', step: '1' })} className="px-5 py-2 text-[10px] font-black uppercase rounded-xl transition-all shadow-sm bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100">
                                 Edit Profil
                             </button>
                         </div>
