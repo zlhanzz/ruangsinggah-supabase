@@ -2,18 +2,22 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 1. Perbaikan Real-Time Banner Error Login & Pembersihan Alert Native Browser (Juni 2026)
+### 1. Eliminasi Tombol Intip Password Ganda (Double Eye Icon) (Juni 2026)
+- **Hapus Mata Bawaan Browser**: Menambahkan CSS global rule `input::-ms-reveal` dan `input::-ms-clear` di `index.css` untuk menyembunyikan ikon penampil sandi native bawaan Microsoft Edge/Windows.
+- **Konsistensi Visual**: Menjaga agar hanya tombol mata kustom premium RuangSinggah yang elegan, fungsional, dan seragam tampil pada semua input kata sandi di halaman Login maupun Daftar.
+
+### 2. Perbaikan Real-Time Banner Error Login & Pembersihan Alert Native Browser (Juni 2026)
 - **Reaktivitas URL Search Params**: Mengintegrasikan hook `useSearchParams` pada `Login.tsx` dan memasukkannya ke dalam dependency list `useEffect` untuk mendeteksi perubahan parameter URL secara real-time.
 - **Pesan Instan Mismatch & Blocked**: Memastikan pesan kesalahan "role mismatch" (ketika akun biasa mencoba login di portal pemilik kost) dan "akun diblokir" (blocked/banned) tampil secara instan di UI tanpa harus merefresh halaman web secara manual.
 - **Penghapusan Alert Native Dialog**: Menghilangkan popup browser native (`alert()`) yang mengganggu estetika pada login sukses (pengalihan langsung secara instan) dan menggantinya dengan inline banner hijau premium pada sukses update kata sandi.
 
-### 2. Manajemen Akun Diblokir & Otorisasi Pemulihan Akses (Unban) Admin (Juni 2026)
+### 3. Manajemen Akun Diblokir & Otorisasi Pemulihan Akses (Unban) Admin (Juni 2026)
 - **Tab Akun Diblokir**: Menambahkan tab khusus "Akun Diblokir" pada switcher halaman Manajemen Mitra di Dashboard Admin untuk mempermudah identifikasi dan monitoring akun-akun mitra/owner yang diblokir permanen.
 - **Otorisasi Unban (Pulihkan Akses)**: Menyediakan tombol "Pulihkan Akses" untuk Admin guna mengaktifkan kembali akun mitra yang diblokir. Alur unban ini akan mengubah `verification_status` kembali ke `'unverified'`, mereset `rejection_count` ke `0`, dan memicu email pemberitahuan otomatis ke pengguna bahwa akses kemitraan mereka telah diaktifkan kembali.
 - **Pemulihan Peran saat Unban**: Memperbaiki logika `unbanMitraRequest` agar turut memulihkan peran (`role`) pengguna kembali menjadi `'owner'` di database `users`. Sebelumnya, pengguna yang di-unban tetap terdaftar sebagai peran `'user'` biasa sehingga memicu penolakan *role mismatch* saat mencoba masuk kembali ke portal Pemilik Kost.
 - **Otomatisasi Email Unbanned**: Mengintegrasikan template email premium "Akses Kemitraan Diaktifkan Kembali" pada Cloud Function `sendMitraStatusEmail` menggunakan Brevo API.
 
-### 3. Penayangan, Penyeragaman Format Kode Referral, State Sync Global, & Penyempurnaan Wizard Edit Profil Mitra (Juni 2026)
+### 4. Penayangan, Penyeragaman Format Kode Referral, State Sync Global, & Penyempurnaan Wizard Edit Profil Mitra (Juni 2026)
 - **Tampilan Input Referral Dinamis**: 
   - Input Kode Referral Agen (`referred_by`) ditampilkan di Step 1 (page awal edit profile) secara kondisional menggunakan aturan: `formData.verification_status !== 'verified' && !hasInitialReferral`.
   - Jika pemilik kost (Mitra) belum diverifikasi (`verified`) DAN belum memiliki kode referral tersimpan di database (`referred_by` kosong), input referral akan muncul.

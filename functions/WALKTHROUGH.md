@@ -1,18 +1,13 @@
-# WALKTHROUGH - Perbaikan Pemulihan Peran (Role Restoration) saat Unban & Login Error Visibilitas
+# WALKTHROUGH - Perbaikan Tombol Intip Password Ganda & Peningkatan Estetika UI/UX
 
-Dokumen ini menjelaskan daftar perubahan, hasil pengujian, dan petunjuk deploy untuk perbaikan penanganan unban (pemulihan peran owner) serta visibilitas error login.
+Dokumen ini menjelaskan daftar perubahan, hasil pengujian, dan petunjuk deploy untuk perbaikan ikon mata ganda pada kolom kata sandi.
 
 ## 1. Daftar Perubahan
 
-### Frontend (Admin Service)
-- **Pembaruan Fungsi `unbanMitraRequest` (`adminService.ts`)**:
-  - Saat melakukan unban pada user, sistem kini tidak hanya mengubah status verifikasi kembali ke `'unverified'`, melainkan juga mengembalikan peran (`role`) pengguna menjadi `'owner'`.
-  - Ini memperbaiki bug di mana pemilik kost yang telah di-unban tetap bertindak sebagai peran `'user'` biasa di database, yang memicu penolakan *role mismatch* saat mereka mencoba login kembali ke portal Pemilik Kost.
-
-### Frontend (Halaman Login)
-- **Pembaruan Halaman Login (`Login.tsx`)**:
-  - Menggunakan hook `useSearchParams` dari `react-router-dom` dan mendaftarkannya ke dalam dependency list `useEffect` agar error (seperti *role mismatch* atau akun diblokir) langsung terdeteksi tanpa perlu refresh halaman secara manual.
-  - Menghapus popup browser native (`alert()`) yang mengganggu estetika pada login sukses (pengalihan langsung secara instan) dan menggantinya dengan inline banner hijau premium pada sukses update kata sandi.
+### Frontend (Global Styles)
+- **Pembaruan Berkas CSS (`index.css`)**:
+  - Menambahkan aturan CSS global untuk menonaktifkan selektor bawaan browser Edge, Internet Explorer, dan Chrome modern (`input::-ms-reveal` dan `input::-ms-clear`) dengan menyetel `display: none !important;`.
+  - Ini mengatasi masalah bertumpuknya tombol intip/mata kustom premium (desain RuangSinggah) dengan tombol penampil bawaan browser Microsoft Edge/Windows yang merusak estetika input sandi.
 
 ---
 
@@ -33,4 +28,4 @@ Dokumen ini menjelaskan daftar perubahan, hasil pengujian, dan petunjuk deploy u
    ```bash
    npm run dev
    ```
-3. Lakukan pengujian unban di Dashboard Admin pada tab **Akun Diblokir**, kemudian cobalah login menggunakan akun mitra yang baru di-unban tersebut pada portal Pemilik Kost. Akun akan dapat masuk kembali dengan sukses dan status verifikasinya ter-reset ke `'unverified'` (siap mengisi profil & KTP ulang).
+3. Buka halaman login/daftar di Microsoft Edge. Ketika Anda mengetik kata sandi, hanya tombol mata kustom premium dari RuangSinggah yang akan muncul di sisi kanan kolom input. Tombol abu-abu bawaan browser Microsoft Edge sudah dinonaktifkan sepenuhnya.

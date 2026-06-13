@@ -25,3 +25,9 @@ body {
 .recharts-wrapper *:focus {
   outline: none !important;
 }
+
+/* Hide Edge/IE native password reveal and clear buttons */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none !important;
+}
