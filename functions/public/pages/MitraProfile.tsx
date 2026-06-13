@@ -157,6 +157,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                 if (mitraErr) throw mitraErr;
                 setHasInitialReferral(true);
             }
+            setSearchParams({ edit: 'true', step: '2' });
             window.dispatchEvent(new Event('RS_USER_UPDATED'));
         } catch (error: any) {
             console.error('Error saving draft:', error);
@@ -731,7 +732,6 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                                                 return;
                                                             }
                                                             await saveStep1Draft();
-                                                            setSearchParams({ edit: 'true', step: '2' });
                                                             window.scrollTo({ top: 0, behavior: 'smooth' });
                                                         }}
                                                         className={`w-full sm:w-auto px-10 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all text-center flex items-center justify-center gap-2 ${isStep1Complete
