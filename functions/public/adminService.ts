@@ -2196,34 +2196,103 @@ export async function getAdminMitraRequests(): Promise<any[]> {
 
   if (verError) throw verError;
 
+  // Fetch all user_verifications and referral codes for these users
+  const userIds = (verRequests || []).map(u => u.id);
+  let verificationsMap: Record<string, any> = {};
+  let referralsMap: Record<string, string> = {};
+  let agentsMap: Record<string, string> = {};
+
+  if (userIds.length > 0) {
+    // A. Fetch verifications
+    const { data: verDetails, error: detailsError } = await supabase
+      .from('user_verifications')
+      .select('*')
+      .in('user_id', userIds);
+    
+    if (!detailsError && verDetails) {
+      verDetails.forEach(v => {
+        verificationsMap[v.user_id] = v;
+      });
+    }
+
+    // B. Fetch mitra table (to find referred_by)
+    const { data: mitraData } = await supabase
+      .from('mitra')
+      .select('user_id, referred_by')
+      .in('user_id', userIds);
+    
+    if (mitraData) {
+      mitraData.forEach(m => {
+        if (m.referred_by) {
+          referralsMap[m.user_id] = m.referred_by;
+        }
+      });
+    }
+
+    // C. Find Agent names who invited them
+    const referralCodes = Object.values(referralsMap).filter(Boolean);
+    if (referralCodes.length > 0) {
+      const { data: agentsData } = await supabase
+        .from('agents')
+        .select(`
+          referral_code,
+          user:user_id (
+            name
+          )
+        `)
+        .in('referral_code', referralCodes);
+      
+      if (agentsData) {
+        agentsData.forEach((a: any) => {
+          agentsMap[a.referral_code] = a.user?.name || 'Agen RS';
+        });
+      }
+    }
+  }
+
   // 3. Map verifications to match registration request format for UI compatibility
-  const mappedVerifications = (verRequests || []).map(u => ({
-    id: u.id,
-    user_id: u.id,
-    name: u.full_name || u.name,
-    phone: u.phone,
-    email: u.email,
-    timestamp: u.updated_at || u.created_at,
-    status: 'pending',
-    type: 'verification', // Special flag for UI
-    ktp_photo: u.ktp_photo_url,
-    ktp_number: u.ktp_number,
-    address: u.ktp_address
-  }));
+  const mappedVerifications = (verRequests || []).map(u => {
+    const verInfo = verificationsMap[u.id] || {};
+    const refCode = referralsMap[u.id] || null;
+    return {
+      id: u.id,
+      user_id: u.id,
+      name: u.full_name || u.name,
+      phone: u.phone,
+      email: u.email,
+      timestamp: u.updated_at || u.created_at,
+      status: 'pending',
+      type: 'verification', // Special flag for UI
+      ktp_photo: verInfo.ktp_photo_url || u.ktp_photo_url,
+      ktp_number: verInfo.ktp_number || u.ktp_number,
+      address: verInfo.ktp_address || u.ktp_address,
+      domicile_address: u.address || '-',
+      birth_place: u.birth_place || '-',
+      birth_date: u.birth_date || '-',
+      whatsapp_verified: u.whatsapp_verified || false,
+      email_verified: true, // Since they are registered in public.users, their email is verified
+      referred_by_code: refCode,
+      referred_by_agent_name: refCode ? (agentsMap[refCode] || 'Agen RS') : null
+    };
+  });
 
   const mappedRegistrations = (regRequests || []).map(r => ({
     ...r,
-    type: 'registration' // Regular flag
+    type: 'registration', // Regular flag
+    whatsapp_verified: false, // Default for non-integrated offline form
+    email_verified: false
   }));
 
   return [...mappedVerifications, ...mappedRegistrations];
 }
 
+
 export async function updateMitraRequestStatus(
   requestId: string, 
-  status: 'accepted' | 'rejected' | 'pending', 
+  status: 'accepted' | 'rejected' | 'pending' | 'banned', 
   userId?: string,
-  type: 'registration' | 'verification' = 'registration'
+  type: 'registration' | 'verification' = 'registration',
+  reason?: string
 ): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
@@ -2231,25 +2300,104 @@ export async function updateMitraRequestStatus(
   const isAdmin = await checkIfUserIsAdmin(user.id);
   if (!isAdmin) throw new Error('Access Denied');
 
+  let targetEmail = '';
+  let targetName = '';
+  let matchedUserId = '';
+
+  // 1. Fetch basic info
   if (type === 'registration') {
-    // 1. Update the request status in mitra_requests table
+    const { data: regReq } = await supabase.from('mitra_requests').select('*').eq('id', requestId).single();
+    if (regReq) {
+      targetEmail = regReq.email;
+      targetName = regReq.name;
+      // Try to find user by email
+      const { data: usr } = await supabase.from('users').select('id').eq('email', regReq.email).maybeSingle();
+      if (usr) {
+        matchedUserId = usr.id;
+      }
+    }
+  } else {
+    matchedUserId = requestId; // For verification, requestId is the user ID
+    const { data: usr } = await supabase.from('users').select('email, name, full_name').eq('id', matchedUserId).single();
+    if (usr) {
+      targetEmail = usr.email;
+      targetName = usr.full_name || usr.name;
+    }
+  }
+
+  let finalStatus: 'accepted' | 'rejected' | 'pending' | 'banned' = status;
+
+  // 2. Handle Rejection Limit if status is rejected
+  if (status === 'rejected' && matchedUserId) {
+    const { data: usr } = await supabase.from('users').select('rejection_count').eq('id', matchedUserId).single();
+    const currentCount = usr?.rejection_count || 0;
+    const newCount = currentCount + 1;
+
+    if (newCount >= 3) {
+      // Automatic Banned
+      finalStatus = 'banned';
+      const banReason = reason || "Telah mencapai batas maksimal 3 kali penolakan verifikasi identitas.";
+      reason = banReason;
+
+      await supabase.from('users').update({
+        role: 'user',
+        verification_status: 'banned',
+        verification_notes: banReason,
+        rejection_count: newCount,
+        updated_at: new Date().toISOString()
+      }).eq('id', matchedUserId);
+
+      await supabase.from('user_verifications').upsert({
+        user_id: matchedUserId,
+        verification_status: 'banned',
+        verification_notes: banReason,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+    } else {
+      // Just increment and set rejected status
+      await supabase.from('users').update({
+        verification_status: 'rejected',
+        verification_notes: reason,
+        rejection_count: newCount,
+        updated_at: new Date().toISOString()
+      }).eq('id', matchedUserId);
+
+      await supabase.from('user_verifications').upsert({
+        user_id: matchedUserId,
+        verification_status: 'rejected',
+        verification_notes: reason,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+    }
+  } else if (status === 'accepted' && matchedUserId) {
+    // Reset rejection count on success
+    await supabase.from('users').update({
+      rejection_count: 0,
+      updated_at: new Date().toISOString()
+    }).eq('id', matchedUserId);
+  }
+
+  // 3. Process primary request records
+  if (type === 'registration') {
+    const requestStatusUpdate = finalStatus === 'banned' ? 'rejected' : finalStatus;
     const { error: requestError } = await supabase
       .from('mitra_requests')
       .update({ 
-        status, 
+        status: requestStatusUpdate, 
+        message: reason || null,
         updated_at: new Date().toISOString() 
       })
       .eq('id', requestId);
 
     if (requestError) throw requestError;
 
-    // 2. If accepted and userId is provided, update the user's role in the users table
-    if (status === 'accepted' && (userId || requestId)) {
+    if (finalStatus === 'accepted' && (userId || requestId)) {
       const targetId = userId || requestId;
       const { error: userError } = await supabase
         .from('users')
         .update({ 
           role: 'owner', 
+          verification_status: 'verified',
           updated_at: new Date().toISOString()
         })
         .eq('id', targetId);
@@ -2259,29 +2407,120 @@ export async function updateMitraRequestStatus(
       }
     }
   } else {
-    // Handle Identity Verification (updating users table and user_verifications)
-    const verifStatus = status === 'accepted' ? 'verified' : (status === 'rejected' ? 'rejected' : 'pending');
-    const { error: userError } = await supabase
-      .from('users')
-      .update({ 
-        verification_status: verifStatus,
+    // Identity Verification Flow
+    const verifStatus = finalStatus === 'accepted' ? 'verified' : (finalStatus === 'rejected' ? 'rejected' : (finalStatus === 'banned' ? 'banned' : 'pending'));
+    
+    if (finalStatus === 'accepted') {
+      await supabase.from('users').update({
+        verification_status: 'verified',
+        role: 'owner',
         updated_at: new Date().toISOString()
-      })
-      .eq('id', requestId); // For verification, requestId is the userId
+      }).eq('id', requestId);
 
-    if (userError) throw userError;
-
-    // Sync to user_verifications table
-    const { error: verifError } = await supabase
-      .from('user_verifications')
-      .update({
-        verification_status: verifStatus,
+      await supabase.from('user_verifications').update({
+        verification_status: 'verified',
         updated_at: new Date().toISOString()
-      })
-      .eq('user_id', requestId);
-    if (verifError) {
-      console.warn('Failed to sync verification status to user_verifications table:', verifError.message);
+      }).eq('user_id', requestId);
     }
+  }
+
+  // 4. Trigger sendMitraStatusEmail Cloud Function
+  if (targetEmail) {
+    fetch('https://us-central1-ruangsinggahid-3afb2.cloudfunctions.net/sendMitraStatusEmail', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: targetEmail,
+        name: targetName,
+        status: finalStatus,
+        reason,
+        type
+      })
+    }).then(res => {
+      if (!res.ok) {
+        console.warn('Failed to send status email notification via Cloud Function');
+      }
+    }).catch(err => {
+      console.warn('Error sending status email notification:', err);
+    });
+  }
+}
+
+export async function banMitraRequest(
+  requestId: string,
+  type: 'registration' | 'verification' = 'registration',
+  reason: string
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  let targetEmail = '';
+  let targetName = '';
+  let matchedUserId = '';
+
+  if (type === 'registration') {
+    const { data: regReq } = await supabase.from('mitra_requests').select('*').eq('id', requestId).single();
+    if (regReq) {
+      targetEmail = regReq.email;
+      targetName = regReq.name;
+      // Try to find user by email
+      const { data: usr } = await supabase.from('users').select('id').eq('email', regReq.email).maybeSingle();
+      if (usr) {
+        matchedUserId = usr.id;
+      }
+
+      await supabase.from('mitra_requests').update({
+        status: 'rejected',
+        message: `BLOKIR PERMANEN: ${reason}`,
+        updated_at: new Date().toISOString()
+      }).eq('id', requestId);
+    }
+  } else {
+    matchedUserId = requestId;
+    const { data: usr } = await supabase.from('users').select('email, name, full_name').eq('id', matchedUserId).single();
+    if (usr) {
+      targetEmail = usr.email;
+      targetName = usr.full_name || usr.name;
+    }
+  }
+
+  if (matchedUserId) {
+    await supabase.from('users').update({
+      role: 'user',
+      verification_status: 'banned',
+      verification_notes: reason,
+      updated_at: new Date().toISOString()
+    }).eq('id', matchedUserId);
+
+    await supabase.from('user_verifications').upsert({
+      user_id: matchedUserId,
+      verification_status: 'banned',
+      verification_notes: reason,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id' });
+  }
+
+  if (targetEmail) {
+    fetch('https://us-central1-ruangsinggahid-3afb2.cloudfunctions.net/sendMitraStatusEmail', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: targetEmail,
+        name: targetName,
+        status: 'banned',
+        reason,
+        type
+      })
+    }).then(res => {
+      if (!res.ok) {
+        console.warn('Failed to send status email notification via Cloud Function');
+      }
+    }).catch(err => {
+      console.warn('Error sending status email notification:', err);
+    });
   }
 }
 
@@ -2796,4 +3035,91 @@ export async function saveSurveyCatalogSettings(settings: SurveyCatalogSettings)
     );
 
   if (error) throw new Error(`Gagal menyimpan katalog survey: ${error.message}`);
+}
+
+export async function getBannedMitra(): Promise<any[]> {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(authUser.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  const { data: users, error: userError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('verification_status', 'banned')
+    .order('updated_at', { ascending: false });
+
+  if (userError) throw userError;
+  if (!users) return [];
+
+  const userIds = users.map(u => u.id);
+  let verificationsMap: Record<string, any> = {};
+  if (userIds.length > 0) {
+    const { data: verDetails } = await supabase
+      .from('user_verifications')
+      .select('*')
+      .in('user_id', userIds);
+    
+    if (verDetails) {
+      verDetails.forEach(v => {
+        verificationsMap[v.user_id] = v;
+      });
+    }
+  }
+
+  return users.map(u => {
+    const verInfo = verificationsMap[u.id] || {};
+    return {
+      ...u,
+      name: u.name || u.full_name || 'No Name',
+      ktp_photo: verInfo.ktp_photo_url || u.ktp_photo_url,
+      ktp_number: verInfo.ktp_number || u.ktp_number,
+      address: verInfo.ktp_address || u.ktp_address,
+      domicile_address: u.address || '-',
+      birth_place: u.birth_place || '-',
+      birth_date: u.birth_date || '-',
+      whatsapp_verified: u.whatsapp_verified || false,
+      email_verified: true,
+      type: 'verification'
+    };
+  });
+}
+
+export async function unbanMitraRequest(userId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  await supabase.from('users').update({
+    verification_status: 'unverified',
+    rejection_count: 0,
+    verification_notes: null,
+    updated_at: new Date().toISOString()
+  }).eq('id', userId);
+
+  await supabase.from('user_verifications').update({
+    verification_status: 'unverified',
+    verification_notes: null,
+    updated_at: new Date().toISOString()
+  }).eq('user_id', userId);
+
+  const { data: usr } = await supabase.from('users').select('email, name, full_name').eq('id', userId).single();
+  if (usr && usr.email) {
+    fetch('https://us-central1-ruangsinggahid-3afb2.cloudfunctions.net/sendMitraStatusEmail', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: usr.email,
+        name: usr.full_name || usr.name,
+        status: 'unbanned',
+        reason: 'Akun Anda telah diaktifkan kembali oleh admin. Anda sekarang dapat mengajukan verifikasi ulang.',
+        type: 'verification'
+      })
+    }).catch(err => {
+      console.warn('Error sending status email notification:', err);
+    });
+  }
 }

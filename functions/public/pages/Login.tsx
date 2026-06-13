@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { Page } from '../types';
 import { sendWhatsAppTemplate } from '../whatsappService';
@@ -51,6 +52,7 @@ const PasswordInput = ({
 );
 
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [mode, setMode] = useState<AuthMode>('LOGIN');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -124,8 +126,13 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   };
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('mode') === 'recovery') {
+    const mode = searchParams.get('mode');
+    const verified = searchParams.get('verified');
+    const error = searchParams.get('error');
+    const upgradeToOwner = searchParams.get('upgrade_to_owner');
+    const upgradeSuccess = searchParams.get('upgrade_success');
+
+    if (mode === 'recovery') {
       setMode('PASSWORD_UPDATE');
       setSuccessMsg('Silakan masukkan kata sandi baru Anda.');
       
@@ -136,33 +143,26 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         }
       };
       checkSession();
-    } else if (params.get('verified') === 'true') {
+    } else if (verified === 'true') {
       setSuccessMsg('Email berhasil diverifikasi! Silakan login dengan email dan kata sandi Anda.');
-      // Clear param from URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (params.get('error') === 'blocked') {
+      setSearchParams({}, { replace: true });
+    } else if (error === 'blocked') {
       setErrorMsg('Akun Anda telah ditangguhkan. Silakan hubungi admin untuk informasi lebih lanjut.');
-      // Clear param from URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (params.get('error') === 'role_mismatch') {
+      setSearchParams({}, { replace: true });
+    } else if (error === 'role_mismatch') {
       setErrorMsg('Akun Anda tidak terdaftar sebagai Pemilik Kost. Silakan login sebagai Pencari Kost.');
-      // Clear param from URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (params.get('upgrade_to_owner') === 'true') {
-      // User mengklik link verifikasi dari email → selesaikan upgrade role
-      window.history.replaceState({}, document.title, window.location.pathname);
-      // Dibersihkan URL — proses upgrade sesungguhnya ditangani App.tsx onAuthStateChange
-      window.history.replaceState({}, document.title, window.location.pathname);
+      setSearchParams({}, { replace: true });
+    } else if (upgradeToOwner === 'true') {
       setMode('LOGIN');
       setActiveRole('owner');
-    } else if (params.get('upgrade_success') === 'true') {
-      // Upgrade selesai dari App.tsx — tampilkan pesan sukses
-      window.history.replaceState({}, document.title, window.location.pathname);
+      setSearchParams({}, { replace: true });
+    } else if (upgradeSuccess === 'true') {
       setMode('LOGIN');
       setActiveRole('owner');
       setSuccessMsg('✅ Akun berhasil diupgrade ke Pemilik Kost! Silakan login kembali untuk akses dashboard Mitra.');
+      setSearchParams({}, { replace: true });
     }
-  }, []);
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     let interval: any;
@@ -198,7 +198,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         return;
       }
 
-      alert('Berhasil Masuk! Selamat datang kembali.');
       if (onLoginSuccess) onLoginSuccess();
     } catch (error: any) {
       setErrorMsg(getErrorMessage(error.message || 'unknown'));
@@ -513,11 +512,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       if (error) {
         setErrorMsg(getErrorMessage(error.message));
       } else {
-        alert('Kata sandi berhasil diperbarui! Silakan login kembali.');
         await supabase.auth.signOut();
-        window.history.replaceState({}, document.title, window.location.origin + Page.LOGIN);
-        setMode('LOGIN');
         resetForm();
+        setMode('LOGIN');
+        setSuccessMsg('Kata sandi berhasil diperbarui! Silakan login kembali.');
       }
     } catch (error: any) {
       setErrorMsg(getErrorMessage(error.message || 'unknown'));

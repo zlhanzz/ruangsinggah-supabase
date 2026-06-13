@@ -489,7 +489,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                 </div>
             )}
 
-            {isEditing ? (
+            {isEditing && formData.verification_status !== 'banned' ? (
                 <div className="bg-white rounded-[2.5rem] p-8 md:p-12 border border-gray-100 shadow-sm relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-64 h-64 bg-orange-50 rounded-full blur-3xl opacity-30 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
                     <div className="relative z-10">
@@ -789,6 +789,21 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                 </div>
                                 <div className="bg-white/10 px-6 py-3 rounded-2xl border border-white/20 backdrop-blur-md">
                                     <span className="text-[10px] font-black uppercase tracking-[0.2em] animate-pulse">Status: Reviewing</span>
+                                </div>
+                            </div>
+                        </div>
+                    ) : formData.verification_status === 'banned' ? (
+                        <div className="bg-red-50 border border-red-100 rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+                            <div className="flex items-center gap-5 text-left">
+                                <div className="w-16 h-16 rounded-3xl bg-red-600 text-white flex items-center justify-center border border-red-200">
+                                    <AlertCircle size={32} />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-black text-red-900 uppercase tracking-tight">Akses Kemitraan Diblokir Permanen</h3>
+                                    <p className="text-xs font-bold text-red-600 uppercase mt-1 italic">Alasan: {formData.verification_notes || 'Melanggar ketentuan layanan atau penolakan berulang kali.'}</p>
+                                    <p className="text-xs font-bold text-gray-500 uppercase mt-2">
+                                        Anda tidak dapat mengajukan verifikasi identitas sebagai pemilik kost lagi. Status akun Anda diturunkan menjadi tipe pengguna biasa.
+                                    </p>
                                 </div>
                             </div>
                         </div>

@@ -2,7 +2,17 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 1. Penayangan, Penyeragaman Format Kode Referral, State Sync Global, & Penyempurnaan Wizard Edit Profil Mitra (Juni 2026)
+### 1. Perbaikan Real-Time Banner Error Login & Pembersihan Alert Native Browser (Juni 2026)
+- **Reaktivitas URL Search Params**: Mengintegrasikan hook `useSearchParams` pada `Login.tsx` dan memasukkannya ke dalam dependency list `useEffect` untuk mendeteksi perubahan parameter URL secara real-time.
+- **Pesan Instan Mismatch & Blocked**: Memastikan pesan kesalahan "role mismatch" (ketika akun biasa mencoba login di portal pemilik kost) dan "akun diblokir" (blocked/banned) tampil secara instan di UI tanpa harus merefresh halaman web secara manual.
+- **Penghapusan Alert Native Dialog**: Menghilangkan popup browser native (`alert()`) yang mengganggu estetika pada login sukses (pengalihan langsung secara instan) dan menggantinya dengan inline banner hijau premium pada sukses update kata sandi.
+
+### 2. Manajemen Akun Diblokir & Otorisasi Pemulihan Akses (Unban) Admin (Juni 2026)
+- **Tab Akun Diblokir**: Menambahkan tab khusus "Akun Diblokir" pada switcher halaman Manajemen Mitra di Dashboard Admin untuk mempermudah identifikasi dan monitoring akun-akun mitra/owner yang diblokir permanen.
+- **Otorisasi Unban (Pulihkan Akses)**: Menyediakan tombol "Pulihkan Akses" untuk Admin guna mengaktifkan kembali akun mitra yang diblokir. Alur unban ini akan mengubah `verification_status` kembali ke `'unverified'`, mereset `rejection_count` ke `0`, dan memicu email pemberitahuan otomatis ke pengguna bahwa akses kemitraan mereka telah diaktifkan kembali.
+- **Otomatisasi Email Unbanned**: Mengintegrasikan template email premium "Akses Kemitraan Diaktifkan Kembali" pada Cloud Function `sendMitraStatusEmail` menggunakan Brevo API.
+
+### 3. Penayangan, Penyeragaman Format Kode Referral, State Sync Global, & Penyempurnaan Wizard Edit Profil Mitra (Juni 2026)
 - **Tampilan Input Referral Dinamis**: 
   - Input Kode Referral Agen (`referred_by`) ditampilkan di Step 1 (page awal edit profile) secara kondisional menggunakan aturan: `formData.verification_status !== 'verified' && !hasInitialReferral`.
   - Jika pemilik kost (Mitra) belum diverifikasi (`verified`) DAN belum memiliki kode referral tersimpan di database (`referred_by` kosong), input referral akan muncul.
@@ -315,13 +325,31 @@
 
 
 
+### 44. Penyempurnaan Detail Verifikasi Identitas Calon Mitra untuk Evaluasi Admin (Juni 2026)
+- **Pengambilan Detail Verifikasi Terintegrasi (`adminService.ts`)**:
+  - Mengubah fungsi `getAdminMitraRequests` agar mengambil data verifikasi dari tabel `user_verifications` (termasuk nomor KTP, alamat KTP, dan foto KTP) serta data pelengkap profil dari tabel `users` (tempat/tanggal lahir, alamat domisili) berdasarkan `user_id` secara paralel.
+- **Tampilan UI Evaluasi Admin Komprehensif & Konkrit (`MitraManagement.tsx`)**:
+  - Merancang ulang layout grid detail data calon mitra pada antrean verifikasi identitas (tab "Antrean Pendaftar").
+  - Menampilkan informasi secara konkrit: Email, No. WhatsApp, Tempat & Tanggal Lahir (dengan format tanggal Indonesia yang rapi), No. KTP, Alamat Domisili, dan Alamat KTP.
+  - Membantu admin melakukan evaluasi silang (cross-match) yang valid antara dokumen identitas KTP dan data domisili profil sebelum melakukan persetujuan/penolakan pendaftaran mitra.
+
 ## Fitur Dalam Pengerjaan (In Progress)
 -   Monitoring konsistensi Webhook Midtrans vs Supabase untuk transaksi multi-kost.
 -   Uji E2E transaksi nyata di Production (Smallest Amount).
 
+### 45. Otomatisasi & Penyelesaian Deploy Email Status Mitra (Juni 2026)
+- **Sukses Deployment Cloud Function (`sendMitraStatusEmail`)**: Menyelesaikan build TypeScript (`tsc`) backend tanpa error dan sukses mendeploy Cloud Function ke Firebase. Cloud Function ini menangani pengiriman email notifikasi otomatis via Brevo API ke calon mitra saat pendaftaran mereka disetujui atau ditolak dengan alasan penolakan yang diinput oleh admin di Dashboard Admin.
+
+### 46. Sistem Blokir Kemitraan Permanen & Batas Penolakan Maksimal (Juni 2026)
+- **Tombol Blokir Kemitraan Manual**: Menambahkan tombol "Blokir Kemitraan" di Dashboard Admin pada tab "Antrean Pendaftar". Admin dapat memblokir secara permanen akses pengajuan kemitraan dari user/calon mitra nakal dengan menyertakan alasan konkrit.
+- **Batas Otomatis 3 Kali Penolakan**: Menambahkan pelacakan kolom `rejection_count` pada database. Jika pengajuan verifikasi/kemitraan ditolak sebanyak 3 kali berturut-turut, sistem secara otomatis mengubah status pengguna menjadi `banned` (akses diblokir permanen) dan menurunkan status peran akun kembali ke `user` biasa.
+- **Proteksi Halaman Mitra Profile**: Memperbarui halaman `MitraProfile.tsx` untuk membaca status `banned`. Jika terdeteksi, panel pengisian form dan tombol edit akan dinonaktifkan sepenuhnya dan diganti dengan pesan peringatan permanent ban.
+- **Email Penegasan Ban via Brevo**: Memperbarui Cloud Function `sendMitraStatusEmail` untuk mendeteksi status `banned` dan mengirimkan email penegasan pemblokiran akun dengan template gelap yang dirancang khusus.
+
 ## Rencana Selanjutnya (Future Plans)
 -   Integrasi laporan keuangan otomatis berbasis transaksi Midtrans.
 -   Sistem penarikan dana (payout) otomatis untuk Mitra.
+
 
 
 

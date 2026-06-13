@@ -2730,3 +2730,183 @@ export const sitemap = functions.https.onRequest(async (req, res) => {
   }
 });
 
+/**
+ * sendMitraStatusEmail: Sends email notification when a partner request (registration or identity verification) is accepted or rejected with a reason.
+ */
+export const sendMitraStatusEmail = functions.https.onRequest({ cors: true }, async (req, res) => {
+  const { email, name, status, reason, type } = req.body;
+  console.log(`MITRA_EMAIL: Start (Email: ${email}, Name: ${name}, Status: ${status}, Type: ${type})`);
+
+  if (!email || !status) {
+    res.status(400).send({ message: 'Missing email or status' });
+    return;
+  }
+
+  try {
+    const brevoApiKey = brevoApiKeyParam.value();
+    if (!brevoApiKey) throw new Error('BREVO_API_KEY missing');
+
+    const isBanned = status === 'banned';
+    const isUnbanned = status === 'unbanned' || status === 'unverified';
+    const isAccepted = status === 'accepted' || status === 'verified';
+    const isVerification = type === 'verification';
+
+    let subject = '';
+    if (isBanned) {
+      subject = `🚫 Penegasan: Akses Kemitraan (Owner) Anda Dinonaktifkan Permanen`;
+    } else if (isUnbanned) {
+      subject = `🔓 Akses Kemitraan (Owner) Anda Telah Diaktifkan Kembali`;
+    } else {
+      subject = isAccepted 
+        ? `🎉 Selamat! Pengajuan ${isVerification ? 'Verifikasi Identitas' : 'Kemitraan'} Anda Diterima`
+        : `⚠️ Pengajuan ${isVerification ? 'Verifikasi Identitas' : 'Kemitraan'} Anda Ditangguhkan`;
+    }
+
+    let contentHtml = '';
+
+    if (isBanned) {
+      contentHtml = `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; padding: 40px 20px; text-align: center;">
+          <div style="max-width: 550px; margin: 0 auto; background-color: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.05); text-align: left;">
+            <div style="background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%); padding: 40px 30px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">Akses Kemitraan Dinonaktifkan</h1>
+            </div>
+            <div style="padding: 40px 35px; color: #374151; line-height: 1.6;">
+              <p style="font-size: 16px; font-weight: 600; margin-top: 0; color: #111827;">Halo, ${name || 'Mitra'}!</p>
+              <p style="font-size: 15px; color: #4b5563; margin-bottom: 20px;">Kami ingin menginformasikan bahwa setelah melalui proses evaluasi, hak akses kemitraan (Owner/Seller) Anda di RuangSinggah.id telah <strong>DINONAKTIFKAN SECARA PERMANEN (BANNED)</strong>.</p>
+              
+              <div style="background-color: #f8fafc; border-left: 4px solid #0f172a; padding: 15px 20px; margin: 25px 0; border-radius: 0 12px 12px 0;">
+                <p style="margin: 0; font-size: 14px; font-weight: bold; color: #1e293b;">Alasan Keputusan:</p>
+                <p style="margin: 5px 0 0 0; font-size: 14px; color: #334155; line-height: 1.5;">${reason || 'Pelanggaran ketentuan kemitraan atau kegagalan verifikasi identitas berulang kali (maksimal 3 kali penolakan).'}</p>
+              </div>
+
+              <p style="font-size: 15px; color: #4b5563; margin-bottom: 30px;">Keputusan ini bersifat final. Anda tidak dapat lagi mengajukan verifikasi identitas sebagai pemilik properti atau mengunggah listing kost di platform kami. Akun Anda telah diturunkan menjadi tipe pengguna biasa (Pencari Kost) untuk seterusnya.</p>
+              
+              <div style="text-align: center; margin: 35px 0;">
+                <a href="https://ruangsinggah.id" style="display: inline-block; background-color: #0f172a; color: #ffffff; padding: 16px 32px; font-size: 14px; font-weight: bold; text-decoration: none; border-radius: 14px; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.25);">
+                  KEMBALI KE BERANDA
+                </a>
+              </div>
+            </div>
+            <div style="background-color: #fafafa; border-top: 1px solid #f3f4f6; padding: 25px 35px; text-align: center;">
+              <p style="font-size: 12px; color: #9ca3af; margin: 0;">&copy; ${new Date().getFullYear()} RuangSinggah.id. All rights reserved.</p>
+            </div>
+          </div>
+        </div>
+      `;
+    } else if (isUnbanned) {
+      contentHtml = `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; padding: 40px 20px; text-align: center;">
+          <div style="max-width: 550px; margin: 0 auto; background-color: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.05); text-align: left;">
+            <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 40px 30px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">Akses Kemitraan Diaktifkan</h1>
+            </div>
+            <div style="padding: 40px 35px; color: #374151; line-height: 1.6;">
+              <p style="font-size: 16px; font-weight: 600; margin-top: 0; color: #111827;">Halo, ${name || 'Mitra'}!</p>
+              <p style="font-size: 15px; color: #4b5563; margin-bottom: 20px;">Kami ingin menginformasikan kabar baik bahwa pembatasan akses kemitraan (Owner/Seller) Anda di RuangSinggah.id telah <strong>DICABUT (UNBANNED)</strong> oleh Tim Admin kami.</p>
+              
+              <div style="background-color: #f0f9ff; border-left: 4px solid #3b82f6; padding: 15px 20px; margin: 25px 0; border-radius: 0 12px 12px 0;">
+                <p style="margin: 0; font-size: 14px; font-weight: bold; color: #1e3a8a;">Pesan Admin:</p>
+                <p style="margin: 5px 0 0 0; font-size: 14px; color: #1e40af; line-height: 1.5;">${reason || 'Akun Anda telah diaktifkan kembali. Silakan lakukan pengajuan verifikasi identitas ulang dengan dokumen yang valid.'}</p>
+              </div>
+
+              <p style="font-size: 15px; color: #4b5563; margin-bottom: 30px;">Anda sekarang dapat masuk kembali ke halaman Profil Pemilik Kost untuk memperbarui data, mengunggah ulang dokumen KTP yang benar, dan mengirimkan kembali pengajuan kemitraan.</p>
+              
+              <div style="text-align: center; margin: 35px 0;">
+                <a href="https://ruangsinggah.id/owner?tab=profile" style="display: inline-block; background-color: #3b82f6; color: #ffffff; padding: 16px 32px; font-size: 14px; font-weight: bold; text-decoration: none; border-radius: 14px; box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25);">
+                  AJUKAN VERIFIKASI SEKARANG
+                </a>
+              </div>
+            </div>
+            <div style="background-color: #fafafa; border-top: 1px solid #f3f4f6; padding: 25px 35px; text-align: center;">
+              <p style="font-size: 12px; color: #9ca3af; margin: 0;">&copy; ${new Date().getFullYear()} RuangSinggah.id. All rights reserved.</p>
+            </div>
+          </div>
+        </div>
+      `;
+    } else if (isAccepted) {
+      contentHtml = `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; padding: 40px 20px; text-align: center;">
+          <div style="max-width: 550px; margin: 0 auto; background-color: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.05); text-align: left;">
+            <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 40px 30px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">Selamat! Pengajuan Diterima</h1>
+            </div>
+            <div style="padding: 40px 35px; color: #374151; line-height: 1.6;">
+              <p style="font-size: 16px; font-weight: 600; margin-top: 0; color: #111827;">Halo, ${name || 'Mitra'}!</p>
+              <p style="font-size: 15px; color: #4b5563; margin-bottom: 20px;">Kami dengan senang hati menginformasikan bahwa pengajuan <strong>${isVerification ? 'Verifikasi Identitas KTP' : 'Kemitraan Pemilik Kost'}</strong> Anda di RuangSinggah.id telah <strong>DITERIMA & DISETUJUI</strong> oleh Tim Admin kami.</p>
+              <p style="font-size: 15px; color: #4b5563; margin-bottom: 30px;">Sekarang akun Anda telah memiliki status terverifikasi penuh dan Anda dapat menikmati fitur pengelolaan kost/properti secara optimal di dashboard pemilik kost.</p>
+              <div style="text-align: center; margin: 35px 0;">
+                <a href="https://ruangsinggah.id/owner" style="display: inline-block; background-color: #10b981; color: #ffffff; padding: 16px 32px; font-size: 14px; font-weight: bold; text-decoration: none; border-radius: 14px; box-shadow: 0 8px 20px rgba(16, 185, 129, 0.25);">
+                  MASUK KE DASHBOARD MITRA
+                </a>
+              </div>
+              <p style="font-size: 13px; color: #9ca3af; margin: 0;">Terima kasih atas kerja sama Anda dalam membangun ekosistem sewa kost yang terpercaya.</p>
+            </div>
+            <div style="background-color: #fafafa; border-top: 1px solid #f3f4f6; padding: 25px 35px; text-align: center;">
+              <p style="font-size: 12px; color: #9ca3af; margin: 0;">&copy; ${new Date().getFullYear()} RuangSinggah.id. All rights reserved.</p>
+            </div>
+          </div>
+        </div>
+      `;
+    } else {
+      contentHtml = `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; padding: 40px 20px; text-align: center;">
+          <div style="max-width: 550px; margin: 0 auto; background-color: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.05); text-align: left;">
+            <div style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); padding: 40px 30px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">Pengajuan Ditangguhkan</h1>
+            </div>
+            <div style="padding: 40px 35px; color: #374151; line-height: 1.6;">
+              <p style="font-size: 16px; font-weight: 600; margin-top: 0; color: #111827;">Halo, ${name || 'Mitra'}!</p>
+              <p style="font-size: 15px; color: #4b5563; margin-bottom: 20px;">Mohon maaf, pengajuan <strong>${isVerification ? 'Verifikasi Identitas KTP' : 'Kemitraan Pemilik Kost'}</strong> Anda di RuangSinggah.id saat ini <strong>ditangguhkan/ditolak</strong> karena alasan berikut:</p>
+              
+              <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 15px 20px; margin: 25px 0; border-radius: 0 12px 12px 0;">
+                <p style="margin: 0; font-size: 14px; font-weight: bold; color: #991b1b;">Alasan Penolakan:</p>
+                <p style="margin: 5px 0 0 0; font-size: 14px; color: #7f1d1d; line-height: 1.5;">${reason || 'Dokumen KTP kurang jelas atau tidak sesuai dengan data profil.'}</p>
+              </div>
+
+              <p style="font-size: 15px; color: #4b5563; margin-bottom: 30px;">Jangan khawatir! Anda dapat masuk kembali ke halaman Profil Anda untuk memperbarui data, mengunggah ulang dokumen yang benar, dan mengajukan kembali proses verifikasi.</p>
+              
+              <div style="text-align: center; margin: 35px 0;">
+                <a href="https://ruangsinggah.id/owner?tab=profile" style="display: inline-block; background-color: #ef4444; color: #ffffff; padding: 16px 32px; font-size: 14px; font-weight: bold; text-decoration: none; border-radius: 14px; box-shadow: 0 8px 20px rgba(239, 68, 68, 0.25);">
+                  PERBAIKI PROFIL & DOKUMEN KTP
+                </a>
+              </div>
+            </div>
+            <div style="background-color: #fafafa; border-top: 1px solid #f3f4f6; padding: 25px 35px; text-align: center;">
+              <p style="font-size: 12px; color: #9ca3af; margin: 0;">&copy; ${new Date().getFullYear()} RuangSinggah.id. All rights reserved.</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': brevoApiKey
+      },
+      body: JSON.stringify({
+        sender: { name: "RuangSinggah.id", email: "system@ruangsinggah.id" },
+        to: [{ email, name }],
+        subject,
+        htmlContent: contentHtml
+      })
+    });
+
+    const result = await response.json();
+    console.log(`MITRA_EMAIL: Brevo Status: ${response.status}`, JSON.stringify(result));
+    
+    if (!response.ok) {
+      throw new Error(`Brevo Error: ${JSON.stringify(result)}`);
+    }
+
+    res.status(200).send({ success: true });
+  } catch (err: any) {
+    console.error("MITRA_EMAIL_EXCEPTION:", err);
+    res.status(500).send({ message: err.message });
+  }
+});
+
+

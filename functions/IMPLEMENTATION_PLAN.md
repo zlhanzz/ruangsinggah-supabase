@@ -1,33 +1,24 @@
-# IMPLEMENTATION PLAN - Wizard Flow Verifikasi KTP & Verifikasi WhatsApp Dinamis (Pembaruan Draft & Foto Profil)
+# IMPLEMENTATION PLAN - Penghapusan Alert Native Browser untuk Meningkatkan Estetika UI/UX
 
-Rencana ini dibuat untuk menyempurnakan alur pengisian profil dan verifikasi identitas (KTP) pada Halaman Profil Mitra (`MitraProfile.tsx`), serta memindahkan input foto profil ke dalam Step 1 sebagai opsi tambahan.
+Rencana ini dibuat untuk menghilangkan kotak dialog native browser (`alert()`) yang mengganggu estetika dan alur pengguna saat login atau mereset kata sandi.
 
-## 1. Analisis Masalah & Kebutuhan
-- **Relokasi Foto Profil**:
-  - Saat ini input foto profil berada di bagian kartu atas (hero header) dan terpisah dari form pengeditan. Hal ini memicu kebingungan visual.
-  - Untuk menyatukan alur, input foto profil akan dipindahkan ke dalam Halaman Form Langkah 1 (Step 1) sebagai input opsional.
-  - Saat mode baca (`isEditing === false`), foto profil di bagian hero header hanya bertindak sebagai tampilan (read-only) tanpa tombol upload overlay.
-  - Saat mode edit (`isEditing === true`), tombol upload pada hero header disembunyikan, dan opsi unggah foto profil dipindahkan ke bagian atas input Langkah 1 (Step 1).
+## 1. Analisis Masalah
+- **Penyebab Utama**: Penggunaan fungsi bawaan browser `alert()` saat login berhasil (`alert('Berhasil Masuk!...')`) dan saat kata sandi berhasil diperbarui (`alert('Kata sandi berhasil diperbarui!...')`).
+- **Dampak**: Kotak dialog native browser menampilkan teks seperti "localhost menyatakan" atau "ruangsinggah.id menyatakan" yang menghalangi konten halaman, memaksa pengguna melakukan klik ekstra, dan mengurangi kesan profesional/premium pada aplikasi.
 
-- **Fungsi Draft**:
-  - Menjaga draf data profil agar tersimpan dengan benar di database menggunakan query yang aman dan memeriksa kembalian error Supabase client.
-
-## 2. Dampak Perubahan
-File yang akan disentuh:
-- `functions/public/pages/MitraProfile.tsx` (Pemindahan UI/Logic Foto Profil)
+## 2. Solusi & Dampak Perubahan
+- **Login Sukses**: Menghapus total `alert()` saat login berhasil, sehingga pengguna langsung dialihkan secara mulus ke dashboard yang sesuai tanpa interupsi popup.
+- **Penyetelan Sandi Baru Sukses**: Mengganti `alert()` dengan inline `successMsg` (spanduk hijau premium yang sudah ada di halaman login), sehingga pengguna mendapatkan umpan balik visual yang elegan di dalam formulir.
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Sembunyikan Hero Header pada Mode Edit**:
-   - Bungkus komponen visual Profile Hero / Header dalam kondisi `!isEditing && (...)` agar disembunyikan sepenuhnya dari layar ketika pengguna sedang berada di formulir pengeditan.
-2. **Tambah Input Foto di Form Step 1**:
-   - Di dalam rendering `currentStep === 1`, sisipkan elemen preview foto profil dan tombol "Pilih Foto" dengan penanganan `isUploadingPhoto` yang sesuai.
+1. **Modifikasi `handleLogin` di `Login.tsx`**:
+   - Menghapus baris `alert('Berhasil Masuk! Selamat datang kembali.');` pada baris 201.
+2. **Modifikasi `handleUpdatePassword` di `Login.tsx`**:
+   - Menghapus baris `alert('Kata sandi berhasil diperbarui! Silakan login kembali.');`.
+   - Menambahkan pemanggilan `setSuccessMsg('Kata sandi berhasil diperbarui! Silakan login kembali.');` setelah pemanggilan `resetForm()` dan penyetelan mode ke `'LOGIN'`.
 3. **Verifikasi Build**:
-   - Pastikan tidak ada error tipe data TypeScript dan bundler Vite berjalan lancar.
-
+   - Menjalankan build produksi untuk memastikan tidak ada kesalahan tipe TypeScript.
 
 ## 4. Rencana Verifikasi
-- Masuk ke mode edit profil, verifikasi bahwa tombol unggah foto profil tidak lagi muncul di hero header atas.
-- Verifikasi input foto profil baru muncul di bagian atas formulir Langkah 1 (Step 1).
-- Unggah foto profil baru, pastikan berhasil terunggah dan status draf tersimpan.
-
-
+- Melakukan login dan memastikan dashboard langsung terbuka secara instan dan mulus tanpa popup browser.
+- Melakukan pembaruan kata sandi dan memastikan pesan sukses tampil dalam spanduk hijau premium di atas formulir login.

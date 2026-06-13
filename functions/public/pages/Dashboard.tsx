@@ -14,7 +14,7 @@ import {
     getAdminSurveyRequests, updateSurveyRequest, deleteSurveyRequest, deleteSurveyRequests, getSurveyAgents, generateManualDriveFolder,
     getAgentVerificationRequests, updateAgentVerificationStatus,
     uploadSurveyPhoto, deleteSurveyPhoto,
-    getAdminMitraRequests, updateMitraRequestStatus,
+    getAdminMitraRequests, updateMitraRequestStatus, getBannedMitra, unbanMitraRequest,
     getAdminBanners, addBanner, updateBanner, deleteBanner,
     getUsersByRole, getActiveMitra, deleteUserAccount, updateUserStatus,
     transferPropertyOwnership, getUserFullDetails,
@@ -370,6 +370,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
     const [analyticsSummary, setAnalyticsSummary] = useState<AnalyticsSummary | null>(null);
     const [mitraRequests, setMitraRequests] = useState<any[]>([]);
     const [activeMitra, setActiveMitra] = useState<any[]>([]);
+    const [bannedMitra, setBannedMitra] = useState<any[]>([]);
     const [agentVerifications, setAgentVerifications] = useState<any[]>([]);
     const [surveyRequests, setSurveyRequests] = useState<SurveyRequest[]>([]);
     const [surveyAgents, setSurveyAgents] = useState<{id: string, name: string, phone: string, photo_url?: string, rating?: string}[]>([]);
@@ -1945,8 +1946,12 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
     const loadMitraRequests = async () => {
         setLoading(true);
         try {
-            const data = await getAdminMitraRequests();
+            const [data, bannedData] = await Promise.all([
+                getAdminMitraRequests(),
+                getBannedMitra()
+            ]);
             setMitraRequests(data);
+            setBannedMitra(bannedData);
         } catch (err) {
             console.error('Failed to load mitra requests:', err);
         } finally {
@@ -2887,6 +2892,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                                         <MitraManagement
                                             mitraRequests={mitraRequests}
                                             activeMitra={activeMitra}
+                                            bannedMitra={bannedMitra}
                                             loadMitraRequests={loadMitraRequests}
                                             loadActiveMitra={loadActiveMitra}
                                             loading={loading}
