@@ -242,13 +242,6 @@ const App: React.FC = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("Auth event triggered:", event, session);
 
-      // Skip semua pemrosesan saat upgrade role sedang berlangsung di Login.tsx
-      // (mencegah race condition: role belum diupdate di DB tapi user sudah di-redirect)
-      if (localStorage.getItem('upgrade_in_progress') === 'true') {
-        console.log('[Upgrade] Skipping auth state processing during upgrade flow.');
-        return;
-      }
-
       // Intercept upgrade role redirect (Pencari Kost → Pemilik Kost)
       if (event === 'SIGNED_IN' && isUpgradeConfirmation && session?.user) {
         localStorage.setItem('upgrade_in_progress', 'true');
@@ -268,6 +261,13 @@ const App: React.FC = () => {
             navigate('/login?upgrade_success=true', { replace: true });
           }
         }, 0);
+        return;
+      }
+
+      // Skip semua pemrosesan saat upgrade role sedang berlangsung di Login.tsx
+      // (mencegah race condition: role belum diupdate di DB tapi user sudah di-redirect)
+      if (localStorage.getItem('upgrade_in_progress') === 'true') {
+        console.log('[Upgrade] Skipping auth state processing during upgrade flow.');
         return;
       }
 
