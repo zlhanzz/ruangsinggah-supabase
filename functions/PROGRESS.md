@@ -2,7 +2,57 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 1. Kustomisasi Template Email Autentikasi & Pembersihan Database Auth (Juni 2026)
+### 1. Penayangan, Penyeragaman Format Kode Referral, State Sync Global, & Penyempurnaan Wizard Edit Profil Mitra (Juni 2026)
+- **Tampilan Input Referral Dinamis**: 
+  - Input Kode Referral Agen (`referred_by`) ditampilkan di Step 1 (page awal edit profile) secara kondisional menggunakan aturan: `formData.verification_status !== 'verified' && !hasInitialReferral`.
+  - Jika pemilik kost (Mitra) belum diverifikasi (`verified`) DAN belum memiliki kode referral tersimpan di database (`referred_by` kosong), input referral akan muncul.
+  - Jika pemilik kost sudah terverifikasi oleh admin atau sudah pernah menginputkan referral sebelumnya, input referral akan disembunyikan agar tidak terinput 2 kali.
+- **Penyimpanan Draft Otomatis (Step 1)**:
+  - Begitu tombol **Lanjutkan** diklik, semua data yang telah diisi di Step 1 (termasuk referral code) secara otomatis tersimpan ke database (`users` dan `mitra`) sebagai draft aktif.
+- **Sinkronisasi State Global (State Sync)**:
+  - Memperbarui `fetchUserData` di `App.tsx` agar memuat data `referred_by` dari tabel `mitra` secara paralel bersama dengan tabel profile dasar lainnya.
+  - Menyediakan global event listener `RS_USER_UPDATED` pada Window object di `App.tsx` yang dipicu setiap kali draft atau profil disimpan di `MitraProfile.tsx`. Hal ini memperbarui context state `user` di seluruh dashboard (termasuk nama/foto di sidebar) secara instan tanpa reload halaman web.
+  - Memastikan `loadProfile` di `MitraProfile.tsx` selalu dijalankan pada saat komponen dimuat guna mengambil data mutakhir langsung dari database.
+- **Scroll-to-Top Otomatis**:
+  - Mengintegrasikan fungsi scroll otomatis `window.scrollTo({ top: 0, behavior: 'smooth' })` pada transisi wizard (saat Lanjutkan, Kembali, dan Batal) untuk memastikan layar langsung memuat dari bagian teratas.
+- **Relokasi RLS Security Notice**:
+  - Memindahkan posisi RLS Security Notice di Step 2 (Verifikasi KTP) ke bagian paling atas (di bawah judul slide), memberikan kesan jaminan privasi data sebelum pengguna mengunggah foto KTP.
+- **Fitur Reset saat Batal/Tutup**:
+  - Menambahkan fungsi `handleCancel` yang menyatukan alur pembatalan (tombol "BATAL" dan tombol silang "X"). Saat batal ditekan, status editing dinonaktifkan, step dikembalikan ke 1, dan `loadProfile()` dipanggil untuk membuang perubahan data sementara yang belum disimpan (rollback state).
+- **Format Alphanumeric Murni**:
+  - Mengubah generator kode referral agen survey dan trigger database di `supabase_schema.sql` agar tidak menyertakan tanda hubung/strip (`-`), sehingga menghasilkan kode murni alphanumeric seperti `AGXXXXXX` yang unik per agen. Placeholder input referral di form pendaftaran dan profile juga disinkronkan ke format baru ini.
+- **Fitur Reset saat Batal/Tutup**:
+  - Menambahkan fungsi `handleCancel` yang menyatukan alur pembatalan (tombol "BATAL" dan tombol silang "X"). Saat batal ditekan, status editing dinonaktifkan, step dikembalikan ke 1, dan `loadProfile()` dipanggil untuk membuang perubahan data sementara yang belum disimpan (rollback state).
+- **Format Alphanumeric Murni**:
+  - Mengubah generator kode referral agen survey dan trigger database di `supabase_schema.sql` agar tidak menyertakan tanda hubung/strip (`-`), sehingga menghasilkan kode murni alphanumeric seperti `AGXXXXXX` yang unik per agen. Placeholder input referral di form pendaftaran dan profile juga disinkronkan ke format baru ini.
+
+### 2. Penyempurnaan Alur Wizard Verifikasi KTP & OTP WhatsApp Dinamis Mitra (Juni 2026)
+- **WhatsApp OTP Dinamis**:
+  - Kolom input OTP kini tersembunyi secara default dan hanya muncul secara dinamis jika status verifikasi nomor WhatsApp adalah belum diverifikasi (`waOtpVerified` bernilai `false`).
+  - Setelah nomor berhasil diverifikasi dengan memasukkan kode OTP 6-digit secara benar, input OTP akan disembunyikan secara otomatis, dan ikon centang hijau (`BadgeCheck`) premium diposisikan langsung di dalam input nomor telepon serta di header label.
+  - Jika nomor telepon diubah, status verifikasi akan otomatis direset (`waOtpVerified` diubah ke `false`) sehingga mengharuskan pengiriman OTP ulang.
+- **Wizard Flow Verifikasi Identitas (KTP)**:
+  - Pemisahan proses edit data profil dan pengajuan KTP menjadi alur bertahap (wizard).
+  - **Slide 1**: Mengisi identitas utama (Nama, No. WhatsApp - wajib verifikasi OTP, Email, Tempat/Tanggal Lahir, Alamat Domisili).
+  - **Akses Slide 2 Dinamis**: Tombol "Lanjutkan ke Verifikasi KTP" hanya akan muncul secara dinamis setelah seluruh kolom data utama di Slide 1 diisi dengan lengkap dan nomor WhatsApp telah terverifikasi via OTP.
+  - **Slide 2**: Formulir KTP (Unggah Foto KTP, NIK 16-Digit, Alamat KTP, dan RLS security notice).
+- **Pembatasan Akses Pasca-Verifikasi**:
+  - Jika status verifikasi akun adalah `verified` (telah disetujui), maka Slide 2 (KTP) disembunyikan sepenuhnya dari wizard dan tidak dapat diakses lagi. Tombol simpan data langsung muncul pada Slide 1 untuk mempermudah pembaruan data profil dasar saja.
+  - Jika status verifikasi ditolak (`rejected`), Slide 2 tetap dapat diakses oleh Mitra untuk mengevaluasi data KTP yang salah dan mengunggah ulang dokumen verifikasi yang benar sebelum menekan tombol "Simpan & Ajukan Verifikasi".
+
+### 2. Integrasi Formulir Terpadu Edit Profil & Verifikasi Identitas Mitra (Juni 2026)
+- **Formulir Edit Profil Terpadu (Single Unified Form)**: Menyatukan formulir input edit profil dan dokumen verifikasi identitas (KTP) ke dalam satu halaman formulir terpadu yang kohesif saat status `isEditing === true`. Menghilangkan layout dua kolom terpisah ketika edit aktif agar posisi input verifikasi tidak menumpuk di bagian bawah layar smartphone (mobile view).
+- **Pembersihan Rekening Bank & Penyederhanaan Verifikasi**:
+  - Menghapus informasi Rekening Bank sepenuhnya dari halaman profil pemilik kost (Mitra) karena data ini sudah dikelola terpisah di menu Dompet.
+  - Menghapus kartu petunjuk edukatif "Kenapa Harus Verifikasi?" untuk menghemat ruang dan menyederhanakan formulir.
+- **Penyempurnaan Data Profil**:
+  - Menambahkan Alamat Email (read-only), Tempat Lahir, dan Tanggal Lahir (dilengkapi dengan pemilih tanggal dinamis) ke dalam formulir profil.
+  - Menjaga keutuhan tombol pengiriman OTP WhatsApp, notifikasi perlindungan data RLS Supabase, dan auto-pindai KTP berbasis OCR (Tesseract.js).
+- **Alur UX Kolaboratif & Responsif**:
+  - Saat mode baca (`isEditing === false`), profil ditampilkan dalam card informatif terpisah, dilengkapi card status verifikasi saat ini (Belum Terverifikasi, Sedang Ditinjau, Terverifikasi, Ditolak).
+  - Ketika tombol "Edit Profil" atau "Lengkapi & Verifikasi" ditekan, antarmuka bertransformasi menjadi satu formulir pengisian data terpadu dengan judul "Lengkapi Profil & Verifikasi", dilengkapi tombol aksi "Batal" dan "Simpan Semua Data" di bagian bawah.
+
+### 2. Kustomisasi Template Email Autentikasi & Pembersihan Database Auth (Juni 2026)
 - **Desain HTML Email Responsif & Premium**: Mengganti email konfirmasi pendaftaran (`signup`) dan reset kata sandi (`recovery`) yang sebelumnya berupa teks polos menjadi format HTML premium. Dilengkapi logo resmi RuangSinggah.id, skema warna oranye gradien, typography bersih, tombol Call-to-Action (CTA) berbayang, dan fallback URL link.
 - **Pembersihan Data Yatim (Orphaned Profiles)**: Menyelesaikan kendala `unexpected_failure` saat klik link verifikasi email dengan membersihkan profil usang (data yatim) di tabel `public.users` yang melanggar unique constraint email.
 - **Perbaikan Alur Reset Sandi (Password Recovery)**: Menambahkan penanganan event `PASSWORD_RECOVERY` pada callback autentikasi di `App.tsx` untuk mengalihkan sesi ke form penyetelan kata sandi baru (`/login?mode=recovery`), serta menyesuaikan pengalihan dashboard agar tidak mem-bypass form reset sandi saat mode recovery aktif.
@@ -244,6 +294,27 @@
 - **Tombol Logout Akun Eksklusif**: Mengalirkan callback `onLogout` global ke dashboard mitra dan menyediakan tombol "Keluar Akun" (merah, ikon `LogOut`) yang benar-benar mematikan sesi autentikasi Supabase, serta menghapus tombol "Kembali ke Beranda" sepenuhnya sesuai instruksi pengguna.
 - **Perbaikan Resolusi Overlap Z-Index**: Mengubah z-index kontainer sidebar seluler dari `z-50` menjadi `z-[100]` sehingga menutup bar navigasi bawah seluler (`z-50`) sepenuhnya saat sidebar aktif tanpa saling bertumpang tindih.
 
+### 42. Redesain Menu Penghuni Aktif Dashboard Mitra (Juni 2026)
+- **Kartu Penghuni Kolapsibel (Collapsible Card)**: Mengurangi ruang vertikal layar secara signifikan dengan menyembunyikan detail sekunder ("Paket & Durasi", "Jadwal Sewa", dan "Rincian Tagihan") di dalam accordion yang dapat dibuka/tutup secara interaktif menggunakan tombol chevron.
+- **Optimasi Layout & Spacing**:
+  - Mengurangi padding kartu dari `p-6 lg:p-12` menjadi `p-4 md:p-6` agar lebih padat dan rapi.
+  - Memperkecil ukuran foto profil (avatar) dari `w-24 h-24 lg:w-32 lg:h-32` menjadi `w-14 h-14 md:w-16 md:h-16`.
+  - Memperkecil ukuran tipografi nama dari `text-3xl lg:text-5xl` menjadi `text-lg md:text-xl` agar lebih proporsional pada tampilan mobile.
+- **Ringkasan Informasi collapsed**: Saat dalam keadaan tertutup (collapsed), kartu tetap menyajikan informasi esensial yang sangat informatif (Nama, Badges Kost & Status Aktif/Tenggang/Lunas, Sisa Hari Sewa, Tanggal Selesai Sewa, dan Total Tagihan Bulanan).
+- **Aksi Cepat Kompak**: Menyusun ulang tombol aksi ("Tandai Selesai", "Tagih", "Chat") ke dalam baris horizontal yang ramping dan hemat tempat.
+- **Header Halaman Kompak & Estetis (De-bulking)**: Menghapus box/card pembungkus judul halaman yang besar, memindahkan judul halaman langsung ke background dengan indikator status sewa yang ringkas, serta menyisakan satu tombol Refresh saja.
+- **Filter Row Ultra-Ramping**: Menyatukan input pencarian dan dropdown properti menjadi satu baris horizontal setinggi `h-10` dengan font `text-xs`, serta mengeliminasi tombol refresh sekunder yang redundan.
+- **Tab Status Horizontal Scroll**: Mengatur tab kategori filter status agar berderet secara horizontal menggunakan `overflow-x-auto flex-nowrap scrollbar-none` untuk mencegah penumpukan baris baru ke bawah di layar smartphone.
+
+### 43. Perbaikan Bug Draf Profil Mitra & Penambahan Kolom Database (Juni 2026)
+- **Penambahan Kolom `whatsapp_verified`**: Menambahkan kolom `whatsapp_verified` ke dalam definisi tabel `public.users` dan melengkapinya dengan perintah migrasi `ALTER TABLE` pada berkas `supabase_schema.sql` agar sinkronisasi draf nomor WhatsApp yang terverifikasi tersimpan secara permanen di database.
+- **Penanganan Silent Error Supabase**: Memperbaiki pemanggilan `.update()` dan `.upsert()` Supabase di `MitraProfile.tsx` agar mendestruktur object `{ error }` dan men-throw error tersebut ke block `catch`. Ini menghentikan bug silent error di mana pembaruan database gagal akibat kolom tidak lengkap tetapi frontend tetap melaju ke halaman berikutnya seolah-olah berhasil.
+- **Notifikasi Error Pengguna**: Menampilkan pesan kesalahan detail via `alert` jika proses penyimpanan draf profil utama gagal agar pengguna mendapatkan petunjuk yang jelas ketika data draf gagal masuk database.
+- **Pemuatan Latar Belakang (Silent Loading) Dashboard Mitra**: Mengubah fungsi `loadData` di `MitraDashboard.tsx` agar mendukung parameter `silent`. Panggilan sinkronisasi saat prop `user` diperbarui atau real-time event chat/booking kini dilakukan secara *silent* (tanpa memicu layar loading spinner penuh). Hal ini memperbaiki bug di mana komponen `MitraProfile` ter-unmount secara otomatis dan kehilangan seluruh state aktifnya (seperti `isEditing` dan `currentStep`) saat draf Step 1 berhasil disimpan.
+- **Relokasi Foto Profil ke Form Langkah 1**: Menghapus tombol unggah foto profil dari kartu atas (hero header) dan memindahkannya ke dalam grid form Langkah 1 (Step 1) sebagai input opsional terintegrasi. Kartu atas (Profile Hero / Header) kini juga disembunyikan sepenuhnya ketika mode edit aktif (`isEditing === true`) untuk mencegah duplikasi visual dan menghemat ruang layar.
+
+
+
 ## Fitur Dalam Pengerjaan (In Progress)
 -   Monitoring konsistensi Webhook Midtrans vs Supabase untuk transaksi multi-kost.
 -   Uji E2E transaksi nyata di Production (Smallest Amount).
@@ -251,6 +322,7 @@
 ## Rencana Selanjutnya (Future Plans)
 -   Integrasi laporan keuangan otomatis berbasis transaksi Midtrans.
 -   Sistem penarikan dana (payout) otomatis untuk Mitra.
+
 
 
 

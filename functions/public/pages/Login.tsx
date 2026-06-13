@@ -76,6 +76,11 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [isVerifyingWaOtp, setIsVerifyingWaOtp] = useState(false);
   const [waOtpVerified, setWaOtpVerified] = useState(false);
   const [waResendTimer, setWaResendTimer] = useState(0);
+  const [showUpgradeOffer, setShowUpgradeOffer] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeModalError, setUpgradeModalError] = useState('');
+  const [upgradeEmailSent, setUpgradeEmailSent] = useState(false);
+  const [upgradeResendTimer, setUpgradeResendTimer] = useState(0);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -111,6 +116,11 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setIsVerifyingWaOtp(false);
     setWaOtpVerified(false);
     setWaResendTimer(0);
+    setShowUpgradeOffer(false);
+    setShowUpgradeModal(false);
+    setUpgradeModalError('');
+    setUpgradeEmailSent(false);
+    setUpgradeResendTimer(0);
   };
 
   useEffect(() => {
@@ -138,19 +148,33 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       setErrorMsg('Akun Anda tidak terdaftar sebagai Pemilik Kost. Silakan login sebagai Pencari Kost.');
       // Clear param from URL
       window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (params.get('upgrade_to_owner') === 'true') {
+      // User mengklik link verifikasi dari email → selesaikan upgrade role
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Dibersihkan URL — proses upgrade sesungguhnya ditangani App.tsx onAuthStateChange
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setMode('LOGIN');
+      setActiveRole('owner');
+    } else if (params.get('upgrade_success') === 'true') {
+      // Upgrade selesai dari App.tsx — tampilkan pesan sukses
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setMode('LOGIN');
+      setActiveRole('owner');
+      setSuccessMsg('✅ Akun berhasil diupgrade ke Pemilik Kost! Silakan login kembali untuk akses dashboard Mitra.');
     }
   }, []);
 
   useEffect(() => {
     let interval: any;
-    if (resendTimer > 0 || waResendTimer > 0) {
+    if (resendTimer > 0 || waResendTimer > 0 || upgradeResendTimer > 0) {
       interval = setInterval(() => {
         if (resendTimer > 0) setResendTimer((prev) => prev - 1);
         if (waResendTimer > 0) setWaResendTimer((prev) => prev - 1);
+        if (upgradeResendTimer > 0) setUpgradeResendTimer((prev) => prev - 1);
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [resendTimer, waResendTimer]);
+  }, [resendTimer, waResendTimer, upgradeResendTimer]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,57 +228,29 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       return;
     }
 
-    // Intersepsi verifikasi OTP WhatsApp jika role adalah owner (Mitra) dan belum diverifikasi
-    if (activeRole === 'owner' && !waOtpVerified) {
-      try {
-        const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-        setWaOtpCode(generatedOtp);
-        
-        // Kirim OTP WhatsApp
-        const res = await sendWhatsAppTemplate({
-          to: finalPhone,
-          templateName: 'otp_verification',
-          languageCode: 'id',
-          components: [
-            {
-              type: 'body',
-              parameters: [
-                { type: 'text', text: generatedOtp }
-              ]
-            }
-          ]
-        });
-
-        if (!res.success) {
-          console.warn('Gagal mengirim template otp_verification, mencoba fallback hello_world...', res.error);
-          
-          // Fallback ke hello_world untuk sandbox
-          const fallbackRes = await sendWhatsAppTemplate({
-            to: finalPhone,
-            templateName: 'hello_world',
-            languageCode: 'en_US'
-          });
-
-          if (!fallbackRes.success) {
-            setErrorMsg('Gagal mengirim OTP WhatsApp. Hubungi admin atau coba nomor lain.');
-            setLoading(false);
-            return;
-          }
-          
-          console.log('Sandbox Mode: Gunakan kode OTP yang ter-generate di console atau OTP standar.', generatedOtp);
-        }
-
-        setIsVerifyingWaOtp(true);
-        setWaResendTimer(60);
-      } catch (error: any) {
-        setErrorMsg(`Gagal mengirim OTP: ${error.message}`);
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
+    // ── [SEMENTARA DINONAKTIFKAN] OTP WhatsApp untuk Pemilik Kost ──────────────
+    // Dinonaktifkan karena endpoint Meta Graph API (/messages) memblokir
+    // request langsung dari browser (CORS). Akan diaktifkan kembali setelah
+    // dipindahkan ke Supabase Edge Function.
+    //
+    // if (activeRole === 'owner' && !waOtpVerified) {
+    //   try {
+    //     const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    //     setWaOtpCode(generatedOtp);
+    //     const res = await sendWhatsAppTemplate({ ... });
+    //     setIsVerifyingWaOtp(true);
+    //     setWaResendTimer(60);
+    //   } catch (error: any) {
+    //     setErrorMsg(`Gagal mengirim OTP: ${error.message}`);
+    //   } finally {
+    //     setLoading(false);
+    //   }
+    //   return;
+    // }
+    // ─────────────────────────────────────────────────────────────────────────
 
     await executeFinalRegister();
+
   };
 
   const executeFinalRegister = async () => {
@@ -292,7 +288,16 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
       if (!response.ok) {
         const errData = await response.json();
-        setErrorMsg(getErrorMessage(errData.message || 'Gagal mendaftar'));
+        const rawMsg = errData.message || 'Gagal mendaftar';
+
+        // Deteksi email sudah terdaftar saat mendaftar sebagai Pemilik Kost
+        if (activeRole === 'owner' &&
+            (rawMsg.includes('already been registered') || rawMsg.includes('already registered') || rawMsg.includes('User already registered'))) {
+          setShowUpgradeModal(true);
+          return;
+        }
+
+        setErrorMsg(getErrorMessage(rawMsg));
         return;
       }
 
@@ -304,6 +309,67 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       setLoading(false);
     }
   };
+
+  // ── Upgrade role: Pencari Kost → Pemilik Kost ─────────────────────────────
+  const handleUpgradeToOwner = async () => {
+    setLoading(true);
+    setUpgradeModalError('');
+
+    try {
+      // Flag untuk mencegah App.tsx memproses SIGNED_IN event ini
+      // (yang akan menyebabkan role_mismatch karena role belum diupdate)
+      localStorage.setItem('upgrade_in_progress', 'true');
+
+      // Step 1: Login untuk verifikasi identitas + dapatkan user.id
+      const { data, error: loginError } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (loginError || !data.user) {
+        localStorage.removeItem('upgrade_in_progress');
+        setUpgradeModalError(
+          loginError?.message.includes('Email not confirmed')
+            ? 'Email belum diverifikasi. Cek inbox email Anda dulu.'
+            : 'Kata sandi salah. Silakan periksa kembali.'
+        );
+        return;
+      }
+
+      // Step 2: Update tabel 'users' di database (sumber kebenaran role)
+      const { error: dbError } = await supabase
+        .from('users')
+        .update({ role: 'owner' })
+        .eq('id', data.user.id);
+
+      if (dbError) {
+        localStorage.removeItem('upgrade_in_progress');
+        setUpgradeModalError('Gagal update database: ' + dbError.message);
+        await supabase.auth.signOut();
+        return;
+      }
+
+      // Step 3: Update user_metadata juga untuk konsistensi
+      await supabase.auth.updateUser({ data: { role: 'owner' } });
+
+      // Step 4: Logout → bersihkan flag → tampilkan sukses
+      await supabase.auth.signOut();
+      localStorage.removeItem('upgrade_in_progress');
+
+      setShowUpgradeModal(false);
+      setMode('LOGIN');
+      setActiveRole('owner');
+      resetForm();
+      setSuccessMsg('✅ Akun berhasil diupgrade ke Pemilik Kost! Silakan login kembali untuk akses dashboard Mitra.');
+
+    } catch (error: any) {
+      localStorage.removeItem('upgrade_in_progress');
+      setUpgradeModalError('Terjadi kesalahan: ' + (error.message || 'unknown'));
+    } finally {
+      setLoading(false);
+    }
+  };
+  // ──────────────────────────────────────────────────────────────────────────
 
   const handleVerifyWaOtp = (e: React.FormEvent) => {
     e.preventDefault();
@@ -631,8 +697,123 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     );
   }
 
+  // ── Layar Konfirmasi Email Upgrade ──────────────────────────────────────────
+  if (upgradeEmailSent) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 animate-in fade-in duration-300">
+        <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-xl border border-gray-100 overflow-hidden p-8 text-center animate-in zoom-in-95">
+          <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">
+            📧
+          </div>
+          <h2 className="text-2xl font-black text-gray-900 mb-2 leading-tight">Verifikasi Email Upgrade</h2>
+          <p className="text-gray-500 mb-2 leading-relaxed text-sm">
+            Link konfirmasi telah dikirim ke{' '}
+            <strong className="text-gray-800">{formData.email}</strong>.
+          </p>
+          <p className="text-xs text-gray-400 mb-6 leading-relaxed">
+            Klik link tersebut untuk menyelesaikan upgrade akun Anda menjadi{' '}
+            <span className="text-orange-500 font-bold">Pemilik Kost</span>. Cek folder spam jika tidak muncul di inbox.
+          </p>
+
+          {errorMsg && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl flex items-center gap-2 text-left">
+              <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <p className="text-xs font-bold text-red-500">{errorMsg}</p>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {upgradeResendTimer > 0 ? (
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                Kirim ulang dalam {upgradeResendTimer} detik
+              </p>
+            ) : (
+              <button
+                onClick={handleResendUpgradeEmail}
+                disabled={loading}
+                className="text-orange-500 font-bold text-sm hover:underline disabled:opacity-60"
+              >
+                Belum terima email? Kirim Ulang
+              </button>
+            )}
+            <button
+              onClick={() => { setUpgradeEmailSent(false); resetForm(); setMode('REGISTER'); setActiveRole('owner'); }}
+              className="w-full bg-gray-100 text-gray-600 font-bold py-3 rounded-xl hover:bg-gray-200 transition-all text-sm"
+            >
+              Batal & Kembali ke Form
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+
+      {/* ── MODAL KONFIRMASI UPGRADE ROLE ───────────────────────────────────── */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+
+            {/* Icon + Header */}
+            <div className="text-center mb-5">
+              <div className="w-16 h-16 rounded-2xl bg-orange-100 flex items-center justify-center mx-auto mb-4 text-3xl">
+                🏠
+              </div>
+              <h3 className="text-xl font-black text-gray-900 mb-2">Upgrade Akun</h3>
+              <p className="text-sm text-gray-500 leading-relaxed">
+                Email <strong className="text-gray-800">{formData.email}</strong> sudah terdaftar sebagai{' '}
+                <span className="text-blue-600 font-bold">Pencari Kost</span>.
+              </p>
+              <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+                Klik <span className="font-bold text-orange-500">Ya, Upgrade Sekarang</span> untuk mengkonfirmasi menggunakan kata sandi yang Anda masukkan dan mengubah akun menjadi <span className="text-orange-600 font-bold">Pemilik Kost</span>.
+              </p>
+            </div>
+
+            {/* Error di dalam modal */}
+            {upgradeModalError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl flex items-center gap-2">
+                <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-xs font-bold text-red-500">{upgradeModalError}</p>
+              </div>
+            )}
+
+            {/* Tombol Aksi */}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setShowUpgradeModal(false); setUpgradeModalError(''); }}
+                disabled={loading}
+                className="flex-1 bg-gray-100 text-gray-700 font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-all disabled:opacity-60"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleUpgradeToOwner}
+                disabled={loading}
+                className={`flex-1 bg-orange-500 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 ${
+                  loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-orange-600 active:scale-95'
+                }`}
+              >
+                {loading && (
+                  <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                  </svg>
+                )}
+                {loading ? 'Memproses...' : 'Ya, Upgrade Sekarang'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ───────────────────────────────────────────────────────────────────── */}
+
       <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-xl border border-gray-100 overflow-hidden">
         <div className="p-8 sm:p-12">
           
@@ -690,6 +871,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               <p className="text-xs font-bold text-red-500 text-left">{errorMsg}</p>
             </div>
           )}
+
 
           {successMsg && (
             <div className="mb-6 p-4 bg-green-50 border border-green-100 rounded-xl flex flex-col gap-2 animate-in fade-in slide-in-from-top-2">
@@ -762,7 +944,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     <input
                       type="text"
                       className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all font-mono placeholder:font-sans uppercase"
-                      placeholder="AG-XXXXXX"
+                      placeholder="AGXXXXXX"
                       value={referralCode}
                       onChange={(e) => setReferralCode(e.target.value)}
                     />

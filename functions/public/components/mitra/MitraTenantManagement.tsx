@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
     Users, Search, Filter, Calendar, Clock, ArrowRight, User, 
-    MessageCircle, MoreHorizontal, ChevronRight, MapPin, Briefcase, 
+    MessageCircle, MoreHorizontal, ChevronRight, ChevronDown, ChevronUp, MapPin, Briefcase, 
     GraduationCap, ClipboardList, TrendingUp, AlertCircle, Plus, DollarSign, ExternalLink, X, Home, Zap, RefreshCw,
     Share2, ShieldAlert, File, History
 } from 'lucide-react';
@@ -50,6 +50,14 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
     const [showAddBillModal, setShowAddBillModal] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
+    const [expandedResidents, setExpandedResidents] = useState<Record<string, boolean>>({});
+
+    const toggleExpand = (uid: string) => {
+        setExpandedResidents(prev => ({
+            ...prev,
+            [uid]: !prev[uid]
+        }));
+    };
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
@@ -217,46 +225,40 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
     };
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6 animate-in fade-in duration-500 w-full max-w-full">
             {/* Header Stats */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm mb-6">
+            <div className="flex items-center justify-between px-1">
                 <div>
-                    <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight leading-none">Database Penghuni</h2>
-                    <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mt-3 flex items-center gap-2">
-                        <Users className="w-3 h-3" /> {stats.total} Penghuni Aktif saat ini
+                    <h2 className="text-xl md:text-2xl font-black text-gray-900 uppercase tracking-tight">Database Penghuni</h2>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-1 flex items-center gap-1.5 flex-wrap">
+                        <span className="flex items-center gap-1"><Users size={12} className="text-orange-500" /> {stats.total} Total</span>
+                        <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                        <span className="text-emerald-600 font-black">{stats.activeRentals} Aktif</span>
+                        <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                        <span className="text-rose-500 font-black">{stats.expiringSoon} Tenggang</span>
                     </p>
                 </div>
-                <div className="flex items-center gap-6">
-                    <div className="text-right hidden sm:block">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Segera Habis</p>
-                        <p className="text-xl font-black text-rose-500">{stats.expiringSoon}</p>
-                    </div>
-                    <div className="text-right hidden sm:block">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sewa Aktif</p>
-                        <p className="text-xl font-black text-emerald-500">{stats.activeRentals}</p>
-                    </div>
-                    <button onClick={handleRefresh} className="w-12 h-12 flex items-center justify-center bg-gray-50 border border-gray-100 rounded-2xl text-gray-400 hover:text-orange-500 transition-all">
-                        <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    </button>
-                </div>
+                <button onClick={handleRefresh} className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-orange-500 active:scale-95 transition-all shadow-sm">
+                    <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+                </button>
             </div>
 
             {/* Filters */}
-            <div className="bg-white rounded-3xl p-2 border border-gray-100 shadow-sm flex flex-col md:flex-row gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
                 <div className="flex-1 relative">
-                    <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input 
                         type="text" 
                         placeholder="Cari nama penghuni atau kost..."
-                        className="w-full h-12 bg-gray-50 rounded-2xl pl-12 pr-4 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-orange-500/10 transition-all border border-transparent focus:border-orange-500/20"
+                        className="w-full h-10 bg-white rounded-xl pl-10 pr-4 text-xs font-semibold text-gray-900 border border-gray-100 outline-none focus:border-orange-500/30 focus:ring-4 focus:ring-orange-500/5 transition-all shadow-sm"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
-                <div className="md:w-64 relative">
-                    <Filter size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <div className="sm:w-64 relative">
+                    <Filter size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                     <select 
-                        className="w-full h-12 bg-gray-50 rounded-2xl pl-12 pr-4 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-orange-500/10 transition-all border border-transparent focus:border-orange-500/20 appearance-none"
+                        className="w-full h-10 bg-white rounded-xl pl-10 pr-8 text-xs font-semibold text-gray-900 border border-gray-100 outline-none appearance-none focus:border-orange-500/30 focus:ring-4 focus:ring-orange-500/5 transition-all shadow-sm"
                         value={filterProperty}
                         onChange={(e) => setFilterProperty(e.target.value)}
                     >
@@ -265,19 +267,12 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                             <option key={p.id} value={p.id}>{p.title}</option>
                         ))}
                     </select>
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                 </div>
-                <button 
-                    onClick={handleRefresh}
-                    disabled={isRefreshing}
-                    className={`w-12 h-12 flex items-center justify-center rounded-2xl bg-white border border-gray-100 text-gray-400 hover:text-orange-500 hover:border-orange-200 transition-all shadow-sm ${isRefreshing ? 'opacity-50' : 'active:scale-90'}`}
-                    title="Segarkan Data"
-                >
-                    <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
-                </button>
             </div>
 
             {/* Status Tabs */}
-            <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-[2rem] border border-gray-100 shadow-sm">
+            <div className="flex flex-wrap gap-2">
                 <StatusTab 
                     active={filterStatus === 'all'} 
                     label="Semua" 
@@ -291,7 +286,7 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                     count={stats.expiringSoon} 
                     onClick={() => setFilterStatus('expiring')}
                     color="orange"
-                    icon={<Clock size={14} />}
+                    icon={<Clock size={12} />}
                 />
                 <StatusTab 
                     active={filterStatus === 'active'} 
@@ -299,7 +294,7 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                     count={stats.activeRentals} 
                     onClick={() => setFilterStatus('active')}
                     color="emerald"
-                    icon={<Zap size={14} fill="currentColor" />}
+                    icon={<Zap size={12} fill="currentColor" />}
                 />
                 <StatusTab 
                     active={filterStatus === 'no_extension'} 
@@ -307,12 +302,12 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                     count={stats.noExtensions} 
                     onClick={() => setFilterStatus('no_extension')}
                     color="rose"
-                    icon={<ShieldAlert size={14} />}
+                    icon={<ShieldAlert size={12} />}
                 />
             </div>
 
             {/* Inhabitants List */}
-            <div className="grid grid-cols-1 gap-6">
+            <div className="grid grid-cols-1 gap-4">
                 {filteredResidents.length === 0 ? (
                     <div className="col-span-full py-20 text-center bg-white rounded-[3rem] border border-dashed border-gray-200">
                         <div className="w-16 h-16 bg-gray-50 rounded-3xl flex items-center justify-center mx-auto mb-4 text-gray-300">
@@ -323,201 +318,212 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                     </div>
                 ) : (
                     filteredResidents.map((resident) => {
-                        const progress = calculateProgress(resident.startDate, resident.endDate);
                         const daysLeft = getRemainingDays(resident.endDate);
-                        const isExpiring = daysLeft !== null && daysLeft <= 7;
-
+                        
                         return (
-
-                            <div key={resident.uid} className="bg-white rounded-[2.5rem] lg:rounded-[3.5rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-500 mb-6 group">
-                                <div className="p-6 lg:p-12">
-                                    <div className="flex flex-col md:flex-row justify-between items-center md:items-start gap-8">
+                            <div key={resident.uid} className="bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 mb-4 group">
+                                <div className="p-4 md:p-6">
+                                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                                         
-                                        {/* Profile Photo & Basic Info */}
-                                        <div className="flex flex-col md:flex-row items-center gap-6 text-center md:text-left w-full md:w-auto">
+                                        {/* Left: Avatar & Basic Info */}
+                                        <div className="flex items-center gap-4 min-w-0">
                                             <div 
                                                 onClick={() => setViewingResident(resident)}
-                                                className="w-24 h-24 lg:w-32 lg:h-32 rounded-[2rem] lg:rounded-[3rem] bg-orange-500 flex items-center justify-center text-4xl lg:text-5xl font-black text-white shadow-2xl border-4 border-white shrink-0 overflow-hidden relative cursor-pointer hover:scale-105 transition-transform"
+                                                className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-orange-500 flex items-center justify-center text-xl font-black text-white shadow-md border-2 border-white shrink-0 overflow-hidden relative cursor-pointer hover:scale-105 transition-transform"
                                             >
                                                 {resident.profile.name?.charAt(0)}
                                                 {resident.profile.photo_url && <img src={resident.profile.photo_url} className="absolute inset-0 w-full h-full object-cover" alt="" />}
                                             </div>
                                             <div className="min-w-0 flex-1">
-                                                <div className="flex flex-wrap justify-center md:justify-start items-center gap-2 mb-2">
-                                                    <span className="text-[8px] lg:text-[9px] bg-orange-50 text-orange-600 px-3 py-1 rounded-xl font-black tracking-widest border border-orange-100 uppercase truncate max-w-[150px]">{resident.kostName}</span>
+                                                <div className="flex flex-wrap items-center gap-2 mb-1">
+                                                    <span className="text-[9px] bg-orange-50 text-orange-600 px-2 py-0.5 rounded-lg font-bold border border-orange-100 uppercase truncate max-w-[120px]">{resident.kostName}</span>
                                                     {resident.isExpired ? (
-                                                        <span className="text-[8px] lg:text-[9px] font-black text-white bg-rose-600 px-3 py-1 rounded-xl uppercase tracking-widest border border-rose-700 flex items-center gap-1.5 shadow-lg shadow-rose-100"><AlertCircle size={10}/> SUDAH HABIS</span>
+                                                        <span className="text-[9px] font-bold text-white bg-rose-600 px-2 py-0.5 rounded-lg uppercase tracking-wider flex items-center gap-1"><AlertCircle size={10}/> HABIS</span>
                                                     ) : resident.isExpiring ? (
-                                                        <span className="text-[8px] lg:text-[9px] font-black text-orange-500 bg-orange-50 px-3 py-1 rounded-xl uppercase tracking-widest border border-orange-100 flex items-center gap-1.5 animate-pulse"><Clock size={10}/> MASA TENGGANG</span>
+                                                        <span className="text-[9px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-lg uppercase tracking-wider flex items-center gap-1 animate-pulse"><Clock size={10}/> TENGGANG</span>
                                                     ) : resident.isNoExtension ? (
-                                                        <span className="text-[8px] lg:text-[9px] font-black text-rose-500 bg-rose-50 px-3 py-1 rounded-xl uppercase tracking-widest border border-rose-100 flex items-center gap-1.5"><ShieldAlert size={10}/> TIDAK PERPANJANG</span>
+                                                        <span className="text-[9px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-lg uppercase tracking-wider flex items-center gap-1"><ShieldAlert size={10}/> TIDAK PERPANJANG</span>
                                                     ) : (
-                                                        <span className="text-[8px] lg:text-[9px] font-black text-emerald-500 bg-emerald-50 px-3 py-1 rounded-xl uppercase tracking-widest border border-emerald-100 flex items-center gap-1.5"><Zap size={10} fill="currentColor"/> SEWA AKTIF</span>
+                                                        <span className="text-[9px] font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-lg uppercase tracking-wider flex items-center gap-1"><Zap size={10} fill="currentColor"/> AKTIF</span>
                                                     )}
                                                     <BillingStatusBadge status={resident.billingStatus || 'pending'} />
                                                 </div>
-                                                <h3 className="text-3xl lg:text-5xl font-black text-gray-900 uppercase tracking-tight leading-tight">{resident.profile.name}</h3>
-                                                <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-4">
-                                                    <span className="text-[9px] lg:text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg uppercase border border-blue-100 flex items-center gap-2">
-                                                        <Users size={12}/> {resident.occupantCount} Orang
-                                                    </span>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="w-1.5 h-1.5 bg-gray-300 rounded-full hidden sm:block"></span>
-                                                        <p className="text-[9px] lg:text-[10px] text-gray-400 font-black uppercase tracking-widest">
-                                                            Penyewa • {resident.roomType}
-                                                        </p>
-                                                    </div>
-                                                </div>
+                                                <h3 className="text-lg md:text-xl font-black text-gray-900 uppercase tracking-tight leading-tight truncate">{resident.profile.name}</h3>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">
+                                                    {resident.roomType} • {resident.occupantCount} Orang
+                                                </p>
                                             </div>
                                         </div>
 
-                                        {/* Payment Status & Actions */}
-                                        <div className="w-full md:w-auto flex flex-col items-center md:items-end gap-6 pt-6 md:pt-0 border-t md:border-t-0 border-gray-50">
+                                        {/* Middle: Sisa Hari, Selesai Sewa, Total Tagihan */}
+                                        <div className="grid grid-cols-3 gap-2 bg-gray-50/50 p-3 rounded-2xl border border-gray-100/50 lg:flex lg:flex-wrap lg:items-center lg:gap-8 lg:bg-transparent lg:border-transparent lg:p-0">
+                                            <div className="min-w-0">
+                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider truncate">Sisa Hari</p>
+                                                <span className={`inline-flex items-center gap-0.5 text-[10px] font-black uppercase mt-0.5 ${
+                                                    daysLeft !== null && daysLeft <= 7 ? 'text-rose-600' : 'text-emerald-600'
+                                                }`}>
+                                                    <Clock size={10} /> <span className="truncate">{daysLeft}h</span>
+                                                </span>
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider truncate">Selesai Sewa</p>
+                                                <p className="text-[10px] font-black text-gray-900 mt-0.5 truncate">{safeFormatDate(resident.endDate, {day:'numeric', month:'short', year:'numeric'})}</p>
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider truncate">Total</p>
+                                                <p className="text-[10px] font-black text-orange-500 mt-0.5 truncate">{FORMAT_CURRENCY(resident.billingBreakdown.total)}</p>
+                                            </div>
+                                        </div>
 
-                                            
-                                            <div className="flex flex-col w-full gap-2.5">
+                                        {/* Right: Actions & Expand Button */}
+                                        <div className="flex items-center justify-between gap-2 border-t lg:border-t-0 pt-3 lg:pt-0 border-gray-100 w-full lg:w-auto">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
                                                 <button 
                                                     onClick={() => handleManualPayment(resident)}
                                                     disabled={daysLeft > 7 || isUpdating}
                                                     title={daysLeft > 7 ? 'Tombol aktif 7 hari sebelum masa sewa berakhir' : ''}
-                                                    className={`w-full px-6 py-3.5 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-sm ${
+                                                    className={`px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1 shadow-sm border ${
                                                         daysLeft > 7 
                                                             ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed opacity-60' 
                                                             : 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100'
                                                     }`}
                                                 >
-                                                    <DollarSign size={16} /> TANDAI PEMBAYARAN SELESAI
+                                                    <DollarSign size={11} /> Selesai
                                                 </button>
-                                                
-                                                <div className="grid grid-cols-2 gap-2.5">
-                                                    <button 
-                                                        onClick={() => setViewingInvoice(resident)}
-                                                        className="px-4 py-3.5 bg-orange-50 text-orange-600 rounded-2xl border border-orange-100 text-[9px] font-black uppercase tracking-widest hover:bg-orange-100 transition-all flex items-center justify-center gap-2"
-                                                    >
-                                                        <File size={14} /> TAGIH
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => onStartChat?.(resident.uid, resident.kostId)}
-                                                        className="px-4 py-3.5 bg-blue-50 text-blue-600 rounded-2xl border border-blue-100 text-[9px] font-black uppercase tracking-widest hover:bg-blue-100 transition-all flex items-center justify-center gap-2"
-                                                    >
-                                                        <MessageCircle size={14} /> CHAT
-                                                    </button>
-                                                </div>
+                                                <button 
+                                                    onClick={() => setViewingInvoice(resident)}
+                                                    className="px-2.5 py-1.5 bg-orange-50 text-orange-600 rounded-xl border border-orange-100 text-[9px] font-black uppercase tracking-wider hover:bg-orange-100 transition-all flex items-center gap-1"
+                                                >
+                                                    <File size={11} /> Tagih
+                                                </button>
+                                                <button 
+                                                    onClick={() => onStartChat?.(resident.uid, resident.kostId)}
+                                                    className="px-2.5 py-1.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100 text-[9px] font-black uppercase tracking-wider hover:bg-blue-100 transition-all flex items-center gap-1"
+                                                >
+                                                    <MessageCircle size={11} /> Chat
+                                                </button>
                                             </div>
+
+                                            <button 
+                                                onClick={() => toggleExpand(resident.uid)}
+                                                className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 hover:text-gray-950 transition-all shrink-0"
+                                                title={expandedResidents[resident.uid] ? 'Sembunyikan Detail' : 'Tampilkan Detail'}
+                                            >
+                                                {expandedResidents[resident.uid] ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                                            </button>
                                         </div>
                                     </div>
 
-                                    {/* Info Grid (Synced with Admin) */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-10 pt-10 mt-10 border-t border-gray-50">
-                                        {/* Paket & Durasi */}
-                                        <div className="space-y-6">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-1.5 h-1.5 bg-orange-500 rounded-full"></div>
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Paket & Durasi</p>
-                                            </div>
-                                            <div className="flex justify-between items-center bg-gray-50/50 p-4 rounded-2xl border border-gray-50">
-                                                <div>
-                                                    <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Paket Aktif</p>
-                                                    <p className="text-lg font-black text-gray-900 leading-none">Per {resident.periodLabel}</p>
+                                    {/* Collapsible Info Grid */}
+                                    {expandedResidents[resident.uid] && (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 pt-6 mt-6 border-t border-gray-100 animate-in slide-in-from-top-4 duration-300">
+                                            {/* Paket & Durasi */}
+                                            <div className="space-y-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full"></div>
+                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Paket & Durasi</p>
                                                 </div>
-                                                <div className="text-right">
-                                                    <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Total Sewa</p>
-                                                    <p className="text-lg font-black text-orange-500 leading-none">{resident.totalSewaLabel}</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center justify-between px-2 pt-2 border-t border-gray-50/50">
-                                                <p className="text-xs text-gray-400 font-black uppercase tracking-widest">Jadwal Aktif</p>
-                                                <p className="text-sm font-black text-emerald-600 uppercase bg-emerald-50/50 px-4 py-2 rounded-xl border border-emerald-100/50 shadow-sm">{safeFormatDate(resident.startDate)}</p>
-                                            </div>
-                                        </div>
-
-                                        {/* Jadwal */}
-                                        <div className="space-y-6">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jadwal Sewa</p>
-                                            </div>
-                                            <div className="flex justify-between items-center bg-gray-50/50 p-4 rounded-2xl border border-gray-50">
-                                                <div>
-                                                    <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Mulai</p>
-                                                    <p className="text-lg font-black text-gray-900 leading-none">{safeFormatDate(resident.startDate, {day:'numeric', month:'short'})}</p>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Selesai</p>
-                                                    <p className="text-lg font-black text-orange-600 leading-none">{safeFormatDate(resident.endDate, {day:'numeric', month:'short', year: 'numeric'})}</p>
-                                                </div>
-                                            </div>
-                                            <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600"><Clock size={16}/></div>
-                                                    <p className="text-[10px] font-black text-gray-500 uppercase">SISA HARI</p>
-                                                </div>
-                                                <p className="text-xs font-black text-emerald-600 uppercase tracking-tight">
-                                                    {daysLeft} Hari Lagi
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        {/* Rincian Tagihan */}
-                                        <div className="space-y-6">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Rincian Tagihan</p>
-                                            </div>
-                                            <div className="space-y-4 px-1">
-                                                <div className="flex justify-between items-center group/info">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                                                            Sewa & Tambahan (Penghuni)
-                                                        </span>
-                                                        <span className="text-[8px] font-black text-emerald-500 tracking-widest">LUNAS</span>
+                                                <div className="flex justify-between items-center bg-gray-50/50 p-3 rounded-xl border border-gray-50">
+                                                    <div>
+                                                        <p className="text-[9px] text-gray-400 font-bold uppercase mb-0.5">Paket Aktif</p>
+                                                        <p className="text-sm font-black text-gray-900 leading-none">Per {resident.periodLabel}</p>
                                                     </div>
-                                                    <span className="text-sm font-black text-gray-900">{FORMAT_CURRENCY(resident.billingBreakdown.base + resident.billingBreakdown.extraOccupant)}</span>
+                                                    <div className="text-right">
+                                                        <p className="text-[9px] text-gray-400 font-bold uppercase mb-0.5">Total Sewa</p>
+                                                        <p className="text-sm font-black text-orange-500 leading-none">{resident.totalSewaLabel}</p>
+                                                    </div>
                                                 </div>
+                                                <div className="flex items-center justify-between px-1 pt-1">
+                                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Jadwal Aktif</p>
+                                                    <p className="text-xs font-black text-emerald-600 uppercase bg-emerald-50/50 px-3 py-1.5 rounded-lg border border-emerald-100/50">{safeFormatDate(resident.startDate)}</p>
+                                                </div>
+                                            </div>
 
+                                            {/* Jadwal */}
+                                            <div className="space-y-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jadwal Sewa</p>
+                                                </div>
+                                                <div className="flex justify-between items-center bg-gray-50/50 p-3 rounded-xl border border-gray-50">
+                                                    <div>
+                                                        <p className="text-[9px] text-gray-400 font-bold uppercase mb-0.5">Mulai</p>
+                                                        <p className="text-sm font-black text-gray-900 leading-none">{safeFormatDate(resident.startDate, {day:'numeric', month:'short'})}</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-[9px] text-gray-400 font-bold uppercase mb-0.5">Selesai</p>
+                                                        <p className="text-sm font-black text-orange-600 leading-none">{safeFormatDate(resident.endDate, {day:'numeric', month:'short', year: 'numeric'})}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600"><Clock size={12}/></div>
+                                                        <p className="text-[9px] font-black text-gray-500 uppercase">SISA HARI</p>
+                                                    </div>
+                                                    <p className="text-xs font-black text-emerald-600 uppercase tracking-tight">
+                                                        {daysLeft} Hari Lagi
+                                                    </p>
+                                                </div>
+                                            </div>
 
-                                                {resident.billingBreakdown.facility > 0 && (
-                                                    <div className="flex justify-between items-center group/info">
+                                            {/* Rincian Tagihan */}
+                                            <div className="space-y-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
+                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Rincian Tagihan</p>
+                                                </div>
+                                                <div className="space-y-3 px-1">
+                                                    <div className="flex justify-between items-center">
                                                         <div className="flex flex-col">
-                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Fasilitas</span>
-                                                            <span className="text-[8px] font-black text-emerald-500 tracking-widest">LUNAS</span>
+                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Sewa & Tambahan</span>
+                                                            <span className="text-[7px] font-black text-emerald-500 tracking-widest">LUNAS</span>
                                                         </div>
-                                                        <span className="text-sm font-black text-gray-900">+{FORMAT_CURRENCY(resident.billingBreakdown.facility)}</span>
+                                                        <span className="text-xs font-black text-gray-900">{FORMAT_CURRENCY(resident.billingBreakdown.base + resident.billingBreakdown.extraOccupant)}</span>
                                                     </div>
-                                                )}
 
-                                                {/* Related Separate Bills */}
-                                                {resident.relatedBills && resident.relatedBills.length > 0 && (
-                                                    <div className="pt-4 border-t border-dashed border-gray-200 space-y-3">
-                                                        <p className="text-[8px] font-black text-orange-500 uppercase tracking-[0.2em] mb-1">Tagihan Tambahan:</p>
-                                                        {resident.relatedBills.map((bill: any) => (
-                                                            <div key={bill.id} className="flex justify-between items-center text-[10px] font-bold">
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-gray-500 uppercase">{bill.name}</span>
-                                                                    <span className={`text-[7px] font-black ${bill.status === 'PAID' ? 'text-emerald-500' : 'text-amber-500'}`}>
-                                                                        {bill.status === 'PAID' ? 'LUNAS' : 'PENDING'}
-                                                                    </span>
-                                                                </div>
-                                                                <span className="text-gray-900 font-black">{FORMAT_CURRENCY(bill.amount)}</span>
+                                                    {resident.billingBreakdown.facility > 0 && (
+                                                        <div className="flex justify-between items-center">
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Fasilitas</span>
+                                                                <span className="text-[7px] font-black text-emerald-500 tracking-widest">LUNAS</span>
                                                             </div>
-                                                        ))}
+                                                            <span className="text-xs font-black text-gray-900">+{FORMAT_CURRENCY(resident.billingBreakdown.facility)}</span>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Related Separate Bills */}
+                                                    {resident.relatedBills && resident.relatedBills.length > 0 && (
+                                                        <div className="pt-2 border-t border-dashed border-gray-200 space-y-2">
+                                                            <p className="text-[8px] font-black text-orange-500 uppercase tracking-wider mb-1">Tagihan Tambahan:</p>
+                                                            {resident.relatedBills.map((bill: any) => (
+                                                                <div key={bill.id} className="flex justify-between items-center text-[9px] font-bold">
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-gray-500 uppercase">{bill.name}</span>
+                                                                        <span className={`text-[7px] font-black ${bill.status === 'PAID' ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                                                            {bill.status === 'PAID' ? 'LUNAS' : 'PENDING'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <span className="text-gray-900 font-black">{FORMAT_CURRENCY(bill.amount)}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+
+                                                    <div className="pt-3 border-t border-gray-100 flex justify-between items-baseline">
+                                                        <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Total</span>
+                                                        <span className="text-base font-black text-orange-500">{FORMAT_CURRENCY(resident.billingBreakdown.total)}</span>
                                                     </div>
-                                                )}
 
-                                                <div className="pt-5 mt-2 border-t-2 border-gray-50 flex justify-between items-baseline">
-                                                     <span className="text-xs font-black text-orange-500 uppercase tracking-widest">Total</span>
-                                                     <span className="text-2xl font-black text-orange-500">{FORMAT_CURRENCY(resident.billingBreakdown.total)}</span>
-                                                 </div>
-
-                                                 <button 
-                                                     onClick={() => setViewingHistory(resident)}
-                                                     className="w-full mt-4 py-3 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-2xl border border-gray-100 text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                                                 >
-                                                     <History size={14} /> Lihat Riwayat Pembayaran
-                                                 </button>
+                                                    <button 
+                                                        onClick={() => setViewingHistory(resident)}
+                                                        className="w-full mt-2 py-2 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-xl border border-gray-100 text-[8px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+                                                    >
+                                                        <History size={12} /> Riwayat Pembayaran
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -793,11 +799,11 @@ const StatusTab: React.FC<{ active: boolean; label: string; count: number; onCli
     return (
         <button 
             onClick={onClick}
-            className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 transition-all ${colorClasses[color]}`}
+            className={`px-3 py-2 lg:px-5 lg:py-2.5 rounded-xl lg:rounded-2xl text-[9px] font-black uppercase tracking-wide flex items-center gap-1.5 lg:gap-3 transition-all ${colorClasses[color]}`}
         >
             {icon}
             {label}
-            <span className={`px-2 py-0.5 rounded-lg text-[9px] ${active ? 'bg-white/20' : 'bg-black/5'}`}>{count}</span>
+            <span className={`px-1.5 py-0.5 rounded-md lg:rounded-lg text-[9px] ${active ? 'bg-white/20' : 'bg-black/5'}`}>{count}</span>
         </button>
     );
 };

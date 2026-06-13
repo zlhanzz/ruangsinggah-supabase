@@ -42,7 +42,12 @@ const initialHash = window.location.hash;
 const isSignupConfirmation =
   initialHash.includes('type=signup') ||
   initialSearch.includes('type=signup') ||
-  (initialSearch.includes('code=') && !initialSearch.includes('mode=recovery'));
+  (initialSearch.includes('code=') &&
+   !initialSearch.includes('mode=recovery') &&
+   !initialSearch.includes('upgrade_to_owner')); // exclude upgrade flow
+
+// Deteksi redirect dari magic link upgrade role
+const isUpgradeConfirmation = initialSearch.includes('upgrade_to_owner=true');
 
 // Improved Protected Route Wrapper for strict access control
 const ProtectedRoute: React.FC<{ 
@@ -133,10 +138,11 @@ const App: React.FC = () => {
     try {
       console.log("Fetching profile for UID:", supabaseUser.id);
       // Fetch profile and private sensitive tables in parallel
-      const [userRes, verificationRes, bankRes] = await Promise.all([
+      const [userRes, verificationRes, bankRes, mitraRes] = await Promise.all([
         supabase.from('users').select('*').eq('id', supabaseUser.id).maybeSingle(),
         supabase.from('user_verifications').select('*').eq('user_id', supabaseUser.id).maybeSingle(),
-        supabase.from('user_bank_accounts').select('*').eq('user_id', supabaseUser.id).maybeSingle()
+        supabase.from('user_bank_accounts').select('*').eq('user_id', supabaseUser.id).maybeSingle(),
+        supabase.from('mitra').select('referred_by').eq('user_id', supabaseUser.id).maybeSingle()
       ]);
         
       if (userRes.error && userRes.error.code !== 'PGRST116') {
@@ -148,6 +154,7 @@ const App: React.FC = () => {
       const profile = userRes.data || {};
       const verification = verificationRes.data || {};
       const bank = bankRes.data || {};
+      const mitraVal = mitraRes?.data?.referred_by || '';
       
       // --- PENANGANAN AKUN DIBLOKIR ---
       if (profile.status === 'blocked') {
@@ -206,6 +213,7 @@ const App: React.FC = () => {
         ...profile,
         ...verification,
         ...bank,
+        referred_by: mitraVal,
         role,
       };
 
@@ -233,6 +241,33 @@ const App: React.FC = () => {
     // Listen to auth changes (login/logout/token refresh and initial mount)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("Auth event triggered:", event, session);
+
+      // Skip semua pemrosesan saat upgrade role sedang berlangsung di Login.tsx
+      // (mencegah race condition: role belum diupdate di DB tapi user sudah di-redirect)
+      if (localStorage.getItem('upgrade_in_progress') === 'true') {
+        console.log('[Upgrade] Skipping auth state processing during upgrade flow.');
+        return;
+      }
+
+      // Intercept upgrade role redirect (Pencari Kost → Pemilik Kost)
+      if (event === 'SIGNED_IN' && isUpgradeConfirmation && session?.user) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        // Pakai setTimeout untuk menghindari deadlock Auth Lock Supabase
+        setTimeout(async () => {
+          try {
+            // Update tabel 'users' di database (sumber kebenaran role)
+            await supabase.from('users').update({ role: 'owner' }).eq('id', session.user.id);
+            // Update user_metadata juga untuk konsistensi
+            await supabase.auth.updateUser({ data: { role: 'owner' } });
+          } catch (e) {
+            console.error('Upgrade role error:', e);
+          } finally {
+            await supabase.auth.signOut();
+            navigate('/login?upgrade_success=true', { replace: true });
+          }
+        }, 0);
+        return;
+      }
 
       // Intercept verification redirect (signup)
       if (event === 'SIGNED_IN' && isSignupConfirmation) {
@@ -304,6 +339,21 @@ const App: React.FC = () => {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       if (channel) channel.close();
+    };
+  }, []);
+
+  // Listen to profile updates from sub-screens (e.g. MitraProfile draft/save)
+  useEffect(() => {
+    const handleProfileUpdateEvent = async () => {
+      console.log("Profile update event detected. Reloading user data...");
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await fetchUserData(session.user);
+      }
+    };
+    window.addEventListener('RS_USER_UPDATED', handleProfileUpdateEvent);
+    return () => {
+      window.removeEventListener('RS_USER_UPDATED', handleProfileUpdateEvent);
     };
   }, []);
 

@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   ktp_address         TEXT,
   ktp_photo_url       TEXT,
   verification_notes  TEXT,
+  whatsapp_verified   BOOLEAN NOT NULL DEFAULT FALSE,
   status              TEXT NOT NULL DEFAULT 'active', -- active, blocked
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -81,6 +82,7 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS ktp_address         TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS ktp_photo_url       TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS verification_notes  TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS status              TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS whatsapp_verified   BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
@@ -545,7 +547,7 @@ BEGIN
       INSERT INTO public.agents (user_id, referral_code, created_at, updated_at)
       VALUES (
         NEW.id,
-        COALESCE(NEW.raw_user_meta_data->>'referral_code', 'AG-' || upper(substring(md5(random()::text) from 1 for 6))),
+        COALESCE(NEW.raw_user_meta_data->>'referral_code', 'AG' || upper(substring(md5(random()::text) from 1 for 6))),
         NOW(),
         NOW()
       )
@@ -973,7 +975,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
 INSERT INTO public.agents (user_id, referral_code, verification_status, ktp_number, ktp_address, ktp_photo_url, verification_notes, created_at, updated_at)
 SELECT 
   id as user_id,
-  COALESCE(referral_code, 'AG-' || upper(substring(md5(random()::text) from 1 for 6))) as referral_code,
+  COALESCE(referral_code, 'AG' || upper(substring(md5(random()::text) from 1 for 6))) as referral_code,
   verification_status,
   ktp_number,
   ktp_address,
