@@ -35,14 +35,15 @@ ${text}
 """
 
 ATURAN PENTING & KETAT:
-1. JANGAN PERNAH MENYALIN NILAI CONTOH TEMPLATE (seperti "3171234567890001", "NAMA LENGKAP", "JAKARTA", "1995-12-31") jika data tersebut tidak ditemukan atau tidak terbaca dari teks KTP hasil OCR.
-2. Jika suatu data (misalnya NIK, Nama, Tanggal Lahir, atau Agama) TIDAK terbaca, kosong, atau tidak ditemukan di DATA KTP HASIL OCR, isilah nilai kunci tersebut dengan string kosong ("") atau null.
-3. KTP yang difoto mungkin memiliki kualitas gambar rendah pada sebagian area (misal sisi kiri buram/silau), sehingga data di area tersebut tidak terbaca. Pastikan Anda hanya mengisi data yang memang terdeteksi di teks OCR secara riil.
+1. ABAIKAN NOISE LATAR BELAKANG: Foto KTP mungkin diambil di atas laptop. JANGAN PERNAH mengekstrak teks stiker laptop (seperti "AMD", "RADEON", "Intel", "Ryzen", "GeForce") atau tombol keyboard (seperti "Caps Lock", "Shift", "Ctrl", "Alt", "Fn", "Space") sebagai bagian dari data KTP (misalnya jangan menjadikannya Nama atau Alamat).
+2. JANGAN PERNAH MENYALIN NILAI CONTOH TEMPLATE (seperti "3171234567890001", "NAMA LENGKAP", "JAKARTA", "1995-12-31") jika data tersebut tidak ditemukan atau tidak terbaca dari teks KTP hasil OCR.
+3. Jika suatu data (misalnya NIK, Nama, Tanggal Lahir, atau Agama) TIDAK terbaca, kosong, atau tidak ditemukan di DATA KTP HASIL OCR secara valid, isilah nilai kunci tersebut dengan string kosong ("") atau null.
+4. KTP yang difoto mungkin memiliki kualitas gambar rendah pada sebagian area (misal sisi kiri buram/silau), sehingga data di area tersebut tidak terbaca. Pastikan Anda hanya mengekstrak data yang memang terdeteksi di teks OCR secara riil.
 
 ATURAN EKSTRAKSI:
 1. "nik": Wajib 16 digit angka bersih yang Anda temukan di teks. Perbaiki typo karakter OCR (seperti 'O'->'0', 'I/l'->'1', etc.). Jika tidak ditemukan 16 digit angka valid, set "".
 2. "name": Nama lengkap orang tersebut. Bersihkan kata awalan seperti "Nama" atau ":". Jika tidak ditemukan nama valid, set "".
-3. "birth_place": Tempat lahir saja (contoh: "SOPPENG", "MAKASSAR"). Jika tidak ditemukan, set "".
+3. "birth_place": Tempat lahir saja (contoh: "SOPPENG", "MAKASSAR"). Perhatikan: Kota di bawah foto KTP adalah kota pembuatan KTP, bukan tempat lahir. Ambil tempat lahir dari baris "Tempat/Tgl Lahir". Jika tidak ditemukan, set "".
 4. "birth_date": Tanggal lahir dalam format standar HTML date: "YYYY-MM-DD" (contoh: "2004-11-10"). Konversikan format angka "DD-MM-YYYY" atau nama bulan menjadi format standar tersebut. Jika tidak ditemukan tanggal lahir valid, set "".
 5. "gender": Jenis kelamin. Wajib bernilai "Pria", "Wanita", atau "".
 6. "religion": Agama. Wajib bernilai salah satu dari: "Islam", "Kristen Protestan", "Kristen Katolik", "Hindu", "Buddha", "Konghucu", atau "".
@@ -64,7 +65,7 @@ FORMAT OUTPUT (JSON SAJA, TANPA DEKORASI BACKTICKS / MURNI JSON):
 }
 `;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
