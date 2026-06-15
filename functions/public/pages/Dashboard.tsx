@@ -12,7 +12,7 @@ import {
     updatePropertyStatus, deleteProperty, BasicPropertyInfo,
     getAnalyticsSummary, AnalyticsSummary,
     getAdminSurveyRequests, updateSurveyRequest, deleteSurveyRequest, deleteSurveyRequests, getSurveyAgents, generateManualDriveFolder,
-    getAgentVerificationRequests, updateAgentVerificationStatus,
+    getAgentVerificationRequests, updateAgentVerificationStatus, getBannedAgents, unbanAgentRequest,
     uploadSurveyPhoto, deleteSurveyPhoto,
     getAdminMitraRequests, updateMitraRequestStatus, getBannedMitra, unbanMitraRequest,
     getAdminBanners, addBanner, updateBanner, deleteBanner,
@@ -372,6 +372,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
     const [activeMitra, setActiveMitra] = useState<any[]>([]);
     const [bannedMitra, setBannedMitra] = useState<any[]>([]);
     const [agentVerifications, setAgentVerifications] = useState<any[]>([]);
+    const [bannedAgents, setBannedAgents] = useState<any[]>([]);
     const [surveyRequests, setSurveyRequests] = useState<SurveyRequest[]>([]);
     const [surveyAgents, setSurveyAgents] = useState<{id: string, name: string, phone: string, photo_url?: string, rating?: string}[]>([]);
     const [activeUsers, setActiveUsers] = useState<any[]>([]);
@@ -447,8 +448,12 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
         if (!isAdmin) return;
         setLoading(true);
         try {
-            const data = await getAgentVerificationRequests();
+            const [data, bannedData] = await Promise.all([
+                getAgentVerificationRequests(),
+                getBannedAgents()
+            ]);
             setAgentVerifications(data);
+            setBannedAgents(bannedData);
         } catch (error) {
             console.error("Gagal memuat verifikasi agen", error);
         } finally {
@@ -2906,6 +2911,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                                          <AgentManagement 
                                              agentVerifications={agentVerifications}
                                              surveyAgents={surveyAgents}
+                                             bannedAgents={bannedAgents}
                                              loadAgentVerifications={loadAgentVerifications}
                                              loadActiveAgents={loadActiveAgents}
                                              loading={loading}

@@ -2,8 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 1. Integrasi AI Gemini Pada Sistem Cerdas OCR KTP Mitra & Agen (Juni 2026)
-- **Ekstraksi Berbasis AI (Edge Function)**: Menambahkan Supabase Edge Function `analyze-ktp` yang memanfaatkan model `gemini-2.5-flash` untuk menganalisis teks KTP mentah hasil pemindaian OCR. AI secara otomatis mengoreksi typo/kesalahan baca, menstandardisasi format data, dan memproduksi struktur JSON yang bersih.
+### 1. Paritas Halaman Profil Agen & Manajemen Agen Admin dengan Mitra (Juni 2026)
+- **Wizard Penyelarasan Profil Agen (`AgentProfile.tsx`)**:
+  - Mengimplementasikan alur wizard 2-langkah (Step 1: Data Profil & OTP WhatsApp, Step 2: Verifikasi Identitas & Dokumen KTP) yang identik dengan `MitraProfile.tsx`.
+  - Menerapkan fitur **Double OTP WhatsApp**: OTP Sesi 1 via email (Brevo) untuk membuka kunci pengeditan WhatsApp, diikuti OTP Sesi 2 via WhatsApp (Meta API) untuk memverifikasi nomor telepon baru secara aman.
+  - Mengunci email secara permanen (read-only) untuk paritas keamanan.
+  - Menampilkan `referral_code` milik agen sendiri secara read-only dilengkapi tombol "Salin" untuk dibagikan kepada calon mitra. Menghilangkan field input `referred_by` (kode referral yang mengundang) yang tidak dibutuhkan oleh agen.
+  - **Perbaikan Deteksi Status & Tombol Aksi**: Memperbaiki visual status di mana Agen yang sudah terverifikasi (`verified`) sebelumnya salah terdeteksi sebagai "Belum Terverifikasi" di dashboard profil. Menyelaraskan tombol aksi agar berubah secara dinamis menjadi "Simpan Semua Data" pada Step 1 (bukan lagi "Lanjutkan") saat akun telah terverifikasi, persis seperti alur pada profil Mitra.
+  - Mengintegrasikan auto-save draf di backend saat berpindah step, pemosisian RLS Security Notice di baris teratas Step 2, auto scroll-to-top dinamis saat navigasi wizard, serta fitur cancel/batal dengan rollback data dinamis dari database.
+- **Pembaruan Manajemen Agen Admin (`AgentManagement.tsx`)**:
+  - Merestrukturisasi tampilan manajemen agen admin menjadi 3 tab interaktif: "Permintaan Verifikasi" (requests), "Daftar Agen Aktif" (active), dan "Akun Diblokir" (blocked), meniru struktur `MitraManagement.tsx`.
+  - Menambahkan fitur penolakan pendaftaran agen dengan input alasan kustom detail, tombol **Blokir Kemitraan** (banned), dan tombol **Pulihkan Akses** (unban) untuk memulihkan akun agen dari pemblokiran.
+  - Mengimplementasikan penghitung penolakan otomatis (`rejection_count`). Jika verifikasi agen ditolak sebanyak 3 kali secara kumulatif, sistem secara otomatis memblokir (ban) akses kemitraan agen tersebut demi menjaga kualitas surveyor.
+- **Dukungan Backend & Integrasi Dashboard (`adminService.ts` & `Dashboard.tsx`)**:
+  - Menambahkan endpoint `getBannedAgents()`, `banAgentRequest()`, dan `unbanAgentRequest()` ke dalam `adminService.ts`.
+  - Memperluas penanganan status update verifikasi agen di `updateAgentVerificationStatus()` untuk memproses alasan penolakan kustom, penghitung otomatis ban, sinkronisasi RLS tabel privat `user_verifications`, pemulihan peran (`role` kembali ke `'user'`), dan trigger email otomatis status kemitraan via Brevo SMTP.
+  - Mengintegrasikan state dan callback pemuatan agen yang diblokir (`bannedAgents`) ke dalam `Dashboard.tsx` serta meneruskannya dengan aman ke sub-komponen management.
+
+### 2. Sistem Double OTP Perubahan Nomor WhatsApp & Penguncian Email Mitra (Juni 2026)
+- **Perbaikan Crash, Tampilan Ganda WhatsApp, Spam Resend, & Perapian Layout**: Mengatasi masalah `ReferenceError: phoneEditStep is not defined` yang menyebabkan blank putih saat tombol "Edit Profil" diklik, meniadakan render nomor WhatsApp duplikat dengan menyatukannya ke alur layout kondisional, menyembunyikan tombol header resend begitu OTP dikirim untuk mencegah spam, serta menyelaraskan visual Tempat & Tanggal Lahir menggunakan `ProfileItemRead` standar dengan ikon visual (`MapPin`, `Calendar`) pada mode baca.
+- **Email Read-Only Permanen**: Mengunci alamat email Mitra secara permanen di formulir profil (`MitraProfile.tsx`) sehingga bernilai read-only. Menghapus tombol "Ubah" dan dialog verifikasi email untuk mencegah modifikasi email demi alasan keamanan.
+- **Sesi Double OTP WhatsApp**: 
+  - **OTP Keamanan (Sesi 1)**: Mengintegrasikan Firebase Cloud Function `sendOtpEmail` berbasis REST API Brevo SMTP (`https://api.brevo.com/v3/smtp/email`) untuk mengirimkan 6-digit OTP ke alamat email terdaftar Mitra saat mereka meminta perubahan nomor WhatsApp. Verifikasi OTP ini harus berhasil sebelum input nomor WhatsApp baru terbuka.
+  - **OTP Nomor WhatsApp Baru (Sesi 2)**: Setelah verifikasi email sukses, Mitra memasukkan nomor baru dan memicu pengiriman OTP via template WhatsApp OTP (`otp_verification`) langsung ke nomor baru tersebut. Perubahan data nomor WhatsApp ke database hanya disimpan apabila verifikasi OTP WhatsApp sesi kedua ini berhasil.
+- **Visual Wizard Double OTP**: Menyusun tata letak stateful (`phoneEditStep` dari `'none'`, `'security_otp'`, `'new_phone_input'`, hingga `'new_phone_otp'`) dengan box instruksi yang interaktif di `MitraProfile.tsx`.
+
+- **Ekstraksi Berbasis AI & Vision (Edge Function)**: Menambahkan Supabase Edge Function `analyze-ktp` yang memanfaatkan model `gemini-3-flash-preview` untuk menganalisis gambar KTP langsung dari Storage (Multimodal Vision) atau teks hasil pemindaian OCR. AI secara otomatis mengoreksi typo/kesalahan baca, menyaring noise stiker laptop/tombol keyboard, menstandardisasi format data, dan memproduksi struktur JSON yang bersih.
+- **Kompresi & Resizing Gambar Client-side**: Mengintegrasikan batasan dimensi maksimal 1200px (lebar/tinggi secara proporsional) pada fungsi `convertToWebP` di `adminService.ts` dan menghubungkannya pada alur unggah KTP di `MitraProfile.tsx` serta `AgentProfile.tsx`. Hal ini memotong ukuran berkas dari ~7.5MB menjadi di bawah 150KB, mengeliminasi error crash `WORKER_RESOURCE_LIMIT` (Status 546) pada Edge Function Deno karena konsumsi CPU/memori yang tinggi, sekaligus mempercepat proses upload.
 - **Sistem Fallback Tangguh (Resilient Hybrid)**: Menghubungkan client-side profile Mitra dan Agen untuk memanggil API AI Edge Function terlebih dahulu. Jika terjadi kegagalan/timeout pada sisi AI, sistem secara otomatis beralih (*fallback*) ke ekstraksi Regex lokal, menjamin kelancaran UX tanpa hambatan.
 
 ### 2. Pengisian Otomatis Data Objektif KTP Cerdas Mitra & Agen (Juni 2026)
@@ -377,15 +402,17 @@
 - **Proteksi Halaman Mitra Profile**: Memperbarui halaman `MitraProfile.tsx` untuk membaca status `banned`. Jika terdeteksi, panel pengisian form dan tombol edit akan dinonaktifkan sepenuhnya dan diganti dengan pesan peringatan permanent ban.
 - **Email Penegasan Ban via Brevo**: Memperbarui Cloud Function `sendMitraStatusEmail` untuk mendeteksi status `banned` dan mengirimkan email penegasan pemblokiran akun dengan template gelap yang dirancang khusus.
 
+### 47. Kelengkapan Informasi Verifikasi Calon Mitra di Dashboard Admin (Juni 2026)
+- **Ekstraksi Field Tambahan KTP**: Memperbarui mapping pengambilan data verifikasi mitra di fungsi `getAdminMitraRequests` pada `adminService.ts` untuk menyertakan data tambahan Step 2 dari database: Jenis Kelamin (`gender`), Agama (`religion`), Pekerjaan (`occupation`), dan Status Perkawinan (`relationship_status`).
+- **Visualisasi Grid Komprehensif**: Menambahkan elemen UI baru pada kartu pengajuan di komponen `MitraManagement.tsx` (Antrean Pendaftar) untuk merender Jenis Kelamin, Agama, Status Perkawinan (diterjemahkan secara rapi: "Belum Kawin" untuk `Single`, "Kawin" untuk `Menikah`), dan Pekerjaan agar dapat dicocokkan langsung oleh admin dengan dokumen KTP fisik.
+
+### 48. Penyempurnaan Tampilan Profil, Alur Sinkronisasi Nama, Kunci Verifikasi & Proteksi Email/WA (Juni 2026)
+- **Pembersihan Redundansi Tempat/Tanggal Lahir**: Menghapus input Tempat dan Tanggal Lahir dari Langkah 1 (Step 1) edit profil mitra untuk memusatkan input tersebut hanya pada Langkah 2 (Verifikasi KTP) sesuai data resmi.
+- **Sinkronisasi Nama Real-time**: Menyelaraskan nama profil (Langkah 1) dengan nama di KTP (Langkah 2) menggunakan sinkronisasi state yang sama secara real-time.
+- **Kunci Identitas Terverifikasi**: Menonaktifkan seluruh input identitas KTP di Langkah 2 setelah status akun calon mitra diverifikasi (`verified`) oleh Admin untuk mencegah manipulasi data pasca-acc.
+- **Penguncian Email & WhatsApp OTP via Email**: Mengunci input email secara permanen (read-only) demi mencegah pengambilalihan akun secara ilegal. Apabila Mitra mengganti nomor WhatsApp, verifikasi wajib dilakukan dengan menggunakan kode OTP yang dikirimkan ke alamat email terdaftar (default) mereka.
+- **Penyembunyian Data KTP Rahasia**: Menghapus seluruh visualisasi data identitas KTP resmi (Langkah 2) dari halaman profil utama read-only Mitra demi privasi dan kerahasiaan data pengguna. Halaman profil kini hanya memuat kartu data dasar & kontak.
+
 ## Rencana Selanjutnya (Future Plans)
 -   Integrasi laporan keuangan otomatis berbasis transaksi Midtrans.
 -   Sistem penarikan dana (payout) otomatis untuk Mitra.
-
-
-
-
-
-
-
-
-

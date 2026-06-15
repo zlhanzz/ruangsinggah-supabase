@@ -86,3 +86,29 @@ export async function notifyAdminWithdrawalRequest(details: {
     "ID Agen": details.agent_id
   });
 }
+
+export async function sendEmailVerificationOtp(email: string, otp: string): Promise<boolean> {
+  const payload = {
+    _subject: `[RuangSinggah.id] Kode Verifikasi Perubahan Email`,
+    "Pemberitahuan": "Kami menerima permintaan untuk mengubah alamat email akun RuangSinggah Anda.",
+    "Kode OTP": otp,
+    "Instruksi": "Silakan gunakan kode OTP di atas untuk memverifikasi alamat email baru Anda pada halaman profil.",
+    "Waktu": new Date().toLocaleString('id-ID')
+  };
+
+  try {
+    const response = await fetch(`https://formsubmit.co/ajax/${email}`, {
+      method: "POST",
+      headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    return response.ok;
+  } catch (err) {
+    console.error("Gagal mengirim email OTP:", err);
+    return false;
+  }
+}
+

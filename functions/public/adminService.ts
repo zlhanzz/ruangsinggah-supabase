@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner } from './types';
 import { notifyAdminStatusUpdate } from './emailService';
 import { ensureAbsoluteUrl } from './userService';
-import { getCurrentDate, parseDateSafely } from './utils/timeUtils';
+import { getCurrentDate } from './utils/timeUtils';
 
 // ---- TYPE DEF ----
 export interface BasicPropertyInfo extends Partial<Kost> {
@@ -159,8 +159,8 @@ export async function deleteSurveyPhoto(fileUrl: string): Promise<void> {
 // Helper: Convert Image to WebP client-side
 export async function convertToWebP(file: File, quality: number = 0.8): Promise<File> {
   return new Promise((resolve) => {
-    // Only process jpeg and png images
-    if (!file.type.match(/image\/(jpeg|jpg|png)/i)) {
+    // Only process jpeg, png and webp images
+    if (!file.type.match(/image\/(jpeg|jpg|png|webp)/i)) {
       return resolve(file);
     }
 
@@ -170,13 +170,31 @@ export async function convertToWebP(file: File, quality: number = 0.8): Promise<
     img.onload = () => {
       URL.revokeObjectURL(objectUrl);
       const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
+      
+      const MAX_WIDTH = 1200;
+      const MAX_HEIGHT = 1200;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width = Math.round((width * MAX_HEIGHT) / height);
+          height = MAX_HEIGHT;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
 
       const ctx = canvas.getContext('2d');
       if (!ctx) return resolve(file);
       
-      ctx.drawImage(img, 0, 0);
+      ctx.drawImage(img, 0, 0, width, height);
 
       canvas.toBlob((blob) => {
         if (!blob) return resolve(file);
@@ -2114,7 +2132,7 @@ export async function getSurveyAgents(): Promise<{id: string, name: string, phon
 
   const { data, error } = await supabase
     .from('users')
-    .select('id, name, phone, photo_url, role, verification_status');
+    .select('id, name, email, phone, photo_url, role, verification_status, status');
 
   if (error) throw error;
   
@@ -2149,24 +2167,199 @@ export async function getAgentVerificationRequests(): Promise<any[]> {
   return data || [];
 }
 
-export async function updateAgentVerificationStatus(agentId: string, status: 'verified' | 'unverified' | 'rejected', reason?: string): Promise<void> {
+export async function updateAgentVerificationStatus(agentId: string, status: 'verified' | 'unverified' | 'rejected' | 'banned', reason?: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 
   const isAdmin = await checkIfUserIsAdmin(user.id);
   if (!isAdmin) throw new Error('Access Denied');
 
-  const { error } = await supabase
-    .from('users')
-    .update({ 
-      verification_status: status,
-      verification_notes: reason || null,
-      role: status === 'verified' ? 'survey_agent' : undefined,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', agentId);
+  let finalStatus: 'verified' | 'unverified' | 'rejected' | 'banned' = status;
 
-  if (error) throw error;
+  if (status === 'rejected') {
+    const { data: usr } = await supabase.from('users').select('rejection_count').eq('id', agentId).single();
+    const currentCount = usr?.rejection_count || 0;
+    const newCount = currentCount + 1;
+
+    if (newCount >= 3) {
+      finalStatus = 'banned';
+      const banReason = reason || "Telah mencapai batas maksimal 3 kali penolakan verifikasi identitas.";
+      reason = banReason;
+
+      await supabase.from('users').update({
+        role: 'user',
+        verification_status: 'banned',
+        verification_notes: banReason,
+        rejection_count: newCount,
+        updated_at: new Date().toISOString()
+      }).eq('id', agentId);
+
+      await supabase.from('user_verifications').upsert({
+        user_id: agentId,
+        verification_status: 'banned',
+        verification_notes: banReason,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+    } else {
+      await supabase.from('users').update({
+        verification_status: 'rejected',
+        verification_notes: reason || null,
+        rejection_count: newCount,
+        updated_at: new Date().toISOString()
+      }).eq('id', agentId);
+
+      await supabase.from('user_verifications').upsert({
+        user_id: agentId,
+        verification_status: 'rejected',
+        verification_notes: reason || null,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+    }
+  } else if (status === 'verified') {
+    await supabase.from('users').update({
+      verification_status: 'verified',
+      role: 'survey_agent',
+      rejection_count: 0,
+      verification_notes: null,
+      updated_at: new Date().toISOString()
+    }).eq('id', agentId);
+
+    await supabase.from('user_verifications').update({
+      verification_status: 'verified',
+      updated_at: new Date().toISOString()
+    }).eq('user_id', agentId);
+  } else if (status === 'banned') {
+    await supabase.from('users').update({
+      role: 'user',
+      verification_status: 'banned',
+      verification_notes: reason || null,
+      updated_at: new Date().toISOString()
+    }).eq('id', agentId);
+
+    await supabase.from('user_verifications').upsert({
+      user_id: agentId,
+      verification_status: 'banned',
+      verification_notes: reason || null,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id' });
+  }
+
+  // Send status email if possible
+  const { data: usr } = await supabase.from('users').select('email, name, full_name').eq('id', agentId).single();
+  if (usr && usr.email) {
+    fetch('https://us-central1-ruangsinggahid-3afb2.cloudfunctions.net/sendMitraStatusEmail', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: usr.email,
+        name: usr.full_name || usr.name,
+        status: finalStatus,
+        reason,
+        type: 'verification'
+      })
+    }).catch(err => {
+      console.warn('Error sending status email notification:', err);
+    });
+  }
+}
+
+export async function getBannedAgents(): Promise<any[]> {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(authUser.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  // Find users who have an entry in the agents table
+  const { data: agentsData } = await supabase.from('agents').select('user_id');
+  const agentUserIds = agentsData?.map(a => a.user_id) || [];
+
+  if (agentUserIds.length === 0) return [];
+
+  const { data: users, error: userError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('verification_status', 'banned')
+    .in('id', agentUserIds)
+    .order('updated_at', { ascending: false });
+
+  if (userError) throw userError;
+  if (!users) return [];
+
+  const userIds = users.map(u => u.id);
+  let verificationsMap: Record<string, any> = {};
+  if (userIds.length > 0) {
+    const { data: verDetails } = await supabase
+      .from('user_verifications')
+      .select('*')
+      .in('user_id', userIds);
+    
+    if (verDetails) {
+      verDetails.forEach(v => {
+        verificationsMap[v.user_id] = v;
+      });
+    }
+  }
+
+  return users.map(u => {
+    const verInfo = verificationsMap[u.id] || {};
+    return {
+      ...u,
+      name: u.name || u.full_name || 'No Name',
+      ktp_photo: verInfo.ktp_photo_url || u.ktp_photo_url,
+      ktp_number: verInfo.ktp_number || u.ktp_number,
+      address: verInfo.ktp_address || u.ktp_address,
+      domicile_address: u.address || '-',
+      birth_place: u.birth_place || '-',
+      birth_date: u.birth_date || '-',
+      whatsapp_verified: u.whatsapp_verified || false,
+      email_verified: true,
+      type: 'verification'
+    };
+  });
+}
+
+export async function banAgentRequest(agentId: string, reason: string): Promise<void> {
+  await updateAgentVerificationStatus(agentId, 'banned', reason);
+}
+
+export async function unbanAgentRequest(userId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  await supabase.from('users').update({
+    role: 'survey_agent',
+    verification_status: 'unverified',
+    rejection_count: 0,
+    verification_notes: null,
+    updated_at: new Date().toISOString()
+  }).eq('id', userId);
+
+  await supabase.from('user_verifications').update({
+    verification_status: 'unverified',
+    verification_notes: null,
+    updated_at: new Date().toISOString()
+  }).eq('user_id', userId);
+
+  const { data: usr } = await supabase.from('users').select('email, name, full_name').eq('id', userId).single();
+  if (usr && usr.email) {
+    fetch('https://us-central1-ruangsinggahid-3afb2.cloudfunctions.net/sendMitraStatusEmail', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: usr.email,
+        name: usr.full_name || usr.name,
+        status: 'unbanned',
+        reason: 'Akun agen Anda telah diaktifkan kembali oleh admin. Anda sekarang dapat mengajukan verifikasi ulang.',
+        type: 'verification'
+      })
+    }).catch(err => {
+      console.warn('Error sending status email notification:', err);
+    });
+  }
 }
 
 // ---- MITRA MANAGEMENT FUNCTIONS ----
@@ -2272,7 +2465,11 @@ export async function getAdminMitraRequests(): Promise<any[]> {
       whatsapp_verified: u.whatsapp_verified || false,
       email_verified: true, // Since they are registered in public.users, their email is verified
       referred_by_code: refCode,
-      referred_by_agent_name: refCode ? (agentsMap[refCode] || 'Agen RS') : null
+      referred_by_agent_name: refCode ? (agentsMap[refCode] || 'Agen RS') : null,
+      gender: u.gender || '-',
+      religion: u.religion || '-',
+      occupation: u.occupation || '-',
+      relationship_status: u.relationship_status || '-'
     };
   });
 
@@ -3044,10 +3241,17 @@ export async function getBannedMitra(): Promise<any[]> {
   const isAdmin = await checkIfUserIsAdmin(authUser.id);
   if (!isAdmin) throw new Error('Access Denied');
 
+  // Find users who have an entry in the mitra table
+  const { data: mitraData } = await supabase.from('mitra').select('user_id');
+  const mitraUserIds = mitraData?.map(m => m.user_id) || [];
+
+  if (mitraUserIds.length === 0) return [];
+
   const { data: users, error: userError } = await supabase
     .from('users')
     .select('*')
     .eq('verification_status', 'banned')
+    .in('id', mitraUserIds)
     .order('updated_at', { ascending: false });
 
   if (userError) throw userError;

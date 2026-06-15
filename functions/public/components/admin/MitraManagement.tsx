@@ -168,6 +168,24 @@ const MitraManagement: React.FC<MitraManagementProps> = (props) => {
                                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alamat Domisili</p>
                                             <p className="font-bold text-gray-800 text-[11px] mt-0.5 leading-relaxed">{mitra.domicile_address || '-'}</p>
                                         </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Jenis Kelamin</p>
+                                            <p className="font-bold text-gray-900 text-xs mt-0.5">{mitra.gender || '-'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Agama</p>
+                                            <p className="font-bold text-gray-900 text-xs mt-0.5">{mitra.religion || '-'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status Perkawinan</p>
+                                            <p className="font-bold text-gray-900 text-xs mt-0.5">
+                                                {mitra.relationship_status === 'Single' ? 'Belum Kawin' : mitra.relationship_status === 'Menikah' ? 'Kawin' : mitra.relationship_status || '-'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pekerjaan</p>
+                                            <p className="font-bold text-gray-900 text-xs mt-0.5">{mitra.occupation || '-'}</p>
+                                        </div>
                                         <div className="lg:col-span-3 border-t border-gray-100 pt-2 mt-1">
                                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alamat KTP</p>
                                             <p className="font-bold text-blue-700 text-[11px] mt-0.5 leading-relaxed">{mitra.address || '-'}</p>

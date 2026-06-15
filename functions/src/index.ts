@@ -2931,4 +2931,66 @@ export const sendMitraStatusEmail = functions.https.onRequest({ cors: true }, as
   }
 });
 
+/**
+ * sendOtpEmail: Sends a security OTP code email via Brevo REST API.
+ */
+export const sendOtpEmail = functions.https.onRequest({ cors: true }, async (req, res) => {
+  const { email, otp, subject } = req.body;
+  console.log(`OTP_EMAIL: Start (Email: ${email}, Subject: ${subject})`);
+
+  if (!email || !otp) {
+    res.status(400).send({ message: 'Missing email or otp' });
+    return;
+  }
+
+  try {
+    const brevoApiKey = brevoApiKeyParam.value();
+    if (!brevoApiKey) throw new Error('BREVO_API_KEY missing');
+
+    const emailSubject = subject || `[RuangSinggah.id] Kode Keamanan Perubahan WhatsApp`;
+    const emailBody = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+        <h2 style="color: #f97316; text-align: center;">RuangSinggah.id</h2>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+        <p>Kami menerima permintaan verifikasi keamanan untuk mengubah nomor WhatsApp akun Anda.</p>
+        <p>Gunakan kode OTP keamanan berikut untuk melanjutkan verifikasi:</p>
+        <div style="background: #fff7ed; padding: 20px; text-align: center; border-radius: 12px; border: 1px solid #ffedd5; margin: 20px 0;">
+          <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #f97316;">${otp}</span>
+        </div>
+        <p style="font-size: 12px; color: #666; text-align: center; margin-top: 30px;">
+          Kode ini bersifat rahasia dan berlaku selama 5 menit. Jangan bagikan kode ini kepada siapa pun.
+        </p>
+      </div>
+    `;
+
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': brevoApiKey
+      },
+      body: JSON.stringify({
+        sender: { name: "RuangSinggah.id", email: "system@ruangsinggah.id" },
+        to: [{ email }],
+        subject: emailSubject,
+        htmlContent: emailBody
+      })
+    });
+
+    const result = await response.json();
+    console.log(`OTP_EMAIL: Brevo Status: ${response.status}`, JSON.stringify(result));
+
+    if (!response.ok) {
+      throw new Error(`Brevo Error: ${JSON.stringify(result)}`);
+    }
+
+    res.status(200).send({ success: true });
+  } catch (err: any) {
+    console.error("OTP_EMAIL_EXCEPTION:", err);
+    res.status(500).send({ message: err.message });
+  }
+});
+
+
 

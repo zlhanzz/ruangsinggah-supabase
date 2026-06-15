@@ -1,37 +1,47 @@
-# IMPLEMENTATION PLAN - Pengisian Otomatis Data Objektif KTP Cerdas Berbasis AI (Mitra & Agen)
+# IMPLEMENTATION PLAN - Paritas Halaman Profil Agen & Manajemen Agen Admin dengan Mitra
 
-Rencana ini dibuat untuk memperluas sistem verifikasi KTP (Step 2) dengan integrasi model kecerdasan buatan (Gemini AI) via Supabase Edge Function untuk ekstraksi data objektif KTP secara otomatis dan presisi, lengkap dengan fallback cerdas berbasis parser lokal.
+Dokumen ini menjelaskan rencana perubahan komprehensif untuk menyelaraskan halaman profil Agen (`AgentProfile.tsx`) dan halaman panel admin Kelola Agen (`AgentManagement.tsx`) dengan alur, tampilan, dan sistem yang ada pada Mitra.
 
-## 1. Analisis Masalah
-- **Masalah Saat Ini**:
-  Meskipun kita sudah memiliki parser lokal berbasis Regex, akurasi pembacaan teks OCR sangat tergantung pada kebersihan teks. OCR yang tidak presisi (karena foto miring, bayangan, atau noise kamera) seringkali menghasilkan data typo yang sulit ditangani oleh Regex statis.
-- **Solusi**:
-  - Membuat Supabase Edge Function baru bernama `analyze-ktp` yang menerima teks hasil pindaian Tesseract.js.
-  - Memanfaatkan API Gemini (`gemini-2.5-flash`) untuk menganalisis teks KTP tersebut secara cerdas, memperbaiki typo secara otomatis, menstandardisasi format data, dan mengembalikan objek JSON yang bersih.
-  - Mengintegrasikan pemanggilan Edge Function ini pada alur pindaian profil Mitra (`MitraProfile.tsx`) dan Agen (`AgentProfile.tsx`).
-  - Menjaga keandalan sistem dengan menambahkan fallback otomatis ke parser Regex lokal jika Edge Function mengalami kegagalan (network error, API limit, dll).
+## 1. Analisis Masalah & Kebutuhan
+Sesuai instruksi USER:
+- **Profil Agen (`AgentProfile.tsx`)**:
+  - Harus diselaraskan agar memiliki tampilan, tata letak, alur pengajuan verifikasi dua langkah (wizard Step 1 & Step 2), dan sistem Double OTP WhatsApp yang identik dengan `MitraProfile.tsx`.
+  - Berbeda dengan Mitra, profil Agen tidak memiliki input referral (`referred_by`) saat melakukan pengeditan. Namun, Agen memiliki kode referral sendiri (`referral_code`) yang dibaca dari tabel `agents` dan ditampilkan secara read-only agar bisa disalin/dibagikan.
+  - Harus mendukung penyimpanan draf otomatis saat berpindah dari Step 1 ke Step 2, auto scroll-to-top saat navigasi step, dan peletakan RLS Security Notice di bagian atas Step 2.
+- **Kelola Agen di Admin (`AgentManagement.tsx`)**:
+  - Harus diselaraskan agar mirip dengan `MitraManagement.tsx`, termasuk pemisahan tabulasi menjadi tiga tab: "Permintaan Verifikasi" (requests), "Daftar Agen Aktif" (active), dan "Akun Diblokir" (blocked).
+  - Menambahkan fitur tolak verifikasi dengan alasan kustom, pemblokiran akses kemitraan agen (banned), pemulihan akses (unban), dan counter batas penolakan (maksimal 3 kali penolakan memicu pemblokiran otomatis).
 
 ## 2. Dampak Perubahan
-Berkas yang diubah/ditambahkan:
-1. `supabase/functions/analyze-ktp/index.ts` (Baru):
-   - Edge Function untuk menganalisis teks KTP dengan Gemini API.
-2. `functions/public/pages/MitraProfile.tsx`:
-   - Menghubungkan fungsi `performOcr` ke Edge Function `analyze-ktp` sebelum memicu fallback Regex.
-3. `functions/public/pages/AgentProfile.tsx`:
-   - Menghubungkan fungsi `performOcr` ke Edge Function `analyze-ktp` sebelum memicu fallback Regex.
+File yang akan dimodifikasi:
+1. `functions/public/adminService.ts`:
+   - Tambahkan fungsi `getBannedAgents()`, `banAgentRequest()`, dan `unbanAgentRequest()`.
+   - Perbarui/optimalkan `updateAgentVerificationStatus()` agar mendukung penolakan beralasan, penanganan batas penolakan 3 kali (rejection count), sinkronisasi tabel `user_verifications`, dan pengiriman notifikasi email.
+2. `functions/public/pages/AgentProfile.tsx`:
+   - Terapkan struktur state & UI wizard flow dua langkah (Step 1: Data Profil, Step 2: Verifikasi KTP) dan Double OTP WhatsApp yang sama dengan `MitraProfile.tsx`.
+   - Hapus input referral code (`referred_by`) dan tampilkan kode referral agen sendiri (`referral_code`) secara read-only dengan tombol "Salin".
+3. `functions/public/components/admin/AgentManagement.tsx`:
+   - Ubah tab menjadi 3 bagian (`requests`, `active`, `blocked`).
+   - Tambahkan penolakan dengan alasan kustom, tombol Blokir Kemitraan (ban), dan tombol Pulihkan Akses (unban) di tab blocked.
+4. `functions/public/pages/Dashboard.tsx`:
+   - Tambahkan state `bannedAgents` dan fungsi `loadBannedAgents()` (atau integrasikan ke dalam `loadAgentVerifications`).
+   - Kirim prop `bannedAgents` ke komponen `AgentManagement`.
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Membuat Edge Function `analyze-ktp`**:
-   - Tentukan prompt optimal untuk memformat output JSON secara ketat (NIK, Nama, Tempat/Tanggal Lahir, Jenis Kelamin, Agama, Pekerjaan, Status Perkawinan, Alamat).
-2. **Perbarui Halaman Profil Mitra & Agen**:
-   - Integrasikan `supabase.functions.invoke('analyze-ktp')`.
-   - Simpan data hasil pemindaian langsung ke state `formData` jika sukses.
-3. **Verifikasi Build & Deploy**:
-   - Uji build Vite frontend untuk menjamin tidak ada error kompilasi.
+1. **Modifikasi `adminService.ts`**: Tulis fungsi-fungsi baru untuk paritas backend agen.
+2. **Modifikasi `AgentProfile.tsx`**: Salin, sesuaikan, dan bersihkan logika referral input.
+3. **Modifikasi `AgentManagement.tsx`**: Implementasikan layout 3 tab dan action handler baru.
+4. **Modifikasi `Dashboard.tsx`**: Tambahkan integrasi state `bannedAgents`.
+5. **Uji Build**: Jalankan `npm run build` untuk memverifikasi kelulusan kompilasi TypeScript/Vite.
 
 ## 4. Rencana Verifikasi
-- Mengunggah foto KTP pada dashboard.
-- Memastikan pemanggilan fungsi `analyze-ktp` berjalan lancar.
-- Memastikan sistem berhasil mengisi formulir secara otomatis menggunakan data dari AI.
-- Memastikan fallback lokal bekerja dengan mematikan koneksi/mensimulasikan kegagalan fungsi.
-
+1. **Verifikasi Profil Agen**:
+   - Buka profil agen, klik edit, amati wizard Step 1. Pastikan tidak ada input referral pemilik kost.
+   - Klik "Lanjutkan", pastikan draft tersimpan di DB, layar scroll ke atas, dan diarahkan ke Step 2.
+   - Amati RLS Security Notice di bagian atas Step 2.
+   - Tes penggantian nomor WhatsApp untuk memicu Double OTP (OTP email keamanan + OTP WA baru).
+2. **Verifikasi Admin Kelola Agen**:
+   - Buka panel kelola agen di admin. Pastikan terdapat 3 tab: Permintaan, Aktif, dan Diblokir.
+   - Uji tombol "Tolak" dengan memasukkan alasan kustom.
+   - Uji tombol "Blokir Kemitraan" dan pastikan agen berpindah ke tab "Akun Diblokir".
+   - Uji tombol "Pulihkan Akses" pada tab "Akun Diblokir".
