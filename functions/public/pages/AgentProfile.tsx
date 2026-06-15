@@ -95,210 +95,241 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
         setIsScanning(true);
         try {
             const { data: { text } } = await Tesseract.recognize(imageUrl, 'ind');
-            const normalizedText = text.toUpperCase();
 
-            // 1. SMART NIK EXTRACTOR (Corrects common OCR digit confusion, searches all tokens)
-            const digitCorrection = (str: string) => {
-                return str
-                    .replace(/O/g, '0')
-                    .replace(/o/g, '0')
-                    .replace(/[Il|i\[\]]/g, '1')
-                    .replace(/B/g, '8')
-                    .replace(/S/g, '5')
-                    .replace(/s/g, '5')
-                    .replace(/[gq]/g, '9')
-                    .replace(/[zZ]/g, '2')
-                    .replace(/A/g, '4')
-                    .replace(/T/g, '7')
-                    .replace(/\D/g, ''); // keep only numbers
-            };
+            let aiSuccess = false;
+            try {
+                const { data: aiRes, error: aiErr } = await supabase.functions.invoke('analyze-ktp', {
+                    body: { text: text }
+                });
 
-            let extractedNik = '';
-            
-            // Try standard label matching first
-            const nikLabelMatch = normalizedText.match(/(?:NIK|MK|NK|NI\s*K|N\s*K|HIK|MIK|NX|H1K|N1K|NlK|NI\.K|N\s*I\s*K)[:\s]+([0-9A-Z?|lIo\-\s]{13,22})/i);
-            if (nikLabelMatch && nikLabelMatch[1]) {
-                const cleaned = digitCorrection(nikLabelMatch[1]);
-                if (cleaned.length === 16) {
-                    extractedNik = cleaned;
+                if (!aiErr && aiRes && aiRes.success && aiRes.data) {
+                    const aiData = aiRes.data;
+                    setFormData(prev => ({
+                        ...prev,
+                        ktp_number: aiData.nik || prev.ktp_number,
+                        display_name: aiData.name || prev.display_name,
+                        name: aiData.name || prev.name,
+                        ktp_address: aiData.address || prev.ktp_address,
+                        birth_place: aiData.birth_place || prev.birth_place,
+                        birth_date: aiData.birth_date || prev.birth_date,
+                        gender: aiData.gender || prev.gender,
+                        religion: aiData.religion || prev.religion,
+                        occupation: aiData.occupation || prev.occupation,
+                        relationship_status: aiData.relationship_status || prev.relationship_status
+                    }));
+                    aiSuccess = true;
+                    alert('Data KTP berhasil dipindai otomatis menggunakan AI Cerdas.');
                 }
+            } catch (e) {
+                console.warn('AI Extraction failed, falling back to local extractor:', e);
             }
 
-            // Fallback 1: Scan words/tokens for any 16-digit candidate after digit correction
-            if (!extractedNik) {
-                const words = normalizedText.split(/[\s,.:;\-_]+/);
-                for (const word of words) {
-                    const cleaned = digitCorrection(word);
+            if (!aiSuccess) {
+                const normalizedText = text.toUpperCase();
+
+                // 1. SMART NIK EXTRACTOR (Corrects common OCR digit confusion, searches all tokens)
+                const digitCorrection = (str: string) => {
+                    return str
+                        .replace(/O/g, '0')
+                        .replace(/o/g, '0')
+                        .replace(/[Il|i\[\]]/g, '1')
+                        .replace(/B/g, '8')
+                        .replace(/S/g, '5')
+                        .replace(/s/g, '5')
+                        .replace(/[gq]/g, '9')
+                        .replace(/[zZ]/g, '2')
+                        .replace(/A/g, '4')
+                        .replace(/T/g, '7')
+                        .replace(/\D/g, ''); // keep only numbers
+                };
+
+                let extractedNik = '';
+                
+                // Try standard label matching first
+                const nikLabelMatch = normalizedText.match(/(?:NIK|MK|NK|NI\s*K|N\s*K|HIK|MIK|NX|H1K|N1K|NlK|NI\.K|N\s*I\s*K)[:\s]+([0-9A-Z?|lIo\-\s]{13,22})/i);
+                if (nikLabelMatch && nikLabelMatch[1]) {
+                    const cleaned = digitCorrection(nikLabelMatch[1]);
                     if (cleaned.length === 16) {
                         extractedNik = cleaned;
-                        break;
                     }
                 }
-            }
 
-            // Fallback 2: Scan line by line for any line that cleans up to 16 digits
-            if (!extractedNik) {
-                const rawLines = normalizedText.split('\n');
-                for (const line of rawLines) {
-                    const cleaned = digitCorrection(line);
-                    if (cleaned.length === 16) {
-                        extractedNik = cleaned;
-                        break;
-                    } else if (cleaned.length >= 16) {
-                        const subMatch = cleaned.match(/[1-9][0-9]{15}/);
-                        if (subMatch) {
-                            extractedNik = subMatch[0];
+                // Fallback 1: Scan words/tokens for any 16-digit candidate after digit correction
+                if (!extractedNik) {
+                    const words = normalizedText.split(/[\s,.:;\-_]+/);
+                    for (const word of words) {
+                        const cleaned = digitCorrection(word);
+                        if (cleaned.length === 16) {
+                            extractedNik = cleaned;
                             break;
                         }
-                        extractedNik = cleaned.substring(0, 16);
-                        break;
                     }
                 }
-            }
 
-            // 2. NAME EXTRACTOR
-            let extractedName = '';
-            const nameMatch = normalizedText.match(/(?:NAMA|HAMA|NANA|NAMA )[:\s]+([A-Z\s'.]+)/i);
-            if (nameMatch && nameMatch[1]) {
-                extractedName = nameMatch[1].split('\n')[0].trim();
-            }
-
-            // 2A. PLACE & DATE OF BIRTH EXTRACTOR
-            let extractedBirthPlace = '';
-            let extractedBirthDate = '';
-            const birthMatch = normalizedText.match(/(?:TEMPAT|TGL|LAHIR|LAH1R|TANGGAL)[:\s]+([A-Z\s\.\-]+)[,\s]+([0-9\s\-OIl]{8,15})/i);
-            if (birthMatch) {
-                extractedBirthPlace = birthMatch[1].trim();
-                const rawDate = birthMatch[2].replace(/\s/g, '');
-                const cleanedDate = rawDate
-                    .replace(/O/g, '0')
-                    .replace(/o/g, '0')
-                    .replace(/[Il|]/g, '1')
-                    .replace(/\D/g, ''); // keep only numbers: DDMMYYYY
-                
-                if (cleanedDate.length === 8) {
-                    const dd = cleanedDate.substring(0, 2);
-                    const mm = cleanedDate.substring(2, 4);
-                    const yyyy = cleanedDate.substring(4, 8);
-                    extractedBirthDate = `${yyyy}-${mm}-${dd}`;
-                }
-            }
-
-            // 2B. GENDER EXTRACTOR
-            let extractedGender = '';
-            const genderMatch = normalizedText.match(/(?:JENIS KELAMIN|KELAMIN)[:\s]+([A-Z\-]+)/i);
-            if (genderMatch) {
-                const genVal = genderMatch[1].toUpperCase();
-                if (genVal.includes('LAK') || genVal.includes('PRIA')) {
-                    extractedGender = 'Pria';
-                } else if (genVal.includes('PER') || genVal.includes('WAN')) {
-                    extractedGender = 'Wanita';
-                }
-            }
-
-            // 2C. RELIGION EXTRACTOR
-            let extractedReligion = '';
-            const religionMatch = normalizedText.match(/AGAMA[:\s]+([A-Z]+)/i);
-            if (religionMatch) {
-                const relVal = religionMatch[1].toUpperCase();
-                if (relVal.includes('ISLAM')) extractedReligion = 'Islam';
-                else if (relVal.includes('PRO') || relVal.includes('KRIS')) extractedReligion = 'Kristen Protestan';
-                else if (relVal.includes('KAT') || relVal.includes('CHRI')) extractedReligion = 'Kristen Katolik';
-                else if (relVal.includes('HIN')) extractedReligion = 'Hindu';
-                else if (relVal.includes('BUD')) extractedReligion = 'Buddha';
-                else if (relVal.includes('KONG') || relVal.includes('KHU')) extractedReligion = 'Konghucu';
-            }
-
-            // 2D. MARITAL STATUS EXTRACTOR
-            let extractedStatus = '';
-            const statusMatch = normalizedText.match(/(?:STATUS PERKAWINAN|STATUS)[:\s]+([A-Z\s]+)/i);
-            if (statusMatch) {
-                const statVal = statusMatch[1].toUpperCase();
-                if (statVal.includes('BELUM') || statVal.includes('SINGLE')) extractedStatus = 'Single';
-                else if (statVal.includes('KAWIN') || statVal.includes('MARRIED')) extractedStatus = 'Menikah';
-            }
-
-            // 2E. OCCUPATION EXTRACTOR
-            let extractedOccupation = '';
-            const jobMatch = normalizedText.match(/(?:PEKERJAAN|PEKERJAAN )[:\s]+([A-Z\s\/\-]+)/i);
-            if (jobMatch) {
-                extractedOccupation = jobMatch[1].trim();
-                extractedOccupation = extractedOccupation.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-            }
-
-            // 3. SMART ADDRESS BUILDER (Concatenates street address, RT/RW, Kelurahan, Kecamatan dynamically)
-            const cleanPrefix = (str: string, labelRegex: RegExp) => {
-                return str.replace(labelRegex, '').replace(/^[:\s\-=\.]*/, '').trim();
-            };
-
-            const lines = normalizedText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-            let street = '';
-            let rtrw = '';
-            let keldesa = '';
-            let kecamatan = '';
-
-            const alamatIdx = lines.findIndex(l => /ALAMAT|ALAM\s+AT|ALANAT|AL4MAT|ALAM4T|ALAMT/i.test(l));
-            if (alamatIdx !== -1) {
-                street = cleanPrefix(lines[alamatIdx], /ALAMAT|ALAM\s+AT|ALANAT|AL4MAT|ALAM4T|ALAMT/i);
-                
-                // Scan up to 5 lines after "ALAMAT"
-                for (let i = alamatIdx + 1; i < Math.min(alamatIdx + 6, lines.length); i++) {
-                    const line = lines[i];
-                    if (/AGAMA|STATUS|PEKERJAAN|WARGANEGARA|BERLAKU|GOL\.\s*DARAH/i.test(line)) {
-                        break;
-                    }
-                    if (/RT\s*[\/\s]*\s*RW/i.test(line)) {
-                        rtrw = cleanPrefix(line, /RT\s*[\/\s]*\s*RW/i);
-                        continue;
-                    }
-                    if (/KEL\s*[\/\s]*\s*DESA|KELURAHAN/i.test(line)) {
-                        keldesa = cleanPrefix(line, /KEL\s*[\/\s]*\s*DESA|KELURAHAN/i);
-                        continue;
-                    }
-                    if (/KECAMATAN/i.test(line)) {
-                        kecamatan = cleanPrefix(line, /KECAMATAN/i);
-                        continue;
-                    }
-                    if (!rtrw && !keldesa && !kecamatan && street.length < 80) {
-                        street += ' ' + line;
+                // Fallback 2: Scan line by line for any line that cleans up to 16 digits
+                if (!extractedNik) {
+                    const rawLines = normalizedText.split('\n');
+                    for (const line of rawLines) {
+                        const cleaned = digitCorrection(line);
+                        if (cleaned.length === 16) {
+                            extractedNik = cleaned;
+                            break;
+                        } else if (cleaned.length >= 16) {
+                            const subMatch = cleaned.match(/[1-9][0-9]{15}/);
+                            if (subMatch) {
+                                extractedNik = subMatch[0];
+                                break;
+                            }
+                            extractedNik = cleaned.substring(0, 16);
+                            break;
+                        }
                     }
                 }
-            } else {
-                // Regex fallback if layout is scattered
-                const rtrwMatch = normalizedText.match(/(?:RT\s*[\/\s]*\s*RW)[:\s]+([0-9\/\s\-]+)/i);
-                if (rtrwMatch) rtrw = rtrwMatch[1].trim();
 
-                const kelMatch = normalizedText.match(/(?:KEL\s*[\/\s]*\s*DESA|KELURAHAN)[:\s]+([A-Z0-9\s\-\.\/]+)/i);
-                if (kelMatch) keldesa = kelMatch[1].trim();
+                // 2. NAME EXTRACTOR
+                let extractedName = '';
+                const nameMatch = normalizedText.match(/(?:NAMA|HAMA|NANA|NAMA )[:\s]+([A-Z\s'.]+)/i);
+                if (nameMatch && nameMatch[1]) {
+                    extractedName = nameMatch[1].split('\n')[0].trim();
+                }
 
-                const kecMatch = normalizedText.match(/(?:KECAMATAN)[:\s]+([A-Z0-9\s\-\.\/]+)/i);
-                if (kecMatch) kecamatan = kecMatch[1].trim();
-            }
+                // 2A. PLACE & DATE OF BIRTH EXTRACTOR
+                let extractedBirthPlace = '';
+                let extractedBirthDate = '';
+                const birthMatch = normalizedText.match(/(?:TEMPAT|TGL|LAHIR|LAH1R|TANGGAL)[:\s]+([A-Z\s\.\-]+)[,\s]+([0-9\s\-OIl]{8,15})/i);
+                if (birthMatch) {
+                    extractedBirthPlace = birthMatch[1].trim();
+                    const rawDate = birthMatch[2].replace(/\s/g, '');
+                    const cleanedDate = rawDate
+                        .replace(/O/g, '0')
+                        .replace(/o/g, '0')
+                        .replace(/[Il|]/g, '1')
+                        .replace(/\D/g, ''); // keep only numbers: DDMMYYYY
+                    
+                    if (cleanedDate.length === 8) {
+                        const dd = cleanedDate.substring(0, 2);
+                        const mm = cleanedDate.substring(2, 4);
+                        const yyyy = cleanedDate.substring(4, 8);
+                        extractedBirthDate = `${yyyy}-${mm}-${dd}`;
+                    }
+                }
 
-            const addressParts = [];
-            if (street) addressParts.push(street);
-            if (rtrw) addressParts.push(`RT. ${rtrw}`);
-            if (keldesa) addressParts.push(`Kel. ${keldesa}`);
-            if (kecamatan) addressParts.push(`Kec. ${kecamatan}`);
+                // 2B. GENDER EXTRACTOR
+                let extractedGender = '';
+                const genderMatch = normalizedText.match(/(?:JENIS KELAMIN|KELAMIN)[:\s]+([A-Z\-]+)/i);
+                if (genderMatch) {
+                    const genVal = genderMatch[1].toUpperCase();
+                    if (genVal.includes('LAK') || genVal.includes('PRIA')) {
+                        extractedGender = 'Pria';
+                    } else if (genVal.includes('PER') || genVal.includes('WAN')) {
+                        extractedGender = 'Wanita';
+                    }
+                }
 
-            const extractedAddress = addressParts.join(', ');
+                // 2C. RELIGION EXTRACTOR
+                let extractedReligion = '';
+                const religionMatch = normalizedText.match(/AGAMA[:\s]+([A-Z]+)/i);
+                if (religionMatch) {
+                    const relVal = religionMatch[1].toUpperCase();
+                    if (relVal.includes('ISLAM')) extractedReligion = 'Islam';
+                    else if (relVal.includes('PRO') || relVal.includes('KRIS')) extractedReligion = 'Kristen Protestan';
+                    else if (relVal.includes('KAT') || relVal.includes('CHRI')) extractedReligion = 'Kristen Katolik';
+                    else if (relVal.includes('HIN')) extractedReligion = 'Hindu';
+                    else if (relVal.includes('BUD')) extractedReligion = 'Buddha';
+                    else if (relVal.includes('KONG') || relVal.includes('KHU')) extractedReligion = 'Konghucu';
+                }
 
-            setFormData(prev => ({
-                ...prev,
-                ktp_number: extractedNik || prev.ktp_number,
-                display_name: (extractedName && extractedName.length > 2) ? extractedName : prev.display_name,
-                name: (extractedName && extractedName.length > 2) ? extractedName : prev.name,
-                ktp_address: extractedAddress || prev.ktp_address,
-                birth_place: extractedBirthPlace || prev.birth_place,
-                birth_date: extractedBirthDate || prev.birth_date,
-                gender: extractedGender || prev.gender,
-                religion: extractedReligion || prev.religion,
-                occupation: extractedOccupation || prev.occupation,
-                relationship_status: extractedStatus || prev.relationship_status
-            }));
+                // 2D. MARITAL STATUS EXTRACTOR
+                let extractedStatus = '';
+                const statusMatch = normalizedText.match(/(?:STATUS PERKAWINAN|STATUS)[:\s]+([A-Z\s]+)/i);
+                if (statusMatch) {
+                    const statVal = statusMatch[1].toUpperCase();
+                    if (statVal.includes('BELUM') || statVal.includes('SINGLE')) extractedStatus = 'Single';
+                    else if (statVal.includes('KAWIN') || statVal.includes('MARRIED')) extractedStatus = 'Menikah';
+                }
 
-            if (extractedNik || extractedName || extractedAddress) {
-                alert('Data KTP berhasil dipindai otomatis.');
+                // 2E. OCCUPATION EXTRACTOR
+                let extractedOccupation = '';
+                const jobMatch = normalizedText.match(/(?:PEKERJAAN|PEKERJAAN )[:\s]+([A-Z\s\/\-]+)/i);
+                if (jobMatch) {
+                    extractedOccupation = jobMatch[1].trim();
+                    extractedOccupation = extractedOccupation.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+                }
+
+                // 3. SMART ADDRESS BUILDER (Concatenates street address, RT/RW, Kelurahan, Kecamatan dynamically)
+                const cleanPrefix = (str: string, labelRegex: RegExp) => {
+                    return str.replace(labelRegex, '').replace(/^[:\s\-=\.]*/, '').trim();
+                };
+
+                const lines = normalizedText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+                let street = '';
+                let rtrw = '';
+                let keldesa = '';
+                let kecamatan = '';
+
+                const alamatIdx = lines.findIndex(l => /ALAMAT|ALAM\s+AT|ALANAT|AL4MAT|ALAM4T|ALAMT/i.test(l));
+                if (alamatIdx !== -1) {
+                    street = cleanPrefix(lines[alamatIdx], /ALAMAT|ALAM\s+AT|ALANAT|AL4MAT|ALAM4T|ALAMT/i);
+                    
+                    // Scan up to 5 lines after "ALAMAT"
+                    for (let i = alamatIdx + 1; i < Math.min(alamatIdx + 6, lines.length); i++) {
+                        const line = lines[i];
+                        if (/AGAMA|STATUS|PEKERJAAN|WARGANEGARA|BERLAKU|GOL\.\s*DARAH/i.test(line)) {
+                            break;
+                        }
+                        if (/RT\s*[\/\s]*\s*RW/i.test(line)) {
+                            rtrw = cleanPrefix(line, /RT\s*[\/\s]*\s*RW/i);
+                            continue;
+                        }
+                        if (/KEL\s*[\/\s]*\s*DESA|KELURAHAN/i.test(line)) {
+                            keldesa = cleanPrefix(line, /KEL\s*[\/\s]*\s*DESA|KELURAHAN/i);
+                            continue;
+                        }
+                        if (/KECAMATAN/i.test(line)) {
+                            kecamatan = cleanPrefix(line, /KECAMATAN/i);
+                            continue;
+                        }
+                        if (!rtrw && !keldesa && !kecamatan && street.length < 80) {
+                            street += ' ' + line;
+                        }
+                    }
+                } else {
+                    // Regex fallback if layout is scattered
+                    const rtrwMatch = normalizedText.match(/(?:RT\s*[\/\s]*\s*RW)[:\s]+([0-9\/\s\-]+)/i);
+                    if (rtrwMatch) rtrw = rtrwMatch[1].trim();
+
+                    const kelMatch = normalizedText.match(/(?:KEL\s*[\/\s]*\s*DESA|KELURAHAN)[:\s]+([A-Z0-9\s\-\.\/]+)/i);
+                    if (kelMatch) keldesa = kelMatch[1].trim();
+
+                    const kecMatch = normalizedText.match(/(?:KECAMATAN)[:\s]+([A-Z0-9\s\-\.\/]+)/i);
+                    if (kecMatch) kecamatan = kecMatch[1].trim();
+                }
+
+                const addressParts = [];
+                if (street) addressParts.push(street);
+                if (rtrw) addressParts.push(`RT. ${rtrw}`);
+                if (keldesa) addressParts.push(`Kel. ${keldesa}`);
+                if (kecamatan) addressParts.push(`Kec. ${kecamatan}`);
+
+                const extractedAddress = addressParts.join(', ');
+
+                setFormData(prev => ({
+                    ...prev,
+                    ktp_number: extractedNik || prev.ktp_number,
+                    display_name: (extractedName && extractedName.length > 2) ? extractedName : prev.display_name,
+                    name: (extractedName && extractedName.length > 2) ? extractedName : prev.name,
+                    ktp_address: extractedAddress || prev.ktp_address,
+                    birth_place: extractedBirthPlace || prev.birth_place,
+                    birth_date: extractedBirthDate || prev.birth_date,
+                    gender: extractedGender || prev.gender,
+                    religion: extractedReligion || prev.religion,
+                    occupation: extractedOccupation || prev.occupation,
+                    relationship_status: extractedStatus || prev.relationship_status
+                }));
+
+                if (extractedNik || extractedName || extractedAddress) {
+                    alert('Data KTP berhasil dipindai otomatis.');
+                }
             }
         } catch (error) {
             console.error('OCR Error:', error);

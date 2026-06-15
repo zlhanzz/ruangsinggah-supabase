@@ -2,7 +2,11 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 1. Pengisian Otomatis Data Objektif KTP Cerdas Mitra & Agen (Juni 2026)
+### 1. Integrasi AI Gemini Pada Sistem Cerdas OCR KTP Mitra & Agen (Juni 2026)
+- **Ekstraksi Berbasis AI (Edge Function)**: Menambahkan Supabase Edge Function `analyze-ktp` yang memanfaatkan model `gemini-2.5-flash` untuk menganalisis teks KTP mentah hasil pemindaian OCR. AI secara otomatis mengoreksi typo/kesalahan baca, menstandardisasi format data, dan memproduksi struktur JSON yang bersih.
+- **Sistem Fallback Tangguh (Resilient Hybrid)**: Menghubungkan client-side profile Mitra dan Agen untuk memanggil API AI Edge Function terlebih dahulu. Jika terjadi kegagalan/timeout pada sisi AI, sistem secara otomatis beralih (*fallback*) ke ekstraksi Regex lokal, menjamin kelancaran UX tanpa hambatan.
+
+### 2. Pengisian Otomatis Data Objektif KTP Cerdas Mitra & Agen (Juni 2026)
 - **Melengkapi Formulir Step 2 (Verifikasi KTP)**: Memperluas panel input KTP dengan data objektif lengkap (Nama Lengkap KTP, Tempat/Tanggal Lahir, Jenis Kelamin, Agama, Pekerjaan, Status Perkawinan) secara serasi pada `MitraProfile.tsx` dan `AgentProfile.tsx`.
 - **Ekstraksi Otomatis OCR**: Menyempurnakan pemrosesan hasil pindai OCR cerdas (Tesseract.js) untuk mengekstrak seluruh data tersebut secara otomatis dengan normalisasi format tanggal lahir ke format HTML date (`YYYY-MM-DD`) serta koreksi noise OCR, sehingga pengisian profil dapat terisi otomatis secara objektif dan instan.
 - **Penyimpanan Terpadu**: Menghubungkan penyimpanan data profil dasar hasil verifikasi ini langsung ke tabel `users` database Supabase saat pengajuan disimpan atau dikirim.

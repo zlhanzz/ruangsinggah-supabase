@@ -1,39 +1,40 @@
-# WALKTHROUGH - Pengisian Otomatis Data Objektif KTP Cerdas (Mitra & Agen)
+# WALKTHROUGH - Pengisian Otomatis Data Objektif KTP Cerdas Berbasis AI (Mitra & Agen)
 
-Dokumen ini menjelaskan daftar perubahan, hasil pengujian, dan instruksi deployment untuk fitur pengisian otomatis data objektif KTP yang lengkap di halaman profil Mitra dan Agen.
+Dokumen ini menjelaskan daftar perubahan, hasil pengujian, dan instruksi deployment untuk penambahan sistem ekstraksi cerdas berbasis AI menggunakan Gemini API.
 
 ## 1. Daftar Perubahan
-Modifikasi telah dilakukan secara bertahap pada halaman profil Agen (`AgentProfile.tsx`) agar setara dengan alur data objektif KTP baru yang ada di `MitraProfile.tsx`.
+Sistem pemindaian OCR KTP kini telah ditingkatkan dengan integrasi kecerdasan buatan (Gemini AI) untuk menjamin akurasi ekstraksi data KTP secara optimal.
 
-### Berkas yang Dimodifikasi:
-1. **[AgentProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx)**:
-   - **Perluasan State `formData`**: Menambahkan field data objektif KTP: `gender`, `religion`, `occupation`, `relationship_status`, `birth_place`, dan `birth_date`.
-   - **Pemuatan Profil (`loadProfile`)**: Memperbarui query data profil dari Supabase agar memuat seluruh field baru tersebut dari tabel `users`.
-   - **Sistem Ekstraksi OCR Cerdas (`performOcr`)**: Mengintegrasikan parser regex pintar untuk mengekstrak Nama Lengkap, Tempat Lahir, Tanggal Lahir (diformat ulang ke `YYYY-MM-DD` standar HTML date picker), Jenis Kelamin (Pria/Wanita), Agama (Islam, Kristen, dll), Pekerjaan, dan Status Perkawinan (Single/Menikah) langsung dari KTP.
-   - **Penyimpanan Terpadu (`handleSave` & `handleVerifySubmit`)**: Menyimpan seluruh data profil dasar hasil ekstraksi ke tabel `users` di Supabase untuk sinkronisasi otomatis.
-   - **Penerapan Elemen UI Baru**: Menambahkan 7 kolom input baru (Nama Lengkap, Tempat Lahir, Tanggal Lahir, Jenis Kelamin, Agama, Pekerjaan, Status Perkawinan) pada form verifikasi KTP (Step 2) dengan styling dark premium menggunakan CSS modern yang adaptif.
-
-2. **[PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md)**:
-   - Mencatat penyelesaian fitur ke dalam daftar progres pengembangan proyek.
+### Berkas yang Ditambahkan/Dimodifikasi:
+1. **[supabase/functions/analyze-ktp/index.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/supabase/functions/analyze-ktp/index.ts)** (Baru):
+   - Edge Function Deno yang memanggil API Gemini (`gemini-2.5-flash`) dengan prompt terstruktur.
+   - AI secara cerdas menganalisis teks KTP mentah, memperbaiki typo pembacaan OCR, menstandardisasi tanggal lahir ke format HTML date (`YYYY-MM-DD`), dan menghasilkan data JSON siap pakai.
+2. **[MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx)** & **[AgentProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx)**:
+   - Menghubungkan alur `performOcr` untuk pertama kali memicu pemanggilan Edge Function `analyze-ktp`.
+   - Mengisi otomatis seluruh state formulir KTP (`formData`) saat AI sukses merespon.
+   - Menyediakan sistem **Fallback Otomatis** ke parser Regex lokal jika Edge Function mati atau mengalami kegagalan teknis, menjamin tidak ada gangguan pada alur UX.
+3. **[IMPLEMENTATION_PLAN.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/IMPLEMENTATION_PLAN.md)**:
+   - Diperbarui untuk mendokumentasikan analisis, dampak, dan rencana verifikasi AI KTP.
+4. **[PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md)**:
+   - Mencatat progres integrasi AI Gemini pada riwayat penyelesaian fitur.
 
 ## 2. Hasil Pengujian & Verifikasi
 - **Verifikasi Build Vite**:
-  Proses kompilasi lokal via command `cmd /c npm run build` berhasil dijalankan tanpa ada error TypeScript maupun bundler:
+  Kompilasi lokal via command `cmd /c npm run build` sukses 100% tanpa error TypeScript maupun bundler:
   ```bash
   vite v6.4.1 building for production...
   ✓ 2521 modules transformed.
-  ✓ built in 34.42s
+  ✓ built in 37.50s
   ```
 
 ## 3. Petunjuk Deploy
-Bagi pengguna, silakan jalankan perintah berikut untuk memperbarui server dan build produksi:
+Bagi pengguna, silakan jalankan perintah berikut untuk mendeploy fungsi backend baru:
 
 ```bash
-# Pindah ke direktori frontend web
-cd functions/public
+# 1. Masuk ke folder root
+# 2. Deploy Supabase Edge Function "analyze-ktp" ke project Supabase Anda
+supabase functions deploy analyze-ktp
 
-# Build aplikasi frontend untuk produksi
-npm run build
-
-# Jika ingin mendeploy hosting/fungsi ke Firebase/Supabase, jalankan deploy workflow Anda seperti biasa
+# 3. Set Gemini API Key di database secrets Supabase
+supabase secrets set GEMINI_API_KEY="kunci-api-gemini-anda"
 ```
