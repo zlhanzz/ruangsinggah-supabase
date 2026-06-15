@@ -34,28 +34,33 @@ DATA KTP HASIL OCR:
 ${text}
 """
 
+ATURAN PENTING & KETAT:
+1. JANGAN PERNAH MENYALIN NILAI CONTOH TEMPLATE (seperti "3171234567890001", "NAMA LENGKAP", "JAKARTA", "1995-12-31") jika data tersebut tidak ditemukan atau tidak terbaca dari teks KTP hasil OCR.
+2. Jika suatu data (misalnya NIK, Nama, Tanggal Lahir, atau Agama) TIDAK terbaca, kosong, atau tidak ditemukan di DATA KTP HASIL OCR, isilah nilai kunci tersebut dengan string kosong ("") atau null.
+3. KTP yang difoto mungkin memiliki kualitas gambar rendah pada sebagian area (misal sisi kiri buram/silau), sehingga data di area tersebut tidak terbaca. Pastikan Anda hanya mengisi data yang memang terdeteksi di teks OCR secara riil.
+
 ATURAN EKSTRAKSI:
-1. "nik": Wajib 16 digit angka bersih (perbaiki typo karakter OCR seperti 'O' -> '0', 'I/l' -> '1', 'B' -> '8', dll).
-2. "name": Nama lengkap orang tersebut. Bersihkan teks awalan "NAMA" atau simbol pemisah.
-3. "birth_place": Tempat lahir saja.
-4. "birth_date": Tanggal lahir dalam format standar HTML date: "YYYY-MM-DD". Konversikan bulan (misal "Januari", "Desember", "DES") atau format angka "DD-MM-YYYY" menjadi format standar tersebut.
-5. "gender": Jenis kelamin. Wajib bernilai "Pria" atau "Wanita".
-6. "religion": Agama. Wajib bernilai salah satu dari: "Islam", "Kristen Protestan", "Kristen Katolik", "Hindu", "Buddha", "Konghucu".
-7. "occupation": Pekerjaan. Format capitalized (contoh: "Karyawan Swasta", "Pelajar/Mahasiswa").
-8. "relationship_status": Status perkawinan. Wajib bernilai "Single" (jika belum kawin) atau "Menikah" (jika sudah kawin/menikah).
-9. "address": Alamat lengkap sesuai KTP. Gabungkan jalan, RT/RW, Kelurahan, Kecamatan jika terpisah.
+1. "nik": Wajib 16 digit angka bersih yang Anda temukan di teks. Perbaiki typo karakter OCR (seperti 'O'->'0', 'I/l'->'1', etc.). Jika tidak ditemukan 16 digit angka valid, set "".
+2. "name": Nama lengkap orang tersebut. Bersihkan kata awalan seperti "Nama" atau ":". Jika tidak ditemukan nama valid, set "".
+3. "birth_place": Tempat lahir saja (contoh: "SOPPENG", "MAKASSAR"). Jika tidak ditemukan, set "".
+4. "birth_date": Tanggal lahir dalam format standar HTML date: "YYYY-MM-DD" (contoh: "2004-11-10"). Konversikan format angka "DD-MM-YYYY" atau nama bulan menjadi format standar tersebut. Jika tidak ditemukan tanggal lahir valid, set "".
+5. "gender": Jenis kelamin. Wajib bernilai "Pria", "Wanita", atau "".
+6. "religion": Agama. Wajib bernilai salah satu dari: "Islam", "Kristen Protestan", "Kristen Katolik", "Hindu", "Buddha", "Konghucu", atau "".
+7. "occupation": Pekerjaan. Format capitalized (contoh: "Karyawan Swasta", "Pelajar/Mahasiswa"). Jika tidak ditemukan, set "".
+8. "relationship_status": Status perkawinan. Wajib bernilai "Single" (belum kawin), "Menikah" (kawin), atau "".
+9. "address": Alamat lengkap sesuai KTP. Gabungkan jalan, RT/RW, Kelurahan, Kecamatan jika terpisah. Jika tidak ditemukan alamat valid, set "".
 
 FORMAT OUTPUT (JSON SAJA, TANPA DEKORASI BACKTICKS / MURNI JSON):
 {
-  "nik": "3171234567890001",
-  "name": "NAMA LENGKAP",
-  "birth_place": "JAKARTA",
-  "birth_date": "1995-12-31",
-  "gender": "Pria" | "Wanita",
-  "religion": "Islam" | "Kristen Protestan" | "Kristen Katolik" | "Hindu" | "Buddha" | "Konghucu",
-  "occupation": "Karyawan Swasta",
-  "relationship_status": "Single" | "Menikah",
-  "address": "JL. CONTOH NO. 123, RT. 001, RW. 002, Kel. Contoh, Kec. Contoh"
+  "nik": "Isi dengan NIK riil dari teks KTP, atau \"\"",
+  "name": "Isi dengan nama riil dari teks KTP, atau \"\"",
+  "birth_place": "Isi dengan tempat lahir riil dari teks KTP, atau \"\"",
+  "birth_date": "Isi dengan tanggal lahir riil dari teks KTP, atau \"\"",
+  "gender": "Pria" | "Wanita" | "",
+  "religion": "Islam" | "Kristen Protestan" | "Kristen Katolik" | "Hindu" | "Buddha" | "Konghucu" | "",
+  "occupation": "Isi dengan pekerjaan riil dari teks KTP, atau \"\"",
+  "relationship_status": "Single" | "Menikah" | "",
+  "address": "Isi dengan alamat riil dari teks KTP, atau \"\""
 }
 `;
 
