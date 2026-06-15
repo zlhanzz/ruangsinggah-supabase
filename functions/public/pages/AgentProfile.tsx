@@ -65,8 +65,20 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
     // Sync local state when URL params change
     useEffect(() => {
         setIsEditing(isEditingFromUrl);
-        setCurrentStep(stepFromUrl);
-    }, [isEditingFromUrl, stepFromUrl]);
+        if (formData.verification_status === 'verified' && stepFromUrl === 2) {
+            setCurrentStep(1);
+            setSearchParams({ edit: 'true', step: '1' });
+        } else {
+            setCurrentStep(stepFromUrl);
+        }
+    }, [isEditingFromUrl, stepFromUrl, formData.verification_status]);
+
+    useEffect(() => {
+        if (formData.verification_status === 'verified' && currentStep === 2) {
+            setCurrentStep(1);
+            setSearchParams({ edit: 'true', step: '1' });
+        }
+    }, [formData.verification_status, currentStep]);
 
     useEffect(() => {
         onEditModeChange?.(isEditing);
@@ -1174,6 +1186,10 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+                            ) : formData.verification_status === 'verified' ? (
+                                <div className="p-8 text-center text-red-500 font-bold uppercase tracking-widest bg-red-50 border border-red-100 rounded-3xl">
+                                    Akses Ditolak: Akun Anda sudah terverifikasi.
                                 </div>
                             ) : (
                                 <div>

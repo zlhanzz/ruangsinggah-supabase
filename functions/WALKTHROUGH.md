@@ -46,6 +46,10 @@ Dokumen ini mendokumentasikan rincian perubahan yang telah diselesaikan untuk me
 1. Menambahkan state `bannedAgents` dan fungsi loading data `loadBannedAgents()` dari service.
 2. Mengalirkan data `bannedAgents` ke komponen `AgentManagement` agar disinkronkan secara real-time saat aksi ban/unban dipicu oleh admin.
 
+### E. Pengamanan Akses Step 2 KTP Akun Terverifikasi (`MitraProfile.tsx` & `AgentProfile.tsx`)
+1. **Validasi State Reaktif (URL & State Sync)**: Menambahkan `useEffect` reaktif untuk mendeteksi apabila akun pengguna sudah terverifikasi (`verified`) tetapi URL parameter terdeteksi berada di `step=2`. Sistem secara otomatis mengembalikan URL ke `step=1` dan menyetel `currentStep` ke `1`.
+2. **Proteksi Rendering (Hard-Guard)**: Memberikan pembatasan visual tambahan di mana Step 2 (KTP) tidak akan dirender melainkan menampilkan banner "Akses Ditolak" apabila status verifikasi bernilai `'verified'`.
+
 ---
 
 ## 2. Hasil Pengujian (Simulasi & Kompilasi)
