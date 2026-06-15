@@ -350,10 +350,17 @@ const ArticleManagement: React.FC = () => {
                     if (!file) return;
                     setIsUploadingImg(true);
                     try {
-                      const fileExt = file.name.split('.').pop();
-                      const fileName = `cover_${Math.random().toString(36).substring(2)}.${fileExt}`;
+                      const { convertToWebP } = await import('../../adminService');
+                      const processedFile = await convertToWebP(file);
+                      const baseName = processedFile.name.substring(0, processedFile.name.lastIndexOf('.')) || processedFile.name;
+                      const fileName = `cover_${Math.random().toString(36).substring(2)}_${baseName}.webp`;
                       const filePath = `articles/covers/${fileName}`;
-                      const { data, error } = await supabase.storage.from('banners').upload(filePath, file);
+                      
+                      const { data, error } = await supabase.storage
+                        .from('banners')
+                        .upload(filePath, processedFile, {
+                          contentType: 'image/webp'
+                        });
                       if (error) throw error;
                       const { data: { publicUrl } } = supabase.storage.from('banners').getPublicUrl(data.path);
                       setImageUrl(publicUrl);

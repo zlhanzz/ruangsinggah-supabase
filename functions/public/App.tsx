@@ -37,17 +37,94 @@ const PageLoader = () => (
 );
 
 
-const initialSearch = window.location.search;
-const initialHash = window.location.hash;
-const isSignupConfirmation =
-  initialHash.includes('type=signup') ||
-  initialSearch.includes('type=signup') ||
-  (initialSearch.includes('code=') &&
-   !initialSearch.includes('mode=recovery') &&
-   !initialSearch.includes('upgrade_to_owner')); // exclude upgrade flow
+// Deteksi redirect dari magic link upgrade role (dibaca dinamis agar akurat pasca loading)
+const getIsUpgradeConfirmation = () => window.location.search.includes('upgrade_to_owner=true');
+const getIsSignupConfirmation = () => {
+  const hash = window.location.hash;
+  const search = window.location.search;
+  return hash.includes('type=signup') ||
+    search.includes('type=signup') ||
+    (search.includes('code=') &&
+     !search.includes('mode=recovery') &&
+     !search.includes('upgrade_to_owner'));
+};
 
-// Deteksi redirect dari magic link upgrade role
-const isUpgradeConfirmation = initialSearch.includes('upgrade_to_owner=true');
+// --- PRE-MOUNT UPGRADE HANDLER ---
+// Menangani upgrade secara global sebelum React melakukan routing, guna menghindari collision auth state.
+if (getIsUpgradeConfirmation()) {
+  localStorage.setItem('upgrade_in_progress', 'true');
+  const searchParams = new URLSearchParams(window.location.search);
+  
+  const checkAndUpgrade = async () => {
+    try {
+      console.log('[Pre-Mount Upgrade] Initializing session check...');
+      
+      // Berikan waktu 500ms agar Supabase Client selesai mengurai hash (#access_token) dari URL ke memory
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        console.log('[Pre-Mount Upgrade] Session detected for user:', session.user.email);
+        
+        // Bersihkan parameter URL di browser agar bersih dari token/code
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        // Jalankan update database
+        const { error: updateErr } = await supabase
+          .from('users')
+          .update({ role: 'owner' })
+          .eq('id', session.user.id);
+          
+        if (updateErr) {
+          console.error('[Pre-Mount Upgrade] DB Update error:', updateErr.message);
+        } else {
+          console.log('[Pre-Mount Upgrade] DB Update success. User role is now OWNER.');
+        }
+        
+        // Sign out agar tidak memicu auto-login dengan data role lama di memory client
+        await supabase.auth.signOut();
+        console.log('[Pre-Mount Upgrade] Sign out complete.');
+        
+        localStorage.removeItem('upgrade_in_progress');
+        window.location.href = window.location.origin + '/login?upgrade_success=true';
+      } else {
+        console.warn('[Pre-Mount Upgrade] Session not found immediately. Attaching onAuthStateChange listener...');
+        
+        // Daftarkan listener transisi jika session belum siap
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+          console.log('[Pre-Mount Upgrade Listener] Event triggered:', event);
+          if (event === 'SIGNED_IN' && newSession?.user) {
+            subscription.unsubscribe();
+            window.history.replaceState({}, document.title, window.location.pathname);
+            
+            console.log('[Pre-Mount Upgrade Listener] User signed in, updating role to owner in DB...');
+            await supabase.from('users').update({ role: 'owner' }).eq('id', newSession.user.id);
+            await supabase.auth.signOut();
+            
+            localStorage.removeItem('upgrade_in_progress');
+            window.location.href = window.location.origin + '/login?upgrade_success=true';
+          }
+        });
+        
+        // Timeout pengaman (jika link kadaluwarsa / session kosong)
+        setTimeout(() => {
+          subscription.unsubscribe();
+          if (localStorage.getItem('upgrade_in_progress') === 'true') {
+            localStorage.removeItem('upgrade_in_progress');
+            console.warn('[Pre-Mount Upgrade] Timeout reached, redirecting to access denied.');
+            window.location.href = window.location.origin + '/login?error=access_denied';
+          }
+        }, 6000);
+      }
+    } catch (err) {
+      console.error('[Pre-Mount Upgrade] Fatal error:', err);
+      localStorage.removeItem('upgrade_in_progress');
+      window.location.href = window.location.origin + '/login?error=access_denied';
+    }
+  };
+  checkAndUpgrade();
+}
 
 // Improved Protected Route Wrapper for strict access control
 const ProtectedRoute: React.FC<{ 
@@ -127,7 +204,12 @@ const App: React.FC = () => {
 
   // Build user object from Supabase session + users table
   const fetchUserData = async (supabaseUser: any) => {
-    console.log("fetchUserData called with:", supabaseUser);
+    if (localStorage.getItem('upgrade_in_progress') === 'true') {
+      console.log('[Upgrade] Blocking fetchUserData call during upgrade transaction.');
+      setLoadingAuth(false);
+      return;
+    }
+
     if (!supabaseUser) {
       console.log("No supabaseUser, setting user to null.");
       setUser(null);
@@ -139,100 +221,100 @@ const App: React.FC = () => {
       console.log("Fetching profile for UID:", supabaseUser.id);
       // Fetch profile and private sensitive tables in parallel
       const [userRes, verificationRes, bankRes, mitraRes] = await Promise.all([
-        supabase.from('users').select('*').eq('id', supabaseUser.id).maybeSingle(),
-        supabase.from('user_verifications').select('*').eq('user_id', supabaseUser.id).maybeSingle(),
-        supabase.from('user_bank_accounts').select('*').eq('user_id', supabaseUser.id).maybeSingle(),
-        supabase.from('mitra').select('referred_by').eq('user_id', supabaseUser.id).maybeSingle()
-      ]);
-        
-      if (userRes.error && userRes.error.code !== 'PGRST116') {
-        console.warn("Could not fetch user profile from public table:", userRes.error.message);
-      }
-      
-      console.log("Profile data received:", userRes.data);
-
-      const profile = userRes.data || {};
-      const verification = verificationRes.data || {};
-      const bank = bankRes.data || {};
-      const mitraVal = mitraRes?.data?.referred_by || '';
-      
-      // --- PENANGANAN AKUN DIBLOKIR ---
-      if (profile.status === 'blocked') {
-        console.warn("User is blocked. Signing out...");
-        await supabase.auth.signOut();
-        setUser(null);
-        setLoadingAuth(false);
-        navigate(`${Page.LOGIN}?error=blocked`, { replace: true });
-        return;
-      }
-
-      let role = profile.role || 'user';
-      if (profile.is_admin === true && (role === 'user' || role === 'mitra' || role === 'owner')) role = 'admin'; // Admin override
-      
-      // Normalize 'mitra' or 'owner' to 'owner' for internal logic consistency
-      const normalizedRole = role.toLowerCase();
-      if (normalizedRole === 'mitra' || normalizedRole === 'owner') role = 'owner';
-      else if (normalizedRole === 'admin') role = 'admin';
-      else if (normalizedRole === 'survey_agent') role = 'survey_agent';
-      else role = 'user';
-
-      // --- AKURASI PORTAL LOGIN PER ROLE ---
-      const portalView = localStorage.getItem('portal_view') || 'user';
-      if (portalView === 'owner' && role !== 'owner' && role !== 'admin') {
-        console.warn("Regular user attempted to log in to owner portal.");
-        await supabase.auth.signOut();
-        setUser(null);
-        setLoadingAuth(false);
-        navigate(`${Page.LOGIN}?error=role_mismatch`, { replace: true });
-        return;
-      }
-
-      if (portalView === 'user' && role === 'owner') {
-        console.log("Partner logged in to user portal. Forcing user view.");
-        role = 'user';
-      }
-
-      console.log("Determined role:", role);
-
-
-      const safeUser = {
-        uid: supabaseUser.id,
-        id: supabaseUser.id,
-        email: supabaseUser.email,
-        emailVerified: supabaseUser.email_confirmed_at != null,
-        photoURL: ensureAbsoluteUrl(profile.photo_url || supabaseUser.user_metadata?.avatar_url || '', 'profile-photos'),
-        displayName: profile.name || supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || '',
-        phoneNumber: profile.phone || '',
-        photo_url: ensureAbsoluteUrl(profile.photo_url || '', 'profile-photos'), // Keep original but resolved for reference
-        relationshipStatus: profile.relationship_status || '',
-        occupation: profile.occupation || '',
-        institution: profile.institution || '',
-        gender: profile.gender || '',
-        religion: profile.religion || '',
-        address: profile.address || '',
-        ...profile,
-        ...verification,
-        ...bank,
-        referred_by: mitraVal,
-        role,
-      };
-
-      setUser(safeUser);
-
-      if (location.pathname === Page.LOGIN) {
-        const isRecovery = new URLSearchParams(window.location.search).get('mode') === 'recovery';
-        if (!isRecovery) {
-          if (role === 'admin') navigate(Page.DASHBOARD_ADMIN, { replace: true });
-          else if (role === 'survey_agent') navigate(Page.DASHBOARD_AGENT, { replace: true });
-          else if (role === 'owner') navigate(Page.DASHBOARD_MITRA, { replace: true });
-          else navigate(Page.HOME, { replace: true });
+          supabase.from('users').select('*').eq('id', supabaseUser.id).maybeSingle(),
+          supabase.from('user_verifications').select('*').eq('user_id', supabaseUser.id).maybeSingle(),
+          supabase.from('user_bank_accounts').select('*').eq('user_id', supabaseUser.id).maybeSingle(),
+          supabase.from('mitra').select('referred_by').eq('user_id', supabaseUser.id).maybeSingle()
+        ]);
+          
+        if (userRes.error && userRes.error.code !== 'PGRST116') {
+          console.warn("Could not fetch user profile from public table:", userRes.error.message);
         }
+        
+        console.log("Profile data received:", userRes.data);
+
+        const profile = userRes.data || {};
+        const verification = verificationRes.data || {};
+        const bank = bankRes.data || {};
+        const mitraVal = mitraRes?.data?.referred_by || '';
+        
+        // --- PENANGANAN AKUN DIBLOKIR ---
+        if (profile.status === 'blocked') {
+          console.warn("User is blocked. Signing out...");
+          await supabase.auth.signOut();
+          setUser(null);
+          setLoadingAuth(false);
+          navigate(`${Page.LOGIN}?error=blocked`, { replace: true });
+          return;
+        }
+
+        let role = profile.role || 'user';
+        if (profile.is_admin === true && (role === 'user' || role === 'mitra' || role === 'owner')) role = 'admin'; // Admin override
+        
+        // Normalize 'mitra' or 'owner' to 'owner' for internal logic consistency
+        const normalizedRole = role.toLowerCase();
+        if (normalizedRole === 'mitra' || normalizedRole === 'owner') role = 'owner';
+        else if (normalizedRole === 'admin') role = 'admin';
+        else if (normalizedRole === 'survey_agent') role = 'survey_agent';
+        else role = 'user';
+
+        // --- AKURASI PORTAL LOGIN PER ROLE ---
+        const portalView = localStorage.getItem('portal_view') || 'user';
+        if (portalView === 'owner' && role !== 'owner' && role !== 'admin') {
+          console.warn("Regular user attempted to log in to owner portal.");
+          await supabase.auth.signOut();
+          setUser(null);
+          setLoadingAuth(false);
+          navigate(`${Page.LOGIN}?error=role_mismatch`, { replace: true });
+          return;
+        }
+
+        if (portalView === 'user' && role === 'owner') {
+          console.log("Partner logged in to user portal. Forcing user view.");
+          role = 'user';
+        }
+
+        console.log("Determined role:", role);
+
+
+        const safeUser = {
+          uid: supabaseUser.id,
+          id: supabaseUser.id,
+          email: supabaseUser.email,
+          emailVerified: supabaseUser.email_confirmed_at != null,
+          photoURL: ensureAbsoluteUrl(profile.photo_url || supabaseUser.user_metadata?.avatar_url || '', 'profile-photos'),
+          displayName: profile.name || supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || '',
+          phoneNumber: profile.phone || '',
+          photo_url: ensureAbsoluteUrl(profile.photo_url || '', 'profile-photos'), // Keep original but resolved for reference
+          relationshipStatus: profile.relationship_status || '',
+          occupation: profile.occupation || '',
+          institution: profile.institution || '',
+          gender: profile.gender || '',
+          religion: profile.religion || '',
+          address: profile.address || '',
+          ...profile,
+          ...verification,
+          ...bank,
+          referred_by: mitraVal,
+          role,
+        };
+
+        setUser(safeUser);
+
+        if (location.pathname === Page.LOGIN) {
+          const isRecovery = new URLSearchParams(window.location.search).get('mode') === 'recovery';
+          if (!isRecovery) {
+            if (role === 'admin') navigate(Page.DASHBOARD_ADMIN, { replace: true });
+            else if (role === 'survey_agent') navigate(Page.DASHBOARD_AGENT, { replace: true });
+            else if (role === 'owner') navigate(Page.DASHBOARD_MITRA, { replace: true });
+            else navigate(Page.HOME, { replace: true });
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching user data:', err);
+        setUser(null);
       }
-    } catch (err) {
-      console.error('Error fetching user data:', err);
-      setUser(null);
-    }
-    setLoadingAuth(false);
+      setLoadingAuth(false);
   };
 
   useEffect(() => {
@@ -242,27 +324,7 @@ const App: React.FC = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("Auth event triggered:", event, session);
 
-      // Intercept upgrade role redirect (Pencari Kost → Pemilik Kost)
-      if (event === 'SIGNED_IN' && isUpgradeConfirmation && session?.user) {
-        localStorage.setItem('upgrade_in_progress', 'true');
-        window.history.replaceState({}, document.title, window.location.pathname);
-        // Pakai setTimeout untuk menghindari deadlock Auth Lock Supabase
-        setTimeout(async () => {
-          try {
-            // Update tabel 'users' di database (sumber kebenaran role)
-            await supabase.from('users').update({ role: 'owner' }).eq('id', session.user.id);
-            // Update user_metadata juga untuk konsistensi
-            await supabase.auth.updateUser({ data: { role: 'owner' } });
-          } catch (e) {
-            console.error('Upgrade role error:', e);
-          } finally {
-            localStorage.removeItem('upgrade_in_progress');
-            await supabase.auth.signOut();
-            navigate('/login?upgrade_success=true', { replace: true });
-          }
-        }, 0);
-        return;
-      }
+
 
       // Skip semua pemrosesan saat upgrade role sedang berlangsung di Login.tsx
       // (mencegah race condition: role belum diupdate di DB tapi user sudah di-redirect)
@@ -273,7 +335,7 @@ const App: React.FC = () => {
       }
 
       // Intercept verification redirect (signup)
-      if (event === 'SIGNED_IN' && isSignupConfirmation) {
+      if (event === 'SIGNED_IN' && getIsSignupConfirmation()) {
         await supabase.auth.signOut();
         navigate('/login?verified=true', { replace: true });
         return;
@@ -285,7 +347,7 @@ const App: React.FC = () => {
         if (mounted) {
           setTimeout(() => {
             if (mounted) fetchUserData(session?.user ?? null);
-          }, 0);
+          }, 100);
         }
         return;
       }
@@ -303,7 +365,7 @@ const App: React.FC = () => {
            // oleh event emitter Supabase, mencegah Deadlock `AbortError`.
            setTimeout(() => {
              if (mounted) fetchUserData(session?.user ?? null);
-           }, 0);
+           }, 100);
          }
       }
     });

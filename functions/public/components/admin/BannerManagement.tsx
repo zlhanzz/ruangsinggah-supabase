@@ -66,11 +66,16 @@ const BannerManagement: React.FC<BannerManagementProps> = ({
             let finalImageUrl = bannerForm.image_url;
 
             if (bannerImageFile) {
-                const fileExt = bannerImageFile.name.split('.').pop();
-                const fileName = `banner_${Math.random()}.${fileExt}`;
+                const { convertToWebP } = await import('../../adminService');
+                const processedFile = await convertToWebP(bannerImageFile);
+                const baseName = processedFile.name.substring(0, processedFile.name.lastIndexOf('.')) || processedFile.name;
+                const fileName = `banner_${Math.random()}_${baseName}.webp`;
+                
                 const { data, error: uploadError } = await supabase.storage
                     .from('banners')
-                    .upload(fileName, bannerImageFile);
+                    .upload(fileName, processedFile, {
+                        contentType: 'image/webp'
+                    });
 
                 if (uploadError) throw uploadError;
                 const { data: { publicUrl } } = supabase.storage.from('banners').getPublicUrl(data.path);

@@ -157,7 +157,7 @@ export async function deleteSurveyPhoto(fileUrl: string): Promise<void> {
 }
 
 // Helper: Convert Image to WebP client-side
-async function convertToWebP(file: File, quality: number = 0.8): Promise<File> {
+export async function convertToWebP(file: File, quality: number = 0.8): Promise<File> {
   return new Promise((resolve) => {
     // Only process jpeg and png images
     if (!file.type.match(/image\/(jpeg|jpg|png)/i)) {

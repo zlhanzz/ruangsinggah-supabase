@@ -343,13 +343,17 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
 
         setIsUploadingKtp(true);
         try {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${uid}-${Math.random()}.${fileExt}`;
+            const { convertToWebP } = await import('../adminService');
+            const processedFile = await convertToWebP(file);
+            const baseName = processedFile.name.substring(0, processedFile.name.lastIndexOf('.')) || processedFile.name;
+            const fileName = `${uid}-${Math.random()}_${baseName}.webp`;
             const filePath = `ktp/${fileName}`;
 
             const { error: uploadError } = await supabase.storage
                 .from('survey-photos')
-                .upload(filePath, file);
+                .upload(filePath, processedFile, {
+                    contentType: 'image/webp'
+                });
 
             if (uploadError) throw uploadError;
 
@@ -369,14 +373,22 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
     const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (file.size > 2 * 1024 * 1024) { alert('Ukuran file maksimal 2MB'); return; }
+        if (file.size > 5 * 1024 * 1024) { alert('Ukuran file maksimal 5MB'); return; }
 
         setIsUploadingPhoto(true);
         try {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${uid}-${Date.now()}.${fileExt}`;
+            const { convertToWebP } = await import('../adminService');
+            const processedFile = await convertToWebP(file);
+            const baseName = processedFile.name.substring(0, processedFile.name.lastIndexOf('.')) || processedFile.name;
+            const fileName = `${uid}-${Date.now()}_${baseName}.webp`;
             const filePath = `profiles/${fileName}`;
-            const { error: uploadError } = await supabase.storage.from('survey-photos').upload(filePath, file);
+            
+            const { error: uploadError } = await supabase.storage
+                .from('survey-photos')
+                .upload(filePath, processedFile, {
+                    contentType: 'image/webp'
+                });
+                
             if (uploadError) throw uploadError;
             const { data: { publicUrl } } = supabase.storage.from('survey-photos').getPublicUrl(filePath);
             setFormData(prev => ({ ...prev, photo_url: publicUrl }));
@@ -568,54 +580,54 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                                                     </div>
                                                 )}
                                             </div>
+                                        </div>
 
-                                            {/* Dynamic 6-Box OTP Input (Show by default when not verified) */}
-                                            {!waOtpVerified && (
-                                                <div className="mt-4 p-5 bg-orange-50/50 rounded-2xl border border-orange-100 space-y-4 animate-in fade-in slide-in-from-top-2 text-center">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-[10px] font-black text-orange-800 uppercase tracking-widest">Masukkan 6 Digit OTP</span>
-                                                        {waResendTimer > 0 ? (
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase">Kirim ulang dalam {waResendTimer}s</span>
-                                                        ) : (
-                                                            <button type="button" onClick={handleSendWaOtp} className="text-[9px] font-black text-orange-500 hover:underline uppercase">
-                                                                {waOtpCode ? 'Kirim Ulang OTP' : 'Kirim OTP'}
-                                                            </button>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="flex justify-center gap-2">
-                                                        {otpDigits.map((digit, idx) => (
-                                                            <input
-                                                                key={idx}
-                                                                ref={el => { otpRefs.current[idx] = el; }}
-                                                                type="text"
-                                                                maxLength={1}
-                                                                value={digit}
-                                                                onChange={e => handleOtpDigitChange(idx, e.target.value)}
-                                                                onKeyDown={e => handleOtpKeyDown(idx, e)}
-                                                                onPaste={handleOtpPaste}
-                                                                className="w-10 h-12 text-center font-mono font-bold text-lg bg-white border border-gray-200 rounded-xl focus:border-orange-500 outline-none transition-all shadow-sm"
-                                                            />
-                                                        ))}
-                                                    </div>
-
-                                                    <button type="button" onClick={handleVerifyWaOtp} className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-xl active:scale-95 transition-all uppercase tracking-widest shadow-lg shadow-orange-500/20">
-                                                        Verifikasi Kode OTP
-                                                    </button>
-
-                                                    {waOtpCode ? (
-                                                        <div className="p-3 bg-white/80 rounded-xl border border-orange-100 text-left animate-in fade-in">
-                                                            <span className="text-[9px] font-black text-orange-500 uppercase tracking-wider block">Developer Sandbox OTP:</span>
-                                                            <span className="font-mono font-bold text-sm text-orange-600">{waOtpCode}</span>
-                                                        </div>
+                                        {/* Dynamic 6-Box OTP Input (Show by default when not verified) */}
+                                        {!waOtpVerified && (
+                                            <div className="md:col-span-2 mt-2 p-5 bg-orange-50/50 rounded-2xl border border-orange-100 space-y-4 animate-in fade-in slide-in-from-top-2 text-center">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-black text-orange-800 uppercase tracking-widest">Masukkan 6 Digit OTP</span>
+                                                    {waResendTimer > 0 ? (
+                                                        <span className="text-[9px] font-bold text-gray-400 uppercase">Kirim ulang dalam {waResendTimer}s</span>
                                                     ) : (
-                                                        <p className="text-[10px] text-orange-600/80 font-bold leading-normal text-left px-1">
-                                                            ⚠️ Silakan klik tombol <span className="underline text-orange-700">Kirim OTP</span> di kanan atas label terlebih dahulu untuk menerima kode verifikasi OTP via WhatsApp.
-                                                        </p>
+                                                        <button type="button" onClick={handleSendWaOtp} className="text-[9px] font-black text-orange-500 hover:underline uppercase">
+                                                            {waOtpCode ? 'Kirim Ulang OTP' : 'Kirim OTP'}
+                                                        </button>
                                                     )}
                                                 </div>
-                                            )}
-                                        </div>
+
+                                                <div className="flex justify-center gap-2">
+                                                    {otpDigits.map((digit, idx) => (
+                                                        <input
+                                                            key={idx}
+                                                            ref={el => { otpRefs.current[idx] = el; }}
+                                                            type="text"
+                                                            maxLength={1}
+                                                            value={digit}
+                                                            onChange={e => handleOtpDigitChange(idx, e.target.value)}
+                                                            onKeyDown={e => handleOtpKeyDown(idx, e)}
+                                                            onPaste={handleOtpPaste}
+                                                            className="w-10 h-12 text-center font-mono font-bold text-lg bg-white border border-gray-200 rounded-xl focus:border-orange-500 outline-none transition-all shadow-sm"
+                                                        />
+                                                    ))}
+                                                </div>
+
+                                                <button type="button" onClick={handleVerifyWaOtp} className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-xl active:scale-95 transition-all uppercase tracking-widest shadow-lg shadow-orange-500/20">
+                                                    Verifikasi Kode OTP
+                                                </button>
+
+                                                {waOtpCode ? (
+                                                    <div className="p-3 bg-white/80 rounded-xl border border-orange-100 text-left animate-in fade-in">
+                                                        <span className="text-[9px] font-black text-orange-500 uppercase tracking-wider block">Developer Sandbox OTP:</span>
+                                                        <span className="font-mono font-bold text-sm text-orange-600">{waOtpCode}</span>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-[10px] text-orange-600/80 font-bold leading-normal text-left px-1">
+                                                        ⚠️ Silakan klik tombol <span className="underline text-orange-700">Kirim OTP</span> di kanan atas label terlebih dahulu untuk menerima kode verifikasi OTP via WhatsApp.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
 
                                         <ProfileItemRead icon={<Mail size={18} />} label="Alamat Email" value={formData.email} isEditing={false} name="email" />
                                         <div className="grid grid-cols-2 gap-4">

@@ -148,10 +148,24 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       setSearchParams({}, { replace: true });
     } else if (error === 'blocked') {
       setErrorMsg('Akun Anda telah ditangguhkan. Silakan hubungi admin untuk informasi lebih lanjut.');
+      setSuccessMsg('');
       setSearchParams({}, { replace: true });
     } else if (error === 'role_mismatch') {
       setErrorMsg('Akun Anda tidak terdaftar sebagai Pemilik Kost. Silakan login sebagai Pencari Kost.');
+      setSuccessMsg('');
       setSearchParams({}, { replace: true });
+    } else if (
+      error === 'access_denied' ||
+      window.location.hash.includes('error_code=otp_expired') ||
+      window.location.search.includes('error_code=otp_expired')
+    ) {
+      setErrorMsg('Tautan verifikasi email Anda telah kedaluwarsa atau sudah pernah digunakan. Silakan ajukan upgrade kembali.');
+      setSuccessMsg('');
+      setSearchParams({}, { replace: true });
+      // Bersihkan hash juga agar tidak terdeteksi terus
+      if (window.location.hash) {
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+      }
     } else if (upgradeToOwner === 'true') {
       setMode('LOGIN');
       setActiveRole('owner');
@@ -159,6 +173,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     } else if (upgradeSuccess === 'true') {
       setMode('LOGIN');
       setActiveRole('owner');
+      setErrorMsg('');
       setSuccessMsg('✅ Akun berhasil diupgrade ke Pemilik Kost! Silakan login kembali untuk akses dashboard Mitra.');
       setSearchParams({}, { replace: true });
     }

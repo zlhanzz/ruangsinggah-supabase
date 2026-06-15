@@ -2,7 +2,15 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 1. Integrasi Verifikasi Email untuk Upgrade Peran Pemilik Kost (Juni 2026)
+### 1. Perbaikan UX & Validasi Kolom Halaman Profil User (Juni 2026)
+- **Tanda Wajib Tanggal Lahir**: Menambahkan asterisk merah `*` pada kolom "Tanggal Lahir" di [Profile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/pages/Profile.tsx). Kolom ini wajib diisi untuk kalkulasi syarat usia transaksi minimal 17 tahun, namun sebelumnya tidak memiliki tanda bintang merah sehingga membingungkan pengguna yang mengosongkannya.
+- **Koreksi Tombol Aksi Menyesatkan**: Mengubah nama tombol di mode baca (*read-only*) dari yang sebelumnya berlabel `"Simpan Profile"` (tapi memicu aksi kembali/`onBack`) menjadi `"Kembali"`. Ini memperbaiki kekeliruan navigasi di mana pengguna menyangka profil disimpan lewat tombol tersebut.
+
+### 2. Penyelarasan Layout OTP WhatsApp Mitra pada Desktop (Juni 2026)
+- **Desain Grid Proporsional**: Mengeluarkan kontainer verifikasi OTP WhatsApp dari dalam kontainer input No. WhatsApp agar tidak merusak keselarasan kolom di desktop.
+- **Penerapan `md:col-span-2`**: Menerapkan lebar penuh untuk kotak OTP di tampilan desktop sehingga membentang secara seimbang di bawah baris input Nama Lengkap dan No. WhatsApp, menghilangkan ruang kosong timpang (ompong) di bawah kolom Nama Lengkap tanpa merusak kerapian tampilan seluler yang responsif.
+
+### 2. Integrasi Verifikasi Email untuk Upgrade Peran Pemilik Kost (Juni 2026)
 - **Gerbang Keamanan Upgrade**: Mengaktifkan alur verifikasi email konfirmasi (magiclink) saat akun pencari kost (`user`) mendaftar sebagai Pemilik Kost (`owner`), sehingga role tidak diupgrade secara langsung melainkan membutuhkan persetujuan klik tautan email terlebih dahulu.
 - **Kustomisasi Brevo Email**: Mengintegrasikan tipe `'magiclink'` pada Cloud Function `handleCustomAuthEmail` untuk mengirimkan email HTML premium bertema upgrade Pemilik Kost dengan subjek dan tata letak yang relevan.
 - **Definisi Kirim Ulang**: Mengimplementasikan `handleResendUpgradeEmail` pada `Login.tsx` untuk mempermudah pengiriman ulang email konfirmasi apabila tidak masuk ke inbox.

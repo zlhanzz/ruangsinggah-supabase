@@ -85,19 +85,21 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      alert('Ukuran foto maksimal 2MB');
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Ukuran foto maksimal 5MB');
       return;
     }
 
     setLoading(true);
     try {
-      const sanitized = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-      const filePath = `${user.uid}/${Date.now()}_${sanitized}`;
+      const { convertToWebP } = await import('../adminService');
+      const processedFile = await convertToWebP(file);
+      const baseName = processedFile.name.substring(0, processedFile.name.lastIndexOf('.')) || processedFile.name;
+      const filePath = `${user.uid}/${Date.now()}_${baseName}.webp`;
 
       const { error: uploadError } = await supabase.storage
         .from('profile-photos')
-        .upload(filePath, file, { contentType: file.type || 'image/jpeg', upsert: true });
+        .upload(filePath, processedFile, { contentType: 'image/webp', upsert: true });
 
       if (uploadError) throw uploadError;
 
@@ -115,25 +117,27 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      alert('Ukuran foto KTP maksimal 2MB');
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Ukuran foto KTP maksimal 5MB');
       return;
     }
 
     setIsUploadingKtp(true);
     try {
-      const sanitized = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-      const filePath = `${user.uid}/ktp_${Date.now()}_${sanitized}`;
+      const { convertToWebP } = await import('../adminService');
+      const processedFile = await convertToWebP(file);
+      const baseName = processedFile.name.substring(0, processedFile.name.lastIndexOf('.')) || processedFile.name;
+      const filePath = `${user.uid}/ktp_${Date.now()}_${baseName}.webp`;
 
       const { error: uploadError } = await supabase.storage
         .from('ktp-photos')
-        .upload(filePath, file, { contentType: file.type || 'image/jpeg', upsert: true });
+        .upload(filePath, processedFile, { contentType: 'image/webp', upsert: true });
 
       if (uploadError) {
         // Fallback to profile-photos if ktp-photos doesn't exist yet
         const { error: fallbackError } = await supabase.storage
           .from('profile-photos')
-          .upload(filePath, file, { contentType: file.type || 'image/jpeg', upsert: true });
+          .upload(filePath, processedFile, { contentType: 'image/webp', upsert: true });
         
         if (fallbackError) throw uploadError;
       }
@@ -493,7 +497,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
 
               {/* Tanggal Lahir */}
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Tanggal Lahir</label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Tanggal Lahir <span className="text-red-500">*</span></label>
                 {isEditing ? (
                   <input type="date" name="birthDate" value={formData.birthDate} onChange={handleInputChange}
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none cursor-pointer"
@@ -679,7 +683,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSaveSuccess, forceE
                     onClick={onBack}
                     className="px-8 py-3 bg-white text-orange-500 border border-orange-200 rounded-xl font-bold hover:bg-orange-50 transition-colors active:scale-95"
                   >
-                    Simpan Profile
+                    Kembali
                   </button>
                 </>
               )}

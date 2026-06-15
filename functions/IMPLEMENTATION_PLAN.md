@@ -1,35 +1,32 @@
-# IMPLEMENTATION PLAN - Integrasi Verifikasi Email untuk Upgrade Peran Pemilik Kost
+# IMPLEMENTATION PLAN - Perbaikan UX & Validasi Halaman Profil User
 
-Rencana ini dibuat untuk mengaktifkan kembali alur verifikasi email saat pengguna biasa (pencari kost) melakukan upgrade akun menjadi pemilik kost (owner/mitra), alih-alih langsung meloloskan login dan upgrade peran tanpa verifikasi.
+Rencana ini dibuat untuk menganalisis dan memperbaiki masalah di mana beberapa pengguna melaporkan tidak dapat menyimpan data profil mereka pada halaman `Profile.tsx`.
 
 ## 1. Analisis Masalah
-- **Penyebab Utama**: Tombol "Ya, Upgrade Sekarang" pada modal deteksi email terdaftar di `Login.tsx` saat ini langsung memicu fungsi `handleUpgradeToOwner` yang mengubah peran di database menggunakan password yang diinput, tanpa mengirimkan email verifikasi.
-- **Dampak**: Tidak ada gerbang keamanan verifikasi kepemilikan email sebelum mengubah peran akun menjadi mitra/owner.
-- **Solusi**: Mengaktifkan alur verifikasi email upgrade menggunakan Supabase Auth Magic Link (`type: 'magiclink'`). Ketika tautan di dalam email diklik, pengguna dialihkan kembali dengan parameter `?upgrade_to_owner=true` untuk diselesaikan secara otomatis oleh `App.tsx`.
+Setelah dianalisis, ditemukan dua masalah utama pada halaman `Profile.tsx`:
+- **Label Tanggal Lahir Kurang Jelas (Required tetapi tidak ber-asterisk)**:
+  Kolom "Tanggal Lahir" bersifat wajib diisi (*required*) dalam logika validasi `handleSave`, namun pada label visual UI tidak ditambahkan tanda asterisk merah (`*`). Hal ini membuat pengguna mengira kolom tersebut opsional, membiarkannya kosong, dan akibatnya proses penyimpanan gagal dengan pesan kesalahan validasi yang membingungkan.
+- **Tombol Aksi Menyesatkan di Mode Read-Only**:
+  Ketika pengguna sedang dalam mode membaca (*read-only* / `isEditing === false`), terdapat tombol putih di sebelah kanan tombol "Edit Profil" yang berlabel **"Simpan Profile"** tetapi fungsi `onClick` yang dijalankan adalah `onBack` (kembali ke halaman sebelumnya). Pengguna yang mengira tombol tersebut berfungsi untuk menyimpan perubahan akan kecewa karena data mereka tidak tersimpan dan malah diarahkan kembali.
 
 ## 2. Dampak Perubahan
-File yang akan diubah:
-1. `functions/src/index.ts`: 
-   - Memodifikasi Cloud Function `handleCustomAuthEmail` agar mendukung `type === 'magiclink'`.
-   - Mengubah text email dan subjek email secara khusus untuk permintaan upgrade Pemilik Kost.
-   - Mengambil dinamis parameter `redirectTo` dari request body agar kompatibel dengan localhost/produksi.
-2. `functions/public/pages/Login.tsx`:
-   - Memodifikasi `handleUpgradeToOwner` agar memicu pengiriman email magic link via Cloud Function dan menampilkan layar `upgradeEmailSent` (menghapus proses ubah role langsung).
-   - Menambahkan definisi fungsi `handleResendUpgradeEmail` yang sebelumnya belum didefinisikan.
+Berkas yang akan diubah:
+1. `functions/public/pages/Profile.tsx`:
+   - Menambahkan tanda asterisk merah (`<span className="text-red-500">*</span>`) pada label "Tanggal Lahir" agar konsisten dengan kolom wajib lainnya.
+   - Mengubah teks tombol `"Simpan Profile"` pada mode read-only menjadi `"Kembali"` agar tidak membingungkan pengguna.
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Modifikasi `functions/src/index.ts` (`handleCustomAuthEmail`)**:
-   - Memperbarui parameter `redirectTo` agar membaca `req.body.redirectTo`.
-   - Menambahkan logika kondisional untuk mendeteksi `type === 'magiclink'` guna menyesuaikan `titleText`, `subTitleText`, `buttonText`, `footerText`, dan `subject`.
-2. **Modifikasi `functions/public/pages/Login.tsx`**:
-   - Memperbarui `handleUpgradeToOwner` agar melakukan fetch ke `handleCustomAuthEmail` dengan `type: 'magiclink'` dan `redirectTo: window.location.origin + Page.LOGIN + '?upgrade_to_owner=true'`.
-   - Mendefinisikan fungsi `handleResendUpgradeEmail`.
-3. **Deploy Firebase Functions**:
-   - Dedeploy `handleCustomAuthEmail` ke Firebase.
-4. **Verifikasi Build**:
-   - Menjalankan build produksi untuk memastikan tidak ada kesalahan tipe TypeScript.
+1. **Pembaruan Label Tanggal Lahir**:
+   - Cari bagian input tanggal lahir di `Profile.tsx` (sekitar baris 500).
+   - Ubah label menjadi: `Tanggal Lahir <span className="text-red-500">*</span>`.
+2. **Penyelarasan Teks Tombol Mode Read-Only**:
+   - Cari baris tombol aksi read-only di `Profile.tsx` (sekitar baris 681).
+   - Ubah label tombol `Simpan Profile` dengan `onClick={onBack}` menjadi `Kembali`.
+3. **Verifikasi Build**:
+   - Jalankan `npm run build` menggunakan `cmd.exe` untuk memverifikasi kelayakan kompilasi kode.
 
 ## 4. Rencana Verifikasi
-- Mendaftar sebagai pemilik kost menggunakan email yang sudah terdaftar sebagai pencari kost.
-- Klik tombol "Ya, Upgrade Sekarang" dan pastikan layar dialihkan ke "Verifikasi Email Upgrade Terkirim".
-- Cek email dan klik link konfirmasi, pastikan akun berhasil diupgrade menjadi Pemilik Kost setelah link diklik.
+- Masuk ke halaman profil pengguna biasa.
+- Masuk ke mode edit, pastikan label "Tanggal Lahir" sekarang memiliki tanda bintang merah `*`.
+- Masuk ke mode read-only, pastikan tombol kedua berganti nama menjadi "Kembali" alih-alih "Simpan Profile".
+- Pastikan build Vite selesai dengan sukses tanpa error.
