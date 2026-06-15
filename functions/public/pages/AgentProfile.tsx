@@ -27,7 +27,13 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
         photo_url: '',
         verification_status: 'unverified',
         verification_notes: '',
-        referral_code: ''
+        referral_code: '',
+        gender: '',
+        religion: '',
+        occupation: '',
+        relationship_status: '',
+        birth_place: '',
+        birth_date: ''
     });
 
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -69,7 +75,13 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
                     verification_status: profile.verification_status || 'unverified',
                     verification_notes: verif.verification_notes || '',
                     name: profile.name || '',
-                    referral_code: agentData?.referral_code || ''
+                    referral_code: agentData?.referral_code || '',
+                    gender: profile.gender || '',
+                    religion: profile.religion || '',
+                    occupation: profile.occupation || '',
+                    relationship_status: profile.relationship_status || '',
+                    birth_place: profile.birth_place || '',
+                    birth_date: profile.birth_date || ''
                 });
             }
         } catch (error) {
@@ -151,6 +163,69 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
                 extractedName = nameMatch[1].split('\n')[0].trim();
             }
 
+            // 2A. PLACE & DATE OF BIRTH EXTRACTOR
+            let extractedBirthPlace = '';
+            let extractedBirthDate = '';
+            const birthMatch = normalizedText.match(/(?:TEMPAT|TGL|LAHIR|LAH1R|TANGGAL)[:\s]+([A-Z\s\.\-]+)[,\s]+([0-9\s\-OIl]{8,15})/i);
+            if (birthMatch) {
+                extractedBirthPlace = birthMatch[1].trim();
+                const rawDate = birthMatch[2].replace(/\s/g, '');
+                const cleanedDate = rawDate
+                    .replace(/O/g, '0')
+                    .replace(/o/g, '0')
+                    .replace(/[Il|]/g, '1')
+                    .replace(/\D/g, ''); // keep only numbers: DDMMYYYY
+                
+                if (cleanedDate.length === 8) {
+                    const dd = cleanedDate.substring(0, 2);
+                    const mm = cleanedDate.substring(2, 4);
+                    const yyyy = cleanedDate.substring(4, 8);
+                    extractedBirthDate = `${yyyy}-${mm}-${dd}`;
+                }
+            }
+
+            // 2B. GENDER EXTRACTOR
+            let extractedGender = '';
+            const genderMatch = normalizedText.match(/(?:JENIS KELAMIN|KELAMIN)[:\s]+([A-Z\-]+)/i);
+            if (genderMatch) {
+                const genVal = genderMatch[1].toUpperCase();
+                if (genVal.includes('LAK') || genVal.includes('PRIA')) {
+                    extractedGender = 'Pria';
+                } else if (genVal.includes('PER') || genVal.includes('WAN')) {
+                    extractedGender = 'Wanita';
+                }
+            }
+
+            // 2C. RELIGION EXTRACTOR
+            let extractedReligion = '';
+            const religionMatch = normalizedText.match(/AGAMA[:\s]+([A-Z]+)/i);
+            if (religionMatch) {
+                const relVal = religionMatch[1].toUpperCase();
+                if (relVal.includes('ISLAM')) extractedReligion = 'Islam';
+                else if (relVal.includes('PRO') || relVal.includes('KRIS')) extractedReligion = 'Kristen Protestan';
+                else if (relVal.includes('KAT') || relVal.includes('CHRI')) extractedReligion = 'Kristen Katolik';
+                else if (relVal.includes('HIN')) extractedReligion = 'Hindu';
+                else if (relVal.includes('BUD')) extractedReligion = 'Buddha';
+                else if (relVal.includes('KONG') || relVal.includes('KHU')) extractedReligion = 'Konghucu';
+            }
+
+            // 2D. MARITAL STATUS EXTRACTOR
+            let extractedStatus = '';
+            const statusMatch = normalizedText.match(/(?:STATUS PERKAWINAN|STATUS)[:\s]+([A-Z\s]+)/i);
+            if (statusMatch) {
+                const statVal = statusMatch[1].toUpperCase();
+                if (statVal.includes('BELUM') || statVal.includes('SINGLE')) extractedStatus = 'Single';
+                else if (statVal.includes('KAWIN') || statVal.includes('MARRIED')) extractedStatus = 'Menikah';
+            }
+
+            // 2E. OCCUPATION EXTRACTOR
+            let extractedOccupation = '';
+            const jobMatch = normalizedText.match(/(?:PEKERJAAN|PEKERJAAN )[:\s]+([A-Z\s\/\-]+)/i);
+            if (jobMatch) {
+                extractedOccupation = jobMatch[1].trim();
+                extractedOccupation = extractedOccupation.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+            }
+
             // 3. SMART ADDRESS BUILDER (Concatenates street address, RT/RW, Kelurahan, Kecamatan dynamically)
             const cleanPrefix = (str: string, labelRegex: RegExp) => {
                 return str.replace(labelRegex, '').replace(/^[:\s\-=\.]*/, '').trim();
@@ -213,7 +288,13 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
                 ktp_number: extractedNik || prev.ktp_number,
                 display_name: (extractedName && extractedName.length > 2) ? extractedName : prev.display_name,
                 name: (extractedName && extractedName.length > 2) ? extractedName : prev.name,
-                ktp_address: extractedAddress || prev.ktp_address
+                ktp_address: extractedAddress || prev.ktp_address,
+                birth_place: extractedBirthPlace || prev.birth_place,
+                birth_date: extractedBirthDate || prev.birth_date,
+                gender: extractedGender || prev.gender,
+                religion: extractedReligion || prev.religion,
+                occupation: extractedOccupation || prev.occupation,
+                relationship_status: extractedStatus || prev.relationship_status
             }));
 
             if (extractedNik || extractedName || extractedAddress) {
@@ -226,7 +307,7 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
         }
     };
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
@@ -310,10 +391,15 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
                     id: uid,
                     name: formData.display_name,
                     full_name: formData.display_name,
-                    email: formData.phone.includes('@') ? formData.phone : undefined, // Fallback if needed, but email is better from auth
                     phone: formData.phone,
                     address: formData.address,
                     photo_url: formData.photo_url,
+                    gender: formData.gender,
+                    religion: formData.religion,
+                    occupation: formData.occupation,
+                    relationship_status: formData.relationship_status,
+                    birth_place: formData.birth_place,
+                    birth_date: formData.birth_date || null,
                     updated_at: new Date().toISOString()
                 }, { onConflict: 'id' });
             setIsEditing(false);
@@ -342,6 +428,12 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
                         full_name: formData.display_name,
                         phone: formData.phone,
                         address: formData.address,
+                        gender: formData.gender,
+                        religion: formData.religion,
+                        occupation: formData.occupation,
+                        relationship_status: formData.relationship_status,
+                        birth_place: formData.birth_place,
+                        birth_date: formData.birth_date || null,
                         verification_status: 'pending',
                         updated_at: new Date().toISOString()
                     })
@@ -535,6 +627,52 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black opacity-60 uppercase tracking-widest block">NIK (16 Digit)</label>
                                             <input name="ktp_number" value={formData.ktp_number} onChange={handleInputChange} maxLength={16} className="w-full bg-white/10 border border-white/20 rounded-2xl px-6 py-4 text-sm font-bold text-white outline-none" />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black opacity-60 uppercase tracking-widest block">Tempat Lahir (Sesuai KTP)</label>
+                                            <input name="birth_place" value={formData.birth_place} onChange={handleInputChange} className="w-full bg-white/10 border border-white/20 rounded-2xl px-6 py-4 text-sm font-bold text-white outline-none" placeholder="Tempat Lahir" />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black opacity-60 uppercase tracking-widest block">Tanggal Lahir (Sesuai KTP)</label>
+                                            <input type="date" name="birth_date" value={formData.birth_date} onChange={handleInputChange} className="w-full bg-white/10 border border-white/20 rounded-2xl px-6 py-4 text-sm font-bold text-white outline-none cursor-pointer" />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black opacity-60 uppercase tracking-widest block">Jenis Kelamin</label>
+                                            <select name="gender" value={formData.gender || ''} onChange={handleInputChange as any} className="w-full bg-white/10 border border-white/20 rounded-2xl px-6 py-4 text-sm font-bold text-white outline-none appearance-none cursor-pointer [&>option]:bg-gray-800">
+                                                <option value="">Pilih Jenis Kelamin</option>
+                                                <option value="Pria">Pria</option>
+                                                <option value="Wanita">Wanita</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black opacity-60 uppercase tracking-widest block">Agama</label>
+                                            <select name="religion" value={formData.religion || ''} onChange={handleInputChange as any} className="w-full bg-white/10 border border-white/20 rounded-2xl px-6 py-4 text-sm font-bold text-white outline-none appearance-none cursor-pointer [&>option]:bg-gray-800">
+                                                <option value="">Pilih Agama</option>
+                                                <option value="Islam">Islam</option>
+                                                <option value="Kristen Protestan">Kristen Protestan</option>
+                                                <option value="Kristen Katolik">Kristen Katolik</option>
+                                                <option value="Hindu">Hindu</option>
+                                                <option value="Buddha">Buddha</option>
+                                                <option value="Konghucu">Konghucu</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black opacity-60 uppercase tracking-widest block">Pekerjaan</label>
+                                            <input name="occupation" value={formData.occupation || ''} onChange={handleInputChange} className="w-full bg-white/10 border border-white/20 rounded-2xl px-6 py-4 text-sm font-bold text-white outline-none" placeholder="Pekerjaan" />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black opacity-60 uppercase tracking-widest block">Status Perkawinan</label>
+                                            <select name="relationship_status" value={formData.relationship_status || ''} onChange={handleInputChange as any} className="w-full bg-white/10 border border-white/20 rounded-2xl px-6 py-4 text-sm font-bold text-white outline-none appearance-none cursor-pointer [&>option]:bg-gray-800">
+                                                <option value="">Pilih Status</option>
+                                                <option value="Single">Belum Kawin</option>
+                                                <option value="Menikah">Kawin</option>
+                                            </select>
                                         </div>
 
                                         <div className="space-y-2">

@@ -2,7 +2,12 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 1. Peningkatan Keandalan & Sistem Cerdas OCR KTP Mitra & Agen (Juni 2026)
+### 1. Pengisian Otomatis Data Objektif KTP Cerdas Mitra & Agen (Juni 2026)
+- **Melengkapi Formulir Step 2 (Verifikasi KTP)**: Memperluas panel input KTP dengan data objektif lengkap (Nama Lengkap KTP, Tempat/Tanggal Lahir, Jenis Kelamin, Agama, Pekerjaan, Status Perkawinan) secara serasi pada `MitraProfile.tsx` dan `AgentProfile.tsx`.
+- **Ekstraksi Otomatis OCR**: Menyempurnakan pemrosesan hasil pindai OCR cerdas (Tesseract.js) untuk mengekstrak seluruh data tersebut secara otomatis dengan normalisasi format tanggal lahir ke format HTML date (`YYYY-MM-DD`) serta koreksi noise OCR, sehingga pengisian profil dapat terisi otomatis secara objektif dan instan.
+- **Penyimpanan Terpadu**: Menghubungkan penyimpanan data profil dasar hasil verifikasi ini langsung ke tabel `users` database Supabase saat pengajuan disimpan atau dikirim.
+
+### 2. Peningkatan Keandalan & Sistem Cerdas OCR KTP Mitra & Agen (Juni 2026)
 - **Smart NIK Extractor**: Mengintegrasikan algoritma pembersih noise OCR (mengoreksi kesalahan deteksi karakter umum seperti `O` -> `0`, `I/l` -> `1`, `B` -> `8`) dan melakukan pencarian fallback multi-tingkat (pencocokan kata & baris) untuk mendeteksi 16 digit NIK secara akurat terlepas dari kualitas/posisi KTP.
 - **Smart Address Builder**: Mengatur parser baris alamat KTP secara dinamis untuk mendeteksi data wilayah (RT/RW, Kelurahan, Kecamatan) dan menggabungkannya ke dalam format alamat terstruktur.
 
