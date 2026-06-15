@@ -2,7 +2,11 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 1. Perbaikan UX & Validasi Kolom Halaman Profil User (Juni 2026)
+### 1. Peningkatan Keandalan & Sistem Cerdas OCR KTP Mitra & Agen (Juni 2026)
+- **Smart NIK Extractor**: Mengintegrasikan algoritma pembersih noise OCR (mengoreksi kesalahan deteksi karakter umum seperti `O` -> `0`, `I/l` -> `1`, `B` -> `8`) dan melakukan pencarian fallback multi-tingkat (pencocokan kata & baris) untuk mendeteksi 16 digit NIK secara akurat terlepas dari kualitas/posisi KTP.
+- **Smart Address Builder**: Mengatur parser baris alamat KTP secara dinamis untuk mendeteksi data wilayah (RT/RW, Kelurahan, Kecamatan) dan menggabungkannya ke dalam format alamat terstruktur.
+
+### 2. Perbaikan UX & Validasi Kolom Halaman Profil User (Juni 2026)
 - **Tanda Wajib Tanggal Lahir**: Menambahkan asterisk merah `*` pada kolom "Tanggal Lahir" di [Profile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/pages/Profile.tsx). Kolom ini wajib diisi untuk kalkulasi syarat usia transaksi minimal 17 tahun, namun sebelumnya tidak memiliki tanda bintang merah sehingga membingungkan pengguna yang mengosongkannya.
 - **Koreksi Tombol Aksi Menyesatkan**: Mengubah nama tombol di mode baca (*read-only*) dari yang sebelumnya berlabel `"Simpan Profile"` (tapi memicu aksi kembali/`onBack`) menjadi `"Kembali"`. Ini memperbaiki kekeliruan navigasi di mana pengguna menyangka profil disimpan lewat tombol tersebut.
 
