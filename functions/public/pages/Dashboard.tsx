@@ -41,6 +41,7 @@ import DbTransactionManagement from '../components/admin/DbTransactionManagement
 import ActiveTenantsManagement from '../components/admin/ActiveTenantsManagement';
 import WithdrawalManagement from '../components/admin/WithdrawalManagement';
 import ManualBillManagement from '../components/admin/ManualBillManagement';
+import ReferralManagement from '../components/admin/ReferralManagement';
 
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -191,7 +192,7 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
 
 
 
-type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_extension' | 'transactions_db' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'wallet' | 'tenants' | 'active_tenants' | 'agent_verification' | 'banners' | 'articles' | 'withdrawals' | 'manual_bill';
+type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_extension' | 'transactions_db' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'wallet' | 'tenants' | 'active_tenants' | 'agent_verification' | 'banners' | 'articles' | 'withdrawals' | 'manual_bill' | 'referral_rewards';
 
 const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, onLogout, listings = [], onAdd, onEdit, onDelete, onRefreshListings, verificationStatus }) => {
     const isAdmin = role === 'admin';
@@ -2163,6 +2164,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                         <SidebarItem icon="🏠" label="Penyewa Aktif" isActive={activeMenu === 'active_tenants'} onClick={() => handleMenuChange('active_tenants')} />
                         <SidebarItem icon="🤝" label="Kelola Mitra" isActive={activeMenu === 'mitra'} onClick={() => handleMenuChange('mitra')} />
                         <SidebarItem icon="🛡️" label="Kelola Agen" isActive={activeMenu === 'agent_verification'} onClick={() => handleMenuChange('agent_verification')} />
+                        <SidebarItem icon="🎁" label="Referral Agen" isActive={activeMenu === 'referral_rewards'} onClick={() => handleMenuChange('referral_rewards')} />
                         <SidebarItem icon="🖼️" label="Banner Promo" isActive={activeMenu === 'banners'} onClick={() => handleMenuChange('banners')} />
                         <SidebarItem icon="📝" label="Kelola Artikel" isActive={activeMenu === 'articles'} onClick={() => handleMenuChange('articles')} />
                         <SidebarItem icon="🧾" label="Buat Tagihan" isActive={activeMenu === 'manual_bill'} onClick={() => handleMenuChange('manual_bill')} />
@@ -2927,6 +2929,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                                              onDeleteUser={handleDeleteUser}
                                              onViewProfile={handleViewProfile}
                                          />
+                                     )}
+                                     {activeMenu === 'referral_rewards' && isAdmin && (
+                                         <ReferralManagement />
                                      )}
                                      {activeMenu === 'withdrawals' && isAdmin && (
                                          <WithdrawalManagement />

@@ -3504,3 +3504,205 @@ export async function updateManualInvoiceStatus(id: string, status: 'issued' | '
 
   if (error) throw new Error(`Gagal mengubah status tagihan: ${error.message}`);
 }
+
+// ============================================================
+// REFERRAL REWARDS MANAGEMENT
+// ============================================================
+
+export interface ReferralReward {
+  id: string;
+  agent_user_id: string;
+  mitra_user_id: string;
+  referral_code: string;
+  bonus_amount: number;
+  status: 'pending' | 'realized' | 'paid';
+  paid_at: string | null;
+  paid_by: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  agent_name?: string;
+  agent_phone?: string;
+  mitra_name?: string;
+  mitra_phone?: string;
+  has_property?: boolean;
+}
+
+/**
+ * Mendapatkan semua data reward referral agen beserta status realisasinya
+ */
+export async function getReferralRewards(): Promise<ReferralReward[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  // 1. Jalankan sinkronisasi referral dari tabel mitra ke referral_rewards
+  await syncReferralRewardsInternal();
+
+  // 2. Ambil semua data referral_rewards
+  const { data: rewards, error: fetchError } = await supabase
+    .from('referral_rewards')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (fetchError) throw new Error(`Gagal mengambil data referral: ${fetchError.message}`);
+
+  const rewardList: ReferralReward[] = (rewards || []) as ReferralReward[];
+
+  if (rewardList.length === 0) return [];
+
+  // 3. Ambil data user profil untuk Agen dan Mitra
+  const userIds = Array.from(new Set([
+    ...rewardList.map(r => r.agent_user_id),
+    ...rewardList.map(r => r.mitra_user_id)
+  ]));
+
+  const { data: userData } = await supabase
+    .from('users')
+    .select('id, name, phone')
+    .in('id', userIds);
+
+  const userMap: Record<string, { name: string; phone: string }> = {};
+  if (userData) {
+    userData.forEach(u => {
+      userMap[u.id] = { name: u.name || 'User Tanpa Nama', phone: u.phone || '-' };
+    });
+  }
+
+  // 4. Periksa apakah mitra sudah upload properti pertamanya (agar status pending -> realized secara real-time)
+  const mitraIds = rewardList.map(r => r.mitra_user_id);
+  
+  // Query ke tabel properties untuk mencari properti milik mitra tersebut
+  const { data: propertiesData } = await supabase
+    .from('properties')
+    .select('owner_id')
+    .in('owner_id', mitraIds);
+
+  const activeMitrasWithProperty = new Set<string>();
+  if (propertiesData) {
+    propertiesData.forEach(p => {
+      if (p.owner_id) activeMitrasWithProperty.add(p.owner_id);
+    });
+  }
+
+  // 5. Mapping dan verifikasi status realisasi
+  const finalRewards: ReferralReward[] = [];
+
+  for (const reward of rewardList) {
+    const hasProperty = activeMitrasWithProperty.has(reward.mitra_user_id);
+    let currentStatus = reward.status;
+
+    // Jika mitra sudah upload properti pertama dan status di DB masih pending, 
+    // update statusnya ke realized secara otomatis di background database
+    if (hasProperty && currentStatus === 'pending') {
+      currentStatus = 'realized';
+      await supabase
+        .from('referral_rewards')
+        .update({ status: 'realized', realized_at: new Date().toISOString() })
+        .eq('id', reward.id);
+    }
+
+    finalRewards.push({
+      ...reward,
+      status: currentStatus,
+      agent_name: userMap[reward.agent_user_id]?.name || 'Agen RS',
+      agent_phone: userMap[reward.agent_user_id]?.phone || '-',
+      mitra_name: userMap[reward.mitra_user_id]?.name || 'Mitra Baru',
+      mitra_phone: userMap[reward.mitra_user_id]?.phone || '-',
+      has_property: hasProperty
+    });
+  }
+
+  return finalRewards;
+}
+
+/**
+ * Konfirmasi pembayaran bonus referral kepada agen
+ */
+export async function payReferralReward(rewardId: string, notes?: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Hanya admin yang dapat mengonfirmasi pembayaran reward.');
+
+  const { error } = await supabase
+    .from('referral_rewards')
+    .update({
+      status: 'paid',
+      paid_at: new Date().toISOString(),
+      paid_by: user.id,
+      notes: notes || null
+    })
+    .eq('id', rewardId);
+
+  if (error) throw new Error(`Gagal memproses pembayaran reward: ${error.message}`);
+}
+
+/**
+ * Fungsi internal untuk sinkronisasi data referred_by dari tabel mitra ke referral_rewards
+ */
+async function syncReferralRewardsInternal(): Promise<void> {
+  // 1. Ambil semua mitra yang memiliki kode referral pengundang (referred_by)
+  const { data: mitras } = await supabase
+    .from('mitra')
+    .select('user_id, referred_by')
+    .not('referred_by', 'is', null);
+
+  if (!mitras || mitras.length === 0) return;
+
+  // 2. Ambil semua kode referral dari agen survey untuk memvalidasi dan mencocokkan user_id agen
+  const referralCodes = Array.from(new Set(mitras.map(m => m.referred_by).filter(Boolean)));
+  if (referralCodes.length === 0) return;
+
+  const { data: agents } = await supabase
+    .from('agents')
+    .select('user_id, referral_code')
+    .in('referral_code', referralCodes);
+
+  if (!agents || agents.length === 0) return;
+
+  // Map referral_code ke user_id agen
+  const agentCodeMap: Record<string, string> = {};
+  agents.forEach(a => {
+    if (a.referral_code && a.user_id) {
+      agentCodeMap[a.referral_code] = a.user_id;
+    }
+  });
+
+  // 3. Ambil data referral_rewards yang sudah terdaftar agar tidak double insert
+  const { data: existingRewards } = await supabase
+    .from('referral_rewards')
+    .select('mitra_user_id');
+
+  const registeredMitraIds = new Set<string>();
+  if (existingRewards) {
+    existingRewards.forEach(r => registeredMitraIds.add(r.mitra_user_id));
+  }
+
+  // 4. Masukkan baris baru ke referral_rewards untuk pasangan agen & mitra baru yang terdeteksi
+  const rewardsToInsert = [];
+  for (const m of mitras) {
+    if (!m.referred_by || registeredMitraIds.has(m.user_id)) continue;
+
+    const agentUserId = agentCodeMap[m.referred_by];
+    if (agentUserId) {
+      rewardsToInsert.push({
+        agent_user_id: agentUserId,
+        mitra_user_id: m.user_id,
+        referral_code: m.referred_by,
+        bonus_amount: 50000,
+        status: 'pending'
+      });
+    }
+  }
+
+  if (rewardsToInsert.length > 0) {
+    await supabase
+      .from('referral_rewards')
+      .insert(rewardsToInsert);
+  }
+}
+
