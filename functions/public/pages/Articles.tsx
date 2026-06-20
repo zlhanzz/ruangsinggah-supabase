@@ -114,6 +114,94 @@ const articles: ArticleData[] = [
     )
   },
   {
+    slug: 'program-referral-agen-ajak-mitra-bonus-50rb',
+    title: 'Program Referral Agen: Ajak Pemilik Kost Bergabung & Dapatkan Bonus Rp 50.000',
+    description: 'Sebagai Agen Survey RuangSinggah, kamu bisa mendapatkan bonus tambahan Rp 50.000 setiap kali berhasil mengajak pemilik kost untuk mendaftar sebagai Mitra RuangSinggah menggunakan kode referral unikmu.',
+    category: 'Bisnis',
+    author: 'Tim Operasional RuangSinggah',
+    date: '17 Juni 2026',
+    readTime: '4 Menit',
+    icon: '🎁',
+    gradient: 'from-orange-500 to-amber-400',
+    content: (
+      <>
+        <p className="text-lg leading-relaxed text-gray-700 mb-6 font-medium">
+          Kabar baik untuk seluruh Agen Survey RuangSinggah! Kami meluncurkan program <strong>Referral Agen Mitra</strong> — cara baru untuk mendapatkan pendapatan tambahan di luar komisi survey rutin kamu. Cukup dengan mengajak pemilik kost di sekitar wilayah surveymu untuk bergabung sebagai Mitra RuangSinggah, kamu langsung berhak mendapat bonus <strong>Rp 50.000</strong> per pemilik kost yang berhasil bergabung.
+        </p>
+
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-6 mb-8">
+          <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-2">Ringkasan Program</p>
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <p className="text-2xl font-black text-orange-600">Rp 50rb</p>
+              <p className="text-xs text-gray-500 font-bold mt-1">Bonus per Mitra Baru</p>
+            </div>
+            <div>
+              <p className="text-2xl font-black text-orange-600">∞</p>
+              <p className="text-xs text-gray-500 font-bold mt-1">Tidak Ada Batas Referral</p>
+            </div>
+            <div>
+              <p className="text-2xl font-black text-orange-600">Gratis</p>
+              <p className="text-xs text-gray-500 font-bold mt-1">Tanpa Syarat Modal</p>
+            </div>
+          </div>
+        </div>
+
+        <h2 className="text-2xl font-black text-gray-900 mt-10 mb-4 uppercase tracking-tight">Bagaimana Cara Kerjanya?</h2>
+        <p className="leading-relaxed text-gray-700 mb-4">
+          Program ini dirancang sesederhana mungkin. Berikut alur lengkapnya:
+        </p>
+        <ol className="list-decimal pl-6 space-y-3 text-gray-700 mb-6">
+          <li><strong>Dapatkan Kode Referral Unikmu:</strong> Setiap Agen Survey yang terdaftar di RuangSinggah secara otomatis memiliki kode referral unik dengan format <strong>AG-XXXXXX</strong>. Kode ini bisa dilihat di dashboard agenmu.</li>
+          <li><strong>Ajak Pemilik Kost di Sekitarmu:</strong> Saat kamu melakukan survey ke suatu lokasi kost, manfaatkan momen itu untuk mengenalkan RuangSinggah kepada pemiliknya. Ceritakan manfaat bergabung sebagai Mitra: listing kost gratis, jangkauan ke ribuan pencari kost mahasiswa, dan fitur KostManager premium.</li>
+          <li><strong>Bagikan Kode Referralmu:</strong> Minta pemilik kost untuk memasukkan kode referralmu saat mendaftar akun Mitra di RuangSinggah.id. Proses pendaftaran Mitra sepenuhnya gratis dan bisa dilakukan dari HP mereka.</li>
+          <li><strong>Bonus Masuk Otomatis:</strong> Setelah pemilik kost berhasil mendaftar dan terverifikasi menggunakan kode referralmu, bonus Rp 50.000 akan otomatis dikreditkan ke saldo dompet agenmu dalam 1×24 jam.</li>
+        </ol>
+
+        <h2 className="text-2xl font-black text-gray-900 mt-10 mb-4 uppercase tracking-tight">Kenapa Pemilik Kost Mau Bergabung?</h2>
+        <p className="leading-relaxed text-gray-700 mb-4">
+          Pertanyaan bagus! Inilah poin-poin yang bisa kamu sampaikan kepada pemilik kost:
+        </p>
+        <ul className="list-disc pl-6 space-y-3 text-gray-700 mb-6">
+          <li><strong>Listing Gratis:</strong> Mendaftarkan unit kost ke marketplace RuangSinggah tidak dipungut biaya apapun. Kamar kosong mereka akan langsung terekspos ke ribuan pencari kost aktif di Makassar.</li>
+          <li><strong>Jangkauan Mahasiswa Luas:</strong> RuangSinggah fokus melayani mahasiswa baru dari luar daerah yang tidak bisa mengecek kost secara langsung — segmen dengan kebutuhan hunian sangat tinggi setiap tahun ajaran baru.</li>
+          <li><strong>Kemudahan Manajemen (KostManager):</strong> Pemilik kost yang upgrade ke layanan premium KostManager mendapatkan fitur pencatatan penghuni otomatis, notifikasi tagihan WA, dan laporan keuangan bulanan — semua dalam satu platform.</li>
+          <li><strong>Proses Pendaftaran Mudah:</strong> Hanya butuh 5 menit, cukup dari smartphone, dan tim kami siap membantu jika ada kendala teknis.</li>
+        </ul>
+
+        <h2 className="text-2xl font-black text-gray-900 mt-10 mb-4 uppercase tracking-tight">Tips Sukses Program Referral</h2>
+        <p className="leading-relaxed text-gray-700 mb-4">
+          Agen dengan performa referral tertinggi biasanya menggunakan pendekatan berikut:
+        </p>
+        <ul className="list-disc pl-6 space-y-3 text-gray-700 mb-6">
+          <li>Selesaikan survey dengan profesional terlebih dahulu — pemilik kost yang puas dengan kinerjamu lebih mudah diajak bergabung.</li>
+          <li>Jelaskan benefit secara personal: "Pak/Bu, kalau bergabung di RuangSinggah, kamar yang kosong bisa lebih cepat terisi karena ada ribuan mahasiswa yang cari kost tiap bulan."</li>
+          <li>Siapkan nomor WhatsApp untuk membantu proses pendaftaran mereka jika mereka kurang familiar dengan teknologi.</li>
+          <li>Manfaatkan momen akhir pekan atau musim masuk kampus baru (Juli–Agustus) — periode dengan permintaan kost tertinggi di Makassar.</li>
+        </ul>
+
+        <blockquote className="border-l-4 border-orange-500 pl-4 py-2 my-6 bg-orange-50/50 rounded-r-xl">
+          <p className="italic font-bold text-gray-800">
+            "Program ini bukan sekadar bonus uang. Ini adalah cara kami mengapresiasi agen yang aktif membangun ekosistem RuangSinggah di lapangan — karena pertumbuhan platform ini bergantung pada kepercayaan komunitas kost lokal."
+          </p>
+          <cite className="block text-xs font-bold text-orange-600 uppercase tracking-widest mt-2">— Founder, PT Ruang Singgah Nusantara</cite>
+        </blockquote>
+
+        <h2 className="text-2xl font-black text-gray-900 mt-10 mb-4 uppercase tracking-tight">Syarat & Ketentuan</h2>
+        <ul className="list-disc pl-6 space-y-3 text-gray-700 mb-6">
+          <li>Program berlaku untuk seluruh Agen Survey yang telah memiliki status <strong>Terverifikasi</strong> di RuangSinggah.</li>
+          <li>Bonus dihitung per pemilik kost unik yang berhasil mendaftar menggunakan kode referral agen — tidak ada duplikasi untuk satu pemilik kost yang sama.</li>
+          <li>Bonus akan dikreditkan ke saldo dompet agen setelah akun Mitra yang baru terverifikasi oleh tim admin RuangSinggah (maks. 1×24 jam kerja).</li>
+          <li>RuangSinggah berhak mengubah ketentuan program sewaktu-waktu dengan pemberitahuan terlebih dahulu melalui notifikasi aplikasi.</li>
+        </ul>
+
+        <p className="leading-relaxed text-gray-700 mb-4 font-medium">
+          Untuk pertanyaan atau kendala seputar program referral ini, hubungi tim kami langsung melalui WhatsApp di <strong>+62 812-XXXX-XXXX</strong> atau melalui menu Chat di dashboard agenmu.
+        </p>
+      </>
+    )
+  },
+  {
     slug: 'optimasi-okupansi-kost-kostmanager',
     title: 'Meningkatkan Okupansi Kost Menggunakan Sistem KostManager',
     description: 'Pelajari bagaimana pemilik kost (mitra) dapat meningkatkan efisiensi operasional dan okupansi kamar hingga 90% dengan fitur manajemen properti digital.',

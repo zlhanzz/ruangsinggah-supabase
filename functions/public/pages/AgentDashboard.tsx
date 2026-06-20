@@ -6,7 +6,11 @@ import { FORMAT_CURRENCY, INDONESIAN_BANKS } from '../constants';
 import { 
     updateSurveyRequest, 
     uploadSurveyPhoto, 
-    deleteSurveyPhoto 
+    deleteSurveyPhoto,
+    generateDeterministicUuid,
+    getSurveyCatalogSettings,
+    getSurveyCatalogLogs,
+    SurveyCatalogLogEntry
 } from '../adminService';
 import { 
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -76,6 +80,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     };
     const [profileImgError, setProfileImgError] = useState(false);
     const [agentReferralCode, setAgentReferralCode] = useState('');
+    // State untuk riwayat referral — nama pemilik kost yang bergabung via kode referral agen
+    const [referralHistory, setReferralHistory] = useState<{ name: string; created_at: string }[]>([]);
+    const [referralTickerIndex, setReferralTickerIndex] = useState(0);
 
     const generateReferralCode = () => {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -110,6 +117,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             setAgentReferralCode(code);
                         }
                     }
+
+                    // Fetch riwayat pemilik kost yang bergabung via referral kode ini
+                    const codeToCheck = data?.referral_code || agentReferralCode;
+                    if (codeToCheck) {
+                        const { data: referredMitra } = await supabase
+                            .from('users')
+                            .select('name, created_at')
+                            .eq('referred_by', codeToCheck)
+                            .eq('role', 'mitra')
+                            .order('created_at', { ascending: false });
+                        if (referredMitra) setReferralHistory(referredMitra);
+                    }
                 } catch (err) {
                     console.error("Error fetching/generating referral code:", err);
                 }
@@ -117,6 +136,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         };
         checkAndFetchReferral();
     }, [user, uid]);
+
+    // Auto-scroll ticker referral setiap 3 detik
+    useEffect(() => {
+        if (referralHistory.length === 0) return;
+        const timer = setInterval(() => {
+            setReferralTickerIndex(prev => (prev + 1) % referralHistory.length);
+        }, 3000);
+        return () => clearInterval(timer);
+    }, [referralHistory]);
 
     // Wallet State
     const [walletView, setWalletView] = useState<'balance' | 'history' | 'bank'>('balance');
@@ -127,6 +155,25 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const [agentAccountName, setAgentAccountName] = useState('');
     const [withdrawalHistory, setWithdrawalHistory] = useState<any[]>([]);
     const [isLoadingWallet, setIsLoadingWallet] = useState(false);
+    const [agentCommissionFlat, setAgentCommissionFlat] = useState(35000);
+    const [changeLogs, setChangeLogs] = useState<SurveyCatalogLogEntry[]>([]);
+    
+    // Load survey catalog settings (for agent commission flat amount) & logs
+    useEffect(() => {
+        getSurveyCatalogSettings().then((settings) => {
+            if (settings.agent_commission_flat !== undefined) {
+                setAgentCommissionFlat(settings.agent_commission_flat);
+            }
+        }).catch((err) => {
+            console.error('Gagal load survey catalog settings:', err);
+        });
+
+        getSurveyCatalogLogs().then((logs) => {
+            setChangeLogs(logs);
+        }).catch((err) => {
+            console.error('Gagal load riwayat log katalog survey:', err);
+        });
+    }, []);
     
     // Modal State
     const [isEditingSurvey, setIsEditingSurvey] = useState<SurveyRequest | null>(null);
@@ -244,7 +291,51 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         }
     };
 
-    // Dynamic earnings and balance calculations based on 70% share from real transactions
+    // Fungsi untuk mendapatkan pendapatan riil yang masuk ke agen (berdasarkan nominal Rupiah flat komisi agen)
+    const getSurveyEarnings = (r: SurveyRequest): number => {
+        const trx = r.transaction;
+        const txDate = new Date(trx?.created_at || r.created_at);
+        // Tanggal 16 Juni 2026 pukul 00:00:00 (WIB/WITA UTC+8)
+        const cutoffTime = new Date("2026-06-16T00:00:00+08:00").getTime();
+
+        // 1. Kondisi Khusus: Transaksi dari awal hingga 15 Juni 2026 mendapatkan komisi 100% dari harga flat Rp 35.000
+        if (txDate.getTime() < cutoffTime) {
+            return 35000;
+        }
+
+        if (!trx) {
+            return agentCommissionFlat;
+        }
+        
+        const metadata = trx.metadata || {};
+        const amount = Number(trx.amount) || 0;
+        const kostList = Array.isArray(metadata.kostList) ? metadata.kostList : [];
+        const count = Number(metadata.kost_count) || kostList.length || 1;
+        const unitPrice = amount / count;
+
+        // 2. Transaksi tanggal 16 Juni 2026 ke atas: Mengikuti log perubahan atau stempel metadata transaksi
+        // Prioritas A: Stempel nominal flat komisi historis di metadata transaksi
+        if (metadata.agent_commission_flat !== undefined) {
+            return Number(metadata.agent_commission_flat);
+        }
+
+        // Prioritas B: Cari nominal dari riwayat log perubahan yang aktif di periode tanggal transaksi tersebut
+        if (changeLogs && changeLogs.length > 0) {
+            const txTime = txDate.getTime();
+            // Cari log yang dibuat sebelum atau sama dengan waktu transaksi, urutkan dari yang paling baru
+            const activeLog = changeLogs
+                .filter(log => new Date(log.timestamp).getTime() <= txTime)
+                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+
+            if (activeLog && activeLog.agent_commission_flat !== undefined) {
+                return Number(activeLog.agent_commission_flat);
+            }
+        }
+
+        // Prioritas C: Fallback jika order pasca 16 Juni tapi log belum ter-record, gunakan global commission saat ini
+        return agentCommissionFlat;
+    };
+
     const completedSurveys = surveyRequests.filter(r => r.status === 'COMPLETED');
     const ratings = completedSurveys.map(r => r.user_rating || 0).filter(r => r > 0);
     const avgRating = ratings.length > 0 
@@ -252,12 +343,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         : 5.0;
 
     const totalEarnings = completedSurveys.reduce((sum, r) => {
-        // Find how many requests share this transaction ID
-        const siblingRequests = surveyRequests.filter(sr => sr.transaction_id === r.transaction_id);
-        const count = siblingRequests.length > 0 ? siblingRequests.length : 1;
-        const trxAmount = r.transaction?.amount || 100000;
-        const unitPrice = trxAmount / count;
-        return sum + (unitPrice * 0.7);
+        return sum + getSurveyEarnings(r);
     }, 0);
 
     const totalWithdrawn = withdrawalHistory
@@ -275,11 +361,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     };
 
     const inTx = completedSurveys.map(r => {
-        const siblingRequests = surveyRequests.filter(sr => sr.transaction_id === r.transaction_id);
-        const count = siblingRequests.length > 0 ? siblingRequests.length : 1;
-        const trxAmount = r.transaction?.amount || 100000;
-        const unitPrice = trxAmount / count;
-        const earned = unitPrice * 0.7;
+        const earned = getSurveyEarnings(r);
         return {
             id: `in-${r.id}`,
             date: new Date(r.created_at),
@@ -682,6 +764,71 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 </div>
             </div>
 
+            {/* ===== BANNER CAMPAIGN REFERRAL MITRA ===== */}
+            <div className="rounded-3xl overflow-hidden shadow-sm">
+                {/* Banner utama — klik menuju artikel penjelasan campaign */}
+                <a
+                    href="/artikel/program-referral-agen-ajak-mitra-bonus-50rb"
+                    className="block relative bg-gradient-to-r from-orange-500 to-amber-400 p-5 sm:p-6 hover:from-orange-600 hover:to-amber-500 transition-all duration-300 group cursor-pointer"
+                    aria-label="Pelajari Program Referral Agen Mitra"
+                >
+                    {/* Dekorasi bulatan transparan */}
+                    <div className="absolute right-0 top-0 w-40 h-40 bg-white/10 rounded-bl-full -mr-10 -mt-10 pointer-events-none" />
+                    <div className="absolute left-10 bottom-0 w-24 h-24 bg-white/5 rounded-full -mb-12 pointer-events-none" />
+
+                    <div className="relative z-10 flex items-center justify-between gap-4">
+                        <div className="flex-1">
+                            <p className="text-[9px] font-black text-orange-100 uppercase tracking-widest mb-1">🎁 Program Eksklusif Agen</p>
+                            <h3 className="text-base sm:text-lg font-black text-white leading-tight">
+                                Ajak Pemilik Kost Bergabung,
+                                <span className="block">Bonus <span className="text-yellow-200">Rp 50.000</span> per Mitra!</span>
+                            </h3>
+                            <p className="text-xs text-orange-100 font-medium mt-1.5 leading-snug max-w-xs">
+                                Bagikan kode referralmu saat survey. Semakin banyak mitra, semakin besar penghasilan tambahanmu.
+                            </p>
+                        </div>
+                        <div className="shrink-0 flex flex-col items-center gap-2">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 group-hover:bg-white/30 rounded-2xl flex items-center justify-center transition-all border border-white/30 group-hover:scale-110">
+                                <span className="text-xl sm:text-2xl">→</span>
+                            </div>
+                            <span className="text-[9px] text-orange-100 font-black uppercase tracking-wider text-center">Pelajari</span>
+                        </div>
+                    </div>
+                </a>
+
+                {/* Ticker pemilik kost yang sudah bergabung via referral */}
+                <div className="bg-orange-50 border-t border-orange-100 px-4 sm:px-5 py-2.5 flex items-center gap-3">
+                    {referralHistory.length > 0 ? (
+                        <>
+                            <span className="text-[9px] font-black text-orange-400 uppercase tracking-widest shrink-0">Referralmu:</span>
+                            <div
+                                className="flex-1 overflow-hidden relative h-4 cursor-pointer"
+                                onClick={() => onMenuChange('profile')}
+                                title="Lihat semua riwayat referral di profil"
+                            >
+                                <div
+                                    className="absolute inset-0 flex items-center transition-all duration-700 ease-in-out"
+                                    style={{ transform: `translateY(0)` }}
+                                >
+                                    <span className="text-xs font-black text-orange-700 truncate animate-in fade-in duration-500">
+                                        {referralHistory[referralTickerIndex].name.substring(0, 3)}*** bergabung sebagai Mitra •
+                                        <span className="font-bold text-orange-500 ml-1">+Rp 50.000 bonus</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <span className="text-[9px] font-black text-orange-300 uppercase tracking-wider shrink-0">
+                                {referralHistory.length} Mitra
+                            </span>
+                        </>
+                    ) : (
+                        <>
+                            <span className="text-[9px] font-black text-orange-300 uppercase tracking-widest">Belum ada mitra yang bergabung via kode referralmu</span>
+                            <span className="text-[9px] text-orange-300 font-bold ml-auto shrink-0">Mulai sekarang →</span>
+                        </>
+                    )}
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
                     <div className="flex justify-between items-center mb-6">
@@ -794,6 +941,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                             <span className="bg-orange-100 text-orange-700 font-bold px-2.5 py-1 rounded-lg text-[10px] uppercase tracking-wider">#{req.id.slice(0,8)}</span>
                                             <span className="text-xs text-gray-400 font-medium">{new Date(req.created_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'short'})}</span>
                                             <div className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-orange-50 text-orange-600 border border-orange-100 italic">Survey Live</div>
+                                            <span className="text-base sm:text-lg font-black text-orange-600 tracking-tight ml-2">
+                                                {FORMAT_CURRENCY(getSurveyEarnings(req))}
+                                            </span>
                                         </div>
                                         <p className="font-bold text-gray-900 text-lg leading-tight mb-1">{req.kost_name}</p>
                                         <p className="text-xs text-gray-500 font-medium flex items-center gap-1.5">
@@ -858,6 +1008,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         <p className="text-sm text-gray-700 italic">"{req.notes}"</p>
                                     </div>
                                 )}
+
                             </div>
                             <div className="flex flex-col gap-2.5 md:w-52 shrink-0 border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-6 relative z-10">
                                 {agentTab === 'pending' && (

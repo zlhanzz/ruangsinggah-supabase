@@ -243,6 +243,7 @@ export interface SurveyRequest {
   transaction?: {
     amount: number;
     status: string;
+    metadata?: any;
   };
   user?: {
     name: string;

@@ -19,6 +19,12 @@ const YT_VIDEO_ID = 'J1lkBcwM6fw'; // Video demo Jasa Survey RuangSinggah
 const formatRupiah = (val: number) =>
   'Rp ' + val.toLocaleString('id-ID');
 
+// Deteksi apakah user membuka halaman dari Instagram In-App Browser (IAB)
+const isInstagramIAB = (): boolean => {
+  const ua = (navigator.userAgent || '').toLowerCase();
+  return ua.includes('instagram');
+};
+
 const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, validateProfile }) => {
   const offerSectionRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
@@ -34,6 +40,8 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [ytReady, setYtReady] = useState(false);
+  // State untuk mendeteksi Instagram IAB — diisi saat mount agar aman (SSR-safe)
+  const [isIAB, setIsIAB] = useState(false);
 
   // Harga jasa survey — dimuat dari Supabase app_settings
   const [surveyPrice, setSurveyPrice] = useState(70000);
@@ -43,6 +51,11 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
   // T&C state
   const [agreedToTnC, setAgreedToTnC] = useState(false);
   const [showTnCModal, setShowTnCModal] = useState(false);
+
+  // Deteksi Instagram IAB saat komponen pertama kali mount
+  useEffect(() => {
+    setIsIAB(isInstagramIAB());
+  }, []);
 
   // Load harga aktual dari database saat komponen mount
   useEffect(() => {
@@ -69,8 +82,9 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
     notes: ''
   });
 
-  // Load YouTube IFrame API
+  // Load YouTube IFrame API — hanya jika BUKAN Instagram IAB
   useEffect(() => {
+    if (isIAB) return; // Jangan load API di Instagram IAB — tidak akan berfungsi
     if ((window as any).YT && (window as any).YT.Player) {
       setYtReady(true);
       return;
@@ -80,7 +94,7 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
     document.head.appendChild(tag);
     (window as any).onYouTubeIframeAPIReady = () => setYtReady(true);
     return () => { delete (window as any).onYouTubeIframeAPIReady; };
-  }, []);
+  }, [isIAB]);
 
   // Init player once API is ready
   useEffect(() => {
@@ -291,55 +305,95 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
               </div>
             </div>
 
-            {/* Kanan / Tengah: Custom YouTube Player */}
+            {/* Kanan / Tengah: Player — Mode IAB vs Normal */}
             <div className="order-2 relative animate-in zoom-in-95 duration-1000 delay-300 w-[90%] sm:w-4/5 lg:w-full mx-auto mt-2 sm:mt-4 lg:mt-0">
               <div className="relative rounded-2xl lg:rounded-3xl overflow-hidden shadow-2xl border-2 lg:border-4 border-white bg-black">
-                {/* 16:9 Aspect Ratio Wrapper (padding-bottom trick, stays 16:9 even after YT replaces inner div) */}
                 <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-                  {/* YT Player mounts here — positioned absolute to fill the ratio box */}
-                  <div ref={playerContainerRef} className="absolute inset-0 w-full h-full" />
 
-                  {/* Transparent overlay to block YouTube click-through */}
-                  <div
-                    className="absolute inset-0 cursor-pointer z-10"
-                    onClick={togglePlay}
-                  />
-
-                  {/* Play/Pause center overlay (shows when paused) */}
-                  {!isPlaying && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-                      <div className="w-16 h-16 bg-white/90 rounded-full flex items-center justify-center shadow-2xl">
-                        <Play className="w-7 h-7 text-orange-500 ml-1" />
+                  {isIAB ? (
+                    /* ===== MODE FALLBACK: Instagram IAB ===== */
+                    /* YouTube IFrame API tidak berfungsi di Instagram IAB.
+                       Tampilkan thumbnail statis + tombol yang buka YouTube langsung. */
+                    <a
+                      href={`https://www.youtube.com/watch?v=${YT_VIDEO_ID}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="absolute inset-0 w-full h-full block group"
+                      aria-label="Buka video demo di YouTube"
+                    >
+                      {/* Thumbnail YouTube maxresdefault */}
+                      <img
+                        src={`https://img.youtube.com/vi/${YT_VIDEO_ID}/maxresdefault.jpg`}
+                        alt="Demo Cara Kerja Jasa Survey RuangSinggah"
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                      {/* Gradient overlay gelap */}
+                      <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition-colors" />
+                      {/* Tombol Play tengah */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/90 group-hover:bg-white rounded-full flex items-center justify-center shadow-2xl transition-all group-hover:scale-110">
+                          <Play className="w-7 h-7 sm:w-9 sm:h-9 text-orange-500 ml-1" />
+                        </div>
+                        <span className="text-white text-xs sm:text-sm font-bold bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">
+                          Tonton di YouTube →
+                        </span>
                       </div>
-                    </div>
+                      {/* Label bawah */}
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-4 py-3">
+                        <p className="text-white/80 text-[10px] font-medium">Demo Jasa Survey RuangSinggah</p>
+                      </div>
+                    </a>
+                  ) : (
+                    /* ===== MODE NORMAL: YouTube IFrame API ===== */
+                    <>
+                      {/* YT Player mounts here */}
+                      <div ref={playerContainerRef} className="absolute inset-0 w-full h-full" />
+
+                      {/* Transparent overlay to block YouTube click-through */}
+                      <div
+                        className="absolute inset-0 cursor-pointer z-10"
+                        onClick={togglePlay}
+                      />
+
+                      {/* Play/Pause center overlay (shows when paused) */}
+                      {!isPlaying && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                          <div className="w-16 h-16 bg-white/90 rounded-full flex items-center justify-center shadow-2xl">
+                            <Play className="w-7 h-7 text-orange-500 ml-1" />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Custom Controls Bar */}
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-4 pt-8 pb-3 flex flex-col gap-2 z-20">
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={0.1}
+                          value={progress}
+                          onChange={handleSeek}
+                          onClick={e => e.stopPropagation()}
+                          className="w-full h-1 accent-orange-500 cursor-pointer"
+                        />
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={e => { e.stopPropagation(); togglePlay(); }}
+                            className="text-white hover:text-orange-400 transition-colors z-30"
+                          >
+                            {isPlaying
+                              ? <Pause className="w-5 h-5" />
+                              : <Play className="w-5 h-5 ml-0.5" />}
+                          </button>
+                          <p className="text-white/70 text-[10px] font-medium flex-grow">
+                            Demo Jasa Survey RuangSinggah
+                          </p>
+                        </div>
+                      </div>
+                    </>
                   )}
 
-                  {/* Custom Controls Bar */}
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-4 pt-8 pb-3 flex flex-col gap-2 z-20">
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      step={0.1}
-                      value={progress}
-                      onChange={handleSeek}
-                      onClick={e => e.stopPropagation()}
-                      className="w-full h-1 accent-orange-500 cursor-pointer"
-                    />
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={e => { e.stopPropagation(); togglePlay(); }}
-                        className="text-white hover:text-orange-400 transition-colors z-30"
-                      >
-                        {isPlaying
-                          ? <Pause className="w-5 h-5" />
-                          : <Play className="w-5 h-5 ml-0.5" />}
-                      </button>
-                      <p className="text-white/70 text-[10px] font-medium flex-grow">
-                        Demo Jasa Survey RuangSinggah
-                      </p>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>

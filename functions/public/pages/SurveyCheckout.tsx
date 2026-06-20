@@ -53,6 +53,7 @@ const SurveyCheckout: React.FC<SurveyCheckoutProps> = ({ user, onPageChange, val
   });
 
   const [priceLoaded, setPriceLoaded] = useState(false);
+  const [agentCommissionFlat, setAgentCommissionFlat] = useState(35000);
 
   useEffect(() => {
     getSurveyCatalogSettings().then(s => {
@@ -63,10 +64,12 @@ const SurveyCheckout: React.FC<SurveyCheckoutProps> = ({ user, onPageChange, val
       const effective = (discountPrice > 0 && discountPrice < basePrice) ? discountPrice : basePrice;
       console.log('[SurveyCheckout] unitPrice dari DB:', effective, '| raw:', s);
       setUnitPrice(effective);
+      setAgentCommissionFlat(s.agent_commission_flat ?? 35000);
       setPriceLoaded(true);
     }).catch((err) => {
       console.error('[SurveyCheckout] Gagal load harga:', err);
       setUnitPrice(70000);
+      setAgentCommissionFlat(35000);
       setPriceLoaded(true);
     });
   }, []);
@@ -169,6 +172,7 @@ const SurveyCheckout: React.FC<SurveyCheckoutProps> = ({ user, onPageChange, val
         package_price: totalPrice,
         kost_count: kostList.length,
         price_per_kost: unitPrice,
+        agent_commission_flat: agentCommissionFlat, // SIMPAN NOMINAL KOMISI HISTORIS DI TRANSAKSI
         has_database_discount: hasBoughtDatabase && kostList.some(k => k.source === 'database'),
         discount_amount: (kostList.length * unitPrice) - totalPrice,
       };

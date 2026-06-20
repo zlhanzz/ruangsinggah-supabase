@@ -2033,8 +2033,12 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
         photo_url
       ),
       transaction:transaction_id (
+        id,
         amount,
-        status
+        status,
+        metadata,
+        created_at,
+        payment_method
       )
     `);
 
@@ -3166,6 +3170,7 @@ export interface SurveyCatalogSettings {
   discount_price: number;
   description: string;
   price_per_kost: number;
+  agent_commission_flat?: number;
 }
 
 /**
@@ -3178,6 +3183,7 @@ export async function getSurveyCatalogSettings(): Promise<SurveyCatalogSettings>
     discount_price: 50000,
     description: 'Dapatkan bantuan profesional untuk mengecek kondisi kost impian Anda secara langsung via Video Call. Hemat waktu, tenaga, dan hindari penipuan ZONK!',
     price_per_kost: 35000,
+    agent_commission_flat: 35000,
   };
 
   try {
@@ -3197,10 +3203,36 @@ export async function getSurveyCatalogSettings(): Promise<SurveyCatalogSettings>
       discount_price: Number(data.value?.discount_price ?? DEFAULT.discount_price),
       description: String(data.value?.description ?? DEFAULT.description),
       price_per_kost: Number(data.value?.price_per_kost ?? DEFAULT.price_per_kost),
+      agent_commission_flat: Number(data.value?.agent_commission_flat ?? DEFAULT.agent_commission_flat ?? 35000),
     };
   } catch (err) {
     console.error('getSurveyCatalogSettings error:', err);
     return DEFAULT;
+  }
+}
+
+export interface SurveyCatalogLogEntry {
+  timestamp: string;
+  admin_email: string;
+  price: number;
+  discount_price: number;
+  price_per_kost: number;
+  agent_commission_flat: number;
+}
+
+export async function getSurveyCatalogLogs(): Promise<SurveyCatalogLogEntry[]> {
+  try {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'survey_catalog_logs')
+      .single();
+
+    if (error || !data) return [];
+    return Array.isArray(data.value?.logs) ? data.value.logs : [];
+  } catch (err) {
+    console.error('getSurveyCatalogLogs error:', err);
+    return [];
   }
 }
 
@@ -3215,6 +3247,8 @@ export async function saveSurveyCatalogSettings(settings: SurveyCatalogSettings)
   const isAdmin = await checkIfUserIsAdmin(user.id);
   if (!isAdmin) throw new Error('Hanya admin yang dapat mengubah pengaturan katalog.');
 
+  const adminEmail = user.email || 'Admin';
+
   const { error } = await supabase
     .from('app_settings')
     .upsert(
@@ -3225,6 +3259,7 @@ export async function saveSurveyCatalogSettings(settings: SurveyCatalogSettings)
           discount_price: settings.discount_price,
           description: settings.description,
           price_per_kost: settings.price_per_kost,
+          agent_commission_flat: settings.agent_commission_flat ?? 35000,
         },
         updated_at: new Date().toISOString(),
       },
@@ -3232,6 +3267,29 @@ export async function saveSurveyCatalogSettings(settings: SurveyCatalogSettings)
     );
 
   if (error) throw new Error(`Gagal menyimpan katalog survey: ${error.message}`);
+
+  // Simpan riwayat perubahan log
+  try {
+    const currentLogs = await getSurveyCatalogLogs();
+    const newLog: SurveyCatalogLogEntry = {
+      timestamp: new Date().toISOString(),
+      admin_email: adminEmail,
+      price: settings.price,
+      discount_price: settings.discount_price,
+      price_per_kost: settings.price_per_kost,
+      agent_commission_flat: settings.agent_commission_flat ?? 35000,
+    };
+    const updatedLogs = [newLog, ...currentLogs].slice(0, 50); // Batasi 50 log terakhir
+    await supabase
+      .from('app_settings')
+      .upsert({
+        key: 'survey_catalog_logs',
+        value: { logs: updatedLogs },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'key' });
+  } catch (err) {
+    console.error('Failed to save survey catalog change log:', err);
+  }
 }
 
 export async function getBannedMitra(): Promise<any[]> {
@@ -3327,4 +3385,122 @@ export async function unbanMitraRequest(userId: string): Promise<void> {
       console.warn('Error sending status email notification:', err);
     });
   }
+}
+
+// ============================================================
+// MANUAL INVOICE (TAGIHAN MANUAL) FUNCTIONS
+// ============================================================
+
+export interface ManualInvoice {
+  id?: string;
+  bill_number: string;
+  bill_date: string;
+  due_date: string;
+  category: 'sewa' | 'survey' | 'database';
+  recipient_name: string;
+  recipient_phone?: string;
+  recipient_address?: string;
+  // Khusus sewa
+  kost_name?: string;
+  rental_amount?: number;
+  commission_percent?: number;
+  commission_amount?: number;
+  // Non-sewa
+  items?: { id: string; name: string; qty: number; unitPrice: number }[];
+  notes?: string;
+  total: number;
+  status?: 'issued' | 'paid' | 'cancelled';
+  created_by?: string;
+  created_at?: string;
+}
+
+/**
+ * Simpan invoice manual baru ke tabel manual_invoices
+ */
+export async function saveManualInvoice(invoice: ManualInvoice): Promise<ManualInvoice> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Hanya admin yang dapat menyimpan tagihan.');
+
+  const payload = {
+    bill_number: invoice.bill_number,
+    bill_date: invoice.bill_date,
+    due_date: invoice.due_date,
+    category: invoice.category,
+    recipient_name: invoice.recipient_name,
+    recipient_phone: invoice.recipient_phone || null,
+    recipient_address: invoice.recipient_address || null,
+    kost_name: invoice.kost_name || null,
+    rental_amount: invoice.rental_amount || 0,
+    commission_percent: invoice.commission_percent || 0,
+    commission_amount: invoice.commission_amount || 0,
+    items: invoice.items || [],
+    notes: invoice.notes || null,
+    total: invoice.total,
+    status: 'issued',
+    created_by: user.id,
+  };
+
+  const { data, error } = await supabase
+    .from('manual_invoices')
+    .insert(payload)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Gagal menyimpan tagihan: ${error.message}`);
+  return data as ManualInvoice;
+}
+
+/**
+ * Ambil semua invoice manual (admin only)
+ */
+export async function getManualInvoices(): Promise<ManualInvoice[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const { data, error } = await supabase
+    .from('manual_invoices')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(`Gagal memuat riwayat tagihan: ${error.message}`);
+  return (data || []) as ManualInvoice[];
+}
+
+/**
+ * Hapus invoice manual berdasarkan ID
+ */
+export async function deleteManualInvoice(id: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Hanya admin yang dapat menghapus tagihan.');
+
+  const { error } = await supabase
+    .from('manual_invoices')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw new Error(`Gagal menghapus tagihan: ${error.message}`);
+}
+
+/**
+ * Update status invoice (issued / paid / cancelled)
+ */
+export async function updateManualInvoiceStatus(id: string, status: 'issued' | 'paid' | 'cancelled'): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Hanya admin yang dapat mengubah status tagihan.');
+
+  const { error } = await supabase
+    .from('manual_invoices')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', id);
+
+  if (error) throw new Error(`Gagal mengubah status tagihan: ${error.message}`);
 }

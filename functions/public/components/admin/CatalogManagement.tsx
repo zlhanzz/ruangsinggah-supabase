@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DatabaseProduct } from '../../types';
-import { addDatabaseProduct, updateDatabaseProduct, deleteDatabase, saveSurveyCatalogSettings } from '../../adminService';
+import { addDatabaseProduct, updateDatabaseProduct, deleteDatabase, saveSurveyCatalogSettings, getSurveyCatalogLogs, SurveyCatalogLogEntry } from '../../adminService';
 
 interface CatalogManagementProps {
     // Verification Props
@@ -12,6 +12,8 @@ interface CatalogManagementProps {
     setVerifikasiDescription: (desc: string) => void;
     verifikasiPricePerKost: number;
     setVerifikasiPricePerKost: (price: number) => void;
+    verifikasiAgentCommissionFlat: number;
+    setVerifikasiAgentCommissionFlat: (commission: number) => void;
     isSavingVerifikasi: boolean;
     setIsSavingVerifikasi: (isSaving: boolean) => void;
     // Database Props
@@ -32,6 +34,8 @@ const CatalogManagement: React.FC<CatalogManagementProps> = ({
     setVerifikasiDescription,
     verifikasiPricePerKost,
     setVerifikasiPricePerKost,
+    verifikasiAgentCommissionFlat,
+    setVerifikasiAgentCommissionFlat,
     isSavingVerifikasi,
     setIsSavingVerifikasi,
     dbProducts,
@@ -41,6 +45,20 @@ const CatalogManagement: React.FC<CatalogManagementProps> = ({
     activeTab: initialTab = 'verification'
 }) => {
     const [currentTab, setCurrentTab] = useState<'verification' | 'database'>(initialTab);
+    const [changeLogs, setChangeLogs] = useState<SurveyCatalogLogEntry[]>([]);
+
+    const loadChangeLogs = () => {
+        getSurveyCatalogLogs().then(logs => {
+            setChangeLogs(logs);
+        }).catch(err => {
+            console.error('Gagal load log riwayat perubahan:', err);
+        });
+    };
+
+    // Load logs saat component did mount
+    useEffect(() => {
+        loadChangeLogs();
+    }, []);
 
     // Sync state with prop if it changes
     React.useEffect(() => {
@@ -191,6 +209,26 @@ const CatalogManagement: React.FC<CatalogManagementProps> = ({
                                 </div>
                                 <p className="text-xs text-gray-400 font-medium">Harga per lokasi jika user memesan lebih dari 1 kost sekaligus (maks. 5 kost). Contoh: 2 kost = 2 × Rp 35.000 = Rp 70.000.</p>
                             </div>
+                            <div className="space-y-3 md:col-span-2">
+                                <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1">
+                                    Komisi Agen (Rp per kost disurvei)
+                                </label>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600 font-bold">Rp</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={verifikasiAgentCommissionFlat}
+                                        onChange={(e) => {
+                                            const val = Math.max(0, Number(e.target.value));
+                                            setVerifikasiAgentCommissionFlat(val);
+                                        }}
+                                        className="w-full bg-emerald-50/30 border border-emerald-100 rounded-xl pl-12 pr-4 py-4 text-emerald-900 font-bold text-lg outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white transition-all"
+                                        placeholder="Misal: 35000"
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-400 font-medium">Nominal komisi tetap (dalam Rupiah) yang dibayarkan langsung ke dompet agen survei untuk setiap kost yang selesai disurvei.</p>
+                            </div>
                         </div>
                     </div>
 
@@ -229,8 +267,10 @@ const CatalogManagement: React.FC<CatalogManagementProps> = ({
                                             discount_price: verifikasiDiscount,
                                             description: verifikasiDescription,
                                             price_per_kost: verifikasiPricePerKost,
+                                            agent_commission_flat: verifikasiAgentCommissionFlat,
                                         });
                                         alert('✅ Katalog berhasil disimpan! Harga baru akan aktif untuk semua order baru.');
+                                        loadChangeLogs();
                                     } catch (err: any) {
                                         alert('❌ Gagal menyimpan: ' + err.message);
                                     } finally {
@@ -243,6 +283,67 @@ const CatalogManagement: React.FC<CatalogManagementProps> = ({
                                 {isSavingVerifikasi ? 'Menyimpan ke Database...' : 'Simpan Perubahan'}
                             </button>
                         </div>
+                    </div>
+
+                    {/* Tampilan Log Perubahan Harga & Komisi */}
+                    <div className="bg-white border border-gray-100 rounded-2xl p-8 shadow-sm space-y-6">
+                        <div className="flex justify-between items-center border-b border-gray-50 pb-4">
+                            <div>
+                                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">RIWAYAT PERUBAHAN HARGA & KOMISI</h3>
+                                <p className="text-xs text-gray-400 font-medium mt-1">Daftar log historis setiap kali admin memperbarui penetapan harga layanan atau komisi agen.</p>
+                            </div>
+                        </div>
+
+                        {changeLogs.length === 0 ? (
+                            <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                                <p className="text-sm text-gray-400 font-medium">Belum ada riwayat perubahan terekam.</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-[10px] font-black">
+                                            <th className="py-3 px-4">Waktu Perubahan</th>
+                                            <th className="py-3 px-4">Admin Pengubah</th>
+                                            <th className="py-3 px-4 text-right">Harga Core</th>
+                                            <th className="py-3 px-4 text-right">Harga Promo</th>
+                                            <th className="py-3 px-4 text-right">Harga per Kost</th>
+                                            <th className="py-3 px-4 text-right">Komisi Agen</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {changeLogs.map((log, index) => (
+                                            <tr key={index} className="hover:bg-gray-50/50 transition-colors font-medium">
+                                                <td className="py-3.5 px-4 text-xs text-gray-500">
+                                                    {new Date(log.timestamp).toLocaleString('id-ID', {
+                                                        day: 'numeric',
+                                                        month: 'short',
+                                                        year: 'numeric',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit'
+                                                    })} WIB
+                                                </td>
+                                                <td className="py-3.5 px-4 text-xs font-semibold text-gray-700">
+                                                    {log.admin_email}
+                                                </td>
+                                                <td className="py-3.5 px-4 text-right font-bold text-gray-900">
+                                                    {FORMAT_CURRENCY(log.price)}
+                                                </td>
+                                                <td className="py-3.5 px-4 text-right font-bold text-orange-600">
+                                                    {FORMAT_CURRENCY(log.discount_price)}
+                                                </td>
+                                                <td className="py-3.5 px-4 text-right font-bold text-blue-600">
+                                                    {FORMAT_CURRENCY(log.price_per_kost)}
+                                                </td>
+                                                <td className="py-3.5 px-4 text-right font-black text-emerald-600">
+                                                    {FORMAT_CURRENCY(log.agent_commission_flat)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
                 </div>
             ) : (

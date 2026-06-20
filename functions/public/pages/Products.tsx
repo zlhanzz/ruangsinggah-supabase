@@ -350,15 +350,33 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
                 {filteredDatabases.map((item) => (
-                  <div key={item.id} className="group bg-white rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-2xl hover:shadow-orange-100 transition-all duration-500 cursor-pointer" onClick={() => {
-                    if (!user) {
-                      if (confirm("Silakan login terlebih dahulu untuk melihat detail produk database. Login sekarang?")) {
-                        onLoginRedirect?.();
+                  <div 
+                    key={item.id} 
+                    role="button"
+                    tabIndex={0}
+                    className="group bg-white rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-2xl hover:shadow-orange-100 transition-all duration-500 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500/20" 
+                    onClick={() => {
+                      if (!user) {
+                        if (confirm("Silakan login terlebih dahulu untuk melihat detail produk database. Login sekarang?")) {
+                          onLoginRedirect?.();
+                        }
+                        return;
                       }
-                      return;
-                    }
-                    navigate(`/products/${item.id}`);
-                  }}>
+                      navigate(`/products/${item.id}`);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        if (!user) {
+                          if (confirm("Silakan login terlebih dahulu untuk melihat detail produk database. Login sekarang?")) {
+                            onLoginRedirect?.();
+                          }
+                          return;
+                        }
+                        navigate(`/products/${item.id}`);
+                      }
+                    }}
+                  >
                     <div className="aspect-[4/3] overflow-hidden relative">
                       <img
                         src={item.fileUrls?.coverImage?.webp || item.fileUrls?.coverImage?.original || 'https://via.placeholder.com/400?text=No+Cover'}
@@ -380,10 +398,24 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-black text-gray-900 leading-none">{FORMAT_CURRENCY(item.price)} <span className="text-[9px] text-gray-400 font-bold uppercase">/tahun</span></p>
-                          <p className="text-[9px] font-black text-orange-500 uppercase tracking-tight mt-1">Cuma {FORMAT_CURRENCY(Math.floor(item.price / 12))}/bulan</p>
                         </div>
                       </div>
-                      <button className="w-full py-2.5 sm:py-3 bg-gray-900 text-white rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:bg-orange-500 transition-all shadow-xl active:scale-95 group-hover:bg-orange-500">Lihat Detail</button>
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Mencegah double triggers
+                          if (!user) {
+                            if (confirm("Silakan login terlebih dahulu untuk melihat detail produk database. Login sekarang?")) {
+                              onLoginRedirect?.();
+                            }
+                            return;
+                          }
+                          navigate(`/products/${item.id}`);
+                        }}
+                        className="w-full py-2.5 sm:py-3 bg-gray-900 text-white rounded-xl sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:bg-orange-500 transition-all shadow-xl active:scale-95 group-hover:bg-orange-500"
+                      >
+                        Lihat Detail
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -510,7 +542,6 @@ const Products: React.FC<ProductsProps> = ({ user, onLoginRedirect, validateProf
                     <p className="text-2xl sm:text-4xl font-black text-gray-900 tracking-tighter leading-none">{FORMAT_CURRENCY(detailItem.price)}</p>
                     <p className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-widest">/tahun</p>
                   </div>
-                  <p className="text-[10px] font-black text-orange-500 uppercase tracking-tight mt-1 sm:mt-1.5">Cuma {FORMAT_CURRENCY(Math.floor(detailItem.price / 12))}/bulan</p>
                 </div>
                 <button
                   onClick={() => handleBuyNow(detailItem)}

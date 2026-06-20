@@ -40,6 +40,7 @@ import ExtensionTransactionManagement from '../components/admin/ExtensionTransac
 import DbTransactionManagement from '../components/admin/DbTransactionManagement';
 import ActiveTenantsManagement from '../components/admin/ActiveTenantsManagement';
 import WithdrawalManagement from '../components/admin/WithdrawalManagement';
+import ManualBillManagement from '../components/admin/ManualBillManagement';
 
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -190,7 +191,7 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
 
 
 
-type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_extension' | 'transactions_db' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'wallet' | 'tenants' | 'active_tenants' | 'agent_verification' | 'banners' | 'articles' | 'withdrawals';
+type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_extension' | 'transactions_db' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'wallet' | 'tenants' | 'active_tenants' | 'agent_verification' | 'banners' | 'articles' | 'withdrawals' | 'manual_bill';
 
 const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, onLogout, listings = [], onAdd, onEdit, onDelete, onRefreshListings, verificationStatus }) => {
     const isAdmin = role === 'admin';
@@ -352,6 +353,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
     const [verifikasiDiscount, setVerifikasiDiscount] = useState(50000);
     const [verifikasiDescription, setVerifikasiDescription] = useState("Dapatkan bantuan profesional untuk mengecek kondisi kost impian Anda secara langsung via Video Call. Hemat waktu, tenaga, dan hindari penipuan ZONK!");
     const [verifikasiPricePerKost, setVerifikasiPricePerKost] = useState(35000);
+    const [verifikasiAgentCommissionFlat, setVerifikasiAgentCommissionFlat] = useState(35000);
     const [isSavingVerifikasi, setIsSavingVerifikasi] = useState(false);
 
     // Load survey catalog settings dari Supabase saat admin mount
@@ -362,6 +364,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
             setVerifikasiDiscount(settings.discount_price);
             setVerifikasiDescription(settings.description);
             setVerifikasiPricePerKost(settings.price_per_kost ?? 35000);
+            setVerifikasiAgentCommissionFlat(settings.agent_commission_flat ?? 35000);
         }).catch((err) => {
             console.error('Gagal load survey catalog settings:', err);
         });
@@ -2162,6 +2165,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                         <SidebarItem icon="🛡️" label="Kelola Agen" isActive={activeMenu === 'agent_verification'} onClick={() => handleMenuChange('agent_verification')} />
                         <SidebarItem icon="🖼️" label="Banner Promo" isActive={activeMenu === 'banners'} onClick={() => handleMenuChange('banners')} />
                         <SidebarItem icon="📝" label="Kelola Artikel" isActive={activeMenu === 'articles'} onClick={() => handleMenuChange('articles')} />
+                        <SidebarItem icon="🧾" label="Buat Tagihan" isActive={activeMenu === 'manual_bill'} onClick={() => handleMenuChange('manual_bill')} />
                     </>
                 )}
 
@@ -2819,6 +2823,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                                             setVerifikasiDescription={setVerifikasiDescription}
                                             verifikasiPricePerKost={verifikasiPricePerKost}
                                             setVerifikasiPricePerKost={setVerifikasiPricePerKost}
+                                            verifikasiAgentCommissionFlat={verifikasiAgentCommissionFlat}
+                                            setVerifikasiAgentCommissionFlat={setVerifikasiAgentCommissionFlat}
                                             isSavingVerifikasi={isSavingVerifikasi}
                                             setIsSavingVerifikasi={setIsSavingVerifikasi}
                                             dbProducts={[]} // Not used for verification tab
@@ -2879,6 +2885,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                                             setVerifikasiDescription={() => {}}
                                             verifikasiPricePerKost={0}
                                             setVerifikasiPricePerKost={() => {}}
+                                            verifikasiAgentCommissionFlat={35000}
+                                            setVerifikasiAgentCommissionFlat={() => {}}
                                             isSavingVerifikasi={false}
                                             setIsSavingVerifikasi={() => {}}
                                         />
@@ -2949,6 +2957,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                                     )}
                                     {activeMenu === 'articles' && isAdmin && (
                                         <ArticleManagement />
+                                    )}
+                                    {activeMenu === 'manual_bill' && isAdmin && (
+                                        <ManualBillManagement />
                                     )}
                                     {activeMenu === 'complaints' && (isAdmin || isOwner) && (
                                         <ComplaintManagement 

@@ -2,7 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 1. Paritas Halaman Profil Agen & Manajemen Agen Admin dengan Mitra (Juni 2026)
+### 1. Perhitungan Pendapatan Agen Survei Berbasis Transaksi Riil (Juni 2026)
+- **Akurasi & Stabilitas Pendapatan**:
+  - Mengubah kalkulasi pendapatan total (`totalEarnings`) dan transaksi masuk (`inTx`) di `AgentDashboard.tsx` agar menggunakan fungsi kalkulasi presisi `getSurveyEarnings(r)`.
+  - Fungsi ini melakukan pencocokan UUID deterministik request survei dengan index kost di array `metadata.kostList` transaksi dari database.
+  - Menghitung pendapatan secara statis berdasarkan harga per unit kost yang benar-benar dibayarkan user saat transaksi (termasuk diskon database 30% jika berhak), bukan dihitung secara dinamis dari database global yang bisa berubah sewaktu-waktu.
+  - Menghilangkan pembagian dinamis bermasalah yang hanya menyaring dari tugas ter-assign milik agen itu sendiri (yang memicu ketidakpasan data jika tugas dibagi ke beberapa agen).
+- **Dukungan Metadata Transaksi**:
+  - Memperluas select query `transaction:transaction_id` di `getAdminSurveyRequests()` pada `adminService.ts` agar memuat kolom `metadata`.
+  - Menambahkan tipe `metadata?: any;` pada interface `SurveyRequest` di `types.ts` untuk memastikan paritas tipe data TypeScript.
+- **Konfigurasi Komisi Bagi Hasil Dinamis**:
+  - Memperluas antarmuka `CatalogManagement.tsx` di panel admin dengan menambahkan input angka **"Komisi Agen (Rp per kost disurvei)"** dinamis dengan prefiks "Rp".
+  - Menyimpan konfigurasi nominal Rupiah tersebut ke tabel `app_settings` dengan kunci `survey_catalog` (`agent_commission_flat`).
+  - Memuat nominal komisi flat Rupiah secara dinamis di `AgentDashboard.tsx` pada saat inisialisasi komponen dan menggunakannya langsung dalam menghitung wallet balance / pendapatan agen survei secara presisi.
+- **Penguncian & Log Transaksi Komisi Agen**:
+  - Mengunci data komisi flat yang aktif dengan menyematkannya langsung ke payload metadata transaksi (`agent_commission_flat`) saat checkout di `SurveyCheckout.tsx`.
+  - Mengimplementasikan aturan **Cutoff Tanggal 16 Juni 2026**: Semua transaksi dari awal hingga 15 Juni 2026 dikunci komisinya sebesar **Rp 35.000** (100% komisi dari harga jasa survey Rp 35.000 flat, tanpa potongan platform).
+  - Memperbaiki query database `getAdminSurveyRequests()` di `adminService.ts` agar memuat kolom `created_at` dan `payment_method` dari relasi sub-query `transactions` ke frontend.
+  - Memperbarui `getSurveyEarnings()` di `AgentDashboard.tsx` agar memanfaatkan `trx?.created_at || r.created_at` secara dinamis demi memastikan filter cutoff tanggal 16 Juni selalu berjalan presisi tanpa kegagalan filter.
+  - Untuk transaksi pada tanggal 16 Juni 2026 dan setelahnya, komisi dicocokkan berdasarkan snapshot transaksi, atau dicocokkan dinamis berdasarkan garis waktu dari log perubahan katalog survey (`changeLogs` di tabel `app_settings` Supabase).
+  - Menyederhanakan visualisasi pendapatan di Dashboard Agen: menghapus seluruh banner/badge komisi besar di bawah kartu, dan menggantinya dengan **teks nominal oranye polos berukuran besar (contoh: Rp 35.000)** langsung di jajaran metadata tag teratas (di samping tag ID dan Tipe Survey). Menyajikan info komisi riil secara minimalis, bersih, dan menyatu dengan identitas visual web app.
+
+### 2. Paritas Halaman Profil Agen & Manajemen Agen Admin dengan Mitra (Juni 2026)
 - **Wizard Penyelarasan Profil Agen (`AgentProfile.tsx`)**:
   - Mengimplementasikan alur wizard 2-langkah (Step 1: Data Profil & OTP WhatsApp, Step 2: Verifikasi Identitas & Dokumen KTP) yang identik dengan `MitraProfile.tsx`.
   - Menerapkan fitur **Double OTP WhatsApp**: OTP Sesi 1 via email (Brevo) untuk membuka kunci pengeditan WhatsApp, diikuti OTP Sesi 2 via WhatsApp (Meta API) untuk memverifikasi nomor telepon baru secara aman.
@@ -416,3 +437,22 @@
 ## Rencana Selanjutnya (Future Plans)
 -   Integrasi laporan keuangan otomatis berbasis transaksi Midtrans.
 -   Sistem penarikan dana (payout) otomatis untuk Mitra.
+
+### 49. Banner Campaign Referral Agen + Artikel Program (Juni 2026)
+- **Artikel Kampanye Program Referral** (`Articles.tsx`): Menambahkan artikel baru dengan slug `program-referral-agen-ajak-mitra-bonus-50rb` di array `articles[]`. Artikel berisi penjelasan lengkap program referral Rp 50.000/mitra, alur kerja 4-langkah, tips argumentasi kepada pemilik kost, tips sukses lapangan, dan syarat ketentuan program.
+- **Banner Campaign Fungsional** (`AgentDashboard.tsx`): Menambahkan banner bergradasi orange-amber di antara grafik "Aktivitas Survey 7 Hari Terakhir" dan section "Tanggapan Pengguna" di tab Overview. Banner memuat judul kampanye, deskripsi singkat, dan tombol navigasi "→" yang jika diklik mengarahkan ke halaman artikel penjelasan campaign.
+- **Ticker Nama Mitra Referral**: Di bawah banner terdapat strip tipis oranye yang menampilkan nama pemilik kost yang sudah bergabung via kode referral agen (hanya 3 huruf awal + `***` untuk privasi). Ticker bergulir otomatis setiap 3 detik menggunakan `setInterval`. Jika belum ada referral sama sekali, strip menampilkan pesan motivasi "Belum ada mitra yang bergabung via kode referralmu — Mulai sekarang →".
+- **Fetch Data Referral Dinamis**: Menambahkan query `supabase.from('users').select('name, created_at').eq('referred_by', agentReferralCode).eq('role', 'mitra')` yang dieksekusi saat agen login untuk memuat riwayat mitra yang bergabung via referral kode agen yang bersangkutan.
+
+### 50. Fitur Buat Tagihan Manual (Manual Invoice) di Dashboard Admin (Juni 2026)
+- **Komponen Baru `ManualBillManagement.tsx`**: Diletakkan di `components/admin/` sebagai komponen standalone yang menangani seluruh logika form + preview bill + print CSS.
+- **3 Jenis Tagihan Didukung**:
+  - **Komisi Sewa Kost**: Input nama kost, nominal sewa, dan persentase komisi. Nilai komisi dihitung secara otomatis real-time (`rentalAmount × commissionPercent / 100`). Bill menampilkan tabel khusus 4 kolom: Nama Kost | Nominal Sewa | Komisi% | Nilai Komisi.
+  - **Jasa Survey**: Multi-item baris bebas (nama jasa + harga satuan + qty → subtotal otomatis).
+  - **Database Kost**: Sama dengan jasa survey, multi-item baris.
+- **Identitas RuangSinggah.id Jelas**: Header bill bergradasi oranye-amber menampilkan brand name, nama PT, alamat, dan kontak perusahaan.
+- **Total Tagihan**: Ditampilkan bold besar di bagian bawah setiap preview bill, dihitung otomatis sesuai jenis tagihan.
+- **Print ke PDF**: Tombol "🖨️ Cetak PDF" memanggil `window.print()`. CSS `@media print` yang diinjeksi langsung memastikan hanya area `#bill-print-area` yang tercetak, semua elemen lain (sidebar, form, nav) tersembunyi. Format halaman A4 dengan margin 1.5cm.
+- **Preview Real-time**: Panel preview di sisi kanan merefleksikan perubahan form secara langsung tanpa submit. Auto-visible di layar desktop ≥ 1024px.
+- **Nomor Bill Auto-generate**: Format `RS-BILL-YYYYMMDD-XXXX` dengan 4 digit angka acak, dihasilkan saat komponen mount. Bisa diedit manual jika perlu.
+- **Integrasi Dashboard Admin**: Menu "🧾 Buat Tagihan" ditambahkan ke sidebar admin. Tipe `DashboardMenu` diperluas dengan value `'manual_bill'`. Render dikondisikan `activeMenu === 'manual_bill' && isAdmin`.
