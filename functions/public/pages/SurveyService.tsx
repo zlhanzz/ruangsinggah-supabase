@@ -302,98 +302,21 @@ const SurveyService: React.FC<SurveyServiceProps> = ({ user, onPageChange, valid
                 >
                   Lihat Penawaran <ArrowRight className="w-4 h-4 lg:w-5 lg:h-5" />
                 </button>
-              </div>
+                            </div>
             </div>
 
-            {/* Kanan / Tengah: Player — Mode IAB vs Normal */}
+            {/* Kanan / Tengah: Player Iframe YouTube yang Kompatibel dengan Semua Browser */}
             <div className="order-2 relative animate-in zoom-in-95 duration-1000 delay-300 w-[90%] sm:w-4/5 lg:w-full mx-auto mt-2 sm:mt-4 lg:mt-0">
               <div className="relative rounded-2xl lg:rounded-3xl overflow-hidden shadow-2xl border-2 lg:border-4 border-white bg-black">
                 <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-
-                  {isIAB ? (
-                    /* ===== MODE FALLBACK: Instagram IAB ===== */
-                    /* YouTube IFrame API tidak berfungsi di Instagram IAB.
-                       Tampilkan thumbnail statis + tombol yang buka YouTube langsung. */
-                    <a
-                      href={`https://www.youtube.com/watch?v=${YT_VIDEO_ID}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="absolute inset-0 w-full h-full block group"
-                      aria-label="Buka video demo di YouTube"
-                    >
-                      {/* Thumbnail YouTube maxresdefault */}
-                      <img
-                        src={`https://img.youtube.com/vi/${YT_VIDEO_ID}/maxresdefault.jpg`}
-                        alt="Demo Cara Kerja Jasa Survey RuangSinggah"
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                      {/* Gradient overlay gelap */}
-                      <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition-colors" />
-                      {/* Tombol Play tengah */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/90 group-hover:bg-white rounded-full flex items-center justify-center shadow-2xl transition-all group-hover:scale-110">
-                          <Play className="w-7 h-7 sm:w-9 sm:h-9 text-orange-500 ml-1" />
-                        </div>
-                        <span className="text-white text-xs sm:text-sm font-bold bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">
-                          Tonton di YouTube →
-                        </span>
-                      </div>
-                      {/* Label bawah */}
-                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-4 py-3">
-                        <p className="text-white/80 text-[10px] font-medium">Demo Jasa Survey RuangSinggah</p>
-                      </div>
-                    </a>
-                  ) : (
-                    /* ===== MODE NORMAL: YouTube IFrame API ===== */
-                    <>
-                      {/* YT Player mounts here */}
-                      <div ref={playerContainerRef} className="absolute inset-0 w-full h-full" />
-
-                      {/* Transparent overlay to block YouTube click-through */}
-                      <div
-                        className="absolute inset-0 cursor-pointer z-10"
-                        onClick={togglePlay}
-                      />
-
-                      {/* Play/Pause center overlay (shows when paused) */}
-                      {!isPlaying && (
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-                          <div className="w-16 h-16 bg-white/90 rounded-full flex items-center justify-center shadow-2xl">
-                            <Play className="w-7 h-7 text-orange-500 ml-1" />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Custom Controls Bar */}
-                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-4 pt-8 pb-3 flex flex-col gap-2 z-20">
-                        <input
-                          type="range"
-                          min={0}
-                          max={100}
-                          step={0.1}
-                          value={progress}
-                          onChange={handleSeek}
-                          onClick={e => e.stopPropagation()}
-                          className="w-full h-1 accent-orange-500 cursor-pointer"
-                        />
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={e => { e.stopPropagation(); togglePlay(); }}
-                            className="text-white hover:text-orange-400 transition-colors z-30"
-                          >
-                            {isPlaying
-                              ? <Pause className="w-5 h-5" />
-                              : <Play className="w-5 h-5 ml-0.5" />}
-                          </button>
-                          <p className="text-white/70 text-[10px] font-medium flex-grow">
-                            Demo Jasa Survey RuangSinggah
-                          </p>
-                        </div>
-                      </div>
-                    </>
-                  )}
-
+                  <iframe
+                    src={`https://www.youtube.com/embed/${YT_VIDEO_ID}?playsinline=1&rel=0&modestbranding=1&controls=1`}
+                    title="Demo Cara Kerja Jasa Survey RuangSinggah"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    className="absolute inset-0 w-full h-full"
+                  />
                 </div>
               </div>
             </div>
