@@ -246,7 +246,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
           syncResidentStatus(orderId).catch(e => console.error("Sync error:", e));
       }
 
-      if (productType === 'survey') {
+      if (productType === 'survey' || productType === 'kostmanager') {
            syncSurveyRequest(orderId).catch(e => console.error("Sync error:", e));
       }
       return;

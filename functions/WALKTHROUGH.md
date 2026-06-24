@@ -1,88 +1,83 @@
-# WALKTHROUGH - Paritas Halaman Profil Agen & Manajemen Agen Admin dengan Mitra
+# WALKTHROUGH — Sinkronisasi Fitur Properti Kelolaan Portal KostManager & Desain Premium Super Admin
 
-Dokumen ini mendokumentasikan rincian perubahan yang telah diselesaikan untuk menyelaraskan halaman profil Agen dan panel manajemen agen di sisi Admin dengan fitur dan visual yang setara dengan Mitra.
+Dokumen ini menjelaskan perubahan, penyelarasan fitur, dan perbaikan navigasi pada Portal KostManager (`KostManagerPortal.tsx`) agar setara dengan dashboard admin utama.
 
-## 1. Daftar Perubahan Detail
+## Perubahan yang Dilakukan
 
-### A. Backend & Services (`functions/public/adminService.ts`)
-1. **Fungsi Baru `getBannedAgents()`**: Mengambil data agen dari tabel `agents` dan tabel `users` yang memiliki status `verification_status = 'banned'`.
-2. **Fungsi Baru `banAgentRequest()`**: Mengubah status verifikasi agen menjadi `'banned'`, mengubah role pengguna di tabel `users` kembali menjadi `'user'` biasa untuk mencabut akses ke dashboard agen, dan menyinkronkan data ke tabel privat `user_verifications`.
-3. **Fungsi Baru `unbanAgentRequest()`**: Memulihkan status verifikasi agen dari pemblokiran kembali ke `'unverified'`, mengatur ulang hitungan penolakan (`rejection_count = 0`), memulihkan role pengguna kembali menjadi `'user'` (atau role agen terkait setelah verifikasi ulang disetujui), serta menyinkronkan status tersebut ke database.
-4. **Pembaruan `updateAgentVerificationStatus()`**:
-   - Mendukung input alasan penolakan kustom (`rejection_reason`).
-   - Menyimpan `rejection_count` secara kumulatif. Jika penolakan mencapai 3 kali, otomatis memicu pemblokiran akun (`verification_status = 'banned'`).
-   - Menyinkronkan status verifikasi terbaru ke tabel privat `user_verifications` agar kebijakan RLS database terpenuhi.
-   - Mengirim email pemberitahuan otomatis ke agen via Brevo SMTP / template email status agen.
-5. **Pembaruan `getBannedMitra()`**: Ditambahkan filter penyaringan agar query hanya mengambil user dengan data di tabel `mitra` saja, sehingga tidak tumpang tindih dengan agen yang diblokir.
+### 1. Penyelarasan Desain Modal & Sidebar Kategori
+* **Lokasi Perubahan**: [KostManagerPortal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/components/admin/KostManagerPortal.tsx)
+* **Detail**:
+  - Seluruh ikon emoji (📝, 📍, dll.) pada sidebar tabs modal properti KostManager telah dihapus.
+  - Gaya visual tombol sidebar disamakan dengan panel super admin (`w-full text-left px-6 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all`).
 
-### B. Halaman Profil Agen (`functions/public/pages/AgentProfile.tsx`)
-1. **Wizard Flow 2-Langkah**:
-   - **Step 1**: Pengisian data profil utama, verifikasi nomor WhatsApp menggunakan Double OTP.
-   - **Step 2**: Pemuatan unggah foto KTP, pengisian data objektif KTP (NIK, Nama, Tempat/Tanggal Lahir, Jenis Kelamin, dll), RLS Security Notice di bagian teratas panel, dan pemindaian otomatis KTP berbasis AI/OCR.
-2. **Double OTP WhatsApp**:
-   - OTP Sesi 1: Dikirim ke email untuk membuka kunci input nomor WhatsApp baru.
-   - OTP Sesi 2: Dikirim ke nomor WhatsApp baru untuk memverifikasi validitas nomor tersebut.
-3. **Hapus Input Referral & Tampilkan Referral Sendiri**:
-   - Menghapus kolom input `referred_by` (kode referral yang mengundang) karena tidak berlaku untuk agen.
-   - Menampilkan kode referral agen itu sendiri (`referral_code`) yang dimuat secara dinamis dari tabel `agents` dalam bentuk kotak read-only premium yang dilengkapi tombol **Salin**.
-4. **Kontrol Navigasi & UX**:
-   - Transisi step otomatis memicu scroll layar ke atas (`window.scrollTo({ top: 0, behavior: 'smooth' })`).
-   - Tombol **BATAL** dan silang "X" memicu pemanggilan `handleCancel()` untuk membuang draft perubahan sementara dan memulihkan data asli dari database (*rollback state*).
-   - Penguncian email permanen secara read-only.
-5. **Perbaikan Deteksi Status Verifikasi & Tombol Aksi**:
-   - Menambahkan penanganan status `'verified'` pada panel *Status Alert Cards*. Agen terverifikasi sekarang melihat kartu hijau "Akun Terverifikasi" yang elegan alih-alih kartu orange "Belum Terverifikasi".
-   - Menyelaraskan tombol aksi di Step 1 edit profil agar berubah menjadi tombol "Simpan Semua Data" secara dinamis ketika status verifikasi bernilai `'verified'`, menggantikan tombol "Lanjutkan".
+### 2. Integrasi Fitur & Form dari Dashboard Admin
+* **Tab Info Dasar**: Menambahkan form **Omnichannel Contact** (WhatsApp Forwarding).
+* **Tab Lokasi & Kampus**:
+  - Integrasi input **Kampus Terdekat** & **Fasilitas Publik** lengkap dengan estimasi jarak dan opsi visualisasi waktu tempuh (jalan kaki / berkendara).
+  - Ditambahkan tombol pencari koordinat latitude & longitude otomatis menggunakan OpenStreetMap Nominatim API berdasarkan nama lokasi.
+* **Tab Fasilitas & Biaya**:
+  - Menambahkan baris input **Biaya Tambahan (Additional Fees)** yang memuat Nama Biaya, Nominal, dan Ketentuan Penagihan.
+* **Tab Media (Galeri Utama)**:
+  - Tab baru yang ditambahkan di portal untuk mengelola media utama properti.
+  - Mendukung multi-upload foto (drag & drop reorderable thumbnail), video tour (file lokal atau tautan eksternal), serta tautan akun media sosial properti (Instagram & TikTok).
 
-### C. Komponen Kelola Agen Admin (`functions/public/components/admin/AgentManagement.tsx`)
-1. **Restrukturisasi Tampilan**:
-   - Memisahkan daftar verifikasi menjadi 3 tab: **Permintaan Verifikasi** (pending), **Daftar Agen Aktif** (verified), dan **Akun Diblokir** (banned).
-2. **Fitur Pengelolaan**:
-   - Tombol **Terima** untuk menyetujui verifikasi agen.
-   - Tombol **Tolak** yang menampilkan dialog modal interaktif untuk memasukkan alasan penolakan kustom.
-   - Tombol **Blokir Kemitraan** untuk menonaktifkan agen dan memindahkannya ke tab "Akun Diblokir".
-   - Tombol **Pulihkan Akses** pada tab "Akun Diblokir" untuk mengaktifkan kembali kemitraan agen yang sempat ditangguhkan.
+### 3. Integrasi Uploader Berkas Media Supabase Storage
+* **Detail**:
+  - Proses penyimpanan (`handleSave` modal) kini menggunakan helper backend `addPropertyWithMedia` dan `updatePropertyWithMedia` dari `adminService.ts`.
+  - File foto utama dan video yang diunggah dikonversi ke format yang sesuai dan diupload langsung ke bucket penyimpanan Supabase Storage.
 
-### D. Integrasi Parent Dashboard (`functions/public/pages/Dashboard.tsx`)
-1. Menambahkan state `bannedAgents` dan fungsi loading data `loadBannedAgents()` dari service.
-2. Mengalirkan data `bannedAgents` ke komponen `AgentManagement` agar disinkronkan secara real-time saat aksi ban/unban dipicu oleh admin.
+### 4. Perbaikan Redirect Loop & Tombol "⬅️ Admin Utama"
+* **Lokasi Perubahan**: [KostManagerPortal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/components/admin/KostManagerPortal.tsx)
+* **Detail**:
+  - Menghapus hook `useEffect` auto-redirect bermasalah (baris 195-199) yang memaksa menu `'kostmanager'` dialihkan kembali ke `'km_overview'`.
+  - Kini tombol **⬅️ Admin Utama** merespons klik dengan baik dan membawa admin kembali ke panel pengelolaan properti KostManager tanpa terkena refresh/redirect loop.
 
-### E. Pengamanan Akses Step 2 KTP Akun Terverifikasi (`MitraProfile.tsx` & `AgentProfile.tsx`)
-1. **Validasi State Reaktif (URL & State Sync)**: Menambahkan `useEffect` reaktif untuk mendeteksi apabila akun pengguna sudah terverifikasi (`verified`) tetapi URL parameter terdeteksi berada di `step=2`. Sistem secara otomatis mengembalikan URL ke `step=1` dan menyetel `currentStep` ke `1`.
-2. **Proteksi Rendering (Hard-Guard)**: Memberikan pembatasan visual tambahan di mana Step 2 (KTP) tidak akan dirender melainkan menampilkan banner "Akses Ditolak" apabila status verifikasi bernilai `'verified'`.
+### 5. Integrasi Foto Kamar Kosong ke Galeri Pemasaran
+* **Lokasi Perubahan**: [KostDetail.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/pages/KostDetail.tsx)
+* **Detail**:
+  - Menambahkan filter dan pemetaan array dinamis (`vacantRoomImages`) untuk mengambil semua foto kamar spesifik unit yang diunggah di tab "Tipe Kamar & Penghuni" KostManager.
+  - Foto-foto tersebut digabungkan ke dalam array `imageUrls` utama galeri properti **hanya jika** status kamar tersebut tercatat secara sistem sebagai "Kosong" (tidak dihuni oleh penyewa).
+
+### 6. Perbaikan Bug Upload Foto Ganda & Integrasi Konversi WebP
+* **Lokasi Perubahan**: [KostManagerPortal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/components/admin/KostManagerPortal.tsx)
+* **Detail**:
+  - Mengubah logika state updater di `handleUploadRoomPhoto` dan `handleDeleteRoomPhoto` agar melakukan pemetaan/shallow copy secara aman (`map`) dan menghindari mutasi referensi objek state React secara langsung. Hal ini menghentikan duplikasi file akibat eksekusi ganda state updater di React Strict Mode.
+  - Menambahkan pembersihan nilai input target file (`e.target.value = ''`) setelah upload selesai agar berkas yang sama dapat diunggah ulang jika dihapus.
+  - Memastikan proses upload foto kamar memanggil `uploadFileAndGetURL`, yang secara otomatis memicu konversi WebP klien (`convertToWebP` di `adminService.ts`) sebelum data berkas diunggah ke bucket properti Supabase Storage.
+
+### 7. Pemuatan Daftar Pemilik (Mitra) Menyeluruh & Penautan Kepemilikan Properti
+* **Lokasi Perubahan**: [KostManagerPortal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/components/admin/KostManagerPortal.tsx)
+* **Detail**:
+  - Memperbarui `loadAllData` untuk mengambil seluruh daftar pengguna dengan `role` `'owner'` atau `'mitra'` dari database untuk diisi ke `ownersList` (untuk pilihan dropdown Mitra). Hal ini memungkinkan properti terkelola ditautkan dengan benar ke pemilik mana saja di RuangSinggah.id.
+  - Menambahkan pencarian `owner_uid` dari tabel `properties` secara langsung dalam `allOwnerIds` sebelum early return, sehingga properti terkelola milik mitra mana pun tetap ter-load di portal KostManager dan data insightnya dapat dipantau oleh mitra di dashboard mereka sendiri.
+
+### 8. Pemisahan Listing Biasa dengan Listing KostManager & Eksklusivitas Badge Verified
+* **Lokasi Perubahan**: [KostManagerPortal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/components/admin/KostManagerPortal.tsx), [KostCard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/components/KostCard.tsx), [KostDetail.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/pages/KostDetail.tsx), [Home.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/pages/Home.tsx)
+* **Detail**:
+  - Menambahkan kolom `is_managed` pada berkas skema `supabase_schema.sql` untuk membedakan properti kelolaan KostManager dengan listing biasa.
+  - Memfilter data di `KostManagerPortal` sehingga hanya memuat properti yang memiliki `is_managed = true` di database. Hal ini menyembunyikan seluruh listing kost biasa (baik self-listing pemilik biasa maupun postingan admin standar) dari dashboard KostManager.
+  - Mengubah logika UI customer-facing (`KostCard`, `KostDetail`, dan daftar Rekomendasi Utama `Home`) agar lencana **"Verified"** / **"Terverifikasi"** hanya ditampilkan jika properti tersebut berstatus kelolaan KostManager (`isManaged === true`), menjadikannya label eksklusif untuk mitra KostManager.
+### 9. Pencarian Instan Pemilik Properti / Mitra Terdaftar
+* **Lokasi Perubahan**: [KostManagerPortal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/components/admin/KostManagerPortal.tsx)
+* **Detail**:
+  - Mengubah dropdown `<select>` statis di tab **Info Dasar** untuk memilih mitra menjadi komponen **Custom Searchable Dropdown** dengan kolom input teks pencarian dinamis.
+  - Memfilter daftar pemilik kost/mitra secara instan berdasarkan nama atau nomor telepon yang diketik oleh admin.
+  - Menyertakan tombol clear pencarian, state kosong ("Tidak ada mitra yang cocok"), serta handling klik di luar area dropdown (click outside) menggunakan ref global untuk kenyamanan UI/UX.
 
 ---
 
-## 2. Hasil Pengujian (Simulasi & Kompilasi)
-1. **Uji Validasi TypeScript / Build**:
-   - Telah dijalankan perintah `npm run build` dan file-file yang kita modifikasi (`AgentProfile.tsx`, `AgentManagement.tsx`, `Dashboard.tsx`, dan `adminService.ts`) lolos proses kompilasi TypeScript dengan sukses tanpa ada error tipe data baru.
-2. **Kesesuaian Desain**:
-   - Penyelarasan visual (warna oranye-amber gradient, shadow card, layout wizard) terintegrasi dengan mulus pada tampilan desktop maupun mobile viewport.
+## Petunjuk Pengujian
 
----
-
-## 3. Petunjuk Deploy (Manual Pilot)
-Sesuai arahan, jangan langsung melakukan `git push` ke repositori utama. Lakukan langkah-langkah pengujian lokal dan deployment manual berikut:
-
-1. **Jalankan Aplikasi secara Lokal untuk Review UI/UX**:
-   ```bash
+1. **Jalankan Aplikasi secara Lokal**:
+   ```powershell
    npm run dev
    ```
-2. **Periksa Profil Agen**:
-   - Masuk sebagai akun dengan role `agent`.
-   - Buka menu **Profil** untuk memverifikasi wizard 2-langkah, Double OTP WhatsApp, dan tampilan read-only kode referral.
-3. **Periksa Kelola Agen Admin**:
-   - Masuk sebagai akun dengan role `admin`.
-   - Buka menu **Kelola Agen** untuk memverifikasi pembagian 3 tab, pengisian alasan tolak verifikasi, tombol blokir, dan pemulihan akses.
-4. **Verifikasi Build Akhir**:
-   ```bash
-   npm run build
-   ```
-5. **Commit Perubahan Secara Manual**:
-   ```bash
-   git add .
-   git commit -m "feat: align agent profile wizard and admin agent management parity with mitra"
-   ```
-6. **Push ke GitHub (Ketika Anda Siap)**:
-   ```bash
-   git push origin <nama-branch>
-   ```
+2. **Uji Penambahan / Pengeditan Properti**:
+   - Masuk ke portal KostManager, klik **"+ Tambah Properti"** atau **"Edit"**.
+   - Verifikasi hilangnya ikon emoji di tab sidebar dan pastikan biaya tambahan dapat diisi.
+   - Uji pencarian koordinat lokasi dan upload media di tab **Media**.
+   - Di tab **Info Dasar**, buka dropdown pemilik (mitra), ketik nama/nomor telepon mitra, pastikan penyaringan berjalan lancar, dan pilih mitra tersebut.
+   - Klik simpan dan periksa apakah properti berhasil tersimpan di database.
+3. **Uji Navigasi**:
+   - Klik tombol **"⬅️ Admin Utama"** dan pastikan Anda diarahkan kembali ke Dashboard Admin tanpa hambatan.
+

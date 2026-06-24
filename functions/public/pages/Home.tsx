@@ -27,7 +27,7 @@ const Home: React.FC<HomeProps> = ({ onPageChange, onKostSelect, user, listings 
     maxPrice: 5000000,
   });
 
-  const featuredKosts = listings.filter(k => k.isVerified).slice(0, 3);
+  const featuredKosts = listings.filter(k => k.isVerified || k.isManaged).slice(0, 3);
 
   React.useEffect(() => {
     const fetchBanners = async () => {

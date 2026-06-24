@@ -1094,11 +1094,12 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     // Render 1 ORDER card yang berisi N kost (grouped by transaction_id)
     const renderSurveyOrderCard = (surveys: any[]) => {
         const first = surveys[0];
-        const transactionId = first.transaction_id;
+        const transactionId = first.transaction_id || first.id;
         const totalKost = surveys.length;
         const doneKosts = surveys.filter(s => ['SUBMITTED', 'COMPLETED'].includes(s.status)).length;
         const allDone = surveys.every(s => s.status === 'COMPLETED');
         const orderStatus = allDone ? 'COMPLETED' : surveys.some(s => ['SURVEYING', 'HEADING_TO_LOCATION'].includes(s.status)) ? 'SURVEYING' : first.status;
+        const isKostManager = first.notes?.toLowerCase().includes('kostmanager') || first.notes?.toLowerCase().includes('kost manager');
 
         return (
             <div key={transactionId} className="group relative bg-white rounded-[2.5rem] p-6 sm:p-8 border border-gray-100 shadow-xl shadow-gray-200/40 hover:shadow-2xl transition-all duration-500 overflow-hidden">
@@ -1109,17 +1110,17 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 bg-orange-50 rounded-[1.5rem] flex items-center justify-center border border-orange-100/50 shrink-0">
-                            <Search className="w-8 h-8 text-orange-500" />
+                            {isKostManager ? <Zap className="w-8 h-8 text-orange-500 animate-pulse" /> : <Search className="w-8 h-8 text-orange-500" />}
                         </div>
                         <div>
-                            <p className="text-[9px] font-black text-orange-500 uppercase tracking-[0.2em] mb-1">Jasa Survey Lokasi Kost</p>
+                            <p className="text-[9px] font-black text-orange-500 uppercase tracking-[0.2em] mb-1">{isKostManager ? 'Layanan Premium KostManager Auto-Pilot' : 'Jasa Survey Lokasi Kost'}</p>
                             <div className="flex items-center gap-2 flex-wrap">
                                 <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border flex items-center gap-1.5 ${STATUS_COLOR[orderStatus] || 'bg-gray-50 text-gray-500 border-gray-100'}`}>
                                     <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
                                     {STATUS_LABEL[orderStatus] || orderStatus}
                                 </span>
                                 <span className="px-3 py-1 rounded-full text-[9px] font-black bg-gray-100 text-gray-600 border border-gray-200">
-                                    {doneKosts}/{totalKost} kost selesai
+                                    {isKostManager ? 'Survey Pendataan Kost' : `${doneKosts}/${totalKost} kost selesai`}
                                 </span>
                             </div>
                         </div>

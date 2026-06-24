@@ -25,6 +25,7 @@ const MitraDashboard = lazy(() => import('./pages/MitraDashboard'));
 const OrderPaymentStatus = lazy(() => import('./pages/OrderPaymentStatus'));
 const Terms = lazy(() => import('./pages/Terms'));
 const Articles = lazy(() => import('./pages/Articles'));
+const KostManagerLanding = lazy(() => import('./pages/KostManagerLanding'));
 
 // Loading fallback
 const PageLoader = () => (
@@ -666,6 +667,7 @@ const App: React.FC = () => {
               />
             } />
             <Route path={Page.TERMS} element={<Terms />} />
+            <Route path={Page.KOSTMANAGER} element={<KostManagerLanding user={user} />} />
             <Route path={Page.ARTICLES} element={<Articles />} />
             <Route path={Page.ARTICLE_DETAIL} element={<Articles />} />
             <Route path={Page.SURVEY_CHECKOUT} element={
@@ -802,7 +804,7 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {!isDashboardPage && <Footer onPageChange={(p: Page) => navigate(p)} />}
+      {!isDashboardPage && location.pathname !== Page.KOSTMANAGER && <Footer onPageChange={(p: Page) => navigate(p)} />}
     </div>
   );
 };

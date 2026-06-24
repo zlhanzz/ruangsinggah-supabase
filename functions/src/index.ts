@@ -387,8 +387,22 @@ async function sendSuccessEmail(orderId: string) {
         return;
     }
 
-    const userEmail = order.users?.email;
-    const userName = order.users?.full_name || 'Pelanggan';
+    let userEmail = order.users?.email;
+    let userName = order.users?.full_name || 'Pelanggan';
+    
+    let metaObj = order.metadata;
+    if (metaObj) {
+      if (typeof metaObj === 'string') {
+        try {
+          metaObj = JSON.parse(metaObj);
+        } catch (e) {}
+      }
+      if (!userEmail && metaObj.userEmail) {
+        userEmail = metaObj.userEmail;
+        userName = metaObj.userName || userName;
+        console.log(`EMAIL_SERVICE: Fallback to metadata for email: ${userEmail}, name: ${userName}`);
+      }
+    }
     
     console.log(`EMAIL_SERVICE: Target Email: ${userEmail}, Target Name: ${userName}`);
 
@@ -480,34 +494,59 @@ async function sendSuccessEmail(orderId: string) {
       `
     };
 
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'api-key': brevoApiKey
-      },
-      body: JSON.stringify(payload)
-    });
+    let response: any;
+    let result: any;
+    let retries = 3;
+    let delay = 1000;
+    let lastErrorMsg = '';
 
-    const result = await response.json();
-    console.log(`EMAIL_SERVICE: Brevo Status: ${response.status} ${response.statusText}`, JSON.stringify(result));
-    
-    if (!response.ok) {
-      const errorMsg = `Brevo API Error (${response.status}): ${JSON.stringify(result)}`;
-      console.error("EMAIL_SERVICE:", errorMsg);
+    for (let i = 0; i < retries; i++) {
+      try {
+        response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'api-key': brevoApiKey
+          },
+          body: JSON.stringify(payload)
+        });
+
+        result = await response.json();
+        console.log(`EMAIL_SERVICE: Brevo attempt ${i + 1} Status: ${response.status} ${response.statusText}`, JSON.stringify(result));
+
+        if (response.ok) {
+          lastErrorMsg = '';
+          break; // Success!
+        } else {
+          lastErrorMsg = `Brevo API Error (${response.status}): ${JSON.stringify(result)}`;
+        }
+      } catch (fetchErr: any) {
+        lastErrorMsg = `Brevo Fetch Exception: ${fetchErr.message}`;
+        console.warn(`EMAIL_SERVICE: Brevo attempt ${i + 1} exception:`, fetchErr);
+      }
+
+      if (i < retries - 1) {
+        console.log(`EMAIL_SERVICE: Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2; // Exponential backoff
+      }
+    }
+
+    if (lastErrorMsg) {
+      console.error("EMAIL_SERVICE: All attempts failed.", lastErrorMsg);
       
       // Record failure in DB
       await supabase.from('transactions').update({
           metadata: { 
               ...(order.metadata || {}), 
               email_sent_status: 'FAILED',
-              email_error: errorMsg,
+              email_error: lastErrorMsg,
               email_last_attempt: new Date().toISOString()
           }
       }).eq('id', orderId);
       
-      throw new Error(errorMsg);
+      throw new Error(lastErrorMsg);
     }
 
     console.log("EMAIL_SERVICE: Email sent successfully via Brevo REST API!", result);

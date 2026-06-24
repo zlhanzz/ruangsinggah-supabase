@@ -738,6 +738,36 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 </div>
                             )}
 
+                            {/* KostManager Premium Upsell Banner */}
+                            {isVerified && (
+                                <div className="bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-orange-500/20">
+                                    {/* Decorative Background Elements */}
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full mix-blend-overlay filter blur-2xl opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                                    
+                                    <div className="relative z-10 flex flex-col md:flex-row gap-4 items-center justify-between">
+                                        <div className="text-left flex-1">
+                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 rounded-full mb-2 shadow-sm backdrop-blur-sm">
+                                                <Zap size={10} className="text-white animate-pulse" fill="currentColor" />
+                                                <span className="text-[9px] font-black text-white uppercase tracking-widest">Premium</span>
+                                            </div>
+                                            <h3 className="text-base lg:text-lg font-black text-white tracking-tight leading-tight">
+                                                Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!
+                                            </h3>
+                                            <p className="text-xs text-orange-50 leading-relaxed max-w-2xl mt-1 font-medium font-sans">
+                                                Duduk manis, biarkan tim kami mengurus foto/video profesional, penagihan otomatis, dan promosi penuh untuk mendatangkan penyewa baru.
+                                            </p>
+                                        </div>
+                                        
+                                        <button 
+                                            onClick={() => navigate(Page.KOSTMANAGER)}
+                                            className="bg-white hover:bg-orange-50 text-orange-600 px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md shrink-0 flex items-center justify-center gap-2 w-full md:w-auto"
+                                        >
+                                            Pelajari <ArrowUpRight size={14} />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* ── ALUR PEMILIK KOST (TIMELINE) & KOSTMANAGER UPSELL ── */}
                             {localStorage.getItem('mitraTourCompleted') !== 'true' && (
                                 <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
@@ -836,63 +866,6 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             )}
                                         </div>
                                     </div>
-
-                                    {/* KostManager Premium Upsell */}
-                                    {isVerified && (
-                                        <div className="bg-gradient-to-br from-indigo-900 via-blue-900 to-indigo-950 rounded-3xl p-6 lg:p-8 relative overflow-hidden shadow-xl border border-indigo-500/20 mt-6">
-                                            {/* Decorative Background Elements */}
-                                            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 -translate-y-1/2 translate-x-1/2"></div>
-                                            <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 translate-y-1/2 -translate-x-1/2"></div>
-                                            
-                                            <div className="relative z-10 flex flex-col lg:flex-row gap-8 items-center">
-                                                <div className="flex-1 text-center lg:text-left">
-                                                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-amber-200 to-yellow-400 rounded-full mb-4 shadow-sm">
-                                                        <Zap size={12} className="text-amber-700" fill="currentColor" />
-                                                        <span className="text-[10px] font-black text-amber-900 uppercase tracking-widest">Layanan Premium Tersedia</span>
-                                                    </div>
-                                                    <h3 className="text-2xl lg:text-3xl font-black text-white tracking-tight mb-3">
-                                                        Tidak Punya Waktu Kelola Kost?
-                                                    </h3>
-                                                    <p className="text-sm text-indigo-200 leading-relaxed max-w-xl mx-auto lg:mx-0">
-                                                        Upgrade ke <span className="text-white font-bold">KostManager</span> dan biarkan tim RuangSinggah mengurus semuanya. Mulai dari pembuatan foto/video profesional, penagihan otomatis, hingga mencari penghuni baru!
-                                                    </p>
-                                                    
-                                                    <div className="grid grid-cols-2 gap-3 mt-6 mb-6">
-                                                        <div className="bg-white/10 rounded-2xl p-3 border border-white/5 backdrop-blur-sm text-left">
-                                                            <div className="w-8 h-8 rounded-lg bg-indigo-500/30 flex items-center justify-center text-indigo-300 mb-2">
-                                                                <Briefcase size={16} />
-                                                            </div>
-                                                            <p className="text-xs font-bold text-white">Full-Managed Service</p>
-                                                            <p className="text-[10px] text-indigo-300 mt-0.5">Duduk manis, kami yang urus.</p>
-                                                        </div>
-                                                        <div className="bg-white/10 rounded-2xl p-3 border border-white/5 backdrop-blur-sm text-left">
-                                                            <div className="w-8 h-8 rounded-lg bg-pink-500/30 flex items-center justify-center text-pink-300 mb-2">
-                                                                <MapPin size={16} />
-                                                            </div>
-                                                            <p className="text-xs font-bold text-white">Surveyor Profesional</p>
-                                                            <p className="text-[10px] text-indigo-300 mt-0.5">Foto & video ciamik gratis.</p>
-                                                        </div>
-                                                    </div>
-
-                                                    <button className="bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-orange-950 px-8 py-3.5 rounded-xl text-xs font-black uppercase tracking-widest transition-transform active:scale-95 shadow-lg shadow-orange-500/20 w-full lg:w-auto flex items-center justify-center gap-2">
-                                                        Pelajari KostManager <ArrowUpRight size={16} />
-                                                    </button>
-                                                </div>
-                                                
-                                                {/* Illustration Mockup */}
-                                                <div className="hidden lg:flex w-72 h-64 bg-gradient-to-t from-white/10 to-white/5 rounded-2xl border border-white/10 backdrop-blur-md items-center justify-center relative shadow-2xl">
-                                                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 rounded-2xl mix-blend-overlay"></div>
-                                                    <div className="text-center relative z-10">
-                                                        <div className="w-20 h-20 bg-gradient-to-tr from-blue-500 to-indigo-500 rounded-full flex items-center justify-center text-white text-3xl mx-auto mb-4 shadow-xl shadow-blue-500/30 border-4 border-white/10">
-                                                            📈
-                                                        </div>
-                                                        <p className="text-white font-black text-sm tracking-widest uppercase">Auto-Pilot</p>
-                                                        <p className="text-indigo-300 text-[10px] mt-1 font-bold">Income Maksimal</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             )}
 
@@ -1023,6 +996,35 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     {/* KOST SAYA */}
                     {activeMenu === 'properties' && (
                         <div className="space-y-6 animate-in fade-in duration-300">
+                            {/* KostManager Premium Upsell Banner */}
+                            {isVerified && (
+                                <div className="bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-orange-500/20">
+                                    {/* Decorative Background Elements */}
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full mix-blend-overlay filter blur-2xl opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                                    
+                                    <div className="relative z-10 flex flex-col md:flex-row gap-4 items-center justify-between">
+                                        <div className="text-left flex-1">
+                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 rounded-full mb-2 shadow-sm backdrop-blur-sm">
+                                                <Zap size={10} className="text-white animate-pulse" fill="currentColor" />
+                                                <span className="text-[9px] font-black text-white uppercase tracking-widest">Premium</span>
+                                            </div>
+                                            <h3 className="text-base lg:text-lg font-black text-white tracking-tight leading-tight">
+                                                Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!
+                                            </h3>
+                                            <p className="text-xs text-orange-50 leading-relaxed max-w-2xl mt-1 font-medium font-sans">
+                                                Duduk manis, biarkan tim kami mengurus foto/video profesional, penagihan otomatis, dan promosi penuh untuk mendatangkan penyewa baru.
+                                            </p>
+                                        </div>
+                                        
+                                        <button 
+                                            onClick={() => navigate(Page.KOSTMANAGER)}
+                                            className="bg-white hover:bg-orange-50 text-orange-600 px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md shrink-0 flex items-center justify-center gap-2 w-full md:w-auto"
+                                        >
+                                            Pelajari <ArrowUpRight size={14} />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h3 className="font-black text-gray-900 text-lg">Kost Saya</h3>

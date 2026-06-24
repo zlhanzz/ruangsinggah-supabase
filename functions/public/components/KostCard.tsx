@@ -89,7 +89,7 @@ const KostCard: React.FC<KostCardProps> = ({ kost, onClick, onDelete }) => {
               </span>
             )}
           </div>
-          {kost.isVerified && (
+          {kost.isManaged && (
             <span className="bg-orange-500 text-white px-3 py-1 rounded-full text-[9px] font-black flex items-center gap-1 shadow-sm border border-orange-400 uppercase tracking-widest w-fit">
               Verified
             </span>

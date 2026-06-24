@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS public.properties (
   type                 TEXT DEFAULT 'Campur',
   status               TEXT NOT NULL DEFAULT 'draft',
   is_verified          BOOLEAN NOT NULL DEFAULT FALSE,
+  is_managed           BOOLEAN NOT NULL DEFAULT FALSE,
   rating               NUMERIC(3,1) DEFAULT 0,
   location             JSONB,
   image_urls           JSONB DEFAULT '[]',
@@ -153,6 +154,7 @@ ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS public_facilities    JSON
 ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS virtual_tour_url     TEXT;
 ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS additional_fee_price NUMERIC(15,2);
 ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS additional_fee_name  TEXT;
+ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS is_managed           BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
@@ -932,6 +934,43 @@ CREATE POLICY "surveys_admin_all" ON public.survey_requests FOR ALL USING (publi
 ALTER PUBLICATION supabase_realtime ADD TABLE public.survey_requests;
 
 -- ============================================================
+-- STEP 15B: KOSTMANAGER REQUESTS TABLE
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.kostmanager_requests (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  transaction_id    UUID REFERENCES public.transactions(id) ON DELETE CASCADE,
+  user_id           UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  kost_name         TEXT NOT NULL,
+  kost_type         TEXT,
+  empty_rooms       INTEGER DEFAULT 0,
+  kost_address      TEXT NOT NULL,
+  status            TEXT NOT NULL DEFAULT 'PENDING_ASSIGNMENT', 
+  -- Statuses: PENDING_ASSIGNMENT, AGENT_ASSIGNED, SURVEYING, PENDING_ONBOARDING, COMPLETED, CANCELLED
+  agent_name        TEXT,
+  agent_phone       TEXT,
+  assigned_agent_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  result_drive_link TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Set Replica Identity to FULL
+ALTER TABLE public.kostmanager_requests REPLICA IDENTITY FULL;
+
+-- ENABLE RLS
+ALTER TABLE public.kostmanager_requests ENABLE ROW LEVEL SECURITY;
+
+-- POLICIES
+CREATE POLICY "kostmanager_requests_select_own" ON public.kostmanager_requests FOR SELECT USING (auth.uid() = user_id OR auth.uid() = assigned_agent_id OR public.is_admin());
+CREATE POLICY "kostmanager_requests_insert_own" ON public.kostmanager_requests FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "kostmanager_requests_update_agent" ON public.kostmanager_requests FOR UPDATE USING (auth.uid() = assigned_agent_id OR public.is_admin());
+CREATE POLICY "kostmanager_requests_admin_all" ON public.kostmanager_requests FOR ALL USING (public.is_admin());
+
+-- AKTIFKAN REALTIME
+ALTER PUBLICATION supabase_realtime ADD TABLE public.kostmanager_requests;
+
+-- ============================================================
 -- STEP 16: NOTIFICATIONS TABLE
 -- ============================================================
 
@@ -968,6 +1007,52 @@ CREATE POLICY "notifications_insert_system"
 
 -- AKTIFKAN REALTIME
 ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+
+-- ============================================================
+-- STEP 16B: KOSTMANAGER PACKAGES TABLE
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.kostmanager_packages (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  duration_months INTEGER NOT NULL UNIQUE,
+  price       INTEGER NOT NULL,
+  label       VARCHAR(255) NOT NULL,
+  is_active   BOOLEAN NOT NULL DEFAULT true,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Set Replica Identity to FULL
+ALTER TABLE public.kostmanager_packages REPLICA IDENTITY FULL;
+
+-- ENABLE RLS
+ALTER TABLE public.kostmanager_packages ENABLE ROW LEVEL SECURITY;
+
+-- POLICIES
+CREATE POLICY "kostmanager_packages_select_all" 
+  ON public.kostmanager_packages FOR SELECT 
+  USING (true);
+
+CREATE POLICY "kostmanager_packages_write_admin" 
+  ON public.kostmanager_packages FOR ALL 
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.users 
+      WHERE users.id = auth.uid() AND (users.role = 'admin' OR users.is_admin = true)
+    )
+  );
+
+-- AKTIFKAN REALTIME
+ALTER PUBLICATION supabase_realtime ADD TABLE public.kostmanager_packages;
+
+-- SEED DATA
+INSERT INTO public.kostmanager_packages (duration_months, price, label, is_active) VALUES
+(1, 15000, 'Bulanan', true),
+(2, 30000, '2 Bulan', true),
+(3, 45000, '3 Bulan', true),
+(6, 80000, '6 Bulan', true),
+(12, 100000, 'Tahunan', true)
+ON CONFLICT (duration_months) DO NOTHING;
+
 
 
 -- ============================================================

@@ -2,7 +2,78 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 1. Perhitungan Pendapatan Agen Survei Berbasis Transaksi Riil (Juni 2026)
+### 1. Pengaturan Harga & Durasi Langganan Dinamis KostManager (Juni 2026)
+- **Manajemen Paket Langganan di Portal Admin (Super Admin)**:
+  - Menambahkan menu baru "Harga Langganan" pada Sidebar Portal Operasional KostManager (`KostManagerPortal.tsx`) yang terhubung dengan SPA routing (`km_packages`).
+  - Menyediakan UI tabel daftar paket langganan aktif/nonaktif lengkap dengan detail Label, Durasi (bulan), Harga, dan status Aktif.
+  - Menyediakan modal form dinamis untuk Menambah, Mengubah (Edit), dan Menghapus paket langganan.
+  - Membuka validasi input durasi berlangganan kustom (1 s/d 12 bulan) serta nominal harga.
+- **Skema Database & API Client (`adminService.ts` & `types.ts`)**:
+  - Menambahkan tabel `public.kostmanager_packages` di file skema (`supabase_schema.sql`) dengan kolom: `id`, `duration_months`, `price`, `label`, `is_active`, dan `created_at`.
+  - Mengimplementasikan helper database client: `getKostManagerPackages`, `saveKostManagerPackage`, dan `deleteKostManagerPackage` dengan fallback statis `DEFAULT_KOSTMANAGER_PACKAGES` demi ketahanan aplikasi sebelum migrasi SQL dijalankan user.
+  - Mendefinisikan interface `KostManagerPackage` di `types.ts`.
+- **Integrasi Landing Page & Checkout Pembayaran (`KostManagerLanding.tsx`)**:
+  - Mengambil data paket langganan aktif dari database Supabase dan menampilkannya secara dinamis di landing page KostManager.
+  - Memungkinkan calon mitra memilih paket durasi berlangganan secara interaktif.
+  - Menampilkan ringkasan biaya berlangganan dan durasi secara dinamis pada modal Syarat & Ketentuan MoU.
+  - Mengintegrasikan harga paket dinamis (`packagePrice`) ke dalam parameter `amount` komponen `PaymentGateway` serta metadata pembayaran yang disetor saat proses transaksi.
+
+### 2. Integrasi Portal Operasional KostManager & Detail Kamar (Juni 2026)
+- **Penambahan Properti Terkelola Baru**:
+  - Menyediakan tombol *"+ Tambah Properti"* di tab Properti Terkelola untuk memicu formulir modal pendaftaran properti baru dengan skema detail.
+  - Memisahkan modal ke dalam sub-komponen `ManagedPropertyAddModal` untuk menghindari pelanggaran *Rules of Hooks*.
+  - Mengimplementasikan tata letak split-view kategori (sidebar kiri) dan accordion mobile yang identik dengan super admin penambahan kost.
+  - Form mencakup Info Umum (Nama Kost, Alamat, Kota, Tipe Kost, Harga), Tipe Kamar, dan Pemetaan Status Kamar (Kosong / Terisi).
+  - Khusus kamar dengan status *"Terisi"*, form secara dinamis meminta detail Nama Penghuni, No HP Penghuni, Paket Sewa, dan Tanggal Jatuh Tempo Sewa.
+  - Integrasi penyimpanan otomatis memasukkan data properti ke `properties` dan data penyewa aktif ke `resident_status` Supabase.
+- **Desain Layout Sidebar Kiri**:
+  - Merancang ulang navigasi Portal KostManager dari tab horizontal di atas menjadi layout Sidebar vertikal di sebelah kiri (`aside` w-64) agar konsisten dengan gaya default Dashboard Admin utama.
+  - Memosisikan tombol "Admin Utama" ke bagian paling bawah Sidebar kiri.
+  - Mengatur area konten sebelah kanan menjadi flex-grow scrollable container.
+- **Integrasi Halaman Utama**:
+  - Mengimpor komponen `KostManagerPortal` di `Dashboard.tsx` dan merendernya secara kondisional ketika status menu aktif diawali dengan `km_` (Portal Operasional).
+  - Mengoptimalkan pembungkus layout di `Dashboard.tsx` dengan menghapus padding (`p-4 sm:p-6 lg:p-8`) dan container `max-w-7xl` agar Sidebar Portal menyentuh tepi layar.
+- **Gerbang Akses Portal**:
+  - Menambahkan tombol *"Buka Portal Operasional KostManager"* di bagian header `KostManagerManagement.tsx` untuk mempermudah navigasi langsung Admin.
+- **Manajemen Detail Kamar Terperinci**:
+  - Menghadirkan tombol *"Detail Kamar"* pada tabel properti terkelola.
+  - Menampilkan modal interaktif detail kamar yang memetakan kamar terisi (menyajikan identitas lengkap penghuni, WhatsApp, NIK, masa sewa, dan tanggal jatuh tempo) serta tombol cepat penerbitan tagihan manual.
+  - Memetakan kamar kosong dengan lencana khusus *"Siap Dipasarkan"* untuk mempermudah Admin memantau ketersediaan unit yang akan dipromosikan.
+- **Fitur Lengkap Edit Properti Kelolaan & Rekonstruksi Kamar**:
+  - Menambahkan tombol *"Edit"* di sebelah tombol *"Detail Kamar"* pada tabel properti terkelola.
+  - Memungkinkan admin mengedit detail properti (deskripsi, lokasi koordinat peta, fasilitas, tipe kamar, rules) dengan aman.
+  - Mengimplementasikan alur rekonstruksi kamar otomatis saat mode edit: kamar terisi ditarik datanya dari tabel `resident_status` lengkap dengan informasi penyewa, dan kamar kosong direkonstruksi sejumlah `availableRoomCount` tipe kamar bersangkutan.
+  - Memperbarui `handleSave` pada `ManagedPropertyAddModal` agar mendeteksi status edit untuk melakukan `UPDATE` ke database Supabase serta mencegah duplikasi data penyewa yang sudah aktif.
+- **Integrasi SPA Routing Lengkap & Anti-Amnesia**:
+  - Mengintegrasikan rute internal KostManager (`km_overview`, `km_properties`, `km_tenants`, `km_billing`) ke tipe `DashboardMenu` di `Dashboard.tsx`.
+  - Menerapkan sinkronisasi URL dua arah (URL-based SPA routing) sehingga menu yang aktif di Portal KostManager tersinkron secara reload-proof di address bar browser.
+- **Fitur Upload Foto Unit Kamar**:
+  - Menambahkan area upload foto kamera 📷 di setiap unit kamar pada formulir detail tipe kamar.
+  - Menyimpan array URL foto kamar (`images`) langsung ke dalam properti `rooms` di objek JSONB `room_types` di database Supabase.
+  - Menyediakan visualisasi pratinjau thumbnail mini serta tombol hapus foto `❌` pada client-side.
+  - Mendukung pemulihan (reconstruction) detail data foto kamar lama/baru saat mode pengeditan properti diaktifkan.
+- **Perbaikan Redirection Loop Navigasi & Justifikasi Database**:
+  - Mengatasi kendala tombol kembali "⬅️ Admin Utama" pada Portal KostManager yang macet dengan memisahkan rute `'kostmanager'` dari `isKostManagerPortal`. Hal ini membuat menu utama KostManager dirender dalam layout panel admin standar.
+  - Menjelaskan alasan teknis pemilihan skema JSONB `room_types` satu-tabel (pada tabel `properties`) alih-alih tabel relasional khusus demi menjamin keutuhan data (Single Source of Truth) dan menjaga kompatibilitas penuh dengan sistem pencarian serta booking utama RuangSinggah.
+
+
+
+### 2. KostManager Auto-Pilot & Survey Integration (Juni 2026)
+- **Desain & Aksen Warna Oranye Standard**:
+  - Merombak visual landing page KostManager (`KostManagerLanding.tsx`) agar selaras dengan skema warna cerah RuangSinggah menggunakan oranye hangat (`orange-500` / `orange-600`), latar belakang putih (`bg-white` / `bg-slate-50`), serta ornamen visual modern.
+- **Simplifikasi Alur Order Langganan**:
+  - Menyederhanakan formulir pemesanan KostManager di modal agar hanya meminta info minimal: *Nama Kost*, *Jenis Kost*, *Jumlah Kamar Kosong*, *Alamat Lengkap*, dan *Persetujuan Syarat & Ketentuan*. Data diri otomatis menggunakan data profile aktif user yang login.
+- **Pemicuan Otomatis Survey Lapangan**:
+  - Mengintegrasikan logika pasca-pembayaran (`updateTransactionStatus` di `adminService.ts`) agar ketika transaksi berlangganan KostManager berstatus `PAID`, secara otomatis membuat entri tugas survey di tabel `survey_requests`.
+  - Admin dapat langsung menugaskan agen dari tab baru "KostManager Auto-Pilot" di dashboard admin.
+- **Progress Card Kepemilikan Kost**:
+  - Menghadirkan kartu pantau progres visual interaktif untuk properti KostManager di halaman "Kost Saya" (`MyKost.tsx`) agar owner dapat memantau status secara langsung (Menunggu Survey, Sedang Disurvey, Aktif).
+- **Banner KostManager di Menu Kost Saya**:
+  - Menampilkan kembali banner promo premium KostManager di menu "Kost Saya" (`properties`), ditempatkan tepat di atas tombol "+ Tambah" kost.
+  - Menyelaraskan tema warna banner di tab `properties` dan `overview` menjadi warna oranye/amber khas RuangSinggah (`bg-gradient-to-br from-orange-600 via-amber-500 to-orange-700`) serta menyambungkan aksi tombol "Pelajari KostManager" agar bernavigasi dengan benar ke landing page.
+
+
+### 2. Perhitungan Pendapatan Agen Survei Berbasis Transaksi Riil (Juni 2026)
 - **Akurasi & Stabilitas Pendapatan**:
   - Mengubah kalkulasi pendapatan total (`totalEarnings`) dan transaksi masuk (`inTx`) di `AgentDashboard.tsx` agar menggunakan fungsi kalkulasi presisi `getSurveyEarnings(r)`.
   - Fungsi ini melakukan pencocokan UUID deterministik request survei dengan index kost di array `metadata.kostList` transaksi dari database.
@@ -456,3 +527,48 @@
 - **Preview Real-time**: Panel preview di sisi kanan merefleksikan perubahan form secara langsung tanpa submit. Auto-visible di layar desktop ≥ 1024px.
 - **Nomor Bill Auto-generate**: Format `RS-BILL-YYYYMMDD-XXXX` dengan 4 digit angka acak, dihasilkan saat komponen mount. Bisa diedit manual jika perlu.
 - **Integrasi Dashboard Admin**: Menu "🧾 Buat Tagihan" ditambahkan ke sidebar admin. Tipe `DashboardMenu` diperluas dengan value `'manual_bill'`. Render dikondisikan `activeMenu === 'manual_bill' && isAdmin`.
+
+### 51. Integrasi Layanan KostManager & Landing Page Premium Mitra (Juni 2026)
+- **Halaman Landing Page KostManager (`KostManagerLanding.tsx` & `/kostmanager`)**: Membuat halaman arahan premium untuk mempublikasikan seluruh keuntungan KostManager (survey gratis oleh agen lapangan, pemasaran prioritas di web dan medsos, penagihan digital otomatis). Menambahkan video demo pemutar youtube yang handal untuk semua peramban, serta menyajikan penawaran langganan Rp100.000 / tahun dan formulir pendaftaran kemitraan yang tersimpan ke tabel `mitra_requests` dengan status pending.
+- **Banner Dashboard Mitra (`MitraDashboard.tsx`)**: Menyediakan banner interaktif premium bergradasi di atas tab "+ TAMBAH" pada menu "Kost Saya" yang mengarahkan Mitra secara langsung ke landing page `/kostmanager` untuk mempelajari benefit layanan.
+- **Hapus Alur Onboarding Awal Form (`KostFormMitra.tsx`)**: Menghilangkan modal dialog pemilihan pengelolaan ("Bagaimana Anda ingin mengelola listing ini?") yang sebelumnya muncul saat tombol "+ TAMBAH" diklik, sehingga Mitra dapat langsung fokus mengisi 6 langkah formulir data properti secara mandiri.
+- **Koreksi Media Preview**: Menata kembali struktur markup render preview untuk unggah foto baru dari galeri agar tersaji presisi.
+
+### 52. Sinkronisasi Fitur Properti Kelolaan Portal KostManager & Desain Premium Super Admin (Juni 2026)
+- **Penyelarasan Tampilan & Penghapusan Ikon Emoji**:
+  - Menghapus ikon emoji pada sidebar tabs modal tambah properti KostManager (`ManagedPropertyAddModal` di `KostManagerPortal.tsx`).
+  - Menyamakan tema visual tab bar dengan dashboard admin menggunakan class font dan tracking yang premium (`w-full text-left px-6 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all`).
+- **Penambahan Biaya Tambahan (Additional Fees)**:
+  - Mengintegrasikan field "Biaya Tambahan" (Nama Biaya, Nominal, dan Ketentuan Penagihan) pada tab "Fasilitas & Biaya" Portal KostManager layaknya di Dashboard Admin.
+- **Penyelarasan Fitur Lokasi & Kampus (Estimasi Jarak)**:
+  - Menyisipkan visualisasi estimasi jarak & waktu tempuh kampus terdekat serta fasilitas publik terdekat (menggunakan Nominatim search & kalkulator estimasi waktu jalan kaki/berkendara).
+- **Integrasi Tab Media & Upload Berkas**:
+  - Menambahkan tab "Media" untuk multi-upload gambar utama listing (dengan drag-and-drop reordering), video tour (file local/link youtube), dan link media sosial (Instagram & TikTok).
+  - Menggunakan helper `addPropertyWithMedia` dan `updatePropertyWithMedia` dari `adminService.ts` untuk memproses upload file media asli ke Supabase Storage.
+- **Navigasi Anti Redirect Loop**:
+  - Menghapus auto-redirect `useEffect` yang tidak perlu pada Portal KostManager sehingga tombol "⬅️ Admin Utama" dapat diklik untuk kembali ke panel admin tanpa terjebak redirect loop.
+- **Integrasi Foto Kamar Kosong ke Galeri Pemasaran**:
+  - Menyinkronkan foto-foto unit kamar yang diunggah pada tab "Tipe Kamar & Penghuni" ke dalam galeri pemasaran publik (`KostDetail.tsx`) secara dinamis, terbatas hanya untuk unit kamar yang tercatat berstatus kosong ("kosong") dan belum dihuni oleh penyewa.
+- **Perbaikan Bug Upload Foto Ganda & Validasi WebP**:
+  - Memperbaiki bug rendering upload foto kamar ganda (double images) dengan cara memperbarui `handleUploadRoomPhoto` dan `handleDeleteRoomPhoto` menggunakan mapping state non-mutating (safe React update) dan mereset nilai target input (`e.target.value = ''`).
+  - Memastikan proses upload foto kamar memanfaatkan utilitas `convertToWebP` di `adminService.ts` sehingga seluruh foto unit dikonversi secara otomatis menjadi berkas format `.webp` yang ringan untuk meminimalkan beban bandwidth pemasaran.
+- **Pemuatan Daftar Pemilik (Mitra) Menyeluruh**:
+  - Memperbarui query pengisian `ownersList` di `KostEditModal` agar mengambil seluruh daftar pengguna ber-role `'owner'` atau `'mitra'` dari database. Ini mempermudah admin KostManager menautkan kepemilikan properti kelolaan ke mitra mana saja di RuangSinggah.id.
+  - Memastikan semua properti kelolaan KostManager yang ada di database ter-load di portal dengan menambahkan pencarian `owner_uid` dari tabel `properties` secara langsung dalam `allOwnerIds` sebelum early return, sehingga data insight dapat terdata dan dipantau oleh mitra di dashboard-nya.
+- **Pemisahan Listing Biasa dengan Listing KostManager**:
+  - Menambahkan kolom `is_managed` (`BOOLEAN DEFAULT FALSE`) pada skema database `properties` untuk membedakan properti kelolaan KostManager dengan properti/listing biasa.
+  - Memfilter properti di Portal KostManager (`KostManagerPortal.tsx` di `loadAllData`) agar **hanya memuat** properti yang memiliki `is_managed = true`. Listing biasa (self-listing mitra maupun upload admin standar) tidak akan dimunculkan lagi di dashboard KostManager.
+  - Menyelaraskan komponen UI publik (`KostCard.tsx`, `KostDetail.tsx`, dan `Home.tsx` Rekomendasi Utama) agar label/badge **"Verified"** atau **"Terverifikasi"** bersifat eksklusif hanya untuk properti kelolaan KostManager (`isManaged === true`), tidak muncul untuk listing biasa.
+
+
+
+
+
+
+
+
+### 53. Fitur Dropdown Cari Pemilik/Mitra Properti Kelolaan KostManager (Juni 2026)
+- **Komponen Custom Searchable Dropdown**: Menggantikan dropdown `<select>` statis untuk pemilihan pemilik/mitra properti di portal KostManager (`KostManagerPortal.tsx`) dengan searchable dropdown custom.
+- **Pencarian Real-time Nama & No HP**: Memungkinkan admin/pengelola untuk mengetik sebagian nama atau nomor telepon mitra pada kolom input teks filter. Daftar mitra disaring secara dinamis berdasarkan masukan kata kunci tersebut.
+- **Visualisasi & Animasi Premium**: Menambahkan visualisasi state aktif/pilih, tombol reset (Clear) instan, state jika data kosong ("Tidak ada mitra yang cocok"), serta transisi CSS lembut dan scrollbar dropdown yang rapi.
+- **Pencegahan Klik Luar (Click Outside)**: Menggunakan event listener mousedown global dan React Ref (`ownerDropdownRef`) untuk menutup dropdown panel secara otomatis jika pengguna mengklik di luar area dropdown.

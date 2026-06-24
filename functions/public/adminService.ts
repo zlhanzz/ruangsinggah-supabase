@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner } from './types';
+import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner, KostManagerPackage } from './types';
 import { notifyAdminStatusUpdate } from './emailService';
 import { ensureAbsoluteUrl } from './userService';
 import { getCurrentDate } from './utils/timeUtils';
@@ -314,6 +314,7 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
       campuses: row.campuses,
       publicFacilities: row.public_facilities,
       isVerified: row.is_verified,
+      isManaged: row.is_managed,
       omnichannelContactName: row.omnichannel_contact_name,
       omnichannelContactPhone: row.omnichannel_contact_phone,
       additionalFeePrice: row.additional_fee_price,
@@ -1022,6 +1023,143 @@ export async function syncSurveyRequest(transactionId: string, transactionOverri
     }
 }
 
+/**
+ * syncKostManagerRequest: Synchronizes a PAID kostmanager transaction with the kostmanager_requests table.
+ */
+export async function syncKostManagerRequest(transactionId: string, transactionOverride?: any) {
+    try {
+        console.log(`SYNC_KOSTMANAGER: [DEBUG] Starting for Transaction ${transactionId}`);
+        
+        let trx = transactionOverride;
+        if (!trx) {
+            const { data, error: fetchErr } = await supabase
+                .from('transactions')
+                .select('*')
+                .eq('id', transactionId)
+                .maybeSingle();
+                
+            if (fetchErr || !data) {
+                console.error("SYNC_KOSTMANAGER: [ERROR] Transaction not found in DB", fetchErr);
+                return;
+            }
+            trx = data;
+        }
+
+        const status = (trx.status || '').toUpperCase();
+        const productType = (trx.product_type || trx.type || '').toLowerCase();
+
+        if (productType !== 'kostmanager' && productType !== 'kostmanager_subscription') {
+            console.log(`SYNC_KOSTMANAGER: [DEBUG] Skipping. Product type is ${productType}.`);
+            return;
+        }
+
+        const PAID_STATUS_LIST = ['PAID', 'SUCCESS', 'SELESAI', 'SETTLEMENT', 'CAPTURE', 'BERHASIL'];
+        const isPaid = PAID_STATUS_LIST.includes(status);
+
+        const meta = trx.metadata || {};
+
+        // Fetch existing record
+        const { data: existing } = await supabase
+            .from('kostmanager_requests')
+            .select('*')
+            .eq('transaction_id', transactionId)
+            .maybeSingle();
+
+        let targetStatus = 'PENDING_ASSIGNMENT';
+        if (existing && existing.status) {
+            targetStatus = existing.status;
+        } else if (isPaid) {
+            targetStatus = 'PENDING_ASSIGNMENT';
+        }
+
+        const payload: any = {
+            user_id: trx.user_id,
+            transaction_id: transactionId,
+            status: targetStatus,
+            kost_name: meta.kostName || meta.title || 'Kost Terdaftar',
+            kost_type: meta.kostType || 'Campur',
+            empty_rooms: parseInt(meta.emptyRooms) || 0,
+            kost_address: meta.address || meta.kostAddress || '-',
+            updated_at: getCurrentDate().toISOString(),
+        };
+
+        if (existing?.result_drive_link) {
+            payload.result_drive_link = existing.result_drive_link;
+        }
+        if (existing?.assigned_agent_id) {
+            payload.assigned_agent_id = existing.assigned_agent_id;
+        }
+        if (existing?.agent_name) {
+            payload.agent_name = existing.agent_name;
+        }
+        if (existing?.agent_phone) {
+            payload.agent_phone = existing.agent_phone;
+        }
+
+        if (existing) {
+            console.log(`SYNC_KOSTMANAGER: [DEBUG] Updating KostManager request (ID: ${existing.id})`);
+            const { error: updateErr } = await supabase
+                .from('kostmanager_requests')
+                .update(payload)
+                .eq('id', existing.id);
+            if (updateErr) console.error(`SYNC_KOSTMANAGER: Update error:`, updateErr);
+        } else {
+            console.log(`SYNC_KOSTMANAGER: [DEBUG] Creating NEW record: ${payload.kost_name}`);
+            payload.created_at = trx.created_at || getCurrentDate().toISOString();
+            const { error: insertErr } = await supabase
+                .from('kostmanager_requests')
+                .insert([payload]);
+            if (insertErr) console.error(`SYNC_KOSTMANAGER: Insert error:`, insertErr);
+        }
+
+        // Sync to survey_requests as well if PAID
+        if (isPaid) {
+            const surveyId = generateDeterministicUuid(transactionId, 999);
+            const { data: existingSurvey } = await supabase
+                .from('survey_requests')
+                .select('*')
+                .eq('id', surveyId)
+                .maybeSingle();
+
+            let surveyStatus = 'PENDING_ASSIGNMENT';
+            if (targetStatus === 'ACTIVE') surveyStatus = 'COMPLETED';
+            else if (targetStatus === 'PENDING_ONBOARDING') surveyStatus = 'SURVEYING';
+            else surveyStatus = targetStatus;
+
+            const surveyPayload: any = {
+                id: surveyId,
+                user_id: trx.user_id,
+                transaction_id: transactionId,
+                status: surveyStatus,
+                kost_name: payload.kost_name,
+                kost_address: payload.kost_address,
+                owner_phone: meta.ownerPhone || meta.owner_phone || '-',
+                survey_date: meta.surveyDate || existingSurvey?.survey_date || getCurrentDate().toISOString().split('T')[0],
+                survey_time: meta.surveyTime || existingSurvey?.survey_time || '10:00',
+                notes: 'KostManager Onboarding - Survey Pendataan Lapangan',
+                updated_at: getCurrentDate().toISOString(),
+            };
+
+            if (payload.result_drive_link) surveyPayload.result_drive_link = payload.result_drive_link;
+            if (payload.assigned_agent_id) surveyPayload.assigned_agent_id = payload.assigned_agent_id;
+            if (payload.agent_name) surveyPayload.agent_name = payload.agent_name;
+            if (payload.agent_phone) surveyPayload.agent_phone = payload.agent_phone;
+
+            if (existingSurvey) {
+                await supabase.from('survey_requests').update(surveyPayload).eq('id', surveyId);
+            } else {
+                surveyPayload.created_at = trx.created_at || getCurrentDate().toISOString();
+                await supabase.from('survey_requests').insert([surveyPayload]);
+            }
+        }
+
+        console.log(`SYNC_KOSTMANAGER: [SUCCESS] record synchronized for transaction ${transactionId}`);
+
+    } catch (err) {
+        console.error("SYNC_KOSTMANAGER_ERROR:", err);
+    }
+}
+
 
 /**
  * autoSyncAllSurveys: Scans for survey transactions that are missing from survey_requests.
@@ -1059,6 +1197,43 @@ export async function autoSyncAllSurveys(userId?: string) {
         
     } catch (err) {
         console.error("AUTO_SYNC_SURVEY_ERROR:", err);
+    }
+}
+
+/**
+ * autoSyncAllKostManagers: Scans for kostmanager transactions that are missing from kostmanager_requests.
+ */
+export async function autoSyncAllKostManagers(userId?: string) {
+    try {
+        console.log("AUTO_SYNC_KOSTMANAGER: [DEBUG] Starting comprehensive scan...");
+        
+        let query = supabase
+            .from('transactions')
+            .select('*')
+            .in('product_type', ['kostmanager', 'kostmanager_subscription']);
+            
+        if (userId) {
+            query = query.eq('user_id', userId);
+        }
+
+        const { data: transactions, error } = await query;
+        if (error) throw error;
+
+        if (!transactions || transactions.length === 0) {
+            console.log("AUTO_SYNC_KOSTMANAGER: [DEBUG] No kostmanager transactions found.");
+            return;
+        }
+
+        console.log(`AUTO_SYNC_KOSTMANAGER: [DEBUG] Found ${transactions.length} transactions. Processing sync...`);
+
+        for (const trx of transactions) {
+            await syncKostManagerRequest(trx.id, trx);
+        }
+        
+        console.log("AUTO_SYNC_KOSTMANAGER: [SUCCESS] Scan and sync completed.");
+        
+    } catch (err) {
+        console.error("AUTO_SYNC_KOSTMANAGER_ERROR:", err);
     }
 }
 
@@ -1138,6 +1313,12 @@ export async function updateTransactionStatus(
             if (type === 'survey') {
                 console.log(`[AdminService] Detected survey transaction. Syncing survey request...`);
                 await syncSurveyRequest(transactionId);
+            }
+
+            // 4. If it's a kostmanager subscription, initialize the kostmanager_request record
+            if (type === 'kostmanager' || type === 'kostmanager_subscription') {
+                console.log(`[AdminService] Detected kostmanager transaction. Syncing request...`);
+                await syncKostManagerRequest(transactionId);
             }
 
         }
@@ -1286,6 +1467,9 @@ export async function addPropertyWithMedia(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Anda harus login.');
 
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  const targetOwnerUid = (isAdmin && kostData.ownerUid) ? kostData.ownerUid : user.id;
+
   // Generate a temporary ID for Storage path (will be overwritten with DB-generated UUID)
   const tempId = crypto.randomUUID();
 
@@ -1314,8 +1498,8 @@ export async function addPropertyWithMedia(
   const { data: inserted, error } = await supabase
     .from('properties')
     .insert({
-      owner_uid: user.id,
-      mitra_id: user.id, // Menambahkan mitra_id karena constraint di DB
+      owner_uid: targetOwnerUid,
+      mitra_id: targetOwnerUid, // Menambahkan mitra_id karena constraint di DB
       title: kostData.title,
       description: kostData.description,
       price: Number(kostData.price || 0),
@@ -1327,6 +1511,7 @@ export async function addPropertyWithMedia(
       property_type: kostData.type, // Map the type specifically for Supabase DB
       status: kostData.status || 'draft',
       is_verified: kostData.isVerified ?? false,
+      is_managed: kostData.isManaged ?? false,
       rating: Number(kostData.rating || 0),
       location: kostData.location,
       image_urls: [...existingImages, ...newImageObjects],
@@ -1445,10 +1630,13 @@ export async function updatePropertyWithMedia(
     newVideoObjects.push({ original: url });
   }
 
+  const targetOwnerUid = (isAdmin && kostData.ownerUid) ? kostData.ownerUid : existing.owner_uid;
+
   const { error: updateError } = await supabase
     .from('properties')
     .update({
-      mitra_id: user.id,
+      owner_uid: targetOwnerUid,
+      mitra_id: targetOwnerUid,
       title: kostData.title,
       description: kostData.description,
       price: Number(kostData.price || 0),
@@ -1460,6 +1648,7 @@ export async function updatePropertyWithMedia(
       property_type: kostData.type, // Sync added column
       status: kostData.status,
       is_verified: kostData.isVerified,
+      is_managed: kostData.isManaged,
       rating: Number(kostData.rating || 0),
       location: kostData.location,
       image_urls: [...finalImageObjects, ...newImageObjects],
@@ -2071,7 +2260,7 @@ export async function updateSurveyRequest(
   const isAgent = role === 'survey_agent';
 
   // Regular users can update their own (for feedback/rating)
-  const { data: existing } = await supabase.from('survey_requests').select('user_id, assigned_agent_id').eq('id', id).single();
+  const { data: existing } = await supabase.from('survey_requests').select('user_id, assigned_agent_id, transaction_id').eq('id', id).single();
   
   if (!isAdmin && user.id !== existing?.user_id && user.id !== existing?.assigned_agent_id) {
      throw new Error('Access Denied');
@@ -2086,7 +2275,38 @@ export async function updateSurveyRequest(
     .eq('id', id);
 
   if (error) throw error;
-  else if (updates.status) {
+  
+  // Sync back to kostmanager_requests if this survey is linked to a KostManager transaction
+  if (existing?.transaction_id) {
+    const { data: trx } = await supabase
+      .from('transactions')
+      .select('product_type')
+      .eq('id', existing.transaction_id)
+      .maybeSingle();
+
+    if (trx && (trx.product_type === 'kostmanager' || trx.product_type === 'kostmanager_subscription')) {
+      const kmUpdates: any = {};
+      if (updates.status) {
+        if (updates.status === 'COMPLETED') kmUpdates.status = 'ACTIVE';
+        else if (updates.status === 'SURVEYING') kmUpdates.status = 'SURVEYING';
+        else if (updates.status === 'SUBMITTED') kmUpdates.status = 'PENDING_ONBOARDING';
+        else kmUpdates.status = updates.status;
+      }
+      if (updates.assigned_agent_id !== undefined) kmUpdates.assigned_agent_id = updates.assigned_agent_id;
+      if (updates.agent_name !== undefined) kmUpdates.agent_name = updates.agent_name;
+      if (updates.agent_phone !== undefined) kmUpdates.agent_phone = updates.agent_phone;
+      if (updates.result_drive_link !== undefined) kmUpdates.result_drive_link = updates.result_drive_link;
+
+      if (Object.keys(kmUpdates).length > 0) {
+        await supabase
+          .from('kostmanager_requests')
+          .update({ ...kmUpdates, updated_at: new Date().toISOString() })
+          .eq('transaction_id', existing.transaction_id);
+      }
+    }
+  }
+
+  if (updates.status) {
     notifyAdminStatusUpdate("Permintaan Survey", id, updates.status);
   }
 }
@@ -2103,6 +2323,134 @@ export async function deleteSurveyRequest(id: string): Promise<void> {
 
   const { error } = await supabase
     .from('survey_requests')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+// ---- KOSTMANAGER CRUD FUNCTIONS ----
+
+export async function getAdminKostManagerRequests(): Promise<any[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const role = await getUserRole(user.id);
+  const isAdmin = role === 'admin';
+  const isAgent = role === 'survey_agent';
+
+  // Auto-sync missing requests in background
+  if (isAdmin) {
+    autoSyncAllKostManagers().catch(console.error);
+  } else {
+    autoSyncAllKostManagers(user.id).catch(console.error);
+  }
+
+  let query = supabase
+    .from('kostmanager_requests')
+    .select(`
+      *,
+      user:user_id (
+        name,
+        email,
+        phone,
+        photo_url
+      ),
+      transaction:transaction_id (
+        id,
+        amount,
+        status,
+        metadata,
+        created_at,
+        payment_method
+      )
+    `);
+
+  if (isAgent) {
+    query = query.eq('assigned_agent_id', user.id);
+  } else if (!isAdmin) {
+    query = query.eq('user_id', user.id);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
+
+  if (error) throw error;
+  
+  return data || [];
+}
+
+export async function updateKostManagerRequest(
+  id: string,
+  updates: Partial<any>
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const role = await getUserRole(user.id);
+  const isAdmin = role === 'admin';
+
+  const { data: existing } = await supabase.from('kostmanager_requests').select('user_id, assigned_agent_id, transaction_id').eq('id', id).single();
+  
+  if (!isAdmin && user.id !== existing?.user_id && user.id !== existing?.assigned_agent_id) {
+     throw new Error('Access Denied');
+  }
+
+  const { error } = await supabase
+    .from('kostmanager_requests')
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', id);
+
+  if (error) throw error;
+
+  // Sync forward to survey_requests if linked to a transaction
+  if (existing?.transaction_id) {
+    const surveyId = generateDeterministicUuid(existing.transaction_id, 999);
+    const { data: existingSurvey } = await supabase
+      .from('survey_requests')
+      .select('id')
+      .eq('id', surveyId)
+      .maybeSingle();
+
+    if (existingSurvey) {
+      const surveyUpdates: any = {};
+      if (updates.status) {
+        if (updates.status === 'ACTIVE') surveyUpdates.status = 'COMPLETED';
+        else if (updates.status === 'PENDING_ONBOARDING') surveyUpdates.status = 'SURVEYING';
+        else surveyUpdates.status = updates.status;
+      }
+      if (updates.assigned_agent_id !== undefined) surveyUpdates.assigned_agent_id = updates.assigned_agent_id;
+      if (updates.agent_name !== undefined) surveyUpdates.agent_name = updates.agent_name;
+      if (updates.agent_phone !== undefined) surveyUpdates.agent_phone = updates.agent_phone;
+      if (updates.result_drive_link !== undefined) surveyUpdates.result_drive_link = updates.result_drive_link;
+
+      if (Object.keys(surveyUpdates).length > 0) {
+        await supabase
+          .from('survey_requests')
+          .update({ ...surveyUpdates, updated_at: new Date().toISOString() })
+          .eq('id', surveyId);
+      }
+    }
+  }
+
+  if (updates.status) {
+    notifyAdminStatusUpdate("KostManager Request", id, updates.status);
+  }
+}
+
+export async function deleteKostManagerRequest(id: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const role = await getUserRole(user.id);
+  const isAdmin = role === 'admin';
+
+  if (!isAdmin) throw new Error('Access Denied');
+
+  const { error } = await supabase
+    .from('kostmanager_requests')
     .delete()
     .eq('id', id);
 
@@ -3705,4 +4053,70 @@ async function syncReferralRewardsInternal(): Promise<void> {
       .insert(rewardsToInsert);
   }
 }
+
+// --- KOSTMANAGER PACKAGE CONFIGURATIONS ---
+
+export const DEFAULT_KOSTMANAGER_PACKAGES: KostManagerPackage[] = [
+  { id: 'bulanan', duration_months: 1, price: 15000, label: 'Bulanan', is_active: true },
+  { id: '2bulan', duration_months: 2, price: 30000, label: '2 Bulan', is_active: true },
+  { id: '3bulan', duration_months: 3, price: 45000, label: '3 Bulan', is_active: true },
+  { id: '6bulan', duration_months: 6, price: 80000, label: '6 Bulan', is_active: true },
+  { id: 'tahunan', duration_months: 12, price: 100000, label: 'Tahunan', is_active: true }
+];
+
+export async function getKostManagerPackages(): Promise<KostManagerPackage[]> {
+  try {
+    const { data, error } = await supabase
+      .from('kostmanager_packages')
+      .select('*')
+      .order('duration_months', { ascending: true });
+
+    if (error) {
+      console.warn('kostmanager_packages table query failed, using defaults:', error.message);
+      return DEFAULT_KOSTMANAGER_PACKAGES;
+    }
+
+    return (data || []).map(d => ({
+      id: d.id,
+      duration_months: d.duration_months,
+      price: d.price,
+      label: d.label,
+      is_active: d.is_active
+    }));
+  } catch (err: any) {
+    console.error('Failed to get KostManager packages:', err);
+    return DEFAULT_KOSTMANAGER_PACKAGES;
+  }
+}
+
+export async function saveKostManagerPackage(pkg: Omit<KostManagerPackage, 'id'> & { id?: string }): Promise<void> {
+  const payload = {
+    duration_months: pkg.duration_months,
+    price: pkg.price,
+    label: pkg.label,
+    is_active: pkg.is_active ?? true
+  };
+  
+  if (pkg.id && !pkg.id.startsWith('pkg_') && pkg.id.length > 10) { // UUID check
+    const { error } = await supabase
+      .from('kostmanager_packages')
+      .update(payload)
+      .eq('id', pkg.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from('kostmanager_packages')
+      .upsert(payload, { onConflict: 'duration_months' });
+    if (error) throw error;
+  }
+}
+
+export async function deleteKostManagerPackage(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('kostmanager_packages')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}
+
 

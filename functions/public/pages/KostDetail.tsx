@@ -155,7 +155,17 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     }
   }, [selectedVariantIdx, selectedRoom]);
 
-  const imageUrls = kost.imageUrls || [];
+  // Ambil semua foto dari unit kamar yang berstatus kosong/tidak dihuni untuk ditampilkan di pemasaran
+  const vacantRoomImages = (kost.roomTypes || []).flatMap((rt: any) => 
+    (rt.rooms || [])
+      .filter((r: any) => r.status === 'kosong')
+      .flatMap((r: any) => r.images || [])
+  );
+
+  const imageUrls = [
+    ...(kost.imageUrls || []),
+    ...vacantRoomImages
+  ];
   const nextPhoto = () => setCurrentPhoto((prev) => (prev + 1) % (imageUrls.length || 1));
   const prevPhoto = () => setCurrentPhoto((prev) => (prev - 1 + (imageUrls.length || 1)) % (imageUrls.length || 1));
 
@@ -467,7 +477,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                   kost.type === 'Putri' ? 'bg-pink-500 text-white' :
                     'bg-purple-500 text-white'
                   }`}>{kost.type}</span>
-                {kost.isVerified && (
+                {kost.isManaged && (
                   <span className="bg-orange-500 text-white px-4 py-1.5 rounded-full text-[10px] font-black flex items-center gap-2 border border-orange-400 shadow-lg shadow-orange-100 uppercase tracking-widest">
                     Terverifikasi
                   </span>

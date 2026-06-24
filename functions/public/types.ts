@@ -86,6 +86,7 @@ export interface Kost {
   area: string;
   type: 'Putra' | 'Putri' | 'Campur';
   isVerified: boolean;
+  isManaged: boolean;
   rating: number;
   rules: string[];
 
@@ -114,6 +115,9 @@ export interface Kost {
   caretakerName?: string;
   caretakerGender?: 'Pria' | 'Wanita';
   caretakerPhone?: string;
+
+  // KostManager / Management Type
+  managed_by?: 'self' | 'kostmanager';
 }
 
 export interface ImageUrlObject {
@@ -184,7 +188,8 @@ export enum Page {
   SURVEY_CHECKOUT = '/survey-checkout',
   TERMS = '/syarat-ketentuan',
   ARTICLES = '/artikel',
-  ARTICLE_DETAIL = '/artikel/:slug'
+  ARTICLE_DETAIL = '/artikel/:slug',
+  KOSTMANAGER = '/kostmanager'
 }
 
 export interface SurveyRequest {
@@ -253,6 +258,37 @@ export interface SurveyRequest {
   };
 }
 
+export interface KostManagerRequest {
+  id: string;
+  transaction_id: string;
+  user_id: string;
+  kost_name: string;
+  kost_type?: string;
+  empty_rooms?: number;
+  kost_address: string;
+  status: string; // PENDING_ASSIGNMENT, AGENT_ASSIGNED, SURVEYING, PENDING_ONBOARDING, COMPLETED, CANCELLED
+  agent_name?: string;
+  agent_phone?: string;
+  agent_photo_url?: string;
+  assigned_agent_id?: string;
+  result_drive_link?: string;
+  created_at: string;
+  updated_at: string;
+  transaction?: {
+    amount: number;
+    status: string;
+    metadata?: any;
+    payment_method?: string;
+    created_at?: string;
+  };
+  user?: {
+    name: string;
+    email: string;
+    phone: string;
+    photo_url?: string;
+  };
+}
+
 export interface Banner {
   id: string;
   title: string;
@@ -262,3 +298,12 @@ export interface Banner {
   sort_order: number;
   created_at: string;
 }
+
+export interface KostManagerPackage {
+  id: string;
+  duration_months: number;
+  price: number;
+  label: string;
+  is_active: boolean;
+}
+

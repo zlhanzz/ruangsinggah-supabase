@@ -42,6 +42,8 @@ import ActiveTenantsManagement from '../components/admin/ActiveTenantsManagement
 import WithdrawalManagement from '../components/admin/WithdrawalManagement';
 import ManualBillManagement from '../components/admin/ManualBillManagement';
 import ReferralManagement from '../components/admin/ReferralManagement';
+import KostManagerManagement from '../components/admin/KostManagerManagement';
+import KostManagerPortal from '../components/admin/KostManagerPortal';
 
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -192,7 +194,7 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
 
 
 
-type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_extension' | 'transactions_db' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'wallet' | 'tenants' | 'active_tenants' | 'agent_verification' | 'banners' | 'articles' | 'withdrawals' | 'manual_bill' | 'referral_rewards';
+type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_extension' | 'transactions_db' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'wallet' | 'tenants' | 'active_tenants' | 'agent_verification' | 'banners' | 'articles' | 'withdrawals' | 'manual_bill' | 'referral_rewards' | 'kostmanager' | 'km_overview' | 'km_properties' | 'km_tenants' | 'km_billing';
 
 const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, onLogout, listings = [], onAdd, onEdit, onDelete, onRefreshListings, verificationStatus }) => {
     const isAdmin = role === 'admin';
@@ -205,6 +207,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
     const [activeMenu, setActiveMenu] = useState<DashboardMenu>(
         (tab as DashboardMenu) || (isAgent ? 'overview' : (isOwner ? 'properties' : 'analytics'))
     );
+
+    const isKostManagerPortal = activeMenu.startsWith('km_');
 
     // Sync state with URL & Redirect empty wildcard to default menu
     useEffect(() => {
@@ -2164,6 +2168,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                         <SidebarItem icon="🏠" label="Penyewa Aktif" isActive={activeMenu === 'active_tenants'} onClick={() => handleMenuChange('active_tenants')} />
                         <SidebarItem icon="🤝" label="Kelola Mitra" isActive={activeMenu === 'mitra'} onClick={() => handleMenuChange('mitra')} />
                         <SidebarItem icon="🛡️" label="Kelola Agen" isActive={activeMenu === 'agent_verification'} onClick={() => handleMenuChange('agent_verification')} />
+                        <SidebarItem icon="⚡" label="KostManager Auto-Pilot" isActive={activeMenu === 'kostmanager'} onClick={() => handleMenuChange('kostmanager')} />
                         <SidebarItem icon="🎁" label="Referral Agen" isActive={activeMenu === 'referral_rewards'} onClick={() => handleMenuChange('referral_rewards')} />
                         <SidebarItem icon="🖼️" label="Banner Promo" isActive={activeMenu === 'banners'} onClick={() => handleMenuChange('banners')} />
                         <SidebarItem icon="📝" label="Kelola Artikel" isActive={activeMenu === 'articles'} onClick={() => handleMenuChange('articles')} />
@@ -2696,6 +2701,25 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
         );
     }
 
+    if (isKostManagerPortal && isAdmin) {
+        return (
+            <>
+                {isSubmitting && (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm">
+                        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-orange-500"></div>
+                        <p className="ml-4 text-white text-lg font-bold">Memproses...</p>
+                    </div>
+                )}
+                <KostManagerPortal 
+                    isAdmin={isAdmin}
+                    activeMenu={activeMenu}
+                    onMenuChange={handleMenuChange}
+                    onBack={() => handleMenuChange('kostmanager')}
+                />
+            </>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-gray-50 flex">
             {isSubmitting && (
@@ -2970,6 +2994,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                                         <ComplaintManagement 
                                             complaints={complaints}
                                             refreshData={loadComplaints}
+                                        />
+                                    )}
+                                    {activeMenu === 'kostmanager' && isAdmin && (
+                                        <KostManagerManagement 
+                                            isAdmin={isAdmin}
+                                            refreshData={loadSurveyRequests}
+                                            onNavigateToPortal={() => handleMenuChange('km_overview')}
                                         />
                                     )}
                                 </div>

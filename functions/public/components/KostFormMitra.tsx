@@ -354,6 +354,9 @@ const FacilityInput: React.FC<{
 const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClose, onSuccess }) => {
     const isEditing = !!editingKost?.id;
     const [step, setStep] = useState(0);
+    const [managementOption, setManagementOption] = useState<'none' | 'self' | 'kostmanager'>(
+        editingKost ? (editingKost.managed_by || 'self') : 'self'
+    );
     const [form, setForm] = useState<Partial<Kost>>(editingKost ? { ...initialForm, ...editingKost } : initialForm);
     const [newImageFiles, setNewImageFiles] = useState<File[]>([]);
     const [newVideoFiles, setNewVideoFiles] = useState<File[]>([]);
@@ -378,6 +381,10 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     }, [user, isEditing]);
 
     const upd = (key: keyof Kost, val: any) => setForm(prev => ({ ...prev, [key]: val }));
+
+    const activeSteps = managementOption === 'kostmanager'
+        ? STEPS.slice(0, 2) // Hanya Info & Lokasi
+        : STEPS;
 
     const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
         const R = 6371; // Radius of the Earth in km
@@ -550,13 +557,13 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     };
     const toggleRoomFeature = (roomIdx: number, field: 'roomFacilities' | 'bathroomFacilities', val: string) => {
         const rooms = [...(form.roomTypes || [])];
-        const cur = rooms[roomIdx][field] || [];
-        updRoom(roomIdx, field, cur.includes(val) ? cur.filter((x: string) => x !== val) : [...cur, val]);
+        const text = rooms[roomIdx][field] || [];
+        updRoom(roomIdx, field, text.includes(val) ? text.filter((x: string) => x !== val) : [...text, val]);
     };
     const addCustomRoomFeature = (roomIdx: number, field: 'roomFacilities' | 'bathroomFacilities', val: string) => {
         const rooms = [...(form.roomTypes || [])];
-        const cur = rooms[roomIdx][field] || [];
-        if (!cur.includes(val)) updRoom(roomIdx, field, [...cur, val]);
+        const text = rooms[roomIdx][field] || [];
+        if (!text.includes(val)) updRoom(roomIdx, field, [...text, val]);
     };
     const removeRoom = (i: number) => {
         upd('roomTypes', (form.roomTypes || []).filter((_, idx) => idx !== i));
@@ -585,7 +592,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 omnichannelContactType: 'owner'
             };
 
-            const data = { ...form, ...contactUpdates, price: finalPrice };
+            const data = { 
+                ...form, 
+                ...contactUpdates, 
+                price: finalPrice, 
+                managed_by: managementOption 
+            };
             
             if (isEditing && editingKost?.id) {
                 await updatePropertyWithMedia(editingKost.id, data, newImageFiles, newVideoFiles);
@@ -599,6 +611,8 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             setSubmitting(false);
         }
     };
+
+
 
     // ── render step ─────────────────────────────────────────────────────────────
     const renderStep = () => {
@@ -635,8 +649,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             onChange={e => upd('description', e.target.value)}
                         />
                     </Field>
-
-
                 </div>
             );
 
@@ -671,75 +683,77 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             value={form.address || ''} onChange={e => upd('address', e.target.value)} />
                     </Field>
 
-                    <Field label="Dekat Kampus / Fasilitas Umum" hint="Tambahkan lokasi penting di sekitar kost">
-                        <div className="space-y-2">
-                            {(form.campuses || []).map((c, i) => (
-                                <div key={i} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-gray-50 p-2 rounded-xl border border-gray-100">
-                                    <div className="flex-1 space-y-2 w-full">
-                                        <div className="flex gap-2 w-full">
-                                            <Input placeholder="Nama kampus/fasilitas (Cth: IPB)" value={c.name}
-                                                onChange={e => { const a = [...(form.campuses||[])]; a[i]={...a[i],name:e.target.value}; upd('campuses',a); }} 
-                                                className="w-full"
+                    {managementOption !== 'kostmanager' && (
+                        <Field label="Dekat Kampus / Fasilitas Umum" hint="Tambahkan lokasi penting di sekitar kost">
+                            <div className="space-y-2">
+                                {(form.campuses || []).map((c, i) => (
+                                    <div key={i} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-gray-50 p-2 rounded-xl border border-gray-100">
+                                        <div className="flex-1 space-y-2 w-full">
+                                            <div className="flex gap-2 w-full">
+                                                <Input placeholder="Nama kampus/fasilitas (Cth: IPB)" value={c.name}
+                                                    onChange={e => { const a = [...(form.campuses||[])]; a[i]={...a[i],name:e.target.value}; upd('campuses',a); }} 
+                                                    className="w-full"
+                                                />
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => searchFacilityCoordinates('campuses', i, c.name)}
+                                                    disabled={isSearchingFacility[`campuses-${i}`]}
+                                                    className="bg-orange-500 text-white px-3 py-2 rounded-xl text-[10px] sm:text-xs font-bold shrink-0 hover:bg-orange-600 disabled:opacity-50"
+                                                >
+                                                    {isSearchingFacility[`campuses-${i}`] ? 'Mencari...' : 'Cari Koordinat'}
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setActiveMapPicker({ field: 'campuses', index: i })}
+                                                    className="bg-white border text-gray-500 border-gray-200 px-3 py-2 rounded-xl text-[10px] sm:text-xs font-bold flex items-center justify-center shrink-0 hover:bg-gray-50 hover:text-orange-500 transition-colors"
+                                                    title="Pilih Manual di Peta"
+                                                >
+                                                    📍 Peta
+                                                </button>
+                                            </div>
+                                            {c.distance && (() => {
+                                                const kmMatch = c.distance.match(/[\d.]+/);
+                                                if (kmMatch) {
+                                                    const km = parseFloat(kmMatch[0]);
+                                                    const walk = Math.ceil((km / 5) * 60);
+                                                    const moto = Math.ceil((km / 30) * 60) + 2;
+                                                    const car = Math.ceil((km / 20) * 60) + 5;
+                                                    return (
+                                                        <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-100 w-full mt-2">
+                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-2">Estimasi Waktu:</span>
+                                                            <div className="flex items-center gap-3 text-xs font-bold text-gray-600">
+                                                                <span className="flex items-center gap-1">🚶 {walk} Mnt</span>
+                                                                <span className="text-gray-300">•</span>
+                                                                <span className="flex items-center gap-1">🏍️ {moto} Mnt</span>
+                                                                <span className="text-gray-300">•</span>
+                                                                <span className="flex items-center gap-1">🚗 {car} Mnt</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Input placeholder="Jarak" value={c.distance}
+                                                onChange={e => { const a=[...(form.campuses||[])]; a[i]={...a[i],distance:e.target.value}; upd('campuses',a); }}
+                                                className="!w-24 sm:!w-32 shrink-0" 
                                             />
-                                            <button 
-                                                type="button" 
-                                                onClick={() => searchFacilityCoordinates('campuses', i, c.name)}
-                                                disabled={isSearchingFacility[`campuses-${i}`]}
-                                                className="bg-orange-500 text-white px-3 py-2 rounded-xl text-[10px] sm:text-xs font-bold shrink-0 hover:bg-orange-600 disabled:opacity-50"
-                                            >
-                                                {isSearchingFacility[`campuses-${i}`] ? 'Mencari...' : 'Cari Koordinat'}
-                                            </button>
-                                            <button 
-                                                type="button" 
-                                                onClick={() => setActiveMapPicker({ field: 'campuses', index: i })}
-                                                className="bg-white border text-gray-500 border-gray-200 px-3 py-2 rounded-xl text-[10px] sm:text-xs font-bold flex items-center justify-center shrink-0 hover:bg-gray-50 hover:text-orange-500 transition-colors"
-                                                title="Pilih Manual di Peta"
-                                            >
-                                                📍 Peta
+                                            <button type="button" onClick={() => upd('campuses',(form.campuses||[]).filter((_,idx)=>idx!==i))}
+                                                className="p-3 text-rose-400 hover:bg-rose-100 bg-white rounded-xl shrink-0">
+                                                <Trash2 size={16}/>
                                             </button>
                                         </div>
-                                        {c.distance && (() => {
-                                            const kmMatch = c.distance.match(/[\d.]+/);
-                                            if (kmMatch) {
-                                                const km = parseFloat(kmMatch[0]);
-                                                const walk = Math.ceil((km / 5) * 60);
-                                                const moto = Math.ceil((km / 30) * 60) + 2;
-                                                const car = Math.ceil((km / 20) * 60) + 5;
-                                                return (
-                                                    <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-100 w-full mt-2">
-                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-2">Estimasi Waktu:</span>
-                                                        <div className="flex items-center gap-3 text-xs font-bold text-gray-600">
-                                                            <span className="flex items-center gap-1">🚶 {walk} Mnt</span>
-                                                            <span className="text-gray-300">•</span>
-                                                            <span className="flex items-center gap-1">🏍️ {moto} Mnt</span>
-                                                            <span className="text-gray-300">•</span>
-                                                            <span className="flex items-center gap-1">🚗 {car} Mnt</span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            }
-                                            return null;
-                                        })()}
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <Input placeholder="Jarak" value={c.distance}
-                                            onChange={e => { const a=[...(form.campuses||[])]; a[i]={...a[i],distance:e.target.value}; upd('campuses',a); }}
-                                            className="!w-24 sm:!w-32 shrink-0" 
-                                        />
-                                        <button type="button" onClick={() => upd('campuses',(form.campuses||[]).filter((_,idx)=>idx!==i))}
-                                            className="p-3 text-rose-400 hover:bg-rose-100 bg-white rounded-xl shrink-0">
-                                            <Trash2 size={16}/>
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                            <button type="button"
-                                onClick={() => upd('campuses',[...(form.campuses||[]),{name:'',distance:'',transportMode:'walk'}])}
-                                className="w-full h-10 border-2 border-dashed border-gray-200 rounded-2xl text-xs font-bold text-gray-400 hover:border-orange-300 hover:text-orange-400 transition-colors flex items-center justify-center gap-2">
-                                <Plus size={14} /> Tambah Kampus / Fasilitas Terdekat
-                            </button>
-                        </div>
-                    </Field>
+                                ))}
+                                <button type="button"
+                                    onClick={() => upd('campuses',[...(form.campuses||[]),{name:'',distance:'',transportMode:'walk'}])}
+                                    className="w-full h-10 border-2 border-dashed border-gray-200 rounded-2xl text-xs font-bold text-gray-400 hover:border-orange-300 hover:text-orange-400 transition-colors flex items-center justify-center gap-2">
+                                    <Plus size={14} /> Tambah Kampus / Fasilitas Terdekat
+                                </button>
+                            </div>
+                        </Field>
+                    )}
 
                     {/* MODAL: MANUAL MAP PICKER FOR FACILITIES */}
                     {activeMapPicker && (
@@ -1061,7 +1075,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
                 <div>
                     <h2 className="font-black text-gray-900 text-base">{isEditing ? 'Edit Listing' : 'Tambah Kost Baru'}</h2>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Langkah {step + 1} dari {STEPS.length}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Langkah {step + 1} dari {activeSteps.length}</p>
                 </div>
                 <button onClick={onClose} className="w-10 h-10 rounded-2xl hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors">
                     <X size={20} />
@@ -1071,7 +1085,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             {/* Step Indicators */}
             <div className="px-5 pt-4 pb-2 shrink-0">
                 <div className="flex items-center gap-1">
-                    {STEPS.map((s, i) => (
+                    {activeSteps.map((s, i) => (
                         <React.Fragment key={s.id}>
                             <button
                                 type="button"
@@ -1084,14 +1098,14 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                 {i < step ? <Check size={10} /> : s.icon}
                                 <span className="hidden sm:inline">{s.label}</span>
                             </button>
-                            {i < STEPS.length - 1 && (
+                            {i < activeSteps.length - 1 && (
                                 <div className={`flex-1 h-0.5 rounded-full transition-all ${i < step ? 'bg-green-300' : 'bg-gray-100'}`} />
                             )}
                         </React.Fragment>
                     ))}
                 </div>
                 <div className="h-1 bg-gray-100 rounded-full mt-3 overflow-hidden">
-                    <div className="h-full bg-orange-500 rounded-full transition-all duration-500" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
+                    <div className="h-full bg-orange-500 rounded-full transition-all duration-500" style={{ width: `${((step + 1) / activeSteps.length) * 100}%` }} />
                 </div>
             </div>
 
@@ -1119,7 +1133,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         </button>
                     )}
 
-                    {step < STEPS.length - 1 ? (
+                    {step < activeSteps.length - 1 ? (
                         <button type="button" onClick={() => { setError(''); setStep(s => s + 1); }}
                             className="flex-1 h-14 bg-orange-500 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-100 active:scale-95 transition-transform">
                             Lanjut <ChevronRight size={18}/>
