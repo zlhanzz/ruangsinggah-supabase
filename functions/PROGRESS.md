@@ -2,7 +2,13 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 1. Pengaturan Harga & Durasi Langganan Dinamis KostManager (Juni 2026)
+### 1. Integrasi CDN Caching Cloudflare Workers untuk Supabase Storage (Juli 2026)
+- **Implementasi Caching Proxy Global**:
+  - Mengubah fungsi pencari URL absolut `ensureAbsoluteUrl` di `userService.ts` agar mendeteksi URL bawaan Supabase dan secara dinamis mengubahnya menjadi URL proxy CDN Cloudflare `https://media.ruangsinggah.id`.
+  - Menghemat penggunaan egress/bandwidth Supabase Storage secara signifikan karena gambar dan media akan di-cache secara permanen di server CDN Cloudflare.
+  - Mempercepat waktu loading gambar kost di sisi browser pengunjung website.
+
+### 2. Pengaturan Harga & Durasi Langganan Dinamis KostManager (Juni 2026)
 - **Manajemen Paket Langganan di Portal Admin (Super Admin)**:
   - Menambahkan menu baru "Harga Langganan" pada Sidebar Portal Operasional KostManager (`KostManagerPortal.tsx`) yang terhubung dengan SPA routing (`km_packages`).
   - Menyediakan UI tabel daftar paket langganan aktif/nonaktif lengkap dengan detail Label, Durasi (bulan), Harga, dan status Aktif.

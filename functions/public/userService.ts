@@ -23,7 +23,16 @@ const getDisplayImageUrl = (img: any): string => {
 export const ensureAbsoluteUrl = (path: string, bucket: string): string => {
   if (!path) return '';
   const trimmedPath = path.trim();
-  if (trimmedPath.startsWith('http') || trimmedPath.startsWith('data:')) return trimmedPath;
+  
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://sgcmnsnokrztocnhxnqm.supabase.co';
+  const cfProxy = 'https://media.ruangsinggah.id';
+
+  if (trimmedPath.startsWith('http') || trimmedPath.startsWith('data:')) {
+    if (trimmedPath.startsWith(supabaseUrl)) {
+      return trimmedPath.replace(supabaseUrl, cfProxy);
+    }
+    return trimmedPath;
+  }
   
   // Clean leading slash for Supabase storage paths
   let cleanPath = trimmedPath.startsWith('/') ? trimmedPath.substring(1) : trimmedPath;
@@ -37,7 +46,11 @@ export const ensureAbsoluteUrl = (path: string, bucket: string): string => {
   
   // Use public storage URL for relative paths
   const { data } = supabase.storage.from(bucket).getPublicUrl(cleanPath);
-  return data.publicUrl;
+  let publicUrl = data.publicUrl;
+  if (publicUrl && publicUrl.startsWith(supabaseUrl)) {
+    publicUrl = publicUrl.replace(supabaseUrl, cfProxy);
+  }
+  return publicUrl;
 };
 
 // Helper to extract video URL
