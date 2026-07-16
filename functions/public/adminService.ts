@@ -1112,8 +1112,24 @@ export async function syncKostManagerRequest(transactionId: string, transactionO
             if (insertErr) console.error(`SYNC_KOSTMANAGER: Insert error:`, insertErr);
         }
 
-        // Sync to survey_requests as well if PAID
+        // Sync to survey_requests and mark property/mitra as managed if PAID
         if (isPaid) {
+            // 1. If an existing property was selected, link it
+            if (meta.propertyId) {
+                console.log(`SYNC_KOSTMANAGER: [DEBUG] Setting is_managed = true for existing property: ${meta.propertyId}`);
+                await supabase
+                    .from('properties')
+                    .update({ is_managed: true })
+                    .eq('id', meta.propertyId);
+            }
+            
+            // 2. Set subscription_status to 'kostmanager' in the mitra table for the owner
+            console.log(`SYNC_KOSTMANAGER: [DEBUG] Upgrading subscription_status to 'kostmanager' for user ${trx.user_id}`);
+            await supabase
+                .from('mitra')
+                .update({ subscription_status: 'kostmanager' })
+                .eq('user_id', trx.user_id);
+
             const surveyId = generateDeterministicUuid(transactionId, 999);
             const { data: existingSurvey } = await supabase
                 .from('survey_requests')

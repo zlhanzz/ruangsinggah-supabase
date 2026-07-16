@@ -38,6 +38,11 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
   const [showPayment, setShowPayment] = useState(() => !!urlOrderId);
   const [paymentMetadata, setPaymentMetadata] = useState<any>(null);
 
+  // User Properties Selection for Existing Mitra (Case 1 vs Case 2)
+  const [userKosts, setUserKosts] = useState<any[]>([]);
+  const [selectedKostId, setSelectedKostId] = useState<string>('');
+  const [isManualInput, setIsManualInput] = useState<boolean>(true);
+
   const [packages, setPackages] = useState<KostManagerPackage[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string>('');
 
@@ -53,6 +58,75 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
     }
     loadPackages();
   }, []);
+
+  useEffect(() => {
+    async function loadUserKosts() {
+      if (!user) return;
+      try {
+        const { data, error } = await supabase
+          .from('properties')
+          .select('id, title, type, room_types, address, city')
+          .eq('owner_uid', user.uid || user.id)
+          .eq('is_managed', false);
+        if (!error && data) {
+          setUserKosts(data);
+          if (data.length > 0) {
+            setIsManualInput(false);
+            // Pre-select the first one
+            const first = data[0];
+            setSelectedKostId(first.id);
+            let totalRoomsCalculated = 0;
+            if (first.room_types && Array.isArray(first.room_types)) {
+              totalRoomsCalculated = first.room_types.reduce((acc: number, rt: any) => acc + (parseInt(rt.availableRoomCount) || 1), 0);
+            }
+            setFormData({
+              kostName: first.title || '',
+              kostType: first.type || '',
+              totalRooms: totalRoomsCalculated > 0 ? String(totalRoomsCalculated) : '10',
+              emptyRooms: '0',
+              address: first.address || '',
+              googleMapsLink: ''
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Error loading user properties:", err);
+      }
+    }
+    loadUserKosts();
+  }, [user]);
+
+  const handleKostSelection = (id: string) => {
+    setSelectedKostId(id);
+    if (id === 'NEW') {
+      setIsManualInput(true);
+      setFormData({
+        kostName: '',
+        kostType: '',
+        totalRooms: '',
+        emptyRooms: '',
+        address: '',
+        googleMapsLink: ''
+      });
+    } else {
+      const selected = userKosts.find(k => k.id === id);
+      if (selected) {
+        setIsManualInput(false);
+        let totalRoomsCalculated = 0;
+        if (selected.room_types && Array.isArray(selected.room_types)) {
+          totalRoomsCalculated = selected.room_types.reduce((acc: number, rt: any) => acc + (parseInt(rt.availableRoomCount) || 1), 0);
+        }
+        setFormData({
+          kostName: selected.title || '',
+          kostType: selected.type || '',
+          totalRooms: totalRoomsCalculated > 0 ? String(totalRoomsCalculated) : '10',
+          emptyRooms: '0',
+          address: selected.address || '',
+          googleMapsLink: ''
+        });
+      }
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -126,7 +200,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
       return;
     }
 
-    const meta = {
+    const meta: any = {
       userName: user.name || user.displayName || 'Pemilik Kost',
       userEmail: user.email || '',
       userPhone: user.phone || '',
@@ -136,6 +210,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
       emptyRooms: eRooms,
       address: formData.address,
       googleMapsLink: formData.googleMapsLink || '',
+      propertyId: !isManualInput && selectedKostId !== 'NEW' ? selectedKostId : null,
       item: `Langganan KostManager - ${packageLabel}`,
       service_name: `KostManager ${packageLabel} Subscription`,
       package_price: packagePrice,
@@ -584,6 +659,62 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
               ) : (
                 /* Form */
                 <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Selector Metode (Case 1 vs Case 2) */}
+                  {userKosts.length > 0 && (
+                    <div className="bg-orange-50/50 border border-orange-100 p-4 rounded-2xl space-y-3">
+                      <label className="block text-[10px] font-black text-orange-800 uppercase tracking-widest">
+                        Metode Pendaftaran Kost
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsManualInput(false);
+                            if (userKosts.length > 0) {
+                              handleKostSelection(userKosts[0].id);
+                            }
+                          }}
+                          className={`px-4 py-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                            !isManualInput 
+                              ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-500/10' 
+                              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          Pilih dari Kost Saya
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleKostSelection('NEW')}
+                          className={`px-4 py-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                            isManualInput 
+                              ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-500/10' 
+                              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          Daftar Kost Baru (Manual)
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dropdown pilihan kost jika ada */}
+                  {!isManualInput && userKosts.length > 0 && (
+                    <div className="animate-in fade-in duration-300">
+                      <label className="block text-xs font-bold text-gray-500 mb-2 font-sans">Pilih Kost Yang Ingin Didaftarkan</label>
+                      <select
+                        value={selectedKostId}
+                        onChange={(e) => handleKostSelection(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:border-orange-500 outline-none text-sm appearance-none cursor-pointer font-bold"
+                      >
+                        {userKosts.map((kost) => (
+                          <option key={kost.id} value={kost.id}>
+                            {kost.title} ({kost.city || kost.address || 'Tanpa Alamat'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-500 mb-2">Nama Kost</label>

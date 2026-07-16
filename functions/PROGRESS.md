@@ -2,7 +2,16 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 1. Integrasi CDN Caching Cloudflare Workers untuk Supabase Storage (Juli 2026)
+### 1. Pendaftaran Langganan KostManager Cerdas (Smart Onboarding) (Juli 2026)
+- **Seleksi Kost Eksisting vs Manual (Case 1 & Case 2)**:
+  - Menambahkan pendeteksi properti milik mitra yang belum dikelola (`is_managed = false`) pada halaman landing page KostManager (`KostManagerLanding.tsx`).
+  - Menampilkan pilihan dinamis untuk mendaftarkan kost eksisting ("Pilih dari Kost Saya") atau mendaftar manual jika merupakan mitra baru.
+  - Memilih kost eksisting secara otomatis mengimpor detail nama, tipe, kamar, dan alamat kost ke formulir pendaftaran.
+- **Fulfillment Transaksi & Sinkronisasi Database (`adminService.ts`)**:
+  - Menyematkan `propertyId` pada metadata transaksi langganan jika pengguna memilih properti eksisting.
+  - Menambahkan logika pada `syncKostManagerRequest` agar saat status transaksi berubah menjadi `PAID`, sistem secara otomatis mengupdate properti tersebut menjadi dikelola (`is_managed = true`) dan meng-upgrade status langganan pemilik di tabel `mitra` menjadi `'kostmanager'`.
+
+### 2. Integrasi CDN Caching Cloudflare Workers untuk Supabase Storage (Juli 2026)
 - **Implementasi Caching Proxy Global**:
   - Mengubah fungsi pencari URL absolut `ensureAbsoluteUrl` di `userService.ts` agar mendeteksi URL bawaan Supabase dan secara dinamis mengubahnya menjadi URL proxy CDN Cloudflare `https://media.ruangsinggah.id`.
   - Menghemat penggunaan egress/bandwidth Supabase Storage secara signifikan karena gambar dan media akan di-cache secara permanen di server CDN Cloudflare.
