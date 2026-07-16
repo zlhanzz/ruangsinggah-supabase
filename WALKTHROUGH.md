@@ -1,11 +1,13 @@
-# WALKTHROUGH - Pendaftaran KostManager Cerdas & Pelacakan Rute GPS
+# WALKTHROUGH - Pendaftaran KostManager Cerdas, Pelacakan Rute GPS, & Peta Interaktif Onboarding
 
 ## 1. Daftar Perubahan
-Berikut adalah detail perubahan yang telah dilakukan pada kode program untuk mendukung integrasi GPS pelacakan:
+Berikut adalah detail perubahan yang telah dilakukan pada kode program untuk mendukung integrasi GPS pelacakan dan visualisasi peta:
 
-### A. Autofill Google Maps Koordinat (`KostManagerLanding.tsx`)
+### A. Peta Interaktif & Autofill Google Maps Koordinat (`KostManagerLanding.tsx`)
 - Jika mitra memilih opsi **"Pilih dari Kost Saya"**, sistem secara otomatis memeriksa koordinat latitude dan longitude dari properti tersebut.
 - Jika koordinat tersedia, sistem memformat URL pencarian Google Maps (`https://www.google.com/maps?q=lat,lng`) dan mengisinya ke field `googleMapsLink` secara otomatis.
+- **Peta Interaktif**: Sistem merender peta lokasi Google Maps (`https://maps.google.com/maps?q=lat,lng&z=16&output=embed`) di dalam frame di dalam modal, sehingga mitra bisa memvalidasi titik lokasinya secara visual secara instan.
+- **Input Protektif**: Input field `googleMapsLink` dikunci menjadi `readOnly` dengan latar belakang terarsir (`bg-gray-50`) untuk mencegah kesalahan ketik manual dari user. Input manual tetap terbuka normal jika mitra mendaftar secara manual (daftar kost baru).
 
 ### B. Sinkronisasi Data Tautan ke Tugas Survey (`adminService.ts` & `index.ts`)
 - Memperbarui file backend `functions/src/index.ts` dan helper client `functions/public/adminService.ts` agar menyisipkan string penunjuk GPS `📍 Link GPS: [URL]` ke dalam kolom `notes` pada entri `survey_requests`.

@@ -7,7 +7,8 @@
   - Menambahkan pendeteksi properti milik mitra yang belum dikelola (`is_managed = false`) pada halaman landing page KostManager (`KostManagerLanding.tsx`).
   - Menampilkan pilihan dinamis untuk mendaftarkan kost eksisting ("Pilih dari Kost Saya") atau mendaftar manual jika merupakan mitra baru.
   - Memilih kost eksisting secara otomatis mengimpor detail nama, tipe, kamar, dan alamat kost ke formulir pendaftaran.
-  - Secara otomatis menarik koordinat lokasi (`latitude` & `longitude`) dari listing kost lama dan merumuskannya menjadi tautan Google Maps untuk diajukan sebagai data lokasi GPS.
+  - Secara otomatis menarik koordinat lokasi (`latitude` & `longitude`) dari listing kost lama, merumuskannya menjadi tautan Google Maps, serta merender peta interaktif **Google Maps Embed** langsung di dalam modal formulir pendaftaran di bawah dropdown kost pilihan.
+  - Mengunci input text field "Link Google Maps" menjadi *read-only* dengan visualisasi terarsir agar data GPS aman dari salah ketik oleh mitra ketika memilih opsi kost eksisting. Silakan menginput maps link secara manual hanya jika memilih opsi daftar baru.
 - **Fulfillment Transaksi & Sinkronisasi Database (`adminService.ts` & `index.ts`)**:
   - Menyematkan `propertyId` pada metadata transaksi langganan jika pengguna memilih properti eksisting.
   - Menambahkan logika pada `syncKostManagerRequest` agar saat status transaksi berubah menjadi `PAID`, sistem secara otomatis mengupdate properti tersebut menjadi dikelola (`is_managed = true`) dan meng-upgrade status langganan pemilik di tabel `mitra` menjadi `'kostmanager'`.

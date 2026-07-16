@@ -706,19 +706,48 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
 
                   {/* Dropdown pilihan kost jika ada */}
                   {!isManualInput && userKosts.length > 0 && (
-                    <div className="animate-in fade-in duration-300">
-                      <label className="block text-xs font-bold text-gray-500 mb-2 font-sans">Pilih Kost Yang Ingin Didaftarkan</label>
-                      <select
-                        value={selectedKostId}
-                        onChange={(e) => handleKostSelection(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:border-orange-500 outline-none text-sm appearance-none cursor-pointer font-bold"
-                      >
-                        {userKosts.map((kost) => (
-                          <option key={kost.id} value={kost.id}>
-                            {kost.title} ({kost.city || kost.address || 'Tanpa Alamat'})
-                          </option>
-                        ))}
-                      </select>
+                    <div className="animate-in fade-in duration-300 space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-2 font-sans">Pilih Kost Yang Ingin Didaftarkan</label>
+                        <select
+                          value={selectedKostId}
+                          onChange={(e) => handleKostSelection(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:border-orange-500 outline-none text-sm appearance-none cursor-pointer font-bold"
+                        >
+                          {userKosts.map((kost) => (
+                            <option key={kost.id} value={kost.id}>
+                              {kost.title} ({kost.city || kost.address || 'Tanpa Alamat'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Tampilkan Peta Titik Lokasi Eksisting */}
+                      {(() => {
+                        const selected = userKosts.find(k => k.id === selectedKostId);
+                        const hasLocation = selected?.location && (selected.location.lat !== 0 || selected.location.lng !== 0);
+                        if (hasLocation) {
+                          const embedUrl = `https://maps.google.com/maps?q=${selected.location.lat},${selected.location.lng}&z=16&output=embed`;
+                          return (
+                            <div className="space-y-2 animate-in slide-in-from-top-4 duration-300">
+                              <label className="block text-xs font-bold text-orange-600 font-sans uppercase tracking-wider flex items-center gap-1.5">
+                                📍 Titik Lokasi Terdaftar
+                              </label>
+                              <div className="rounded-2xl overflow-hidden border border-gray-200 bg-gray-50 shadow-inner">
+                                <iframe
+                                  title="Kost Location Map"
+                                  width="100%"
+                                  height="180"
+                                  style={{ border: 0 }}
+                                  loading="lazy"
+                                  src={embedUrl}
+                                ></iframe>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   )}
 
@@ -789,8 +818,13 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
                       name="googleMapsLink"
                       value={formData.googleMapsLink}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:border-orange-500 outline-none text-sm font-medium animate-all"
-                      placeholder="https://maps.app.goo.gl/... atau https://google.com/maps/..."
+                      readOnly={!isManualInput}
+                      className={`w-full px-4 py-3 rounded-xl border outline-none text-sm font-medium animate-all ${
+                        !isManualInput 
+                          ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed font-semibold' 
+                          : 'bg-white text-gray-900 focus:border-orange-500 border-gray-200'
+                      }`}
+                      placeholder={!isManualInput ? "Link lokasi terisi otomatis dari data titik koordinat listing" : "https://maps.app.goo.gl/... atau https://google.com/maps/..."}
                     />
                   </div>
 
