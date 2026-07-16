@@ -29,7 +29,13 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const isModalOpen = searchParams.get('register') === 'true';
+  const setIsModalOpen = (open: boolean) => {
+    const params: any = {};
+    if (open) params.register = 'true';
+    if (urlOrderId) params.orderId = urlOrderId;
+    setSearchParams(params);
+  };
   const [hasAgreedMoU, setHasAgreedMoU] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
@@ -45,6 +51,34 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
 
   const [packages, setPackages] = useState<KostManagerPackage[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string>('');
+
+  // Load draft from localStorage on mount
+  useEffect(() => {
+    const draft = localStorage.getItem('kostmanager_onboarding_draft');
+    if (draft) {
+      try {
+        const parsed = JSON.parse(draft);
+        if (parsed.formData) setFormData(parsed.formData);
+        if (parsed.isManualInput !== undefined) setIsManualInput(parsed.isManualInput);
+        if (parsed.selectedKostId !== undefined) setSelectedKostId(parsed.selectedKostId);
+        if (parsed.selectedPackageId !== undefined) setSelectedPackageId(parsed.selectedPackageId);
+        if (parsed.hasAgreedMoU !== undefined) setHasAgreedMoU(parsed.hasAgreedMoU);
+      } catch (e) {
+        console.error('Failed to parse draft:', e);
+      }
+    }
+  }, []);
+
+  // Save draft on changes
+  useEffect(() => {
+    localStorage.setItem('kostmanager_onboarding_draft', JSON.stringify({
+      formData,
+      isManualInput,
+      selectedKostId,
+      selectedPackageId,
+      hasAgreedMoU
+    }));
+  }, [formData, isManualInput, selectedKostId, selectedPackageId, hasAgreedMoU]);
 
   useEffect(() => {
     async function loadPackages() {
@@ -65,7 +99,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
       try {
         const { data, error } = await supabase
           .from('properties')
-          .select('id, title, type, room_types, address, city')
+          .select('id, title, type, room_types, address, city, location')
           .eq('owner_uid', user.uid || user.id)
           .eq('is_managed', false);
         if (!error && data) {
@@ -886,6 +920,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
           userId={user.uid || user.id}
           metadata={paymentMetadata}
           onPaymentSuccess={() => {
+            localStorage.removeItem('kostmanager_onboarding_draft');
             setShowPayment(false);
             setIsModalOpen(false);
             setIsSuccess(true);
