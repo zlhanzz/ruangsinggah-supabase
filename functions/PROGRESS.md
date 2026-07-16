@@ -2,14 +2,19 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 1. Pendaftaran Langganan KostManager Cerdas (Smart Onboarding) (Juli 2026)
+### 1. Pendaftaran Langganan KostManager Cerdas (Smart Onboarding) & Pelacakan GPS (Juli 2026)
 - **Seleksi Kost Eksisting vs Manual (Case 1 & Case 2)**:
   - Menambahkan pendeteksi properti milik mitra yang belum dikelola (`is_managed = false`) pada halaman landing page KostManager (`KostManagerLanding.tsx`).
   - Menampilkan pilihan dinamis untuk mendaftarkan kost eksisting ("Pilih dari Kost Saya") atau mendaftar manual jika merupakan mitra baru.
   - Memilih kost eksisting secara otomatis mengimpor detail nama, tipe, kamar, dan alamat kost ke formulir pendaftaran.
-- **Fulfillment Transaksi & Sinkronisasi Database (`adminService.ts`)**:
+  - Secara otomatis menarik koordinat lokasi (`latitude` & `longitude`) dari listing kost lama dan merumuskannya menjadi tautan Google Maps untuk diajukan sebagai data lokasi GPS.
+- **Fulfillment Transaksi & Sinkronisasi Database (`adminService.ts` & `index.ts`)**:
   - Menyematkan `propertyId` pada metadata transaksi langganan jika pengguna memilih properti eksisting.
   - Menambahkan logika pada `syncKostManagerRequest` agar saat status transaksi berubah menjadi `PAID`, sistem secara otomatis mengupdate properti tersebut menjadi dikelola (`is_managed = true`) dan meng-upgrade status langganan pemilik di tabel `mitra` menjadi `'kostmanager'`.
+  - Mengalirkan data tautan Google Maps ke dalam kolom `notes` pada data `survey_requests` agar dapat dibaca oleh tim surveyor lapangan.
+- **Pelacakan Rute Lokasi GPS (Admin & Agen Survey)**:
+  - **Dashboard Admin (`KostManagerManagement.tsx`)**: Menambahkan kolom `metadata` pada query data transaksi serta menampilkan tautan tombol "📍 Lacak Rute GPS" yang responsif agar admin dapat melacak rute lokasi kost secara instan.
+  - **Dashboard Agen (`AgentDashboard.tsx`)**: Menambahkan pendeteksi format link GPS pada kolom catatan tugas survey untuk menampilkan tombol interaktif "📍 Buka Rute GPS / Maps" yang membawa agen survey langsung ke titik koordinat kost dengan navigasi Google Maps.
 
 ### 2. Integrasi CDN Caching Cloudflare Workers untuk Supabase Storage (Juli 2026)
 - **Implementasi Caching Proxy Global**:

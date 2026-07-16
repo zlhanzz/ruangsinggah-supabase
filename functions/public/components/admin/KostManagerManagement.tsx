@@ -44,7 +44,8 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                         amount,
                         status,
                         payment_method,
-                        created_at
+                        created_at,
+                        metadata
                     )
                 `)
                 .order('created_at', { ascending: false });
@@ -186,6 +187,16 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                             <div className="font-bold text-gray-900 uppercase">{req.kost_name}</div>
                                             <div className="text-xs text-gray-400 mt-0.5">{req.kost_type} • {req.empty_rooms} Kamar Kosong</div>
                                             <div className="text-xs text-gray-500 mt-1 max-w-xs truncate">{req.kost_address}</div>
+                                            {req.transaction?.metadata?.googleMapsLink && (
+                                                <a 
+                                                    href={req.transaction.metadata.googleMapsLink} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer" 
+                                                    className="inline-flex items-center gap-1 text-[10px] text-orange-600 hover:text-orange-700 font-bold uppercase tracking-wider mt-1.5"
+                                                >
+                                                    📍 Lacak Rute GPS
+                                                </a>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="font-semibold text-gray-800">{req.user?.name || 'User'}</div>

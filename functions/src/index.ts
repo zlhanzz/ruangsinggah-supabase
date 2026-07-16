@@ -1076,6 +1076,7 @@ async function syncSurveyRequestsBackend(supabase: any, order: any) {
         targetStatus = existing.status;
       }
 
+      const mapsLink = kost.mapsLink || kost.googleMapsLink || metadata.googleMapsLink || '';
       const payload: any = {
         user_id: userId,
         transaction_id: orderId,
@@ -1085,7 +1086,7 @@ async function syncSurveyRequestsBackend(supabase: any, order: any) {
         owner_phone: normalizePhone(kost.ownerPhone || kost.owner_phone || ''),
         survey_date: metadata.surveyDate || existing?.survey_date || null,
         survey_time: metadata.surveyTime || existing?.survey_time || null,
-        notes: `${metadata.notes || ''}\n[Sync]`.trim(),
+        notes: `${metadata.notes || ''}${mapsLink ? `\n📍 Link GPS: ${mapsLink}` : ''}\n[Sync]`.trim(),
         updated_at: new Date().toISOString(),
       };
 

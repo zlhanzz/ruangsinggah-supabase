@@ -1152,7 +1152,7 @@ export async function syncKostManagerRequest(transactionId: string, transactionO
                 owner_phone: meta.ownerPhone || meta.owner_phone || '-',
                 survey_date: meta.surveyDate || existingSurvey?.survey_date || getCurrentDate().toISOString().split('T')[0],
                 survey_time: meta.surveyTime || existingSurvey?.survey_time || '10:00',
-                notes: 'KostManager Onboarding - Survey Pendataan Lapangan',
+                notes: `KostManager Onboarding - Survey Pendataan Lapangan${meta.googleMapsLink ? `\n📍 Link GPS: ${meta.googleMapsLink}` : ''}`,
                 updated_at: getCurrentDate().toISOString(),
             };
 

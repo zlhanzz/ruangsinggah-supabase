@@ -978,7 +978,27 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 mt-1">
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                         </div>
-                                        <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Lokasi Kost</p><p className="font-bold text-gray-900 text-xs sm:text-sm leading-relaxed">{req.kost_address}</p></div>
+                                                                       <div>
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Lokasi Kost</p>
+                                            <p className="font-bold text-gray-900 text-xs sm:text-sm leading-relaxed">{req.kost_address}</p>
+                                            {(() => {
+                                                const match = req.notes?.match(/📍(?: Link)? GPS:\s*(https?:\/\/\S+)/);
+                                                const mapsUrl = match ? match[1] : null;
+                                                if (mapsUrl) {
+                                                    return (
+                                                        <a 
+                                                            href={mapsUrl} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer" 
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 text-[10px] font-black uppercase tracking-wider transition-all border border-orange-200 mt-2 shadow-sm"
+                                                        >
+                                                            📍 Buka Rute GPS / Maps
+                                                        </a>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
+                                         </div>
                                     </div>
                                     <div className="flex items-start gap-3">
                                         <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 mt-1">

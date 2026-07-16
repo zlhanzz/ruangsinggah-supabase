@@ -116,13 +116,20 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
         if (selected.room_types && Array.isArray(selected.room_types)) {
           totalRoomsCalculated = selected.room_types.reduce((acc: number, rt: any) => acc + (parseInt(rt.availableRoomCount) || 1), 0);
         }
+
+        // Construct maps link from coordinates if available
+        let mapsLink = '';
+        if (selected.location && selected.location.lat && selected.location.lng) {
+          mapsLink = `https://www.google.com/maps?q=${selected.location.lat},${selected.location.lng}`;
+        }
+
         setFormData({
           kostName: selected.title || '',
           kostType: selected.type || '',
           totalRooms: totalRoomsCalculated > 0 ? String(totalRoomsCalculated) : '10',
           emptyRooms: '0',
           address: selected.address || '',
-          googleMapsLink: ''
+          googleMapsLink: mapsLink
         });
       }
     }
