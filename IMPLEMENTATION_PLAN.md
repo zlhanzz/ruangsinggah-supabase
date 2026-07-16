@@ -1,22 +1,26 @@
-# IMPLEMENTATION PLAN - Pendaftaran KostManager Cerdas, Pelacakan Rute GPS, & Peta Interaktif Onboarding
+# IMPLEMENTATION PLAN - Pendaftaran KostManager, Pelacakan GPS, & Pemantauan Status Pengajuan
 
 ## 1. Analisis Masalah
-Mitra yang mendaftarkan kost eksisting ke KostManager ingin agar alamat titik lokasi GPS yang sudah mereka tetapkan (melalui latitude & longitude) digunakan kembali secara otomatis tanpa perlu menginput ulang atau mencari koordinat baru. Selain itu, admin pada dashboard admin dan agen survey pada dashboard agen harus dapat memantau, melacak, serta melakukan navigasi langsung ke titik lokasi GPS tersebut guna efisiensi operasional.
-Di samping itu, untuk verifikasi visual langsung saat pendaftaran, kita perlu merender peta Google Maps interaktif (iframe) di dalam form pendaftaran saat kost eksisting dipilih, serta menonaktifkan kolom isian manual agar terhindar dari salah ketik.
+Mitra/owner yang mengajukan pendaftaran KostManager membutuhkan umpan balik status secara transparan mengenai proses pengajuannya, mulai dari pembayaran sukses hingga ditetapkannya agen survey, jadwal survey, dan status operasional (Selesai). Kita ingin menghadirkan UI pemantauan real-time yang ramah bagi pengguna di menu Profil Dashboard Mitra, yang bersinkronisasi langsung dengan aksi penugasan dan survey dari Dashboard Admin/Agen.
 
 ## 2. Dampak Perubahan
-1. `functions/public/pages/KostManagerLanding.tsx` (Render peta Google Maps embed & menonaktifkan kolom Maps link jika kost eksisting dipilih)
-2. `functions/public/adminService.ts` & `functions/src/index.ts` (Meneruskan URL maps ke database survey_requests.notes)
-3. `functions/public/components/admin/KostManagerManagement.tsx` (Tampilan tombol lacak rute di Dashboard Admin)
-4. `functions/public/pages/AgentDashboard.tsx` (Tampilan tombol navigasi GPS di Dashboard Agen)
+1. `functions/public/pages/MitraProfile.tsx` (Implementasi penarikan database permohonan KostManager & visualisasi Progress Stepper 5 tahapan)
+2. `functions/public/pages/KostManagerLanding.tsx` (Autofill koordinat peta Google Maps embed & proteksi input)
+3. `functions/public/adminService.ts` & `functions/src/index.ts` (Penyematan data link GPS ke catatan survey_requests)
+4. `functions/public/components/admin/KostManagerManagement.tsx` (Visualisasi tombol lacak koordinat di Dashboard Admin)
+5. `functions/public/pages/AgentDashboard.tsx` (Tombol navigasi rute instan di Dashboard Agen)
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Peta Interaktif & Autofill GPS**: Pada `KostManagerLanding.tsx`, jika mitra memilih kost eksisting, sistem merender komponen `<iframe src={embedUrl} />` tepat di bawah dropdown pilihan kost dan menyetel kolom `googleMapsLink` sebagai `readOnly` (terarsir).
-2. **Penyimpanan notes di Backend**: Pada sinkronisasi data sukses (di client `adminService.ts` dan cloud function `index.ts`), sisipkan teks penunjuk `📍 Link GPS: [URL]` ke dalam kolom `notes` pada baris `survey_requests`.
-3. **Tombol Lacak di Portal Admin**: Tambahkan query kolom `metadata` pada database transaksi di `KostManagerManagement.tsx` dan tampilkan tombol *"📍 Lacak Rute GPS"* di bawah alamat kost.
-4. **Navigasi di Dashboard Agen**: Di `AgentDashboard.tsx`, gunakan regex untuk mendeteksi `📍 Link GPS:` di dalam kolom catatan tugas survey. Jika terdeteksi, tampilkan tombol hijau bersinar *"📍 Buka Rute GPS / Maps"* agar agen langsung bisa membuka navigasi Google Maps.
+1. **Fetching Data Status di Mitra**: Di `MitraProfile.tsx`, tambahkan pengambilan data dari tabel `kostmanager_requests` beserta relasi transaksi Midtrans untuk user yang sedang aktif.
+2. **Visualisasi Progress Stepper**: Buat stepper responsive dengan 5 langkah:
+   - **Diajukan**: Pembayaran berhasil diverifikasi.
+   - **Verifikasi**: Sedang ditinjau admin.
+   - **Agen Ditunjuk**: Menampilkan nama agen jika sudah ditetapkan admin.
+   - **Proses Survey**: Menampilkan jadwal survey (tanggal/jam) jika sudah diatur.
+   - **Selesai**: Kost berhasil diaktifkan dengan status `COMPLETED` dan dikelola penuh.
+3. **Penyelarasan Dashboard Admin**: Memastikan admin dapat menetapkan agen survey dan memperbarui jadwal melalui dashboard admin.
 
 ## 4. Rencana Verifikasi
-- Menguji pengisian form kost eksisting untuk memastikan peta Google Maps terender dengan titik lokasi yang tepat.
-- Memastikan kolom Link Google Maps tidak dapat diubah (read-only) ketika memilih opsi kost eksisting.
-- Memastikan kolom Link Google Maps tetap terbuka untuk diisi manual ketika memilih opsi daftar baru (manual).
+- Membuka menu profil mitra dan memverifikasi data pengajuan KostManager terisi.
+- Menguji responsivitas stepper pada layout mobile dan desktop.
+- Memastikan build frontend sukses tanpa warning.

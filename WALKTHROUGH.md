@@ -1,24 +1,24 @@
-# WALKTHROUGH - Pendaftaran KostManager Cerdas, Pelacakan Rute GPS, & Peta Interaktif Onboarding
+# WALKTHROUGH - Pendaftaran KostManager, Pelacakan GPS, & Pemantauan Status Pengajuan
 
 ## 1. Daftar Perubahan
-Berikut adalah detail perubahan yang telah dilakukan pada kode program untuk mendukung integrasi GPS pelacakan dan visualisasi peta:
+Berikut adalah detail perubahan yang telah dilakukan pada kode program untuk mendukung tracking pengajuan:
 
-### A. Peta Interaktif & Autofill Google Maps Koordinat (`KostManagerLanding.tsx`)
-- Jika mitra memilih opsi **"Pilih dari Kost Saya"**, sistem secara otomatis memeriksa koordinat latitude dan longitude dari properti tersebut.
-- Jika koordinat tersedia, sistem memformat URL pencarian Google Maps (`https://www.google.com/maps?q=lat,lng`) dan mengisinya ke field `googleMapsLink` secara otomatis.
-- **Peta Interaktif**: Sistem merender peta lokasi Google Maps (`https://maps.google.com/maps?q=lat,lng&z=16&output=embed`) di dalam frame di dalam modal, sehingga mitra bisa memvalidasi titik lokasinya secara visual secara instan.
-- **Input Protektif**: Input field `googleMapsLink` dikunci menjadi `readOnly` dengan latar belakang terarsir (`bg-gray-50`) untuk mencegah kesalahan ketik manual dari user. Input manual tetap terbuka normal jika mitra mendaftar secara manual (daftar kost baru).
+### A. Dashboard Mitra: Pemantauan Progress Stepper (`MitraProfile.tsx`)
+- Menambahkan state `kmRequests` untuk menarik seluruh riwayat transaksi pengajuan layanan KostManager milik mitra secara live.
+- Merancang komponen visual **Progress Stepper UI** di dalam menu Profil (jika tidak sedang dalam mode edit).
+- Memetakan 5 tahapan proses pengajuan secara dinamis:
+  1. **Diajukan**: Status pembayaran terverifikasi sukses.
+  2. **Verifikasi**: Pengajuan sedang diproses verifikasi kelayakan oleh admin.
+  3. **Agen Ditunjuk**: Menampilkan nama agen survey lapangan jika sudah ditugaskan oleh admin.
+  4. **Proses Survey**: Menampilkan jadwal survey (tanggal & waktu) yang ditetapkan untuk kunjungan.
+  5. **Selesai**: Kost diserahterimakan dan dikelola penuh oleh sistem autopilot.
 
-### B. Sinkronisasi Data Tautan ke Tugas Survey (`adminService.ts` & `index.ts`)
-- Memperbarui file backend `functions/src/index.ts` dan helper client `functions/public/adminService.ts` agar menyisipkan string penunjuk GPS `📍 Link GPS: [URL]` ke dalam kolom `notes` pada entri `survey_requests`.
+### B. Dashboard Admin: Tombol Lacak & Penugasan (`KostManagerManagement.tsx`)
+- Admin dapat memantau permohonan aktif, melihat tautan GPS, dan memilih tombol *"📍 Lacak Rute GPS"* langsung dari baris tabel data.
+- Menyediakan formulir penugasan agen survey dan penjadwalan kunjungan secara dinamis, yang secara otomatis memicu pembaruan progress stepper di sisi mitra.
 
-### C. Dashboard Admin: Tombol Lacak (`KostManagerManagement.tsx`)
-- Memodifikasi kueri pemilihan data KostManager agar menyertakan kolom `metadata` dari tabel transaksi.
-- Menambahkan tautan tombol interaktif *"📍 Lacak Rute GPS"* di bawah alamat kost jika data `googleMapsLink` terdeteksi di dalam metadata transaksi.
-
-### D. Dashboard Agen: Navigasi GPS (`AgentDashboard.tsx`)
-- Menggunakan regex `📍(?: Link)? GPS:\s*(https?:\/\/\S+)` untuk mendeteksi keberadaan tautan lokasi di kolom `notes` tugas survey.
-- Jika terdeteksi, sistem akan menampilkan tombol hijau bersinar *"📍 Buka Rute GPS / Maps"* pada detail kartu tugas survey agen agar agen dapat langsung bernavigasi ke lokasi menggunakan Google Maps bawaan ponsel/komputer mereka.
+### C. Dashboard Agen: Navigasi Lokasi GPS (`AgentDashboard.tsx`)
+- Menyediakan tombol *"📍 Buka Rute GPS / Maps"* pada detail kartu tugas survey agen untuk navigasi instan ke titik koordinat properti yang didaftarkan.
 
 ## 2. Hasil Pengujian & Verifikasi
 - Pengujian kompilasi dengan `npm run build` selesai dengan **sukses** (100% aman tanpa error lint/tipe data).

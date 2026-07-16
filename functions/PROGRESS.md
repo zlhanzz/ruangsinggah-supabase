@@ -13,9 +13,11 @@
   - Menyematkan `propertyId` pada metadata transaksi langganan jika pengguna memilih properti eksisting.
   - Menambahkan logika pada `syncKostManagerRequest` agar saat status transaksi berubah menjadi `PAID`, sistem secara otomatis mengupdate properti tersebut menjadi dikelola (`is_managed = true`) dan meng-upgrade status langganan pemilik di tabel `mitra` menjadi `'kostmanager'`.
   - Mengalirkan data tautan Google Maps ke dalam kolom `notes` pada data `survey_requests` agar dapat dibaca oleh tim surveyor lapangan.
-- **Pelacakan Rute Lokasi GPS (Admin & Agen Survey)**:
+- **Pelacakan Rute Lokasi GPS & Pemantauan Status Pengajuan (Mitra, Admin, & Agen)**:
+  - **Dashboard Mitra (`MitraProfile.tsx`)**: Menambahkan pemantauan status pengajuan KostManager langsung di menu profil mitra. Menampilkan kartu pelacakan dengan **Progress Stepper UI** interaktif yang memvisualisasikan 5 tahapan proses secara *real-time*: `Diajukan` (Pembayaran Sukses) -> `Verifikasi` (Ditinjau oleh Admin) -> `Agen Ditunjuk` (Menampilkan nama agen) -> `Proses Survey` (Menampilkan jadwal kunjungan) -> `Selesai` (Kost aktif dikelola autopilot).
   - **Dashboard Admin (`KostManagerManagement.tsx`)**: Menambahkan kolom `metadata` pada query data transaksi serta menampilkan tautan tombol "📍 Lacak Rute GPS" yang responsif agar admin dapat melacak rute lokasi kost secara instan.
   - **Dashboard Agen (`AgentDashboard.tsx`)**: Menambahkan pendeteksi format link GPS pada kolom catatan tugas survey untuk menampilkan tombol interaktif "📍 Buka Rute GPS / Maps" yang membawa agen survey langsung ke titik koordinat kost dengan navigasi Google Maps.
+
 
 ### 2. Integrasi CDN Caching Cloudflare Workers untuk Supabase Storage (Juli 2026)
 - **Implementasi Caching Proxy Global**:
