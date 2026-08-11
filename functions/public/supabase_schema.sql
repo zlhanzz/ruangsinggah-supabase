@@ -382,6 +382,11 @@ CREATE POLICY "users_select_basic_profile"
   ON public.users FOR SELECT 
   USING (auth.uid() IS NOT NULL);
 
+-- Izinkan publik untuk melihat profil agen survey agar daftar agen tampil dengan lancar
+CREATE POLICY "users_select_agents_public"
+  ON public.users FOR SELECT
+  USING (role = 'survey_agent');
+
 -- ============================================================
 -- POLICIES untuk tabel AGENTS
 -- ============================================================
@@ -728,6 +733,16 @@ CREATE POLICY "transactions_select_owner"
     )
   );
 
+CREATE POLICY "transactions_select_agent" 
+  ON public.transactions FOR SELECT 
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.survey_requests 
+      WHERE survey_requests.transaction_id = transactions.id 
+      AND survey_requests.assigned_agent_id = auth.uid()
+    )
+  );
+
 -- AKTIFKAN REALTIME
 ALTER PUBLICATION supabase_realtime ADD TABLE public.transactions;
 
@@ -950,6 +965,9 @@ CREATE TABLE IF NOT EXISTS public.kostmanager_requests (
   agent_name        TEXT,
   agent_phone       TEXT,
   assigned_agent_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  survey_date       DATE,
+  survey_time       TIME,
+  notes             TEXT,
   result_drive_link TEXT,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -1084,3 +1102,50 @@ SELECT
 FROM public.users
 WHERE role IN ('owner', 'mitra')
 ON CONFLICT (user_id) DO NOTHING;
+
+-- ============================================================
+-- TABEL KHUSUS MITRA KOST MANAGER
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.mitra_kostmanager (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  property_id          UUID REFERENCES public.properties(id) ON DELETE CASCADE,
+  owner_uid            UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  title                TEXT,
+  description          TEXT,
+  price                NUMERIC(15,2) DEFAULT 0,
+  facilities           JSONB DEFAULT '[]',
+  address              TEXT,
+  city                 TEXT,
+  area                 TEXT,
+  location             JSONB DEFAULT '{}',
+  rules                JSONB DEFAULT '[]',
+  campuses             JSONB DEFAULT '[]',
+  image_urls           JSONB DEFAULT '[]',
+  room_types           JSONB DEFAULT '[]',
+  metadata             JSONB DEFAULT '{}',
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Enable RLS for the new table
+ALTER TABLE public.mitra_kostmanager ENABLE ROW LEVEL SECURITY;
+
+-- Simple policies for mitra_kostmanager
+CREATE POLICY "Allow read for all users" ON public.mitra_kostmanager
+  FOR SELECT USING (true);
+
+CREATE POLICY "Allow all operations for admins" ON public.mitra_kostmanager
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.users 
+      WHERE users.id = auth.uid() AND (users.is_admin = true OR users.role::text = 'admin')
+    )
+  );
+
+CREATE POLICY "Allow insert/update for survey agents" ON public.mitra_kostmanager
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.users 
+      WHERE users.id = auth.uid() AND users.role::text IN ('survey_agent', 'agen', 'agent', 'admin')
+    )
+  );

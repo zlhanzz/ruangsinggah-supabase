@@ -4,7 +4,7 @@ import { FORMAT_CURRENCY } from '../constants';
 import { supabase } from '../supabase';
 import { notificationService } from '../notificationService';
 import { notifyAdminStatusUpdate, notifyAdminTransaction } from '../emailService';
-import { syncResidentStatus, syncSurveyRequest } from '../adminService';
+import { syncResidentStatus, syncSurveyRequest, syncKostManagerRequest } from '../adminService';
 import { Transaction } from '../types';
 
 interface PaymentGatewayProps {
@@ -246,8 +246,11 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
           syncResidentStatus(orderId).catch(e => console.error("Sync error:", e));
       }
 
-      if (productType === 'survey' || productType === 'kostmanager') {
+      if (productType === 'survey' || productType === 'kostmanager' || productType === 'kostmanager_subscription') {
            syncSurveyRequest(orderId).catch(e => console.error("Sync error:", e));
+           if (productType === 'kostmanager' || productType === 'kostmanager_subscription') {
+               syncKostManagerRequest(orderId).catch(e => console.error("Sync error:", e));
+           }
       }
       return;
     }
@@ -761,11 +764,12 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({
 
                 <div className="flex flex-col sm:flex-row gap-4 w-full max-w-sm">
                   <button 
-                   onClick={() => onPaymentSuccess(currentOrder?.id)} 
-                   className="flex-grow bg-gray-900 text-white px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-orange-500 transition-all shadow-xl shadow-gray-200"
-                  >
-                   {productType === 'survey' ? 'Lihat di Kost Saya' : 'Lanjutkan ke Pesanan'}
-                  </button>
+                    onClick={() => onPaymentSuccess(currentOrder?.id)} 
+                    className="flex-grow bg-gray-900 text-white px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-orange-500 transition-all shadow-xl shadow-gray-200"
+                   >
+                    {productType === 'survey' ? 'Lihat di Kost Saya' : 
+                     productType === 'kostmanager' ? 'Lihat Status Pengajuan' : 'Lanjutkan ke Pesanan'}
+                   </button>
                  {productType === 'survey' && (
                    <a 
                     href="https://wa.me/6285156634283" 

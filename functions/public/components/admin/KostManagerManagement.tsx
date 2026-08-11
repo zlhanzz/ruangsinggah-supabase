@@ -4,7 +4,8 @@ import { supabase } from '../../supabase';
 import { 
     updateKostManagerRequest, 
     deleteKostManagerRequest, 
-    getSurveyAgents
+    getSurveyAgents,
+    generateManualDriveFolder
 } from '../../adminService';
 
 interface KostManagerManagementProps {
@@ -72,8 +73,27 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
         if (!editingRequest) return;
         setIsSubmitting(true);
         try {
+            // Determine automatic status
+            let computedStatus = editingRequest.status;
+            
+            if (!editForm.assigned_agent_id) {
+                computedStatus = 'PENDING_ASSIGNMENT';
+            } else {
+                // If agent is newly assigned, keep status as PENDING_ASSIGNMENT so agent can accept it in their dashboard first
+                if (computedStatus === 'PENDING_ASSIGNMENT') {
+                    computedStatus = 'PENDING_ASSIGNMENT';
+                }
+                // If drive link is filled
+                if (editForm.result_drive_link) {
+                    computedStatus = 'PENDING_ONBOARDING';
+                } else if (computedStatus === 'PENDING_ONBOARDING') {
+                    // Revert to AGENT_ASSIGNED if drive link is cleared
+                    computedStatus = 'AGENT_ASSIGNED';
+                }
+            }
+
             const updates: any = {
-                status: editForm.status,
+                status: computedStatus,
                 assigned_agent_id: editForm.assigned_agent_id || null,
                 result_drive_link: editForm.result_drive_link || null
             };
@@ -187,16 +207,32 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                             <div className="font-bold text-gray-900 uppercase">{req.kost_name}</div>
                                             <div className="text-xs text-gray-400 mt-0.5">{req.kost_type} • {req.empty_rooms} Kamar Kosong</div>
                                             <div className="text-xs text-gray-500 mt-1 max-w-xs truncate">{req.kost_address}</div>
-                                            {req.transaction?.metadata?.googleMapsLink && (
-                                                <a 
-                                                    href={req.transaction.metadata.googleMapsLink} 
-                                                    target="_blank" 
-                                                    rel="noopener noreferrer" 
-                                                    className="inline-flex items-center gap-1 text-[10px] text-orange-600 hover:text-orange-700 font-bold uppercase tracking-wider mt-1.5"
-                                                >
-                                                    📍 Lacak Rute GPS
-                                                </a>
+                                            {req.notes && (
+                                                <div className="text-[10px] text-slate-500 font-bold mt-1 normal-case truncate max-w-xs" title={req.notes}>
+                                                    📝 Catatan: {req.notes.replace(/https?:\/\/[^\s]+/, '').trim() || 'Ada koordinat GPS'}
+                                                </div>
                                             )}
+                                            {(() => {
+                                                const extractUrl = (text: string) => {
+                                                    if (!text) return null;
+                                                    const match = text.match(/https?:\/\/[^\s]+/);
+                                                    return match ? match[0] : null;
+                                                };
+                                                const mapsUrl = extractUrl(req.notes) || req.transaction?.metadata?.googleMapsLink;
+                                                if (mapsUrl) {
+                                                    return (
+                                                        <a 
+                                                            href={mapsUrl} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer" 
+                                                            className="inline-flex items-center gap-1 text-[10px] text-orange-600 hover:text-orange-700 font-bold uppercase tracking-wider mt-1.5 border border-orange-200 bg-orange-50 px-2 py-0.5 rounded-md hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                                        >
+                                                            📍 Lacak Rute GPS
+                                                        </a>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="font-semibold text-gray-800">{req.user?.name || 'User'}</div>
@@ -264,29 +300,82 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
 
             {/* EDIT MODAL */}
             {editingRequest && (
-                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setEditingRequest(null)}></div>
-                    <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl relative z-10 p-8 animate-in zoom-in-95 flex flex-col" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-center mb-6">
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                    <div className="absolute inset-0" onClick={() => setEditingRequest(null)}></div>
+                    <div className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl relative z-10 p-8 animate-in zoom-in-95 flex flex-col max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-6 shrink-0">
                             <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Kelola KostManager</h3>
-                            <button onClick={() => setEditingRequest(null)} className="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
+                            <button onClick={() => setEditingRequest(null)} className="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-500 flex items-center justify-center border border-slate-200 transition-colors text-lg font-bold">&times;</button>
                         </div>
 
-                        <form onSubmit={handleUpdateStatusAndAgent} className="space-y-4">
-                            <div>
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Status Progres</label>
-                                <select
-                                    value={editForm.status}
-                                    onChange={e => setEditForm({ ...editForm, status: e.target.value })}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-orange-500/20"
-                                >
-                                    <option value="PENDING_ASSIGNMENT">Menunggu Penugasan Agen</option>
-                                    <option value="AGENT_ASSIGNED">Agen Ditugaskan</option>
-                                    <option value="SURVEYING">Sedang Disurvey (Pengambilan Konten)</option>
-                                    <option value="PENDING_ONBOARDING">Menunggu Onboarding (Upload Pemasaran)</option>
-                                    <option value="ACTIVE">Aktif (Properti Auto-Pilot)</option>
-                                </select>
+                        {/* Detail Informasi Pendaftaran (Read-only) */}
+                        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 text-xs font-bold uppercase text-slate-500 mb-6 space-y-4 shrink-0">
+                            <h4 className="text-[10px] font-black text-slate-400 tracking-wider">Detail Pendaftaran Pengaju</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left normal-case">
+                                <div>
+                                    <span className="text-[9px] font-black text-slate-400 tracking-wider uppercase block">Nama Mitra</span>
+                                    <span className="text-slate-800 font-black text-orange-600">{editingRequest.user?.name || '-'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-black text-slate-400 tracking-wider uppercase block">No. Telepon Mitra</span>
+                                    <span className="text-slate-800 font-bold">{editingRequest.user?.phone || editingRequest.owner_phone || '-'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-black text-slate-400 tracking-wider uppercase block">Nama Properti</span>
+                                    <span className="text-slate-800 font-black">{editingRequest.kost_name}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-black text-slate-400 tracking-wider uppercase block">Tipe Kost</span>
+                                    <span className="text-slate-800 font-bold">{editingRequest.kost_type || '-'} ({editingRequest.empty_rooms || 0} Kamar Kosong)</span>
+                                </div>
+                                <div className="sm:col-span-2">
+                                    <span className="text-[9px] font-black text-slate-400 tracking-wider uppercase block">Alamat Kost</span>
+                                    <span className="text-slate-800 font-medium leading-relaxed">{editingRequest.kost_address}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[9px] font-black text-slate-400 tracking-wider uppercase block">Metode Pembayaran</span>
+                                    <span className="text-slate-800 font-bold">{editingRequest.transaction?.payment_method || 'TRANSFER (MIDTRANS)'}</span>
+                                </div>
                             </div>
+                        </div>
+
+                        <form onSubmit={handleUpdateStatusAndAgent} className="space-y-6 flex-1">
+                            {editingRequest.status === 'PENDING_ONBOARDING' && (
+                                <div className="bg-emerald-50 border border-emerald-100 rounded-3xl p-5 flex flex-col gap-3 shrink-0">
+                                    <div className="flex gap-2">
+                                        <span className="text-lg">⚡</span>
+                                        <div className="min-w-0">
+                                            <p className="text-xs text-emerald-900 font-black uppercase tracking-wider">Siap Diaktifkan</p>
+                                            <p className="text-[10px] text-emerald-700 font-bold mt-0.5 normal-case leading-normal">
+                                                Agen survey lapangan telah mengunggah berkas foto & detail properti ke Google Drive. Layanan Autopilot siap diluncurkan!
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={isSubmitting}
+                                        onClick={async () => {
+                                            if (!window.confirm("Apakah Anda yakin ingin mengaktifkan layanan Auto-Pilot untuk properti ini? Status akan berubah menjadi AKTIF.")) return;
+                                            setIsSubmitting(true);
+                                            try {
+                                                await updateKostManagerRequest(editingRequest.id, { status: 'ACTIVE' });
+                                                alert('Layanan KostManager berhasil diaktifkan sepenuhnya (ACTIVE)!');
+                                                setEditingRequest(null);
+                                                loadData();
+                                                refreshData();
+                                            } catch (err) {
+                                                console.error(err);
+                                                alert('Gagal mengaktifkan layanan.');
+                                            } finally {
+                                                setIsSubmitting(false);
+                                            }
+                                        }}
+                                        className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 disabled:opacity-50"
+                                    >
+                                        {isSubmitting ? 'Mengaktifkan...' : 'Aktifkan Layanan Auto-Pilot'}
+                                    </button>
+                                </div>
+                            )}
 
                             <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Tugaskan Agen Survey</label>
@@ -303,7 +392,29 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                             </div>
 
                             <div>
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Link Folder Google Drive Hasil Konten</label>
+                                <div className="flex justify-between items-center mb-1.5">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Link Folder Google Drive Hasil Konten</label>
+                                    {!editForm.result_drive_link && (
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                setIsSubmitting(true);
+                                                try {
+                                                    const link = await generateManualDriveFolder(editingRequest.id);
+                                                    setEditForm({ ...editForm, result_drive_link: link });
+                                                    alert('Folder Google Drive berhasil dibuat!');
+                                                } catch (err) {
+                                                    alert('Gagal membuat folder: ' + (err as Error).message);
+                                                } finally {
+                                                    setIsSubmitting(false);
+                                                }
+                                            }}
+                                            className="text-[9px] font-black text-orange-600 uppercase tracking-wider hover:underline"
+                                        >
+                                            ⚙️ Buat Folder Otomatis
+                                        </button>
+                                    )}
+                                </div>
                                 <input
                                     type="text"
                                     value={editForm.result_drive_link}
@@ -318,7 +429,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                 disabled={isSubmitting}
                                 className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-orange-100 active:scale-95 transition-all mt-6 disabled:opacity-50"
                             >
-                                {isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}
+                                {isSubmitting ? 'Menyimpan...' : 'Simpan Penugasan & Link'}
                             </button>
                         </form>
                     </div>

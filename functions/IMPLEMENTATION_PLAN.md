@@ -1,37 +1,32 @@
-# IMPLEMENTATION PLAN — Penyelarasan Fitur, Biaya Tambahan, Media, & Dropdown Cari Pemilik KostManager
+# IMPLEMENTATION PLAN — Restorasi UI/UX & Fungsi Input KostManager di Dashboard Agen (Survey Field App)
 
-**Tanggal:** 25 Juni 2026  
-**Fitur:** Menghapus ikon sidebar modal, menyamakan gaya tabs dengan panel admin utama, menambahkan bidang "Biaya Tambahan", "Media (Foto/Video Listing)", "Kampus & Fasilitas Publik Terdekat", "Omnichannel Contact", serta menambahkan fitur pencarian (search) pemilik kost/mitra secara langsung pada dropdown pemilihan pemilik properti.
+**Tanggal:** 3 Agustus 2026  
+**Fitur:** Mengubah tampilan dan alur input pendataan properti KostManager oleh Agen Survey menjadi model Multi-Step Stepper (3 Langkah) sesuai desain mockup Google Stitch.
 
 ---
 
 ## 1. Analisis Masalah / Tujuan
-
-1. **Pencarian Pemilik/Mitra yang Panjang:** Saat mendaftarkan properti di KostManager, dropdown "Pilih Pemilik (Mitra)" menampilkan semua akun pemilik/mitra. Ketika jumlah mitra bertambah banyak, memilih secara manual sangat menyulitkan. Diperlukan komponen input pencarian (searchable dropdown) agar admin dapat mengetik nama atau nomor telepon mitra untuk memfilter dan memilih secara cepat.
-2. **Ikon & Tema Sidebar Modal:** Menghapus ikon emoji (📝, 📍, dll.) pada sidebar tabs modal tambah properti KostManager dan mengubah styling font/text agar bernada `font-black text-xs uppercase tracking-widest` (persis layout admin utama).
-3. **Biaya Tambahan (Additional Fees):** Menambahkan bidang Keterangan Biaya, Nominal, dan Ketentuan Penagihan (Mulai Bulan Pertama / Promo Bebas Bulan Pertama) ke tab "Fasilitas & Biaya".
-4. **Penyelidikan Fitur Admin Utama yang Relevan:**
-   - **Tab Media:** Menambahkan tab baru untuk mengelola foto & video utama listing (`imageUrls`, `videoUrls`, `instagramUrl`, `tiktokUrl`), mendukung upload file baru, pratinjau, drag-drop reordering, dan hapus gambar.
-   - **Kampus & Fasilitas Publik Terdekat:** Mengaktifkan array `campuses` dan `publicFacilities` di tab lokasi beserta fitur pencarian koordinat Nominatim dan estimasi waktu perjalanan.
-   - **Omnichannel Contact:** Menambahkan bidang kontak WhatsApp forwarding ke tab "Info Dasar".
-5. **Penyimpanan Terintegrasi:** Mengubah alur simpan (`handleSave`) agar memanggil helper `addPropertyWithMedia` dan `updatePropertyWithMedia` dari `adminService.ts` untuk mengunggah file media listing utama ke storage Supabase.
+Saat ini, pengisian data properti & kamar oleh Agen Survey menggunakan tab standard (Info Properti & Kamar). Desain baru membagi pengisian menjadi 3 langkah berurutan agar lebih terstruktur untuk surveyor lapangan:
+1. **Langkah 1 (Properti):** Nama properti, tipe kos (Putra/Putri/Campur), alamat lengkap, koordinat GPS presisi, checkbox fasilitas umum (WiFi, Dapur, Parkir, Ruang Tamu, CCTV, Laundry) dengan fitur "+ Tambah Fasilitas", dokumentasi foto area umum (Depan, Koridor, Area Umum, Lingkungan), fasilitas & landmark terdekat (terintegrasi GPS), dan peraturan kos.
+2. **Langkah 2 (Data Kamar):** Pengisian detail tipe kamar (nama, ukuran, harga, jumlah kamar, kapasitas, fasilitas, foto kamar).
+3. **Langkah 3 (Review):** Pratinjau seluruh data sebelum disimpan dan dikirim.
 
 ---
 
 ## 2. Dampak Perubahan
-
-| File | Perubahan |
-|------|-----------|
-| `functions/public/components/admin/KostManagerPortal.tsx` | 1. Impor `addPropertyWithMedia` dan `updatePropertyWithMedia` dari `../../adminService`.<br>2. Perbarui interface `ManagedProperty` dan mapping-nya pada `loadAllData`. <br>3. Tambahkan state `ownerSearchQuery` (string) dan `isOwnerDropdownOpen` (boolean) serta ref `ownerDropdownRef` untuk mengontrol dropdown cari pemilik.<br>4. Tambahkan event listener untuk mendeteksi klik di luar dropdown guna menutup dropdown otomatis.<br>5. Ubah render elemen `<select>` untuk `owner_uid` di bagian Info Dasar menjadi custom searchable dropdown dengan input teks filter, tombol reset query, list pilihan bermikro-animasi, dan list kosong state.<br>6. Perbarui tabs (`sections`) menjadi 6 buah tanpa icon field: Info Dasar, Lokasi & Kampus, Media, Fasilitas & Biaya, Tipe Kamar & Penghuni, Peraturan.<br>7. Terapkan render form untuk tab Media, Biaya Tambahan, Kampus, dan Fasilitas Publik terdekat.<br>8. Perbarui `handleSave` agar memanggil helper media upload admin service. |
+File yang akan diubah:
+* `functions/public/pages/AgentDashboard.tsx`
+  - Memperbarui state `kmListingForm` untuk menyimpan data baru seperti `rules` (array), `image_urls` (array), `campuses` (array), `facilities` (array).
+  - Menambahkan state `kmStep` (number: 1, 2, 3) untuk navigasi stepper.
+  - Mengubah render modal `{isEditingKostManager && (...)}` agar menggunakan UI layout dari mockup Stitch (termasuk skema warna, ikon Material Symbols, layout grid, tombol navigasi bawah "Simpan Draft" & "Lanjut ke Step 2/3").
+  - Menghubungkan fungsionalitas tombol upload foto area umum & kamar, penambahan fasilitas kustom, penambahan landmark, dan input peraturan dinamis.
 
 ---
 
 ## 3. Rencana Verifikasi
-
-1. Jalankan compile proyek dengan `npm.cmd run build` (atau `npm run dev` / `tsc --noEmit`) untuk memastikan TypeScript compiler bersih.
-2. Buka KostManager Portal -> "+ Tambah Properti".
-3. Di tab **Info Dasar**, cari field **Pilih Pemilik (Mitra)**.
-4. Klik tombol dropdown dan ketik sebagian nama (misal: "sulhan") atau nomor telepon. Pastikan daftar terfilter secara dinamis.
-5. Klik salah satu mitra untuk memilih, pastikan dropdown tertutup, nama mitra terpilih ditampilkan, dan `newPropForm.owner_uid` terisi dengan benar.
-6. Simpan properti, lalu pastikan properti tersimpan dengan id pemilik yang sesuai di Supabase.
-
+1. Jalankan `npm run build` untuk memverifikasi kebersihan kode TypeScript.
+2. Buka Dashboard Agen -> Klik tombol "⚡ Isi Listing & Kamar" pada salah satu tugas KostManager.
+3. Pastikan modal baru dengan Stepper muncul.
+4. Lakukan pengisian data di Langkah 1 (coba ubah tipe kos, tambah fasilitas kustom, isi peraturan, klik tombol kunci koordinat).
+5. Lanjut ke Langkah 2, kelola data tipe kamar, lalu lanjut ke Langkah 3 untuk review.
+6. Klik "Simpan & Kirim Listing" dan pastikan data tersimpan dengan benar di tabel Supabase.

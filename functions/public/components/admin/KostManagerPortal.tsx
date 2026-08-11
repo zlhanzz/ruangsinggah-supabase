@@ -321,7 +321,9 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                 .eq('is_managed', true);
             const propOwnerIds = allProps?.map(p => p.owner_uid).filter(Boolean) || [];
 
-            const allOwnerIds = [...new Set([...ownerIds, ...reqOwnerIds, ...propOwnerIds])];
+            // Hanya tampilkan jika pemilik memiliki langganan aktif ('kostmanager') atau pengajuan aktif
+            const activeOwnerIds = [...new Set([...ownerIds, ...reqOwnerIds])];
+            const allOwnerIds = activeOwnerIds;
 
             // 4. Ambil seluruh daftar pemilik (mitra) dari platform untuk dropdown modal
             const { data: allMitraUsers } = await supabase

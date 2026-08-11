@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase';
 import { 
     CheckCircle2, ShieldCheck, Video, MapPin, FileText, ArrowRight, ArrowLeft,
@@ -9,6 +9,89 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import PaymentGateway from '../components/PaymentGateway';
 import { getKostManagerPackages, KostManagerPackage } from '../adminService';
 import { FORMAT_CURRENCY } from '../constants';
+
+// Leaflet LocationPicker Helper Component for Graphical Pinpointing
+const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (lat: number, lng: number, address: string) => void }> = ({ lat, lng, onLocationChange }) => {
+    const mapContainerRef = useRef<HTMLDivElement>(null);
+    const mapInstance = useRef<any>(null);
+    const markerInstance = useRef<any>(null);
+
+    useEffect(() => {
+        if (!mapContainerRef.current) return;
+        if (mapInstance.current) return; // Initialize once
+
+        if (typeof window.L === 'undefined') {
+            console.error("Leaflet API not loaded");
+            return;
+        }
+
+        const L = window.L;
+        const initialLocation = [lat, lng];
+
+        // Initialize Map
+        const map = L.map(mapContainerRef.current).setView(initialLocation, 15);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Initialize Marker
+        const marker = L.marker(initialLocation, { draggable: true }).addTo(map);
+
+        const updatePositionAndAddress = async (lat: number, lng: number) => {
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`, {
+                    headers: {
+                        'User-Agent': 'RuangSinggah/1.0'
+                    }
+                });
+                const data = await response.json();
+                const addressStr = data.display_name || `GPS: ${lat}, ${lng}`;
+                onLocationChange(lat, lng, addressStr);
+            } catch (error) {
+                console.error("Geocoding failed:", error);
+                onLocationChange(lat, lng, `GPS: ${lat}, ${lng}`);
+            }
+        };
+
+        // Listeners
+        marker.on('dragend', function (event: any) {
+            const marker = event.target;
+            const position = marker.getLatLng();
+            updatePositionAndAddress(position.lat, position.lng);
+        });
+
+        map.on('click', function (e: any) {
+            marker.setLatLng(e.latlng);
+            updatePositionAndAddress(e.latlng.lat, e.latlng.lng);
+        });
+
+        mapInstance.current = map;
+        markerInstance.current = marker;
+
+        // Force map invalidation to ensure tiles load correctly after rendering
+        setTimeout(() => {
+            map.invalidateSize();
+        }, 100);
+
+    }, []);
+
+    // Update marker position if props change from outside
+    useEffect(() => {
+        if (markerInstance.current && mapInstance.current && window.L) {
+            const currentLatLng = markerInstance.current.getLatLng();
+            if (Math.abs(currentLatLng.lat - lat) > 0.0001 || Math.abs(currentLatLng.lng - lng) > 0.0001) {
+                const newLatLng = [lat, lng];
+                markerInstance.current.setLatLng(newLatLng);
+                mapInstance.current.setView(newLatLng, 15);
+            }
+        }
+    }, [lat, lng]);
+
+    return (
+        <div id="map-picker" ref={mapContainerRef} style={{ height: '220px', width: '100%', border: '1px solid #e2e8f0', borderRadius: '1rem', zIndex: 0 }} />
+    );
+};
 
 interface KostManagerLandingProps {
   user?: any;
@@ -39,6 +122,8 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
   const [hasAgreedMoU, setHasAgreedMoU] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [mapCoords, setMapCoords] = useState({ lat: -5.147665, lng: 119.432731 }); // Default to Makassar or Jakarta
 
   // Billing Flow Integration
   const [showPayment, setShowPayment] = useState(() => !!urlOrderId);
@@ -99,9 +184,8 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
       try {
         const { data, error } = await supabase
           .from('properties')
-          .select('id, title, type, room_types, address, city, location')
-          .eq('owner_uid', user.uid || user.id)
-          .eq('is_managed', false);
+          .select('id, title, type, room_types, address, city, location, is_managed')
+          .eq('owner_uid', user.uid || user.id);
         if (!error && data) {
           setUserKosts(data);
           if (data.length > 0) {
@@ -155,6 +239,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
         let mapsLink = '';
         if (selected.location && selected.location.lat && selected.location.lng) {
           mapsLink = `https://www.google.com/maps?q=${selected.location.lat},${selected.location.lng}`;
+          setMapCoords({ lat: selected.location.lat, lng: selected.location.lng });
         }
 
         setFormData({
@@ -183,7 +268,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
     setIsModalOpen(true);
   };
 
-  const handleGetLocation = () => {
+   const handleGetLocation = () => {
     if (!navigator.geolocation) {
       alert('Geolocation tidak didukung oleh browser Anda.');
       return;
@@ -191,6 +276,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
     setIsDetectingLocation(true);
     navigator.geolocation.getCurrentPosition(async (position) => {
       const { latitude, longitude } = position.coords;
+      setMapCoords({ lat: latitude, lng: longitude });
       try {
         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`, {
           headers: { 'User-Agent': 'RuangSinggah.id/1.0' }
@@ -199,18 +285,21 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
         if (data && data.display_name) {
           setFormData(prev => ({
             ...prev,
-            address: `${data.display_name}`
+            address: `${data.display_name}`,
+            googleMapsLink: `https://www.google.com/maps?q=${latitude},${longitude}`
           }));
         } else {
           setFormData(prev => ({
             ...prev,
-            address: `GPS: ${latitude}, ${longitude}`
+            address: `GPS: ${latitude}, ${longitude}`,
+            googleMapsLink: `https://www.google.com/maps?q=${latitude},${longitude}`
           }));
         }
       } catch (error) {
         setFormData(prev => ({
           ...prev,
-          address: `GPS: ${latitude}, ${longitude}`
+          address: `GPS: ${latitude}, ${longitude}`,
+          googleMapsLink: `https://www.google.com/maps?q=${latitude},${longitude}`
         }));
       } finally {
         setIsDetectingLocation(false);
@@ -252,6 +341,9 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
       address: formData.address,
       googleMapsLink: formData.googleMapsLink || '',
       propertyId: !isManualInput && selectedKostId !== 'NEW' ? selectedKostId : null,
+      location: mapCoords,
+      latitude: mapCoords.lat,
+      longitude: mapCoords.lng,
       item: `Langganan KostManager - ${packageLabel}`,
       service_name: `KostManager ${packageLabel} Subscription`,
       package_price: packagePrice,
@@ -750,7 +842,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
                         >
                           {userKosts.map((kost) => (
                             <option key={kost.id} value={kost.id}>
-                              {kost.title} ({kost.city || kost.address || 'Tanpa Alamat'})
+                              {kost.title} ({kost.city || kost.address || 'Tanpa Alamat'}){kost.is_managed ? ' [KostManager]' : ''}
                             </option>
                           ))}
                         </select>
@@ -865,16 +957,54 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <label className="block text-xs font-bold text-gray-500">Alamat Lengkap Kost</label>
-                      <button
-                        type="button"
-                        onClick={handleGetLocation}
-                        disabled={isDetectingLocation}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-50"
-                      >
-                        <MapPin size={12} className="stroke-[2.5]" />
-                        <span>{isDetectingLocation ? 'Mencari GPS...' : 'Ambil Lokasi GPS'}</span>
-                      </button>
+                      <div className="flex gap-2">
+                        {isManualInput && (
+                          <button
+                            type="button"
+                            onClick={() => setShowMapPicker(!showMapPicker)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
+                              showMapPicker 
+                                ? 'bg-orange-500 text-white border-orange-500 shadow-sm' 
+                                : 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-200'
+                            }`}
+                          >
+                            🗺️ {showMapPicker ? 'Tutup Peta' : 'Pilih di Peta'}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleGetLocation}
+                          disabled={isDetectingLocation}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 text-[10px] font-black uppercase tracking-wider transition-all border border-orange-200 disabled:opacity-50"
+                        >
+                          <MapPin size={12} className="stroke-[2.5]" />
+                          <span>{isDetectingLocation ? 'Mencari GPS...' : 'Ambil GPS'}</span>
+                        </button>
+                      </div>
                     </div>
+
+                    {isManualInput && showMapPicker && (
+                      <div className="mb-4 space-y-2 animate-in slide-in-from-top-4 duration-300">
+                        <span className="block text-[9px] font-black text-orange-600 uppercase tracking-widest leading-none mb-1">
+                          Geser marker merah atau klik di peta untuk menentukan koordinat kost Anda
+                        </span>
+                        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-slate-50 relative z-0">
+                          <LocationPicker 
+                            lat={mapCoords.lat}
+                            lng={mapCoords.lng}
+                            onLocationChange={(lat, lng, address) => {
+                              setMapCoords({ lat, lng });
+                              setFormData(prev => ({
+                                ...prev,
+                                googleMapsLink: `https://www.google.com/maps?q=${lat},${lng}`,
+                                address: address || prev.address
+                              }));
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     <textarea
                       name="address"
                       required
@@ -882,8 +1012,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
                       value={formData.address}
                       onChange={handleChange}
                       className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:border-orange-500 outline-none text-sm resize-none font-medium"
-                      placeholder="Masukkan alamat lokasi kost lengkap..."
-                    ></textarea>
+                     ></textarea>
                   </div>
 
                   <div className="pt-4 border-t border-gray-100 flex justify-end gap-3 bg-white sticky bottom-0">
@@ -926,7 +1055,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
             setIsSuccess(true);
             setSearchParams({});
             alert('Pembayaran sukses! Langganan KostManager Anda aktif dan penugasan survey telah dibuat otomatis.');
-            navigate(Page.MY_BOOKINGS);
+            navigate(`${Page.DASHBOARD_MITRA}/profile/km-progress`);
           }}
           onCancel={() => {
             setShowPayment(false);

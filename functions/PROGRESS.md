@@ -2,7 +2,83 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 1. Pendaftaran Langganan KostManager Cerdas (Smart Onboarding) & Pelacakan GPS (Juli 2026)
+### 1. Sistem Pencatatan Status Lunas/Sisa Tagihan Penghuni (Agustus 2026)
+- **Status Pembayaran (Lunas / Belum Lunas)**:
+  * Menambahkan tombol toggle pilihan **Status Pembayaran** (Lunas / Belum Lunas) di bagian **Informasi Penghuni** (Langkah 2).
+  * Jika status dipilih **Lunas**, sistem akan memproses penagihan di masa depan berdasarkan **Tagihan Berikutnya**.
+  * Jika status dipilih **Belum Lunas**, sistem memicu kemunculan input angka **Sisa Tagihan (Rp)** secara kondisional agar tagihan baru dengan nominal sisa tersebut langsung diterbitkan ke penghuni saat ini.
+
+### 1. Sistem Manajemen Langganan & Tagihan Penghuni Wizard (Agustus 2026)
+- **Dropdown Jenis Langganan Dinamis**:
+  * Menambahkan dropdown pilihan **Jenis Langganan** pada bagian **Informasi Penghuni** (khusus kamar dengan status Terisi).
+  * Opsi pilihan jenis langganan dimuat secara dinamis mencocokkan skema tarif/harga kamar yang telah ditentukan di atas (seperti Bulanan, Tahunan, dll).
+- **Label Tanggal & Tagihan Baru**:
+  * Mengubah label **Mulai Masuk** menjadi **Tanggal Pembayaran Terakhir** agar lebih presisi.
+  * Mengubah label **Selesai Sewa** menjadi **Tagihan Berikutnya** untuk mengakomodasi alur billing berlangganan bergulir yang tepat.
+
+### 1. Sistem Multi-Tarif, Fasilitas Kustom, & Sub-Fasilitas WC Dinamis (Agustus 2026)
+- **Modul Skema Tarif / Harga Kamar Fleksibel**:
+  * Menambahkan editor profil multi-tarif dinamis (`pricing: [{ period, price }]`) pada form penambahan dan pengeditan kamar di Langkah 2 Wizard.
+  * Mendukung pengaturan harga berbasis periode kustom: **Bulanan**, **3 Bulan**, **6 Bulan**, **Tahunan**, **Mingguan**, dan **Harian**.
+  * Menerapkan logika kelipatan default (12x harga bulanan) jika tarif tahunan tidak diisi secara eksplisit.
+- **Fasilitas Kamar Mandi Dalam Beranak & Kustom**:
+  * Memindahkan modul Fasilitas Kamar agar selalu muncul baik untuk kamar status Terisi maupun Kosong.
+  * Menggeser opsi checklist **Kamar Mandi Dalam** ke posisi paling akhir pada daftar utama untuk kerapian tata letak.
+  * Menyediakan sub-checklist kelengkapan fasilitas kamar mandi dalam secara dinamis: **Kloset Duduk**, **Kloset Jongkok**, **Shower**, dan **Wastafel**.
+  * Dilengkapi kolom input teks dan tombol tambah untuk mendata kelengkapan fasilitas WC kustom secara bebas.
+- **Fasilitas WC Umum Beranak & Kustom pada Wizard Properti (Langkah 1)**:
+  * Menambahkan opsi **WC Umum** pada checklist Fasilitas Umum Properti.
+  * Menyediakan sub-checklist kelengkapan WC Umum secara dinamis: **Kloset Duduk**, **Kloset Jongkok**, **Shower**, **Bak Mandi**, **Cermin**, dan **Wastafel**.
+  * Dilengkapi kolom input teks dan tombol tambah kelengkapan WC Umum kustom yang secara dinamis tersimpan ke dalam JSONB `metadata.publicBathroomFacilities` pada tabel `properties` dan `mitra_kostmanager`.
+- **Pembaruan Skema Database**:
+  * Menambahkan kolom `metadata` (`JSONB DEFAULT '{}'`) pada tabel `mitra_kostmanager` di [supabase_schema.sql](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/supabase_schema.sql) untuk menyimpan properti metadata kustom secara aman.
+
+### 1. Restorasi UI/UX & Fungsi Input KostManager Stepper (Agustus 2026)
+- **Wizard Stepper Input Properti & Kamar Baru (3 Langkah)**:
+  * Mengintegrasikan layout desain baru berdasarkan Google Stitch untuk pengisian data KostManager oleh Agen Survey di [AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/pages/AgentDashboard.tsx).
+  * Membagi proses pengisian data properti menjadi 3 langkah terarah: **Langkah 1 (Properti)**, **Langkah 2 (Data Kamar)**, dan **Langkah 3 (Review & Kirim)**.
+  * Di Langkah 1, menyediakan form pengisian Nama Properti, Tipe Kos (grup selector Putra/Putri/Campur), Alamat Lengkap, tombol "Kunci Koordinat Presisi Saat Ini" dengan sensor GPS browser, kelola checklist fasilitas umum & penambahan fasilitas kustom, 4 slot foto dokumentasi area umum (Depan, Koridor, Area Umum, Lingkungan), penambahan landmark terdekat dengan GPS, serta penambahan peraturan kost yang dinamis.
+  * Di Langkah 2, menyediakan panel pengelolaan tipe-tipe kamar (nama, ukuran, harga, jumlah kamar, kapasitas, ketersediaan, kelola fasilitas kamar, dan upload foto kamar).
+  * Di Langkah 3, menyediakan ringkasan (review) data sebelum dikirimkan ke Supabase.
+  * Mengintegrasikan warna-warna tema Stitch ke dalam `@theme` Tailwind di [index.css](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/index.css) sehingga render layout terlihat sangat premium dan konsisten.
+
+### 2. Pendaftaran Langganan KostManager Cerdas (Smart Onboarding) & Pelacakan GPS (Juli 2026)
+- **Diferensiasi Tugas Agen & Form Listing Detail Kamar**:
+  * Menambahkan pendeteksi tipe tugas pada `AgentDashboard.tsx` (`isKostManager`) untuk membedakan antara **Jasa Survey** reguler dengan **Tugas Pendataan KostManager**.
+  * Menampilkan tag visual yang mencolok (**`⚡ KostManager Onboarding`** vs **`🔍 Jasa Survey`**) pada masing-masing kartu tugas agen.
+  * Menyediakan formulir listing properti & kamar terintegrasi (**`⚡ Isi Listing & Kamar`**) khusus untuk tugas pendataan KostManager.
+  * Formulir ini membagi pendataan menjadi 2 tab interaktif: *Info Properti* (nama, deskripsi, kota, area, alamat, koordinat peta/GPS, fasilitas umum) dan *Tipe Kamar & Foto* (nama tipe, ukuran, harga bulanan, jumlah kamar kosong, checklist fasilitas kamar/WC, dan upload foto kamar per unit).
+  * Data properti yang diinput oleh agen akan langsung dibuat/diperbarui di tabel `properties` dengan status `is_managed = true` dan ditautkan ke ID mitra pengaju.
+  * Setelah agen menyelesaikan pengisian dan menekan "Simpan & Kirim Listing", status pengajuan otomatis diubah menjadi `PENDING_ONBOARDING` (siap diaktifkan autopilot oleh admin) dan status survey diubah menjadi `COMPLETED`.
+  * **Kurasi Tampilan & Kontak Otomatis KostManager**: Menyembunyikan tombol "Chat User" pada tugas pendataan KostManager (karena hanya melibatkan 1 orang yaitu mitra/pemilik itu sendiri) dan memperluas tombol "Chat Pemilik Kost" menjadi full-width. Secara otomatis mendeteksi dan mengambil nomor WhatsApp terdata langsung dari profil pengguna (`users.phone`) sebagai fallback jika data `owner_phone` bawaan transaksi kosong atau bernilai dash (`-`).
+  * **Harga/Komisi Khusus KostManager**: Memperbarui fungsi kalkulasi pendapatan agen (`getSurveyEarnings`) agar tugas pendataan KostManager secara otomatis menampilkan nominal harga berlangganan KostManager yang dibayarkan oleh pemilik (misalnya Rp 150.000) alih-alih menggunakan nilai flat komisi survei standar (Rp 50.000).
+  * **Perbaikan Layout Kartu Tugas (Anti-Cutoff)**: Meredesain penempatan nominal harga komisi/pendapatan pada kartu tugas di `AgentDashboard.tsx` dengan memindahkannya ke satu baris khusus (*dedicated row*) di bawah baris tag status. Hal ini menjamin angka nominal harga tidak akan pernah terpotong (*cutoff*) oleh elemen dekorasi latar belakang kartu dan terbaca secara sempurna dengan tipografi yang sangat kontras dan elegan.
+  * **Integrasi Koordinat & Tracking Peta Lapangan**: Memperbarui komponen rute peta pada kartu tugas agen agar secara cerdas membaca koordinat GPS (`latitude` & `longitude` atau objek `location`) langsung dari metadata transaksi pembayaran onboarding yang telah diinput secara grafis oleh mitra pemilik. Menampilkan teks informasi titik koordinat serta menyediakan tautan tombol rute GPS instan yang mengarahkan agen navigasi ke titik tepat koordinat properti tersebut.
+  * **Penyelesaian Isu Akses Metadata (RLS Policy)**: Menemukan kendala di mana data objek `transaction` terambil bernilai `null` pada dashboard agen survei karena dibatasi oleh kebijakan keamanan Row Level Security (RLS) pada tabel `transactions`. Mengatasi hal tersebut dengan menambahkan kebijakan RLS baru `transactions_select_agent` di database Supabase yang memperbolehkan agen survey terverifikasi melihat data transaksi yang ditugaskan kepada mereka.
+  * **Fleksibilitas Pemilihan Listing Eksisting**: Menghilangkan filter ketat `is_managed = false` saat memuat pilihan kost milik mitra di [KostManagerLanding.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostManagerLanding.tsx). Hal ini memungkinan mitra yang ingin mendaftarkan ulang, memperbarui, atau melakukan tes ulang pendaftaran KostManager pada listing yang sudah ada tetap dapat memilih properti mereka di dropdown "Pilih dari Kost Saya".
+  * **Sinkronisasi Status Langganan Properti Terkelola**: Memperbaiki logika load data di [KostManagerPortal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx) agar memverifikasi status langganan pemilik (`subscription_status = 'kostmanager'` atau request aktif). Jika status mitra adalah `free`, properti yang pernah didaftarkan tidak akan ditampilkan di portal operasional KostManager admin secara otomatis demi kepatuhan bisnis.
+  * **Rute URL Progress KostManager di Menu Profil**:
+    * Mengintegrasikan rute URL sub-menu `/dashboard-mitra/profile/km-progress` untuk membuka secara otomatis modal "Progress KostManager" (di bawah tab Profil -> Status Program & Layanan).
+    * Mengubah klik card pada pilihan "Status Program & Layanan" di [MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/pages/MitraProfile.tsx) agar langsung menavigasikan ke rute `/dashboard-mitra/profile/km-progress` alih-alih memicu state lokal.
+    * Memperbarui [MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/pages/MitraDashboard.tsx) untuk menangkap sub-rute profil dan meneruskan prop `autoOpenKmProgress` ke komponen [MitraProfile.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/pages/MitraProfile.tsx).
+    * Ketika pembayaran pendaftaran sukses, tombol sukses bayar di [PaymentGateway.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/components/PaymentGateway.tsx) akan memandu mitra dengan tulisan **"Lihat Status Pengajuan"** dan secara otomatis mengarahkannya langsung ke `/dashboard-mitra/profile/km-progress` untuk melihat progress secara instan.
+    * Ketika modal progress ditutup, sistem secara otomatis mengembalikan URL ke `/dashboard-mitra/profile` dengan mulus, dan sebaliknya, menutup modal ketika navigasi kembali dilakukan.
+  * **Perbaikan Alur Penerimaan Tugas Surveyor (Permintaan ke Aktif)**:
+    * Memperbaiki logika penetapan agen di [KostManagerManagement.tsx](file:///c:/Users/ZHULL/Desktop/Firebase to Supabase/functions/public/components/admin/KostManagerManagement.tsx) agar saat admin menugaskan agen survey untuk pendataan KostManager, status pengajuan tetap berada pada status `PENDING_ASSIGNMENT` alih-alih langsung diubah menjadi `AGENT_ASSIGNED`.
+    * Perubahan ini memastikan tugas onboarding KostManager masuk ke tab **"Permintaan"** terlebih dahulu pada dashboard agen/surveyor terkait, sehingga agen memiliki kesempatan untuk mengeklik tombol **"Terima Tugas"** sebelum tugas berpindah ke tab **"Aktif"** secara sah.
+- **Titik Koordinat Peta Grafis Interaktif (Leaflet Maps)**:
+  * Mengintegrasikan komponen peta interaktif Leaflet (`LocationPicker`) pada formulir pendaftaran onboarding manual mitra baru di `KostManagerLanding.tsx`.
+  * Memungkinkan mitra menentukan titik lokasi secara grafis dengan mengklik peta atau menyeret marker merah.
+  * Secara otomatis menghasilkan tautan Google Maps (Google Maps Link) dan melakukan reverse-geocoding (Nominatim API) untuk mengisi kolom Alamat Kost secara instan.
+  * Menyelaraskan marker peta secara real-time dengan koordinat GPS browser saat tombol "Ambil GPS" diklik.
+- **Pembersihan Layout Dashboard Admin (`KostManagerManagement.tsx`)**:
+  * Menghapus input "Catatan Lokasi / Tautan GPS" yang membingungkan dari modal kelola pendaftaran admin.
+  * Menghapus widget "Status Saat Ini" di dalam modal kelola karena status sudah ditampilkan secara transparan di luar modal (di baris tabel utama).
+- **Pemuatan Daftar Agen & Otomatisasi Google Drive**:
+  * Menghapus restriksi session auth ketat pada `getSurveyAgents` agar data agen tetap dapat dimuat andal di localhost.
+  * Menyediakan tombol "Buat Folder Otomatis" di sebelah input link Google Drive pada modal kelola admin, lengkap dengan fallback mock link Google Drive jika cloud function sedang offline.
+  * Secara otomatis membuat mock link Google Drive pada saat sinkronisasi pembayaran sukses di backend (`syncKostManagerRequest`).
+  * Menambahkan kebijakan RLS `users_select_agents_public` pada tabel `users` di database Supabase untuk mengizinkan pemuatan profil agen survey.
 - **Seleksi Kost Eksisting vs Manual (Case 1 & Case 2)**:
   - Menambahkan pendeteksi properti milik mitra yang belum dikelola (`is_managed = false`) pada halaman landing page KostManager (`KostManagerLanding.tsx`).
   - Menampilkan pilihan dinamis untuk mendaftarkan kost eksisting ("Pilih dari Kost Saya") atau mendaftar manual jika merupakan mitra baru.
@@ -17,6 +93,14 @@
   - **Dashboard Mitra (`MitraProfile.tsx`)**: Menambahkan pemantauan status pengajuan KostManager langsung di menu profil mitra. Menampilkan kartu pelacakan dengan **Progress Stepper UI** interaktif yang memvisualisasikan 5 tahapan proses secara *real-time*: `Diajukan` (Pembayaran Sukses) -> `Verifikasi` (Ditinjau oleh Admin) -> `Agen Ditunjuk` (Menampilkan nama agen) -> `Proses Survey` (Menampilkan jadwal kunjungan) -> `Selesai` (Kost aktif dikelola autopilot).
   - **Dashboard Admin (`KostManagerManagement.tsx`)**: Menambahkan kolom `metadata` pada query data transaksi serta menampilkan tautan tombol "📍 Lacak Rute GPS" yang responsif agar admin dapat melacak rute lokasi kost secara instan.
   - **Dashboard Agen (`AgentDashboard.tsx`)**: Menambahkan pendeteksi format link GPS pada kolom catatan tugas survey untuk menampilkan tombol interaktif "📍 Buka Rute GPS / Maps" yang membawa agen survey langsung ke titik koordinat kost dengan navigasi Google Maps.
+  - **Alur Pasca-Pembayaran**: Mengubah arah navigasi setelah transaksi pembayaran KostManager berhasil agar langsung merujuk ke menu profil di dashboard mitra (`/dashboard-mitra/profile`), bukan lagi ke halaman daftar pesanan user. Hal ini mempermudah mitra untuk langsung memantau perkembangan status survey kostnya.
+  - **Kartu Status Layanan & Program Kemitraan**: Menambahkan komponen *"Status Program & Layanan"* yang menarik dan informatif di profil mitra untuk menunjukkan jenis kemitraan aktif (`Mitra Reguler` vs `Calon Mitra KostManager (Proses Upgrade)` vs `Mitra KostManager (Autopilot)`). Menyediakan tombol "Upgrade ke KostManager" yang tampil secara andal (bila kemitraan belum aktif `'kostmanager'`) untuk mengarahkan mitra reguler langsung ke halaman pendaftaran. Kartu ini didesain interaktif (dapat diklik) untuk membuka **Modal Ruang Pemantauan Progress** yang menyajikan riwayat pengajuan, detail data agen, tanggal survey, rute GPS, dan visualisasi progress stepper.
+  - **Sinkronisasi Database Pelacakan Progres**: Menambahkan kolom `survey_date` (DATE), `survey_time` (TIME), dan `notes` (TEXT) ke dalam tabel `kostmanager_requests` di berkas `supabase_schema.sql` dan database Supabase. Memperbarui handler `adminService.ts` untuk mensinkronisasi data jadwal survey, agen, dan catatan lokasi secara bi-direksional penuh antara tabel `survey_requests` dan `kostmanager_requests`.
+
+
+
+
+
 
 
 ### 2. Integrasi CDN Caching Cloudflare Workers untuk Supabase Storage (Juli 2026)

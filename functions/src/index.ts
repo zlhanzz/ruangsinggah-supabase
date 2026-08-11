@@ -3034,3 +3034,73 @@ export const sendOtpEmail = functions.https.onRequest({ cors: true }, async (req
 
 
 
+
+// --- MAP SHORT LINK RESOLVER ENDPOINT ---
+export const resolveMapShortLink = functions.https.onRequest({ cors: true }, async (req, res) => {
+  try {
+    const shortUrl = req.query.url as string;
+    if (!shortUrl) {
+      res.status(400).send({ error: 'URL parameter is required' });
+      return;
+    }
+
+    console.log("resolveMapShortLink: resolving URL:", shortUrl);
+
+    const response = await fetch(shortUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+
+    const html = await response.text();
+    console.log("resolveMapShortLink: fetched page length:", html.length);
+
+    // Priority 1: Exact Place Pin coordinates (!3d[lat]!4d[lng])
+    const pinRegex = /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/i;
+    let match = html.match(pinRegex);
+
+    if (!match) {
+        const centerRegex = /center(?:=|\\u003d|%3d)(-?\d+\.\d+)(?:%2C|,|%2c)(-?\d+\.\d+)/i;
+        match = html.match(centerRegex);
+    }
+    
+    if (!match) {
+        const mapUrlRegex = /(?:@|%40)(-?\d+\.\d+),(?:%2C|,|%2c)?(-?\d+\.\d+)/i;
+        match = html.match(mapUrlRegex);
+    }
+    
+    if (!match) {
+        const llRegex = /ll(?:=|\\u003d|%3d)(-?\d+\.\d+)(?:%2C|,|%2c)(-?\d+\.\d+)/i;
+        match = html.match(llRegex);
+    }
+    
+    if (!match) {
+        const qRegex = /[?&]q(?:=|\\u003d|%3d)(-?\d+\.\d+)(?:%2C|,|%2c)(-?\d+\.\d+)/i;
+        match = html.match(qRegex);
+    }
+
+    if (match && match[1] && match[2]) {
+        const lat = parseFloat(match[1]);
+        const lng = parseFloat(match[2]);
+        res.status(200).send({ success: true, lat, lng });
+        return;
+    }
+
+    const makassarCoordsRegex = /(-5\.\d+)\s*(?:,|%2C|%2c)\s*(119\.\d+)/g;
+    let m;
+    while ((m = makassarCoordsRegex.exec(html)) !== null) {
+        const lat = parseFloat(m[1]);
+        const lng = parseFloat(m[2]);
+        if (lat >= -5.3 && lat <= -4.9 && lng >= 119.3 && lng <= 119.6) {
+            res.status(200).send({ success: true, lat, lng });
+            return;
+        }
+    }
+
+    res.status(404).send({ error: 'Coordinates not found in page content' });
+  } catch (err: any) {
+    console.error("resolveMapShortLink error:", err);
+    res.status(500).send({ error: err.message });
+  }
+});

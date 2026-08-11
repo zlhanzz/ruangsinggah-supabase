@@ -14,7 +14,7 @@ import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer
 } from 'recharts';
 import { 
-    Zap, Home, ClipboardList, Wallet, User, Users,
+    Zap, Home, ClipboardList, Wallet, User, Users, Compass,
     Plus, Edit, Eye, Check, MessageSquare, Search, Filter, MoreHorizontal, ArrowUpRight,
     Clock, LogOut, Bell, ChevronRight, TrendingUp, Menu, X, Landmark, CreditCard, Save,
     Briefcase, GraduationCap, Heart, MapPin, Trash2
@@ -73,7 +73,7 @@ const CHART_DATA = [
     { day: 'Kam', views: 500 }, { day: 'Jum', views: 800 }, { day: 'Sab', views: 1200 }, { day: 'Min', views: 950 }
 ];
 
-type MenuKey = 'overview' | 'properties' | 'bookings' | 'tenants' | 'chat' | 'wallet' | 'profile';
+type MenuKey = 'overview' | 'properties' | 'bookings' | 'tenants' | 'chat' | 'wallet' | 'profile' | 'km_progress';
 
 // ── Sidebar Nav Item ──────────────────────────────────────────────────────────
 const SideNavItem: React.FC<{ active: boolean; icon: React.ReactNode; label: string; badge?: number; onClick: () => void }> = ({ active, icon, label, badge, onClick }) => (
@@ -118,11 +118,17 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
     const { "*": tab } = useParams();
 
-    const [activeMenu, setActiveMenu] = useState<MenuKey>((tab as MenuKey) || 'overview');
+    const getTargetMenu = (t: string | undefined): MenuKey => {
+        if (!t) return 'overview';
+        if (t.startsWith('profile/')) return 'profile';
+        return (t as MenuKey) || 'overview';
+    };
+
+    const [activeMenu, setActiveMenu] = useState<MenuKey>(getTargetMenu(tab));
 
     // Sync state with URL — selalu sinkronkan saat tab berubah, termasuk saat tab kosong (fallback ke 'overview')
     useEffect(() => {
-        const targetMenu = (tab as MenuKey) || 'overview';
+        const targetMenu = getTargetMenu(tab);
         if (targetMenu !== activeMenu) {
             setActiveMenu(targetMenu);
         }
@@ -144,6 +150,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [showKostForm, setShowKostForm] = useState(false);
     const [editingKost, setEditingKost] = useState<Partial<Kost> | null>(null);
     const [dynamicChartData, setDynamicChartData] = useState<any[]>(CHART_DATA);
+    const [kmRequests, setKmRequests] = useState<any[]>([]);
 
     // Withdrawal State
     const [withdrawalHistory, setWithdrawalHistory] = useState<any[]>([]);
@@ -235,12 +242,13 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         if (!uid) return;
         if (!silent) setLoading(true);
         try {
-            const [propsData, rawBookingsData, statusRecords, chatData, withdrawalRequestsData] = await Promise.all([
+            const [propsData, rawBookingsData, statusRecords, chatData, withdrawalRequestsData, kmRequestsData] = await Promise.all([
                 getOwnerProperties(uid),
                 getOwnerBookings(uid),
                 getResidentStatus(uid),
                 getMyChatSessions(uid),
-                supabase.from('withdrawal_requests').select('*').eq('agent_id', uid).order('created_at', { ascending: false })
+                supabase.from('withdrawal_requests').select('*').eq('agent_id', uid).order('created_at', { ascending: false }),
+                supabase.from('kostmanager_requests').select('*').eq('user_id', uid).order('created_at', { ascending: false })
             ]);
 
             // GROUPING LOGIC: Group split transactions (Rent + Facility) into one card for the Owner
@@ -300,6 +308,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             setBookings(bookingsData);
             setResidentStatus(statusRecords);
             setChatSessions(chatData);
+            setKmRequests(kmRequestsData.data || []);
 
             // --- TIME TRAVEL SYNCED ANALYTICS ---
             const now = getCurrentDate();
@@ -525,6 +534,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         { key: 'wallet', icon: <Wallet size={20} />, label: 'Dompet' },
         { key: 'profile', icon: <User size={20} />, label: 'Profil' },
     ];
+
 
     if (loading) {
         return (
@@ -1503,6 +1513,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 user={user} 
                                 onBack={() => handleMenuChange('overview')} 
                                 onLogout={() => onPageChange?.(Page.HOME)} 
+                                autoOpenKmProgress={tab === 'profile/km-progress'}
                             />
                         </div>
                     )}

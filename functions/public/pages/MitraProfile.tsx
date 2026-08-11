@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { User, ShieldCheck, MapPin, Phone, ChevronRight, LogOut, Upload, BadgeCheck, AlertCircle, Clock, Search, X, Mail, Calendar, Gift } from 'lucide-react';
 import Tesseract from 'tesseract.js';
@@ -10,9 +10,11 @@ interface MitraProfileProps {
     user?: any;
     onBack?: () => void;
     onLogout?: () => void;
+    autoOpenKmProgress?: boolean;
 }
 
-const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onBack, onLogout }) => {
+const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onBack, onLogout, autoOpenKmProgress }) => {
+    const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const isEditingFromUrl = searchParams.get('edit') === 'true';
     const stepFromUrl = parseInt(searchParams.get('step') || '1', 10);
@@ -65,6 +67,58 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
 
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
+    // KostManager requests status tracking states
+    const [kmRequests, setKmRequests] = useState<any[]>([]);
+    const [loadingKm, setLoadingKm] = useState(false);
+    const [subscriptionStatus, setSubscriptionStatus] = useState<string>('regular');
+    const [showKmProgressModal, setShowKmProgressModal] = useState(false);
+
+    useEffect(() => {
+        if (autoOpenKmProgress) {
+            setShowKmProgressModal(true);
+        } else {
+            setShowKmProgressModal(false);
+        }
+    }, [autoOpenKmProgress]);
+
+    useEffect(() => {
+        if (!isEditing && uid) {
+            loadKmRequests();
+        }
+    }, [isEditing, uid]);
+
+    const loadKmRequests = async () => {
+        setLoadingKm(true);
+        try {
+            const { data, error } = await supabase
+                .from('kostmanager_requests')
+                .select(`
+                    *,
+                    transaction:transaction_id (
+                        amount,
+                        status
+                    )
+                `)
+                .eq('user_id', uid)
+                .order('created_at', { ascending: false });
+            if (!error && data) {
+                setKmRequests(data);
+            }
+        } catch (e) {
+            console.error('Error loading KM requests:', e);
+        } finally {
+            setLoadingKm(false);
+        }
+    };
+    const getKmStepIndex = (status: string) => {
+        const s = (status || '').toUpperCase();
+        if (s === 'COMPLETED' || s === 'ACTIVE') return 5;
+        if (s === 'PENDING_ONBOARDING') return 4;
+        if (s === 'SURVEYING' || s === 'AGENT_ASSIGNED') return 3;
+        if (s === 'PENDING_ASSIGNMENT' || s === 'PAID') return 2;
+        return 1;
+    };
+
     // Sync local state when URL params change (e.g. after background re-render)
     useEffect(() => {
         setIsEditing(isEditingFromUrl);
@@ -107,12 +161,14 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
             const [profileRes, verifRes, mitraRes] = await Promise.all([
                 supabase.from('users').select('*').eq('id', uid).maybeSingle(),
                 supabase.from('user_verifications').select('*').eq('user_id', uid).maybeSingle(),
-                supabase.from('mitra').select('referred_by').eq('user_id', uid).maybeSingle()
+                supabase.from('mitra').select('referred_by, subscription_status').eq('user_id', uid).maybeSingle()
             ]);
 
             const profile = profileRes.data;
             const verif = verifRes.data || {};
             const mitraVal = mitraRes?.data?.referred_by || '';
+            const subStatus = mitraRes?.data?.subscription_status || 'regular';
+            setSubscriptionStatus(subStatus);
 
             if (profile) {
                 setFormData({
@@ -1459,6 +1515,96 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                         </div>
                     )}
 
+
+                    {/* Membership Status Card */}
+                    {(() => {
+                        const hasActiveKmRequest = kmRequests.length > 0 && kmRequests[0].status !== 'COMPLETED';
+                        return (
+                            <div 
+                                onClick={() => {
+                                    if (hasActiveKmRequest) {
+                                        navigate('/dashboard-mitra/profile/km-progress');
+                                    }
+                                }}
+                                className={`bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm text-left relative overflow-hidden group ${
+                                    hasActiveKmRequest 
+                                        ? 'cursor-pointer hover:scale-[1.01] active:scale-[0.99] transition-all' 
+                                        : 'cursor-default'
+                                }`}
+                            >
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-orange-50 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-sm font-black uppercase text-gray-900 tracking-widest">Status Program & Layanan</h3>
+                                    {hasActiveKmRequest && (
+                                        <span className="text-[10px] font-black text-orange-500 uppercase tracking-wider group-hover:underline">Lihat Progress →</span>
+                                    )}
+                                </div>
+                        
+                        {/* If they are actively a kostmanager */}
+                        {subscriptionStatus === 'kostmanager' ? (
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl border bg-amber-50/30 border-amber-100">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl border bg-amber-100 border-amber-200 text-amber-600 shrink-0">
+                                        👑
+                                    </div>
+                                    <div>
+                                        <h4 className="font-black text-amber-900 text-sm uppercase tracking-tight">
+                                            Mitra KostManager (Autopilot)
+                                        </h4>
+                                        <p className="text-[10px] text-amber-600 font-bold mt-1 uppercase tracking-widest">
+                                            Properti Anda dikelola penuh secara otomatis
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : kmRequests.length > 0 && kmRequests[0].status !== 'COMPLETED' ? (
+                            /* If they have a pending onboarding request, show the pending status preview */
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl border border-orange-100 bg-orange-50/20">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl border bg-orange-100 border-orange-200 text-orange-600 shrink-0 animate-pulse">
+                                        ⚙️
+                                    </div>
+                                    <div>
+                                        <h4 className="font-black text-gray-900 text-sm uppercase tracking-tight">
+                                            Upgrade KostManager (Sedang Diproses)
+                                        </h4>
+                                        <p className="text-[10px] text-gray-500 font-bold mt-1 uppercase tracking-widest leading-relaxed">
+                                            Proses: {kmRequests[0].kost_name} • Menunggu survey lokasi
+                                        </p>
+                                    </div>
+                                </div>
+                                <span className="text-[9px] font-black uppercase px-2.5 py-1 bg-orange-100 text-orange-600 rounded-full border border-orange-200 shrink-0">
+                                    Pantau Progress
+                                </span>
+                            </div>
+                        ) : (
+                            /* If they are regular, show regular Mitra box with Upgrade button */
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl border bg-gray-50/50">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl border bg-gray-100 border-gray-200 text-gray-400 shrink-0">
+                                        👤
+                                    </div>
+                                    <div>
+                                        <h4 className="font-black text-gray-900 text-sm uppercase tracking-tight">
+                                            Mitra Reguler
+                                        </h4>
+                                        <p className="text-[10px] text-gray-500 font-bold mt-1 uppercase tracking-widest">
+                                            Kelola properti kost Anda secara manual
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); navigate('/kostmanager'); }}
+                                    className="w-full sm:w-auto px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-md shadow-orange-500/10 shrink-0 text-center"
+                                >
+                                    Upgrade ke KostManager
+                                </button>
+                            </div>
+                        )}
+                            </div>
+                        );
+                    })()}
+
                     {/* Account Info Card */}
                     <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm text-left relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-32 h-32 bg-orange-50 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
@@ -1477,6 +1623,141 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                             <div className="md:col-span-2">
                                 <ProfileItemRead icon={<MapPin size={18} />} label="Alamat Domisili" value={formData.address} isEditing={false} name="address" onChange={handleInputChange} isTextArea />
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Ruang Pemantauan Progress */}
+            {showKmProgressModal && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-[2rem] w-full max-w-2xl max-h-[80vh] overflow-y-auto p-5 md:p-8 border border-slate-100 shadow-2xl relative text-left flex flex-col">
+                        
+                        {/* Header */}
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4 shrink-0">
+                            <div>
+                                <h3 className="text-base font-black text-slate-900 uppercase tracking-wider">Progress Kostmanager</h3>
+                            </div>
+                            <button 
+                                onClick={() => { setShowKmProgressModal(false); navigate('/dashboard-mitra/profile'); }}
+                                className="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-500 flex items-center justify-center border border-slate-200 transition-colors"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="space-y-6 overflow-y-auto pr-1 flex-1">
+                            {kmRequests.length === 0 ? (
+                                <div className="text-center py-10 space-y-4">
+                                    <div className="w-16 h-16 rounded-full bg-gray-50 text-gray-300 flex items-center justify-center mx-auto text-3xl border border-gray-100">
+                                        📭
+                                    </div>
+                                    <div>
+                                        <h4 className="font-black text-gray-800 uppercase text-sm">Belum Ada Pengajuan</h4>
+                                        <p className="text-xs text-gray-400 font-medium mt-1">Anda belum pernah mengajukan program KostManager.</p>
+                                    </div>
+                                    <button
+                                        onClick={() => { setShowKmProgressModal(false); navigate('/kostmanager'); }}
+                                        className="px-6 py-3 bg-orange-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 transition-colors"
+                                    >
+                                        Gabung KostManager Sekarang
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    {kmRequests.map((req) => {
+                                        const stepIndex = getKmStepIndex(req.status);
+                                        const steps = [
+                                            { label: 'Diajukan', desc: 'Pendaftaran diterima' },
+                                            { label: 'Verifikasi', desc: 'Ditinjau oleh admin' },
+                                            { label: 'Penugasan Agen', desc: req.agent_name ? `Agen: ${req.agent_name}` : 'Mencari agen survey' },
+                                            { label: 'Pendataan Lapangan', desc: req.status === 'SURVEYING' ? 'Proses pendataan oleh agen' : 'Menunggu survey pendataan' },
+                                            { label: 'Selesai', desc: 'Kost autopilot aktif' }
+                                        ];
+                                        return (
+                                            <div key={req.id} className="p-6 sm:p-8 rounded-[2rem] border border-slate-100 bg-slate-50/40 space-y-8 shadow-sm">
+                                                {/* Properti Header */}
+                                                <div className="flex justify-between items-start gap-4">
+                                                    <div className="min-w-0">
+                                                        <h4 className="font-black text-slate-900 uppercase text-base tracking-tight">{req.kost_name}</h4>
+                                                        <p className="text-[10px] text-slate-400 font-black mt-1 uppercase tracking-wider leading-relaxed truncate max-w-xs sm:max-w-md">
+                                                            {req.kost_type} • {req.kost_address}
+                                                        </p>
+                                                    </div>
+                                                    <span className={`text-[9px] font-black uppercase tracking-wider px-3 py-1 rounded-full border shrink-0 ${
+                                                        req.status === 'COMPLETED'
+                                                            ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                                            : 'bg-orange-50 text-orange-600 border-orange-100'
+                                                    }`}>
+                                                        {req.status === 'COMPLETED' ? 'Aktif' : 'Diproses'}
+                                                    </span>
+                                                </div>
+
+                                                {/* Stepper UI (Modern Vertical Timeline for neat layout on all devices) */}
+                                                <div className="relative pl-8 space-y-6 pt-2 pb-2">
+                                                    {/* Connecting Vertical Line */}
+                                                    <div className="absolute left-[15px] top-6 bottom-6 w-[2px] bg-slate-100 z-0" />
+                                                    {/* Active progress bar line segment */}
+                                                    <div 
+                                                        className="absolute left-[15px] top-6 w-[2px] bg-gradient-to-b from-orange-500 to-amber-500 z-0 transition-all duration-500" 
+                                                        style={{ height: `${Math.max(0, Math.min(100, ((stepIndex - 1) / 4) * 100))}%` }}
+                                                    />
+
+                                                    {steps.map((step, idx) => {
+                                                        const stepNum = idx + 1;
+                                                        const isActive = stepNum <= stepIndex;
+                                                        const isCurrent = stepNum === stepIndex;
+                                                        
+                                                        let iconEl;
+                                                        if (isActive && !isCurrent) {
+                                                            iconEl = (
+                                                                <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                                </svg>
+                                                            );
+                                                        } else {
+                                                            iconEl = <span className="font-black text-[11px]">{stepNum}</span>;
+                                                        }
+
+                                                        return (
+                                                            <div key={idx} className="flex items-start gap-4 relative z-10">
+                                                                {/* Step Circle */}
+                                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300 shrink-0 ${
+                                                                    isCurrent 
+                                                                        ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-500/20 scale-110 ring-4 ring-orange-500/10' 
+                                                                        : isActive 
+                                                                            ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm shadow-emerald-500/10' 
+                                                                            : 'bg-white text-slate-300 border-slate-200'
+                                                                }`}>
+                                                                    {iconEl}
+                                                                </div>
+                                                                {/* Step Info */}
+                                                                <div className="flex-1 min-w-0 pt-0.5">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <p className={`text-[10px] font-black uppercase tracking-wider ${isActive ? 'text-slate-900' : 'text-slate-400'}`}>
+                                                                            {step.label}
+                                                                        </p>
+                                                                        {isCurrent && (
+                                                                            <span className="flex h-2 w-2 relative">
+                                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                                                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <p className="text-[10px] text-slate-500 mt-0.5 font-bold leading-normal">
+                                                                        {step.desc}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

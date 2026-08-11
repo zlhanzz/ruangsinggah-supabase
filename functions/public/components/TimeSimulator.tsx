@@ -5,7 +5,7 @@ import { getCurrentDate, setMockDate, getMockDateStr } from '../utils/timeUtils'
 const TimeSimulator: React.FC = () => {
     const [mockDate, setMockDateState] = useState(getMockDateStr());
     const [isExpanded, setIsExpanded] = useState(false);
-    
+
     const activeDate = getCurrentDate();
     const isMocking = !!mockDate;
 
@@ -29,7 +29,7 @@ const TimeSimulator: React.FC = () => {
     return (
         <div className={`fixed bottom-24 right-6 lg:bottom-8 lg:right-8 z-[9999] transition-all duration-500 ${isExpanded ? 'w-80' : 'w-14 h-14'}`}>
             {!isExpanded ? (
-                <button 
+                <button
                     onClick={() => setIsExpanded(true)}
                     className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all hover:scale-110 active:scale-95 ${isMocking ? 'bg-orange-600 text-white animate-pulse' : 'bg-gray-900 text-white'}`}
                 >
@@ -58,8 +58,8 @@ const TimeSimulator: React.FC = () => {
 
                         <div className="space-y-2">
                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Lakukan Time Travel</p>
-                            <input 
-                                type="date" 
+                            <input
+                                type="date"
                                 className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
                                 value={mockDate}
                                 onChange={(e) => setMockDateState(e.target.value)}
@@ -72,14 +72,14 @@ const TimeSimulator: React.FC = () => {
                         </div>
 
                         <div className="flex gap-2 pt-2">
-                            <button 
+                            <button
                                 onClick={handleTravel}
                                 disabled={!mockDate}
                                 className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-100"
                             >
                                 Pergi
                             </button>
-                            <button 
+                            <button
                                 onClick={() => window.location.reload()}
                                 className="px-4 py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-gray-200 flex items-center justify-center gap-2"
                                 title="Segarkan Data"
@@ -87,7 +87,7 @@ const TimeSimulator: React.FC = () => {
                                 <RefreshCcw size={14} />
                                 Sync
                             </button>
-                            <button 
+                            <button
                                 onClick={handleReset}
                                 className="px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
                             >
@@ -102,3 +102,4 @@ const TimeSimulator: React.FC = () => {
 };
 
 export default TimeSimulator;
+
