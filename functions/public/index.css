@@ -111,3 +111,19 @@ input::-ms-reveal,
 input::-ms-clear {
   display: none !important;
 }
+
+/* Prevent Google Fonts Icons layout shift and FOUT (Flash of Unstyled Text) */
+.material-symbols-outlined, 
+.material-icons, 
+.material-icons-outlined {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  height: 1em;
+  overflow: hidden;
+  white-space: nowrap;
+  word-wrap: normal;
+  text-transform: none;
+}
+

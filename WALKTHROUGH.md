@@ -1,21 +1,20 @@
-# WALKTHROUGH - Perbaikan Peringatan Peninjauan Ulang Data KostManager
+# WALKTHROUGH - Perbaikan Peringatan Peninjauan Ulang Data KostManager, Pembersihan URL Parameter, & CSS Layout Shift Ikon
 
-Dokumen ini menjelaskan daftar perubahan, hasil pengujian, dan instruksi penanganan kode pasca perbaikan sistem *warning overlay* pada Dashboard Agen.
+Dokumen ini menjelaskan daftar perubahan, hasil pengujian, dan instruksi penanganan kode pasca perbaikan sistem *warning overlay*, pembersihan parameter URL, serta perbaikan visual layout shift ikon pada Dashboard Agen.
 
 ## 1. Daftar Perubahan
-Modifikasi telah diintegrasikan secara incremental melalui regenerasi file [`AgentDashboard.tsx`](file:///C:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx):
-- **Loader Dedicated `mitra_kostmanager`**:
-  Ditambahkan status `setIsExistingPropertyMigration(true)` dan `setWarningAccepted(false)` ketika data draf KostManager berhasil diambil dari tabel `mitra_kostmanager` (`kmProp`). Hal ini memastikan peringatan peninjauan ulang data langsung muncul ketika draf hasil migrasi pertama kali dibuka dari database.
-- **Auto-Save & Auto-Load Draf `localStorage`**:
-  - Memperbarui objek `draftData` pada `useEffect` auto-save untuk menyertakan variabel `isExistingPropertyMigration` dan `warningAccepted`.
-  - Memperbarui pembacaan `savedDraft` di browser agar memuat kembali status `isExistingPropertyMigration` dan `warningAccepted` dari `localStorage`. Ini mencegah hilangnya popup peringatan secara tidak sengaja ketika draf dimuat ulang/refresh browser sebelum agen mengklik "Saya Mengerti".
-- **Sinkronisasi Rebuild (Branch origin/main)**:
-  Memperbarui [`reapply_all_changes_chronologically.js`](file:///C:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/scratch/reapply_all_changes_chronologically.js) agar selalu menggunakan source `origin/main` yang bersih saat proses checkout. Hal ini memungkinkannya meregenerasi seluruh 18 tahapan skrip scratch (A sampai R) secara bersih tanpa resiko korupsi layout ganda (*double-modification layout corruption*).
+Modifikasi telah diintegrasikan secara incremental ke berkas utama:
+- **Loader Dedicated `mitra_kostmanager` & Draf**:
+  Penyetelan otomatis status `isExistingPropertyMigration(true)` dan `setWarningAccepted(false)` ketika data draf dimuat baik dari tabel `mitra_kostmanager` maupun dari draf `localStorage` agar *warning overlay* muncul konsisten di awal migrasi.
+- **Pembersihan URL Parameter `onboarding_id`**:
+  Memperbarui fungsi `closeKostManagerListing` dan callback simpan sukses agar membersihkan parameter `'onboarding_id'` secara eksplisit menggunakan objek `URLSearchParams` secara terprogram sebelum memanggil `setSearchParams`. Hal ini menjamin bilah alamat browser bersih seketika form ditutup/kembali ke dashboard.
+- **Pencegahan CSS Layout Shift & FOUT (Flash of Unstyled Text) Ikon**:
+  Menambahkan aturan CSS khusus pada [`functions/public/index.css`](file:///C:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/index.css) untuk elemen kelas `.material-symbols-outlined`, `.material-icons`, `.material-icons-outlined`. Elemen dipaksa memiliki dimensi tetap `width: 1em; height: 1em;` dan `overflow: hidden;` sejak awal load. Ini memotong teks ligatur mentah (seperti "calendar_today", "schedule") sebelum web font selesai diunduh dari Google Fonts CDN, mencegah pergeseran layout UI yang membuat visual terkesan hancur di awal refresh.
 
 ## 2. Hasil Pengujian / Kompilasi
 Kompilasi produksi menggunakan Vite bundler berjalan lancar:
 - **Perintah**: `npm run build` di dalam folder `functions/public/`.
-- **Hasil**: **✓ built in 24.43s** dengan sukses tanpa error JSX maupun esbuild syntax error.
+- **Hasil**: **✓ built in 21.99s** dengan sukses tanpa error JSX maupun CSS compilation.
 
 ## 3. Petunjuk Deploy / Push Manual
 Guna mempublikasikan hasil kerja ke branch GitHub Anda (`bukan-productions`), jalankan perintah-perintah berikut di terminal lokal Anda secara berurutan:
@@ -24,9 +23,10 @@ Guna mempublikasikan hasil kerja ke branch GitHub Anda (`bukan-productions`), ja
 git add -A
 
 # 2. Buat commit lokal baru
-git commit -m "feat: perbaikan persistensi warning overlay peninjauan ulang data kostmanager hasil migrasi"
+git commit -m "feat: perbaikan warning overlay, pembersihan URL parameter, dan pencegahan layout shift ikon google"
 
 # 3. Push ke branch bukan-productions di GitHub
 git push origin bukan-productions
 ```
 *(Catatan: Anda juga bisa meminta saya langsung untuk memicu push jika Anda mengetikkan instruksinya di obrolan chat).*
+
