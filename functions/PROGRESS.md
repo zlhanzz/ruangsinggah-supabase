@@ -28,6 +28,8 @@
   * Mendaftarkan skrip `apply_gps_fixes_v2.js` ke daftar eksekusi akhir `reapply_all_changes_chronologically.js`.
   * Memperbarui parser metadata jumlah kamar agar turut mencari data pendaftaran root `req.total_rooms` / `req.totalRooms`, serta mendukung pencocokan regex case-insensitive yang fleksibel terhadap catatan notes (`Total Kamar:`, `Jumlah Kamar:`, `Kamar:`).
   * Menyelaraskan target pencarian string `cardMapFind` di `apply_gps_fixes_v2.js` menggunakan indentasi 49 spasi untuk mencocokkan struktur file upstream asli. Ini memastikan ekstraksi otomatis koordinat `lat` & `lng` dari notes/URL google maps diaktifkan pada preview map task card.
+  * Menambahkan state `requestsCoords` dan hook `useEffect` auto-resolver yang secara cerdas akan mendeteksi transaksi KostManager dengan metadata kosong (atau koordinat default Makassar), lalu melakukan kueri batch lookup ke tabel `properties` berdasarkan `owner_uid = req.user_id` untuk mendapatkan koordinat lokasi real properti dari kolom `location` objek JSON.
+
 
 
 

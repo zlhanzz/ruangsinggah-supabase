@@ -103,6 +103,7 @@ const scripts = [
   'functions/scratch/apply_segmented_kosongan_v5.js',
 
   // P. Dynamic GPS Coordinates & initialTotalRooms extractor and prefill
+  'functions/scratch/add_auto_resolve_coords.js',
   'functions/scratch/apply_gps_fixes_v2.js',
 
   // Q. Disable scroll wheel zoom to prevent wheel unmount crash

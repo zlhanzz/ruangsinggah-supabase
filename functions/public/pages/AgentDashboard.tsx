@@ -353,6 +353,59 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         return () => clearTimeout(timer);
     }, [newLandmarkName]);
     const [uploadingPublicAreas, setUploadingPublicAreas] = useState<Record<number, boolean>>({});
+    const [requestsCoords, setRequestsCoords] = useState<Record<string, { lat: number; lng: number }>>({});
+
+    useEffect(() => {
+        if (!surveyRequests || surveyRequests.length === 0) return;
+        
+        const missingUserIds = surveyRequests
+            .filter(req => {
+                const isKostManager = req.notes?.includes('KostManager Onboarding') || req.task_type === 'kostmanager';
+                if (!isKostManager) return false;
+                if (requestsCoords[req.id]) return false;
+                
+                const meta = req.transaction?.metadata || {};
+                const lat = meta.location?.lat || meta.latitude || (req as any).latitude;
+                const lng = meta.location?.lng || meta.longitude || (req as any).longitude;
+                if (!lat || !lng) return true;
+                
+                const isDefaultMakassar = Math.abs(lat - (-5.147665)) < 0.0001 && Math.abs(lng - 119.432731) < 0.0001;
+                return isDefaultMakassar;
+            })
+            .map(req => req.user_id)
+            .filter((val, idx, self) => val && self.indexOf(val) === idx);
+            
+        if (missingUserIds.length === 0) return;
+        
+        const fetchCoords = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('properties')
+                    .select('owner_uid, location')
+                    .in('owner_uid', missingUserIds);
+                    
+                if (!error && data) {
+                    const newCoords: Record<string, { lat: number; lng: number }> = {};
+                    surveyRequests.forEach(req => {
+                        const prop = data.find(p => p.owner_uid === req.user_id);
+                        if (prop && prop.location) {
+                            const loc = prop.location as any;
+                            if (loc.lat && loc.lng) {
+                                newCoords[req.id] = { lat: Number(loc.lat), lng: Number(loc.lng) };
+                            }
+                        }
+                    });
+                    if (Object.keys(newCoords).length > 0) {
+                        setRequestsCoords(prev => ({ ...prev, ...newCoords }));
+                    }
+                }
+            } catch (err) {
+                console.error("Error batch fetching coordinates:", err);
+            }
+        };
+        
+        fetchCoords();
+    }, [surveyRequests]);
 
     const [kmListingForm, setKmListingForm] = useState<any>({
         title: '',
@@ -3169,9 +3222,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                     {/* Location Section */}
                                     {(() => {
                                         const meta = req.transaction?.metadata || {};
-                                        const lat = meta.location?.lat || meta.latitude || (req as any).latitude;
-                                        const lng = meta.location?.lng || meta.longitude || (req as any).longitude;
+                                        let lat = requestsCoords[req.id]?.lat || meta.location?.lat || meta.latitude || (req as any).latitude;
+                                        let lng = requestsCoords[req.id]?.lng || meta.location?.lng || meta.longitude || (req as any).longitude;
                                         const mapsUrl = meta.googleMapsLink || (req as any).google_maps_url || (lat && lng ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}` : null);
+                                        
+                                        // Try extracting coordinates from text notes/name if still missing
+                                        if (!lat || !lng) {
+                                            const extracted = extractCoordinates(meta.googleMapsLink || (req as any).google_maps_url || req.kost_name || req.notes);
+                                            if (extracted) {
+                                                lat = extracted.lat;
+                                                lng = extracted.lng;
+                                            }
+                                        }
                                         const regexMatch = req.notes?.match(/📍(?: Link)? GPS:\s*(https?:\/\/\S+)/);
                                         const finalUrl = mapsUrl || (regexMatch ? regexMatch[1] : null);
 
@@ -3483,9 +3545,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                 <p className="font-bold text-gray-900 text-xs sm:text-sm leading-relaxed">{req.kost_address}</p>
                                                 {(() => {
                                                     const meta = req.transaction?.metadata || {};
-                                                    const lat = meta.location?.lat || meta.latitude;
-                                                    const lng = meta.location?.lng || meta.longitude;
-                                                    const mapsUrl = meta.googleMapsLink || (lat && lng ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}` : null);
+                                                    let lat = requestsCoords[req.id]?.lat || meta.location?.lat || meta.latitude || (req as any).latitude;
+                                                    let lng = requestsCoords[req.id]?.lng || meta.location?.lng || meta.longitude || (req as any).longitude;
+                                                    const mapsUrl = meta.googleMapsLink || (req as any).google_maps_url || (lat && lng ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}` : null);
+                                                    
+                                                    // Try extracting coordinates from text notes/name if still missing
+                                                    if (!lat || !lng) {
+                                                        const extracted = extractCoordinates(meta.googleMapsLink || (req as any).google_maps_url || req.kost_name || req.notes);
+                                                        if (extracted) {
+                                                            lat = extracted.lat;
+                                                            lng = extracted.lng;
+                                                        }
+                                                    }
                                                     const regexMatch = req.notes?.match(/📍(?: Link)? GPS:\s*(https?:\/\/\S+)/);
                                                     const finalUrl = mapsUrl || (regexMatch ? regexMatch[1] : null);
 
