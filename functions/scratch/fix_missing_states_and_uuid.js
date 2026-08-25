@@ -72,7 +72,7 @@ if (code.includes(closeTarget) && !code.includes('setIsExistingPropertyMigration
 }
 
 // ============================================================
-// FIX 3: Set isExistingPropertyMigration=true when existingProp found
+// FIX 3: Set isExistingPropertyMigration=true when existingProp found in fallback table
 // ============================================================
 const existingPropSetTarget = `            if (existingProp) {
                 console.log("openKostManagerListing: fallback to properties table:", existingProp.id);`;
@@ -85,8 +85,8 @@ const existingPropSetReplacement = `            if (existingProp) {
 if (code.includes(existingPropSetTarget)) {
     code = code.replace(existingPropSetTarget, existingPropSetReplacement);
     console.log('setIsExistingPropertyMigration(true) added when existingProp found.');
-} else if (code.includes('setIsExistingPropertyMigration(true)')) {
-    console.log('setIsExistingPropertyMigration already set.');
+} else if (code.includes('setIsExistingPropertyMigration(true)') && code.includes('fallback to properties table')) {
+    console.log('setIsExistingPropertyMigration already set on fallback properties loader.');
 } else {
     console.error('Could not find existingProp check target!');
 }
@@ -94,16 +94,13 @@ if (code.includes(existingPropSetTarget)) {
 // ============================================================
 // FIX 4: UUID guard - validate propertyIdToFetch before using
 // ============================================================
-const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-// Guard propertyIdToFetch assignment to validate UUID format
 const uuidGuardTarget = `                if (trxData?.metadata?.propertyId) {
                     propertyIdToFetch = trxData.metadata.propertyId;
                     console.log("openKostManagerListing: found propertyId in transaction metadata:", propertyIdToFetch);
                 }`;
 
 const uuidGuardReplacement = `                const rawPropId = trxData?.metadata?.propertyId;
-                const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
                 if (rawPropId && uuidPattern.test(rawPropId)) {
                     propertyIdToFetch = rawPropId;
                     console.log("openKostManagerListing: found valid propertyId in transaction metadata:", propertyIdToFetch);
@@ -175,14 +172,14 @@ if (code.includes(earlyPropertiesQueryTarget)) {
 // FIX 7: UUID guard for fallback properties query (L990)
 // ============================================================
 const fallbackPropertiesQueryTarget = `            // 2. Fallback to properties table if no dedicated mitra_kostmanager record exists yet
-            let query = supabase.from('properties').select('*');
+            let query2 = supabase.from('properties').select('*');
             if (propertyIdToFetch) {
-                query = query.eq('id', propertyIdToFetch);
+                query2 = query2.eq('id', propertyIdToFetch);
             } else {
-                query = query.eq('owner_uid', req.user_id);
+                query2 = query2.eq('owner_uid', req.user_id);
             }
             
-            const { data: existingProps, error } = await query;`;
+            const { data: existingProps, error } = await query2;`;
 
 const fallbackPropertiesQueryReplacement = `            // 2. Fallback to properties table if no dedicated mitra_kostmanager record exists yet
             let query2 = supabase.from('properties').select('*');
@@ -209,6 +206,83 @@ if (code.includes(fallbackPropertiesQueryTarget)) {
     console.log('UUID guard for fallback properties query already present.');
 } else {
     console.error('Could not find fallback properties query target!');
+}
+
+// ============================================================
+// FIX 8: Set migration warning states when dedicated kmProp is found
+// ============================================================
+const kmPropTarget = `            if (kmProp) {
+                console.log("openKostManagerListing: found existing dedicated mitra_kostmanager to load:", kmProp.property_id);`;
+const kmPropReplacement = `            if (kmProp) {
+                setIsExistingPropertyMigration(true);
+                setWarningAccepted(false);
+                console.log("openKostManagerListing: found existing dedicated mitra_kostmanager to load:", kmProp.property_id);`;
+
+if (code.includes(kmPropTarget)) {
+    code = code.replace(kmPropTarget, kmPropReplacement);
+    console.log('setIsExistingPropertyMigration(true) added when kmProp dedicated database found.');
+} else if (code.includes('setIsExistingPropertyMigration(true);') && code.includes('mitra_kostmanager to load')) {
+    console.log('kmProp migration warning already set.');
+} else {
+    console.error('Could not find kmProp migration warning target!');
+}
+
+// ============================================================
+// FIX 9: Save isExistingPropertyMigration and warningAccepted into draftData
+// ============================================================
+const draftSaveTarget = `            const draftData = {
+                kmListingForm,
+                kmStep,
+                temporaryRoom,
+                activeRoomIdx,
+                kmActiveTab,
+                photoCategories
+            };`;
+const draftSaveReplacement = `            const draftData = {
+                kmListingForm,
+                kmStep,
+                temporaryRoom,
+                activeRoomIdx,
+                kmActiveTab,
+                photoCategories,
+                isExistingPropertyMigration,
+                warningAccepted
+            };`;
+
+if (code.includes(draftSaveTarget)) {
+    code = code.replace(draftSaveTarget, draftSaveReplacement);
+    console.log('Draft data save updated to preserve warning states.');
+} else if (code.includes('isExistingPropertyMigration,') && code.includes('warningAccepted')) {
+    console.log('Draft data warning states preservation already present.');
+} else {
+    console.error('Could not find draftData saving target!');
+}
+
+// ============================================================
+// FIX 10: Load isExistingPropertyMigration and warningAccepted from localStorage draft
+// ============================================================
+const draftLoadTarget = `                    if (parsed.photoCategories) {
+                        setPhotoCategories(parsed.photoCategories);
+                    }
+                    console.log("Loaded complete onboarding draft from localStorage on open");`;
+const draftLoadReplacement = `                    if (parsed.photoCategories) {
+                        setPhotoCategories(parsed.photoCategories);
+                    }
+                    if (parsed.isExistingPropertyMigration !== undefined) {
+                        setIsExistingPropertyMigration(parsed.isExistingPropertyMigration);
+                    }
+                    if (parsed.warningAccepted !== undefined) {
+                        setWarningAccepted(parsed.warningAccepted);
+                    }
+                    console.log("Loaded complete onboarding draft from localStorage on open");`;
+
+if (code.includes(draftLoadTarget)) {
+    code = code.replace(draftLoadTarget, draftLoadReplacement);
+    console.log('Draft data load updated to restore warning states.');
+} else if (code.includes('setIsExistingPropertyMigration(parsed.isExistingPropertyMigration)')) {
+    console.log('Draft data warning states restoration already present.');
+} else {
+    console.error('Could not find draftData loading target!');
 }
 
 fs.writeFileSync(targetFile, code, 'utf8');

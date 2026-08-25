@@ -2,7 +2,15 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 30. Perbaikan Warning Overlay & Persistensi Draf Peninjauan Ulang Data KostManager (Agustus 2026)
+- **Masalah**: Warning overlay untuk peninjauan ulang data properti hasil migrasi tidak muncul ketika data draf dimuat dari dedicated `mitra_kostmanager` (`kmProp`). Selain itu, status warning ini ter-reset (overlay menghilang) saat draf dimuat ulang dari `localStorage` browser.
+- **Perbaikan**:
+  * Menambahkan penyetelan status `setIsExistingPropertyMigration(true)` dan `setWarningAccepted(false)` ketika data KostManager dimuat pertama kali dari tabel `mitra_kostmanager`.
+  * Memodifikasi fungsi penyimpanan draf agar menyertakan variabel `isExistingPropertyMigration` dan `warningAccepted` ke dalam `draftData` di `localStorage`.
+  * Memodifikasi pemuatan draf `localStorage` agar merestorasi status kedua variabel tersebut saat form dibuka kembali oleh agen survey.
+
 ### 29. Sinkronisasi Siklus Pembangunan Ulang (Anti-Reset) & Perbaikan Review Admin (Agustus 2026)
+
 - **Masalah**: Setiap kali skrip pembangun ulang `reapply_all_changes_chronologically.js` dijalankan, perubahan di luar `AgentDashboard.tsx` ter-reset. Selain itu, fitur detail kelola properti di Admin Dashboard (`KostManagerManagement.tsx`) selalu gagal terinjeksi karena skrip pencari salah mencocokkan pola `onClick={async () => {` padahal aslinya fungsi sinkron biasa.
 - **Perbaikan**:
   * Memperbarui `reapply_all_changes_chronologically.js` agar secara otomatis membersihkan (`git checkout HEAD`) file `KostManagerManagement.tsx` di awal proses untuk mencegah modifikasi bertumpuk.

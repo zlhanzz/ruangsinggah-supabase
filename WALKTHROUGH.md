@@ -1,55 +1,32 @@
-# WALKTHROUGH
+# WALKTHROUGH - Perbaikan Peringatan Peninjauan Ulang Data KostManager
 
-Dokumen ini berisi daftar perubahan yang telah dilakukan untuk menyelesaikan seluruh permintaan perbaikan sistem dan antarmuka (UI/UX) pada repositori ini.
-
----
+Dokumen ini menjelaskan daftar perubahan, hasil pengujian, dan instruksi penanganan kode pasca perbaikan sistem *warning overlay* pada Dashboard Agen.
 
 ## 1. Daftar Perubahan
+Modifikasi telah diintegrasikan secara incremental melalui regenerasi file [`AgentDashboard.tsx`](file:///C:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx):
+- **Loader Dedicated `mitra_kostmanager`**:
+  Ditambahkan status `setIsExistingPropertyMigration(true)` dan `setWarningAccepted(false)` ketika data draf KostManager berhasil diambil dari tabel `mitra_kostmanager` (`kmProp`). Hal ini memastikan peringatan peninjauan ulang data langsung muncul ketika draf hasil migrasi pertama kali dibuka dari database.
+- **Auto-Save & Auto-Load Draf `localStorage`**:
+  - Memperbarui objek `draftData` pada `useEffect` auto-save untuk menyertakan variabel `isExistingPropertyMigration` dan `warningAccepted`.
+  - Memperbarui pembacaan `savedDraft` di browser agar memuat kembali status `isExistingPropertyMigration` dan `warningAccepted` dari `localStorage`. Ini mencegah hilangnya popup peringatan secara tidak sengaja ketika draf dimuat ulang/refresh browser sebelum agen mengklik "Saya Mengerti".
+- **Sinkronisasi Rebuild (Branch origin/main)**:
+  Memperbarui [`reapply_all_changes_chronologically.js`](file:///C:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/scratch/reapply_all_changes_chronologically.js) agar selalu menggunakan source `origin/main` yang bersih saat proses checkout. Hal ini memungkinkannya meregenerasi seluruh 18 tahapan skrip scratch (A sampai R) secara bersih tanpa resiko korupsi layout ganda (*double-modification layout corruption*).
 
-### A. Restorasi UI/UX & Fitur Kustom (Penyebab Reset Teratasi)
-* Seluruh 93 perubahan antarmuka kustom (termasuk step-step wizard pendataan kamar, validasi index batas kamar, input WC umum & dapur umum sub-fasilitas kustom, opsi pen neutralized lantai, dll.) yang sebelumnya hilang akibat reset HEAD repositori kini telah **diaplikasikan kembali secara penuh** menggunakan naskah orkestrator regenerasi kronologis.
-* Penempatan tombol `⚡ Isi Listing & Kamar` pada kartu pendataan agen disesuaikan agar selalu aktif saat status tugas sedang `SURVEYING` atau `AGENT_ASSIGNED` untuk pesanan KostManager Onboarding.
+## 2. Hasil Pengujian / Kompilasi
+Kompilasi produksi menggunakan Vite bundler berjalan lancar:
+- **Perintah**: `npm run build` di dalam folder `functions/public/`.
+- **Hasil**: **✓ built in 24.43s** dengan sukses tanpa error JSX maupun esbuild syntax error.
 
-### B. Penyelesaian Error Konsol `invalid input syntax for type uuid: "undefined"` (RLS Policy)
-* Masalah kegagalan join relasi tabel `properties` dan `kostmanager_requests` yang diblokir oleh sistem Row Level Security (RLS) database ketika agen mencoba mengakses draft telah diselesaikan dengan menambahkan kebijakan SELECT yang mengizinkan agen terdaftar untuk membaca data pemilik terkait.
-* SQL kebijakan baru disiapkan di berkas `functions/scratch/add_policy.sql` untuk dijalankan oleh admin/user pada editor SQL Supabase.
+## 3. Petunjuk Deploy / Push Manual
+Guna mempublikasikan hasil kerja ke branch GitHub Anda (`bukan-productions`), jalankan perintah-perintah berikut di terminal lokal Anda secara berurutan:
+```bash
+# 1. Masukkan semua perubahan ke stage git
+git add -A
 
-### C. Pop-up Peringatan Peninjauan Ulang Properti Terintegrasi (Migrasi Mitra Biasa -> KostManager)
-* Saat agen membuka modul pendataan `⚡ Isi Listing & Kamar`, sistem mendeteksi apakah properti tersebut sudah ada sebelumnya di database (`properties` atau `mitra_kostmanager` fallback).
-* Jika terdeteksi merupakan migrasi properti yang sudah ada, modal editor akan di-overlay dengan pop-up peringatan kustom: 
-  > **"Peninjauan Ulang Properti: Beberapa data secara otomatis sudah terisi, lakukan peninjauan ulang untuk memastikan kesesuaian data sudah benar."**
-* Agen harus menekan tombol **"Saya Mengerti"** untuk membuka lembar pendataan, atau menekan tombol **"Keluar"** untuk membatalkannya.
+# 2. Buat commit lokal baru
+git commit -m "feat: perbaikan persistensi warning overlay peninjauan ulang data kostmanager hasil migrasi"
 
-### D. Switcher Segmented Premium untuk Pilihan Kamar "Kosongan"
-* Checkbox isian manual untuk fasilitas kosongan telah diganti dengan **Segmented Switcher Premium** dengan dua pilihan: **`[Kosongan (Tanpa Perabot)]`** dan **`[Furnished (Isian)]`**.
-* Saat mode **`Kosongan`** diaktifkan:
-  - Fasilitas standard kamar (`Kasur`, `Lemari`, `Meja Belajar`, `AC`, `Kipas Angin`, `Water Heater`) otomatis dimatikan (`checked = false`) dan di-lock dengan visual opacity rendah (40%).
-  - Memilih **`Furnished`** membuka kembali akses input untuk agen.
-  - Perubahan ini otomatis disinkronkan ke dalam state payload pengiriman properti dan data listing mitra.
-
----
-
-## 2. Hasil Pengujian & Kompilasi
-* Kompilasi bundle produksi menggunakan Vite (`npm run build`) berhasil diselesaikan dengan **Exit Code 0 (SUKSES)** tanpa adanya error sintaks JSX ataupun character bracket mismatch pada berkas [`AgentDashboard.tsx`](file:///C:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx) maupun [`KostManagerLanding.tsx`](file:///C:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostManagerLanding.tsx).
-
----
-
-## 3. Petunjuk Deploy (Untuk Dilakukan Manual oleh User)
-1. **Kebijakan RLS Supabase**:
-   Salin dan jalankan kueri SQL berikut di editor SQL Supabase Anda untuk memastikan agen dapat mengakses data properti dan requests tanpa terhambat error RLS (yang menyebabkan UUID `undefined` di konsol):
-   ```sql
-   CREATE POLICY "properties_select_agents" ON public.properties 
-   FOR SELECT USING (EXISTS (SELECT 1 FROM public.agents WHERE user_id = auth.uid()));
-
-   CREATE POLICY "kostmanager_requests_select_agents" ON public.kostmanager_requests
-   FOR SELECT USING (
-       auth.uid() = user_id 
-       OR EXISTS (SELECT 1 FROM public.agents WHERE user_id = auth.uid())
-       OR public.is_admin()
-   );
-   ```
-2. **Kompilasi Ulang Frontend**:
-   Jalankan perintah berikut di direktori `functions/public` sebelum melakukan upload/deploy ke server produksi:
-   ```bash
-   npm run build
-   ```
+# 3. Push ke branch bukan-productions di GitHub
+git push origin bukan-productions
+```
+*(Catatan: Anda juga bisa meminta saya langsung untuk memicu push jika Anda mengetikkan instruksinya di obrolan chat).*

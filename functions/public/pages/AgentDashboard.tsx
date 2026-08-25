@@ -475,7 +475,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 temporaryRoom,
                 activeRoomIdx,
                 kmActiveTab,
-                photoCategories
+                photoCategories,
+                isExistingPropertyMigration,
+                warningAccepted
             };
             localStorage.setItem(draftKey, JSON.stringify(draftData));
         }
@@ -859,6 +861,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     if (parsed.photoCategories) {
                         setPhotoCategories(parsed.photoCategories);
                     }
+                    if (parsed.isExistingPropertyMigration !== undefined) {
+                        setIsExistingPropertyMigration(parsed.isExistingPropertyMigration);
+                    }
+                    if (parsed.warningAccepted !== undefined) {
+                        setWarningAccepted(parsed.warningAccepted);
+                    }
                     console.log("Loaded complete onboarding draft from localStorage on open");
                     return;
                 }
@@ -883,52 +891,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     .select('metadata')
                     .eq('id', req.transaction_id)
                     .maybeSingle();
-                if (trxData?.metadata) {
-                    transactionMetadata = trxData.metadata;
-                }
                 const rawPropId = trxData?.metadata?.propertyId;
-                const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
                 if (rawPropId && uuidPattern.test(rawPropId)) {
                     propertyIdToFetch = rawPropId;
                     console.log("openKostManagerListing: found valid propertyId in transaction metadata:", propertyIdToFetch);
                 } else if (rawPropId) {
                     console.warn("openKostManagerListing: propertyId in metadata is not a valid UUID, ignoring:", rawPropId);
-                }
-            }
-
-            // Calculate Mitra's initial input for total rooms and coordinates from transaction metadata or notes
-            const parsedMetaRooms = transactionMetadata.total_rooms || transactionMetadata.totalRooms || transactionMetadata.jumlah_kamar;
-            if (parsedMetaRooms) {
-                initialTotalRooms = Number(parsedMetaRooms) || 0;
-            }
-            if (!initialTotalRooms && req.notes) {
-                const m = req.notes.match(/Total Kamar:\s*(\d+)/i);
-                if (m) {
-                    initialTotalRooms = Number(m[1]) || 0;
-                }
-            }
-
-            // Extract coordinates
-            const possibleLocationUrls = [
-                transactionMetadata.googleMapsLink,
-                transactionMetadata.google_maps_url,
-                req.kost_name,
-                req.notes
-            ];
-            for (const url of possibleLocationUrls) {
-                if (url) {
-                    const parsed = extractCoordinates(url);
-                    if (parsed) {
-                        initialCoords = parsed;
-                        break;
-                    }
-                }
-            }
-            if (initialCoords.lat === -5.147665 && initialCoords.lng === 119.432731) {
-                const directLat = transactionMetadata.location?.lat || transactionMetadata.latitude || (req as any).latitude;
-                const directLng = transactionMetadata.location?.lng || transactionMetadata.longitude || (req as any).longitude;
-                if (directLat && directLng) {
-                    initialCoords = { lat: Number(directLat), lng: Number(directLng) };
                 }
             }
 
@@ -946,6 +915,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             }
 
             if (kmProp) {
+                setIsExistingPropertyMigration(true);
+                setWarningAccepted(false);
                 console.log("openKostManagerListing: found existing dedicated mitra_kostmanager to load:", kmProp.property_id);
                 kmOriginalLocationRef.current = kmProp.location || null;
                 
@@ -993,22 +964,14 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             }
 
             // 2. Fallback to properties table if no dedicated mitra_kostmanager record exists yet
-            let query2 = supabase.from('properties').select('*');
-            const uuidPat3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            let canQueryProperties = false;
+            let query = supabase.from('properties').select('*');
             if (propertyIdToFetch) {
-                query2 = query2.eq('id', propertyIdToFetch);
-                canQueryProperties = true;
-            } else if (req.user_id && uuidPat3.test(req.user_id)) {
-                query2 = query2.eq('owner_uid', req.user_id);
-                canQueryProperties = true;
+                query = query.eq('id', propertyIdToFetch);
             } else {
-                console.warn('openKostManagerListing: no valid UUID for properties lookup, will use req data as fallback.');
+                query = query.eq('owner_uid', req.user_id);
             }
             
-            const { data: existingProps, error } = canQueryProperties
-                ? await query2
-                : { data: null, error: null };
+            const { data: existingProps, error } = await query;
 
             if (error) {
                 console.error("Error fetching existing property:", error);
