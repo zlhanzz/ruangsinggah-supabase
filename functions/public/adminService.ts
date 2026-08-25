@@ -1170,6 +1170,9 @@ export async function syncKostManagerRequest(transactionId: string, transactionO
 
         const mockDriveLink = `https://drive.google.com/drive/folders/mock-${transactionId.slice(0, 8)}`;
 
+        const isUpgrade = !!meta.propertyId;
+        const onboardingType = isUpgrade ? 'Upgrade Mitra Biasa' : 'Pendaftaran Kost Baru';
+
         const payload: any = {
             user_id: trx.user_id,
             transaction_id: transactionId,
@@ -1178,9 +1181,10 @@ export async function syncKostManagerRequest(transactionId: string, transactionO
             kost_type: meta.kostType || 'Campur',
             empty_rooms: parseInt(meta.emptyRooms) || 0,
             kost_address: meta.address || meta.kostAddress || '-',
+            property_id: meta.propertyId || existing?.property_id || null,
             survey_date: meta.surveyDate || existing?.survey_date || null,
             survey_time: meta.surveyTime || existing?.survey_time || null,
-            notes: `KostManager Onboarding - Survey Pendataan Lapangan${meta.googleMapsLink ? `\n📍 Link GPS: ${meta.googleMapsLink}` : ''}`,
+            notes: `KostManager Onboarding [${onboardingType}] - Survey Pendataan Lapangan${meta.googleMapsLink ? `\n📍 Link GPS: ${meta.googleMapsLink}` : ''}`,
             result_drive_link: existing?.result_drive_link || mockDriveLink,
             updated_at: getCurrentDate().toISOString(),
         };

@@ -98,6 +98,7 @@ const scripts = [
 
   // N2. State variables and UUID guard for warning popup
   'functions/scratch/fix_missing_states_and_uuid.js',
+  'functions/scratch/fix_onboarding_loading_discrepancy.js',
 
   // O. Premium segmented switcher for Kosongan vs Furnished
   'functions/scratch/apply_segmented_kosongan_v5.js',

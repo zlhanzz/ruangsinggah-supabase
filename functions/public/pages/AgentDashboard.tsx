@@ -1065,15 +1065,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
             // 1. Try fetching from dedicated mitra_kostmanager table first (bypass RLS draft restriction)
             let kmProp = null;
-            let kmQuery = supabase.from('mitra_kostmanager').select('*');
             if (propertyIdToFetch) {
-                kmQuery = kmQuery.eq('property_id', propertyIdToFetch);
-            } else {
-                kmQuery = kmQuery.eq('owner_uid', req.user_id);
-            }
-            const { data: kmProps } = await kmQuery.limit(1);
-            if (kmProps && kmProps.length > 0) {
-                kmProp = kmProps[0];
+                const { data: kmProps } = await supabase
+                    .from('mitra_kostmanager')
+                    .select('*')
+                    .eq('property_id', propertyIdToFetch)
+                    .limit(1);
+                if (kmProps && kmProps.length > 0) {
+                    kmProp = kmProps[0];
+                }
             }
 
             if (kmProp) {
@@ -1129,14 +1129,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             let query2 = supabase.from('properties').select('*');
             const uuidPat3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
             let canQueryProperties = false;
-            if (propertyIdToFetch) {
+            if (propertyIdToFetch && uuidPat3.test(propertyIdToFetch)) {
                 query2 = query2.eq('id', propertyIdToFetch);
                 canQueryProperties = true;
-            } else if (req.user_id && uuidPat3.test(req.user_id)) {
-                query2 = query2.eq('owner_uid', req.user_id);
-                canQueryProperties = true;
             } else {
-                console.warn('openKostManagerListing: no valid UUID for properties lookup, will use req data as fallback.');
+                console.log('openKostManagerListing: new property pendaftaran (propertyIdToFetch is empty), skipping properties database query lookup.');
             }
             
             const { data: existingProps, error } = canQueryProperties
