@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabase';
 import { FORMAT_CURRENCY } from '../../constants';
+import { KostManagerPackage } from '../../types';
 import { 
     getResidentStatus, 
     getManualInvoices, 
@@ -9,7 +10,6 @@ import {
     uploadFileAndGetURL, 
     addPropertyWithMedia, 
     updatePropertyWithMedia,
-    KostManagerPackage,
     getKostManagerPackages,
     saveKostManagerPackage,
     deleteKostManagerPackage

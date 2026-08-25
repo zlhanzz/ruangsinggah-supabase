@@ -9,6 +9,7 @@ import ChatWindow from '../components/ChatWindow';
 import { incrementPropertyView } from '../userService';
 import { getOrCreateChatSession, SYSTEM_ADMIN_ID } from '../chatService';
 import { createBookingRequest } from '../userService';
+import { supabase } from '../supabase';
 
 interface KostDetailProps {
   kost: Kost;
@@ -50,6 +51,9 @@ const InfoSection: React.FC<{ title: string; children: React.ReactNode; defaultO
 const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user, onLoginRedirect, validateProfile }) => {
   const [currentPhoto, setCurrentPhoto] = useState(0);
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
+  const [physicalRooms, setPhysicalRooms] = useState<any[]>([]);
+  const [selectedPhysicalRoom, setSelectedPhysicalRoom] = useState<any>(null);
+  const [loadingRooms, setLoadingRooms] = useState(false);
 
   // === SEO: Dynamic Meta Tags ===
   const kostName = kost.name || 'Kost Makassar';
@@ -115,6 +119,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
       incrementPropertyView(kost.id);
     }
   }, [kost.id]);
+
   const [selectedPeriod, setSelectedPeriod] = useState<PricingPeriod>('bulanan');
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isPaymentGatewayOpen, setIsPaymentGatewayOpen] = useState(false);
@@ -155,6 +160,39 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     }
   }, [selectedVariantIdx, selectedRoom]);
 
+  // Load physical rooms if isManaged is true
+  useEffect(() => {
+    if (kost.id && kost.isManaged) {
+      const fetchRooms = async () => {
+        setLoadingRooms(true);
+        try {
+          const { data, error } = await supabase
+            .from('rooms')
+            .select('*')
+            .eq('property_id', kost.id)
+            .order('room_number', { ascending: true });
+          if (!error && data) {
+            setPhysicalRooms(data);
+          }
+        } catch (e) {
+          console.error("Error loading rooms:", e);
+        } finally {
+          setLoadingRooms(false);
+        }
+      };
+      fetchRooms();
+    }
+  }, [kost.id, kost.isManaged]);
+
+  // Sync selectedPhysicalRoom when variant changes
+  useEffect(() => {
+    if (kost.isManaged && physicalRooms.length > 0) {
+      const typeRooms = physicalRooms.filter(r => r.room_type_name === selectedRoom.name);
+      const firstAvail = typeRooms.find(r => r.status === 'available');
+      setSelectedPhysicalRoom(firstAvail || typeRooms[0] || null);
+    }
+  }, [selectedVariantIdx, physicalRooms, selectedRoom.name, kost.isManaged]);
+
   // Ambil semua foto dari unit kamar yang berstatus kosong/tidak dihuni untuk ditampilkan di pemasaran
   const vacantRoomImages = (kost.roomTypes || []).flatMap((rt: any) => 
     (rt.rooms || [])
@@ -170,7 +208,12 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   const prevPhoto = () => setCurrentPhoto((prev) => (prev - 1 + (imageUrls.length || 1)) % (imageUrls.length || 1));
 
   const handleBookingClick = () => {
-    if (!selectedRoom.isAvailable) {
+    if (kost.isManaged && !selectedPhysicalRoom) {
+      alert("Silakan pilih nomor kamar yang tersedia terlebih dahulu.");
+      return;
+    }
+
+    if (!kost.isManaged && !selectedRoom.isAvailable) {
       alert("Mohon maaf, tipe kamar ini sedang penuh.");
       return;
     }
@@ -211,6 +254,8 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           imageUrls: kost.image_urls,
           periodLabel: periodLabels[selectedPeriod] || selectedPeriod,
           roomType: data.variantName || selectedRoom.name || '-',
+          roomNumber: selectedPhysicalRoom?.room_number || null,
+          roomId: selectedPhysicalRoom?.id || null,
           startDate: data.startDate || new Date().toISOString().split('T')[0],
           endDate: (() => {
             const d = new Date(data.startDate || new Date());
@@ -736,6 +781,58 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                   </div>
                 )}
 
+                {/* Physical Rooms Selector for KostManager properties */}
+                {kost.isManaged && physicalRooms.length > 0 && (
+                  <div className="mb-6 border-t border-gray-100 pt-6">
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+                      Pilih Nomor Kamar ({physicalRooms.filter(r => r.room_type_name === selectedRoom.name && r.status === 'available').length} Tersedia)
+                    </label>
+                    {loadingRooms ? (
+                      <div className="py-4 text-center text-xs font-bold text-gray-400 uppercase">Memuat nomor kamar...</div>
+                    ) : (
+                      <div className="grid grid-cols-4 gap-2">
+                        {(() => {
+                          const typeRooms = physicalRooms.filter(r => r.room_type_name === selectedRoom.name);
+                          if (typeRooms.length === 0) {
+                            return <div className="col-span-4 text-center py-4 text-xs font-bold text-gray-400 uppercase">Tidak ada kamar terdaftar</div>;
+                          }
+                          return typeRooms.map((room) => {
+                            const isOccupied = room.status === 'occupied';
+                            const isMaintenance = room.status === 'maintenance';
+                            const isSelected = selectedPhysicalRoom?.id === room.id;
+                            
+                            let bgStyle = 'border-gray-200 hover:border-orange-500 bg-white text-gray-700';
+                            if (isSelected) {
+                              bgStyle = 'border-orange-500 bg-orange-50 text-orange-600 font-extrabold shadow-md';
+                            } else if (isOccupied) {
+                              bgStyle = 'border-red-100 bg-red-50/50 text-red-400 cursor-not-allowed opacity-60';
+                            } else if (isMaintenance) {
+                              bgStyle = 'border-gray-150 bg-gray-50 text-gray-400 cursor-not-allowed opacity-60';
+                            }
+                            
+                            return (
+                              <button
+                                key={room.id}
+                                type="button"
+                                disabled={isOccupied || isMaintenance}
+                                onClick={() => setSelectedPhysicalRoom(room)}
+                                className={`p-2.5 rounded-xl border text-center transition-all flex flex-col items-center justify-center relative ${bgStyle}`}
+                              >
+                                <span className="text-xs uppercase tracking-tight font-black">
+                                  {room.room_number}
+                                </span>
+                                <span className="text-[8px] font-bold mt-0.5 uppercase tracking-wider block">
+                                  {isOccupied ? 'Terisi' : isMaintenance ? 'Perbaikan' : 'Kosong'}
+                                </span>
+                              </button>
+                            );
+                          });
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Pricing Period Selector (Only if room has multiple pricing options) */}
                 {selectedRoom.pricing && selectedRoom.pricing.length > 0 && (
                   <div className="mb-6">
@@ -787,13 +884,17 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                 <div className="space-y-3">
                   <button
                     onClick={handleBookingClick}
-                    disabled={selectedRoom.isAvailable === false}
-                    className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl transition-all active:scale-95 ${selectedRoom.isAvailable === false
+                    disabled={kost.isManaged ? (!selectedPhysicalRoom || selectedPhysicalRoom.status !== 'available') : (selectedRoom.isAvailable === false)}
+                    className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl transition-all active:scale-95 ${
+                      (kost.isManaged ? (!selectedPhysicalRoom || selectedPhysicalRoom.status !== 'available') : (selectedRoom.isAvailable === false))
                       ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
                       : 'bg-orange-500 text-white shadow-orange-100 hover:bg-orange-600'
                       }`}
                   >
-                    {selectedRoom.isAvailable === false ? 'Kamar Penuh' : `Ajukan Sewa (${periodLabels[selectedPeriod] || selectedPeriod})`}
+                    {kost.isManaged 
+                      ? (!selectedPhysicalRoom ? 'Pilih Kamar' : selectedPhysicalRoom.status !== 'available' ? 'Kamar Penuh' : `Ajukan Sewa Kamar ${selectedPhysicalRoom.room_number}`) 
+                      : (selectedRoom.isAvailable === false ? 'Kamar Penuh' : `Ajukan Sewa (${periodLabels[selectedPeriod] || selectedPeriod})`)
+                    }
                   </button>
                   <button
                     onClick={handleOpenChat}

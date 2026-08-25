@@ -1,179 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { FORMAT_CURRENCY } from '../../constants';
-import { supabase } from '../../supabase';
-import { 
-    updateKostManagerRequest, 
-    deleteKostManagerRequest, 
-    getSurveyAgents,
-    generateManualDriveFolder
-} from '../../adminService';
+const fs = require('fs');
+const path = require('path');
 
-interface KostManagerManagementProps {
-    isAdmin: boolean;
-    refreshData: () => void;
-    onNavigateToPortal?: () => void;
-}
+const targetFile = path.join(__dirname, '../public/components/admin/KostManagerManagement.tsx');
+let content = fs.readFileSync(targetFile, 'utf8');
 
-const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
-    isAdmin,
-    refreshData,
-    onNavigateToPortal
-}) => {
-    const [requests, setRequests] = useState<any[]>([]);
-    const [agents, setAgents] = useState<any[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    
-    // Dialog/Editing State
-    const [editingRequest, setEditingRequest] = useState<any | null>(null);
-    const [editForm, setEditForm] = useState<any>({});
+// Normalize CRLF to LF
+content = content.replace(/\r\n/g, '\n');
+
+// 1. Inject state variables after setEditingRequest/editForm states
+const stateSearch = '    const [editForm, setEditForm] = useState<any>({});';
+const stateReplacement = `    const [editForm, setEditForm] = useState<any>({});
     const [selectedPropertyDetails, setSelectedPropertyDetails] = useState<any>(null);
     const [loadingProperty, setLoadingProperty] = useState(false);
     const [showReviewAccordion, setShowReviewAccordion] = useState(false);
     const [activeTab, setActiveTab] = useState<'ALL' | 'NEED_AGENT' | 'SURVEYING' | 'VERIFICATION' | 'ACTIVE'>('ALL');
     const [selectedMitra, setSelectedMitra] = useState<any | null>(null);
     const [isMitraModalOpen, setIsMitraModalOpen] = useState(false);
-    const [assignAgentMap, setAssignAgentMap] = useState<{ [reqId: string]: string }>({});
-    
-    const loadData = async () => {
-        setLoading(true);
-        try {
-            // Fetch requests
-            const { data: reqData, error: reqErr } = await supabase
-                .from('kostmanager_requests')
-                .select(`
-                    *,
-                    user:user_id (
-                        name,
-                        email,
-                        phone
-                    ),
-                    transaction:transaction_id (
-                        amount,
-                        status,
-                        payment_method,
-                        created_at,
-                        metadata
-                    )
-                `)
-                .order('created_at', { ascending: false });
+    const [assignAgentMap, setAssignAgentMap] = useState<{ [reqId: string]: string }>({});`;
 
-            if (reqErr) throw reqErr;
-            setRequests(reqData || []);
+if (content.includes(stateSearch)) {
+    content = content.replace(stateSearch, stateReplacement);
+    console.log("State variables injected successfully.");
+} else {
+    console.error("ERROR: State search pattern not found!");
+    process.exit(1);
+}
 
-            // Fetch agents
-            const surveyAgents = await getSurveyAgents();
-            setAgents(surveyAgents || []);
-        } catch (err) {
-            console.error('Error loading KostManager requests:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        loadData();
-    }, []);
-
-    const handleUpdateStatusAndAgent = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!editingRequest) return;
-        setIsSubmitting(true);
-        try {
-            // Determine automatic status
-            let computedStatus = editingRequest.status;
-            
-            if (!editForm.assigned_agent_id) {
-                computedStatus = 'PENDING_ASSIGNMENT';
-            } else {
-                // If agent is newly assigned, keep status as PENDING_ASSIGNMENT so agent can accept it in their dashboard first
-                if (computedStatus === 'PENDING_ASSIGNMENT') {
-                    computedStatus = 'PENDING_ASSIGNMENT';
-                }
-                // If drive link is filled
-                if (editForm.result_drive_link) {
-                    computedStatus = 'PENDING_ONBOARDING';
-                } else if (computedStatus === 'PENDING_ONBOARDING') {
-                    // Revert to AGENT_ASSIGNED if drive link is cleared
-                    computedStatus = 'AGENT_ASSIGNED';
-                }
-            }
-
-            const updates: any = {
-                status: computedStatus,
-                assigned_agent_id: editForm.assigned_agent_id || null,
-                result_drive_link: editForm.result_drive_link || null
-            };
-
-            if (editForm.assigned_agent_id) {
-                const selectedAgent = agents.find(a => a.id === editForm.assigned_agent_id);
-                if (selectedAgent) {
-                    updates.agent_name = selectedAgent.name;
-                    updates.agent_phone = selectedAgent.phone;
-                }
-            } else {
-                updates.agent_name = null;
-                updates.agent_phone = null;
-            }
-
-            await updateKostManagerRequest(editingRequest.id, updates);
-            alert('Permintaan KostManager berhasil diperbarui.');
-            setEditingRequest(null);
-            loadData();
-            refreshData();
-        } catch (err) {
-            console.error(err);
-            alert('Gagal memperbarui data.');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleDelete = async (id: string, name: string) => {
-        if (!window.confirm(`Apakah Anda yakin ingin menghapus permintaan KostManager untuk "${name}"?`)) return;
-        setIsSubmitting(true);
-        try {
-            await deleteKostManagerRequest(id);
-            alert('Permintaan berhasil dihapus.');
-            loadData();
-            refreshData();
-        } catch (err) {
-            console.error(err);
-            alert('Gagal menghapus permintaan.');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const getStatusBadge = (status: string) => {
-        switch (status) {
-            case 'PENDING_ASSIGNMENT':
-                return 'bg-amber-100 text-amber-800 border-amber-200';
-            case 'AGENT_ASSIGNED':
-                return 'bg-blue-100 text-blue-800 border-blue-200';
-            case 'SURVEYING':
-                return 'bg-purple-100 text-purple-800 border-purple-200';
-            case 'PENDING_ONBOARDING':
-                return 'bg-indigo-100 text-indigo-800 border-indigo-200';
-            case 'ACTIVE':
-                return 'bg-green-100 text-green-800 border-green-200';
-            default:
-                return 'bg-gray-100 text-gray-800 border-gray-200';
-        }
-    };
-
-    const getStatusLabel = (status: string) => {
-        switch (status) {
-            case 'PENDING_ASSIGNMENT': return 'Menunggu Agen';
-            case 'AGENT_ASSIGNED': return 'Agen Ditugaskan';
-            case 'SURVEYING': return 'Sedang Disurvey';
-            case 'PENDING_ONBOARDING': return 'Menunggu Onboarding';
-            case 'ACTIVE': return 'Aktif (Auto-Pilot)';
-            default: return status;
-        }
-    };
-
-    const handleAssignAgentInline = async (reqId: string, agentId: string) => {
+// 2. Inject helper function & pipeline count logic before the return statement
+const returnSearch = '    return (';
+const helperReplacement = `    const handleAssignAgentInline = async (reqId: string, agentId: string) => {
         if (!agentId) return alert('Silakan pilih agen terlebih dahulu.');
         const selectedAgent = agents.find(a => a.id === agentId);
         if (!selectedAgent) return;
@@ -213,7 +68,23 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
     const totalVerification = requests.filter(r => r.status === 'PENDING_ONBOARDING').length;
     const totalActive = requests.filter(r => r.status === 'ACTIVE').length;
 
-    return (
+    return (`;
+
+if (content.includes(returnSearch)) {
+    content = content.replace(returnSearch, helperReplacement);
+    console.log("Inline assignment helper and filter counters injected successfully.");
+} else {
+    console.error("ERROR: Return statement search pattern not found!");
+    process.exit(1);
+}
+
+// 3. Replace the entire render block starting from return ( down to export default KostManagerManagement;
+const startIdx = content.indexOf('    return (');
+const endIdx = content.lastIndexOf('export default KostManagerManagement;');
+
+if (startIdx !== -1 && endIdx !== -1) {
+    const originalPre = content.substring(0, startIdx);
+    const replacementRender = `    return (
         <div className="space-y-6 animate-in fade-in duration-500 pb-20">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
                 <div>
@@ -243,14 +114,14 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                         key={tab.key}
                         onClick={() => setActiveTab(tab.key as any)}
                         type="button"
-                        className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 border ${
+                        className={\`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 border \${
                             activeTab === tab.key
                                 ? 'bg-gray-900 text-white border-gray-900 shadow-md shadow-gray-900/10'
                                 : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-                        }`}
+                        }\`}
                     >
                         <span>{tab.label}</span>
-                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${tab.color}`}>
+                        <span className={\`px-1.5 py-0.5 rounded-full text-[9px] font-black \${tab.color}\`}>
                             {tab.count}
                         </span>
                     </button>
@@ -273,12 +144,12 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                 // Extract coordinates from notes or metadata
                                 const extractCoords = (text: string) => {
                                     if (!text) return null;
-                                    const match = text.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+                                    const match = text.match(/(-?\\d+\\.\\d+),\\s*(-?\\d+\\.\\d+)/);
                                     if (match) return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
-                                    const gmapsUrl = text.match(/https?:\/\/[^\s]+/);
+                                    const gmapsUrl = text.match(/https?:\\/\\/[^\\s]+/);
                                     if (gmapsUrl) {
                                         // Simple regex for lat/lng in URL
-                                        const urlMatch = gmapsUrl[0].match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) || gmapsUrl[0].match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+                                        const urlMatch = gmapsUrl[0].match(/@(-?\\d+\\.\\d+),(-?\\d+\\.\\d+)/) || gmapsUrl[0].match(/q=(-?\\d+\\.\\d+),(-?\\d+\\.\\d+)/);
                                         if (urlMatch) return { lat: parseFloat(urlMatch[1]), lng: parseFloat(urlMatch[2]) };
                                     }
                                     return null;
@@ -310,7 +181,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                         {req.user?.name || 'Mitra Pengaju'}
                                                     </span>
                                                     <a 
-                                                        href={`https://wa.me/${(req.user?.phone || req.owner_phone || '').replace(/[^0-9]/g, '')}`}
+                                                        href={\`https://wa.me/\${(req.user?.phone || req.owner_phone || '').replace(/[^0-9]/g, '')}\`}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                         className="text-[10px] text-gray-500 font-bold block hover:text-orange-500 transition-colors"
@@ -318,7 +189,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                         📞 {req.user?.phone || req.owner_phone || '-'}
                                                     </a>
                                                 </div>
-                                                <span className={`ml-auto px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border ${getStatusBadge(req.status)}`}>
+                                                <span className={\`ml-auto px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border \${getStatusBadge(req.status)}\`}>
                                                     {getStatusLabel(req.status)}
                                                 </span>
                                             </div>
@@ -337,13 +208,13 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                 {coords && (
                                                     <div className="w-full h-28 rounded-2xl overflow-hidden border border-gray-150 relative mt-3">
                                                         <iframe
-                                                            title={`map-${req.id}`}
+                                                            title={\`map-\${req.id}\`}
                                                             width="100%"
                                                             height="100%"
                                                             frameBorder="0"
                                                             marginHeight={0}
                                                             marginWidth={0}
-                                                            src={`https://maps.google.com/maps?q=${coords.lat},${coords.lng}&z=14&output=embed`}
+                                                            src={\`https://maps.google.com/maps?q=\${coords.lat},\${coords.lng}&z=14&output=embed\`}
                                                             className="absolute inset-0"
                                                         />
                                                     </div>
@@ -351,7 +222,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
 
                                                 {req.notes && (
                                                     <div className="text-[9px] bg-slate-50 border border-slate-100 p-2.5 rounded-xl text-slate-500 font-bold leading-normal normal-case mt-2">
-                                                        📝 Catatan: {req.notes.replace(/https?:\/\/[^\s]+/, '').trim() || 'Ada koordinat GPS'}
+                                                        📝 Catatan: {req.notes.replace(/https?:\\/\\/[^\\s]+/, '').trim() || 'Ada koordinat GPS'}
                                                     </div>
                                                 )}
                                             </div>
@@ -442,7 +313,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                             <div>
                                 <span className="text-[9px] font-black text-gray-400 tracking-wider uppercase block">No. WhatsApp</span>
                                 <a 
-                                    href={`https://wa.me/${(selectedMitra.phone || '').replace(/[^0-9]/g, '')}`}
+                                    href={\`https://wa.me/\${(selectedMitra.phone || '').replace(/[^0-9]/g, '')}\`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-orange-600 font-black text-base hover:underline block"
@@ -563,7 +434,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                             <div className="grid grid-cols-4 gap-2 mt-2">
                                                 {selectedPropertyDetails.image_urls?.map((url, i) => (
                                                     <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative aspect-video rounded-lg overflow-hidden border border-gray-150">
-                                                        <img src={url} alt={`properti-${i}`} className="w-full h-full object-cover" />
+                                                        <img src={url} alt={\`properti-\${i}\`} className="w-full h-full object-cover" />
                                                     </a>
                                                 )) || '-'}
                                             </div>
@@ -692,3 +563,16 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
 };
 
 export default KostManagerManagement;
+`;
+    content = originalPre + replacementRender;
+    console.log("Entire render block replaced successfully.");
+} else {
+    console.error("ERROR: Failed to find target boundaries for entire return block replacement!");
+    process.exit(1);
+}
+
+// Convert back to CRLF
+content = content.replace(/\n/g, '\r\n');
+
+fs.writeFileSync(targetFile, content, 'utf8');
+console.log("apply_admin_premium_layout.js execution finished successfully.");

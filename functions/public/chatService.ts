@@ -351,7 +351,7 @@ export async function getMyChatSessions(userId: string): Promise<ChatSession[]> 
     .in('id', uniqueUserIds);
 
   const profileMap = new Map();
-  profiles?.forEach(p => {
+  profiles?.forEach((p: any) => {
     profileMap.set(p.id, {
       name: p.name,
       photo_url: p.photo_url || p.avatar_url || ''

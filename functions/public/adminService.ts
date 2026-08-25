@@ -897,40 +897,105 @@ export async function syncResidentStatus(transactionId: string, metadataOverride
 /**
  * syncPropertyRooms: Synchronizes rooms from JSONB properties.room_types to public.rooms table.
  */
-export async function syncPropertyRooms(propertyId: string): Promise<void> {
+export async function syncPropertyRooms(propertyId: string, inputRooms?: any[]): Promise<void> {
     try {
         console.log(`[SYNC_ROOMS] Starting room sync for property ${propertyId}`);
-        const { data: prop, error: fetchErr } = await supabase
-            .from('properties')
-            .select('id, room_types')
-            .eq('id', propertyId)
-            .maybeSingle();
+        
+        let rawRooms = inputRooms;
+        if (!rawRooms) {
+            const { data: prop, error: fetchErr } = await supabase
+                .from('properties')
+                .select('id, room_types')
+                .eq('id', propertyId)
+                .maybeSingle();
 
-        if (fetchErr || !prop) {
-            console.error(`[SYNC_ROOMS] Property not found or query error:`, fetchErr);
+            if (fetchErr || !prop) {
+                console.error(`[SYNC_ROOMS] Property not found or query error:`, fetchErr);
+                return;
+            }
+            rawRooms = Array.isArray(prop.room_types) ? prop.room_types : [];
+        }
+
+        let flatRooms: any[] = [];
+        if (Array.isArray(rawRooms)) {
+            rawRooms.forEach((item: any) => {
+                // If it's a grouped room type (has a nested rooms array)
+                if (Array.isArray(item.rooms)) {
+                    item.rooms.forEach((r: any) => {
+                        flatRooms.push({
+                            roomNumber: r.roomNumber || r.room_number || r.name || '',
+                            roomTypeName: item.name || r.roomTypeName || r.room_type_name || 'Standard',
+                            price: Number(r.price || item.price) || 0,
+                            status: r.status || 'available',
+                            roomFacilities: r.roomFacilities || item.roomFacilities || [],
+                            bathroomFacilities: r.bathroomFacilities || item.bathroomFacilities || [],
+                            images: r.images || r.imageUrls || [],
+                            floor: r.floor || item.floor || '',
+                            size: r.size || item.size || '3x4m'
+                        });
+                    });
+                } else {
+                    // It's a flat room object
+                    flatRooms.push({
+                        roomNumber: item.name || item.roomNumber || item.room_number || '',
+                        roomTypeName: item.type || item.roomTypeName || item.room_type_name || 'Standard',
+                        price: Number(item.price || item.price_per_month) || 0,
+                        status: item.status || 'available',
+                        roomFacilities: item.roomFacilities || [],
+                        bathroomFacilities: item.bathroomFacilities || [],
+                        images: item.images || item.imageUrls || [],
+                        floor: item.floor || '',
+                        size: item.size || '3x4m'
+                    });
+                }
+            });
+        }
+
+        if (flatRooms.length === 0) {
+            console.log(`[SYNC_ROOMS] No physical rooms to sync.`);
             return;
         }
 
-        const roomTypes = Array.isArray(prop.room_types) ? prop.room_types : [];
-        if (roomTypes.length === 0) {
-            console.log(`[SYNC_ROOMS] Property has no room_types defined.`);
-            return;
-        }
-
-        const roomsPayload = roomTypes.map((room: any, idx: number) => {
-            const roomNumber = String(room.name || room.roomNumber || room.room_number || `Kamar ${idx + 1}`).trim();
-            const isOccupied = room.is_occupied === true || room.status === 'terisi';
+        const roomsPayload = flatRooms.map((r: any) => {
+            const roomNumber = String(r.roomNumber).trim();
+            const isOccupied = r.status === 'occupied' || r.status === 'terisi';
+            const isMaintenance = r.status === 'maintenance' || r.status === 'perbaikan';
+            let finalStatus = 'available';
+            if (isOccupied) finalStatus = 'occupied';
+            else if (isMaintenance) finalStatus = 'maintenance';
 
             return {
                 property_id: propertyId,
                 room_number: roomNumber,
-                room_type_name: room.room_type_name || room.type || 'Standard',
-                price_per_month: Number(room.price || room.price_per_month) || 0,
-                status: isOccupied ? 'occupied' : 'available',
+                room_type_name: r.roomTypeName,
+                price_per_month: Number(r.price) || 0,
+                status: finalStatus,
                 updated_at: new Date().toISOString()
             };
         });
 
+        // 1. Fetch existing rooms in db
+        const { data: dbRooms } = await supabase
+            .from('rooms')
+            .select('id, room_number')
+            .eq('property_id', propertyId);
+
+        const activeRoomNumbers = roomsPayload.map(r => r.room_number);
+
+        if (dbRooms && dbRooms.length > 0) {
+            const roomsToDelete = dbRooms.filter(dr => !activeRoomNumbers.includes(dr.room_number));
+            if (roomsToDelete.length > 0) {
+                const idsToDelete = roomsToDelete.map(dr => dr.id);
+                console.log(`[SYNC_ROOMS] Deleting ${idsToDelete.length} removed rooms...`);
+                const { error: deleteErr } = await supabase
+                    .from('rooms')
+                    .delete()
+                    .in('id', idsToDelete);
+                if (deleteErr) console.error("[SYNC_ROOMS] Delete removed rooms error:", deleteErr);
+            }
+        }
+
+        // 2. Perform upsert of rooms
         console.log(`[SYNC_ROOMS] Performing upsert for ${roomsPayload.length} rooms...`);
         const { error: upsertErr } = await supabase
             .from('rooms')
@@ -940,6 +1005,57 @@ export async function syncPropertyRooms(propertyId: string): Promise<void> {
             console.error(`[SYNC_ROOMS] Error upserting rooms:`, upsertErr.message);
         } else {
             console.log(`[SYNC_ROOMS] Successfully synced rooms.`);
+        }
+
+        // 3. Group flatRooms by roomTypeName and update parent properties table
+        const groups: Record<string, any[]> = {};
+        flatRooms.forEach((r: any) => {
+            const key = r.roomTypeName || 'Standard';
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(r);
+        });
+
+        const aggregatedRoomTypes = Object.keys(groups).map(typeName => {
+            const roomsInGroup = groups[typeName];
+            const prices = roomsInGroup.map(r => Number(r.price)).filter(p => p > 0);
+            const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
+            const availableRooms = roomsInGroup.filter(r => r.status === 'available' || r.status === 'kosong' || r.status === 'kosong_siap');
+            const availableCount = availableRooms.length;
+            const isAvailable = availableCount > 0;
+            
+            const firstRoom = roomsInGroup[0] || {};
+            
+            return {
+                name: typeName,
+                price: minPrice,
+                size: firstRoom.size || '3x4m',
+                isAvailable: isAvailable,
+                availableRoomCount: availableCount,
+                maxOccupants: firstRoom.maxOccupants || 1,
+                roomFacilities: firstRoom.roomFacilities || [],
+                bathroomFacilities: firstRoom.bathroomFacilities || [],
+                rooms: roomsInGroup.map(r => ({
+                    roomNumber: r.roomNumber,
+                    status: r.status,
+                    images: r.images || []
+                }))
+            };
+        });
+
+        const allPrices = flatRooms.map(r => Number(r.price)).filter(p => p > 0);
+        const finalMinPrice = allPrices.length > 0 ? Math.min(...allPrices) : 0;
+
+        console.log(`[SYNC_ROOMS] Updating properties table for property ${propertyId} with aggregated room_types...`);
+        const { error: propUpdateErr } = await supabase
+            .from('properties')
+            .update({
+                room_types: aggregatedRoomTypes,
+                price: finalMinPrice
+            })
+            .eq('id', propertyId);
+
+        if (propUpdateErr) {
+            console.error(`[SYNC_ROOMS] Error updating property:`, propUpdateErr.message);
         }
     } catch (err) {
         console.error(`[SYNC_ROOMS] Fatal error during sync:`, err);
@@ -1676,6 +1792,7 @@ export async function addPropertyWithMedia(
   }
 
   if (error) throw error;
+  await syncPropertyRooms(inserted.id);
   return inserted.id;
 }
 
@@ -1811,6 +1928,7 @@ export async function updatePropertyWithMedia(
     console.error("Supabase Update Error:", updateError);
     throw new Error(updateError.message);
   }
+  await syncPropertyRooms(propertyId);
 }
 
 export async function updatePropertyStatus(propertyId: string, newStatus: 'draft' | 'published'): Promise<void> {
@@ -2515,6 +2633,8 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
         *,
         request:kostmanager_request_id (
           id,
+          status,
+          property_id,
           kost_name,
           kost_type,
           kost_address,
@@ -2544,29 +2664,36 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
 
     const { data: kmSurveys, error: kmErr } = await kmQuery.order('created_at', { ascending: false });
     if (!kmErr && kmSurveys) {
-      mappedKmSurveys = kmSurveys.map((ks: any) => ({
-        id: ks.id,
-        task_type: 'kostmanager',
-        kostmanager_survey_id: ks.id,
-        kostmanager_request_id: ks.kostmanager_request_id,
-        assigned_agent_id: ks.assigned_agent_id,
-        status: ks.status,
-        result_drive_link: ks.result_drive_link,
-        signature_data: ks.signature_data,
-        created_at: ks.created_at,
-        updated_at: ks.updated_at,
-        // Map data dari request agar compatible dengan model SurveyRequest
-        user_id: ks.request?.user_id,
-        transaction_id: ks.request?.transaction_id,
-        kost_name: ks.request?.kost_name || 'KostManager Listing',
-        kost_address: ks.request?.kost_address || '',
-        kost_type: ks.request?.kost_type || '',
-        empty_rooms: ks.request?.empty_rooms || 0,
-        notes: ks.request?.notes || '',
-        survey_date: ks.request?.survey_date,
-        user: ks.request?.user,
-        transaction: ks.request?.transaction
-      }));
+      mappedKmSurveys = kmSurveys.map((ks: any) => {
+        let computedStatus = ks.status;
+        if (ks.status === 'SURVEYING' && ks.request?.status === 'AGENT_ASSIGNED') {
+          computedStatus = 'PENDING_ASSIGNMENT';
+        }
+        return {
+          id: ks.id,
+          task_type: 'kostmanager',
+          kostmanager_survey_id: ks.id,
+          kostmanager_request_id: ks.kostmanager_request_id,
+          assigned_agent_id: ks.assigned_agent_id,
+          status: computedStatus,
+          result_drive_link: ks.result_drive_link,
+          signature_data: ks.signature_data,
+          created_at: ks.created_at,
+          updated_at: ks.updated_at,
+          // Map data dari request agar compatible dengan model SurveyRequest
+          kost_id: ks.request?.property_id,
+          user_id: ks.request?.user_id,
+          transaction_id: ks.request?.transaction_id,
+          kost_name: ks.request?.kost_name || 'KostManager Listing',
+          kost_address: ks.request?.kost_address || '',
+          kost_type: ks.request?.kost_type || '',
+          empty_rooms: ks.request?.empty_rooms || 0,
+          notes: ks.request?.notes || '',
+          survey_date: ks.request?.survey_date,
+          user: ks.request?.user,
+          transaction: ks.request?.transaction
+        };
+      });
     }
   }
 
@@ -2601,6 +2728,82 @@ export async function updateSurveyRequest(
   const role = await getUserRole(user.id);
   const isAdmin = role === 'admin';
   const isAgent = role === 'survey_agent';
+
+  // --- CHECK IF TARGET IS KOSTMANAGER SURVEY ---
+  const { data: existingKmSurvey } = await supabase
+    .from('kostmanager_surveys')
+    .select('id, kostmanager_request_id')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (existingKmSurvey) {
+    if (updates.assigned_agent_id === null) {
+      // Tolak / Deassign
+      const { error: delErr } = await supabase
+        .from('kostmanager_surveys')
+        .delete()
+        .eq('id', id);
+      if (delErr) throw delErr;
+
+      const { error: reqErr } = await supabase
+        .from('kostmanager_requests')
+        .update({
+          assigned_agent_id: null,
+          agent_name: null,
+          agent_phone: null,
+          status: 'PENDING_ASSIGNMENT',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingKmSurvey.kostmanager_request_id);
+      if (reqErr) throw reqErr;
+      return;
+    }
+
+    const kmSurveyUpdates: any = { updated_at: new Date().toISOString() };
+    if (updates.status) {
+      if (updates.status === 'AGENT_ASSIGNED' || updates.status === 'SURVEYING') {
+        kmSurveyUpdates.status = 'SURVEYING';
+      } else if (updates.status === 'SUBMITTED' || updates.status === 'PENDING_ONBOARDING') {
+        kmSurveyUpdates.status = 'SUBMITTED';
+      } else if (updates.status === 'ACTIVE' || updates.status === 'APPROVED') {
+        kmSurveyUpdates.status = 'APPROVED';
+      } else {
+        kmSurveyUpdates.status = updates.status;
+      }
+    }
+    if (updates.assigned_agent_id !== undefined) kmSurveyUpdates.assigned_agent_id = updates.assigned_agent_id;
+    if (updates.result_drive_link !== undefined) kmSurveyUpdates.result_drive_link = updates.result_drive_link;
+
+    const { error: kmSurveyErr } = await supabase
+      .from('kostmanager_surveys')
+      .update(kmSurveyUpdates)
+      .eq('id', id);
+    if (kmSurveyErr) throw kmSurveyErr;
+
+    const kmReqUpdates: any = { updated_at: new Date().toISOString() };
+    if (updates.status) {
+      if (updates.status === 'AGENT_ASSIGNED' || updates.status === 'SURVEYING') {
+        kmReqUpdates.status = 'SURVEYING';
+      } else if (updates.status === 'SUBMITTED' || updates.status === 'PENDING_ONBOARDING') {
+        kmReqUpdates.status = 'PENDING_ONBOARDING';
+      } else if (updates.status === 'ACTIVE' || updates.status === 'APPROVED') {
+        kmReqUpdates.status = 'ACTIVE';
+      } else {
+        kmReqUpdates.status = updates.status;
+      }
+    }
+    if (updates.assigned_agent_id !== undefined) kmReqUpdates.assigned_agent_id = updates.assigned_agent_id;
+    if (updates.agent_name !== undefined) kmReqUpdates.agent_name = updates.agent_name;
+    if (updates.agent_phone !== undefined) kmReqUpdates.agent_phone = updates.agent_phone;
+    if (updates.result_drive_link !== undefined) kmReqUpdates.result_drive_link = updates.result_drive_link;
+
+    const { error: kmReqErr } = await supabase
+      .from('kostmanager_requests')
+      .update(kmReqUpdates)
+      .eq('id', existingKmSurvey.kostmanager_request_id);
+    if (kmReqErr) throw kmReqErr;
+    return;
+  }
 
   // Regular users can update their own (for feedback/rating), agents can update assigned or unassigned tasks
   const { data: existing } = await supabase.from('survey_requests').select('user_id, assigned_agent_id, transaction_id, status').eq('id', id).single();
@@ -2772,7 +2975,7 @@ export async function updateKostManagerRequest(
         if (updates.status === 'ACTIVE') kmSurveyPayload.status = 'APPROVED';
         else if (updates.status === 'SURVEYING') kmSurveyPayload.status = 'SURVEYING';
         else if (updates.status === 'PENDING_ONBOARDING') kmSurveyPayload.status = 'SUBMITTED';
-        else if (updates.status === 'PENDING_ASSIGNMENT') kmSurveyPayload.status = 'PENDING_ASSIGNMENT';
+        else if (updates.status === 'PENDING_ASSIGNMENT') kmSurveyPayload.status = 'SURVEYING';
         else if (updates.status === 'AGENT_ASSIGNED') kmSurveyPayload.status = 'SURVEYING';
       }
 
@@ -2782,9 +2985,9 @@ export async function updateKostManagerRequest(
           .update(kmSurveyPayload)
           .eq('id', existingKmSurvey.id);
       } else if (updates.assigned_agent_id) {
-        // Buat baru jika ada agen yang baru ditugaskan — mulai dari PENDING_ASSIGNMENT
-        // agar agen bisa melihat di tab Permintaan dan menerimanya terlebih dahulu
-        kmSurveyPayload.status = 'PENDING_ASSIGNMENT';
+        // Buat baru jika ada agen yang baru ditugaskan — mulai dari SURVEYING
+        // agar lolos check constraint, dan dinamis dimap ke PENDING_ASSIGNMENT di frontend/service
+        kmSurveyPayload.status = 'SURVEYING';
         kmSurveyPayload.assigned_agent_id = updates.assigned_agent_id;
         await supabase
           .from('kostmanager_surveys')
@@ -2903,9 +3106,9 @@ export async function getSurveyAgents(): Promise<{id: string, name: string, phon
   if (error) throw error;
   
   // Filter in memory for maximum reliability
-  return (data || []).filter(u => 
+  return (data || []).filter((u: any) => 
     ['survey_agent', 'agen', 'agent'].includes(u.role?.toLowerCase())
-  ).map(u => ({
+  ).map((u: any) => ({
     id: u.id,
     name: u.name,
     email: u.email,
@@ -3622,7 +3825,7 @@ export async function getUsersByRole(role: string): Promise<any[]> {
 
     const activeRenterMap = new Map<string, any>();
     if (rentTransactions) {
-      rentTransactions.forEach(t => {
+      rentTransactions.forEach((t: any) => {
         const type = (t.product_type || '').toLowerCase();
         const status = (t.status || t.metadata?.status || '').toLowerCase();
         const isRentType = ['rent', 'kost_booking', 'sewa_kost'].includes(type) || !type;

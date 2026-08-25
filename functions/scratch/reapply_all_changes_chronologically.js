@@ -111,7 +111,10 @@ const scripts = [
   'functions/scratch/disable_scroll_wheel_zoom.js',
 
   // R. Premium Card Layout for task list cards
-  'functions/scratch/apply_premium_card_layout.js'
+  'functions/scratch/apply_premium_card_layout.js',
+
+  // S. Premium Card Layout and pipeline tabs for admin KostManager orders management
+  'functions/scratch/apply_admin_premium_layout.js'
 ];
 
 scripts.forEach(script => {

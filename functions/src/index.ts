@@ -2,6 +2,7 @@
 
 // --- IMPOR YANG DIBUTUHKAN ---
 import * as functions from 'firebase-functions/v2';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { URL } from 'url';
 // Heavy imports (admin, Storage, googleDriveUtils) are lazy-loaded below to avoid deployment timeouts
 
@@ -3102,5 +3103,117 @@ export const resolveMapShortLink = functions.https.onRequest({ cors: true }, asy
   } catch (err: any) {
     console.error("resolveMapShortLink error:", err);
     res.status(500).send({ error: err.message });
+  }
+});
+
+/**
+ * cleanExpiredDraftsCore: Core function to clean draft properties that are older than 30 days.
+ * - Only affects properties with status = 'draft' and is_managed = true
+ * - Checks that the property has never had an approved or completed KostManager survey request
+ */
+async function cleanExpiredDraftsCore(daysThreshold = 30) {
+  const supabase = getSupabase();
+  if (!supabase) {
+    throw new Error("Supabase client is not initialized.");
+  }
+
+  const thresholdDate = new Date();
+  thresholdDate.setDate(thresholdDate.getDate() - daysThreshold);
+  const thresholdIso = thresholdDate.toISOString();
+
+  console.log(`CF_LOG: Starting cleanExpiredDraftsCore with threshold: older than ${daysThreshold} days (${thresholdIso})`);
+
+  // 1. Fetch candidates from properties
+  const { data: candidates, error: fetchErr } = await supabase
+    .from('properties')
+    .select('id, title, status, is_managed, is_verified, updated_at')
+    .eq('status', 'draft')
+    .eq('is_managed', true)
+    .eq('is_verified', false)
+    .lt('updated_at', thresholdIso);
+
+  if (fetchErr) {
+    throw fetchErr;
+  }
+
+  console.log(`CF_LOG: Found ${candidates?.length || 0} candidate draft properties older than threshold.`);
+
+  const deletedIds: string[] = [];
+  
+  for (const candidate of (candidates || [])) {
+    try {
+      // Check if there is any approved/completed request in kostmanager_requests
+      const { data: approvedRequests, error: reqErr } = await supabase
+        .from('kostmanager_requests')
+        .select('id, status')
+        .eq('property_id', candidate.id)
+        .in('status', ['APPROVED', 'COMPLETED', 'approved', 'completed']);
+
+      if (reqErr) {
+        console.error(`CF_LOG: Error checking requests for property ${candidate.id}:`, reqErr);
+        continue;
+      }
+      
+      if (!approvedRequests || approvedRequests.length === 0) {
+        console.log(`CF_LOG: Deleting expired draft property: ${candidate.title} (${candidate.id})`);
+        
+        // Delete from properties. Due to ON DELETE CASCADE on mitra_kostmanager and rooms,
+        // this will automatically delete child rows.
+        const { error: delErr } = await supabase
+          .from('properties')
+          .delete()
+          .eq('id', candidate.id);
+
+        if (delErr) {
+          console.error(`CF_LOG: Failed to delete property ${candidate.id}:`, delErr);
+        } else {
+          deletedIds.push(candidate.id);
+        }
+      } else {
+        console.log(`CF_LOG: Skipping property ${candidate.id} because it has approved/completed requests.`);
+      }
+    } catch (itemErr) {
+      console.error(`CF_LOG: Error processing candidate ${candidate.id}:`, itemErr);
+    }
+  }
+
+  return {
+    processedCount: candidates?.length || 0,
+    deletedCount: deletedIds.length,
+    deletedIds: deletedIds
+  };
+}
+
+/**
+ * scheduledCleanExpiredDrafts: Scheduled daily clean task.
+ */
+export const scheduledCleanExpiredDrafts = onSchedule('every 24 hours', async (event) => {
+  try {
+    const result = await cleanExpiredDraftsCore(30);
+    console.log("CF_LOG: scheduledCleanExpiredDrafts finished successfully:", result);
+  } catch (err) {
+    console.error("CF_LOG: scheduledCleanExpiredDrafts failed:", err);
+  }
+});
+
+/**
+ * triggerCleanExpiredDrafts: HTTP trigger to manually execute cleaning for testing/admin purposes.
+ * Accepts optional ?days=X parameter to override threshold.
+ */
+export const triggerCleanExpiredDrafts = functions.https.onRequest({ cors: true }, async (req, res) => {
+  try {
+    const daysParam = req.query.days ? parseInt(req.query.days as string, 10) : 30;
+    const result = await cleanExpiredDraftsCore(daysParam);
+    res.status(200).send({
+      success: true,
+      message: `Expired drafts cleanup completed successfully.`,
+      result: result
+    });
+  } catch (err: any) {
+    console.error("triggerCleanExpiredDrafts error:", err);
+    res.status(500).send({
+      success: false,
+      error: err.message
+    });
   }
 });

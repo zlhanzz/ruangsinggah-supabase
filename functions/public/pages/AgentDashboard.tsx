@@ -240,6 +240,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const [isReschedulingSurvey, setIsReschedulingSurvey] = useState<SurveyRequest | null>(null);
     const [newSurveyDate, setNewSurveyDate] = useState('');
     const [newSurveyTime, setNewSurveyTime] = useState('');
+    const [rescheduleReason, setRescheduleReason] = useState('');
     const checkIsKostManager = (r: any) => {
         if (!r) return false;
         const pType = (r.transaction?.product_type || r.transaction?.type || '').toLowerCase();
@@ -588,9 +589,146 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         setWarningAccepted(false);
     };
 
+    const handleSaveDraftDirectly = async (currentForm: any, silent = true) => {
+        if (!isEditingKostManager) return;
+        try {
+            const finalPrice = currentForm.roomTypes.length > 0 
+                ? Math.min(...currentForm.roomTypes.map((rt: any) => Number(rt.price)).filter((p: number) => p > 0))
+                : 0;
+
+            const propertyPayload = {
+                title: currentForm.title,
+                description: currentForm.description,
+                address: currentForm.address,
+                city: currentForm.city,
+                area: currentForm.area,
+                type: currentForm.type,
+                price: finalPrice,
+                owner_uid: currentForm.owner_uid,
+                mitra_id: currentForm.owner_uid, // Add mitra_id for not-null DB constraint
+                room_types: currentForm.roomTypes,
+                status: 'draft',
+                is_managed: true,
+                facilities: currentForm.facilities,
+                location: currentForm.location,
+                rules: currentForm.rules,
+                image_urls: (currentForm.image_urls || []).map((img: any, idx: number) => {
+                    const url = getImageUrlString(img);
+                    if (!url) return null;
+                    const label = photoCategories[idx] || 'Foto Lainnya';
+                    return { original: url, label: label };
+                }).filter(Boolean),
+                campuses: currentForm.campuses
+            };
+
+            // Find propertyId from memory or metadata
+            let propertyIdToFetch = null;
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (isEditingKostManager.kost_id && uuidPattern.test(isEditingKostManager.kost_id)) {
+                propertyIdToFetch = isEditingKostManager.kost_id;
+            } else if (isEditingKostManager.transaction_id) {
+                const { data: trxData } = await supabase
+                    .from('transactions')
+                    .select('metadata')
+                    .eq('id', isEditingKostManager.transaction_id)
+                    .maybeSingle();
+                const rawSavePropId = trxData?.metadata?.propertyId;
+                if (rawSavePropId && uuidPattern.test(rawSavePropId)) {
+                    propertyIdToFetch = rawSavePropId;
+                }
+            }
+
+            // Fetch existing property for this user to edit
+            let query = supabase.from('properties').select('id, is_managed');
+            let canQuerySaveProperties = false;
+            if (propertyIdToFetch) {
+                query = query.eq('id', propertyIdToFetch);
+                canQuerySaveProperties = true;
+            } else if (isEditingKostManager.user_id && uuidPattern.test(isEditingKostManager.user_id)) {
+                query = query.eq('owner_uid', isEditingKostManager.user_id);
+                canQuerySaveProperties = true;
+            }
+            
+            const { data: existingProps } = canQuerySaveProperties
+                ? await query
+                : { data: null };
+
+            const existingProp = existingProps?.find(p => p.is_managed) || existingProps?.[0];
+
+            let savedProperty = null;
+            if (existingProp) {
+                const { data, error } = await supabase.from('properties').update(propertyPayload).eq('id', existingProp.id).select().maybeSingle();
+                if (error) throw error;
+                savedProperty = data;
+            } else {
+                const { data, error } = await supabase.from('properties').insert([propertyPayload]).select().maybeSingle();
+                if (error) throw error;
+                savedProperty = data;
+            }
+
+            if (savedProperty) {
+                const kmPropertyPayload = {
+                    property_id: savedProperty.id,
+                    owner_uid: isEditingKostManager.user_id,
+                    title: propertyPayload.title,
+                    description: propertyPayload.description,
+                    price: propertyPayload.price,
+                    facilities: propertyPayload.facilities,
+                    address: propertyPayload.address,
+                    city: propertyPayload.city,
+                    area: propertyPayload.area,
+                    location: propertyPayload.location,
+                    rules: propertyPayload.rules,
+                    campuses: propertyPayload.campuses,
+                    image_urls: propertyPayload.image_urls,
+                    room_types: propertyPayload.room_types
+                };
+
+                const { data: existingKmProp } = await supabase
+                    .from('mitra_kostmanager')
+                    .select('id')
+                    .eq('property_id', savedProperty.id)
+                    .maybeSingle();
+
+                if (existingKmProp) {
+                    const { error: kmErr } = await supabase
+                        .from('mitra_kostmanager')
+                        .update(kmPropertyPayload)
+                        .eq('id', existingKmProp.id);
+                    if (kmErr) throw kmErr;
+                } else {
+                    const { error: kmErr } = await supabase
+                        .from('mitra_kostmanager')
+                        .insert([kmPropertyPayload]);
+                    if (kmErr) throw kmErr;
+                }
+
+                if (!isEditingKostManager.kost_id) {
+                    setIsEditingKostManager((prev: any) => prev ? { ...prev, kost_id: savedProperty.id } : null);
+                }
+
+                if (!silent) {
+                    alert('Draf onboarding berhasil disimpan langsung ke database!');
+                }
+            }
+        } catch (err: any) {
+            console.error("Gagal menyimpan draf ke database:", err);
+            if (!silent) {
+                alert('Gagal menyimpan draf ke database: ' + err.message);
+            }
+        }
+    };
+
+    const closeKostManagerListingWithSave = async () => {
+        if (isEditingKostManager && kmListingForm.title) {
+            await handleSaveDraftDirectly(kmListingForm, true);
+        }
+        closeKostManagerListing();
+    };
+
     // Auto-save Kost Manager Onboarding draft effect
     useEffect(() => {
-        if (isEditingKostManager && kmListingForm.owner_uid && kmListingForm.owner_uid === isEditingKostManager.user_id) {
+        if (isEditingKostManager && kmListingForm.owner_uid && kmListingForm.title && kmListingForm.owner_uid === isEditingKostManager.user_id) {
             const draftKey = `km_draft_${isEditingKostManager.id}`;
             const draftData = {
                 kmListingForm,
@@ -914,12 +1052,19 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         setSearchParams({ status: agentTab, onboarding_id: req.id.toString() });
 
         const draftKey = `km_draft_${req.id}`;
-        // Fetch existing Kost Manager room types first to assist in sanitizing drafts
+        
+        // 1. Fetch existing Kost Manager property & room types first to assist in sanitizing drafts and prefilling
         let kmRoomTypes = [];
+        let dbPropertyRecord = null;
+        let dbKmProp = null;
         try {
-            // Find propertyId from transaction metadata if exists
+            // Find propertyId from req.kost_id or transaction metadata if exists
             let propertyIdToFetch = null;
-            if (req.transaction_id) {
+            const uuidPatDraft = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (req.kost_id && uuidPatDraft.test(req.kost_id)) {
+                propertyIdToFetch = req.kost_id;
+                console.log("openKostManagerListing: resolved propertyIdToFetch from req.kost_id:", propertyIdToFetch);
+            } else if (req.transaction_id) {
                 const { data: trxData } = await supabase
                     .from('transactions')
                     .select('metadata')
@@ -927,11 +1072,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     .maybeSingle();
                 if (trxData?.metadata?.propertyId) {
                     propertyIdToFetch = trxData.metadata.propertyId;
+                    console.log("openKostManagerListing: resolved propertyIdToFetch from transaction metadata:", propertyIdToFetch);
                 }
             }
 
-            let query = supabase.from('properties').select('id');
-            const uuidPatDraft = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            let query = supabase.from('properties').select('*');
             if (propertyIdToFetch) {
                 query = query.eq('id', propertyIdToFetch);
             } else if (req.user_id && uuidPatDraft.test(req.user_id)) {
@@ -943,13 +1088,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             const { data: existingProps } = await query;
             const existingProp = existingProps?.[0];
             if (existingProp) {
+                dbPropertyRecord = existingProp;
                 const { data: kmProp } = await supabase
                     .from('mitra_kostmanager')
-                    .select('room_types')
+                    .select('*')
                     .eq('property_id', existingProp.id)
                     .maybeSingle();
-                if (kmProp && kmProp.room_types) {
-                    kmRoomTypes = kmProp.room_types;
+                if (kmProp) {
+                    dbKmProp = kmProp;
+                    if (kmProp.room_types) {
+                        kmRoomTypes = kmProp.room_types;
+                    }
                 }
             }
         } catch (e: any) {
@@ -958,20 +1107,37 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             }
         }
 
+        // 2. Load draft from localStorage if exists
         const savedDraft = localStorage.getItem(draftKey);
         if (savedDraft) {
             try {
                 const parsed = JSON.parse(savedDraft);
                 if (parsed.kmListingForm) {
-                    // Sanitize draft: if no mitra_kostmanager record exists yet, do not load old prefilled default rooms
+                    // Load room types from draft, fallback to database if draft has none (helps heal corrupted drafts or empty states)
                     let draftRoomTypes = parsed.kmListingForm.roomTypes || [];
-                    if (kmRoomTypes.length === 0) {
-                        draftRoomTypes = draftRoomTypes.filter((r: any) => r.name !== '101' && r.name !== 'Tipe Standar');
+                    if (draftRoomTypes.length === 0) {
+                        const dbRooms = dbKmProp?.room_types || [];
+                        if (dbRooms.length > 0) {
+                            draftRoomTypes = dbRooms;
+                            console.log("openKostManagerListing: restored roomTypes from database into draft:", dbRooms);
+                        }
                     }
                     parsed.kmListingForm.roomTypes = draftRoomTypes;
+
+                    // Fallback campuses to database if draft has none (helps heal corrupted drafts or empty states)
+                    let draftCampuses = parsed.kmListingForm.campuses || [];
+                    if (draftCampuses.length === 0) {
+                        const dbCampuses = dbKmProp?.campuses || dbPropertyRecord?.campuses || [];
+                        if (dbCampuses.length > 0) {
+                            draftCampuses = dbCampuses;
+                            console.log("openKostManagerListing: restored campuses from database into draft:", dbCampuses);
+                        }
+                    }
+
                     // Merge draft with request data to ensure title and address are never lost
                     const mergedForm = {
                         ...parsed.kmListingForm,
+                        campuses: draftCampuses,
                         title: parsed.kmListingForm.title || req.kost_name,
                         address: parsed.kmListingForm.address || req.kost_address,
                         owner_uid: parsed.kmListingForm.owner_uid || req.user_id
@@ -998,34 +1164,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             }
         }
 
+        // 3. Populate default form values using the already fetched database records if no draft exists
         let initialTotalRooms = 0;
         let initialCoords = { lat: -5.147665, lng: 119.432731 };
         setKmActiveTab('info');
         setKmStep(1);
 
-        
         try {
-            // Find propertyId from transaction metadata if exists
-            let propertyIdToFetch = null;
-            let transactionMetadata = req.transaction?.metadata || {};
-            if (req.transaction_id) {
-                const { data: trxData } = await supabase
-                    .from('transactions')
-                    .select('metadata')
-                    .eq('id', req.transaction_id)
-                    .maybeSingle();
-                if (trxData?.metadata) {
-                    transactionMetadata = trxData.metadata;
-                }
-                const rawPropId = trxData?.metadata?.propertyId;
-                const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-                if (rawPropId && uuidPattern.test(rawPropId)) {
-                    propertyIdToFetch = rawPropId;
-                    console.log("openKostManagerListing: found valid propertyId in transaction metadata:", propertyIdToFetch);
-                } else if (rawPropId) {
-                    console.warn("openKostManagerListing: propertyId in metadata is not a valid UUID, ignoring:", rawPropId);
-                }
-            }
+            // Find transaction metadata from the request object directly
+            const transactionMetadata = req.transaction?.metadata || {};
 
             // Calculate Mitra's initial input for total rooms and coordinates from transaction metadata or notes
             const parsedMetaRooms = transactionMetadata.total_rooms || transactionMetadata.totalRooms || transactionMetadata.jumlah_kamar || (req as any).total_rooms || (req as any).totalRooms;
@@ -1063,28 +1210,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 }
             }
 
-            // 1. Try fetching from dedicated mitra_kostmanager table first (bypass RLS draft restriction)
-            let kmProp = null;
-            if (propertyIdToFetch) {
-                const { data: kmProps } = await supabase
-                    .from('mitra_kostmanager')
-                    .select('*')
-                    .eq('property_id', propertyIdToFetch)
-                    .limit(1);
-                if (kmProps && kmProps.length > 0) {
-                    kmProp = kmProps[0];
-                }
-            }
-
-            if (kmProp) {
+            // A. Try loading from dedicated `mitra_kostmanager` table record if exists
+            if (dbKmProp) {
                 setIsExistingPropertyMigration(true);
                 setWarningAccepted(false);
-                console.log("openKostManagerListing: found existing dedicated mitra_kostmanager to load:", kmProp.property_id);
-                kmOriginalLocationRef.current = kmProp.location || null;
+                console.log("openKostManagerListing: loading from dedicated dbKmProp:", dbKmProp.property_id);
+                kmOriginalLocationRef.current = dbKmProp.location || null;
                 
                 const loadedCategories = ['Bangunan Depan', 'Koridor', 'Parkiran', 'Lingkungan'];
-                if (kmProp.image_urls && Array.isArray(kmProp.image_urls)) {
-                    kmProp.image_urls.forEach((img: any, idx: number) => {
+                if (dbKmProp.image_urls && Array.isArray(dbKmProp.image_urls)) {
+                    dbKmProp.image_urls.forEach((img: any, idx: number) => {
                         let label = img.label || '';
                         if (label.toLowerCase() === 'area umum') {
                             label = 'Parkiran';
@@ -1104,57 +1239,37 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 setTemporaryRoom(null);
 
                 setKmListingForm({
-                    title: kmProp.title || req.kost_name,
-                    description: kmProp.description || '',
-                    address: kmProp.address || req.kost_address,
-                    city: kmProp.city || 'Makassar',
-                    area: kmProp.area || '',
-                    type: kmProp.type || 'Campur',
-                    price: kmProp.price || 0,
-                    totalRooms: (kmProp.total_rooms && kmProp.total_rooms > 0) ? kmProp.total_rooms : (initialTotalRooms || 0),
+                    title: dbKmProp.title || req.kost_name,
+                    description: dbKmProp.description || '',
+                    address: dbKmProp.address || req.kost_address,
+                    city: dbKmProp.city || 'Makassar',
+                    area: dbKmProp.area || '',
+                    type: dbKmProp.type || 'Campur',
+                    price: dbKmProp.price || 0,
+                    totalRooms: (dbKmProp.total_rooms && dbKmProp.total_rooms > 0) ? dbKmProp.total_rooms : (initialTotalRooms || 0),
                     owner_uid: req.user_id,
-                    roomTypes: kmProp.room_types || [],
-                    facilities: kmProp.facilities || ['WiFi', 'Parkir Motor'],
-                    location: kmProp.location || initialCoords,
-                    rules: kmProp.rules || ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
-                    image_urls: kmProp.image_urls || [],
-                    campuses: kmProp.campuses || [],
-                    publicBathroomFacilities: kmProp.metadata?.publicBathroomFacilities || [],
-                    publicKitchenFacilities: kmProp.metadata?.publicKitchenFacilities || []
+                    roomTypes: dbKmProp.room_types || [],
+                    facilities: dbKmProp.facilities || ['WiFi', 'Parkir Motor'],
+                    location: dbKmProp.location || initialCoords,
+                    rules: dbKmProp.rules || ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
+                    image_urls: dbKmProp.image_urls || [],
+                    campuses: dbKmProp.campuses || [],
+                    publicBathroomFacilities: dbKmProp.metadata?.publicBathroomFacilities || [],
+                    publicKitchenFacilities: dbKmProp.metadata?.publicKitchenFacilities || []
                 });
                 return;
             }
 
-            // 2. Fallback to properties table if no dedicated mitra_kostmanager record exists yet
-            let query2 = supabase.from('properties').select('*');
-            const uuidPat3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            let canQueryProperties = false;
-            if (propertyIdToFetch && uuidPat3.test(propertyIdToFetch)) {
-                query2 = query2.eq('id', propertyIdToFetch);
-                canQueryProperties = true;
-            } else {
-                console.log('openKostManagerListing: new property pendaftaran (propertyIdToFetch is empty), skipping properties database query lookup.');
-            }
-            
-            const { data: existingProps, error } = canQueryProperties
-                ? await query2
-                : { data: null, error: null };
-
-            if (error) {
-                console.error("Error fetching existing property:", error);
-            }
-
-            const existingProp = existingProps?.find(p => p.is_managed) || existingProps?.[0];
-
-            if (existingProp) {
+            // B. Fallback to `properties` table record if exists
+            if (dbPropertyRecord) {
                 setIsExistingPropertyMigration(true);
                 setWarningAccepted(false);
-                console.log("openKostManagerListing: fallback to properties table:", existingProp.id);
-                kmOriginalLocationRef.current = existingProp.location || null;
+                console.log("openKostManagerListing: fallback to loading from dbPropertyRecord:", dbPropertyRecord.id);
+                kmOriginalLocationRef.current = dbPropertyRecord.location || null;
                 
                 const loadedCategories = ['Bangunan Depan', 'Koridor', 'Parkiran', 'Lingkungan'];
-                if (existingProp.image_urls && Array.isArray(existingProp.image_urls)) {
-                    existingProp.image_urls.forEach((img: any, idx: number) => {
+                if (dbPropertyRecord.image_urls && Array.isArray(dbPropertyRecord.image_urls)) {
+                    dbPropertyRecord.image_urls.forEach((img: any, idx: number) => {
                         let label = img.label || '';
                         if (label.toLowerCase() === 'area umum') {
                             label = 'Parkiran';
@@ -1174,31 +1289,31 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 setTemporaryRoom(null);
 
                 setKmListingForm({
-                    title: existingProp.title || req.kost_name,
-                    description: existingProp.description || '',
-                    address: existingProp.address || req.kost_address,
-                    city: existingProp.city || 'Makassar',
-                    area: existingProp.area || '',
-                    type: existingProp.type || 'Campur',
-                    price: existingProp.price || 0,
-                    totalRooms: (existingProp.total_rooms && existingProp.total_rooms > 0) ? existingProp.total_rooms : (initialTotalRooms || 0),
+                    title: dbPropertyRecord.title || req.kost_name,
+                    description: dbPropertyRecord.description || '',
+                    address: dbPropertyRecord.address || req.kost_address,
+                    city: dbPropertyRecord.city || 'Makassar',
+                    area: dbPropertyRecord.area || '',
+                    type: dbPropertyRecord.type || 'Campur',
+                    price: dbPropertyRecord.price || 0,
+                    totalRooms: (dbPropertyRecord.total_rooms && dbPropertyRecord.total_rooms > 0) ? dbPropertyRecord.total_rooms : (initialTotalRooms || 0),
                     owner_uid: req.user_id,
                     roomTypes: [],
-                    facilities: existingProp.facilities || ['WiFi', 'Parkir Motor'],
-                    location: existingProp.location || initialCoords,
-                    rules: existingProp.rules || ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
-                    image_urls: existingProp.image_urls || [],
-                    campuses: existingProp.campuses || [],
-                    publicBathroomFacilities: existingProp.metadata?.publicBathroomFacilities || [],
-                    publicKitchenFacilities: existingProp.metadata?.publicKitchenFacilities || []
+                    facilities: dbPropertyRecord.facilities || ['WiFi', 'Parkir Motor'],
+                    location: dbPropertyRecord.location || initialCoords,
+                    rules: dbPropertyRecord.rules || ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
+                    image_urls: dbPropertyRecord.image_urls || [],
+                    campuses: dbPropertyRecord.campuses || [],
+                    publicBathroomFacilities: dbPropertyRecord.metadata?.publicBathroomFacilities || [],
+                    publicKitchenFacilities: dbPropertyRecord.metadata?.publicKitchenFacilities || []
                 });
                 return;
             }
         } catch (err) {
-            console.error("Failed to fetch existing property details:", err);
+            console.error("Failed to populate existing property details:", err);
         }
 
-        // Fallback initialization
+        // C. Clean slate fallback if no property records found in database
         kmOriginalLocationRef.current = null;
         setPhotoCategories(['Bangunan Depan', 'Koridor', 'Parkiran', 'Lingkungan']);
         setShowAddLandmarkForm(false);
@@ -1506,6 +1621,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 type: kmListingForm.type,
                 price: finalPrice,
                 owner_uid: kmListingForm.owner_uid,
+                mitra_id: kmListingForm.owner_uid, // Add mitra_id for not-null DB constraint
                 room_types: kmListingForm.roomTypes,
                 status: 'draft',
                 is_managed: true,
@@ -1638,7 +1754,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             return 150000; // Standar harga berlangganan KostManager sebagai fallback
         }
 
-        const txDate = new Date(trx?.created_at || r.created_at);
+        const txDate = new Date((trx as any)?.created_at || r.created_at);
         // Tanggal 16 Juni 2026 pukul 00:00:00 (WIB/WITA UTC+8)
         const cutoffTime = new Date("2026-06-16T00:00:00+08:00").getTime();
 
@@ -4634,7 +4750,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                 {isEditingKostManager && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={closeKostManagerListing}></div>
+                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={closeKostManagerListingWithSave}></div>
                         <div className="bg-[#f8f9ff] text-[#0b1c30] w-full max-w-2xl rounded-3xl shadow-2xl relative z-10 flex flex-col h-[90vh] max-h-[880px] overflow-hidden animate-in zoom-in-95 font-['Plus_Jakarta_Sans']">
                             
                             {/* Warning overlay for existing property migration */}
@@ -4653,7 +4769,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         <div className="flex gap-3 w-full">
                                             <button
                                                 type="button"
-                                                onClick={closeKostManagerListing}
+                                                onClick={closeKostManagerListingWithSave}
                                                 className="flex-1 h-12 border border-gray-300 text-[#584235] rounded-full font-bold text-xs uppercase tracking-wider hover:bg-gray-50 transition-colors"
                                             >
                                                 Keluar
@@ -4676,11 +4792,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                 <div className="flex items-center gap-3">
                                     <button 
                                         type="button"
-                                        onClick={() => {
+                                        onClick={async () => {
                                             if (kmStep > 1) {
                                                 setKmStep(kmStep - 1);
+                                                await handleSaveDraftDirectly(kmListingForm, true);
                                             } else {
-                                                closeKostManagerListing();
+                                                await closeKostManagerListingWithSave();
                                             }
                                         }}
                                         className="text-[#584235] p-2 rounded-full hover:bg-gray-100 transition-colors active:scale-95 flex items-center justify-center"
@@ -4692,7 +4809,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         <p className="text-[10px] text-[#584235] font-medium tracking-wide">Survey Field App</p>
                                     </div>
                                 </div>
-                                <button onClick={closeKostManagerListing} className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded-full hover:bg-gray-50 transition-colors">&times;</button>
+                                <button onClick={closeKostManagerListingWithSave} className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded-full hover:bg-gray-50 transition-colors">&times;</button>
                             </div>
 
                             {/* Stepper Indicator */}
@@ -6445,17 +6562,19 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                              {/* Save Button for New Room */}
                                                              <button 
                                                                  type="button"
-                                                                 onClick={() => {
+                                                                 onClick={async () => {
                                                                      if (!temporaryRoom.name.trim()) {
                                                                          alert('Silakan isi nomor kamar terlebih dahulu.');
                                                                          return;
                                                                      }
-                                                                     setKmListingForm({
+                                                                     const updatedForm = {
                                                                          ...kmListingForm,
                                                                          roomTypes: [...(kmListingForm.roomTypes || []), temporaryRoom]
-                                                                     });
+                                                                     };
+                                                                     setKmListingForm(updatedForm);
                                                                      setTemporaryRoom(null);
                                                                      alert('Kamar baru berhasil disimpan ke daftar!');
+                                                                     await handleSaveDraftDirectly(updatedForm, true);
                                                                  }}
                                                                  className="w-full h-[40px] bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center transition-colors shadow-sm"
                                                              >
@@ -6555,22 +6674,22 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                             <h3 className="font-bold text-sm text-[#0b1c30] border-b border-gray-100 pb-2">Data Kamar</h3>
                                             
                                             {/* Summary Stats Cards */}
-                                            <div className="grid grid-cols-3 gap-2 text-center">
-                                                <div className="bg-blue-50 border border-blue-100 rounded-xl p-2.5 flex flex-col">
-                                                    <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Total</span>
-                                                    <span className="text-sm font-extrabold text-blue-900 mt-0.5">
+                                            <div className="grid grid-cols-3 gap-3 text-center">
+                                                <div className="bg-gray-50 border border-gray-150 rounded-xl p-2 flex flex-col">
+                                                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Total</span>
+                                                    <span className="text-sm font-extrabold text-[#0b1c30] mt-0.5">
                                                         {kmListingForm.roomTypes?.length || 0}
                                                     </span>
                                                 </div>
-                                                <div className="bg-orange-50 border border-orange-100 rounded-xl p-2.5 flex flex-col">
-                                                    <span className="text-[9px] font-bold text-[#ff7a00] uppercase tracking-wider">Terisi</span>
-                                                    <span className="text-sm font-extrabold text-orange-950 mt-0.5">
+                                                <div className="bg-gray-50 border border-gray-150 rounded-xl p-2 flex flex-col">
+                                                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Terisi</span>
+                                                    <span className="text-sm font-extrabold text-[#0b1c30] mt-0.5">
                                                         {kmListingForm.roomTypes?.filter((r: any) => r.status === 'Terisi').length || 0}
                                                     </span>
                                                 </div>
-                                                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2.5 flex flex-col">
-                                                    <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider">Kosong</span>
-                                                    <span className="text-sm font-extrabold text-emerald-900 mt-0.5">
+                                                <div className="bg-gray-50 border border-gray-150 rounded-xl p-2 flex flex-col">
+                                                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Kosong</span>
+                                                    <span className="text-sm font-extrabold text-[#0b1c30] mt-0.5">
                                                         {kmListingForm.roomTypes?.filter((r: any) => r.status !== 'Terisi').length || 0}
                                                     </span>
                                                 </div>
@@ -6583,7 +6702,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                         const isExpanded = expandedRoomIdx === idx;
                                                         const isTerisi = rt.status === 'Terisi';
                                                         return (
-                                                            <div key={idx} className="border border-gray-150 rounded-xl overflow-hidden bg-white shadow-sm">
+                                                            <div key={idx} className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
                                                                 {/* Accordion Trigger */}
                                                                 <button 
                                                                     type="button"
@@ -6592,7 +6711,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                 >
                                                                     <div className="flex items-center gap-2.5">
                                                                         <span className="text-xs font-bold text-gray-800">{rt.name || `Kamar ${idx + 1}`}</span>
-                                                                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${isTerisi ? 'bg-orange-100 text-[#ff7a00]' : 'bg-blue-100 text-blue-700'}`}>
+                                                                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border ${isTerisi ? 'bg-orange-50 text-[#ff7a00] border-orange-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
                                                                             {isTerisi ? 'Terisi' : 'Kosong'}
                                                                         </span>
                                                                     </div>
@@ -6603,35 +6722,137 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                 
                                                                 {/* Accordion Content */}
                                                                 {isExpanded && (
-                                                                    <div className="px-4 pb-4 pt-1 border-t border-gray-100 bg-gray-50/30 flex flex-col gap-3 text-xs text-gray-700">
-                                                                        {isTerisi ? (
-                                                                            <div className="grid grid-cols-2 gap-3.5">
+                                                                    <div className="px-4 pb-4 pt-3 border-t border-gray-100 bg-gray-50/30 flex flex-col gap-3.5 text-xs text-gray-700">
+                                                                        
+                                                                        {/* Section 1: Detail & Status */}
+                                                                        <div className="grid grid-cols-3 gap-2.5 pb-2.5 border-b border-gray-100/60">
+                                                                            <div className="flex flex-col gap-0.5">
+                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Tipe Kamar</span>
+                                                                                <span className="font-bold text-gray-800">{rt.type || 'Standard'}</span>
+                                                                            </div>
+                                                                            <div className="flex flex-col gap-0.5">
+                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Lantai</span>
+                                                                                <span className="font-bold text-gray-800">{rt.floor || 'Lantai 1'}</span>
+                                                                            </div>
+                                                                            <div className="flex flex-col gap-0.5">
+                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Kapasitas</span>
+                                                                                <span className="font-bold text-gray-800">{rt.maxOccupants || 1} Orang</span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Section 2: Info Penghuni jika Terisi */}
+                                                                        {isTerisi && (
+                                                                            <div className="grid grid-cols-3 gap-2.5 pb-2.5 border-b border-gray-100/60 bg-[#fffbfa] p-2.5 rounded-lg border border-orange-100">
                                                                                 <div className="flex flex-col gap-0.5">
-                                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Nama Penghuni</span>
-                                                                                    <span className="font-bold text-gray-800">{rt.residentName || '-'}</span>
+                                                                                    <span className="text-[9px] font-bold text-[#ff7a00] uppercase tracking-wider">Penghuni</span>
+                                                                                    <span className="font-extrabold text-gray-800">{rt.residentName || '-'}</span>
                                                                                 </div>
                                                                                 <div className="flex flex-col gap-0.5">
-                                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Nomor WA</span>
+                                                                                    <span className="text-[9px] font-bold text-[#ff7a00] uppercase tracking-wider">Nomor WA</span>
                                                                                     <span className="font-bold text-gray-800">{rt.residentPhone || '-'}</span>
                                                                                 </div>
                                                                                 <div className="flex flex-col gap-0.5">
-                                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Tipe Sewa</span>
-                                                                                    <span className="font-bold text-gray-850 uppercase text-[10px]">{rt.paymentPeriod || 'Bulanan'}</span>
-                                                                                </div>
-                                                                                <div className="flex flex-col gap-0.5">
-                                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Harga Sewa</span>
-                                                                                    <span className="font-extrabold text-[#ff7a00]">Rp {formatThousand(rt.price || 0)}</span>
+                                                                                    <span className="text-[9px] font-bold text-[#ff7a00] uppercase tracking-wider">Sewa</span>
+                                                                                    <span className="font-bold text-gray-800 uppercase text-[10px]">{rt.paymentPeriod || 'Bulanan'}</span>
                                                                                 </div>
                                                                             </div>
-                                                                        ) : (
-                                                                            <div className="grid grid-cols-2 gap-3.5">
-                                                                                <div className="flex flex-col gap-0.5">
-                                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Harga Kamar</span>
-                                                                                    <span className="font-extrabold text-[#ff7a00]">Rp {formatThousand(rt.price || 0)}</span>
+                                                                        )}
+
+                                                                        {/* Section 3: Skema Harga */}
+                                                                        <div className="flex flex-col gap-1 pb-2.5 border-b border-gray-100/60">
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Skema Harga</span>
+                                                                            <div className="flex flex-wrap gap-1.5">
+                                                                                {rt.pricing && rt.pricing.length > 0 ? (
+                                                                                    rt.pricing.map((p: any, pIdx: number) => (
+                                                                                        <span key={pIdx} className="bg-white border border-gray-200 px-2.5 py-1 rounded-md text-[10px] font-bold text-gray-700">
+                                                                                            <span className="text-gray-400 capitalize">{p.period}:</span> Rp {formatThousand(p.price || 0)}
+                                                                                        </span>
+                                                                                    ))
+                                                                                ) : (
+                                                                                    <span className="bg-white border border-gray-200 px-2.5 py-1 rounded-md text-[10px] font-bold text-[#ff7a00]">
+                                                                                        Rp {formatThousand(rt.price || 0)} <span className="text-gray-400 text-[9px] font-normal">/ Bulanan</span>
+                                                                                    </span>
+                                                                                )}
+                                                                                {rt.extraOccupantFee && rt.extraOccupantFee > 0 ? (
+                                                                                    <span className="bg-orange-50 border border-orange-100 px-2.5 py-1 rounded-md text-[10px] font-bold text-[#ff7a00]">
+                                                                                        <span className="text-orange-400">Ekstra Orang:</span> +Rp {formatThousand(rt.extraOccupantFee)}
+                                                                                    </span>
+                                                                                ) : null}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Section 4: Biaya Bulanan Lainnya */}
+                                                                        {rt.otherFeeAmount && rt.otherFeeAmount > 0 ? (
+                                                                            <div className="flex flex-col gap-1 pb-2.5 border-b border-gray-100/60">
+                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Biaya Bulanan Lainnya</span>
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="bg-white border border-gray-200 px-2.5 py-1 rounded-md text-[10px] font-bold text-gray-700">
+                                                                                        Rp {formatThousand(rt.otherFeeAmount)} <span className="text-gray-400 text-[9px] font-normal">/ Bulan</span>
+                                                                                    </span>
+                                                                                    <div className="flex flex-wrap gap-1">
+                                                                                        {rt.otherFeeCoveredItems?.map((item: string) => (
+                                                                                            <span key={item} className="bg-gray-150 text-gray-600 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider">{item}</span>
+                                                                                        ))}
+                                                                                    </div>
                                                                                 </div>
-                                                                                <div className="flex flex-col gap-0.5">
-                                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Kapasitas</span>
-                                                                                    <span className="font-bold text-gray-850">{rt.maxOccupants || 1} Orang</span>
+                                                                            </div>
+                                                                        ) : null}
+
+                                                                        {/* Section 5: Fasilitas */}
+                                                                        <div className="flex flex-col gap-1.5 pb-2.5 border-b border-gray-100/60">
+                                                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Fasilitas Kamar</span>
+                                                                            <div className="flex flex-wrap gap-1">
+                                                                                {rt.roomFacilities && rt.roomFacilities.length > 0 ? (
+                                                                                    rt.roomFacilities.map((fac: string) => (
+                                                                                        <span key={fac} className="bg-white border border-gray-200 px-2 py-0.5 rounded text-[9px] font-bold text-gray-700 uppercase tracking-wide">
+                                                                                            {fac}
+                                                                                        </span>
+                                                                                    ))
+                                                                                ) : (
+                                                                                    <span className="text-gray-450 italic text-[10px]">Tidak ada fasilitas khusus</span>
+                                                                                )}
+                                                                            </div>
+
+                                                                            {/* Fasilitas Kamar Mandi */}
+                                                                            {rt.bathroomFacilities && rt.bathroomFacilities.length > 0 && (
+                                                                                <div className="mt-1 pl-2.5 border-l-2 border-orange-400 flex flex-col gap-1">
+                                                                                    <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Kelengkapan KM Dalam:</span>
+                                                                                    <div className="flex flex-wrap gap-1">
+                                                                                        {rt.bathroomFacilities.map((bf: string) => (
+                                                                                            <span key={bf} className="bg-orange-50 text-[#ff7a00] px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wide border border-orange-100">{bf}</span>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+
+                                                                            {/* Fasilitas Dapur */}
+                                                                            {rt.kitchenFacilities && rt.kitchenFacilities.length > 0 && (
+                                                                                <div className="mt-1 pl-2.5 border-l-2 border-orange-400 flex flex-col gap-1">
+                                                                                    <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Kelengkapan Dapur Dalam:</span>
+                                                                                    <div className="flex flex-wrap gap-1">
+                                                                                        {rt.kitchenFacilities.map((kf: string) => (
+                                                                                            <span key={kf} className="bg-orange-50 text-[#ff7a00] px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wide border border-orange-100">{kf}</span>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* Section 6: Dokumentasi Foto */}
+                                                                        {rt.images && rt.images.filter(Boolean).length > 0 && (
+                                                                            <div className="flex flex-col gap-1.5">
+                                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Foto Kondisi Kamar</span>
+                                                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                                                    {rt.images.map((img: string, imgIdx: number) => {
+                                                                                        if (!img) return null;
+                                                                                        const label = rt.photoCategories?.[imgIdx] || 'Foto Kamar';
+                                                                                        return (
+                                                                                            <div key={imgIdx} className="aspect-video rounded-lg overflow-hidden border border-gray-200 relative group">
+                                                                                                <img src={img} className="w-full h-full object-cover" />
+                                                                                                <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-0.5 px-2 text-[7px] text-white text-center uppercase font-bold tracking-wider">{label}</div>
+                                                                                            </div>
+                                                                                        );
+                                                                                    })}
                                                                                 </div>
                                                                             </div>
                                                                         )}
@@ -6717,19 +6938,20 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                     <>
                                         <button
                                             type="button"
-                                            onClick={closeKostManagerListing}
+                                            onClick={closeKostManagerListingWithSave}
                                             className="flex-1 h-[48px] border border-[#ff7a00] text-[#ff7a00] rounded-full font-bold text-xs uppercase tracking-wider hover:bg-orange-50 transition-colors"
                                         >
                                             Keluar
                                         </button>
                                         <button
                                             type="button"
-                                             onClick={() => {
+                                             onClick={async () => {
                                                  if (!kmListingForm.totalRooms || kmListingForm.totalRooms < 1) {
                                                      alert('Silakan masukkan total jumlah kamar terlebih dahulu.');
                                                      return;
                                                  }
                                                  setKmStep(2);
+                                                 await handleSaveDraftDirectly(kmListingForm, true);
                                              }}
                                             className="flex-[2] h-[48px] bg-[#ff7a00] hover:bg-orange-600 text-white rounded-full font-bold text-xs uppercase tracking-wider shadow-md hover:shadow-lg active:scale-95 transition-all"
                                         >
@@ -6742,7 +6964,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                     <>
                                         <button
                                             type="button"
-                                            onClick={() => setKmStep(1)}
+                                            onClick={async () => {
+                                                setKmStep(1);
+                                                await handleSaveDraftDirectly(kmListingForm, true);
+                                            }}
                                             className="flex-1 h-[48px] border border-gray-300 text-gray-600 rounded-full font-bold text-xs uppercase tracking-wider hover:bg-gray-50 transition-colors"
                                         >
                                             Kembali ke Step 1
@@ -6750,7 +6975,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                          <button
                                              type="button"
                                              disabled={(kmListingForm.roomTypes?.length || 0) !== (kmListingForm.totalRooms || 0)}
-                                             onClick={() => setKmStep(3)}
+                                             onClick={async () => {
+                                                 setKmStep(3);
+                                                 await handleSaveDraftDirectly(kmListingForm, true);
+                                             }}
                                              className={`flex-[2] h-[48px] rounded-full font-bold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 ${(kmListingForm.roomTypes?.length || 0) === (kmListingForm.totalRooms || 0) ? 'bg-[#ff7a00] hover:bg-orange-600 text-white hover:shadow-lg' : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'}`}
                                          >
                                              {(kmListingForm.roomTypes?.length || 0) !== (kmListingForm.totalRooms || 0) ? 'Kamar Belum Lengkap' : 'Lanjut ke Step 3'}

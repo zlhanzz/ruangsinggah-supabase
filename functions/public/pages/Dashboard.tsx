@@ -194,7 +194,7 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
 
 
 
-type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_extension' | 'transactions_db' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'wallet' | 'tenants' | 'active_tenants' | 'agent_verification' | 'banners' | 'articles' | 'withdrawals' | 'manual_bill' | 'referral_rewards' | 'kostmanager' | 'km_overview' | 'km_properties' | 'km_tenants' | 'km_billing';
+type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_extension' | 'transactions_db' | 'transactions_survey' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'wallet' | 'tenants' | 'active_tenants' | 'agent_verification' | 'banners' | 'articles' | 'withdrawals' | 'manual_bill' | 'referral_rewards' | 'kostmanager' | 'km_overview' | 'km_properties' | 'km_tenants' | 'km_billing';
 
 const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, onLogout, listings = [], onAdd, onEdit, onDelete, onRefreshListings, verificationStatus }) => {
     const isAdmin = role === 'admin';
@@ -909,15 +909,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
         } finally { setIsSubmitting(false); }
     };
 
-    // --- DATABASE HANDLERS ---
 
-    const openAddDbModal = () => {
-        setEditingDbId(null);
-        setDbForm(initialDbForm);
-        setDbCoverFile(null);
-        setDbDocFile(null);
-        setIsDbModalOpen(true);
-    };
 
     // Generic Helpers
     const addArrayItem = (field: keyof Kost, defaultValue: string = '') => {
@@ -2028,57 +2020,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
     ]);
 
 
-    const handleSurveyPhotoUpload = async (fieldId: string, files: FileList | null) => {
-        if (!files || files.length === 0 || !isEditingSurvey) return;
 
-        setIsUploadingSurveyPhoto(fieldId);
-        try {
-            const urls: string[] = [];
-            for (let i = 0; i < files.length; i++) {
-                const url = await uploadSurveyPhoto(files[i], isEditingSurvey.id);
-                urls.push(url);
-            }
-
-            const photoField = `${fieldId}_photos`;
-            const currentSummary = (surveyForm.evaluation_summary as any) || {};
-            const existingPhotos = currentSummary[photoField] || [];
-
-            setSurveyForm({
-                ...surveyForm,
-                evaluation_summary: {
-                    ...currentSummary,
-                    [photoField]: [...existingPhotos, ...urls]
-                }
-            });
-        } catch (error) {
-            alert('Gagal mengupload foto survey');
-            console.error(error);
-        } finally {
-            setIsUploadingSurveyPhoto(null);
-        }
-    };
-
-    const handleRemoveSurveyPhoto = async (fieldId: string, photoUrl: string) => {
-        if (!isEditingSurvey || !window.confirm('Hapus foto ini?')) return;
-
-        try {
-            await deleteSurveyPhoto(photoUrl);
-
-            const photoField = `${fieldId}_photos`;
-            const currentSummary = (surveyForm.evaluation_summary as any) || {};
-            const existingPhotos = currentSummary[photoField] || [];
-
-            setSurveyForm({
-                ...surveyForm,
-                evaluation_summary: {
-                    ...currentSummary,
-                    [photoField]: existingPhotos.filter((url: string) => url !== photoUrl)
-                }
-            });
-        } catch (error) {
-            console.error('Gagal menghapus foto:', error);
-        }
-    };
 
     const renderSidebar = () => (
         <aside className="w-64 bg-white border-r border-gray-200 min-h-[calc(100vh-80px)] hidden md:flex flex-col sticky top-20 z-10">

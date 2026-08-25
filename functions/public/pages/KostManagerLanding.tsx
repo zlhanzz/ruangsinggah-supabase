@@ -4,10 +4,10 @@ import {
     CheckCircle2, ShieldCheck, Video, MapPin, FileText, ArrowRight, ArrowLeft,
     Briefcase, Sparkles, TrendingUp, Wallet, Zap, Play, X, Star, Users, Menu
 } from 'lucide-react';
-import { Page } from '../types';
+import { Page, KostManagerPackage } from '../types';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import PaymentGateway from '../components/PaymentGateway';
-import { getKostManagerPackages, KostManagerPackage } from '../adminService';
+import { getKostManagerPackages } from '../adminService';
 import { FORMAT_CURRENCY } from '../constants';
 
 // Leaflet LocationPicker Helper Component for Graphical Pinpointing

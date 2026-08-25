@@ -2,6 +2,51 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 34. Perbaikan Penyerapan Data Landmark & Persistensi Draf Otomatis KostManager (Agustus 2026)
+- **Masalah**:
+  1. Data landmark (kampus terdekat) yang sudah diisi oleh mitra biasa tidak terisi secara otomatis ketika surveyor membuka wizard onboarding KostManager.
+  2. Data draf kamar rahasia yang sudah diinput surveyor (seperti nomor "101") berisiko hilang ketika modal ditutup secara tidak sengaja atau halaman direfresh karena draf hanya disimpan di local storage peramban.
+- **Perbaikan**:
+  * **API Mapping**: Menambahkan kolom `property_id` pada select subquery di `getAdminSurveyRequests` dan memetakannya langsung sebagai `kost_id` di frontend.
+  * **Direct Resolution**: Memperbarui `openKostManagerListing` di `AgentDashboard.tsx` agar langsung menggunakan `req.kost_id` sebagai `propertyIdToFetch`, melompati kueri redundan ke tabel `transactions`.
+  * **Auto-Heal Drafts**: Menambahkan filter restrukturisasi pada draf lokal di mana jika draf mendeteksi array `campuses` kosong namun properti database aslinya memiliki data, campuses tersebut secara otomatis digabungkan kembali ke draf agar datanya tidak hilang.
+  * **Penyimpanan Draf Database**:
+    - Membuat fungsi `handleSaveDraftDirectly` untuk mengupsert data draf survei secara instan ke tabel `properties` (dengan status `'draft'`) dan tabel `mitra_kostmanager` secara online di Supabase.
+    - Mengintegrasikan penyimpanan otomatis draf database pada transisi step navigasi, ketika tombol "Simpan Kamar Baru" ditekan, dan ketika surveyor menutup modal.
+    - Menambahkan tombol manual "Simpan Draf" (warna emerald) di header modal dengan konfirmasi alert.
+    - Menambahkan pemulihan otomatis array `roomTypes` dari database `dbKmProp` ke draf lokal apabila terdeteksi kosong.
+
+### 33. Perbaikan Sinkronisasi Status Penugasan Surveyor KostManager & Pembersihan Tombol Kelola (Agustus 2026)
+- **Masalah**:
+  1. Klik tombol "Tugaskan" agen pada Dashboard Admin tidak mengubah status orderan KostManager dan tugas tidak masuk ke tab "Permintaan" di Dashboard Agen. Masalah ini disebabkan oleh kegagalan operasi INSERT pada tabel `kostmanager_surveys` dengan status `'PENDING_ASSIGNMENT'` yang melanggar check constraint `kostmanager_surveys_status_check` (hanya mengizinkan `'SURVEYING'`, `'SUBMITTED'`, `'APPROVED'`).
+  2. Tombol "Kelola" di kartu orderan KostManager pada Dashboard Admin membingungkan alur operasional karena penugasan agen sudah dipindahkan langsung secara inline di dalam kartu.
+  3. Adanya bug di mana kolom `status` pada relasi `request` tidak ditarik di subquery `getAdminSurveyRequests` (`adminService.ts`). Hal ini mengakibatkan `ks.request?.status` bernilai `undefined` saat runtime, yang menyebabkan kegagalan pemetaan status dinamis ke `'PENDING_ASSIGNMENT'` sehingga kartu pesanan baru langsung masuk ke tab **Aktif** agen secara prematur.
+- **Perbaikan**:
+  * **Penyelesaian Check Constraint & Pemetaan Dinamis**: Memperbarui status insert awal pada tabel `kostmanager_surveys` menjadi `'SURVEYING'` yang valid agar lolos check constraint database.
+  * **Perbaikan Subquery Field Status**: Menambahkan kolom `status` di subquery seleksi data `request` pada fungsi `getAdminSurveyRequests` (`adminService.ts`) agar nilai status `'AGENT_ASSIGNED'` terbaca dengan benar oleh logika pemetaan.
+  * **Status Hybrid Dinamis**: Menambahkan logika pemetaan dinamis di fungsi `getAdminSurveyRequests` (`adminService.ts`). Jika status survei KostManager adalah `'SURVEYING'` dan status request utama `kostmanager_requests` masih `'AGENT_ASSIGNED'`, status dipetakan menjadi `'PENDING_ASSIGNMENT'`. Hal ini memicu tugas masuk secara andal ke tab **Permintaan (Pending)** agen.
+  * **Alur Terima & Tolak Tugas**: Menyempurnakan fungsi `updateSurveyRequest` (`adminService.ts`) untuk menangani respon dari surveyor:
+    - **Diterima**: Mengubah status request KostManager menjadi `'SURVEYING'` sehingga berpindah ke tab **Aktif** surveyor.
+    - **Ditolak**: Menghapus baris survei terkait dari `kostmanager_surveys` dan mengembalikan status request utama ke `'PENDING_ASSIGNMENT'` agar dapat ditugaskan ulang oleh Admin.
+  * **Pembersihan UI & Tombol Kelola**: Menghapus tombol "Kelola" secara permanen dari kartu orderan KostManager di `KostManagerManagement.tsx` melalui penyesuaian skrip pembangunan layout `apply_admin_premium_layout.js`.
+
+### 32. Restorasi Desain Grid Premium & Tab Filter Admin KostManager (Agustus 2026)
+- **Masalah**: Desain premium kartu dan pipeline tab status filter di `KostManagerManagement.tsx` sempat ter-reset ke layout tabel horizontal bawaan karena script `reapply_all_changes_chronologically.js` melakukan reset/checkout file tersebut ke status HEAD bersih tanpa mengaplikasikan kembali modifikasi UI tersebut.
+- **Perbaikan**:
+  * Menulis script otomatis `apply_admin_premium_layout.js` di folder `functions/scratch/` yang bertugas menyuntikkan state tab filter, data modal profil mitra, Google Maps embed mini, koordinat GPS dinamis, inline actions (dropdown penunjukan agen langsung pada kartu), serta merombak total rendering tabel menjadi layout grid responsif (`grid-cols-1 md:grid-cols-2 lg:grid-cols-3`) premium.
+  * Mendaftarkan script tersebut ke dalam array pengeksekusi di `reapply_all_changes_chronologically.js` untuk menjamin tidak ter-reset kembali di masa depan.
+  * Mendeklarasikan state peninjauan (`selectedPropertyDetails`, `loadingProperty`, `showReviewAccordion`) secara langsung di script agar selalu terdefinisi andal pada dashboard admin.
+
+### 31. Arsitektur Properti Hybrid (Mitra Biasa vs KostManager) & Perbaikan Koordinat Peta (Agustus 2026)
+- **Masalah**: 
+  1. Properti yang berhenti berlangganan atau tidak aktif KostManager (`is_managed = false`) tidak dapat fallback secara aman menggunakan tipe kamar global di halaman detail kost, karena data kamar fisik dipecah secara mendalam di tabel `rooms`.
+  2. Preview koordinat peta di kartu tugas dashboard agen (`AgentDashboard.tsx`) menampilkan titik lokasi yang salah (milik properti lain dari owner yang sama) karena kueri lookup menyaring menggunakan `owner_uid` bukan `kost_id` / `property_id` spesifik.
+- **Perbaikan**:
+  * Memodifikasi `fetchCoords` di `AgentDashboard.tsx` agar memprioritaskan penyaringan koordinat menggunakan `req.kost_id` spesifik sebelum jatuh ke fallback `owner_uid`.
+  * Mengembangkan parser cerdas dan mesin agregasi kamar di dalam `syncPropertyRooms` (`adminService.ts`) agar secara otomatis mengelompokkan kamar fisik hasil survei berdasarkan nama tipe kamarnya, mengkalkulasi ketersediaan kamar global (`availableRoomCount`), lalu memperbaruinya di kolom JSONB `properties.room_types` dan kolom `properties.price` sebagai fallback.
+  * Mengintegrasikan pemanggilan `syncPropertyRooms` ke akhir fungsi simpan survei `handleSaveKostManagerListing` di `AgentDashboard.tsx`, serta penambahan/pembaruan properti di `adminService.ts`.
+  * Memodifikasi halaman detail kost publik (`KostDetail.tsx`) agar memuat data nomor kamar fisik secara interaktif dari tabel `rooms` apabila `kost.isManaged = true`, memvalidasi pemilihan kamar, dan menyisipkan metadata `roomNumber` serta `roomId` ke dalam alur transaksi booking/sewa kamar.
+
 ### 30. Perbaikan Warning Overlay & Persistensi Draf Peninjauan Ulang Data KostManager & URL Cleanup (Agustus 2026)
 - **Masalah**: Warning overlay untuk peninjauan ulang data properti hasil migrasi tidak muncul ketika data draf dimuat dari dedicated `mitra_kostmanager` (`kmProp`). Selain itu, status warning ini ter-reset (overlay menghilang) saat draf dimuat ulang dari `localStorage` browser. Di samping itu, query properties fallback dan query penyimpanan data `handleSaveKostManagerListing` memicu error sintaks database `22P02` (invalid input syntax for type uuid: "undefined") karena variabel `propertyIdToFetch` berisi string `"undefined"` dari transaksi metadata yang belum divalidasi. Masalah lainnya adalah URL parameter `onboarding_id` tetap tertinggal di peramban setelah form ditutup.
 - **Perbaikan**:

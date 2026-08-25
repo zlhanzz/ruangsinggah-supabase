@@ -1,32 +1,52 @@
-# IMPLEMENTATION PLAN - Perbaikan Peringatan Peninjauan Ulang Data KostManager, Pembersihan URL Parameter, & CSS Layout Shift Ikon
+# IMPLEMENTATION PLAN - Penyimpanan & Pembersihan Draf Database KostManager
 
-Dokumen ini menjelaskan rencana perbaikan agar:
-1. Peringatan peninjauan ulang data (*warning overlay*) selalu muncul secara konsisten saat agen survey pertama kali membuka form pendataan KostManager hasil migrasi.
-2. Parameter pencarian URL `onboarding_id` dibersihkan dengan benar saat form pendataan KostManager ditutup.
-3. Menghilangkan visual FOUT (*Flash of Unstyled Text*) teks ligatur ikon Google Fonts yang merusak tata letak saat awal refresh halaman.
+Dokumen ini menjelaskan rencana perbaikan dan implementasi penyimpanan draf langsung ke database Supabase beserta sistem pembersihan draf otomatis (draft cleaner) berbasis backend cron job/schedule.
 
-## 1. Analisis Masalah
-- **Warning Overlay & Draf**: Peringatan tidak dipicu secara otomatis pada loader database utama (`mitra_kostmanager`) dan draf.
-- **URL Parameter Tertinggal**: Parameter `onboarding_id` tetap berada di URL setelah form ditutup karena race condition state.
-- **FOUT / Layout Shift Ikon**: Sebelum berkas web font Google Icons selesai diunduh di awal muatan halaman (refresh), browser menampilkan teks ligatur mentah seperti `"calendar_today"`, `"schedule"`, `"bolt"`, `"phone"` di dalam UI. Hal ini melebarkan kontainer ikon dan menggeser teks-teks pendukung di sebelahnya ke kanan, menciptakan kesan visual yang hancur.
+---
+
+## 1. Analisis Masalah & Tujuan
+
+### Masalah:
+* Penyimpanan draf sebelumnya hanya berbasis `localStorage` lokal. Data rentan hilang jika surveyor berpindah peramban atau membersihkan cache.
+* Dengan dialihkannya draf ke database Supabase, data draf yang mangkrak/tidak selesai berpotensi menjadi sampah (clutter) yang mengotori database jika dibiarkan selamanya.
+
+### Tujuan:
+* **Penyimpanan Draf**: Mengupsert draf survei secara instan ke tabel `properties` (status `'draft'`) dan tabel `mitra_kostmanager` secara online di Supabase.
+* **Pembersihan Draf**: Membuat sistem pembersih otomatis (cron job) yang berjalan setiap 24 jam untuk menghapus draf properti KostManager yang tidak aktif melewati periode waktu tertentu (misal: 30 hari).
+* **Keamanan Data**: Menjamin pembersihan **hanya** menghapus draf mangkrak yang belum pernah disetujui (unapproved/unverified) dan tidak menyentuh properti aktif, properti nonaktif (namun sudah pernah publish), maupun properti Mitra Biasa.
+
+---
 
 ## 2. Dampak Perubahan
-File yang akan tersentuh:
-- [`functions/scratch/fix_missing_states_and_uuid.js`](file:///C:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/scratch/fix_missing_states_and_uuid.js) (Skrip scratch pemicu modifikasi).
-- [`functions/public/pages/AgentDashboard.tsx`](file:///C:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx) (File komponen utama dashboard agen yang diregenerasi).
-- [`functions/public/index.css`](file:///C:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/index.css) (CSS global).
+File yang disentuh:
+1. [`functions/public/pages/AgentDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx)
+2. [`functions/src/index.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/src/index.ts)
+
+---
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Modifikasi `fix_missing_states_and_uuid.js`**:
-   - Menambahkan **FIX 13**: URL parameter cleanup pada `closeKostManagerListing`.
-   - Menambahkan **FIX 14**: URL parameter cleanup pada simpan sukses `handleSaveKostManagerListing`.
-2. **Modifikasi `index.css`**:
-   - Menambahkan CSS rule anti-layout shift untuk `.material-symbols-outlined`, `.material-icons`, `.material-icons-outlined` agar memotong teks ligatur yang belum dimuat dengan properti `width: 1em`, `height: 1em`, dan `overflow: hidden`.
-3. **Eksekusi Pembangunan Ulang**:
-   - Menjalankan `node functions/scratch/reapply_all_changes_chronologically.js`.
-4. **Verifikasi Build**:
-   - Melakukan kompilasi produksi `npm run build`.
+
+### Langkah 1: Implementasi Penyimpanan Draf di Frontend (`AgentDashboard.tsx`)
+* Tambahkan `handleSaveDraftDirectly` dan `closeKostManagerListingWithSave`.
+* Integrasikan auto-save otomatis pada transisi step, penutupan modal, dan saat kamar baru berhasil disimpan.
+* Lakukan restorasi kamar otomatis dari database ke state lokal jika terdeteksi draf lokal kosong.
+
+### Langkah 2: Buat Fungsi Pembersih Backend di Cloud Functions (`index.ts`)
+* Impor modul scheduler dari Firebase Functions v2 (`onSchedule`).
+* Implementasikan core cleaning logic `cleanExpiredDraftsCore` dengan filter ketat:
+  1. `properties.status = 'draft'`
+  2. `properties.is_managed = true`
+  3. `properties.is_verified = false` (belum terverifikasi oleh admin)
+  4. `properties.updated_at < threshold_date` (lebih tua dari 30 hari)
+  5. Periksa relasi `kostmanager_requests` untuk memastikan tidak ada request dengan status `'APPROVED'` atau `'COMPLETED'`.
+* Daftarkan fungsi terjadwal `scheduledCleanExpiredDrafts` (berjalan setiap 24 jam).
+* Daftarkan HTTP trigger `triggerCleanExpiredDrafts` agar administrator dapat memicu pembersihan secara manual via URL / curl dengan parameter hari opsional (`?days=X`).
+
+---
 
 ## 4. Rencana Verifikasi
-- Memastikan tidak ada layout shift pada ikon-ikon kartu saat refresh peramban dilakukan.
-- Memastikan build berhasil dikompilasi tanpa error.
+1. **Verifikasi Kompilasi Backend & Frontend**:
+   * Jalankan `npm run build` di folder `functions` untuk memverifikasi kesuksesan kompilasi Typescript backend.
+   * Jalankan `npm run build` di folder `functions/public` untuk memverifikasi kesuksesan kompilasi Vite frontend.
+2. **Uji Coba Fungsionalitas**:
+   * Panggil endpoint HTTP trigger secara manual untuk menguji proses pemindaian draf usang.
