@@ -15,8 +15,8 @@ const stateInjection = `    const [uploadingPublicAreas, setUploadingPublicAreas
     useEffect(() => {
         if (!surveyRequests || surveyRequests.length === 0) return;
         
-        const missingUserIds = surveyRequests
-            .filter(req => {
+        const fetchCoords = async () => {
+            const missingReqs = surveyRequests.filter(req => {
                 const isKostManager = req.notes?.includes('KostManager Onboarding') || req.task_type === 'kostmanager';
                 if (!isKostManager) return false;
                 if (requestsCoords[req.id]) return false;
@@ -28,41 +28,37 @@ const stateInjection = `    const [uploadingPublicAreas, setUploadingPublicAreas
                 
                 const isDefaultMakassar = Math.abs(lat - (-5.147665)) < 0.0001 && Math.abs(lng - 119.432731) < 0.0001;
                 return isDefaultMakassar;
-            })
-            .map(req => req.user_id)
-            .filter((val, idx, self) => val && self.indexOf(val) === idx);
+            });
             
-        if (missingUserIds.length === 0) return;
-        
-        const fetchCoords = async () => {
+            if (missingReqs.length === 0) return;
+            
             try {
-                const { data, error } = await supabase
-                    .from('properties')
-                    .select('owner_uid, location')
-                    .in('owner_uid', missingUserIds);
-                    
-                if (!error && data) {
-                    const newCoords: Record<string, { lat: number; lng: number }> = {};
-                    surveyRequests.forEach(req => {
-                        const prop = data.find(p => p.owner_uid === req.user_id);
-                        if (prop && prop.location) {
-                            const loc = prop.location as any;
-                            if (loc.lat && loc.lng) {
-                                newCoords[req.id] = { lat: Number(loc.lat), lng: Number(loc.lng) };
-                            }
+                const newCoords: Record<string, { lat: number; lng: number }> = {};
+                await Promise.all(missingReqs.map(async (req) => {
+                    if (!req.user_id) return;
+                    const { data, error } = await supabase
+                        .from('properties')
+                        .select('location')
+                        .eq('owner_uid', req.user_id)
+                        .maybeSingle();
+                        
+                    if (!error && data?.location) {
+                        const loc = data.location as any;
+                        if (loc.lat && loc.lng) {
+                            newCoords[req.id] = { lat: Number(loc.lat), lng: Number(loc.lng) };
                         }
-                    });
-                    if (Object.keys(newCoords).length > 0) {
-                        setRequestsCoords(prev => ({ ...prev, ...newCoords }));
                     }
+                }));
+                if (Object.keys(newCoords).length > 0) {
+                    setRequestsCoords(prev => ({ ...prev, ...newCoords }));
                 }
             } catch (err) {
-                console.error("Error batch fetching coordinates:", err);
+                console.error("Error fetching coordinates via individual query:", err);
             }
         };
         
         fetchCoords();
-    }, [surveyRequests]);`;
+    }, [surveyRequests, requestsCoords]);`;
 
 if (code.includes(stateTarget)) {
     code = code.replace(stateTarget, stateInjection);
