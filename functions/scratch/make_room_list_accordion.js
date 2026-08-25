@@ -12,6 +12,10 @@ const lines = content.split('\n');
 // 1. Find the bottom editor block in the original file
 const editorStartIdx = lines.findIndex(l => l.includes('Active Entry: Existing Room Detail Editor'));
 if (editorStartIdx === -1) {
+  if (content.includes('renderRoomEditor')) {
+    console.log("Accordion layout already present in AgentDashboard.tsx. Skipping.");
+    process.exit(0);
+  }
   console.error("CRITICAL: Active Entry: Existing Room Detail Editor comment not found!");
   process.exit(1);
 }

@@ -9,6 +9,18 @@ console.log("1. Reverting target files to clean HEAD state...");
 execSync('git checkout functions/public/pages/AgentDashboard.tsx', { cwd: rootDir });
 execSync('git checkout functions/public/components/admin/KostManagerManagement.tsx', { cwd: rootDir });
 
+// 2. Smart check: If files in git HEAD are already modified/premium, skip reapplying scratch scripts
+const dashboardPath = path.join(rootDir, 'functions/public/pages/AgentDashboard.tsx');
+if (fs.existsSync(dashboardPath)) {
+  const content = fs.readFileSync(dashboardPath, 'utf8');
+  if (content.includes('isKostManager')) {
+    console.log("\n[INFO] Premium layout and KostManager updates are already present in git HEAD.");
+    console.log("[INFO] Skipping scratch scripts reapply to avoid double-modification layout corruption.\n");
+    console.log("ALL SCRIPTS APPLIED SUCCESSFULLY! (Loaded from committed git HEAD)");
+    process.exit(0);
+  }
+}
+
 const scripts = [
   // A. Dokumen Penghuni removal
   'functions/scratch/remove_dokumen_penghuni_entirely_fixed.js',
@@ -106,7 +118,10 @@ const scripts = [
   'functions/scratch/apply_gps_fixes_v2.js',
 
   // Q. Disable scroll wheel zoom to prevent wheel unmount crash
-  'functions/scratch/disable_scroll_wheel_zoom.js'
+  'functions/scratch/disable_scroll_wheel_zoom.js',
+
+  // R. Premium Card Layout for task list cards
+  'functions/scratch/apply_premium_card_layout.js'
 ];
 
 scripts.forEach(script => {

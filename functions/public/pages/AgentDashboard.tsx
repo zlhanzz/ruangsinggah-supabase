@@ -3046,373 +3046,668 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 gap-6">
-                    {filteredRequests.map((req: SurveyRequest) => (
-                        <div key={req.id} className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row gap-6 hover:shadow-md transition-shadow relative overflow-hidden">
-                            {(req.status === 'AGENT_ASSIGNED' || req.status === 'SURVEYING') && <div className="absolute top-0 right-0 w-20 h-20 bg-orange-500/10 rounded-bl-full"></div>}
-                            <div className="flex-1 space-y-4 relative z-10">
-                                <div className="flex flex-col sm:flex-row justify-between items-start border-b border-gray-50 pb-4 gap-3">
-                                                                         <div>
-                                         <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                             <span className="bg-orange-100 text-orange-700 font-bold px-2.5 py-1 rounded-lg text-[10px] uppercase tracking-wider">#{req.id.slice(0,8)}</span>
-                                             <span className="text-xs text-gray-400 font-medium">{new Date(req.created_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'short'})}</span>
-                                             {req.notes?.includes('KostManager') ? (
-                                                 <div className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center gap-1">
-                                                     <span>⚡</span> KostManager Onboarding
-                                                 </div>
-                                             ) : (
-                                                 <div className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-orange-50 text-orange-600 border border-orange-100 italic">🔍 Jasa Survey</div>
-                                             )}
-                                         </div>
-                                         <div className="mb-3 flex items-baseline gap-1.5 flex-wrap">
-                                             <span className="text-2xl font-black text-orange-600 tracking-tight leading-none">
-                                                 {FORMAT_CURRENCY(getSurveyEarnings(req))}
-                                             </span>
-                                             <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none">Komisi Pendapatan</span>
-                                         </div>
-                                         <p className="font-bold text-gray-900 text-lg leading-tight mb-1">{req.notes?.includes('KostManager') ? `[Onboarding] ${req.kost_name}` : req.kost_name}</p>
-                                        <p className="text-xs text-gray-500 font-medium flex items-center gap-1.5">
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                                            {req.user?.name || 'User'}
-                                        </p>
-                                    </div>
-                                    <div className="w-full sm:w-auto">
-                                        <span className={`inline-flex w-full sm:w-auto justify-center px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl border shadow-sm
-                                            ${req.status === 'AWAITING_PAYMENT' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
-                                              req.status === 'PENDING_ASSIGNMENT' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
-                                              req.status === 'HEADING_TO_LOCATION' ? 'bg-indigo-600 text-white border-indigo-600' :
-                                              req.status === 'SURVEYING' ? 'bg-orange-600 text-white border-orange-600 animate-pulse' : 
-                                              req.status === 'SUBMITTED' ? 'bg-blue-600 text-white border-blue-600' :
-                                              req.status === 'COMPLETED' ? 'bg-green-600 text-white border-green-600' : 
-                                              req.status === 'RESCHEDULED' ? 'bg-amber-500 text-white border-amber-600 shadow-amber-100' : 
-                                              'bg-red-50 text-red-700 border-red-200'}`}>
-                                            {req.status === 'AWAITING_PAYMENT' ? 'Menunggu Bayar' : 
-                                             req.status === 'PENDING_ASSIGNMENT' ? 'Menunggu Agen' : 
-                                             req.status === 'AGENT_ASSIGNED' ? 'Tugas Baru' : 
-                                             req.status === 'HEADING_TO_LOCATION' ? 'Menuju Lokasi' :
-                                             req.status === 'SURVEYING' ? 'Sedang Survey' : 
-                                             req.status === 'SUBMITTED' ? 'Menunggu Konfirmasi' :
-                                             req.status === 'COMPLETED' ? 'Selesai' : 
-                                             req.status === 'RESCHEDULED' ? 'Jadwal Ulang' : 
-                                             req.status}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                                    <div className="flex items-start gap-3">
-                                        <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 mt-1">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                        </div>
-                                                                       <div>
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Lokasi Kost</p>
-                                            <p className="font-bold text-gray-900 text-xs sm:text-sm leading-relaxed">{req.kost_address}</p>
-                                                                                         {(() => {
-                                                 const meta = req.transaction?.metadata || {};
-                                                 let lat = meta.location?.lat || meta.latitude || (req as any).latitude;
-                                                 let lng = meta.location?.lng || meta.longitude || (req as any).longitude;
-                                                 const mapsUrl = meta.googleMapsLink || (req as any).google_maps_url || (lat && lng ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}` : null);
-                                                 
-                                                 // Try extracting coordinates from text notes/name if still missing
-                                                 if (!lat || !lng) {
-                                                     const extracted = extractCoordinates(meta.googleMapsLink || (req as any).google_maps_url || req.kost_name || req.notes);
-                                                     if (extracted) {
-                                                         lat = extracted.lat;
-                                                         lng = extracted.lng;
-                                                     }
-                                                 }
-                                                 const regexMatch = req.notes?.match(/📍(?: Link)? GPS:\s*(https?:\/\/\S+)/);
-                                                 const finalUrl = mapsUrl || (regexMatch ? regexMatch[1] : null);
-
-                                                 if (finalUrl) {
-                                                     return (
-                                                         <div className="mt-2 flex flex-col gap-1">
-                                                             <a 
-                                                                 href={finalUrl} 
-                                                                 target="_blank" 
-                                                                 rel="noopener noreferrer" 
-                                                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 text-[10px] font-black uppercase tracking-wider transition-all border border-orange-200 shadow-sm w-max"
-                                                             >
-                                                                 📍 Buka Rute GPS / Maps
-                                                             </a>
-                                                             {lat && lng && (
-                                                                 <p className="text-[9px] text-gray-400 font-bold tracking-tight">
-                                                                     Koordinat: {lat}, {lng}
-                                                                 </p>
-                                                             )}
-                                                         </div>
-                                                     );
-                                                 }
-                                                 return null;
-                                             })()}
-                                         </div>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                        <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 mt-1">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                        </div>
-                                        <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Jadwal Survey</p><p className="font-bold text-orange-700 text-xs sm:text-sm">{req.survey_date} · {req.survey_time}</p></div>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                        <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 mt-1">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                                        </div>
-                                                                                 <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Kontak Pemilik</p><p className="font-bold text-gray-900 text-xs sm:text-sm">{req.notes?.includes('KostManager') ? (req.user?.phone || req.owner_phone || '-') : (req.owner_phone && req.owner_phone !== '-' ? req.owner_phone : (req.user?.phone || '-'))}</p></div>
-                                    </div>
-                                </div>
-                                {req.status === 'RESCHEDULED' && (
-                                    <div className="bg-amber-50 rounded-2xl p-3 border border-amber-100 flex items-start gap-3">
-                                        <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-amber-500 shadow-sm shrink-0 mt-0.5">🗓️</div>
-                                        <div className="flex-1">
-                                            <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Informasi Jadwal Ulang</p>
-                                            <p className="text-xs text-amber-800 font-medium leading-relaxed italic">"{req.notes || 'User/Admin meminta perubahan jadwal survey sesuai kesepakatan baru.'}"</p>
-                                        </div>
-                                    </div>
-                                )}
-                                {req.notes && req.status !== 'RESCHEDULED' && (
-                                    <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Catatan Pemesan</p>
-                                        <p className="text-sm text-gray-700 italic">"{req.notes}"</p>
-                                    </div>
-                                )}
-
-                            </div>
-                            <div className="flex flex-col gap-2.5 md:w-52 shrink-0 border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-6 relative z-10">
-                                {agentTab === 'pending' && (
+                    {filteredRequests.map((req: SurveyRequest) => {
+                        const isKostManager = checkIsKostManager(req);
+                        if (isKostManager) {
+                            return (
+                                <div key={req.id} className="bg-surface-container-lowest p-stack-md rounded-2xl shadow-soft-float border border-surface-container mb-stack-lg relative overflow-hidden flex flex-col gap-stack-md max-w-lg mx-auto w-full">
+                                    {/* Header Info */}
                                     <div className="flex flex-col gap-2">
-                                        <button 
-                                            onClick={async () => {
-                                                if (verificationStatus !== 'verified') {
-                                                    alert('Akun Anda belum terverifikasi. Silahkan lengkapi identitas di menu Profil.');
-                                                    onMenuChange('profile');
-                                                    return;
-                                                }
-                                                if (window.confirm('Terima tugas survey ini?')) {
-                                                    try {
-                                                        setIsSubmitting(true);
-                                                        await updateSurveyRequest(req.id, { 
-                                                            status: 'AGENT_ASSIGNED',
-                                                            agent_name: user?.name || user?.displayName || 'Surveyor RuangSinggah',
-                                                            agent_phone: user?.phone || user?.phoneNumber || '',
-                                                            agent_photo_url: user?.photo_url || user?.photoURL || ''
-                                                        });
-                                                        await notifySurveyStatusUpdate(req.id, 'AGENT_ASSIGNED');
-                                                        alert('Pesanan Diterima! Tugas kini ada di tab Aktif.');
-                                                        await loadSurveyRequests(true);
-                                                        setAgentTab('active');
-                                                    } catch (error) {
-                                                        alert('Gagal menerima tugas.');
-                                                    } finally {
-                                                        setIsSubmitting(false);
-                                                    }
-                                                }
-                                            }} 
-                                            disabled={isSubmitting}
-                                            className={`w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all ${
-                                                verificationStatus === 'verified' && !isSubmitting
-                                                ? 'bg-orange-600 hover:bg-orange-700 text-white' 
-                                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                            }`}
-                                        >
-                                            {isSubmitting ? 'Memproses...' : 'Terima Tugas'}
-                                        </button>
-                                        <button 
-                                            onClick={async () => {
-                                                if (window.confirm('Yakin ingin menolak tugas ini? Tugas akan dikembalikan ke Admin untuk ditugaskan ulang.')) {
-                                                    try {
-                                                        setIsSubmitting(true);
-                                                        await updateSurveyRequest(req.id, { 
-                                                            assigned_agent_id: null,
-                                                            agent_name: '',
-                                                            agent_phone: ''
-                                                        } as any);
-                                                        alert('Tugas Ditolak.');
-                                                        await loadSurveyRequests(true);
-                                                    } catch (error) {
-                                                        alert('Gagal menolak tugas.');
-                                                    } finally {
-                                                        setIsSubmitting(false);
-                                                    }
-                                                }
-                                            }} 
-                                            disabled={isSubmitting}
-                                            className="w-full bg-red-50 hover:bg-red-500 text-red-600 hover:text-white border border-red-200 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all"
-                                        >
-                                            Tolak
-                                        </button>
+                                        <div className="flex flex-wrap gap-2 items-center">
+                                            <span className="bg-surface-container-high text-on-surface text-label-bold font-bold px-3 py-1 rounded-full">
+                                                #{req.id.slice(0, 8).toUpperCase()}
+                                            </span>
+                                            <span className="flex items-center gap-1 text-on-surface-variant text-label-bold font-bold bg-surface-container px-3 py-1 rounded-full">
+                                                <span className="material-symbols-outlined text-[14px]">calendar_today</span> 
+                                                {new Date(req.created_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}
+                                            </span>
+                                            <span className="flex items-center gap-1 text-on-surface-variant text-label-bold font-bold bg-surface-container px-3 py-1 rounded-full">
+                                                <span className="material-symbols-outlined text-[14px]">schedule</span> 
+                                                {new Date(req.created_at).toLocaleTimeString('id-ID', {hour: '2-digit', minute: '2-digit'})} WIB
+                                            </span>
+                                        </div>
+                                        
+                                        <div className="inline-flex items-center gap-2 bg-primary-container text-on-primary-container text-label-bold font-bold px-4 py-1.5 rounded-full uppercase tracking-wide w-fit mt-1">
+                                            <span className="material-symbols-outlined text-[16px] icon-filled">bolt</span>
+                                            Pendataan KostManager
+                                        </div>
+                                        
+                                        <div className="mt-1">
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="text-headline-lg-mobile md:text-headline-lg font-black text-primary">
+                                                    {FORMAT_CURRENCY(getSurveyEarnings(req))}
+                                                </span>
+                                                <span className="text-label-bold font-bold text-on-surface-variant uppercase">
+                                                    Komisi Pendapatan
+                                                </span>
+                                            </div>
+                                            <h2 className="text-headline-md font-headline-md text-on-surface mt-1">
+                                                {req.kost_name}
+                                            </h2>
+                                        </div>
                                     </div>
-                                )}
-                                
-                                {agentTab === 'active' && (
-                                    <>
-                                        {req.status === 'SUBMITTED' ? (
+
+                                    {/* Occupant & Status */}
+                                    <div className="grid grid-cols-1 gap-gutter-grid">
+                                        <div className="bg-surface-container-lowest p-stack-md rounded-2xl border border-surface-container flex items-center gap-stack-md">
+                                            <div className="w-12 h-12 rounded-full bg-secondary text-on-secondary flex items-center justify-center text-headline-md font-black shrink-0">
+                                                {(req.user?.name || 'M').charAt(0).toUpperCase()}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-label-sm font-bold text-on-surface-variant uppercase tracking-wider mb-1">
+                                                    Mitra Pemesan KostManager
+                                                </p>
+                                                <p className="text-body-lg font-bold text-on-surface truncate">
+                                                    {req.user?.name || 'Mitra Kost'}
+                                                </p>
+                                                <a 
+                                                    className="inline-flex items-center gap-1 text-primary-container mt-1 text-body-md font-medium hover:underline" 
+                                                    href={`tel:${req.user?.phone || req.owner_phone || ''}`}
+                                                >
+                                                    <span className="material-symbols-outlined text-[16px]">phone</span> 
+                                                    {req.user?.phone || req.owner_phone || '-'}
+                                                </a>
+                                            </div>
+                                        </div>
+                                        
+                                        {(() => {
+                                            const statusColorMap: any = {
+                                                'AWAITING_PAYMENT': 'bg-yellow-100 text-yellow-900 border border-yellow-200',
+                                                'PENDING_ASSIGNMENT': 'bg-amber-100 text-amber-900 border border-amber-200',
+                                                'AGENT_ASSIGNED': 'bg-blue-100 text-blue-900 border border-blue-200',
+                                                'HEADING_TO_LOCATION': 'bg-indigo-100 text-indigo-900 border border-indigo-200',
+                                                'SURVEYING': 'bg-orange-100 text-orange-900 border border-orange-200',
+                                                'SUBMITTED': 'bg-blue-100 text-blue-900 border border-blue-200',
+                                                'COMPLETED': 'bg-green-100 text-green-900 border border-green-200',
+                                                'RESCHEDULED': 'bg-amber-100 text-amber-900 border border-amber-200'
+                                            };
+                                            const bgClass = statusColorMap[req.status] || 'bg-primary-fixed text-on-primary-fixed';
+                                            const labelMap: any = {
+                                                'AWAITING_PAYMENT': 'MENUNGGU PEMBAYARAN',
+                                                'PENDING_ASSIGNMENT': 'MENUNGGU AGEN',
+                                                'AGENT_ASSIGNED': 'TUGAS BARU',
+                                                'HEADING_TO_LOCATION': 'OTW KE LOKASI',
+                                                'SURVEYING': 'SEDANG SURVEY',
+                                                'SUBMITTED': 'MENUNGGU KONFIRMASI',
+                                                'COMPLETED': 'SELESAI',
+                                                'RESCHEDULED': 'JADWAL ULANG'
+                                            };
+                                            return (
+                                                <div className={`p-stack-md rounded-2xl flex items-center justify-center shadow-soft-float ${bgClass}`}>
+                                                    <div className="text-center">
+                                                        <p className="text-body-lg font-bold uppercase tracking-wider">
+                                                            {labelMap[req.status] || req.status}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    {/* Location Section */}
+                                    {(() => {
+                                        const meta = req.transaction?.metadata || {};
+                                        const lat = meta.location?.lat || meta.latitude || (req as any).latitude;
+                                        const lng = meta.location?.lng || meta.longitude || (req as any).longitude;
+                                        const mapsUrl = meta.googleMapsLink || (req as any).google_maps_url || (lat && lng ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}` : null);
+                                        const regexMatch = req.notes?.match(/📍(?: Link)? GPS:\s*(https?:\/\/\S+)/);
+                                        const finalUrl = mapsUrl || (regexMatch ? regexMatch[1] : null);
+
+                                        return (
+                                            <div className="bg-surface-container-lowest p-stack-md rounded-2xl border border-surface-container flex flex-col gap-4">
+                                                <div>
+                                                    <h3 className="flex items-center gap-2 text-body-lg font-bold text-on-surface mb-2">
+                                                        <span className="material-symbols-outlined text-primary-container icon-filled">location_on</span>
+                                                        Lokasi Properti &amp; Preview GPS
+                                                    </h3>
+                                                    <p className="text-body-md font-medium text-on-surface-variant leading-relaxed">
+                                                        {req.kost_address}
+                                                    </p>
+                                                </div>
+                                                
+                                                {lat && lng && (
+                                                    <div className="relative w-full h-48 rounded-xl overflow-hidden border border-outline-variant bg-gray-50">
+                                                        <iframe 
+                                                            title={`map-preview-${req.id}`}
+                                                            width="100%" 
+                                                            height="100%" 
+                                                            frameBorder="0" 
+                                                            scrolling="no" 
+                                                            marginHeight={0} 
+                                                            marginWidth={0} 
+                                                            src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(lng)-0.005}%2C${Number(lat)-0.005}%2C${Number(lng)+0.005}%2C${Number(lat)+0.005}&layer=mapnik&marker=${lat}%2C${lng}`}
+                                                            className="w-full h-full border-0 pointer-events-none"
+                                                        />
+                                                    </div>
+                                                )}
+                                                
+                                                <div className="flex flex-col gap-stack-sm w-full">
+                                                    {(finalUrl || (lat && lng)) && (
+                                                        <a 
+                                                            className="w-full bg-secondary text-on-secondary py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-opacity font-bold text-label-lg shadow-sm"
+                                                            href={finalUrl || `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                        >
+                                                            <span className="material-symbols-outlined">directions</span>
+                                                            Buka Rute GPS / Google Maps
+                                                        </a>
+                                                    )}
+                                                    {lat && lng && (
+                                                        <div className="w-full bg-surface text-on-surface-variant py-3 px-4 rounded-xl flex items-center justify-center gap-2 border border-outline-variant font-medium text-body-md">
+                                                            <span className="material-symbols-outlined text-primary-container">share_location</span>
+                                                            {lat}, {lng}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Stats Grid */}
+                                    {(() => {
+                                        const meta = req.transaction?.metadata || {};
+                                        let totalRooms = meta.total_rooms || meta.totalRooms || meta.jumlah_kamar || (req as any).total_rooms;
+                                        let emptyRooms = meta.empty_rooms || meta.emptyRooms || meta.kamar_kosong || (req as any).empty_rooms;
+                                        let kostType = meta.kost_type || meta.tipe_kost || (req as any).kost_type;
+
+                                        if (!totalRooms && req.notes) {
+                                            const m = req.notes.match(/Total Kamar:\s*(\d+)/i);
+                                            if (m) totalRooms = m[1];
+                                        }
+                                        if (emptyRooms === undefined && req.notes) {
+                                            const m = req.notes.match(/Kamar Kosong:\s*(\d+)/i);
+                                            if (m) emptyRooms = m[1];
+                                        }
+                                        if (!kostType && req.notes) {
+                                            const m = req.notes.match(/Tipe Kost:\s*([^\n,]+)/i);
+                                            if (m) kostType = m[1];
+                                        }
+
+                                        return (
+                                            <div className="flex flex-col gap-stack-sm w-full">
+                                                <div className="bg-surface-container-lowest p-stack-md rounded-2xl border border-surface-container text-center">
+                                                    <p className="text-label-bold font-bold text-on-surface-variant uppercase tracking-wider mb-2">
+                                                        Tipe Kost
+                                                    </p>
+                                                    <p className="text-headline-md font-headline-md text-on-surface capitalize">{kostType || 'Campur'}</p>
+                                                </div>
+                                                <div className="bg-surface-container-lowest p-stack-md rounded-2xl border border-surface-container text-center">
+                                                    <p className="text-label-bold font-bold text-on-surface-variant uppercase tracking-wider mb-2">
+                                                        Total Jumlah Kamar
+                                                    </p>
+                                                    <p className="text-headline-lg font-headline-lg text-primary">{totalRooms || '5'}</p>
+                                                </div>
+                                                <div className="bg-surface-container-lowest p-stack-md rounded-2xl border border-surface-container text-center">
+                                                    <p className="text-label-bold font-bold text-on-surface-variant uppercase tracking-wider mb-2">
+                                                        Jumlah Kamar Kosong
+                                                    </p>
+                                                    <p className="text-headline-lg font-headline-lg text-secondary">{emptyRooms !== undefined ? emptyRooms : '0'}</p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Kontak Pemilik */}
+                                    <div className="bg-surface-container-lowest p-stack-md rounded-2xl border border-surface-container flex flex-col sm:flex-row items-center justify-between gap-stack-md">
+                                        <div className="flex items-center gap-stack-sm">
+                                            <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+                                                <span className="material-symbols-outlined">phone_iphone</span>
+                                            </div>
+                                            <div>
+                                                <p className="text-label-sm font-bold text-on-surface-variant uppercase">
+                                                    Kontak Pemilik Kost
+                                                </p>
+                                                <p className="text-body-md font-bold text-on-surface">{req.owner_phone && req.owner_phone !== '-' ? req.owner_phone : (req.user?.phone || '-')}</p>
+                                            </div>
+                                        </div>
+                                        {(req.user?.phone || req.owner_phone) && (
+                                            <a 
+                                                href={`https://wa.me/${(req.user?.phone || req.owner_phone || '').replace(/[^0-9]/g, '')}`} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="w-full sm:w-auto bg-[#25D366] text-white py-2 px-6 rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-opacity font-bold text-label-lg shadow-sm"
+                                            >
+                                                <span className="material-symbols-outlined">chat</span>
+                                                Chat WA
+                                            </a>
+                                        )}
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex flex-col gap-2 border-t border-surface-container pt-stack-md mt-2">
+                                        {agentTab === 'pending' && (
+                                            <div className="flex flex-col gap-2">
+                                                <button 
+                                                    onClick={async () => {
+                                                        if (verificationStatus !== 'verified') {
+                                                            alert('Akun Anda belum terverifikasi. Silahkan lengkapi identitas di menu Profil.');
+                                                            onMenuChange('profile');
+                                                            return;
+                                                        }
+                                                        if (window.confirm('Terima tugas pendataan KostManager ini?')) {
+                                                            try {
+                                                                setIsSubmitting(true);
+                                                                await updateSurveyRequest(req.id, { 
+                                                                    status: 'AGENT_ASSIGNED',
+                                                                    assigned_agent_id: uid,
+                                                                    agent_name: user?.name || user?.displayName || 'Surveyor RuangSinggah',
+                                                                    agent_phone: user?.phone || user?.phoneNumber || '',
+                                                                    agent_photo_url: user?.photo_url || user?.photoURL || ''
+                                                                });
+                                                                await notifySurveyStatusUpdate(req.id, 'AGENT_ASSIGNED');
+                                                                alert('Pesanan Diterima! Tugas kini ada di tab Aktif.');
+                                                                await loadSurveyRequests(true);
+                                                                setAgentTab('active');
+                                                            } catch (error) {
+                                                                alert('Gagal menerima tugas.');
+                                                            } finally {
+                                                                setIsSubmitting(false);
+                                                            }
+                                                        }
+                                                    }} 
+                                                    disabled={isSubmitting}
+                                                    className={`w-full py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-opacity font-bold text-label-lg shadow-sm ${
+                                                        verificationStatus === 'verified' && !isSubmitting
+                                                        ? 'bg-primary text-white'
+                                                        : 'bg-surface text-on-surface-variant border border-outline-variant cursor-not-allowed'
+                                                    }`}
+                                                >
+                                                    {isSubmitting ? 'Memproses...' : '⚡ Terima Pendataan'}
+                                                </button>
+                                                <button 
+                                                    onClick={async () => {
+                                                        if (window.confirm('Yakin ingin menolak tugas ini? Tugas akan dikembalikan ke Admin untuk ditugaskan ulang.')) {
+                                                            try {
+                                                                setIsSubmitting(true);
+                                                                await updateSurveyRequest(req.id, { 
+                                                                    assigned_agent_id: null,
+                                                                    agent_name: '',
+                                                                    agent_phone: ''
+                                                                } as any);
+                                                                alert('Tugas Ditolak.');
+                                                                await loadSurveyRequests(true);
+                                                            } catch (error) {
+                                                                alert('Gagal menolak tugas.');
+                                                            } finally {
+                                                                setIsSubmitting(false);
+                                                            }
+                                                        }
+                                                    }} 
+                                                    disabled={isSubmitting}
+                                                    className="w-full bg-surface text-error border border-error/20 py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-red-50 transition-opacity font-bold text-label-lg shadow-sm"
+                                                >
+                                                    Tolak
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {agentTab === 'active' && (
                                             <>
-                                                {req.notes?.includes('KostManager') ? (
+                                                {req.status === 'SUBMITTED' ? (
                                                     <button 
                                                         onClick={() => openKostManagerListing(req)} 
-                                                        className="w-full bg-white hover:bg-emerald-50 text-emerald-600 border border-emerald-200 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex justify-center items-center gap-2"
+                                                        className="w-full bg-surface text-primary border border-outline-variant py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-primary/5 transition-opacity font-bold text-label-lg shadow-sm"
                                                     >
                                                         ✅ Lihat Detail Listing
                                                     </button>
                                                 ) : (
-                                                    <button 
-                                                        onClick={() => openSurveyEditor(req, req.status)} 
-                                                        className="w-full bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex justify-center items-center gap-2"
-                                                    >
-                                                        {req.evaluation_summary?.room_facilities ? '✅ Lihat Laporan' : '📝 Detail Progress'}
-                                                    </button>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <button 
-                                                        onClick={async () => {
-                                                            try {
-                                                                setIsSubmitting(true);
-                                                                await updateSurveyRequest(req.id, { status: 'HEADING_TO_LOCATION' });
-                                                                await notifySurveyStatusUpdate(req.id, 'HEADING_TO_LOCATION');
-                                                                await loadSurveyRequests(true);
-                                                            } catch (e) {
-                                                                alert('Gagal update status');
-                                                            } finally {
-                                                                setIsSubmitting(false);
-                                                            }
-                                                        }}
-                                                        disabled={isSubmitting || req.status === 'HEADING_TO_LOCATION' || req.status === 'SURVEYING' || req.status === 'COMPLETED'}
-                                                        className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-tight shadow-sm transition-all border-b-4 active:border-b-0 active:translate-y-1 ${
-                                                            req.status === 'HEADING_TO_LOCATION' || req.status === 'SURVEYING' || req.status === 'COMPLETED'
-                                                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                                            : 'bg-orange-600 hover:bg-orange-700 text-white border-orange-800'
-                                                        }`}
-                                                    >
-                                                        🚗 {req.status === 'HEADING_TO_LOCATION' || req.status === 'SURVEYING' || req.status === 'COMPLETED' ? 'Sudah OTW' : 'Menuju Lokasi'}
-                                                    </button>
-                                                    <button 
-                                                        onClick={async () => {
-                                                            try {
-                                                                setIsSubmitting(true);
-                                                                await updateSurveyRequest(req.id, { status: 'SURVEYING' });
-                                                                await notifySurveyStatusUpdate(req.id, 'SURVEYING');
-                                                                await loadSurveyRequests(true);
-                                                            } catch (e) {
-                                                                alert('Gagal update status');
-                                                            } finally {
-                                                                setIsSubmitting(false);
-                                                            }
-                                                        }}
-                                                        disabled={isSubmitting || req.status !== 'HEADING_TO_LOCATION'}
-                                                        className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-tight shadow-sm transition-all border-b-4 active:border-b-0 active:translate-y-1 ${
-                                                            req.status === 'HEADING_TO_LOCATION'
-                                                            ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-700'
-                                                            : req.status === 'SURVEYING' || req.status === 'COMPLETED'
-                                                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                                            : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                                        }`}
-                                                    >
-                                                        📷 {req.status === 'SURVEYING' || req.status === 'COMPLETED' ? 'Sedang Survey' : 'Sedang Survey'}
-                                                    </button>
-                                                </div>
-                                                
-                                                {req.notes?.includes('KostManager') ? (
-                                                    <div className="w-full mt-1">
-                                                        <button 
-                                                            onClick={() => window.open(`https://wa.me/${req.user?.phone || req.owner_phone || ''}?text=${encodeURIComponent(`Halo Pemilik Kost, saya Arif agen survey RuangSinggah.`)}`, '_blank')} 
-                                                            className="w-full bg-emerald-50 hover:bg-emerald-500 text-emerald-700 hover:text-white border border-emerald-200 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex justify-center items-center gap-1 shadow-sm"
-                                                        >
-                                                            💬 Chat Pemilik Kost
-                                                        </button>
+                                                    <div className="flex flex-col gap-2">
+                                                        {req.status === 'AGENT_ASSIGNED' && (
+                                                            <button 
+                                                                onClick={async () => {
+                                                                    if (window.confirm('Mulai perjalanan menuju lokasi kost?')) {
+                                                                        await updateSurveyRequest(req.id, { status: 'HEADING_TO_LOCATION' });
+                                                                        await loadSurveyRequests(true);
+                                                                    }
+                                                                }}
+                                                                className="w-full py-3.5 px-4 bg-secondary text-on-secondary rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-opacity font-bold text-label-lg shadow-sm"
+                                                            >
+                                                                🚗 OTW Ke Lokasi
+                                                            </button>
+                                                        )}
+                                                        {req.status === 'HEADING_TO_LOCATION' && (
+                                                            <button 
+                                                                onClick={async () => {
+                                                                    if (window.confirm('Mulai pendataan / survey lapangan?')) {
+                                                                        await updateSurveyRequest(req.id, { status: 'SURVEYING' });
+                                                                        await loadSurveyRequests(true);
+                                                                    }
+                                                                }}
+                                                                className="w-full py-3.5 px-4 bg-primary text-white rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-opacity font-bold text-label-lg shadow-sm animate-pulse"
+                                                            >
+                                                                📷 Mulai Pendataan
+                                                            </button>
+                                                        )}
+                                                        {(req.status === 'SURVEYING' || req.status === 'RESCHEDULED') && (
+                                                            <button 
+                                                                onClick={() => openKostManagerListing(req)} 
+                                                                className="w-full py-3.5 px-4 bg-primary text-white rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-opacity font-bold text-label-lg shadow-sm"
+                                                            >
+                                                                ⚡ Isi Listing & Kamar
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                ) : (
-                                                    <div className="grid grid-cols-2 gap-2 mt-1">
-                                                        <button onClick={() => window.open(`https://wa.me/${req.user?.phone}`, '_blank')} className="bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2.5 rounded-xl text-[10px] font-bold transition-all flex justify-center items-center gap-1">
-                                                            💬 Chat User
-                                                        </button>
-                                                        <button onClick={() => window.open(`https://wa.me/${req.owner_phone}`, '_blank')} className="bg-orange-50 hover:bg-orange-500 text-orange-600 hover:text-white border border-orange-200 py-2.5 rounded-xl text-[10px] font-bold transition-all flex justify-center items-center gap-1">
-                                                            🏢 Chat Pemilik
-                                                        </button>
-                                                    </div>
-                                                )}
-
-                                                {req.result_drive_link && (
-                                                    <button 
-                                                        onClick={() => window.open(req.result_drive_link, '_blank')} 
-                                                        className="w-full bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all mt-1"
-                                                    >
-                                                        📁 Buka Folder Drive (Upload)
-                                                    </button>
-                                                )}
-
-                                                <button 
-                                                    onClick={() => {
-                                                        setIsReschedulingSurvey(req);
-                                                        setNewSurveyDate(req.survey_date || '');
-                                                        setNewSurveyTime(req.survey_time || '');
-                                                        setRescheduleReason(req.notes && req.status === 'RESCHEDULED' ? req.notes : '');
-                                                    }} 
-                                                    className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-                                                >
-                                                    📅 Jadwal Ulang
-                                                </button>
-
-                                                {req.notes?.includes('KostManager') ? (
-                                                    <button 
-                                                        onClick={() => openKostManagerListing(req)} 
-                                                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-md active:scale-95 transition-all flex justify-center items-center gap-2"
-                                                    >
-                                                        ⚡ Isi Listing & Kamar
-                                                    </button>
-                                                ) : (
-                                                    <button 
-                                                        onClick={() => openSurveyEditor(req, 'COMPLETED')} 
-                                                        className="w-full bg-orange-600 hover:bg-orange-700 text-white py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-md animate-pulse active:scale-95 transition-all flex justify-center items-center gap-2"
-                                                    >
-                                                        📝 Buat Laporan
-                                                    </button>
                                                 )}
                                             </>
                                         )}
-                                    </>
-                                )}
- 
-                                 {agentTab === 'history' && (
-                                     <>
-                                         {req.notes?.includes('KostManager') ? (
-                                             <button 
-                                                 onClick={() => openKostManagerListing(req)} 
-                                                 className="w-full bg-white hover:bg-emerald-50 text-emerald-600 border border-emerald-200 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex justify-center items-center gap-2"
-                                             >
-                                                 ✅ Lihat Detail Listing
-                                             </button>
-                                         ) : (
-                                             <button 
-                                                 onClick={() => openSurveyEditor(req, req.status)} 
-                                                 className="w-full bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex justify-center items-center gap-2"
-                                             >
-                                                 {req.evaluation_summary?.room_facilities ? '✅ Lihat Laporan' : '📝 Detail Progress'}
-                                             </button>
-                                         )}
 
-                                        <div className="mt-3 bg-orange-50/50 rounded-2xl p-4 border border-orange-100 flex flex-col gap-2">
-                                            <div className="flex justify-between items-center">
-                                                <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Rating & Feedback User</p>
-                                                {req.user_rating ? (
-                                                    <div className="flex text-yellow-500 text-[10px]">
-                                                        {[...Array(5)].map((_, i) => (
-                                                            <span key={i}>{i < (req.user_rating || 0) ? '★' : '☆'}</span>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-[9px] font-bold text-gray-400 italic">Belum ada rating</span>
-                                                )}
+                                        {agentTab === 'history' && (
+                                            <button 
+                                                onClick={() => openKostManagerListing(req)} 
+                                                className="w-full bg-surface text-primary border border-outline-variant py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-primary/5 transition-opacity font-bold text-label-lg shadow-sm"
+                                            >
+                                                ✅ Lihat Detail Listing
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        }
+
+                        // ── DESAIN LAMA KARTU SURVEY BIASA ───────────────────────────
+                        return (
+                            <div key={req.id} className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row gap-6 hover:shadow-md transition-shadow relative overflow-hidden">
+                                {(req.status === 'AGENT_ASSIGNED' || req.status === 'SURVEYING') && <div className="absolute top-0 right-0 w-20 h-20 bg-orange-500/10 rounded-bl-full"></div>}
+                                <div className="flex-1 space-y-4 relative z-10">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start border-b border-gray-50 pb-4 gap-3">
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                                <span className="bg-orange-100 text-orange-700 font-bold px-2.5 py-1 rounded-lg text-[10px] uppercase tracking-wider">#{req.id.slice(0,8)}</span>
+                                                <span className="text-xs text-gray-400 font-medium">{new Date(req.created_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'short'})}</span>
+                                                <div className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-orange-50 text-orange-600 border border-orange-100 italic">🔍 Jasa Survey</div>
                                             </div>
-                                            <p className={`text-xs italic font-medium leading-relaxed ${req.user_comment ? 'text-gray-700' : 'text-gray-400'}`}>
-                                                {req.user_comment ? `"${req.user_comment}"` : 'User belum memberikan ulasan.'}
+                                            <div className="mb-3 flex items-baseline gap-1.5 flex-wrap">
+                                                <span className="text-2xl font-black text-orange-600 tracking-tight leading-none">
+                                                    {FORMAT_CURRENCY(getSurveyEarnings(req))}
+                                                </span>
+                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none">Komisi Pendapatan</span>
+                                            </div>
+                                            <p className="font-bold text-gray-900 text-lg leading-tight mb-1">{req.kost_name}</p>
+                                            <p className="text-xs text-gray-500 font-medium flex items-center gap-1.5">
+                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                                {req.user?.name || 'User'}
                                             </p>
                                         </div>
-                                    </>
-                                )}
+                                        <div className="w-full sm:w-auto">
+                                            <span className={`inline-flex w-full sm:w-auto justify-center px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl border shadow-sm
+                                                ${req.status === 'AWAITING_PAYMENT' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
+                                                  req.status === 'PENDING_ASSIGNMENT' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                                                  req.status === 'HEADING_TO_LOCATION' ? 'bg-indigo-600 text-white border-indigo-600' :
+                                                  req.status === 'SURVEYING' ? 'bg-orange-600 text-white border-orange-600 animate-pulse' : 
+                                                  req.status === 'SUBMITTED' ? 'bg-blue-600 text-white border-blue-600' :
+                                                  req.status === 'COMPLETED' ? 'bg-green-600 text-white border-green-600' : 
+                                                  req.status === 'RESCHEDULED' ? 'bg-amber-505 text-white border-amber-600 shadow-amber-100' : 
+                                                  'bg-red-50 text-red-700 border-red-200'}`}>
+                                                {req.status === 'AWAITING_PAYMENT' ? 'Menunggu Bayar' : 
+                                                 req.status === 'PENDING_ASSIGNMENT' ? 'Menunggu Agen' : 
+                                                 req.status === 'AGENT_ASSIGNED' ? 'Tugas Baru' : 
+                                                 req.status === 'HEADING_TO_LOCATION' ? 'Menuju Lokasi' :
+                                                 req.status === 'SURVEYING' ? 'Sedang Survey' : 
+                                                 req.status === 'SUBMITTED' ? 'Menunggu Konfirmasi' :
+                                                 req.status === 'COMPLETED' ? 'Selesai' : 
+                                                 req.status === 'RESCHEDULED' ? 'Jadwal Ulang' : 
+                                                 req.status}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-150 mt-1">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Lokasi Kost</p>
+                                                <p className="font-bold text-gray-900 text-xs sm:text-sm leading-relaxed">{req.kost_address}</p>
+                                                {(() => {
+                                                    const meta = req.transaction?.metadata || {};
+                                                    const lat = meta.location?.lat || meta.latitude;
+                                                    const lng = meta.location?.lng || meta.longitude;
+                                                    const mapsUrl = meta.googleMapsLink || (lat && lng ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}` : null);
+                                                    const regexMatch = req.notes?.match(/📍(?: Link)? GPS:\s*(https?:\/\/\S+)/);
+                                                    const finalUrl = mapsUrl || (regexMatch ? regexMatch[1] : null);
+
+                                                    if (finalUrl) {
+                                                        return (
+                                                            <div className="mt-2 flex flex-col gap-1">
+                                                                <a 
+                                                                    href={finalUrl} 
+                                                                    target="_blank" 
+                                                                    rel="noopener noreferrer" 
+                                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 text-[10px] font-black uppercase tracking-wider transition-all border border-orange-200 shadow-sm w-max"
+                                                                >
+                                                                    📍 Buka Rute GPS / Maps
+                                                                </a>
+                                                                {lat && lng && (
+                                                                    <p className="text-[9px] text-gray-400 font-bold tracking-tight">
+                                                                        Koordinat: {lat}, {lng}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 mt-1">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                            </div>
+                                            <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Jadwal Survey</p><p className="font-bold text-orange-700 text-xs sm:text-sm">{req.survey_date} · {req.survey_time}</p></div>
+                                        </div>
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 mt-1">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                                            </div>
+                                            <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Kontak Pemilik</p><p className="font-bold text-gray-900 text-xs sm:text-sm">{req.owner_phone && req.owner_phone !== '-' ? req.owner_phone : (req.user?.phone || '-')}</p></div>
+                                        </div>
+                                    </div>
+                                    {req.status === 'RESCHEDULED' && (
+                                        <div className="bg-amber-50 rounded-2xl p-3 border border-amber-100 flex items-start gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-amber-500 shadow-sm shrink-0 mt-0.5">🗓️</div>
+                                            <div className="flex-1">
+                                                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Informasi Jadwal Ulang</p>
+                                                <p className="text-xs text-amber-800 font-medium leading-relaxed italic">"{req.notes || 'User/Admin meminta perubahan jadwal survey sesuai kesepakatan baru.'}"</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {req.notes && req.status !== 'RESCHEDULED' && (
+                                        <div className="bg-gray-50 rounded-2xl p-3 border border-gray-150">
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Catatan Pemesan</p>
+                                            <p className="text-sm text-gray-700 italic">"{req.notes}"</p>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex flex-col gap-2.5 md:w-52 shrink-0 border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-6 relative z-10">
+                                    {agentTab === 'pending' && (
+                                        <div className="flex flex-col gap-2">
+                                            <button 
+                                                onClick={async () => {
+                                                    if (verificationStatus !== 'verified') {
+                                                        alert('Akun Anda belum terverifikasi. Silahkan lengkapi identitas di menu Profil.');
+                                                        onMenuChange('profile');
+                                                        return;
+                                                    }
+                                                    if (window.confirm('Terima tugas survey ini?')) {
+                                                        try {
+                                                            setIsSubmitting(true);
+                                                            await updateSurveyRequest(req.id, { 
+                                                                status: 'AGENT_ASSIGNED',
+                                                                agent_name: user?.name || user?.displayName || 'Surveyor RuangSinggah',
+                                                                agent_phone: user?.phone || user?.phoneNumber || '',
+                                                                agent_photo_url: user?.photo_url || user?.photoURL || ''
+                                                            });
+                                                            await notifySurveyStatusUpdate(req.id, 'AGENT_ASSIGNED');
+                                                            alert('Pesanan Diterima! Tugas kini ada di tab Aktif.');
+                                                            await loadSurveyRequests(true);
+                                                            setAgentTab('active');
+                                                        } catch (error) {
+                                                            alert('Gagal menerima tugas.');
+                                                        } finally {
+                                                            setIsSubmitting(false);
+                                                        }
+                                                    }
+                                                }} 
+                                                disabled={isSubmitting}
+                                                className={`w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all ${
+                                                    verificationStatus === 'verified' && !isSubmitting
+                                                    ? 'bg-orange-600 hover:bg-orange-700 text-white' 
+                                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                                }`}
+                                            >
+                                                {isSubmitting ? 'Memproses...' : 'Terima Tugas'}
+                                            </button>
+                                            <button 
+                                                onClick={async () => {
+                                                    if (window.confirm('Yakin ingin menolak tugas ini? Tugas akan dikembalikan ke Admin untuk ditugaskan ulang.')) {
+                                                        try {
+                                                            setIsSubmitting(true);
+                                                            await updateSurveyRequest(req.id, { 
+                                                                assigned_agent_id: null,
+                                                                agent_name: '',
+                                                                agent_phone: ''
+                                                            } as any);
+                                                            alert('Tugas Ditolak.');
+                                                            await loadSurveyRequests(true);
+                                                        } catch (error) {
+                                                            alert('Gagal menolak tugas.');
+                                                        } finally {
+                                                            setIsSubmitting(false);
+                                                        }
+                                                    }
+                                                }} 
+                                                disabled={isSubmitting}
+                                                className="w-full bg-red-50 hover:bg-red-500 text-red-600 hover:text-white border border-red-200 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all"
+                                            >
+                                                Tolak
+                                            </button>
+                                        </div>
+                                    )}
+                                    
+                                    {agentTab === 'active' && (
+                                        <>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <button 
+                                                    onClick={async () => {
+                                                        try {
+                                                            setIsSubmitting(true);
+                                                            await updateSurveyRequest(req.id, { status: 'HEADING_TO_LOCATION' });
+                                                            await notifySurveyStatusUpdate(req.id, 'HEADING_TO_LOCATION');
+                                                            await loadSurveyRequests(true);
+                                                        } catch (e) {
+                                                            alert('Gagal update status');
+                                                        } finally {
+                                                            setIsSubmitting(false);
+                                                        }
+                                                    }}
+                                                    disabled={isSubmitting || req.status === 'HEADING_TO_LOCATION' || req.status === 'SURVEYING' || req.status === 'COMPLETED'}
+                                                    className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-tight shadow-sm transition-all border-b-4 active:border-b-0 active:translate-y-1 ${
+                                                        req.status === 'HEADING_TO_LOCATION' || req.status === 'SURVEYING' || req.status === 'COMPLETED'
+                                                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                                        : 'bg-orange-600 hover:bg-orange-700 text-white border-orange-800'
+                                                    }`}
+                                                >
+                                                    🚗 {req.status === 'HEADING_TO_LOCATION' || req.status === 'SURVEYING' || req.status === 'COMPLETED' ? 'Sudah OTW' : 'Menuju Lokasi'}
+                                                </button>
+                                                <button 
+                                                    onClick={async () => {
+                                                        try {
+                                                            setIsSubmitting(true);
+                                                            await updateSurveyRequest(req.id, { status: 'SURVEYING' });
+                                                            await notifySurveyStatusUpdate(req.id, 'SURVEYING');
+                                                            await loadSurveyRequests(true);
+                                                        } catch (e) {
+                                                            alert('Gagal update status');
+                                                        } finally {
+                                                            setIsSubmitting(false);
+                                                        }
+                                                    }}
+                                                    disabled={isSubmitting || req.status !== 'HEADING_TO_LOCATION'}
+                                                    className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-tight shadow-sm transition-all border-b-4 active:border-b-0 active:translate-y-1 ${
+                                                        req.status === 'HEADING_TO_LOCATION'
+                                                        ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-700'
+                                                        : req.status === 'SURVEYING' || req.status === 'COMPLETED'
+                                                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                                        : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                                    }`}
+                                                >
+                                                    📷 {req.status === 'SURVEYING' || req.status === 'COMPLETED' ? 'Sedang Survey' : 'Sedang Survey'}
+                                                </button>
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-2 gap-2 mt-1">
+                                                <button onClick={() => window.open(`https://wa.me/${req.user?.phone}?text=${encodeURIComponent(`Halo ${req.user?.name}, saya Arif agen survey RuangSinggah.`)}`, '_blank')} className="bg-green-50 hover:bg-green-500 text-green-600 hover:text-white border border-green-200 py-2.5 rounded-xl text-[10px] font-bold transition-all flex justify-center items-center gap-1">
+                                                    💬 Chat User
+                                                </button>
+                                                <button onClick={() => window.open(`https://wa.me/${req.owner_phone}?text=${encodeURIComponent(`Halo Pemilik Kost, saya Arif agen survey RuangSinggah.`)}`, '_blank')} className="bg-orange-50 hover:bg-orange-500 text-orange-600 hover:text-white border border-orange-200 py-2.5 rounded-xl text-[10px] font-bold transition-all flex justify-center items-center gap-1">
+                                                    🏢 Chat Pemilik
+                                                </button>
+                                            </div>
+
+                                            {req.result_drive_link && (
+                                                <button 
+                                                    onClick={() => window.open(req.result_drive_link, '_blank')} 
+                                                    className="w-full bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all mt-1"
+                                                >
+                                                    📁 Buka Folder Drive (Upload)
+                                                </button>
+                                            )}
+
+                                            <button 
+                                                onClick={() => {
+                                                    setIsReschedulingSurvey(req);
+                                                    setNewSurveyDate(req.survey_date || '');
+                                                    setNewSurveyTime(req.survey_time || '');
+                                                    setRescheduleReason(req.notes && req.status === 'RESCHEDULED' ? req.notes : '');
+                                                }} 
+                                                className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                                            >
+                                                📅 Jadwal Ulang
+                                            </button>
+
+                                            <button 
+                                                onClick={() => openSurveyEditor(req, 'COMPLETED')} 
+                                                className="w-full bg-orange-600 hover:bg-orange-700 text-white py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-md animate-pulse active:scale-95 transition-all flex justify-center items-center gap-2"
+                                            >
+                                                📝 Buat Laporan
+                                            </button>
+                                        </>
+                                    )}
+
+                                    {agentTab === 'history' && (
+                                        <>
+                                            <button 
+                                                onClick={() => openSurveyEditor(req, req.status)} 
+                                                className="w-full bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex justify-center items-center gap-2"
+                                            >
+                                                {req.evaluation_summary?.room_facilities ? '✅ Lihat Laporan' : '📝 Detail Progress'}
+                                            </button>
+
+                                            <div className="mt-3 bg-orange-50/50 rounded-2xl p-4 border border-orange-100 flex flex-col gap-2">
+                                                <div className="flex justify-between items-center">
+                                                    <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Rating & Feedback User</p>
+                                                    {req.user_rating ? (
+                                                        <div className="flex text-yellow-500 text-[10px]">
+                                                            {[...Array(5)].map((_, i) => (
+                                                                <span key={i}>{i < (req.user_rating || 0) ? '★' : '☆'}</span>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-[9px] font-bold text-gray-400 italic">Belum ada rating</span>
+                                                    )}
+                                                </div>
+                                                <p className={`text-xs italic font-medium leading-relaxed ${req.user_comment ? 'text-gray-700' : 'text-gray-400'}`}>
+                                                    {req.user_comment ? `"${req.user_comment}"` : 'User belum memberikan ulasan.'}
+                                                </p>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
+
                     {filteredRequests.length === 0 && (
                         <div className="bg-gray-50 rounded-[2.5rem] p-12 text-center border-2 border-dashed border-gray-200">
                             <p className="text-gray-500 font-bold">Belum ada tugas di tab ini.</p>
