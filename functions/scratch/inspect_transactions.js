@@ -15,14 +15,21 @@ envContent.split('\n').forEach(line => {
 const supabase = createClient(envVars.SUPABASE_URL, envVars.SUPABASE_SERVICE_ROLE_KEY);
 
 async function inspect() {
-    const { data: trx, error: errTrx } = await supabase
-        .from('transactions')
+    console.log("=== MITRA KOSTMANAGER DETAILS ===");
+    const { data: prop, error } = await supabase
+        .from('mitra_kostmanager')
         .select('*')
-        .eq('id', 'e5b905f0-90bf-4044-a80c-f576b12c9530')
+        .eq('property_id', '67f062a8-b5a5-4adb-bd40-928e6e8d9ee6')
         .maybeSingle();
-
-    console.log("Transaction:", trx);
-    console.log("Error:", errTrx);
+    
+    if (error) {
+        console.error(error);
+    } else {
+        console.log("Found in mitra_kostmanager:");
+        console.log("Property ID: 67f062a8-b5a5-4adb-bd40-928e6e8d9ee6");
+        console.log("Title:", prop?.title);
+        console.log("Location / Coordinates:", prop?.location);
+    }
 }
 
 inspect();

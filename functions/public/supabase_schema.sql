@@ -940,9 +940,11 @@ ALTER TABLE public.survey_requests REPLICA IDENTITY FULL;
 ALTER TABLE public.survey_requests ENABLE ROW LEVEL SECURITY;
 
 -- POLICIES
-CREATE POLICY "surveys_select_own" ON public.survey_requests FOR SELECT USING (auth.uid() = user_id OR auth.uid() = assigned_agent_id OR public.is_admin());
+DROP POLICY IF EXISTS "surveys_select_own" ON public.survey_requests;
+CREATE POLICY "surveys_select_own" ON public.survey_requests FOR SELECT USING (auth.uid() = user_id OR auth.uid() = assigned_agent_id OR assigned_agent_id IS NULL OR public.is_admin());
 CREATE POLICY "surveys_insert_own" ON public.survey_requests FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "surveys_update_agent" ON public.survey_requests FOR UPDATE USING (auth.uid() = assigned_agent_id OR public.is_admin());
+DROP POLICY IF EXISTS "surveys_update_agent" ON public.survey_requests;
+CREATE POLICY "surveys_update_agent" ON public.survey_requests FOR UPDATE USING (auth.uid() = assigned_agent_id OR assigned_agent_id IS NULL OR public.is_admin());
 CREATE POLICY "surveys_admin_all" ON public.survey_requests FOR ALL USING (public.is_admin());
 
 -- AKTIFKAN REALTIME

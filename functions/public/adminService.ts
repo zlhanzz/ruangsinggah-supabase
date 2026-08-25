@@ -492,7 +492,7 @@ export async function getResidentStatus(filters?: { ownerUid?: string; userId?: 
     const trxIds = [...new Set(residents.map(r => r.last_transaction_id).filter(Boolean))];
 
     const [usersRes, propsRes, trxsRes] = await Promise.all([
-        supabase.from('users').select('id, full_name, photo_url, phone').in('id', userIds),
+        supabase.from('users').select('id, name, full_name, photo_url, phone, occupation, institution, city, address, email').in('id', userIds),
         supabase.from('properties').select('id, title, address, city, area, image_urls, location, price, room_types, additional_fee_name, additional_fee_price').in('id', propertyIds),
         supabase.from('transactions').select('id, amount, status, payment_method, pakasir_order_id, metadata, product_type').in('id', trxIds.filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)))
     ]);
@@ -812,9 +812,37 @@ export async function syncResidentStatus(transactionId: string, metadataOverride
             processed_transactions: Array.from(new Set([...processedTrx, transactionId]))
         };
 
+        // --- RESOLVE RELATIONAL ROOM_ID ---
+        let roomId: string | null = existing?.room_id || null;
+        if (kostId && !roomId) {
+            const targetRoomNumber = meta.roomNumber || meta.room_number || meta.roomName || null;
+            if (targetRoomNumber) {
+                const { data: matchedRoom } = await supabase
+                    .from('rooms')
+                    .select('id')
+                    .eq('property_id', kostId)
+                    .eq('room_number', String(targetRoomNumber).trim())
+                    .maybeSingle();
+                if (matchedRoom?.id) roomId = matchedRoom.id;
+            }
+
+            if (!roomId && roomType && roomType !== '-') {
+                const { data: matchedRooms } = await supabase
+                    .from('rooms')
+                    .select('id, status')
+                    .eq('property_id', kostId)
+                    .eq('room_type_name', roomType);
+                if (matchedRooms && matchedRooms.length > 0) {
+                    const availableRoom = matchedRooms.find(r => r.status === 'available') || matchedRooms[0];
+                    roomId = availableRoom.id;
+                }
+            }
+        }
+
         const payload: any = {
             user_id: userId,
             kost_id: kostId,
+            room_id: roomId,
             room_type: roomType !== '-' ? roomType : (existing?.room_type || roomType),
             start_date: startDate,
             end_date: endDate,
@@ -849,6 +877,14 @@ export async function syncResidentStatus(transactionId: string, metadataOverride
 
         if (syncError) throw syncError;
 
+        // Update room status to occupied in the rooms table
+        if (!isFacilityOnly && roomId) {
+            await supabase
+                .from('rooms')
+                .update({ status: 'occupied' })
+                .eq('id', roomId);
+        }
+
         const { data: activeRes } = await supabase.from('resident_status').select('id').eq('user_id', userId).eq('kost_id', kostId).eq('status', 'ACTIVE').order('created_at', { ascending: false }).limit(1).single();
         if (activeRes?.id) {
             await supabase.from('transactions').update({ resident_status_id: activeRes.id }).or(`id.eq.${transactionId},metadata->>parent_order_id.eq.${transactionId}`);
@@ -857,6 +893,59 @@ export async function syncResidentStatus(transactionId: string, metadataOverride
         console.error("SYNC_RESIDENT_ERROR:", err);
     }
 }
+
+/**
+ * syncPropertyRooms: Synchronizes rooms from JSONB properties.room_types to public.rooms table.
+ */
+export async function syncPropertyRooms(propertyId: string): Promise<void> {
+    try {
+        console.log(`[SYNC_ROOMS] Starting room sync for property ${propertyId}`);
+        const { data: prop, error: fetchErr } = await supabase
+            .from('properties')
+            .select('id, room_types')
+            .eq('id', propertyId)
+            .maybeSingle();
+
+        if (fetchErr || !prop) {
+            console.error(`[SYNC_ROOMS] Property not found or query error:`, fetchErr);
+            return;
+        }
+
+        const roomTypes = Array.isArray(prop.room_types) ? prop.room_types : [];
+        if (roomTypes.length === 0) {
+            console.log(`[SYNC_ROOMS] Property has no room_types defined.`);
+            return;
+        }
+
+        const roomsPayload = roomTypes.map((room: any, idx: number) => {
+            const roomNumber = String(room.name || room.roomNumber || room.room_number || `Kamar ${idx + 1}`).trim();
+            const isOccupied = room.is_occupied === true || room.status === 'terisi';
+
+            return {
+                property_id: propertyId,
+                room_number: roomNumber,
+                room_type_name: room.room_type_name || room.type || 'Standard',
+                price_per_month: Number(room.price || room.price_per_month) || 0,
+                status: isOccupied ? 'occupied' : 'available',
+                updated_at: new Date().toISOString()
+            };
+        });
+
+        console.log(`[SYNC_ROOMS] Performing upsert for ${roomsPayload.length} rooms...`);
+        const { error: upsertErr } = await supabase
+            .from('rooms')
+            .upsert(roomsPayload, { onConflict: 'property_id,room_number' });
+
+        if (upsertErr) {
+            console.error(`[SYNC_ROOMS] Error upserting rooms:`, upsertErr.message);
+        } else {
+            console.log(`[SYNC_ROOMS] Successfully synced rooms.`);
+        }
+    } catch (err) {
+        console.error(`[SYNC_ROOMS] Fatal error during sync:`, err);
+    }
+}
+
 
 /**
  * Generates a valid UUID v4 string deterministically based on transactionId and index.
@@ -956,6 +1045,13 @@ export async function syncSurveyRequest(transactionId: string, transactionOverri
             const targetId = generateDeterministicUuid(transactionId, i);
             // Match by deterministic ID first, fallback to index
             const existing = sortedExisting.find(r => r.id === targetId) || sortedExisting[i] || null;
+
+            // Jika transaksi sudah memiliki record terproses (bukan AWAITING_PAYMENT), jangan buat record PENDING_ASSIGNMENT baru
+            const hasProcessedRecord = sortedExisting.some(r => r.status && r.status !== 'AWAITING_PAYMENT');
+            if (!existing && hasProcessedRecord) {
+                console.log(`SYNC_SURVEY: [DEBUG] Skipping insert. Transaction ${transactionId} already has processed survey record(s).`);
+                continue;
+            }
 
             let targetStatus = 'AWAITING_PAYMENT';
             if (existing && existing.status) {
@@ -1125,13 +1221,9 @@ export async function syncKostManagerRequest(transactionId: string, transactionO
 
         // Sync to survey_requests and mark property/mitra as managed if PAID
         if (isPaid) {
-            // 1. If an existing property was selected, link it
+            // 1. If an existing property was selected, link it (is_managed will be set to true when admin activates Auto-Pilot)
             if (meta.propertyId) {
-                console.log(`SYNC_KOSTMANAGER: [DEBUG] Setting is_managed = true for existing property: ${meta.propertyId}`);
-                await supabase
-                    .from('properties')
-                    .update({ is_managed: true })
-                    .eq('id', meta.propertyId);
+                console.log(`SYNC_KOSTMANAGER: [DEBUG] Existing property linked: ${meta.propertyId}. (Will set is_managed = true upon Auto-Pilot activation)`);
             }
             
             // 2. Set subscription_status to 'kostmanager' in the mitra table for the owner
@@ -2239,6 +2331,114 @@ export async function generateManualDriveFolder(surveyId: string): Promise<strin
     return `https://drive.google.com/drive/folders/mock-${surveyId.slice(0, 8)}`;
 }
 
+/**
+ * repairSurveyRequestStatuses: Memulihkan status dan konsolidasi data evaluation_summary survei terdahulu di Supabase.
+ */
+export async function repairSurveyRequestStatuses() {
+  try {
+    const { data: requests } = await supabase
+      .from('survey_requests')
+      .select(`
+        id, transaction_id, status, result_drive_link, evaluation_summary, agent_name, agent_phone, assigned_agent_id, survey_date, created_at, owner_phone,
+        transaction:transaction_id ( metadata )
+      `);
+
+    if (!requests || requests.length === 0) return;
+
+    const grouped = new Map<string, any[]>();
+    for (const r of requests) {
+      if (!r.transaction_id) continue;
+      const list = grouped.get(r.transaction_id) || [];
+      list.push(r);
+      grouped.set(r.transaction_id, list);
+    }
+
+    const todayStr = getCurrentDate().toISOString().split('T')[0];
+
+    for (const [, list] of grouped.entries()) {
+      let bestSummary: any = null;
+      let bestDrive: string | null = null;
+      let bestAgentId: string | null = null;
+      let bestAgentName: string | null = null;
+      let bestAgentPhone: string | null = null;
+      let isProcessed = false;
+
+      for (const r of list) {
+        let summaryObj = r.evaluation_summary;
+        if (typeof summaryObj === 'string') {
+          try { summaryObj = JSON.parse(summaryObj); } catch (e) { summaryObj = null; }
+        }
+
+        // Cek fallback di transaction metadata
+        if ((!summaryObj || Object.keys(summaryObj).length === 0) && r.transaction?.metadata) {
+          const meta = r.transaction.metadata;
+          summaryObj = meta.evaluation_summary || meta.surveyForm || meta.surveyResult || null;
+        }
+
+        if (summaryObj && typeof summaryObj === 'object' && Object.keys(summaryObj).length > 0) {
+          if (!bestSummary || Object.keys(summaryObj).length > Object.keys(bestSummary).length) {
+            bestSummary = summaryObj;
+          }
+        }
+
+        if (r.result_drive_link && r.result_drive_link.trim() !== '') {
+          bestDrive = r.result_drive_link;
+        }
+        if (r.assigned_agent_id) {
+          bestAgentId = r.assigned_agent_id;
+        }
+        if (r.agent_name && r.agent_name.trim() !== '') {
+          bestAgentName = r.agent_name;
+        }
+        if (r.agent_phone && r.agent_phone.trim() !== '') {
+          bestAgentPhone = r.agent_phone;
+        }
+
+        if (['COMPLETED', 'SUBMITTED', 'SURVEYING', 'AGENT_ASSIGNED', 'ACTIVE'].includes(r.status)) {
+          isProcessed = true;
+        }
+      }
+
+      const hasEvidence = bestSummary || bestDrive || bestAgentId || bestAgentName || isProcessed;
+
+      // Pilih 1 primary row untuk dipertahankan (utamakan row yang memiliki evaluation_summary atau agent)
+      const primaryRow = list.find(r => 
+        (r.evaluation_summary && typeof r.evaluation_summary === 'object' && Object.keys(r.evaluation_summary).length > 0) || r.assigned_agent_id
+      ) || list[0];
+
+      if (hasEvidence) {
+        const sDate = primaryRow.survey_date ? String(primaryRow.survey_date).split('T')[0] : '';
+        const cDate = primaryRow.created_at ? String(primaryRow.created_at).split('T')[0] : '';
+        const isPastDate = (sDate && sDate < todayStr) || (cDate && cDate < todayStr);
+
+        const targetStatus = (isPastDate || bestSummary || bestDrive || isProcessed) ? 'COMPLETED' : 'PENDING_ASSIGNMENT';
+
+        const updatePayload: any = {
+          status: targetStatus,
+          updated_at: new Date().toISOString()
+        };
+
+        if (bestSummary) updatePayload.evaluation_summary = bestSummary;
+        if (bestDrive) updatePayload.result_drive_link = bestDrive;
+        if (bestAgentId) updatePayload.assigned_agent_id = bestAgentId;
+        if (bestAgentName) updatePayload.agent_name = bestAgentName;
+        if (bestAgentPhone) updatePayload.agent_phone = bestAgentPhone;
+
+        await supabase.from('survey_requests').update(updatePayload).eq('id', primaryRow.id);
+
+        // Hapus row duplikat lainnya untuk transaction_id ini
+        for (const r of list) {
+          if (r.id !== primaryRow.id) {
+            await supabase.from('survey_requests').delete().eq('id', r.id);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error repairing survey request statuses:", err);
+  }
+}
+
 export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
@@ -2247,13 +2447,15 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
   const isAdmin = role === 'admin';
   const isAgent = role === 'survey_agent';
 
-  // Auto-sync missing requests in background
+  // Jalankan pemulihan status survei ter-reset di Supabase
+  await repairSurveyRequestStatuses();
+
+  // Auto-sync missing requests in background (Hanya untuk Admin agar tidak mereset status/membuat duplikat untuk agen)
   if (isAdmin) {
     autoSyncAllSurveys().catch(console.error);
-  } else {
-    autoSyncAllSurveys(user.id).catch(console.error);
   }
 
+  // 1. Fetch survei biasa dari survey_requests
   let query = supabase
     .from('survey_requests')
     .select(`
@@ -2275,20 +2477,114 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
     `);
 
   if (isAgent) {
-    query = query.eq('assigned_agent_id', user.id);
+    query = query.or(`assigned_agent_id.eq.${user.id},assigned_agent_id.is.null,status.eq.PENDING_ASSIGNMENT`);
   } else if (!isAdmin) {
     // Regular user: only see their own requests
     query = query.eq('user_id', user.id);
   }
 
-  const { data, error } = await query.order('created_at', { ascending: false });
-
+  const { data: surveys, error } = await query.order('created_at', { ascending: false });
   if (error) throw error;
-  
-  // If we found zero requests and just triggered a sync, we might want to retry once or just let the next refresh handle it.
-  // For now, we return what we have.
-  
-  return (data || []) as SurveyRequest[];
+
+  const mappedSurveys = (surveys || []).map((s: any) => {
+    const isKostManager = s.notes?.includes('KostManager Onboarding') || false;
+    let summary = s.evaluation_summary;
+    if (typeof summary === 'string') {
+      try { summary = JSON.parse(summary); } catch (e) { summary = null; }
+    }
+    if ((!summary || Object.keys(summary).length === 0) && s.transaction?.metadata) {
+      summary = s.transaction.metadata.evaluation_summary || s.transaction.metadata.surveyForm || s.transaction.metadata.surveyResult || summary;
+    }
+    return {
+      ...s,
+      evaluation_summary: summary || {},
+      task_type: isKostManager ? 'kostmanager' : 'survei_biasa'
+    };
+  });
+
+  // 2. Fetch survei KostManager dari kostmanager_surveys (gabungkan dengan kostmanager_requests untuk mengambil data kost)
+  let mappedKmSurveys: any[] = [];
+  if (isAdmin || isAgent) {
+    let kmQuery = supabase
+      .from('kostmanager_surveys')
+      .select(`
+        *,
+        request:kostmanager_request_id (
+          id,
+          kost_name,
+          kost_type,
+          kost_address,
+          empty_rooms,
+          notes,
+          survey_date,
+          user:user_id (
+            name,
+            email,
+            phone,
+            photo_url
+          ),
+          transaction:transaction_id (
+            id,
+            amount,
+            status,
+            metadata,
+            created_at,
+            payment_method
+          )
+        )
+      `);
+
+    if (isAgent) {
+      kmQuery = kmQuery.or(`assigned_agent_id.eq.${user.id},assigned_agent_id.is.null,status.eq.PENDING_ASSIGNMENT`);
+    }
+
+    const { data: kmSurveys, error: kmErr } = await kmQuery.order('created_at', { ascending: false });
+    if (!kmErr && kmSurveys) {
+      mappedKmSurveys = kmSurveys.map((ks: any) => ({
+        id: ks.id,
+        task_type: 'kostmanager',
+        kostmanager_survey_id: ks.id,
+        kostmanager_request_id: ks.kostmanager_request_id,
+        assigned_agent_id: ks.assigned_agent_id,
+        status: ks.status,
+        result_drive_link: ks.result_drive_link,
+        signature_data: ks.signature_data,
+        created_at: ks.created_at,
+        updated_at: ks.updated_at,
+        // Map data dari request agar compatible dengan model SurveyRequest
+        user_id: ks.request?.user_id,
+        transaction_id: ks.request?.transaction_id,
+        kost_name: ks.request?.kost_name || 'KostManager Listing',
+        kost_address: ks.request?.kost_address || '',
+        kost_type: ks.request?.kost_type || '',
+        empty_rooms: ks.request?.empty_rooms || 0,
+        notes: ks.request?.notes || '',
+        survey_date: ks.request?.survey_date,
+        user: ks.request?.user,
+        transaction: ks.request?.transaction
+      }));
+    }
+  }
+
+  // Bersihkan duplikat record PENDING_ASSIGNMENT jika transaksi sudah memiliki record terproses (COMPLETED / SUBMITTED / DLL)
+  const processedTxIds = new Set(
+    mappedSurveys
+      .filter((s: any) => s.transaction_id && ['COMPLETED', 'SUBMITTED', 'SURVEYING', 'HEADING_TO_LOCATION', 'AGENT_ASSIGNED', 'RESCHEDULED', 'ACTIVE'].includes(s.status))
+      .map((s: any) => s.transaction_id)
+  );
+
+  const deduplicatedSurveys = mappedSurveys.filter((s: any) => {
+    if (s.transaction_id && ['PENDING_ASSIGNMENT', 'AWAITING_PAYMENT'].includes(s.status) && processedTxIds.has(s.transaction_id)) {
+      return false;
+    }
+    return true;
+  });
+
+  // Gabungkan dan urutkan berdasarkan tanggal dibuat desc (hindari duplikasi jika request KostManager sudah ada di kostmanager_surveys)
+  const kmTxIds = new Set(mappedKmSurveys.map((ks: any) => ks.transaction_id).filter(Boolean));
+  const filteredSurveys = deduplicatedSurveys.filter((s: any) => !s.transaction_id || !kmTxIds.has(s.transaction_id));
+  const allSurveys = [...filteredSurveys, ...mappedKmSurveys];
+  return allSurveys.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()) as SurveyRequest[];
 }
 
 export async function updateSurveyRequest(
@@ -2302,10 +2598,10 @@ export async function updateSurveyRequest(
   const isAdmin = role === 'admin';
   const isAgent = role === 'survey_agent';
 
-  // Regular users can update their own (for feedback/rating)
-  const { data: existing } = await supabase.from('survey_requests').select('user_id, assigned_agent_id, transaction_id').eq('id', id).single();
+  // Regular users can update their own (for feedback/rating), agents can update assigned or unassigned tasks
+  const { data: existing } = await supabase.from('survey_requests').select('user_id, assigned_agent_id, transaction_id, status').eq('id', id).single();
   
-  if (!isAdmin && user.id !== existing?.user_id && user.id !== existing?.assigned_agent_id) {
+  if (!isAdmin && user.id !== existing?.user_id && user.id !== existing?.assigned_agent_id && existing?.assigned_agent_id !== null && existing?.status !== 'PENDING_ASSIGNMENT') {
      throw new Error('Access Denied');
   }
 
@@ -2451,7 +2747,51 @@ export async function updateKostManagerRequest(
 
   if (error) throw error;
 
-  // Sync forward to survey_requests if linked to a transaction
+  // --- SYNC TO Dedicated kostmanager_surveys (Tabel Baru) ---
+  if (id) {
+    try {
+      const { data: existingKmSurvey } = await supabase
+        .from('kostmanager_surveys')
+        .select('id')
+        .eq('kostmanager_request_id', id)
+        .maybeSingle();
+
+      const kmSurveyPayload: any = {
+        kostmanager_request_id: id,
+        updated_at: new Date().toISOString()
+      };
+
+      if (updates.assigned_agent_id !== undefined) kmSurveyPayload.assigned_agent_id = updates.assigned_agent_id;
+      if (updates.result_drive_link !== undefined) kmSurveyPayload.result_drive_link = updates.result_drive_link;
+      
+      if (updates.status) {
+        if (updates.status === 'ACTIVE') kmSurveyPayload.status = 'APPROVED';
+        else if (updates.status === 'SURVEYING') kmSurveyPayload.status = 'SURVEYING';
+        else if (updates.status === 'PENDING_ONBOARDING') kmSurveyPayload.status = 'SUBMITTED';
+        else if (updates.status === 'PENDING_ASSIGNMENT') kmSurveyPayload.status = 'PENDING_ASSIGNMENT';
+        else if (updates.status === 'AGENT_ASSIGNED') kmSurveyPayload.status = 'SURVEYING';
+      }
+
+      if (existingKmSurvey) {
+        await supabase
+          .from('kostmanager_surveys')
+          .update(kmSurveyPayload)
+          .eq('id', existingKmSurvey.id);
+      } else if (updates.assigned_agent_id) {
+        // Buat baru jika ada agen yang baru ditugaskan — mulai dari PENDING_ASSIGNMENT
+        // agar agen bisa melihat di tab Permintaan dan menerimanya terlebih dahulu
+        kmSurveyPayload.status = 'PENDING_ASSIGNMENT';
+        kmSurveyPayload.assigned_agent_id = updates.assigned_agent_id;
+        await supabase
+          .from('kostmanager_surveys')
+          .insert([kmSurveyPayload]);
+      }
+    } catch (syncKmErr) {
+      console.error("Error syncing to kostmanager_surveys:", syncKmErr);
+    }
+  }
+
+  // --- BACKWARDS COMPATIBILITY SYNC TO survey_requests ---
   if (existing?.transaction_id) {
     const surveyId = generateDeterministicUuid(existing.transaction_id, 999);
     const { data: existingSurvey } = await supabase
@@ -2465,6 +2805,7 @@ export async function updateKostManagerRequest(
       if (updates.status) {
         if (updates.status === 'ACTIVE') surveyUpdates.status = 'COMPLETED';
         else if (updates.status === 'PENDING_ONBOARDING') surveyUpdates.status = 'SURVEYING';
+        else if (updates.status === 'PENDING_ASSIGNMENT') surveyUpdates.status = 'PENDING_ASSIGNMENT';
         else surveyUpdates.status = updates.status;
       }
       if (updates.assigned_agent_id !== undefined) surveyUpdates.assigned_agent_id = updates.assigned_agent_id;
@@ -2498,6 +2839,31 @@ export async function deleteKostManagerRequest(id: string): Promise<void> {
 
   if (!isAdmin) throw new Error('Access Denied');
 
+  // 1. Ambil transaction_id dari kostmanager_requests sebelum dihapus
+  //    agar kita bisa mencari survey_requests yang terhubung
+  const { data: kmReq, error: fetchErr } = await supabase
+    .from('kostmanager_requests')
+    .select('transaction_id')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (fetchErr) throw fetchErr;
+
+  // 2. Hapus survey_requests yang memiliki transaction_id yang sama
+  //    (ini yang muncul sebagai kartu di dashboard agen)
+  if (kmReq?.transaction_id) {
+    const { error: surveyDeleteErr } = await supabase
+      .from('survey_requests')
+      .delete()
+      .eq('transaction_id', kmReq.transaction_id);
+
+    if (surveyDeleteErr) {
+      console.warn('Warning: gagal hapus survey_requests terkait:', surveyDeleteErr.message);
+      // Lanjutkan tetap hapus kostmanager_requests meskipun survey_requests gagal
+    }
+  }
+
+  // 3. Hapus kostmanager_requests itu sendiri
   const { error } = await supabase
     .from('kostmanager_requests')
     .delete()
@@ -2505,6 +2871,7 @@ export async function deleteKostManagerRequest(id: string): Promise<void> {
 
   if (error) throw error;
 }
+
 
 export async function deleteSurveyRequests(ids: string[]): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();

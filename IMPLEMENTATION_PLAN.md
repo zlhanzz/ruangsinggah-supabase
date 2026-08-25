@@ -1,25 +1,34 @@
-# IMPLEMENTATION PLAN - Pendaftaran KostManager, Pelacakan GPS, Pemantauan Status Pengajuan, & Kartu Kemitraan
+# IMPLEMENTATION PLAN
+
+Dokumen ini menjelaskan rencana analisis, dampak perubahan, langkah-langkah, dan verifikasi untuk penanganan error konsol RLS, pemulihan antarmuka kustom (UI/UX) yang tereset, pembuatan peringatan peninjauan ulang untuk migrasi mitra, dan segmented switcher premium untuk pilihan kosongan.
+
+---
 
 ## 1. Analisis Masalah
-Mitra/owner yang mengajukan pendaftaran KostManager membutuhkan umpan balik status secara transparan mengenai proses pengajuannya, serta informasi tipe keanggotaan aktif mereka (Mitra Reguler vs Mitra KostManager Autopilot). Kita perlu menyediakan wadah interaktif "Status Program & Layanan" yang dapat diklik untuk menampilkan modal khusus pelacakan progres pengajuan yang sangat mendetail.
-Untuk mendukung hal tersebut di tingkat data, database Supabase harus memiliki kolom jadwal survey (`survey_date`, `survey_time`) dan catatan maps (`notes`) pada tabel `kostmanager_requests` untuk disinkronisasikan secara bi-direksional dengan tabel `survey_requests`.
+1. **Reset UI/UX Kustom**: Perubahan antarmuka kustom hilang karena berkas dasar sempat tereset kembali ke keadaan aslinya. Perlu pemulihan kronologis dari naskah perbaikan yang ada.
+2. **Error Konsol UUID "undefined"**: Row Level Security (RLS) pada tabel `properties` dan `kostmanager_requests` menghalangi query join yang dilakukan oleh agen survey, menghasilkan nilai `null` pada data transaksi dan memicu UUID `undefined` di antarmuka.
+3. **Peringatan Peninjauan Ulang Properti**: Untuk kasus migrasi properti mitra biasa lama menjadi KostManager, diperlukan pop-up instruktif yang mewajibkan agen melakukan konfirmasi ulang atas kesesuaian data lapangan sebelum masuk ke dalam form.
+4. **Segmented Switcher Premium Kosongan**: Masukan kosongan berupa checkbox standar terasa kaku dan kurang premium. Perlu diganti dengan tombol geser/segmented pill premium (Kosongan vs Furnished) yang secara dinamis me-lock fasilitas standar kamar.
+
+---
 
 ## 2. Dampak Perubahan
-1. `functions/public/pages/MitraProfile.tsx` (Penambahan state `showKmProgressModal`, kueri `mitra` table, rendering Membership Status Card yang clickable, dan implementasi popup modal ruang pelacakan progres detail)
-2. `functions/public/supabase_schema.sql` (Penambahan kolom `survey_date`, `survey_time`, dan `notes` ke tabel `kostmanager_requests`)
-3. `functions/public/adminService.ts` & `functions/src/index.ts` (Penambahan sinkronisasi bi-direksional untuk data tanggal survey, jam survey, dan catatan di `updateSurveyRequest`, `updateKostManagerRequest`, dan `syncKostManagerRequest`)
-4. `functions/public/pages/KostManagerLanding.tsx` (Autofill koordinat peta Google Maps embed, proteksi input, dan arah navigasi ke dashboard-mitra/profile setelah bayar sukses)
-5. `functions/public/components/admin/KostManagerManagement.tsx` (Visualisasi tombol lacak koordinat di Dashboard Admin)
-6. `functions/public/pages/AgentDashboard.tsx` (Tombol navigasi rute instan di Dashboard Agen)
+1. **`AgentDashboard.tsx`**: Modifikasi state modal, penambahan modal dialog peninjauan, integrasi segmented switcher pada form data kamar (baik untuk input kamar baru maupun editor kamar aktif), dan penggantian aksi tutup modal.
+2. **`KostManagerLanding.tsx`**: Pembenahan inisialisasi link maps dan koordinat default agar langsung terisi otomatis sesuai dengan pilihan properti pertama mitra.
+3. **Skema Database (RLS)**: Tambahan kueri kebijakan RLS baru untuk tabel properti dan permohonan agar agen dapat membaca draft.
+
+---
 
 ## 3. Langkah-Langkah Eksekusi
-1. **Perubahan Skema Supabase**: Ubah definisi tabel `kostmanager_requests` di berkas `supabase_schema.sql` untuk menyertakan kolom `survey_date` (DATE), `survey_time` (TIME), dan `notes` (TEXT).
-2. **Sinkronisasi Bi-direksional data**:
-   - Di `syncKostManagerRequest`: Copy data survey awal (`survey_date`, `survey_time`, dan `notes` link GPS) dari metadata transaksi ke kolom `kostmanager_requests`.
-   - Di `updateSurveyRequest` dan `updateKostManagerRequest`: Tambahkan logika sinkronisasi data tanggal, waktu, dan catatan survey agar kedua tabel selalu identik secara real-time.
-3. **Pembalutan Elemen Clickable**: Bungkus kartu "Status Program & Layanan" dengan handler `onClick` untuk mengaktifkan visibilitas modal.
-4. **Implementasi Modal Ruang Progress**: Buat dialog pop-up berisi daftar permohonan KostManager milik user. Pada tiap permohonan, tampilkan progress stepper 5 tahapan secara detail beserta info penugasan agen, rute peta GPS, dan jadwal survey.
+1. Jalankan naskah regenerasi kronologis `reapply_all_changes_chronologically.js` untuk memulihkan seluruh fitur antarmuka kustom sebelumnya.
+2. Jalankan naskah `apply_warning_popup_v7.js` untuk menyematkan dialog peninjauan ulang bermigrasi di editor.
+3. Jalankan naskah `apply_segmented_kosongan_v5.js` untuk menerapkan UI pill switcher kosongan premium di editor kamar.
+4. Validasi hasil penggabungan dan perbaiki error parsing tag penutup JSX.
+5. Lakukan uji coba build produksi menggunakan Vite untuk memastikan tidak ada kesalahan kompilasi.
+
+---
 
 ## 4. Rencana Verifikasi
-- Membuka profil mitra, mengklik kartu "Status Program & Layanan", dan menguji terbukanya modal.
-- Memastikan database schema sinkron dan build frontend sukses tanpa warning.
+1. **Kompilasi Sukses**: Memastikan command `npm run build` selesai dengan exit code 0.
+2. **RLS Policy Execution**: Memastikan kueri SQL kebijakan di `add_policy.sql` siap digunakan untuk menghilangkan kegagalan fetch di konsol browser.
+3. **Pill Switcher & Lock Logic**: Memverifikasi secara visual lock opacity (40%) dan status checked=false pada properti kasur, lemari, meja, AC, kipas, dan water heater ketika mode "Kosongan" aktif.

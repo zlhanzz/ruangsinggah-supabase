@@ -1,6 +1,36 @@
 @import "tailwindcss";
 
 @theme {
+  /* Stitch spacing tokens */
+  --spacing-margin-page: 1.5rem;
+  --spacing-stack-sm: 0.75rem;
+  --spacing-stack-md: 1.5rem;
+  --spacing-stack-lg: 2.5rem;
+  --spacing-gutter-grid: 1.5rem;
+
+  /* Stitch font sizes */
+  --text-label-bold: 0.75rem;
+  --text-label-sm: 0.65rem;
+  --text-label-lg: 0.875rem;
+  --text-body-lg: 1rem;
+  --text-body-md: 0.875rem;
+  --text-headline-md: 1.5rem;
+  --text-headline-lg: 2.25rem;
+  --text-headline-lg-mobile: 1.875rem;
+
+  /* Stitch font weights */
+  --font-weight-label-bold: 700;
+  --font-weight-label-sm: 700;
+  --font-weight-label-lg: 700;
+  --font-weight-body-lg: 700;
+  --font-weight-body-md: 500;
+  --font-weight-headline-md: 800;
+  --font-weight-headline-lg: 900;
+  --font-weight-headline-lg-mobile: 900;
+
+  /* Stitch float shadow */
+  --shadow-soft-float: 0 4px 20px -2px rgba(11, 28, 48, 0.05), 0 2px 8px -1px rgba(11, 28, 48, 0.03);
+
   --color-surface-container-low: #eff4ff;
   --color-on-secondary-fixed-variant: #264191;
   --color-inverse-surface: #213145;

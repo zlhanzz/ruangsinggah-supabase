@@ -353,18 +353,21 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                 .in('id', allOwnerIds);
             const ownerMap = new Map(owners?.map(o => [o.id, o]) || []);
 
-            // 6. Ambil properti dari pemilik-pemilik tersebut (hanya yang dikelola KostManager)
+            // 6. Ambil properti dari pemilik-pemilik tersebut
+            //    Hanya yang is_managed=true DAN sudah published (bukan draft)
+            //    Properti draft = pendataan agen belum diapprove admin, belum boleh masuk portal
             const { data: props, error: pErr } = await supabase
                 .from('properties')
                 .select('*')
                 .in('owner_uid', allOwnerIds)
-                .eq('is_managed', true);
+                .eq('is_managed', true)
+                .neq('status', 'draft');
 
             if (pErr) throw pErr;
 
             // 5. Ambil data resident_status (semua penyewa)
             const allResidents = await getResidentStatus();
-            // Filter hanya penyewa di properti KostManager
+            // Filter hanya penyewa di properti KostManager yang sudah published (non-draft)
             const managedPropIds = props?.map(p => p.id) || [];
             const managedResidents = (allResidents || []).filter((r: any) => managedPropIds.includes(r.kost_id));
 
@@ -410,10 +413,22 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
 
             // 6. Ambil tagihan manual (filter kategori sewa)
             const allInvoices = await getManualInvoices();
-            const rentInvoices = (allInvoices || []).filter((inv: any) => 
-                inv.category === 'sewa' && 
-                (managedPropIds.length === 0 || mappedProperties.some(p => p.title?.toLowerCase() === inv.kost_name?.toLowerCase() || p.address?.toLowerCase()?.includes(inv.recipient_address?.toLowerCase())))
-            );
+            // PERBAIKAN: Jika belum ada properti terkelola (published), jangan tampilkan tagihan apapun.
+            // Sebelumnya: (managedPropIds.length === 0 || ...) → saat length=0, kondisi TRUE → SEMUA tagihan tampil
+            // Sekarang: wajib cocok dengan property_id atau kost_name dari properti yang benar-benar terkelola
+            const rentInvoices = managedPropIds.length === 0 ? [] : (allInvoices || []).filter((inv: any) => {
+                if (inv.category !== 'sewa') return false;
+                // Prioritas 1: Cocokkan via kost_id (field langsung, paling akurat)
+                if (inv.kost_id && managedPropIds.includes(inv.kost_id)) return true;
+                // Prioritas 2: Cocokkan via judul properti (exact match, bukan partial)
+                if (inv.kost_name) {
+                    return mappedProperties.some(p =>
+                        p.title?.toLowerCase().trim() === inv.kost_name?.toLowerCase().trim()
+                    );
+                }
+                return false;
+            });
+
 
             setProperties(mappedProperties);
             setTenants(managedResidents);

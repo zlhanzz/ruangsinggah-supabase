@@ -378,6 +378,11 @@ const SurveyManagement: React.FC<SurveyManagementProps> = ({
     };
 
     const filteredRequests = surveyRequests.filter(r => {
+        // Jangan tampilkan survei tipe kostmanager di panel admin Jasa Survey komersil biasa
+        if (isAdmin && r.task_type === 'kostmanager') {
+            return false;
+        }
+
         if (isAdmin) {
             if (adminSurveyTab === 'all') return true;
             if (adminSurveyTab === 'pending') return r.status === 'PENDING_ASSIGNMENT';

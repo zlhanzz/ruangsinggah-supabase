@@ -1870,7 +1870,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
         setLoading(true);
         try {
             const data = await getAdminTransactions();
-            const srvTrx = data.filter(t => t.product_type === 'survey' || Number(t.amount) === 70000);
+            const srvTrx = data.filter(t => 
+                (t.product_type === 'survey' || Number(t.amount) === 70000) && 
+                t.product_type !== 'kostmanager' && 
+                t.product_type !== 'kostmanager_subscription'
+            );
             setSurveyTransactions(srvTrx);
         } catch (error) {
             console.error("Gagal memuat transaksi survey", error);

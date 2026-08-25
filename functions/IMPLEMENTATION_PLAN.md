@@ -1,32 +1,24 @@
-# IMPLEMENTATION PLAN — Restorasi UI/UX & Fungsi Input KostManager di Dashboard Agen (Survey Field App)
+# IMPLEMENTATION PLAN - Penyelarasan Siklus Kode & Perbaikan Auto-Prefill Data
 
-**Tanggal:** 3 Agustus 2026  
-**Fitur:** Mengubah tampilan dan alur input pendataan properti KostManager oleh Agen Survey menjadi model Multi-Step Stepper (3 Langkah) sesuai desain mockup Google Stitch.
+Dokumen ini menjelaskan rencana tindakan untuk mengatasi masalah hilangnya modifikasi kode, data jumlah kamar acuan mitra yang kosong, dan rusaknya peta preview pada Dashboard Agen dan Admin.
 
----
-
-## 1. Analisis Masalah / Tujuan
-Saat ini, pengisian data properti & kamar oleh Agen Survey menggunakan tab standard (Info Properti & Kamar). Desain baru membagi pengisian menjadi 3 langkah berurutan agar lebih terstruktur untuk surveyor lapangan:
-1. **Langkah 1 (Properti):** Nama properti, tipe kos (Putra/Putri/Campur), alamat lengkap, koordinat GPS presisi, checkbox fasilitas umum (WiFi, Dapur, Parkir, Ruang Tamu, CCTV, Laundry) dengan fitur "+ Tambah Fasilitas", dokumentasi foto area umum (Depan, Koridor, Area Umum, Lingkungan), fasilitas & landmark terdekat (terintegrasi GPS), dan peraturan kos.
-2. **Langkah 2 (Data Kamar):** Pengisian detail tipe kamar (nama, ukuran, harga, jumlah kamar, kapasitas, fasilitas, foto kamar).
-3. **Langkah 3 (Review):** Pratinjau seluruh data sebelum disimpan dan dikirim.
-
----
+## 1. Analisis Masalah
+* **Masalah 1 (Reset Kode)**: File `KostManagerManagement.tsx` di Admin Dashboard tidak dibersihkan di awal skrip `reapply_all_changes_chronologically.js`.
+* **Masalah 2 (Admin Review Gagal)**: Skrip `add_admin_review_kostmanager.js` mencari string `onClick={async () => {` sedangkan aslinya adalah sinkron `onClick={() => {`. Hal ini menyebabkan pencarian gagal dan fitur Kelola/Review Admin hilang saat build.
+* **Masalah 3 (Prefill Kamar & GPS Kosong)**: Logika pre-fill jumlah kamar acuan awal (`initialTotalRooms`) dan koordinat peta (`initialCoords`) tidak terdaftar untuk dijalankan secara otomatis saat rebuild.
 
 ## 2. Dampak Perubahan
-File yang akan diubah:
-* `functions/public/pages/AgentDashboard.tsx`
-  - Memperbarui state `kmListingForm` untuk menyimpan data baru seperti `rules` (array), `image_urls` (array), `campuses` (array), `facilities` (array).
-  - Menambahkan state `kmStep` (number: 1, 2, 3) untuk navigasi stepper.
-  - Mengubah render modal `{isEditingKostManager && (...)}` agar menggunakan UI layout dari mockup Stitch (termasuk skema warna, ikon Material Symbols, layout grid, tombol navigasi bawah "Simpan Draft" & "Lanjut ke Step 2/3").
-  - Menghubungkan fungsionalitas tombol upload foto area umum & kamar, penambahan fasilitas kustom, penambahan landmark, dan input peraturan dinamis.
+File yang tersentuh:
+* `functions/scratch/reapply_all_changes_chronologically.js` (Urutan eksekusi skrip)
+* `functions/scratch/add_admin_review_kostmanager.js` (Perbaikan pencocokan pola tombol Kelola Admin)
+* `functions/scratch/apply_gps_fixes_v2.js` (Injeksi baru untuk ekstraksi GPS & pre-fill kapasitas kamar)
 
----
+## 3. Rencana Eksekusi
+1. **Langkah 1**: Daftarkan file `KostManagerManagement.tsx` untuk di-checkout bersih ke status `git HEAD` di awal `reapply_all_changes_chronologically.js`.
+2. **Langkah 2**: Perbaiki target pencocokan tombol Kelola di skrip `add_admin_review_kostmanager.js`.
+3. **Langkah 3**: Tulis skrip `apply_gps_fixes_v2.js` untuk mengintegrasikan helper `extractCoordinates` dan data pre-fill kapasitas kamar dari registrasi.
+4. **Langkah 4**: Daftarkan skrip `apply_gps_fixes_v2.js` ke antrean reapply otomatis.
 
-## 3. Rencana Verifikasi
-1. Jalankan `npm run build` untuk memverifikasi kebersihan kode TypeScript.
-2. Buka Dashboard Agen -> Klik tombol "⚡ Isi Listing & Kamar" pada salah satu tugas KostManager.
-3. Pastikan modal baru dengan Stepper muncul.
-4. Lakukan pengisian data di Langkah 1 (coba ubah tipe kos, tambah fasilitas kustom, isi peraturan, klik tombol kunci koordinat).
-5. Lanjut ke Langkah 2, kelola data tipe kamar, lalu lanjut ke Langkah 3 untuk review.
-6. Klik "Simpan & Kirim Listing" dan pastikan data tersimpan dengan benar di tabel Supabase.
+## 5. Rencana Verifikasi
+* Jalankan `reapply_all_changes_chronologically.js` dan pastikan status output `ALL SCRIPTS APPLIED SUCCESSFULLY!`.
+* Jalankan `npm run build` di folder `functions/public` untuk memastikan kompilasi bundle sukses tanpa error.

@@ -2,6 +2,239 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 29. Sinkronisasi Siklus Pembangunan Ulang (Anti-Reset) & Perbaikan Review Admin (Agustus 2026)
+- **Masalah**: Setiap kali skrip pembangun ulang `reapply_all_changes_chronologically.js` dijalankan, perubahan di luar `AgentDashboard.tsx` ter-reset. Selain itu, fitur detail kelola properti di Admin Dashboard (`KostManagerManagement.tsx`) selalu gagal terinjeksi karena skrip pencari salah mencocokkan pola `onClick={async () => {` padahal aslinya fungsi sinkron biasa.
+- **Perbaikan**:
+  * Memperbarui `reapply_all_changes_chronologically.js` agar secara otomatis membersihkan (`git checkout HEAD`) file `KostManagerManagement.tsx` di awal proses untuk mencegah modifikasi bertumpuk.
+  * Memperbaiki pencocokan regex di `add_admin_review_kostmanager.js` agar sesuai dengan format signature `onClick={() => {` yang asli, sehingga fitur logging dan review properti kelolaan KostManager di Admin Dashboard berhasil diinjeksi 100%.
+
+### 28. Penyelarasan GPS Ekstraktor & Prefill Kamar (Agustus 2026)
+- **Masalah**: Jumlah kamar acuan awal (`initialTotalRooms`) dan koordinat awal (`initialCoords`) tidak otomatis ter-prefill dari metadata transaksi atau catatan registrasi mitra karena skrip `apply_gps_fixes.js` sebelumnya tidak terdaftar di daftar run otomatis.
+- **Perbaikan**:
+  * Menulis skrip `apply_gps_fixes_v2.js` dengan regex yang lebih fleksibel dan mencocokkan UUID guard terbaru.
+  * Memastikan draft loader di local storage tidak melakukan `return` secara instan, melainkan menggabungkannya sehingga database dapat meng-override dengan data ter-update.
+  * Mendaftarkan skrip `apply_gps_fixes_v2.js` ke daftar eksekusi akhir `reapply_all_changes_chronologically.js`.
+
+
+### 27. Perbaikan ReferenceError: isExistingPropertyMigration + UUID Guard (Agustus 2026)
+- **Masalah 1**: State variables `isExistingPropertyMigration` dan `warningAccepted` tidak dideklarasikan karena script injeksi sebelumnya gagal menemukan target pola di file yang sudah dimodifikasi.
+- **Masalah 2**: Error `invalid input syntax for type uuid: "undefined"` muncul di console saat agen membuka form pendataan, karena `propertyId` dari `transactions.metadata` bisa berisi string non-UUID atau `undefined`.
+- **Perbaikan**:
+  * Membuat script baru `fix_missing_states_and_uuid.js` yang mendeklarasikan state `const [isExistingPropertyMigration, setIsExistingPropertyMigration] = useState(false)` dan `const [warningAccepted, setWarningAccepted] = useState(false)` setelah state `kmActiveTab`.
+  * Menambahkan validasi format UUID (`/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i`) sebelum nilai `propertyId` dari metadata transaksi digunakan untuk query ke Supabase.
+  * Menambahkan `setIsExistingPropertyMigration(true)` saat `existingProp` berhasil ditemukan di tabel `properties`.
+  * Script ini sudah ditambahkan ke `reapply_all_changes_chronologically.js` sehingga selalu dijalankan ulang saat regenerasi.
+
+### 26. Refactor Warning Popup: Dari Ternary JSX ke Absolute Overlay (Agustus 2026)
+- **Masalah**: Pendekatan ternary JSX (`? : (`) untuk menampilkan popup peringatan migrasi properti menyebabkan ketidakseimbangan closing tags (`</div>` dan `)}`) yang tidak bisa dikompilasi oleh esbuild.
+- **Perbaikan**:
+  * Mengganti pendekatan ternary dengan **absolute overlay** (`position: absolute, inset-0, z-50`) yang dirender di *dalam* content div `bg-[#f8f9ff]`, sehingga tidak mempengaruhi struktur closing tags sama sekali.
+  * Overlay muncul di atas seluruh konten form menggunakan `backdrop-blur-sm` untuk efek premium.
+  * Script baru: `add_warning_overlay.js` menggantikan `inject_warning_popup_inline.js` yang bermasalah.
+  * Build berhasil: `Dashboard-BZua4NmM.js` (817.55 kB) dikompilasi tanpa error.
+
+### 25. Panel Kontrol Eksklusif "Kosongan vs Furnished" dengan Visual Menarik & Dinamis (Agustus 2026)
+- **Masalah**: Centang "Kosongan" di tengah-tengah fasilitas lain terlihat kaku dan kurang mencerminkan alur pendataan modern.
+- **Perbaikan**:
+  * Mengganti checkbox "Kosongan" dengan **Segmented Pill Switcher (Pill Toggle)** yang diletakkan di bagian atas panel fasilitas kamar (berupa pilihan **[Kosongan]** vs **[Furnished (Isian)]**).
+  * Menampilkan visualisasi canggih: Ketika opsi **[Kosongan]** aktif, semua checkbox fasilitas perabot fisik (Kasur, Lemari, Meja Belajar, AC, Kipas Angin, Water Heater) secara dinamis berubah menjadi **setengah transparan (low opacity - 40%)** dan **dinonaktifkan (disabled / pointer-events-none)**.
+  * Memungkinkan input tata letak struktural (Kamar Mandi Dalam, Jendela Luar, Dapur Dalam) tetap dapat diisi meskipun status kamar adalah Kosongan.
+  * Menjaga kompatibilitas data dengan Supabase: status "Kosongan (Tanpa Perabot)" tetap tersimpan dengan format array yang sama agar terintegrasi sempurna dengan halaman detail properti di sisi pengguna.
+
+### 24. Peringatan Kesesuaian Data Saat Agen Survey Melakukan Migrasi Properti (Agustus 2026)
+- **Masalah**: Saat pendataan properti yang sebelumnya terdaftar sebagai Mitra biasa (migrasi) diaktifkan, data-data properti lama (nama, alamat, tipe, dll.) terisi secara otomatis (*pre-filled*). Hal ini berpotensi membuat agen survey langsung melanjutkan proses tanpa meninjau kesesuaian data yang sebenarnya di lapangan.
+- **Perbaikan**:
+  * Menambahkan overlay pop-up peringatan interaktif bertema peringatan (kuning-oranye) yang memblokir layar wizard pendataan jika terdeteksi bahwa properti yang sedang diedit sudah ada di database (`existingProp` ditemukan).
+  * Meminta agen untuk mengonfirmasi peninjauan ulang data dengan mengklik tombol **"Saya Mengerti"** sebelum alur pengisian form pendataan diizinkan untuk dilanjutkan.
+  * Menyinkronkan status verifikasi peringatan agar direset setiap kali wizard ditutup atau draf baru dibuka.
+
+### 23. Ekstraksi Koordinat GPS Otomatis dari Link Google Maps (Agustus 2026)
+- **Masalah**: Preview peta OSM dan koordinat pada kartu pendataan KostManager serta inisialisasi pin lokasi pada wizard pendataan di Dashboard Agen selalu menampilkan koordinat default/fallback Makassar (`-5.147665, 119.432731`). Hal ini karena tautan Google Maps yang diinput mitra saat mendaftar tidak otomatis diterjemahkan menjadi koordinat Latitude dan Longitude.
+- **Perbaikan**:
+  * Menambahkan fungsi pembantu `extractCoordinates` menggunakan ekspresi reguler untuk mengekstrak Latitude & Longitude dari berbagai format Google Maps URL (seperti query `q=`, path `@`, daddr, maupun format koordinat mentah).
+  * Menjalankan fungsi ekstraksi ini pada berbagai field asal data pendaftaran mitra (`meta.googleMapsLink`, `meta.google_maps_url`, `req.kost_name`, dan `req.notes`).
+  * Menyinkronkan koordinat hasil ekstraksi agar langsung ter-render pada komponen peta preview kartu agen serta menjadi titik awal peta picker saat agen membuka formulir pendataan.
+
+### 22. Auto-Prefill Jumlah Kamar Berdasarkan Input Awal Mitra (Agustus 2026)
+- **Masalah**: Pada formulir pendataan KostManager di wizard step 1, kolom total jumlah kamar ter-render kosong atau bernilai default `0`. Agen survey harus mengetik ulang angka jumlah kamar secara manual meskipun mitra telah menginput jumlah kamar saat mendaftar/order layanan untuk pertama kalinya.
+- **Perbaikan**:
+  * Menambahkan pendeteksian otomatis jumlah kamar awal (`initialTotalRooms`) dari data metadata transaksi atau catatan (*notes* dari mitra) saat wizard `openKostManagerListing` diinisialisasi.
+  * Menerapkan fallback nilai otomatis ini jika properti baru dibuat atau kueri database untuk `total_rooms` bernilai kosong/0. Agen kini langsung melihat angka kamar default yang telah terisi sesuai isian mitra sebelumnya.
+
+### 21. Redesign UI/UX Kartu Pesanan Pendataan KostManager dengan Design Tokens & Stitch (Agustus 2026)
+- **Masalah**: Tampilan kartu pesanan pendataan KostManager sebelumnya di dashboard agen tidak selaras dengan mockup baru, serta memiliki elemen spacing, border line, dan penataan tanggal/jam yang kurang presisi.
+- **Perbaikan**:
+  * **Integrasi Design Tokens di CSS**: Menambahkan variabel spacing kustom (`stack-sm`, `stack-md`, `stack-lg`, `margin-page`, `gutter-grid`), typography (`label-bold`, `body-lg`, `headline-md`, dll.), dan float shadow (`shadow-soft-float`) ke dalam `@theme` di `index.css` agar sejalan dengan system token milik Stitch UI.
+  * **Header Terkalibrasi**: Tanggal dan jam pesanan dipisah menjadi badge individu yang rapi di bagian atas kartu lengkap dengan ikon `calendar_today` dan `schedule` dari Material Symbols.
+  * **Layout v2 Terpadu**: Mengubah struktur flexbox kartu agar memuat layout grid dan card-within-card Stitch dengan border line kontras.
+  * **Fungsionalitas Riil Terintegrasi**: Mengintegrasikan nominal komisi dinamis, info status terpadu dengan warna dinamis, navigasi rute GPS dengan OpenStreetMap, kontak pemilik dengan sensor WA, dan tombol-tombol alur survey (terima, tolak, OTW, pendataan, isi listing) di setiap tab dashboard agen.
+
+### 20. Perbaikan Kartu Riwayat Survey Biasa & Pendataan KostManager di Dashboard Agen (Agustus 2026)
+- **Masalah**: Pesanan survei biasa yang telah diproses/diselesaikan agen sebelumnya tidak muncul di tab Riwayat dan sempat kembali ke tab Permintaan sebagai "MENUNGGU AGEN" (`PENDING_ASSIGNMENT`). Selain itu, detail isi laporan survei (fasilitas, penilaian, bukti foto, dll.) tampak kosong saat dibuka di tab Riwayat.
+- **Root Cause**:
+  * `adminService.ts` (`getAdminSurveyRequests`): Memanggil `autoSyncAllSurveys(user.id)` pada sesi agen (non-admin). Karena sesi agen memiliki RLS terbatas, `syncSurveyRequest` gagal mendeteksi record lama dan membuat record DUPLIKAT baru berstatus `PENDING_ASSIGNMENT` untuk transaksi yang sudah diproses.
+  * `adminService.ts` (Data Terpisah): Record lama (asli) yang menyimpan data `evaluation_summary` terpisah dari record duplikat auto-sync baru yang ber-`evaluation_summary` kosong `{}`.
+  * `AgentDashboard.tsx` (`openSurveyEditor`): Terjadinya perubahan kunci ID akibat auto-sync sehingga draf lokal yang pernah tersimpan di `localStorage` pada browser agen belum terhubungkan secara otomatis.
+- **Perbaikan**:
+  * `adminService.ts`: Mengimplementasikan rutinitas konsolidasi otomatis `repairSurveyRequestStatuses()` yang menyatukan data `evaluation_summary` terlengkap, `result_drive_link`, dan informasi agen dari seluruh record per `transaction_id` ke record utama Supabase, serta mengekstrak fallback dari `transaction.metadata`.
+  * `AgentDashboard.tsx`: Menambahkan `assigned_agent_id: uid` pada payload tombol "Terima Tugas", menyertakan status `'SUBMITTED'` ke dalam filter tab `history` (`['COMPLETED', 'CANCELLED', 'ACTIVE', 'SUBMITTED']`), serta mengimplementasikan pemindaian draf bertingkat (`openSurveyEditor`) yang otomatis memindai `localStorage` browser agen untuk merekonstruksi dan menyinkronkan ulang data `evaluation_summary` yang pernah diisi ke Supabase.
+  * `supabase_schema.sql`: Memperbarui RLS policy `surveys_select_own` dan `surveys_update_agent` untuk mengizinkan `assigned_agent_id IS NULL`.
+- **Hasil**: Seluruh pesanan survei biasa terdahulu yang sempat kembali ke tab Permintaan telah **secara otomatis dipulihkan statusnya kembali ke `COMPLETED` di Supabase**, berpindah ke tab **Riwayat**, dan seluruh data laporan survei (checklist Jenis Kost, Kamar, WC, Dapur, Air, WiFi, Bintang Penilaian, Catatan, & Bukti Foto WA) **tampil dengan utuh dan lengkap**.
+
+### 19. Redesign UI/UX Kartu Pesanan KostManager Dashboard Agen (Agustus 2026)
+- **Masalah**: Tampilan kartu pesanan KostManager di `AgentDashboard.tsx` kurang optimal, menggunakan label "Onboarding Kost Madani" yang membingungkan, menampilkan input catatan/jadwal yang tidak relevan, serta memiliki ukuran text/avatar profil mitra dan tanggal/waktu yang sangat kecil dan pudar.
+- **Perbaikan UI/UX**:
+  * **Pemberian Label & Tema Khusus**: Mengubah badge header menjadi `⚡ Pendataan Kostmanager` dengan aksen tema warna Emerald/Green khas KostManager untuk membedakannya secara jelas dari survei biasa.
+  * **Profil Mitra Terbaca & Jelas**: Menampilkan avatar profil mitra 56x56 (`w-14 h-14`), label "Mitra Pemesan Kostmanager", nama mitra berukuran besar (`text-lg font-black text-gray-900`), dan nomor telepon mitra dengan badge berkontras tinggi.
+  * **Tanggal & Waktu Berkontras Tinggi**: Mengubah warna dan background badge tanggal & waktu pesanan menjadi hitam pekat (`text-gray-900 font-black`) dengan background kontras terang (`bg-emerald-100` & `bg-white` border emerald) agar sangat mudah dibaca.
+  * **Peta GPS Mini & Integrasi Navigasi**: Menambahkan preview peta GPS interaktif OpenStreetMap mini (iframe) dan tombol navigasi langsung "📍 Buka Rute GPS / Google Maps" beserta koordinat GPS lengkap.
+  * **Informasi Kamar & Properti Lengkap**: Menampilkan badge "Total Jumlah Kamar" vs "Jumlah Kamar Kosong" serta tipe kost (Putra/Putri/Campur).
+  * **Pembersihan Elemen**: Menghapus `req.notes` ("Catatan Pemesan") dan jadwal survei yang tidak dibutuhkan pada alur KostManager.
+
+### 18. Perbaikan Alur Penugasan Agen KostManager (Agustus 2026)
+- **Masalah**: Setelah admin menetapkan agen survey, kartu tugas langsung muncul di tab "Aktif" di dashboard agen, melewati tab "Permintaan".
+- **Root Cause**: `handleQuickAssignAgent` di `KostManagerManagement.tsx` meng-set status ke `AGENT_ASSIGNED` saat assign. Padahal, di `AgentDashboard.tsx`, tab "Permintaan" hanya menampilkan status `PENDING_ASSIGNMENT`.
+- **Perbaikan**:
+  * `KostManagerManagement.tsx` baris 152: Status saat admin assign agen diubah dari `AGENT_ASSIGNED` → `PENDING_ASSIGNMENT`.
+  * `adminService.ts` (`updateKostManagerRequest`): Menambahkan handling `PENDING_ASSIGNMENT` dalam sinkronisasi ke `kostmanager_surveys` (pemetaan status dan insert pertama).
+  * `adminService.ts` (`updateKostManagerRequest`): Menambahkan mapping `PENDING_ASSIGNMENT` dalam sinkronisasi backward-compatible ke `survey_requests`.
+- **Alur yang Benar Sekarang**: Admin assign → `PENDING_ASSIGNMENT` (tab "Permintaan") → Agen terima → `AGENT_ASSIGNED` (tab "Aktif") → Agen survey → `PENDING_ONBOARDING` → Admin aktivasi → `ACTIVE`.
+
+### 17. Perombakan UI/UX & Kelengkapan Informasi KostManager Admin (Agustus 2026)
+- **Reposisi Hierarki & Profil Mitra Interaktif (DIPERBAIKI)**:
+  * Memindahkan profil Mitra Pengaju ke bagian teratas badan kartu sebelum profil properti (kost) untuk hierarki informasi yang logis.
+  * Mendesain profil mitra secara minimalis dan menjadikannya dapat diklik untuk membuka Modal Detail Popup lengkap.
+  * Memperbaiki bug kegagalan query profil mitra dengan membagi query bersarang PostgREST menjadi kueri sekuensial yang aman (kueri `users` lalu kueri `mitra` secara terpisah dengan fallback dinamis) serta menyelaraskan field `business_name`.
+- **Desain Grid Kartu Premium & Peta GPS Mini**:
+  * Menggantikan tabel horizontal yang sempit dengan layout grid kartu responsif (`grid-cols-1 md:grid-cols-2 lg:grid-cols-3`) berdesain premium menggunakan Tailwind CSS.
+  * Mengintegrasikan **Iframe Google Maps Mini (interaktif)** langsung di dalam kartu pesanan jika koordinat GPS (`latitude` & `longitude`) tersedia di metadata transaksi.
+- **Kelengkapan Informasi Properti**:
+  * Menampilkan **Total Jumlah Kamar** secara dinamis yang diambil dari metadata transaksi pendaftaran (`totalRooms`), disandingkan dengan jumlah kamar kosong.
+- **Pemisahan Visibilitas Survei Jasa Survey vs KostManager (DIPERBAIKI)**:
+  * Memetakan tipe tugas (`task_type`) secara dinamis di `getAdminSurveyRequests` (`adminService.ts`). Jika kolom `notes` mengandung kata `"KostManager Onboarding"`, maka ia dideteksi sebagai `'kostmanager'`. Jika tidak, ia bertipe `'survei_biasa'`.
+  * Mengecualikan data survei bertipe `'kostmanager'` dari halaman kelola **"Layanan Jasa Survey"** (`SurveyManagement.tsx`) milik Admin.
+  * Menyaring keluar transaksi tipe `'kostmanager'` dan `'kostmanager_subscription'` dari data transaksi survei komersil di `loadSurveyTransactions` (`Dashboard.tsx`).
+- **Sistem Tab Filter Pipeline**:
+  * Menambahkan tab filter navigasi status di bagian atas halaman ("Semua permohonan", "🔴 Butuh Agen", "⚡ Proses Survey", "📥 Butuh Verifikasi", "🟢 Aktif Autopilot") lengkap dengan badge counter dinamis.
+- **Aksi Cepat Langsung di Kartu (Inline Actions)**:
+  * Mengintegrasikan dropdown select agen survey lapangan dan tombol "Tugaskan" langsung pada kartu permohonan berstatus `PENDING_ASSIGNMENT` tanpa harus membuka modal kelola.
+- **Penyederhanaan Modal Tinjauan**:
+  * Merancang ulang modal tinjauan survei agar fokus pada peninjauan data properti terelasi hasil input lapangan agen (deskripsi, koordinat GPS, fasilitas, landmark, data kamar & penyewa terdata, galeri foto kamar) serta tombol aktivasi Auto-Pilot.
+
+### 16. Perbaikan Visibilitas Properti & Filter Invoice Prematur KostManager (Agustus 2026)
+- **Pencegahan Onboarding Prematur**:
+  * Menghapus pembaruan `is_managed = true` secara otomatis di `syncKostManagerRequest` (`adminService.ts`) saat transaksi baru saja dibayar.
+  * Mengubah status `is_managed` pada properti baru/lama yang disubmit oleh agen menjadi `false` terlebih dahulu di `AgentDashboard.tsx`.
+- **Aktivasi Resmi Oleh Admin**:
+  * Mengonfigurasi tombol "Aktifkan Layanan Auto-Pilot" di `KostManagerManagement.tsx` agar mengupdate `status: 'published'` sekaligus `is_managed: true` pada tabel `properties` secara bersamaan setelah laporan survei diapprove.
+- **Hasil**: Properti yang sedang disurvei tidak akan muncul prematur di portal KostManager milik admin/mitra sebelum disetujui, dan data penghuni dummy tidak akan ter-render prematur.
+
+### 15. Alur Submit & Review KostManager (ACC Admin) (Agustus 2026)
+- **Submit oleh Agen**:
+  * Mengubah status properti awal yang disimpan menjadi `'draft'` di `AgentDashboard.tsx` (sebelumnya langsung `'published'`).
+  * Mengubah status pembaruan `survey_requests` menjadi `'SUBMITTED'` (sebelumnya langsung `'COMPLETED'`).
+  * Memperbaiki bug pada update status `kostmanager_requests` dengan mencocokkan `transaction_id` alih-alih request ID, serta turut menyimpan `property_id` agar terhubung.
+- **Review & ACC oleh Admin**:
+  * Menambahkan panel detail peninjauan (Accordion/Dropdown Preview) berisi detail data properti hasil survei (deskripsi, koordinat gps peta, fasilitas, landmark, tipe kamar beserta harga/penghuni/foto kamar) di modal kelola `KostManagerManagement.tsx`.
+  * Menyesuaikan tombol "Aktifkan Layanan Auto-Pilot" agar turut mempublikasikan properti (`status: 'published'`) dan memicu status `survey_requests` menjadi `'COMPLETED'` secara otomatis.
+
+### 14. Pemindahan Input Hunian ke Skema Tarif (Agustus 2026)
+- **Reposisi Field**:
+  * Memindahkan input "Maksimal Penghuni" dan "Biaya Tambahan / Orang" dari panel Detail Kamar ke dalam panel Skema Tarif / Harga Kamar agar tata letak lebih rapi dan relevan dengan komponen harga.
+
+### 13. Input Maksimal Penghuni & Biaya Tambahan (Agustus 2026)
+- **Maksimal Penghuni & Biaya Tambahan**:
+  * Menambahkan input "Maksimal Penghuni" (type="number") dan "Biaya Tambahan / Orang" (type="text" dengan format ribuan otomatis) di dalam panel Detail Kamar pada form temporaryRoom maupun activeRoomIdx.
+
+### 12. Pemformatan Ribuan Input Harga Sewa (Agustus 2026)
+- **Ribuan Separator Dot**:
+  * Menambahkan helper formatThousand dan parseThousand untuk memformat masukan angka desimal/bulat dengan pemisah ribuan titik (dot separator).
+  * Mengubah tipe masukan input harga skema tarif bulanan, mingguan, harian, dll. dari type="number" menjadi type="text" dengan pemformat otomatis secara langsung pada formulir.
+
+### 11. Sinkronisasi URL Routing & Auto-Save State Onboarding (Agustus 2026)
+- **Auto-Save State & Restore**:
+  * Mengintegrasikan penyimpanan draf otomatis untuk seluruh state edit onboarding (kmListingForm, kmStep, temporaryRoom, activeRoomIdx, kmActiveTab, photoCategories) ke localStorage.
+  * Menghubungkan active onboarding ke URL query parameter `?onboarding_id=[ID]`.
+  * Memulihkan secara otomatis state form onboarding yang aktif beserta detail isian draft ketika halaman dimuat ulang (refresh) tanpa kembali ke halaman tugas survei aktif.
+
+### 10. Perbaikan Nesting Sub-Input Dapur Dalam & Filter Tag (Agustus 2026)
+- **Perbaikan Peletakan & Filter**:
+  * Memperbaiki kesalahan peletakan sub-input "Dapur Dalam" agar dirender di luar blok IIFE Kamar Mandi Dalam.
+  * Memfilter "Dapur Dalam" agar tidak dirender sebagai tag kustom di bagian bawah.
+
+### 9. Fitur Sub-Fasilitas Dapur Dalam (Agustus 2026)
+- **Sub-Input Dapur Dalam**:
+  * Menambahkan checkbox "Dapur Dalam" pada daftar fasilitas kamar utama.
+  * Membuat panel isian bersarang (nested) untuk "Dapur Dalam" yang berisi checklist kelengkapan dapur standar (Kompor, Kulkas, Wastafel Cuci Piring, Kitchen Set, Dispenser) dan input teks tambah kelengkapan kustom secara dinamis.
+
+### 8. Perubahan Kategori Foto Utama: Tempat Tidur (Agustus 2026)
+- **Penggantian Kategori**:
+  * Mengganti nama kategori bawaan ketiga dari "View / Jendela" menjadi "Tempat Tidur" di seluruh setelan fallback uploader foto kamar.
+
+### 7. Kategori Foto Kamar Kustom & Tanpa Batas (Agustus 2026)
+- **Unggah Foto Kamar Dinamis**:
+  * Mengganti daftar foto kamar statis dengan opsi dinamis (photoCategories kustom) di level tipe kamar.
+  * Menambahkan bidang masukan teks dan tombol "+ Foto Kamar" di bawah grid galeri pada form temporaryRoom dan rt (activeRoomIdx) untuk menambahkan kategori foto secara bebas.
+  * Menyinkronkan fungsi hapus foto kustom (indeks >= 4) agar ikut membersihkan kategori penampungnya secara otomatis.
+
+### 6. Penghapusan Bidang Tanggal Kamar Siap Huni (Agustus 2026)
+- **Penghapusan readyDate**:
+  * Menghapus input "Tanggal Kamar Siap Huni" (readyDate) sepenuhnya karena status kamar kosong langsung dianggap siap dihuni saat didata.
+  * Menyesuaikan nama kontainer pada editor kamar aktif menjadi "Harga Sewa Kamar".
+
+### 5. Fitur Salin Konfigurasi Kamar (Agustus 2026)
+- **Kloning Data Kamar**:
+  * Menambahkan dropdown pembantu di bagian atas input lanjutan untuk menyalin konfigurasi dari kamar lain yang sudah terdaftar.
+  * Fitur ini menyalin skema harga (price & pricing) serta semua fasilitas kamar/kamar mandi guna menghindari pengisian manual yang berulang.
+
+### 4. Input Pilihan Lantai Netral di Detail Kamar Baru (Agustus 2026)
+- **Netralisasi Pilihan Lantai**:
+  * Menghapus pra-seleksi otomatis "Lantai 1" saat menambahkan kamar baru di Wizard Step 2.
+  * Menambahkan opsi placeholder "Pilih Lantai" yang dinonaktifkan secara bawaan.
+  * Memperketat validasi agar agen wajib memilih lantai secara manual sebelum input form kelanjutan terbuka secara dinamis.
+
+### 3. Penggantian Tombol Simpan Draft menjadi Keluar & Auto-Save (Agustus 2026)
+- **Tombol Keluar**:
+  * Mengganti label tombol "Simpan Draft" di Wizard Step 1 menjadi "Keluar".
+  * Draft tersimpan secara otomatis di sisi klien (localStorage) dan akan langsung terhapus saat data berhasil dikirim. Hal ini memastikan penyimpanan bersifat sementara dan tidak membebani database utama.
+
+### 2. Validasi Jumlah Kamar Berdasarkan Target Acuan
+- **Input Total Kamar di Step 1**:
+  * Menambahkan bidang **Total Jumlah Kamar** di bagian bawah tipe kost pada Wizard Step 1.
+  * Mencegah navigasi ke Step 2 jika total kamar belum diisi atau kurang dari 1.
+- **Validasi Kunci Progres di Step 2**:
+  * Menampilkan banner real-time **Progres Pendataan Kamar (X / Y Kamar)**.
+  * Menonaktifkan tombol **Tambah Kamar Baru** secara otomatis jika target kapasitas telah terpenuhi.
+  * Mengunci navigasi **Lanjut ke Step 3** (menonaktifkan tombol dan mengubah label tombol menjadi "Kamar Belum Lengkap") kecuali jumlah kamar terdata sama persis dengan target acuan yang diinput di Step 1.
+
+### 1. Rekonstruksi Alur Input Detail & Status Kamar
+- **Integrasi Status Kamar**:
+  * Memindahkan bidang pilihan **Status Kamar** (Terisi / Kosong) menjadi bagian input terakhir di dalam kartu **Detail Kamar** (di bawah Tipe Kamar).
+  * Menghapus tampilan pembuka yang memisahkannya secara independen di bagian atas.
+- **Tahapan Progresif Form**:
+  * Saat pertama kali menambahkan kamar baru, sistem hanya akan merender kartu **Detail Kamar** saja (Nomor, Lantai, Tipe, Status).
+  * Bidang input berikutnya (Tarif, Fasilitas, Foto, Informasi Penghuni) disembunyikan seluruhnya dan baru akan dimunculkan setelah keempat komponen di dalam Detail Kamar terisi lengkap.
+
+### 1. Reposisi Modul Dokumentasi Foto Kamar (Agustus 2026)
+- **Aksesibilitas Foto Kamar**:
+  * Memindahkan modul **Dokumentasi Foto Kamar** keluar dari blok kondisional kamar kosong sehingga dapat diakses dan diisi baik ketika status kamar Terisi maupun Kosong.
+  * Tetap mempertahankan label dinamik **"(Opsional)"** jika status dipilih Terisi, dan **"*Wajib"** jika status dipilih Kosong.
+
+### 1. Dokumentasi Foto Kamar Opsional untuk Kamar Terisi (Agustus 2026)
+- **Visualisasi Dinamis Status Foto Kamar**:
+  * Mengubah label "Interior Kamar *Wajib" menjadi **"Interior Kamar (Opsional)"** secara dinamis khusus ketika status kamar dipilih sebagai **Terisi**.
+  * Memperbarui deskripsi pembantu (helper text) secara kondisional agar menginformasikan agen bahwa pemotretan kamar bersifat opsional dan hanya dilakukan jika pemilik/penghuni berkenan.
+
+### 1. Eliminasi Total Modul Dokumen Penghuni Kamar Terisi (Agustus 2026)
+- **Penghapusan Total Dokumen Penghuni**:
+  * Menghapus seluruh modul **Dokumen Penghuni** dari Langkah 2 Wizard (Data Kamar).
+  * Menghapus input berkas **Bukti Bayar / Kontrak** (`paymentProofUrl`) secara permanen, sehingga tidak lagi meminta berkas dokumen apapun untuk mempercepat alur survei lapangan.
+
+### 1. Eliminasi Input Unggah KTP Penghuni Kamar Terisi (Agustus 2026)
+- **Pembersihan Dokumen KTP Penghuni**:
+  * Menghapus secara permanen kolom unggah **Foto KTP** (`residentKtpUrl`) dari modul **Dokumen Penghuni** di Langkah 2 Wizard (Data Kamar).
+  * Menyederhanakan tata letak kolom menjadi satu baris penuh (`flex flex-col gap-1`) yang berfokus penuh hanya pada berkas **Bukti Bayar / Kontrak** saja.
+
 ### 1. Sistem Pencatatan Status Lunas/Sisa Tagihan Penghuni (Agustus 2026)
 - **Status Pembayaran (Lunas / Belum Lunas)**:
   * Menambahkan tombol toggle pilihan **Status Pembayaran** (Lunas / Belum Lunas) di bagian **Informasi Penghuni** (Langkah 2).
