@@ -357,6 +357,47 @@ if (code.includes(saveQueryTarget)) {
     console.error('Could not find save properties query target!');
 }
 
+// ============================================================
+// FIX 13: Clean up URL parameter in closeKostManagerListing
+// ============================================================
+const closeUrlCleanupTarget = `        setSearchParams({ status: agentTab });
+        setIsExistingPropertyMigration(false);
+        setWarningAccepted(false);
+    };`;
+const closeUrlCleanupReplacement = `        const cleanupParams = new URLSearchParams(searchParams);
+        cleanupParams.delete('onboarding_id');
+        setSearchParams(cleanupParams);
+        setIsExistingPropertyMigration(false);
+        setWarningAccepted(false);
+    };`;
+
+if (code.includes(closeUrlCleanupTarget)) {
+    code = code.replace(closeUrlCleanupTarget, closeUrlCleanupReplacement);
+    console.log('URL parameter cleanup added to closeKostManagerListing.');
+} else if (code.includes('cleanupParams.delete')) {
+    console.log('closeKostManagerListing URL parameter cleanup already present.');
+} else {
+    console.error('Could not find closeKostManagerListing URL cleanup target!');
+}
+
+// ============================================================
+// FIX 14: Clean up URL parameter after handleSaveKostManagerListing completion
+// ============================================================
+const saveUrlCleanupTarget = `            setSearchParams({ status: agentTab });`;
+const saveUrlCleanupReplacement = `            const cleanupParamsSave = new URLSearchParams(searchParams);
+            cleanupParamsSave.delete('onboarding_id');
+            setSearchParams(cleanupParamsSave);`;
+
+if (code.includes(saveUrlCleanupTarget)) {
+    code = code.replace(saveUrlCleanupTarget, saveUrlCleanupReplacement);
+    console.log('URL parameter cleanup added to handleSaveKostManagerListing completion.');
+} else if (code.includes('cleanupParamsSave.delete')) {
+    console.log('handleSaveKostManagerListing URL parameter cleanup already present.');
+} else {
+    console.error('Could not find handleSaveKostManagerListing URL cleanup target!');
+}
+
 fs.writeFileSync(targetFile, code, 'utf8');
 console.log('\nAll fixes applied successfully.');
+
 

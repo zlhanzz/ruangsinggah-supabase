@@ -460,7 +460,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         setTemporaryRoom(null);
         setActiveRoomIdx(null);
         setPhotoCategories(['Bangunan Depan', 'Koridor', 'Parkiran', 'Lingkungan']);
-        setSearchParams({ status: agentTab });
+        const cleanupParams = new URLSearchParams(searchParams);
+        cleanupParams.delete('onboarding_id');
+        setSearchParams(cleanupParams);
         setIsExistingPropertyMigration(false);
         setWarningAccepted(false);
     };
@@ -1455,7 +1457,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             alert('Listing properti & kamar berhasil disimpan! Status pengajuan kini PENDING ONBOARDING.');
             localStorage.removeItem(`km_draft_${isEditingKostManager.id}`);
             closeKostManagerListing();
-            setSearchParams({ status: agentTab });
+            const cleanupParamsSave = new URLSearchParams(searchParams);
+            cleanupParamsSave.delete('onboarding_id');
+            setSearchParams(cleanupParamsSave);
             await loadSurveyRequests();
         } catch (err) {
             console.error('Error saving listing:', err);
