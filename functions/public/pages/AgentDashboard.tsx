@@ -893,13 +893,52 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     .select('metadata')
                     .eq('id', req.transaction_id)
                     .maybeSingle();
+                if (trxData?.metadata) {
+                    transactionMetadata = trxData.metadata;
+                }
                 const rawPropId = trxData?.metadata?.propertyId;
-                const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
                 if (rawPropId && uuidPattern.test(rawPropId)) {
                     propertyIdToFetch = rawPropId;
                     console.log("openKostManagerListing: found valid propertyId in transaction metadata:", propertyIdToFetch);
                 } else if (rawPropId) {
                     console.warn("openKostManagerListing: propertyId in metadata is not a valid UUID, ignoring:", rawPropId);
+                }
+            }
+
+            // Calculate Mitra's initial input for total rooms and coordinates from transaction metadata or notes
+            const parsedMetaRooms = transactionMetadata.total_rooms || transactionMetadata.totalRooms || transactionMetadata.jumlah_kamar || (req as any).total_rooms || (req as any).totalRooms;
+            if (parsedMetaRooms) {
+                initialTotalRooms = Number(parsedMetaRooms) || 0;
+            }
+            if (!initialTotalRooms && req.notes) {
+                const m = req.notes.match(/(?:total|jumlah)?\s*kamar\s*:\s*(\d+)/i);
+                if (m) {
+                    initialTotalRooms = Number(m[1]) || 0;
+                }
+            }
+
+            // Extract coordinates
+            const possibleLocationUrls = [
+                transactionMetadata.googleMapsLink,
+                transactionMetadata.google_maps_url,
+                req.kost_name,
+                req.notes
+            ];
+            for (const url of possibleLocationUrls) {
+                if (url) {
+                    const parsed = extractCoordinates(url);
+                    if (parsed) {
+                        initialCoords = parsed;
+                        break;
+                    }
+                }
+            }
+            if (initialCoords.lat === -5.147665 && initialCoords.lng === 119.432731) {
+                const directLat = transactionMetadata.location?.lat || transactionMetadata.latitude || (req as any).latitude;
+                const directLng = transactionMetadata.location?.lng || transactionMetadata.longitude || (req as any).longitude;
+                if (directLat && directLng) {
+                    initialCoords = { lat: Number(directLat), lng: Number(directLng) };
                 }
             }
 

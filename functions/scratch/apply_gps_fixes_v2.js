@@ -111,12 +111,12 @@ const metadataReplacement = `            if (req.transaction_id) {
             }
 
             // Calculate Mitra's initial input for total rooms and coordinates from transaction metadata or notes
-            const parsedMetaRooms = transactionMetadata.total_rooms || transactionMetadata.totalRooms || transactionMetadata.jumlah_kamar;
+            const parsedMetaRooms = transactionMetadata.total_rooms || transactionMetadata.totalRooms || transactionMetadata.jumlah_kamar || (req as any).total_rooms || (req as any).totalRooms;
             if (parsedMetaRooms) {
                 initialTotalRooms = Number(parsedMetaRooms) || 0;
             }
             if (!initialTotalRooms && req.notes) {
-                const m = req.notes.match(/Total Kamar:\\s*(\\d+)/i);
+                const m = req.notes.match(/(?:total|jumlah)?\\s*kamar\\s*:\\s*(\\d+)/i);
                 if (m) {
                     initialTotalRooms = Number(m[1]) || 0;
                 }

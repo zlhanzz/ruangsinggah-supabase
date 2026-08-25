@@ -21,11 +21,13 @@
   * Memperbaiki pencocokan regex di `add_admin_review_kostmanager.js` agar sesuai dengan format signature `onClick={() => {` yang asli, sehingga fitur logging dan review properti kelolaan KostManager di Admin Dashboard berhasil diinjeksi 100%.
 
 ### 28. Penyelarasan GPS Ekstraktor & Prefill Kamar (Agustus 2026)
-- **Masalah**: Jumlah kamar acuan awal (`initialTotalRooms`) dan koordinat awal (`initialCoords`) tidak otomatis ter-prefill dari metadata transaksi atau catatan registrasi mitra karena skrip `apply_gps_fixes.js` sebelumnya tidak terdaftar di daftar run otomatis.
+- **Masalah**: Jumlah kamar acuan awal (`initialTotalRooms`) dan koordinat awal (`initialCoords`) tidak otomatis ter-prefill dari metadata transaksi atau catatan registrasi mitra karena skrip `apply_gps_fixes.js` sebelumnya tidak terdaftar di daftar run otomatis. Selain itu, jika data jumlah kamar disimpan langsung pada root request (`req.total_rooms`/`req.totalRooms`) alih-alih di metadata, prefill tersebut tetap gagal.
 - **Perbaikan**:
   * Menulis skrip `apply_gps_fixes_v2.js` dengan regex yang lebih fleksibel dan mencocokkan UUID guard terbaru.
   * Memastikan draft loader di local storage tidak melakukan `return` secara instan, melainkan menggabungkannya sehingga database dapat meng-override dengan data ter-update.
   * Mendaftarkan skrip `apply_gps_fixes_v2.js` ke daftar eksekusi akhir `reapply_all_changes_chronologically.js`.
+  * Memperbarui parser metadata jumlah kamar agar turut mencari data pendaftaran root `req.total_rooms` / `req.totalRooms`, serta mendukung pencocokan regex case-insensitive yang fleksibel terhadap catatan notes (`Total Kamar:`, `Jumlah Kamar:`, `Kamar:`).
+
 
 
 ### 27. Perbaikan ReferenceError: isExistingPropertyMigration + UUID Guard (Agustus 2026)

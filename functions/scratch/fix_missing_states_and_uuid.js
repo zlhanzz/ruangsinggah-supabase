@@ -100,7 +100,7 @@ const uuidGuardTarget = `                if (trxData?.metadata?.propertyId) {
                 }`;
 
 const uuidGuardReplacement = `                const rawPropId = trxData?.metadata?.propertyId;
-                const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
                 if (rawPropId && uuidPattern.test(rawPropId)) {
                     propertyIdToFetch = rawPropId;
                     console.log("openKostManagerListing: found valid propertyId in transaction metadata:", propertyIdToFetch);
