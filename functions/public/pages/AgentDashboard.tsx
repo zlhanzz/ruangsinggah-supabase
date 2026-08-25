@@ -964,14 +964,22 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             }
 
             // 2. Fallback to properties table if no dedicated mitra_kostmanager record exists yet
-            let query = supabase.from('properties').select('*');
+            let query2 = supabase.from('properties').select('*');
+            const uuidPat3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            let canQueryProperties = false;
             if (propertyIdToFetch) {
-                query = query.eq('id', propertyIdToFetch);
+                query2 = query2.eq('id', propertyIdToFetch);
+                canQueryProperties = true;
+            } else if (req.user_id && uuidPat3.test(req.user_id)) {
+                query2 = query2.eq('owner_uid', req.user_id);
+                canQueryProperties = true;
             } else {
-                query = query.eq('owner_uid', req.user_id);
+                console.warn('openKostManagerListing: no valid UUID for properties lookup, will use req data as fallback.');
             }
             
-            const { data: existingProps, error } = await query;
+            const { data: existingProps, error } = canQueryProperties
+                ? await query2
+                : { data: null, error: null };
 
             if (error) {
                 console.error("Error fetching existing property:", error);
@@ -1362,20 +1370,28 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     .select('metadata')
                     .eq('id', isEditingKostManager.transaction_id)
                     .maybeSingle();
-                if (trxData?.metadata?.propertyId) {
-                    propertyIdToFetch = trxData.metadata.propertyId;
+                const rawSavePropId = trxData?.metadata?.propertyId;
+                const uuidSavePat = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                if (rawSavePropId && uuidSavePat.test(rawSavePropId)) {
+                    propertyIdToFetch = rawSavePropId;
                 }
             }
 
             // Fetch existing property for this user to edit
             let query = supabase.from('properties').select('id, is_managed');
+            const uuidSavePat2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            let canQuerySaveProperties = false;
             if (propertyIdToFetch) {
                 query = query.eq('id', propertyIdToFetch);
-            } else {
+                canQuerySaveProperties = true;
+            } else if (isEditingKostManager.user_id && uuidSavePat2.test(isEditingKostManager.user_id)) {
                 query = query.eq('owner_uid', isEditingKostManager.user_id);
+                canQuerySaveProperties = true;
             }
             
-            const { data: existingProps } = await query;
+            const { data: existingProps } = canQuerySaveProperties
+                ? await query
+                : { data: null };
 
             // Prioritize is_managed = true, otherwise take the first one found
             const existingProp = existingProps?.find(p => p.is_managed) || existingProps?.[0];

@@ -172,14 +172,14 @@ if (code.includes(earlyPropertiesQueryTarget)) {
 // FIX 7: UUID guard for fallback properties query (L990)
 // ============================================================
 const fallbackPropertiesQueryTarget = `            // 2. Fallback to properties table if no dedicated mitra_kostmanager record exists yet
-            let query2 = supabase.from('properties').select('*');
+            let query = supabase.from('properties').select('*');
             if (propertyIdToFetch) {
-                query2 = query2.eq('id', propertyIdToFetch);
+                query = query.eq('id', propertyIdToFetch);
             } else {
-                query2 = query2.eq('owner_uid', req.user_id);
+                query = query.eq('owner_uid', req.user_id);
             }
             
-            const { data: existingProps, error } = await query2;`;
+            const { data: existingProps, error } = await query;`;
 
 const fallbackPropertiesQueryReplacement = `            // 2. Fallback to properties table if no dedicated mitra_kostmanager record exists yet
             let query2 = supabase.from('properties').select('*');
@@ -285,5 +285,78 @@ if (code.includes(draftLoadTarget)) {
     console.error('Could not find draftData loading target!');
 }
 
+// ============================================================
+// FIX 11: Save metadata UUID guard
+// ============================================================
+const saveMetadataTarget = `            if (isEditingKostManager.transaction_id) {
+                const { data: trxData } = await supabase
+                    .from('transactions')
+                    .select('metadata')
+                    .eq('id', isEditingKostManager.transaction_id)
+                    .maybeSingle();
+                if (trxData?.metadata?.propertyId) {
+                    propertyIdToFetch = trxData.metadata.propertyId;
+                }
+            }`;
+const saveMetadataReplacement = `            if (isEditingKostManager.transaction_id) {
+                const { data: trxData } = await supabase
+                    .from('transactions')
+                    .select('metadata')
+                    .eq('id', isEditingKostManager.transaction_id)
+                    .maybeSingle();
+                const rawSavePropId = trxData?.metadata?.propertyId;
+                const uuidSavePat = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                if (rawSavePropId && uuidSavePat.test(rawSavePropId)) {
+                    propertyIdToFetch = rawSavePropId;
+                }
+            }`;
+
+if (code.includes(saveMetadataTarget)) {
+    code = code.replace(saveMetadataTarget, saveMetadataReplacement);
+    console.log('UUID validation added to transaction metadata lookup during save.');
+} else if (code.includes('uuidSavePat')) {
+    console.log('Save transaction metadata UUID guard already present.');
+} else {
+    console.error('Could not find save metadata target!');
+}
+
+// ============================================================
+// FIX 12: Save properties lookup query UUID guard
+// ============================================================
+const saveQueryTarget = `            // Fetch existing property for this user to edit
+            let query = supabase.from('properties').select('id, is_managed');
+            if (propertyIdToFetch) {
+                query = query.eq('id', propertyIdToFetch);
+            } else {
+                query = query.eq('owner_uid', isEditingKostManager.user_id);
+            }
+            
+            const { data: existingProps } = await query;`;
+const saveQueryReplacement = `            // Fetch existing property for this user to edit
+            let query = supabase.from('properties').select('id, is_managed');
+            const uuidSavePat2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            let canQuerySaveProperties = false;
+            if (propertyIdToFetch) {
+                query = query.eq('id', propertyIdToFetch);
+                canQuerySaveProperties = true;
+            } else if (isEditingKostManager.user_id && uuidSavePat2.test(isEditingKostManager.user_id)) {
+                query = query.eq('owner_uid', isEditingKostManager.user_id);
+                canQuerySaveProperties = true;
+            }
+            
+            const { data: existingProps } = canQuerySaveProperties
+                ? await query
+                : { data: null };`;
+
+if (code.includes(saveQueryTarget)) {
+    code = code.replace(saveQueryTarget, saveQueryReplacement);
+    console.log('UUID validation added to properties lookup during save.');
+} else if (code.includes('canQuerySaveProperties')) {
+    console.log('Save properties query UUID guard already present.');
+} else {
+    console.error('Could not find save properties query target!');
+}
+
 fs.writeFileSync(targetFile, code, 'utf8');
 console.log('\nAll fixes applied successfully.');
+

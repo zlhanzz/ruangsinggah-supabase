@@ -3,11 +3,13 @@
 ## Fitur Selesai (Completed Features)
 
 ### 30. Perbaikan Warning Overlay & Persistensi Draf Peninjauan Ulang Data KostManager (Agustus 2026)
-- **Masalah**: Warning overlay untuk peninjauan ulang data properti hasil migrasi tidak muncul ketika data draf dimuat dari dedicated `mitra_kostmanager` (`kmProp`). Selain itu, status warning ini ter-reset (overlay menghilang) saat draf dimuat ulang dari `localStorage` browser.
+- **Masalah**: Warning overlay untuk peninjauan ulang data properti hasil migrasi tidak muncul ketika data draf dimuat dari dedicated `mitra_kostmanager` (`kmProp`). Selain itu, status warning ini ter-reset (overlay menghilang) saat draf dimuat ulang dari `localStorage` browser. Di samping itu, query properties fallback dan query penyimpanan data `handleSaveKostManagerListing` memicu error sintaks database `22P02` (invalid input syntax for type uuid: "undefined") karena variabel `propertyIdToFetch` berisi string `"undefined"` dari transaksi metadata yang belum divalidasi.
 - **Perbaikan**:
   * Menambahkan penyetelan status `setIsExistingPropertyMigration(true)` dan `setWarningAccepted(false)` ketika data KostManager dimuat pertama kali dari tabel `mitra_kostmanager`.
   * Memodifikasi fungsi penyimpanan draf agar menyertakan variabel `isExistingPropertyMigration` dan `warningAccepted` ke dalam `draftData` di `localStorage`.
   * Memodifikasi pemuatan draf `localStorage` agar merestorasi status kedua variabel tersebut saat form dibuka kembali oleh agen survey.
+  * Menambahkan UUID pattern guard `/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i` di area properties fallback query (`openKostManagerListing`) serta lookup property query saat penyimpanan (`handleSaveKostManagerListing`) untuk menyaring string non-UUID `"undefined"` secara aman.
+
 
 ### 29. Sinkronisasi Siklus Pembangunan Ulang (Anti-Reset) & Perbaikan Review Admin (Agustus 2026)
 
