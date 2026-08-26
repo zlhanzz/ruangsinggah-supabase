@@ -171,30 +171,30 @@ export async function convertToWebP(file: File, quality: number = 0.8): Promise<
       URL.revokeObjectURL(objectUrl);
       const canvas = document.createElement('canvas');
       
-      const MAX_WIDTH = 1200;
-      const MAX_HEIGHT = 1200;
-      let width = img.width;
-      let height = img.height;
+      const TARGET_WIDTH = 1200;
+      const TARGET_HEIGHT = 900; // Standard 4:3 landscape ratio
 
-      if (width > height) {
-        if (width > MAX_WIDTH) {
-          height = Math.round((height * MAX_WIDTH) / width);
-          width = MAX_WIDTH;
-        }
-      } else {
-        if (height > MAX_HEIGHT) {
-          width = Math.round((width * MAX_HEIGHT) / height);
-          height = MAX_HEIGHT;
-        }
-      }
-
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = TARGET_WIDTH;
+      canvas.height = TARGET_HEIGHT;
 
       const ctx = canvas.getContext('2d');
       if (!ctx) return resolve(file);
-      
-      ctx.drawImage(img, 0, 0, width, height);
+
+      const imgRatio = img.width / img.height;
+      const targetRatio = TARGET_WIDTH / TARGET_HEIGHT;
+      let sx = 0, sy = 0, sWidth = img.width, sHeight = img.height;
+
+      if (imgRatio > targetRatio) {
+        // Image is wider than 4:3 target - crop horizontally
+        sWidth = img.height * targetRatio;
+        sx = (img.width - sWidth) / 2;
+      } else {
+        // Image is taller than 4:3 target - crop vertically
+        sHeight = img.width / targetRatio;
+        sy = (img.height - sHeight) / 2;
+      }
+
+      ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
 
       canvas.toBlob((blob) => {
         if (!blob) return resolve(file);
@@ -2666,7 +2666,9 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
     if (!kmErr && kmSurveys) {
       mappedKmSurveys = kmSurveys.map((ks: any) => {
         let computedStatus = ks.status;
-        if (ks.status === 'SURVEYING' && ks.request?.status === 'AGENT_ASSIGNED') {
+        if (ks.status === 'SUBMITTED' || ks.request?.status === 'PENDING_ONBOARDING') {
+          computedStatus = 'SUBMITTED';
+        } else if (ks.status === 'SURVEYING' && ks.request?.status === 'AGENT_ASSIGNED') {
           computedStatus = 'PENDING_ASSIGNMENT';
         }
         return {

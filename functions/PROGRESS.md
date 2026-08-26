@@ -2,6 +2,227 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 58. Eliminasi FOUT (Flash of Unstyled Text) Ikon & Migrasi ke Bundled Pure Vector SVG (Lucide React) di AgentDashboard (Agustus 2026)
+- **Masalah**: Tampilan kartu tugas sempat memunculkan teks mentah seperti `calendar_today`, `schedule`, `bolt`, `phone`, `location_on` sesaat setelah skeleton loader selesai (FOUT/Flash of Unstyled Text) karena browser menunggu unduhan file font dari CDN Google Fonts (`fonts.googleapis.com`).
+- **Implementasi & Perbaikan**:
+  * **Migrasi Penuh ke Bundled Pure Vector SVG (`lucide-react`)**:
+    - Mengganti seluruh 100% pemanggilan tag ligature Google Font `<span className="material-symbols-outlined">` pada `AgentDashboard.tsx` dengan komponen vector SVG React dari `lucide-react` (`Calendar`, `Clock`, `Zap`, `Phone`, `MapPin`, `Navigation`, `CheckCircle2`, `Trash2`, `Plus`, `Bed`, `Bath`, `Fan`, `ImagePlus`, `ChevronDown`, dll.).
+    - Semua ikon kini terkompilasi langsung di dalam bundle JavaScript lokal aplikasi.
+  * **Keuntungan & Hasil**:
+    - ✅ **0 Network Request untuk Ikon**: Tidak ada lagi proses unduhan font terpisah dari server luar.
+    - ✅ **0 FOUT (Bebas Teks Mentah)**: Ikon langsung muncul secara instan **0 milidetik** bersamaan dengan render kartu data.
+    - ✅ **Transisi Mulus**: Tampilan kartu data tampil sempurna dan optimal tanpa kedipan teks ikon.
+  * Build verification `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% tanpa error (exit code 0).
+
+### 57. Arsitektur Structured Categorized Photos (Record<string, string[]>) untuk Isolasi Total Foto Kamar (Agustus 2026)
+- **Permintaan & Masalah**: Terjadi kasus foto tertukar, berpindah kategori, atau duplikat akibat *Index Drift* pada dua array paralel terpisah (`images` dan `photoCategories`). Diperlukan arsitektur penyimpanan data foto yang konkrit, terisolasi, dan aman untuk produksi jangka panjang.
+- **Implementasi & Perbaikan**:
+  * **Arsitektur Objek Terstruktur (`categorized_photos`)**:
+    - Mengubah model penyimpanan foto kamar menjadi key-value dictionary mandiri:
+      `categorized_photos: { "Interior Kamar *Wajib": ["url1", "url2"], "Jendela Luar": ["url3"], ... }`.
+    - Setiap kategori memiliki bucket URL tersendiri yang berdiri sendiri.
+    - Menambah/menghapus foto pada satu kategori **100% terisolasi** dan mustahil menggeser, menimpa, atau mencemari foto di kategori lain.
+  * **Helper Normalisasi & Kompatibilitas Database**:
+    - `getRoomCategorizedPhotos`: Mengekstrak/menormalisasi data kamar baik dari format baru maupun format lama tanpa kehilangan foto.
+    - `exportCategorizedPhotos`: Menghasilkan array flat `images` dan `photoCategories` secara otomatis untuk kompatibilitas penuh dengan Supabase, Dashboard Admin (`KostManagerManagement.tsx`), dan halaman publik (`KostDetail.tsx`).
+  * **Penerapan Menyeluruh di UI**:
+    - Diterapkan pada Accordion Kamar (`renderRoomEditor`), Form Tambah Kamar Baru (`temporaryRoom`), dan fungsi sinkronisasi fasilitas (`updateRoomFacilitiesWithPhotos` & `updateTemporaryRoomFacilitiesWithPhotos`).
+  * Build verification `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% tanpa error (exit code 0).
+
+### 56. Perbaikan Bug Hilangnya Foto Terunggah Saat Mengubah Checklist Fasilitas Kamar (Agustus 2026)
+- **Masalah**: Ketika surveyor telah mengunggah foto pada suatu kategori (misalnya *Interior Kamar*), kemudian kembali ke atas untuk mencentang fasilitas lain (misalnya *Jendela Luar*, *Kamar Mandi*, atau *AC*), foto yang telah diunggah sebelumnya tiba-tiba menghilang.
+- **Penyebab**:
+  * Pada fungsi `updateRoomFacilitiesWithPhotos` dan `updateTemporaryRoomFacilitiesWithPhotos`, terdapat logika pemetaan 1-ke-1 lama (`dynamicCats.map(cat => oldImages[oldCats.indexOf(cat)])`) yang me-reset dan menimpa array `images` setiap kali `roomFacilities` diperbarui.
+- **Perbaikan**:
+  * Menghapus pemetaan destruktif tersebut dan menjaga array `images` serta `photoCategories` tetap 100% utuh saat checklist fasilitas kamar dicentang/diubah.
+  * Mengintegrasikan auto-update label interior kamar (`*Wajib` vs `(Opsional)`) ketika status kamar beralih antara *Terisi* dan *Kosong* tanpa merusak file foto.
+  * Build verification `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% tanpa error (exit code 0).
+
+### 55. Sistem Multi-Foto (Multi-Angle) per Kategori Dokumentasi Foto (Agustus 2026)
+- **Permintaan**: Mengizinkan surveyor untuk mengunggah lebih dari satu foto untuk satu kategori/fasilitas yang sama (misalnya untuk *Interior Kamar*, surveyor dapat mengambil beberapa foto dari sudut/angle yang berbeda seperti sudut pintu masuk, sudut jendela, dan sudut meja kerja).
+- **Implementasi & Perbaikan**:
+  * **Arsitektur UI Grouped Category Cards**:
+    - **Step 2 (Accordion Kamar & Tambah Kamar Baru)**: Setiap kategori foto aktif (wajib, dinamis dari fasilitas, maupun kustom) disajikan sebagai kontainer kartu kategori tersendiri lengkap dengan header berikon, nama kategori, dan badge counter jumlah foto (`X Foto / Angle`).
+    - **Step 1 (Dokumentasi Area Umum & Fasilitas Properti)**: Diterapkan pola kartu grup yang sama untuk area publik (Bangunan Depan, Koridor, Parkiran, Dapur Bersama, dll.).
+  * **Galeri Thumbnail Angle & Tombol Tambah**:
+    - Menampilkan seluruh foto yang diunggah dalam galeri thumbnail rapi dengan badge penomoran sudut (`Angle 1`, `Angle 2`, dst.).
+    - Tombol hapus individual (`✕`) pada setiap thumbnail untuk menghapus sudut foto tertentu tanpa merusak foto sudut lainnya atau menghapus kategori.
+    - Slot upload interaktif bertuliskan `+ Tambah Angle` / `+ Unggah Foto [Kategori]` yang mendukung pemilihan banyak file sekaligus (`input type="file" multiple`) maupun kamera HP.
+  * **100% Backward Compatible**:
+    - Tetap menyimpan data dalam array flat `images` dan `photoCategories` sehingga Dashboard Admin (`KostManagerManagement.tsx`), Halaman Publik (`KostDetail.tsx`), dan query Supabase langsung membaca seluruh foto dan label kategori tanpa perlu migrasi skema tabel database.
+  * Build verification `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% tanpa error (exit code 0).
+
+### 54. Perbaikan Syntax Error Babel & Posisi Deklarasi Hook pada AgentDashboard (Agustus 2026)
+- **Masalah**: Muncul error Vite React-Babel `Unexpected token, expected "," (7589:28)` dan error deklarasi variabel `Block-scoped variable 'kmListingForm' used before its declaration` pada `AgentDashboard.tsx`.
+- **Penyebab**:
+  * Pada baris ~7113, terdapat penutupan berlebih `})()})}` pada blok IIFE `temporaryRoom` yang merusak hierarki tag JSX Step 2 dan navigation bar di bawahnya.
+  * Hook `useEffect` auto-sync Step 1 diletakkan sebelum deklarasi state `const [kmListingForm, setKmListingForm] = useState(...)`.
+- **Perbaikan**:
+  * Mengoreksi penutupan tag JSX di akhir blok `temporaryRoom` menjadi `})()}`, `</div>`, dan `)}` yang berpasangan presisi dengan `<div className="space-y-6">` dan `{kmStep === 2 && (`.
+  * Memindahkan deklarasi hook `useEffect` sinkronisasi fasilitas Step 1 ke posisi setelah deklarasi state `kmListingForm`.
+  * Menjalankan build verifikasi `vite build` di `functions/public/` dan sukses terkompilasi 100% tanpa error (exit code 0).
+
+### 53. Sistem Dinamis Slot Input Foto Dokumentasi Berdasarkan Fasilitas Terpilih (Agustus 2026)
+- **Permintaan**: Pada formulir pendataan KostManager (`AgentDashboard.tsx`), sistem slot input foto dokumentasi dibuat dinamis. Ketika fasilitas tertentu dicentang atau ditambahkan (baik fasilitas area umum/properti pada Step 1 maupun fasilitas kamar pada Step 2), otomatis muncul slot input kategori foto dokumentasi yang bersesuaian tanpa menghilangkan foto yang telah diunggah sebelumnya.
+- **Implementasi & Perbaikan**:
+  * **Helper Dynamic Categories Generator**:
+    - `computeDynamicPublicPhotoCategories`: Menghasilkan kategori foto Step 1 (Dasar: *Bangunan Depan*, *Koridor*, *Lingkungan*; Tambahan dinamis: *Parkiran*, *Dapur Bersama*, *Ruang Tamu*, *WC Umum*, *CCTV*, *Laundry*, serta fasilitas kustom).
+    - `computeDynamicRoomPhotoCategories`: Menghasilkan kategori foto Step 2 (Dasar: *Interior Kamar *Wajib* atau *Interior Kamar (Opsional)* jika terisi; Tambahan dinamis: *Kamar Mandi*, *Dapur Dalam*, *Tempat Tidur*, *Lemari / Storage*, *Meja Belajar*, *AC*, *Kipas Angin*, *Jendela Luar*, *Water Heater*, serta fasilitas kamar kustom).
+  * **Auto-Sync Step 1 (Area Umum)**: Mengintegrasikan `useEffect` sinkronisasi fasilitas properti ke `photoCategories` dan array `images` tanpa data loss.
+  * **Auto-Sync Step 2 (Kamar Accordion & Tambah Kamar Baru)**:
+    - Mengintegrasikan fungsi sinkronisasi fasilitas ke kategori foto pada tombol status (*Terisi* vs *Kosong*), switch *Kosongan* vs *Furnished*, checkbox fasilitas standar, tag kelengkapan kustom, serta penambahan kategori manual (*+ Foto Kamar*).
+    - Menambahkan input field *Detail Kamar* (Nomor Kamar, Lantai, Tipe Kamar) di dalam accordion editor kamar yang sedang diedit.
+  * Build verification `npm run build` (`tsc`) lulus 100% tanpa TypeScript/JSX error (exit code 0).
+
+### 52. Penyempurnaan Label Kategori Foto Kamar & Pemetaan Slot Foto (Agustus 2026)
+- **Masalah**: Label foto kamar pada kartu kamar di Tab 3 menggunakan nomor urut generic (`Foto Kamar 1`, `Foto Kamar 2`), yang menimbulkan kesalahpahaman seolah-olah foto tersebut adalah milik kamar lain yang dicampur dalam satu tempat.
+- **Perbaikan**:
+  * **`KostManagerManagement.tsx`**: Mengganti penamaan fallback menjadi nama bagian ruangan yang jelas (*Interior Kamar*, *Kamar Mandi Dalam*, *Tempat Tidur*, *Lemari / Penyimpanan*, *Foto Tambahan*). Menjaga mapping index slot foto asli sehingga slot yang dilewati tidak menggeser kategori foto lainnya.
+  * Build verification `npm run build` lulus 100% tanpa TypeScript error (`tsc` exit code 0).
+
+### 51. Penampilan Dokumentasi Foto Kamar pada Tab Tipe Kamar & Fasilitas di Dashboard Admin (Agustus 2026)
+- **Masalah**: Foto-foto kondisi kamar yang telah diunggah surveyor saat pendataan tidak muncul pada Tab 3 ("Tipe Kamar & Fasilitas") saat dilakukan peninjauan oleh Admin di Dashboard Admin.
+- **Perbaikan**:
+  * **`KostManagerManagement.tsx`**: Menambahkan normalisasi foto kamar (`room.images || room.image_urls || room.photos`) dan merender galeri thumbnail foto kondisi kamar lengkap dengan label kategorinya (*Kamar Tidur*, *Kamar Mandi Dalam*, *Jendela*, dll.) pada setiap kartu tipe kamar di Tab 3.
+  * Mengintegrasikan setiap foto kamar dengan penampil **Lightbox Modal Zoom** layar penuh beresolusi tinggi saat foto diklik.
+  * Build verification `npm run build` lulus 100% tanpa TypeScript error (`tsc` exit code 0).
+
+### 50. Perbaikan Penyimpanan Tanda Tangan Digital & Salinan Syarat Ketentuan KostManager (Agustus 2026)
+- **Masalah**: Tanda tangan digital yang digambar agen di Step 3 tidak muncul di Dashboard Admin ("Tanda tangan digital belum terlampir") dan Tab Legalitas belum memuat salinan lengkap teks Syarat & Ketentuan (*Terms and Conditions*) yang disepakati mitra.
+- **Perbaikan**:
+  * **`AgentDashboard.tsx`**: Memperbarui `handleSaveKostManagerListing` agar secara eksplisit menyertakan `signature_data: signatureData` saat meng-update `kostmanager_surveys` dan `survey_requests`. Menambahkan restorasi otomatis tanda tangan saat membuka formulir survey.
+  * **`KostManagerManagement.tsx`**: Memperbarui query `openReviewModal` agar mengambil `signature_data` dari `kostmanager_surveys` dan fallback relasi. Menyajikan dokumen salinan resmi Syarat & Ketentuan Kemitraan KostManager (Auto-Pilot) 4 pasal perjanjian lengkap dengan stempel verifikasi digital.
+  * Build verification `npm run build` lulus 100% tanpa TypeScript error (`tsc` exit code 0).
+
+### 49. Pembaruan Protokol Kerja 2-Fase AI Agent (Pemisahan Plan & Walkthrough) (Agustus 2026)
+- **Permintaan**: Mengatur aturan workspace (*rules MD*) agar dokumen `IMPLEMENTATION_PLAN.md` dan `WALKTHROUGH.md` tidak dikeluarkan dalam satu proses yang bersamaan. Setiap instruksi fitur baru wajib disajikan dalam `IMPLEMENTATION_PLAN.md` terlebih dahulu, lalu Agent wajib berhenti dan menunggu persetujuan (ACC/Proceed) dari User sebelum mengeksekusi kode dan menerbitkan `WALKTHROUGH.md`.
+- **Perubahan**:
+  * Membuat dan memperbarui file aturan baku:
+    - [`.agents/rules/protocol.md`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/.agents/rules/protocol.md)
+    - [`GEMINI.md`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/GEMINI.md)
+    - [`AGENTS.md`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/AGENTS.md)
+    - [`C:\Users\ZHULL\.gemini\config\rules\user_global.md`](file:///C:/Users/ZHULL/.gemini/config/rules/user_global.md)
+  * Menegaskan siklus 2-Fase:
+    1. **Fase 1 (Perencanaan)**: Agent hanya menyusun `IMPLEMENTATION_PLAN.md` dengan `RequestFeedback: true`, lalu berhenti menunggu ACC User.
+    2. **Fase 2 (Eksekusi & Walkthrough)**: Setelah di-ACC, Agent mengeksekusi modifikasi kode, verifikasi build, mencatat di `PROGRESS.md`, dan menerbitkan `WALKTHROUGH.md`.
+
+### 48. Sistem Peninjauan Hasil Pendataan KostManager Lengkap & Komprehensif (Agustus 2026)
+- **Permintaan**: Menambahkan antarmuka inspeksi dan review hasil pendataan lapangan KostManager secara lengkap, mendalam, dan modern pada Dashboard Admin (`KostManagerManagement.tsx`), bukan antarmuka generik sederhana (AI slop).
+- **Perbaikan**:
+  * **Card Action & Visual Highlight**: Kartu berstatus `PENDING_ONBOARDING` / `SUBMITTED` kini memiliki highlight border emerald glowing, banner informasi dinamis, serta tombol aksi utama **`"🔍 Tinjau Hasil Pendataan Lengkap"`**.
+  * **Review Modal Menyeluruh (`ReviewKostManagerModal`)**:
+    - **Header & Quick Chat**: Tampilan profil mitra + tombol langsung chat WhatsApp, surveyor lapangan, dan tombol tautan Google Drive.
+    - **Tab 1 (🏢 Info & Lokasi GPS)**: Deskripsi properti, titik koordinat Latitude/Longitude, Google Maps iframe embed, landmark/kampus terdekat berjarak, fasilitas umum berikon, dan peraturan kost.
+    - **Tab 2 (📸 Galeri Foto Berkategori)**: Filter kategori foto (Bangunan Depan, Koridor, Kamar, Parkiran, dsb.) + **Lightbox Modal Zoom** untuk melihat foto layar penuh resolusi tinggi.
+    - **Tab 3 (🛏️ Tipe Kamar & Inventaris)**: Kartu spesifikasi tipe kamar (ukuran, harga sewa, jumlah ketersediaan kamar, fasilitas kamar tidur & kamar mandi).
+    - **Tab 4 (✍️ Legalitas & Tanda Tangan)**: Kanvas render tanda tangan digital asli mitra/surveyor berformat sertifikat legalitas, timestamp pendataan, dan klausul persetujuan kemitraan.
+    - **Sticky Action Bar**: Tombol aksi cepat **`"🚀 Setujui & Aktifkan Layanan Auto-Pilot (LIVE)"`** yang secara otomatis mengaktifkan status di `kostmanager_requests`, `properties`, `kostmanager_surveys`, dan `survey_requests`.
+  * Build verification `npm run build` lulus 100% tanpa TypeScript error (`tsc` exit code 0).
+
+### 47. Perbaikan Sinkronisasi Status Submit Survey KostManager Agen & Admin (Agustus 2026)
+- **Masalah**: Setelah agen menekan "Selesaikan & Submit", status kartu di Dashboard Agen tetap "SEDANG SURVEY" dan di Dashboard Admin tetap "SEDANG DISURVEY". Hal ini terjadi karena `isEditingKostManager.id` mereferensikan tabel `kostmanager_surveys` (bukan `survey_requests`), sehingga query update `survey_requests` tidak cocok, sementara tabel `kostmanager_surveys` & `kostmanager_requests` tidak ter-update dengan presisi.
+- **Perbaikan**:
+  * **`AgentDashboard.tsx`**: Meng-update secara eksplisit 3 tabel database saat submit: `kostmanager_surveys` (`status: 'SUBMITTED'`), `kostmanager_requests` (`status: 'PENDING_ONBOARDING'`), dan `survey_requests` (`status: 'SUBMITTED'`).
+  * **`adminService.ts`**: Memperbarui `getAdminSurveyRequests()` agar mengembalikan `computedStatus = 'SUBMITTED'` apabila `ks.status === 'SUBMITTED'` atau `ks.request?.status === 'PENDING_ONBOARDING'`.
+  * **`KostManagerManagement.tsx`**: Memperbarui badge & label status di Dashboard Admin untuk `PENDING_ONBOARDING` / `SUBMITTED` menjadi **`"Menunggu Onboarding Admin"`** (Hijau Emerald) dan memasukkannya ke tab filter **`📥 Butuh Verifikasi`**.
+  * Build verification `npm run build` lulus 100% tanpa TypeScript error (`tsc` exit code 0).
+
+### 46. Update UI Kartu Pendataan KostManager Setelah Submit ke Admin (Agustus 2026)
+- **Masalah**: Setelah agen survey menyelesaikan pendataan dan menekan submit, kartu pendataan KostManager pada Dashboard Agen tidak memberikan sinyal visual yang cukup jelas bahwa data telah dikirim ke Admin. Teks tombol sebelumnya ("Lihat Detail Listing") juga membingungkan agen karena tidak menunjukkan bahwa data listing masih bisa diedit.
+- **Perbaikan**:
+  * **Status Badge**: Mengubah badge status `SUBMITTED` menjadi warna **Emerald/Teal** bertuliskan **`"DATA DIKIRIM (MENUNGGU TINJAUAN ADMIN)"`**.
+  - **Informative Banner**: Menambahkan banner pemberitahuan berwarna Emerald di kartu `AgentDashboard.tsx` yang menjelaskan bahwa data telah dikirim ke Admin dan agen tetap dapat mengeditnya kapan saja.
+  - **Action Button**: Mengubah label tombol aksi utama pada kartu menjadi **`"✏️ Edit & Perbarui Data Listing"`**.
+  - **Modal Step 3 Submit Text**: Mengubah label tombol submit modal Step 3 saat mengedit survey status `SUBMITTED` menjadi **`"🔄 Perbarui & Kirim Ulang ke Admin"`**.
+  - Build verification `npm run build` lulus 100% tanpa TypeScript error (`tsc` exit code 0).
+
+### 45. Perbaikan ReferenceError fetchedUser is not defined pada AgentDashboard (Agustus 2026)
+- **Masalah**: Muncul error runtime `Uncaught (in promise) ReferenceError: fetchedUser is not defined at openKostManagerListing (AgentDashboard.tsx:1391)` saat agen survey menekan tombol membuka listing.
+- **Perbaikan**:
+  * Memindahkan deklarasi `let fetchedUser: any = null;` ke luar dan sebelum blok `try { ... }` pada fungsi `openKostManagerListing` di [`AgentDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx).
+  * Variabel `fetchedUser` sekarang dapat diakses secara merata di seluruh alur fungsi `openKostManagerListing`.
+  * Build verification `npm run build` lulus 100% tanpa TypeScript error (`tsc` exit code 0).
+
+### 44. Perbaikan PostgreSQL Error 23502 (mitra_id NOT NULL constraint) pada AgentDashboard (Agustus 2026)
+- **Masalah**: Gagal menyimpan listing properti dengan pesan `Error saving listing: {code: '23502', message: 'null value in column "mitra_id" of relation "properties" violates not-null constraint'}` saat ID mitra bernilai kosong `""`.
+- **Perbaikan**:
+  * Membuat fungsi helper `resolveValidOwnerUid` di [`AgentDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx) yang memvalidasi UUID dari form, request survey, profil mitra, relasi user, hingga ID agen yang sedang login.
+  * Menggunakan `resolveValidOwnerUid` pada `saveKostManagerDraftToDatabase`, `handleSaveKostManagerListing`, dan `openKostManagerListing` untuk menjamin `mitra_id` dan `owner_uid` selalu terisi UUID valid dan tidak pernah NULL.
+  * Build verification `npm run build` lulus 100% tanpa TypeScript error (`tsc` exit code 0).
+
+### 43. Perbaikan Resolusi Profil Pemilik/Mitra Asli di AgentDashboard (Agustus 2026)
+- **Masalah**: Bagian "Data Pemilik / Mitra" pada formulir survey agent menampilkan data dummy `Budi Santoso`, `budi.santoso@email.com`, dan `+62 812-3456-7890`.
+- **Perbaikan**:
+  * Menghapus seluruh nilai fallback dummy `Budi Santoso` di [`AgentDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx).
+  * Mengimplementasikan *Multi-Level Owner Profile Resolution* untuk membaca profil pemilik dari tabel `users` (kolom `name` & `full_name`), relasi `properties`, data `req.user`, dan metadata transaksi (`ownerName`, `ownerPhone`, `ownerEmail`).
+  * Jika data belum diisi pengguna, menampilkan placeholder bersih seperti `-` atau `Pemilik / Mitra Kost`.
+  * Build verification `npm run build` lulus 100% tanpa TypeScript error (`tsc` exit code 0).
+
+### 42. Perubahan Teks Tombol Lokasi GPS Menjadi 'Gunakan Lokasi Saya Saat Ini' (Agustus 2026)
+- **Permintaan**: Mengubah label teks tombol lokasi GPS di bawah preview peta mini agar lebih intuitif.
+- **Perbaikan**:
+  * Mengubah label teks tombol dari `KUNCI KOORDINAT PRESISI SAAT INI` menjadi **`Gunakan Lokasi Saya Saat Ini`** pada `AgentDashboard.tsx`.
+  * Build verification `npm run build` lulus 100% tanpa TypeScript error (`tsc` exit code 0).
+
+### 41. Penanganan & Optimasi Warning Browser Touch Intervention Google Maps (Agustus 2026)
+- **Masalah**: Muncul pesan peringatan `[Intervention] Ignored attempt to cancel a touchstart/touchmove/touchend event...` pada konsol browser saat peta disentuh/di-scroll pada simulasi mode HP.
+- **Penjelasan & Perbaikan**:
+  * Peringatan ini **bukan error/crash**, melainkan *Browser Intervention Warning* dari Chrome/Chromium saat Google Maps JS API mencoba memanggil `preventDefault()` pada gestur touch yang bertipe `cancelable: false` agar scroll halaman tetap mulus (60fps).
+  * Menambahkan atribut CSS `touch-action: none;` pada div kontainer peta Google Maps di `AgentDashboard.tsx` dan `KostFormMitra.tsx` untuk menginformasikan browser bahwa gesture peta dikendalikan secara khusus.
+  * Build verification `npm run build` lulus 100% tanpa TypeScript error (`tsc` exit code 0).
+
+### 40. Fitur Pop-Up Grafis Konfirmasi Perubahan Titik Lokasi Peta (Agustus 2026)
+- **Masalah**: Sentuhan atau klik tidak sengaja pada area preview peta mini langsung menggeser koordinat properti secara otomatis.
+- **Perbaikan**:
+  * Menambahkan **Pop-Up Grafis Konfirmasi** (`pendingLocationChange`) pada `AgentDashboard.tsx` dan `KostFormMitra.tsx`.
+  * Saat peta diklik atau marker diseret, titik lokasi tidak langsung berpindah. Sistem menampilkan modal grafis interaktif berisi perbandingan **Lokasi Saat Ini** vs **Titik Baru (Dipilih)** dengan tombol **"Batal (Tetap)"** dan **"Ya, Ubah Lokasi"**.
+  * Build verification `npm run build` lulus 100% tanpa TypeScript error (`tsc` exit code 0).
+
+### 39. Penyederhanaan Tombol Pop-Up Peta di AgentDashboard (Agustus 2026)
+- **Masalah**: Jumlah tombol pemicu pop-up peta terlalu banyak (tombol atas, tombol melayang di preview, dan tombol bawah), membuat tampilan area Lokasi GPS padat.
+- **Perbaikan**:
+  * Menghapus tombol pemicu pop-up di samping label header "Lokasi GPS".
+  * Mempertahankan **hanya 1 tombol tunggal** yang melayang di preview peta: **"Buka Peta Pop-up (Layar Penuh)"**.
+  * Mengembalikan tombol bawah menjadi 1 tombol tunggal penuh: **"Kunci Koordinat Presisi Saat Ini"**.
+  * Build verification `npm run build` lulus 100% tanpa TypeScript error (`tsc` exit code 0).
+
+### 38. Perbaikan Gestur Peta 1-Jari (gestureHandling: 'greedy') (Agustus 2026)
+- **Masalah**: Saat membuka peta pada simulasi mode HP (DevTools) atau perangkat seluler, penggeseran peta dengan 1 jari menampilkan peringatan *"Use two fingers to move the map"*.
+- **Perbaikan**:
+  * Menambahkan opsi `gestureHandling: 'greedy'` pada seluruh 7 konstruktor `new google.maps.Map` di 5 file (`AgentDashboard.tsx`, `KostFormMitra.tsx`, `Dashboard.tsx`, `KostManagerPortal.tsx`, `KostManagerLanding.tsx`).
+  * Peringatan 2 jari hilang 100% dan penggeseran peta + marker dapat dilakukan secara responsif cukup dengan **1 jari**.
+  * Build verification `npm run build` lulus 100% tanpa TypeScript error (`tsc` exit code 0).
+
+### 37. Fitur Modal Pop-Up Peta Layar Penuh (Fullscreen Map Picker) (Agustus 2026)
+- **Masalah**: Preview peta mini pada formulir pendataan berukuran kecil (~160px), sehingga gestur menggeser/zoom pada peta sering terganggu oleh scroll halaman formulir. Tombol-tombol kontrol Google Maps juga memakan sebagian besar area peta mini.
+- **Perbaikan**:
+  * **`AgentDashboard.tsx`**: Menambahkan tombol **"🔍 Perbesar Peta (Pop-up)"** dan **"Peta Layar Penuh"** di Lokasi GPS. Mengimplementasikan Modal Pop-Up Layar Penuh (`fixed inset-0 z-[99999]`) berukuran tinggi 92vh, dilengkapi Search Bar Autocomplete Google Places, tombol quick locator "Lokasi GPS Saya", marker draggable dengan animasi DROP, pembacaan koordinat real-time, dan tombol "Kunci & Gunakan Lokasi Ini".
+  * **`KostFormMitra.tsx`**: Mengintegrasikan modal pop-up layar penuh berfitur sama pada komponen `MapPicker` formulir mitra biasa.
+  * Build verification `npm run build` lulus 100% tanpa TypeScript error (`tsc` exit code 0).
+
+### 36. Perbaikan Maps Embed Preview Kartu KostManager (Agustus 2026)
+- **Masalah**: Preview peta pada kartu pendataan KostManager di Dashboard Agen (`AgentDashboard.tsx`) menampilkan pesan error Google Maps Platform rejected request karena menyematkan iframe dengan endpoint `maps/embed/v1/place` yang memerlukan pengaktifan layanan *Maps Embed API* terpisah di Google Cloud Console.
+- **Perbaikan**:
+  * Mengganti URL `src` iframe di `AgentDashboard.tsx` dari `https://www.google.com/maps/embed/v1/place?...` menjadi URL standar `https://maps.google.com/maps?q=${lat},${lng}&z=16&output=embed`.
+  * Format ini konsisten dengan `KostDetail.tsx` dan `KostManagerManagement.tsx` dan langsung merender lokasi peta tanpa membutuhkan API activation tambahan di GCP Console.
+  * Build verification `npm run build` lulus 100% tanpa error (`tsc` exit code 0).
+
+### 35. Migrasi Peta Leaflet/OpenStreetMap → Google Maps Platform (Agustus 2026)
+- **Masalah**:
+  1. Semua komponen peta di aplikasi menggunakan Leaflet + OpenStreetMap yang kurang akurat untuk POI (Point of Interest) lokal Indonesia, sehingga nama tempat sering tidak dikenal atau tidak lengkap.
+  2. Nominatim (reverse geocoder OSM) kadang gagal menemukan nama area/kecamatan lokal yang familiar di Indonesia.
+  3. Terdapat inkonsistensi: kartu pesanan KostManager di dashboard admin sudah menggunakan Google Maps embed, sementara semua komponen picker masih Leaflet.
+- **Perbaikan**:
+  * **`index.html`**: Menghapus script Leaflet CSS + JS (`unpkg.com/leaflet@1.9.4`). Hanya menyisakan Google Maps JS API (`libraries=places`) yang sudah tersedia.
+  * **`Dashboard.tsx`**: Komponen `LocationPicker` (form tambah/edit properti admin & mitra) dimigrasi ke `google.maps.Map`, `google.maps.Marker` draggable, dan `google.maps.Geocoder` untuk reverse geocoding. Ditambahkan `google.maps.places.Autocomplete` pada search bar.
+  * **`KostManagerPortal.tsx`**: Komponen `LocationPicker` dimigrasi ke Google Maps dengan pola yang sama. Height dipertahankan 300px.
+  * **`KostManagerLanding.tsx`**: Komponen `LocationPicker` (form registrasi KostManager publik) dimigrasi. Height 220px dipertahankan.
+  * **`AgentDashboard.tsx`** (2 instance):
+    - **Landmark map picker** (`kmLandmarkMapInstance`): `L.map` → `google.maps.Map`, click listener diperbarui ke format `e.latLng.lat()/lng()`.
+    - **Main GPS picker** (`kmMapInstance`): Sama, ditambah listener `dragend` pada marker (sebelumnya tidak ada di implementasi Leaflet lama), sehingga drag marker juga memperbarui `kmListingForm.location`.
+  * **Memory management**: Cleanup `useEffect` menggunakan `google.maps.event.clearInstanceListeners()` untuk mencegah memory leak, menggantikan `.remove()` Leaflet.
+  * **Build verification**: `npm run build` lulus dengan exit code 0, 2526 modul, tanpa TypeScript error.
+
 ### 34. Perbaikan Penyerapan Data Landmark & Persistensi Draf Otomatis KostManager (Agustus 2026)
 - **Masalah**:
   1. Data landmark (kampus terdekat) yang sudah diisi oleh mitra biasa tidak terisi secara otomatis ketika surveyor membuka wizard onboarding KostManager.

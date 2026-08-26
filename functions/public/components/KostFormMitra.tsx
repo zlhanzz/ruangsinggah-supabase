@@ -4,7 +4,7 @@ import { addPropertyWithMedia, updatePropertyWithMedia } from '../adminService';
 import {
     X, ChevronRight, ChevronLeft, Camera, Video, MapPin, Home, Wifi,
     Plus, Trash2, Check, AlertCircle, Loader2, Upload, Image as ImageIcon,
-    Phone, BookOpen, DollarSign, Search, Navigation, ShieldCheck, User
+    Phone, BookOpen, DollarSign, Search, Navigation, ShieldCheck, User, Maximize2
 } from 'lucide-react';
 
 interface KostFormMitraProps {
@@ -113,56 +113,213 @@ const MapPicker: React.FC<{
     const [isSearching, setIsSearching] = useState(false);
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-    const reverseGeocode = useCallback(async (lat: number, lng: number) => {
-        try {
-            const res = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`,
-                { headers: { 'User-Agent': 'RuangSinggah.id/1.0' } }
-            );
-            const data = await res.json();
-            const addr = data.display_name || 'Alamat tidak ditemukan';
-            const address = data.address || {};
-            const city = address.city || address.town || address.municipality || address.county || address.state || '';
-            const area = address.suburb || address.village || address.district || address.neighbourhood || '';
-            
-            onLocationChange(lat, lng, addr, city, area);
-            setSearchQuery(addr);
-        } catch {
-            onLocationChange(lat, lng, 'Gagal memuat alamat');
+    // Fullscreen Pop-up Map States & Refs
+    const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+    const [pendingLocationChange, setPendingLocationChange] = useState<{ lat: number; lng: number } | null>(null);
+    const [modalTempLocation, setModalTempLocation] = useState<{ lat: number; lng: number }>({ lat, lng });
+    const modalMapRef = useRef<HTMLDivElement>(null);
+    const modalMapInstance = useRef<any>(null);
+    const modalMarkerInstance = useRef<any>(null);
+    const [modalSearchQuery, setModalSearchQuery] = useState('');
+    const [modalSearchResults, setModalSearchResults] = useState<any[]>([]);
+    const [isSearchingModalMap, setIsSearchingModalMap] = useState(false);
+    const modalSearchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        if (!isMapModalOpen || !modalMapRef.current) {
+            if (modalMapInstance.current) {
+                (window as any).google?.maps?.event?.clearInstanceListeners(modalMapInstance.current);
+                modalMapInstance.current = null;
+                modalMarkerInstance.current = null;
+            }
+            return;
         }
+
+        const google = (window as any).google;
+        if (!google?.maps) return;
+
+        const startLat = modalTempLocation.lat || lat;
+        const startLng = modalTempLocation.lng || lng;
+
+        try {
+            const map = new google.maps.Map(modalMapRef.current, {
+                center: { lat: startLat, lng: startLng },
+                zoom: 17,
+                mapTypeControl: true,
+                streetViewControl: true,
+                fullscreenControl: false,
+                zoomControl: true,
+                gestureHandling: 'greedy',
+            });
+
+            const marker = new google.maps.Marker({
+                position: { lat: startLat, lng: startLng },
+                map,
+                draggable: true,
+                animation: google.maps.Animation.DROP,
+            });
+
+            map.addListener('click', (e: any) => {
+                const clickLat = e.latLng.lat();
+                const clickLng = e.latLng.lng();
+                marker.setPosition({ lat: clickLat, lng: clickLng });
+                setModalTempLocation({ lat: clickLat, lng: clickLng });
+            });
+
+            marker.addListener('dragend', () => {
+                const pos = marker.getPosition();
+                if (pos) {
+                    setModalTempLocation({ lat: pos.lat(), lng: pos.lng() });
+                }
+            });
+
+            modalMapInstance.current = map;
+            modalMarkerInstance.current = marker;
+        } catch (e) {
+            console.error("Modal Map Init Error:", e);
+        }
+
+        return () => {
+            if (modalMapInstance.current) {
+                (window as any).google?.maps?.event?.clearInstanceListeners(modalMapInstance.current);
+                modalMapInstance.current = null;
+                modalMarkerInstance.current = null;
+            }
+        };
+    }, [isMapModalOpen]);
+
+    const handleModalSearch = (text: string) => {
+        setModalSearchQuery(text);
+        if (modalSearchDebounceRef.current) clearTimeout(modalSearchDebounceRef.current);
+        if (text.length < 3) { setModalSearchResults([]); return; }
+        modalSearchDebounceRef.current = setTimeout(() => {
+            setIsSearchingModalMap(true);
+            try {
+                const gw = (window as any).google;
+                if (!gw?.maps?.places?.AutocompleteService) { setIsSearchingModalMap(false); return; }
+                const svc = new gw.maps.places.AutocompleteService();
+                svc.getPlacePredictions(
+                    { input: text, componentRestrictions: { country: 'id' }, types: ['geocode', 'establishment'] },
+                    (predictions: any[], status: string) => {
+                        if (status === gw.maps.places.PlacesServiceStatus.OK && predictions) {
+                            setModalSearchResults(predictions);
+                        } else {
+                            setModalSearchResults([]);
+                        }
+                        setIsSearchingModalMap(false);
+                    }
+                );
+            } catch { setModalSearchResults([]); setIsSearchingModalMap(false); }
+        }, 500);
+    };
+
+    const selectModalSearchResult = (result: any) => {
+        setModalSearchQuery(result.description || result.structured_formatting?.main_text || '');
+        setModalSearchResults([]);
+        const gw = (window as any).google;
+        if (!gw?.maps?.Geocoder) return;
+        const geocoder = new gw.maps.Geocoder();
+        geocoder.geocode(
+            { placeId: result.place_id },
+            (results: any[], status: string) => {
+                if (status === 'OK' && results && results.length > 0) {
+                    const loc = results[0].geometry.location;
+                    const plat = loc.lat(), plng = loc.lng();
+                    setModalTempLocation({ lat: plat, lng: plng });
+                    if (modalMarkerInstance.current && modalMapInstance.current) {
+                        modalMarkerInstance.current.setPosition({ lat: plat, lng: plng });
+                        modalMapInstance.current.setCenter({ lat: plat, lng: plng });
+                        modalMapInstance.current.setZoom(17);
+                    }
+                }
+            }
+        );
+    };
+
+    const handleConfirmModalLocation = () => {
+        reverseGeocode(modalTempLocation.lat, modalTempLocation.lng);
+        setIsMapModalOpen(false);
+    };
+
+    // Helper: extract city and area from Google geocoder address_components
+    const extractCityArea = (components: any[]) => {
+        let city = '', area = '';
+        for (const comp of components) {
+            const types = comp.types || [];
+            if (types.includes('administrative_area_level_2') && !city) city = comp.long_name;
+            if (types.includes('administrative_area_level_3') && !city) city = comp.long_name;
+            if (types.includes('sublocality_level_1') && !area) area = comp.long_name;
+            if (types.includes('sublocality') && !area) area = comp.long_name;
+            if (types.includes('locality') && !city) city = comp.long_name;
+        }
+        return { city, area };
+    };
+
+    const reverseGeocode = useCallback((lat: number, lng: number) => {
+        const gw = (window as any).google;
+        if (!gw?.maps?.Geocoder) {
+            onLocationChange(lat, lng, `${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+            return;
+        }
+        const geocoder = new gw.maps.Geocoder();
+        geocoder.geocode(
+            { location: { lat, lng } },
+            (results: any[], status: string) => {
+                if (status === 'OK' && results && results.length > 0) {
+                    const addr = results[0].formatted_address;
+                    const { city, area } = extractCityArea(results[0].address_components || []);
+                    onLocationChange(lat, lng, addr, city, area);
+                    setSearchQuery(addr);
+                } else {
+                    onLocationChange(lat, lng, `${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+                }
+            }
+        );
     }, [onLocationChange]);
 
     useEffect(() => {
         if (!mapRef.current || mapInstance.current) return;
-        const L = (window as any).L;
-        if (!L) return;
+        const gw = (window as any).google;
+        if (!gw?.maps?.Map) return;
 
-        const map = L.map(mapRef.current).setView([lat, lng], 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        }).addTo(map);
-
-        const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
-        marker.on('dragend', (e: any) => {
-            const pos = e.target.getLatLng();
-            reverseGeocode(pos.lat, pos.lng);
+        const map = new gw.maps.Map(mapRef.current, {
+            center: { lat, lng },
+            zoom: 15,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false,
+            gestureHandling: 'greedy',
         });
-        map.on('click', (e: any) => {
-            marker.setLatLng(e.latlng);
-            reverseGeocode(e.latlng.lat, e.latlng.lng);
+
+        const marker = new gw.maps.Marker({
+            position: { lat, lng },
+            map,
+            draggable: true,
+        });
+
+        marker.addListener('dragend', () => {
+            const pos = marker.getPosition();
+            if (pos) {
+                setPendingLocationChange({ lat: pos.lat(), lng: pos.lng() });
+                marker.setPosition({ lat, lng });
+            }
+        });
+
+        map.addListener('click', (e: any) => {
+            const clickLat = e.latLng.lat(), clickLng = e.latLng.lng();
+            setPendingLocationChange({ lat: clickLat, lng: clickLng });
         });
 
         mapInstance.current = map;
         markerInstance.current = marker;
-        setTimeout(() => map.invalidateSize(), 100);
     }, []);
 
     useEffect(() => {
         if (markerInstance.current && mapInstance.current) {
-            const cur = markerInstance.current.getLatLng();
-            if (Math.abs(cur.lat - lat) > 0.0001 || Math.abs(cur.lng - lng) > 0.0001) {
-                markerInstance.current.setLatLng([lat, lng]);
-                mapInstance.current.setView([lat, lng], 15);
+            const curPos = markerInstance.current.getPosition();
+            if (!curPos || Math.abs(curPos.lat() - lat) > 0.0001 || Math.abs(curPos.lng() - lng) > 0.0001) {
+                markerInstance.current.setPosition({ lat, lng });
+                mapInstance.current.setCenter({ lat, lng });
             }
         }
     }, [lat, lng]);
@@ -171,46 +328,61 @@ const MapPicker: React.FC<{
         setSearchQuery(text);
         if (debounceRef.current) clearTimeout(debounceRef.current);
         if (text.length < 3) { setSearchResults([]); return; }
-        debounceRef.current = setTimeout(async () => {
+        debounceRef.current = setTimeout(() => {
             setIsSearching(true);
             try {
-                const res = await fetch(
-                    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text)}&countrycodes=id&limit=5`,
-                    { headers: { 'User-Agent': 'RuangSinggah.id/1.0' } }
+                const gw = (window as any).google;
+                if (!gw?.maps?.places?.AutocompleteService) { setIsSearching(false); return; }
+                const svc = new gw.maps.places.AutocompleteService();
+                svc.getPlacePredictions(
+                    { input: text, componentRestrictions: { country: 'id' }, types: ['geocode', 'establishment'] },
+                    (predictions: any[], status: string) => {
+                        if (status === gw.maps.places.PlacesServiceStatus.OK && predictions) {
+                            setSearchResults(predictions);
+                        } else {
+                            setSearchResults([]);
+                        }
+                        setIsSearching(false);
+                    }
                 );
-                setSearchResults(await res.json());
-            } catch { setSearchResults([]); }
-            finally { setIsSearching(false); }
+            } catch { setSearchResults([]); setIsSearching(false); }
         }, 500);
     };
 
-    const selectResult = async (r: any) => {
-        const plat = parseFloat(r.lat), plng = parseFloat(r.lon);
-        setSearchQuery(r.display_name);
+    const selectResult = (r: any) => {
+        setSearchQuery(r.description || r.structured_formatting?.main_text || '');
         setSearchResults([]);
         
-        // Reverse geocode explicitly to get the detailed address object for city and area
-        try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${plat}&lon=${plng}&addressdetails=1`, { headers: { 'User-Agent': 'RuangSinggah.id/1.0' } });
-            const data = await res.json();
-            const address = data.address || {};
-            const city = address.city || address.town || address.municipality || address.county || address.state || '';
-            const area = address.suburb || address.village || address.district || address.neighbourhood || '';
-            onLocationChange(plat, plng, r.display_name, city, area);
-        } catch {
-            onLocationChange(plat, plng, r.display_name);
-        }
-
-        if (markerInstance.current && mapInstance.current) {
-            markerInstance.current.setLatLng([plat, plng]);
-            mapInstance.current.setView([plat, plng], 16);
-        }
+        const gw = (window as any).google;
+        if (!gw?.maps?.Geocoder) return;
+        const geocoder = new gw.maps.Geocoder();
+        geocoder.geocode(
+            { placeId: r.place_id },
+            (results: any[], status: string) => {
+                if (status === 'OK' && results && results.length > 0) {
+                    const loc = results[0].geometry.location;
+                    const plat = loc.lat(), plng = loc.lng();
+                    const addr = results[0].formatted_address;
+                    const { city, area } = extractCityArea(results[0].address_components || []);
+                    onLocationChange(plat, plng, addr, city, area);
+                    if (markerInstance.current && mapInstance.current) {
+                        markerInstance.current.setPosition({ lat: plat, lng: plng });
+                        mapInstance.current.setCenter({ lat: plat, lng: plng });
+                        mapInstance.current.setZoom(16);
+                    }
+                }
+            }
+        );
     };
 
     const handleCurrentLocation = () => {
         if (!navigator.geolocation) return;
         navigator.geolocation.getCurrentPosition(pos => {
             reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+            if (markerInstance.current && mapInstance.current) {
+                markerInstance.current.setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                mapInstance.current.setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+            }
         });
     };
 
@@ -243,14 +415,14 @@ const MapPicker: React.FC<{
                                 <Loader2 size={14} className="animate-spin" /> Mencari...
                             </p>
                         ) : (
-                            searchResults.map((r, i) => (
+                            searchResults.map((r: any, i: number) => (
                                 <button
-                                    key={i} type="button"
+                                    key={r.place_id || i} type="button"
                                     onClick={() => selectResult(r)}
                                     className="w-full p-3 text-left text-xs font-medium text-gray-700 hover:bg-orange-50 border-b border-gray-50 last:border-0 transition-colors flex items-start gap-2"
                                 >
                                     <MapPin size={12} className="text-orange-400 mt-0.5 shrink-0" />
-                                    <span className="line-clamp-2">{r.display_name}</span>
+                                    <span className="line-clamp-2">{r.description || r.structured_formatting?.main_text}</span>
                                 </button>
                             ))
                         )}
@@ -259,12 +431,217 @@ const MapPicker: React.FC<{
             </div>
 
             {/* Map */}
-            <div className="relative rounded-3xl overflow-hidden border border-gray-200 shadow-sm">
-                <div ref={mapRef} style={{ height: 280, width: '100%', zIndex: 0 }} />
+            <div className="relative rounded-3xl overflow-hidden border border-gray-200 shadow-sm group">
+                <div ref={mapRef} style={{ height: 280, width: '100%', zIndex: 0, touchAction: 'none' }} />
+                
+                {/* Fullscreen Button */}
+                <button
+                    type="button"
+                    onClick={() => {
+                        setModalTempLocation({ lat, lng });
+                        setIsMapModalOpen(true);
+                    }}
+                    className="absolute top-3 right-3 z-10 bg-white/95 backdrop-blur-sm hover:bg-white text-gray-800 text-xs font-bold px-3 py-2 rounded-xl border border-gray-200 shadow-md flex items-center gap-1.5 transition-all active:scale-95"
+                >
+                    <Maximize2 size={14} className="text-orange-500" />
+                    <span>Perbesar Peta (Pop-up)</span>
+                </button>
+
                 <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm rounded-xl px-3 py-1.5 text-[10px] font-bold text-gray-500 border border-gray-100">
                     📍 Klik peta atau seret marker untuk memilih lokasi
                 </div>
             </div>
+
+            {/* Fullscreen Map Picker Pop-up Modal */}
+            {isMapModalOpen && (
+                <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-md flex flex-col justify-center items-center p-2 sm:p-4 md:p-6 animate-fadeIn">
+                    <div className="bg-white w-full max-w-4xl h-[92vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 relative">
+                        
+                        {/* Modal Header */}
+                        <div className="bg-white border-b border-gray-100 px-5 py-3.5 flex justify-between items-center shrink-0">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-500 shrink-0">
+                                    <MapPin size={18} />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-black text-gray-900 leading-tight">Tentukan Titik Lokasi Presisi Properti</h3>
+                                    <p className="text-[11px] font-medium text-gray-500">Seret marker atau klik peta untuk menentukan koordinat kost dengan bebas</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsMapModalOpen(false)}
+                                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center transition-colors"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        {/* Modal Search Bar & Quick GPS */}
+                        <div className="p-3 bg-slate-50 border-b border-gray-100 flex flex-col sm:flex-row gap-2 relative z-20 shrink-0">
+                            <div className="relative flex-1">
+                                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Cari nama jalan, tempat, atau lokasi di peta..."
+                                    value={modalSearchQuery}
+                                    onChange={e => handleModalSearch(e.target.value)}
+                                    className="w-full h-10 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-900 pl-9 pr-4 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
+                                />
+                                
+                                {/* Modal Search Dropdown */}
+                                {(isSearchingModalMap || modalSearchResults.length > 0) && (
+                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200 shadow-xl z-50 overflow-hidden max-h-52 overflow-y-auto divide-y divide-gray-50">
+                                        {isSearchingModalMap ? (
+                                            <p className="p-3 text-xs font-bold text-gray-400 flex items-center gap-2">
+                                                <Loader2 size={14} className="animate-spin" /> Mencari lokasi...
+                                            </p>
+                                        ) : (
+                                            modalSearchResults.map((r: any, i: number) => (
+                                                <button
+                                                    key={r.place_id || i}
+                                                    type="button"
+                                                    onClick={() => selectModalSearchResult(r)}
+                                                    className="w-full p-2.5 text-left text-xs font-medium text-gray-700 hover:bg-orange-50 transition-colors flex items-start gap-2"
+                                                >
+                                                    <MapPin size={14} className="text-orange-500 mt-0.5 shrink-0" />
+                                                    <span className="line-clamp-2">{r.description || r.structured_formatting?.main_text}</span>
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (navigator.geolocation) {
+                                        navigator.geolocation.getCurrentPosition(pos => {
+                                            const plat = pos.coords.latitude, plng = pos.coords.longitude;
+                                            setModalTempLocation({ lat: plat, lng: plng });
+                                            if (modalMarkerInstance.current && modalMapInstance.current) {
+                                                modalMarkerInstance.current.setPosition({ lat: plat, lng: plng });
+                                                modalMapInstance.current.setCenter({ lat: plat, lng: plng });
+                                                modalMapInstance.current.setZoom(17);
+                                            }
+                                        }, err => alert('Gagal mendapatkan GPS: ' + err.message));
+                                    }
+                                }}
+                                className="h-10 px-3.5 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shrink-0 whitespace-nowrap"
+                            >
+                                <Navigation size={14} />
+                                Lokasi GPS Saya
+                            </button>
+                        </div>
+
+                        {/* Modal Map Viewport */}
+                        <div className="relative flex-1 w-full bg-gray-100">
+                            <div ref={modalMapRef} className="w-full h-full" style={{ touchAction: 'none' }} />
+
+                            {/* Floating Coordinate Readout */}
+                            <div className="absolute bottom-4 left-4 right-4 sm:right-auto bg-white/95 backdrop-blur-sm rounded-2xl p-3 border border-gray-200 shadow-lg z-10 flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-2">
+                                    <MapPin size={18} className="text-orange-500" />
+                                    <div>
+                                        <p className="text-[10px] uppercase font-bold text-gray-400">Koordinat Dipilih</p>
+                                        <p className="text-xs font-mono font-black text-gray-800">
+                                            {modalTempLocation.lat.toFixed(6)}, {modalTempLocation.lng.toFixed(6)}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer Actions */}
+                        <div className="bg-white border-t border-gray-100 p-3.5 sm:px-6 flex items-center justify-end gap-3 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setIsMapModalOpen(false)}
+                                className="px-5 py-2.5 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmModalLocation}
+                                className="px-6 py-2.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-xl shadow-lg shadow-orange-500/20 transition-all flex items-center gap-1.5 active:scale-95"
+                            >
+                                <Check size={16} />
+                                Kunci & Gunakan Lokasi Ini
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Graphical Location Change Confirmation Modal */}
+            {pendingLocationChange && (
+                <div className="fixed inset-0 z-[100000] bg-slate-950/80 backdrop-blur-md flex justify-center items-center p-4 animate-fadeIn">
+                    <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-gray-100 p-6 flex flex-col items-center text-center relative">
+                        
+                        {/* Animated Icon Header */}
+                        <div className="w-16 h-16 rounded-full bg-orange-50 border border-orange-200 flex items-center justify-center text-orange-500 mb-4 shadow-inner relative">
+                            <span className="material-symbols-outlined text-3xl animate-bounce" style={{ fontVariationSettings: '"FILL" 1' }}>edit_location_alt</span>
+                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 rounded-full border-2 border-white flex items-center justify-center text-white text-[10px] font-black">!</div>
+                        </div>
+
+                        <h3 className="text-base font-black text-gray-900 mb-1">Konfirmasi Pindah Titik Lokasi</h3>
+                        <p className="text-xs text-gray-500 mb-5 leading-relaxed font-medium">
+                            Peta tersentuh atau diklik. Apakah Anda yakin ingin memindahkan koordinat lokasi kost ke titik baru ini?
+                        </p>
+
+                        {/* Coordinate Comparison Box */}
+                        <div className="w-full bg-slate-50 border border-gray-200/80 rounded-2xl p-3.5 mb-6 text-left space-y-2.5">
+                            <div className="flex justify-between items-center text-xs">
+                                <span className="text-gray-400 font-bold text-[10px] uppercase tracking-wider">Lokasi Saat Ini</span>
+                                <span className="font-mono font-bold text-gray-600 bg-gray-200/60 px-2 py-0.5 rounded-md text-[11px]">
+                                    {lat.toFixed(6)}, {lng.toFixed(6)}
+                                </span>
+                            </div>
+                            <div className="border-t border-dashed border-gray-200" />
+                            <div className="flex justify-between items-center text-xs">
+                                <span className="text-orange-600 font-black text-[10px] uppercase tracking-wider flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-xs">near_me</span>
+                                    Titik Baru (Dipilih)
+                                </span>
+                                <span className="font-mono font-black text-orange-600 bg-orange-100/70 px-2 py-0.5 rounded-md text-[11px]">
+                                    {pendingLocationChange.lat.toFixed(6)}, {pendingLocationChange.lng.toFixed(6)}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="grid grid-cols-2 gap-3 w-full">
+                            <button
+                                type="button"
+                                onClick={() => setPendingLocationChange(null)}
+                                className="w-full py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all active:scale-95"
+                            >
+                                Batal (Tetap)
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const newLoc = pendingLocationChange;
+                                    reverseGeocode(newLoc.lat, newLoc.lng);
+                                    if (markerInstance.current) {
+                                        markerInstance.current.setPosition(newLoc);
+                                    }
+                                    if (mapInstance.current) {
+                                        mapInstance.current.panTo(newLoc);
+                                    }
+                                    setPendingLocationChange(null);
+                                }}
+                                className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs rounded-xl shadow-lg shadow-orange-500/25 transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                            >
+                                <span className="material-symbols-outlined text-sm">check_circle</span>
+                                Ya, Ubah Lokasi
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Coordinate display */}
             <div className="grid grid-cols-2 gap-2 text-[10px]">
@@ -429,37 +806,39 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
     const [isSearchingFacility, setIsSearchingFacility] = useState<Record<string, boolean>>({});
 
-    const searchFacilityCoordinates = async (field: 'campuses' | 'publicFacilities', index: number, name: string) => {
+    const searchFacilityCoordinates = (field: 'campuses' | 'publicFacilities', index: number, name: string) => {
         if (!name) return;
         const stateKey = `${field}-${index}`;
         setIsSearchingFacility(prev => ({ ...prev, [stateKey]: true }));
-        try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(name)}&countrycodes=id&limit=1`, {
-                headers: { 'User-Agent': 'RuangSinggah.id/1.0' }
-            });
-            const data = await res.json();
-            if (data && data.length > 0) {
-                const lat = parseFloat(data[0].lat);
-                const lng = parseFloat(data[0].lon);
-                const arr = [...(form[field] || [])];
-                
-                let distString = arr[index].distance;
-                if (form.location && form.location.lat) {
-                    const km = calculateDistance(form.location.lat, form.location.lng, lat, lng);
-                    distString = `± ${km} KM`;
-                }
-
-                arr[index] = { ...arr[index], lat, lng, distance: distString };
-                upd(field, arr);
-            } else {
-                alert('Lokasi tidak ditemukan di peta. Coba setel nama yang lebih spesifik.');
-            }
-        } catch (error) {
-            console.error('Error fetching facility location:', error);
-            alert('Gagal mencari kordinat.');
-        } finally {
+        const gw = (window as any).google;
+        if (!gw?.maps?.Geocoder) {
             setIsSearchingFacility(prev => ({ ...prev, [stateKey]: false }));
+            alert('Google Maps belum siap.');
+            return;
         }
+        const geocoder = new gw.maps.Geocoder();
+        geocoder.geocode(
+            { address: name + ', Indonesia', componentRestrictions: { country: 'ID' } },
+            (results: any[], status: string) => {
+                if (status === 'OK' && results && results.length > 0) {
+                    const loc = results[0].geometry.location;
+                    const lat = loc.lat(), lng = loc.lng();
+                    const arr = [...(form[field] || [])];
+                    
+                    let distString = arr[index].distance;
+                    if (form.location && form.location.lat) {
+                        const km = calculateDistance(form.location.lat, form.location.lng, lat, lng);
+                        distString = `± ${km} KM`;
+                    }
+
+                    arr[index] = { ...arr[index], lat, lng, distance: distString };
+                    upd(field, arr);
+                } else {
+                    alert('Lokasi tidak ditemukan di peta. Coba setel nama yang lebih spesifik.');
+                }
+                setIsSearchingFacility(prev => ({ ...prev, [stateKey]: false }));
+            }
+        );
     };
 
     // ── location ───────────────────────────────────────────────────────────────

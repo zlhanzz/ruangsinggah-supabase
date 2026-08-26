@@ -25,6 +25,13 @@ Dokumen ini menjelaskan daftar perubahan, hasil pengujian, dan instruksi deploy 
 * **Perubahan**:
   * Ketika onboarding dibuka kembali, sistem memeriksa draf lokal. Jika draf lokal memiliki array kamar kosong (`roomTypes.length === 0`), sistem secara cerdas akan menarik kembali data kamar asli dari database (`dbKmProp.room_types`) dan menggabungkannya ke draf lokal agar data kamar tidak terbuang.
 
+### D. Simulasi Tampilan Mobile App (Preview Listing) & Redesain Data Kamar
+* **File**: [`functions/public/pages/AgentDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx)
+* **Perubahan**:
+  * **Simulator Tampilan Mobile**: Mengganti seksi ringkasan properti sederhana dengan bingkai simulator handphone interaktif modern (dilengkapi status bar, app bar, indikator, dan tombol aksi pemesanan sewa) yang merepresentasikan persis visualisasi detail kost di layar aplikasi calon penyewa.
+  * **Carousel Interaktif**: Pemilik kost dapat mengetuk tombol-tombol foto mini di bawah carousel simulator handphone untuk berganti-ganti foto kost secara interaktif.
+  * **Redesain Data Kamar**: Merestrukturisasi panel statistik kamar (Total, Terisi, Kosong) dengan gaya minimalis abu-abu/oranye agar konsisten dengan warna sistem, dan memperluas isi akordeon saat di-*maximize* untuk memaparkan seluruh rincian kamar yang diinput (tipe, lantai, kapasitas, informasi sewa penyewa aktif, daftar skema harga lengkap, biaya bulanan tambahan, kelengkapan WC/Dapur, serta grid foto kondisi kamar).
+
 ### E. Sistem Pembersih Draf Otomatis (Backend Scheduler & HTTP Trigger)
 * **File**: [`functions/src/index.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/src/index.ts)
 * **Perubahan**:

@@ -97,98 +97,128 @@ declare global {
     }
 }
 
-// Helper Component for Leaflet Map
-// Helper Component for Leaflet Map
+// Google Maps LocationPicker Component
 const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (lat: number, lng: number, address: string, city?: string, area?: string) => void }> = ({ lat, lng, onLocationChange }) => {
     const mapContainerRef = useRef<HTMLDivElement>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
     const mapInstance = useRef<any>(null);
     const markerInstance = useRef<any>(null);
-
+    const geocoderInstance = useRef<any>(null);
+    const autocompleteInstance = useRef<any>(null);
     const [searchQuery, setSearchQuery] = useState("");
+
+    const reverseGeocode = (latVal: number, lngVal: number) => {
+        if (!geocoderInstance.current) return;
+        geocoderInstance.current.geocode({ location: { lat: latVal, lng: lngVal } }, (results: any[], status: string) => {
+            if (status === 'OK' && results[0]) {
+                const result = results[0];
+                const addressStr = result.formatted_address;
+                const components = result.address_components || [];
+                const getComp = (type: string) => components.find((c: any) => c.types.includes(type))?.long_name || '';
+                const city = getComp('locality') || getComp('administrative_area_level_2') || getComp('administrative_area_level_1');
+                const area = getComp('sublocality_level_1') || getComp('sublocality') || getComp('neighborhood');
+                setSearchQuery(addressStr);
+                onLocationChange(latVal, lngVal, addressStr, city, area);
+            } else {
+                onLocationChange(latVal, lngVal, `GPS: ${latVal.toFixed(6)}, ${lngVal.toFixed(6)}`);
+            }
+        });
+    };
 
     useEffect(() => {
         if (!mapContainerRef.current) return;
-        if (mapInstance.current) return; // Initialize once
+        if (mapInstance.current) return;
 
-        if (typeof window.L === 'undefined') {
-            console.error("Leaflet API not loaded");
+        const google = (window as any).google;
+        if (!google?.maps) {
+            console.error("Google Maps API not loaded");
             return;
         }
 
-        const L = window.L;
-        const initialLocation = [lat, lng];
+        const initialLatLng = { lat, lng };
 
-        // Initialize Map
-        const map = L.map(mapContainerRef.current).setView(initialLocation, 15);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
-
-        // Initialize Marker
-        const marker = L.marker(initialLocation, { draggable: true }).addTo(map);
-
-        const updatePositionAndAddress = async (lat: number, lng: number) => {
-            // Reverse Geocoding using Nominatim
-            try {
-                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`, {
-                    headers: {
-                        'User-Agent': 'RuangSinggah/1.0'
-                    }
-                });
-                const data = await response.json();
-                const addressStr = data.display_name || "Alamat tidak ditemukan";
-                const addressObj = data.address || {};
-                const city = addressObj.city || addressObj.town || addressObj.municipality || addressObj.county || addressObj.state || '';
-                const area = addressObj.suburb || addressObj.village || addressObj.district || addressObj.neighbourhood || '';
-                
-                onLocationChange(lat, lng, addressStr, city, area);
-                setSearchQuery(addressStr);
-            } catch (error) {
-                console.error("Geocoding failed:", error);
-                onLocationChange(lat, lng, "Gagal memuat alamat");
-            }
-        };
-
-        // Listeners
-        marker.on('dragend', function (event: any) {
-            const marker = event.target;
-            const position = marker.getLatLng();
-            updatePositionAndAddress(position.lat, position.lng);
+        const map = new google.maps.Map(mapContainerRef.current, {
+            center: initialLatLng,
+            zoom: 15,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false,
+            gestureHandling: 'greedy',
         });
 
-        map.on('click', function (e: any) {
-            marker.setLatLng(e.latlng);
-            updatePositionAndAddress(e.latlng.lat, e.latlng.lng);
+        const marker = new google.maps.Marker({
+            position: initialLatLng,
+            map,
+            draggable: true,
+        });
+
+        const geocoder = new google.maps.Geocoder();
+        geocoderInstance.current = geocoder;
+
+        marker.addListener('dragend', () => {
+            const pos = marker.getPosition();
+            reverseGeocode(pos.lat(), pos.lng());
+        });
+
+        map.addListener('click', (e: any) => {
+            marker.setPosition(e.latLng);
+            reverseGeocode(e.latLng.lat(), e.latLng.lng());
         });
 
         mapInstance.current = map;
         markerInstance.current = marker;
 
-        // Force map invalidation to ensure tiles load correctly after rendering
-        setTimeout(() => {
-            map.invalidateSize();
-        }, 100);
+        // Setup Places Autocomplete on search input
+        if (searchInputRef.current) {
+            const autocomplete = new google.maps.places.Autocomplete(searchInputRef.current, {
+                componentRestrictions: { country: 'id' },
+                fields: ['geometry', 'formatted_address', 'address_components'],
+            });
+            autocomplete.addListener('place_changed', () => {
+                const place = autocomplete.getPlace();
+                if (!place.geometry?.location) return;
+                const newLat = place.geometry.location.lat();
+                const newLng = place.geometry.location.lng();
+                map.setCenter({ lat: newLat, lng: newLng });
+                map.setZoom(17);
+                marker.setPosition({ lat: newLat, lng: newLng });
+                const components = place.address_components || [];
+                const getComp = (type: string) => components.find((c: any) => c.types.includes(type))?.long_name || '';
+                const city = getComp('locality') || getComp('administrative_area_level_2') || getComp('administrative_area_level_1');
+                const area = getComp('sublocality_level_1') || getComp('sublocality') || getComp('neighborhood');
+                setSearchQuery(place.formatted_address || '');
+                onLocationChange(newLat, newLng, place.formatted_address || '', city, area);
+            });
+            autocompleteInstance.current = autocomplete;
+        }
 
     }, []);
 
-    // Update marker position if props change from outside
+    // Update marker & map center if props change from outside
     useEffect(() => {
-        if (markerInstance.current && mapInstance.current && window.L) {
-            const currentLatLng = markerInstance.current.getLatLng();
-            // Check difference to avoid loops
-            if (Math.abs(currentLatLng.lat - lat) > 0.0001 || Math.abs(currentLatLng.lng - lng) > 0.0001) {
-                const newLatLng = [lat, lng];
-                markerInstance.current.setLatLng(newLatLng);
-                mapInstance.current.setView(newLatLng, 15);
+        if (markerInstance.current && mapInstance.current) {
+            const google = (window as any).google;
+            if (!google?.maps) return;
+            const currentPos = markerInstance.current.getPosition();
+            if (!currentPos || Math.abs(currentPos.lat() - lat) > 0.0001 || Math.abs(currentPos.lng() - lng) > 0.0001) {
+                markerInstance.current.setPosition({ lat, lng });
+                mapInstance.current.setCenter({ lat, lng });
             }
         }
     }, [lat, lng]);
 
-    // Handlers removed to be handled by Dashboard
-
     return (
-        <div id="map" ref={mapContainerRef} style={{ height: '400px', width: '100%', border: '1px solid #ccc', borderRadius: '0.75rem', zIndex: 0 }} />
+        <div className="flex flex-col gap-2">
+            <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="🔍 Cari lokasi / nama jalan / nama tempat..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+            />
+            <div ref={mapContainerRef} style={{ height: '400px', width: '100%', borderRadius: '0.75rem', zIndex: 0 }} />
+        </div>
     );
 };
 
@@ -303,35 +333,50 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
             return;
         }
 
-        searchTimeoutRef.current = setTimeout(async () => {
+        searchTimeoutRef.current = setTimeout(() => {
             setIsSearchingLocation(true);
             try {
-                // Geocoding menggunakan Nominatim (OpenStreetMap)
-                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text)}&countrycodes=id&limit=5`, {
-                    headers: { 'User-Agent': 'RuangSinggah.id/1.0' }
-                });
-                const data = await response.json();
-                setSearchLocationResults(data);
+                const gw = (window as any).google;
+                if (!gw?.maps?.places?.AutocompleteService) { setIsSearchingLocation(false); return; }
+                const svc = new gw.maps.places.AutocompleteService();
+                svc.getPlacePredictions(
+                    { input: text, componentRestrictions: { country: 'id' }, types: ['geocode', 'establishment'] },
+                    (predictions: any[], status: string) => {
+                        if (status === gw.maps.places.PlacesServiceStatus.OK && predictions) {
+                            setSearchLocationResults(predictions);
+                        } else {
+                            setSearchLocationResults([]);
+                        }
+                        setIsSearchingLocation(false);
+                    }
+                );
             } catch (error) {
-                console.error("Error searching location with Nominatim:", error);
+                console.error("Error searching location with Google Places:", error);
                 setSearchLocationResults([]);
-            } finally {
                 setIsSearchingLocation(false);
             }
-        }, 500); // Debounce selama 500ms
+        }, 500);
     };
 
     const handleSelectSearchResult = (result: any) => {
-        const lat = parseFloat(result.lat);
-        const lng = parseFloat(result.lon);
-        const address = result.display_name;
-
-        // Perbarui formData untuk menggerakkan peta
-        setFormData(prev => ({ ...prev, location: { lat, lng } }));
-        setMapAddress(address); // Perbarui input alamat di form
-
-        setSearchLocationText(address); // Set input pencarian dengan alamat lengkap
-        setSearchLocationResults([]); // Kosongkan hasil pencarian
+        // result is a Google Places AutocompletePrediction
+        const gw = (window as any).google;
+        if (!gw?.maps?.Geocoder) return;
+        const geocoder = new gw.maps.Geocoder();
+        geocoder.geocode(
+            { placeId: result.place_id },
+            (results: any[], status: string) => {
+                if (status === 'OK' && results && results.length > 0) {
+                    const loc = results[0].geometry.location;
+                    const lat = loc.lat(), lng = loc.lng();
+                    const address = results[0].formatted_address;
+                    setFormData(prev => ({ ...prev, location: { lat, lng } }));
+                    setMapAddress(address);
+                    setSearchLocationText(address);
+                    setSearchLocationResults([]);
+                }
+            }
+        );
     };
     const loadAnalyticsData = async () => {
         if (!isAdmin) return;
@@ -950,37 +995,39 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
 
     const [isSearchingFacilityMap, setIsSearchingFacilityMap] = useState<Record<string, boolean>>({});
 
-    const searchFacilityCoordinates = async (field: 'campuses' | 'publicFacilities', index: number, name: string) => {
+    const searchFacilityCoordinates = (field: 'campuses' | 'publicFacilities', index: number, name: string) => {
         if (!name) return;
         const stateKey = `${field}-${index}`;
         setIsSearchingFacilityMap(prev => ({ ...prev, [stateKey]: true }));
-        try {
-            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(name)}&countrycodes=id&limit=1`, {
-                headers: { 'User-Agent': 'RuangSinggah.id/1.0' }
-            });
-            const data = await response.json();
-            if (data && data.length > 0) {
-                const lat = parseFloat(data[0].lat);
-                const lng = parseFloat(data[0].lon);
-                const arr = [...(formData[field] || [])];
-                
-                let distString = arr[index].distance;
-                if (formData.location && formData.location.lat) {
-                    const km = calculateDistance(formData.location.lat, formData.location.lng, lat, lng);
-                    distString = `± ${km} KM`;
-                }
-
-                arr[index] = { ...arr[index], lat, lng, distance: distString };
-                setFormData({ ...formData, [field]: arr });
-            } else {
-                alert('Lokasi tidak ditemukan di peta. Coba setel nama yang lebih spesifik.');
-            }
-        } catch (error) {
-            console.error('Error fetching facility location:', error);
-            alert('Gagal mencari kordinat.');
-        } finally {
+        const gw = (window as any).google;
+        if (!gw?.maps?.Geocoder) {
             setIsSearchingFacilityMap(prev => ({ ...prev, [stateKey]: false }));
+            alert('Google Maps belum siap.');
+            return;
         }
+        const geocoder = new gw.maps.Geocoder();
+        geocoder.geocode(
+            { address: name + ', Indonesia', componentRestrictions: { country: 'ID' } },
+            (results: any[], status: string) => {
+                if (status === 'OK' && results && results.length > 0) {
+                    const loc = results[0].geometry.location;
+                    const lat = loc.lat(), lng = loc.lng();
+                    const arr = [...(formData[field] || [])];
+                    
+                    let distString = arr[index].distance;
+                    if (formData.location && formData.location.lat) {
+                        const km = calculateDistance(formData.location.lat, formData.location.lng, lat, lng);
+                        distString = `± ${km} KM`;
+                    }
+
+                    arr[index] = { ...arr[index], lat, lng, distance: distString };
+                    setFormData({ ...formData, [field]: arr });
+                } else {
+                    alert('Lokasi tidak ditemukan di peta. Coba setel nama yang lebih spesifik.');
+                }
+                setIsSearchingFacilityMap(prev => ({ ...prev, [stateKey]: false }));
+            }
+        );
     };
 
     const [activeMapPicker, setActiveMapPicker] = useState<{ field: 'campuses' | 'publicFacilities', index: number } | null>(null);
@@ -1231,7 +1278,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                                             className="px-4 py-2 text-sm text-gray-800 cursor-pointer hover:bg-orange-50 border-b border-gray-50 last:border-b-0"
                                             onClick={() => handleSelectSearchResult(result)}
                                         >
-                                            {result.display_name}
+                                            {result.description || result.structured_formatting?.main_text || result.formatted_address}
                                         </li>
                                     ))}
                                 </ul>
@@ -2643,6 +2690,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                 onMenuChange={handleMenuChange as any}
                 onLogout={onLogout}
                 onPageChange={onPageChange}
+                isLoading={loading}
             />
         );
     }

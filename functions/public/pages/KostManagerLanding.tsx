@@ -10,86 +10,113 @@ import PaymentGateway from '../components/PaymentGateway';
 import { getKostManagerPackages } from '../adminService';
 import { FORMAT_CURRENCY } from '../constants';
 
-// Leaflet LocationPicker Helper Component for Graphical Pinpointing
+// Google Maps LocationPicker Component
 const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (lat: number, lng: number, address: string) => void }> = ({ lat, lng, onLocationChange }) => {
     const mapContainerRef = useRef<HTMLDivElement>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
     const mapInstance = useRef<any>(null);
     const markerInstance = useRef<any>(null);
+    const geocoderInstance = useRef<any>(null);
+    const [searchQuery, setSearchQuery] = useState("");
+
+    const reverseGeocode = (latVal: number, lngVal: number) => {
+        if (!geocoderInstance.current) return;
+        geocoderInstance.current.geocode({ location: { lat: latVal, lng: lngVal } }, (results: any[], status: string) => {
+            if (status === 'OK' && results[0]) {
+                const addressStr = results[0].formatted_address;
+                setSearchQuery(addressStr);
+                onLocationChange(latVal, lngVal, addressStr);
+            } else {
+                onLocationChange(latVal, lngVal, `GPS: ${latVal.toFixed(6)}, ${lngVal.toFixed(6)}`);
+            }
+        });
+    };
 
     useEffect(() => {
         if (!mapContainerRef.current) return;
-        if (mapInstance.current) return; // Initialize once
+        if (mapInstance.current) return;
 
-        if (typeof window.L === 'undefined') {
-            console.error("Leaflet API not loaded");
+        const google = (window as any).google;
+        if (!google?.maps) {
+            console.error("Google Maps API not loaded");
             return;
         }
 
-        const L = window.L;
-        const initialLocation = [lat, lng];
+        const initialLatLng = { lat, lng };
 
-        // Initialize Map
-        const map = L.map(mapContainerRef.current).setView(initialLocation, 15);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
-
-        // Initialize Marker
-        const marker = L.marker(initialLocation, { draggable: true }).addTo(map);
-
-        const updatePositionAndAddress = async (lat: number, lng: number) => {
-            try {
-                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`, {
-                    headers: {
-                        'User-Agent': 'RuangSinggah/1.0'
-                    }
-                });
-                const data = await response.json();
-                const addressStr = data.display_name || `GPS: ${lat}, ${lng}`;
-                onLocationChange(lat, lng, addressStr);
-            } catch (error) {
-                console.error("Geocoding failed:", error);
-                onLocationChange(lat, lng, `GPS: ${lat}, ${lng}`);
-            }
-        };
-
-        // Listeners
-        marker.on('dragend', function (event: any) {
-            const marker = event.target;
-            const position = marker.getLatLng();
-            updatePositionAndAddress(position.lat, position.lng);
+        const map = new google.maps.Map(mapContainerRef.current, {
+            center: initialLatLng,
+            zoom: 15,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false,
+            gestureHandling: 'greedy',
         });
 
-        map.on('click', function (e: any) {
-            marker.setLatLng(e.latlng);
-            updatePositionAndAddress(e.latlng.lat, e.latlng.lng);
+        const marker = new google.maps.Marker({
+            position: initialLatLng,
+            map,
+            draggable: true,
+        });
+
+        geocoderInstance.current = new google.maps.Geocoder();
+
+        marker.addListener('dragend', () => {
+            const pos = marker.getPosition();
+            reverseGeocode(pos.lat(), pos.lng());
+        });
+
+        map.addListener('click', (e: any) => {
+            marker.setPosition(e.latLng);
+            reverseGeocode(e.latLng.lat(), e.latLng.lng());
         });
 
         mapInstance.current = map;
         markerInstance.current = marker;
 
-        // Force map invalidation to ensure tiles load correctly after rendering
-        setTimeout(() => {
-            map.invalidateSize();
-        }, 100);
-
+        if (searchInputRef.current) {
+            const autocomplete = new google.maps.places.Autocomplete(searchInputRef.current, {
+                componentRestrictions: { country: 'id' },
+                fields: ['geometry', 'formatted_address'],
+            });
+            autocomplete.addListener('place_changed', () => {
+                const place = autocomplete.getPlace();
+                if (!place.geometry?.location) return;
+                const newLat = place.geometry.location.lat();
+                const newLng = place.geometry.location.lng();
+                map.setCenter({ lat: newLat, lng: newLng });
+                map.setZoom(17);
+                marker.setPosition({ lat: newLat, lng: newLng });
+                setSearchQuery(place.formatted_address || '');
+                onLocationChange(newLat, newLng, place.formatted_address || '');
+            });
+        }
     }, []);
 
-    // Update marker position if props change from outside
     useEffect(() => {
-        if (markerInstance.current && mapInstance.current && window.L) {
-            const currentLatLng = markerInstance.current.getLatLng();
-            if (Math.abs(currentLatLng.lat - lat) > 0.0001 || Math.abs(currentLatLng.lng - lng) > 0.0001) {
-                const newLatLng = [lat, lng];
-                markerInstance.current.setLatLng(newLatLng);
-                mapInstance.current.setView(newLatLng, 15);
+        if (markerInstance.current && mapInstance.current) {
+            const google = (window as any).google;
+            if (!google?.maps) return;
+            const currentPos = markerInstance.current.getPosition();
+            if (!currentPos || Math.abs(currentPos.lat() - lat) > 0.0001 || Math.abs(currentPos.lng() - lng) > 0.0001) {
+                markerInstance.current.setPosition({ lat, lng });
+                mapInstance.current.setCenter({ lat, lng });
             }
         }
     }, [lat, lng]);
 
     return (
-        <div id="map-picker" ref={mapContainerRef} style={{ height: '220px', width: '100%', border: '1px solid #e2e8f0', borderRadius: '1rem', zIndex: 0 }} />
+        <div className="flex flex-col gap-2">
+            <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="🔍 Cari lokasi / nama jalan / nama tempat..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+            />
+            <div id="map-picker" ref={mapContainerRef} style={{ height: '220px', width: '100%', borderRadius: '1rem', zIndex: 0 }} />
+        </div>
     );
 };
 
@@ -285,22 +312,35 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
       const { latitude, longitude } = position.coords;
       setMapCoords({ lat: latitude, lng: longitude });
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`, {
-          headers: { 'User-Agent': 'RuangSinggah.id/1.0' }
-        });
-        const data = await res.json();
-        if (data && data.display_name) {
-          setFormData(prev => ({
-            ...prev,
-            address: `${data.display_name}`,
-            googleMapsLink: `https://www.google.com/maps?q=${latitude},${longitude}`
-          }));
+        const gw = (window as any).google;
+        if (gw?.maps?.Geocoder) {
+          const geocoder = new gw.maps.Geocoder();
+          geocoder.geocode(
+            { location: { lat: latitude, lng: longitude } },
+            (results: any[], status: string) => {
+              if (status === 'OK' && results && results.length > 0) {
+                setFormData(prev => ({
+                  ...prev,
+                  address: results[0].formatted_address,
+                  googleMapsLink: `https://www.google.com/maps?q=${latitude},${longitude}`
+                }));
+              } else {
+                setFormData(prev => ({
+                  ...prev,
+                  address: `GPS: ${latitude}, ${longitude}`,
+                  googleMapsLink: `https://www.google.com/maps?q=${latitude},${longitude}`
+                }));
+              }
+              setIsDetectingLocation(false);
+            }
+          );
         } else {
           setFormData(prev => ({
             ...prev,
             address: `GPS: ${latitude}, ${longitude}`,
             googleMapsLink: `https://www.google.com/maps?q=${latitude},${longitude}`
           }));
+          setIsDetectingLocation(false);
         }
       } catch (error) {
         setFormData(prev => ({
