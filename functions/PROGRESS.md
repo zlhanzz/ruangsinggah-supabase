@@ -2,6 +2,21 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 115. Penambahan Fasilitas Lengkap & Dokumentasi Foto Dinamis pada Kartu Unit Kamar di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar seluruh informasi fasilitas (Ukuran, Fasilitas Kamar, Kamar Mandi, Dapur) ditampilkan lengkap pada setiap kartu unit kamar yang sedang dihuni (`occupiedUnits`).
+  2. Pengguna meminta agar foto hasil dokumentasi survey ditampilkan untuk setiap kartu unit kamar secara dinamis (menampilkan galeri thumbnail jika ada foto, dan status informatif elegan jika tidak ada foto / privasi penghuni).
+- **Implementasi & Perbaikan**:
+  * **1. Fasilitas Lengkap pada Kamar Terisi**:
+    - Menyematkan box *"🛋️ Fasilitas & Spesifikasi Terpasang"* lengkap dengan badge ukuran (`📐 2x2 meter`) dan pill badges seluruh fasilitas kamar, kamar mandi, dan dapur pada kartu unit kamar yang dihuni.
+  * **2. Galeri Foto Dokumentasi Unit Dinamis**:
+    - **Ada Foto**: Menampilkan galeri thumbnail foto berlabel kategori (*Interior Kamar, Kamar Mandi, dll.*) yang dapat diklik untuk membuka foto resolusi penuh di tab baru.
+    - **Tidak Ada Foto (Privasi/Belum Terunggah)**: Menampilkan status info bar bergaris putus-putus yang halus (`📷 Dokumentasi Foto: Tidak tersedia (Privasi penghuni / belum diunggah)` atau `Belum ada foto terunggah`), menjaga estetika dan kelengkapan layout kartu.
+  * **3. Konsistensi pada Kamar Kosong**:
+    - Menerapkan komponen galeri foto dokumentasi unit dinamis yang serupa pada kartu unit kamar kosong (`vacantUnits`).
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 114. Tampilan Penuh Seluruh Fasilitas dengan Layout Adaptif Responsif di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menginstruksikan agar seluruh fasilitas (kamar, kamar mandi, dapur) ditampilkan 100% lengkap tanpa batas di dalam kartu Tipe Kamar, dan lebar/tinggi kartu dibuat menyesuaikan secara dinamis (*adaptive auto-wrap*).

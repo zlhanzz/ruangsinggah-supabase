@@ -2070,102 +2070,183 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                             {isOccExpanded && (
                                                                                 <div className="p-4 bg-amber-50/30 border-t border-amber-100 space-y-3">
                                                                                     {rt.occupiedUnits.length > 0 ? (
-                                                                                        rt.occupiedUnits.map((u: any, uIdx: number) => (
-                                                                                            <div key={u.id || uIdx} className="bg-white border border-amber-200/90 rounded-2xl p-4 shadow-sm space-y-3 hover:border-amber-300 transition-all">
-                                                                                                {/* Top Bar: Room Name & Status */}
-                                                                                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-100/80 pb-2.5">
-                                                                                                    <div className="flex items-center gap-2.5">
-                                                                                                        <span className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-black text-sm">
-                                                                                                            <Lock size={15} />
-                                                                                                        </span>
-                                                                                                        <div>
-                                                                                                            <div className="flex items-center gap-1.5">
-                                                                                                                <span className="text-[9px] font-black text-amber-800 uppercase tracking-widest">UNIT KAMAR</span>
-                                                                                                                <span className="px-2 py-0.2 rounded-full bg-amber-100 border border-amber-200 text-amber-900 text-[9px] font-black uppercase">
-                                                                                                                    🔒 Dihuni
-                                                                                                                </span>
-                                                                                                            </div>
-                                                                                                            <h5 className="text-sm font-black text-slate-900 leading-tight">{u.name}</h5>
-                                                                                                        </div>
-                                                                                                    </div>
-                                                                                                    <div className="text-right">
-                                                                                                        <span className="text-[9px] font-bold text-slate-400 block uppercase">Tarif Sewa</span>
-                                                                                                        <span className="text-xs font-black text-emerald-700">{FORMAT_CURRENCY(u.price || rt.price)}<span className="text-[9px] text-slate-400 font-bold">/bln</span></span>
-                                                                                                    </div>
-                                                                                                </div>
+                                                                                        rt.occupiedUnits.map((u: any, uIdx: number) => {
+                                                                                            const unitPhotos = getRoomPhotos(u);
+                                                                                            const uRoomFacilities = (u.facilities && u.facilities.length > 0) ? u.facilities : (rt.roomFacilities || []);
+                                                                                            const uBathFacilities = (u.bathroomFacilities && u.bathroomFacilities.length > 0) ? u.bathroomFacilities : (rt.bathroomFacilities || []);
+                                                                                            const uKitchenFacilities = (u.kitchenFacilities && u.kitchenFacilities.length > 0) ? u.kitchenFacilities : (rt.kitchenFacilities || []);
 
-                                                                                                {/* Grid Data Penghuni & Detail Sewa */}
-                                                                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 text-xs">
-                                                                                                    {/* 1. Nama Penghuni */}
-                                                                                                    <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2.5">
-                                                                                                        <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider block mb-1">
-                                                                                                            👤 Nama Penghuni
-                                                                                                        </span>
-                                                                                                        <p className="font-black text-slate-900 truncate">{u.residentName || '-'}</p>
-                                                                                                        <span className="text-[10px] text-slate-500 font-semibold">{u.currentOccupants || 1} Orang Penghuni</span>
-                                                                                                    </div>
-
-                                                                                                    {/* 2. Kontak WhatsApp */}
-                                                                                                    <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2.5">
-                                                                                                        <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider block mb-1">
-                                                                                                            📱 Kontak WhatsApp
-                                                                                                        </span>
-                                                                                                        <p className="font-black text-slate-900">{u.residentPhone || '-'}</p>
-                                                                                                        {u.residentPhone && u.residentPhone !== '-' && (
-                                                                                                            <a 
-                                                                                                                href={`https://wa.me/${u.residentPhone.replace(/\D/g, '')}`} 
-                                                                                                                target="_blank" 
-                                                                                                                rel="noreferrer" 
-                                                                                                                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 hover:underline mt-0.5"
-                                                                                                            >
-                                                                                                                Hubungi via WA ↗
-                                                                                                            </a>
-                                                                                                        )}
-                                                                                                    </div>
-
-                                                                                                    {/* 3. Periode & Tagihan */}
-                                                                                                    <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2.5 sm:col-span-2 md:col-span-1">
-                                                                                                        <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider block mb-1">
-                                                                                                            📅 Periode &amp; Tagihan
-                                                                                                        </span>
-                                                                                                        <p className="font-bold text-slate-800 text-[11px]">
-                                                                                                            Langganan: <span className="font-black capitalize">{u.paymentPeriod || 'Bulanan'}</span>
-                                                                                                        </p>
-                                                                                                        <div className="flex flex-col text-[10px] text-slate-600 font-semibold mt-0.5 space-y-0.5">
-                                                                                                            {u.startDate && <span>Bayar Terakhir: <strong className="text-slate-800">{u.startDate}</strong></span>}
-                                                                                                            {u.endDate && <span>Tagihan Berikutnya: <strong className="text-amber-800">{u.endDate}</strong></span>}
-                                                                                                        </div>
-                                                                                                    </div>
-                                                                                                </div>
-
-                                                                                                {/* Additional Occupants (Jika ada) */}
-                                                                                                {u.additionalOccupants && u.additionalOccupants.length > 0 && (
-                                                                                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1.5">
-                                                                                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block">
-                                                                                                            👥 Anggota Penghuni Tambahan ({u.additionalOccupants.length})
-                                                                                                        </span>
-                                                                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                                                                            {u.additionalOccupants.map((occ: any, oi: number) => (
-                                                                                                                <div key={oi} className="bg-white border border-slate-200 rounded-lg p-2 flex items-center justify-between text-xs">
-                                                                                                                    <span className="font-black text-slate-800">{occ.name || `Anggota ${oi + 2}`}</span>
-                                                                                                                    <span className="text-[10px] font-bold text-slate-500">{occ.phone || '-'}</span>
+                                                                                            return (
+                                                                                                <div key={u.id || uIdx} className="bg-white border border-amber-200/90 rounded-2xl p-4 shadow-sm space-y-3.5 hover:border-amber-300 transition-all">
+                                                                                                    {/* Top Bar: Room Name & Status */}
+                                                                                                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-100/80 pb-2.5">
+                                                                                                        <div className="flex items-center gap-2.5">
+                                                                                                            <span className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-black text-sm">
+                                                                                                                <Lock size={15} />
+                                                                                                            </span>
+                                                                                                            <div>
+                                                                                                                <div className="flex items-center gap-1.5">
+                                                                                                                    <span className="text-[9px] font-black text-amber-800 uppercase tracking-widest">UNIT KAMAR</span>
+                                                                                                                    <span className="px-2 py-0.2 rounded-full bg-amber-100 border border-amber-200 text-amber-900 text-[9px] font-black uppercase">
+                                                                                                                        🔒 Dihuni
+                                                                                                                    </span>
                                                                                                                 </div>
-                                                                                                            ))}
+                                                                                                                <h5 className="text-sm font-black text-slate-900 leading-tight">{u.name}</h5>
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                        <div className="text-right">
+                                                                                                            <span className="text-[9px] font-bold text-slate-400 block uppercase">Tarif Sewa</span>
+                                                                                                            <span className="text-xs font-black text-emerald-700">{FORMAT_CURRENCY(u.price || rt.price)}<span className="text-[9px] text-slate-400 font-bold">/bln</span></span>
                                                                                                         </div>
                                                                                                     </div>
-                                                                                                )}
 
-                                                                                                {/* Surveyor Notes (Jika ada) */}
-                                                                                                {u.notes && (
-                                                                                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs">
-                                                                                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block mb-0.5">
-                                                                                                            📝 Catatan Pendataan Surveyor
-                                                                                                        </span>
-                                                                                                        <p className="text-slate-700 italic font-medium">{u.notes}</p>
+                                                                                                    {/* Grid Data Penghuni & Detail Sewa */}
+                                                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 text-xs">
+                                                                                                        {/* 1. Nama Penghuni */}
+                                                                                                        <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2.5">
+                                                                                                            <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider block mb-1">
+                                                                                                                👤 Nama Penghuni
+                                                                                                            </span>
+                                                                                                            <p className="font-black text-slate-900 truncate">{u.residentName || '-'}</p>
+                                                                                                            <span className="text-[10px] text-slate-500 font-semibold">{u.currentOccupants || 1} Orang Penghuni</span>
+                                                                                                        </div>
+
+                                                                                                        {/* 2. Kontak WhatsApp */}
+                                                                                                        <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2.5">
+                                                                                                            <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider block mb-1">
+                                                                                                                📱 Kontak WhatsApp
+                                                                                                            </span>
+                                                                                                            <p className="font-black text-slate-900">{u.residentPhone || '-'}</p>
+                                                                                                            {u.residentPhone && u.residentPhone !== '-' && (
+                                                                                                                <a 
+                                                                                                                    href={`https://wa.me/${u.residentPhone.replace(/\D/g, '')}`} 
+                                                                                                                    target="_blank" 
+                                                                                                                    rel="noreferrer" 
+                                                                                                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 hover:underline mt-0.5"
+                                                                                                                >
+                                                                                                                    Hubungi via WA ↗
+                                                                                                                </a>
+                                                                                                            )}
+                                                                                                        </div>
+
+                                                                                                        {/* 3. Periode & Tagihan */}
+                                                                                                        <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2.5 sm:col-span-2 md:col-span-1">
+                                                                                                            <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider block mb-1">
+                                                                                                                📅 Periode &amp; Tagihan
+                                                                                                            </span>
+                                                                                                            <p className="font-bold text-slate-800 text-[11px]">
+                                                                                                                Langganan: <span className="font-black capitalize">{u.paymentPeriod || 'Bulanan'}</span>
+                                                                                                            </p>
+                                                                                                            <div className="flex flex-col text-[10px] text-slate-600 font-semibold mt-0.5 space-y-0.5">
+                                                                                                                {u.startDate && <span>Bayar Terakhir: <strong className="text-slate-800">{u.startDate}</strong></span>}
+                                                                                                                {u.endDate && <span>Tagihan Berikutnya: <strong className="text-amber-800">{u.endDate}</strong></span>}
+                                                                                                            </div>
+                                                                                                        </div>
                                                                                                     </div>
-                                                                                                )}
-                                                                                            </div>
-                                                                                        ))
+
+                                                                                                    {/* Spesifikasi & Fasilitas Kamar Terpasang (Kamar Terisi) */}
+                                                                                                    <div className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-2.5 space-y-1.5 text-xs">
+                                                                                                        <div className="flex items-center justify-between">
+                                                                                                            <span className="text-[9px] font-black text-slate-600 uppercase tracking-wider">
+                                                                                                                🛋️ Fasilitas &amp; Spesifikasi Terpasang
+                                                                                                            </span>
+                                                                                                            <span className="px-2 py-0.5 rounded bg-slate-200/70 text-[9px] font-black text-slate-700">
+                                                                                                                📐 {u.size || rt.size || '3x4 meter'}
+                                                                                                            </span>
+                                                                                                        </div>
+                                                                                                        <div className="flex flex-wrap gap-1 pt-0.5">
+                                                                                                            {uRoomFacilities.map((f: string, fi: number) => (
+                                                                                                                <span key={`f_${fi}`} className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[9.5px] font-bold text-slate-700">
+                                                                                                                    {f}
+                                                                                                                </span>
+                                                                                                            ))}
+                                                                                                            {uBathFacilities.map((bf: string, bfi: number) => (
+                                                                                                                <span key={`bf_${bfi}`} className="px-1.5 py-0.5 bg-sky-50 border border-sky-200 rounded text-[9.5px] font-bold text-sky-800">
+                                                                                                                    {bf}
+                                                                                                                </span>
+                                                                                                            ))}
+                                                                                                            {uKitchenFacilities.map((kf: string, kfi: number) => (
+                                                                                                                <span key={`kf_${kfi}`} className="px-1.5 py-0.5 bg-amber-50 border border-amber-200 rounded text-[9.5px] font-bold text-amber-800">
+                                                                                                                    {kf}
+                                                                                                                </span>
+                                                                                                            ))}
+                                                                                                            {uRoomFacilities.length === 0 && uBathFacilities.length === 0 && uKitchenFacilities.length === 0 && (
+                                                                                                                <span className="text-[10px] text-slate-400 italic">Fasilitas standar tipe kamar</span>
+                                                                                                            )}
+                                                                                                        </div>
+                                                                                                    </div>
+
+                                                                                                    {/* Dokumentasi Foto Unit Kamar (Dinamis) */}
+                                                                                                    {unitPhotos.length > 0 ? (
+                                                                                                        <div className="bg-amber-50/40 border border-amber-100 rounded-xl p-2.5 space-y-2">
+                                                                                                            <div className="flex items-center justify-between">
+                                                                                                                <span className="text-[9px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                                                                                                                    <Camera size={13} className="text-amber-700" />
+                                                                                                                    Foto Dokumentasi Unit ({unitPhotos.length})
+                                                                                                                </span>
+                                                                                                                <span className="text-[9px] font-bold text-slate-400">Hasil Survey</span>
+                                                                                                            </div>
+                                                                                                            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                                                                                                                {unitPhotos.map((photo: any, pi: number) => (
+                                                                                                                    <a
+                                                                                                                        key={pi}
+                                                                                                                        href={photo.url}
+                                                                                                                        target="_blank"
+                                                                                                                        rel="noopener noreferrer"
+                                                                                                                        className="relative w-20 h-14 sm:w-24 sm:h-16 rounded-lg overflow-hidden shrink-0 border border-amber-200 hover:border-amber-500 transition-all group cursor-pointer shadow-2xs block"
+                                                                                                                    >
+                                                                                                                        <img
+                                                                                                                            src={photo.url}
+                                                                                                                            alt={photo.label || `Foto ${u.name}`}
+                                                                                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                                                                                                        />
+                                                                                                                        {photo.label && (
+                                                                                                                            <div className="absolute inset-x-0 bottom-0 bg-black/60 backdrop-blur-xs py-0.5 px-1 text-[8px] text-white font-bold truncate text-center">
+                                                                                                                                {photo.label}
+                                                                                                                            </div>
+                                                                                                                        )}
+                                                                                                                    </a>
+                                                                                                                ))}
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    ) : (
+                                                                                                        <div className="bg-slate-50/60 border border-dashed border-slate-200 rounded-xl p-2.5 flex items-center gap-2 text-slate-400">
+                                                                                                            <Camera size={14} className="text-slate-400 shrink-0" />
+                                                                                                            <span className="text-[10px] font-semibold italic">
+                                                                                                                Dokumentasi Foto: Tidak tersedia (Privasi penghuni / belum diunggah)
+                                                                                                            </span>
+                                                                                                        </div>
+                                                                                                    )}
+
+                                                                                                    {/* Additional Occupants (Jika ada) */}
+                                                                                                    {u.additionalOccupants && u.additionalOccupants.length > 0 && (
+                                                                                                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1.5">
+                                                                                                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block">
+                                                                                                                👥 Anggota Penghuni Tambahan ({u.additionalOccupants.length})
+                                                                                                            </span>
+                                                                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                                                                                {u.additionalOccupants.map((occ: any, oi: number) => (
+                                                                                                                    <div key={oi} className="bg-white border border-slate-200 rounded-lg p-2 flex items-center justify-between text-xs">
+                                                                                                                        <span className="font-black text-slate-800">{occ.name || `Anggota ${oi + 2}`}</span>
+                                                                                                                        <span className="text-[10px] font-bold text-slate-500">{occ.phone || '-'}</span>
+                                                                                                                    </div>
+                                                                                                                ))}
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    )}
+
+                                                                                                    {/* Surveyor Notes (Jika ada) */}
+                                                                                                    {u.notes && (
+                                                                                                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs">
+                                                                                                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block mb-0.5">
+                                                                                                                📝 Catatan Pendataan Surveyor
+                                                                                                            </span>
+                                                                                                            <p className="text-slate-700 italic font-medium">{u.notes}</p>
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            );
+                                                                                        })
                                                                                     ) : (
                                                                                         <div className="p-4 bg-white rounded-xl border border-dashed border-amber-200 text-center text-xs font-bold text-amber-800">
                                                                                             Tidak ada unit kamar yang sedang dihuni pada tipe ini.
@@ -2197,72 +2278,126 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                             {isAvailExpanded && (
                                                                                 <div className="p-4 bg-emerald-50/30 border-t border-emerald-100 space-y-3">
                                                                                     {rt.vacantUnits.length > 0 ? (
-                                                                                        rt.vacantUnits.map((u: any, uIdx: number) => (
-                                                                                            <div key={u.id || uIdx} className="bg-white border border-emerald-200/90 rounded-2xl p-4 shadow-sm space-y-3 hover:border-emerald-300 transition-all">
-                                                                                                {/* Top Bar: Room Name & Status */}
-                                                                                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100/80 pb-2.5">
-                                                                                                    <div className="flex items-center gap-2.5">
-                                                                                                        <span className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-sm">
-                                                                                                            <Sparkles size={15} />
-                                                                                                        </span>
-                                                                                                        <div>
-                                                                                                            <div className="flex items-center gap-1.5">
-                                                                                                                <span className="text-[9px] font-black text-emerald-800 uppercase tracking-widest">UNIT KAMAR</span>
-                                                                                                                <span className="px-2 py-0.2 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-900 text-[9px] font-black uppercase">
-                                                                                                                    ✨ Siap Huni
-                                                                                                                </span>
+                                                                                        rt.vacantUnits.map((u: any, uIdx: number) => {
+                                                                                            const unitPhotos = getRoomPhotos(u);
+                                                                                            const uRoomFacilities = (u.facilities && u.facilities.length > 0) ? u.facilities : (rt.roomFacilities || ['Kosongan (Tanpa Perabot)']);
+                                                                                            const uBathFacilities = (u.bathroomFacilities && u.bathroomFacilities.length > 0) ? u.bathroomFacilities : (rt.bathroomFacilities || []);
+                                                                                            const uKitchenFacilities = (u.kitchenFacilities && u.kitchenFacilities.length > 0) ? u.kitchenFacilities : (rt.kitchenFacilities || []);
+
+                                                                                            return (
+                                                                                                <div key={u.id || uIdx} className="bg-white border border-emerald-200/90 rounded-2xl p-4 shadow-sm space-y-3.5 hover:border-emerald-300 transition-all">
+                                                                                                    {/* Top Bar: Room Name & Status */}
+                                                                                                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100/80 pb-2.5">
+                                                                                                        <div className="flex items-center gap-2.5">
+                                                                                                            <span className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-sm">
+                                                                                                                <Sparkles size={15} />
+                                                                                                            </span>
+                                                                                                            <div>
+                                                                                                                <div className="flex items-center gap-1.5">
+                                                                                                                    <span className="text-[9px] font-black text-emerald-800 uppercase tracking-widest">UNIT KAMAR</span>
+                                                                                                                    <span className="px-2 py-0.2 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-900 text-[9px] font-black uppercase">
+                                                                                                                        ✨ Siap Huni
+                                                                                                                    </span>
+                                                                                                                </div>
+                                                                                                                <h5 className="text-sm font-black text-slate-900 leading-tight">{u.name}</h5>
                                                                                                             </div>
-                                                                                                            <h5 className="text-sm font-black text-slate-900 leading-tight">{u.name}</h5>
+                                                                                                        </div>
+                                                                                                        <div className="text-right">
+                                                                                                            <span className="text-[9px] font-bold text-slate-400 block uppercase">Tarif Sewa</span>
+                                                                                                            <span className="text-xs font-black text-emerald-700">{FORMAT_CURRENCY(u.price || rt.price)}<span className="text-[9px] text-slate-400 font-bold">/bln</span></span>
                                                                                                         </div>
                                                                                                     </div>
-                                                                                                    <div className="text-right">
-                                                                                                        <span className="text-[9px] font-bold text-slate-400 block uppercase">Tarif Sewa</span>
-                                                                                                        <span className="text-xs font-black text-emerald-700">{FORMAT_CURRENCY(u.price || rt.price)}<span className="text-[9px] text-slate-400 font-bold">/bln</span></span>
-                                                                                                    </div>
-                                                                                                </div>
 
-                                                                                                {/* Grid Spesifikasi Kamar & Kelengkapan */}
-                                                                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-                                                                                                    {/* 1. Dimensi Kamar */}
-                                                                                                    <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-2.5">
-                                                                                                        <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider block mb-1">
-                                                                                                            📐 Ukuran Kamar
-                                                                                                        </span>
-                                                                                                        <p className="font-black text-slate-900">{u.size || rt.size || '3x4 meter'}</p>
-                                                                                                        <span className="text-[10px] text-slate-500 font-semibold">Ruangan Kosong</span>
-                                                                                                    </div>
+                                                                                                    {/* Grid Spesifikasi Kamar & Kelengkapan */}
+                                                                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                                                                                                        {/* 1. Dimensi Kamar */}
+                                                                                                        <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-2.5">
+                                                                                                            <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider block mb-1">
+                                                                                                                📐 Ukuran Kamar
+                                                                                                            </span>
+                                                                                                            <p className="font-black text-slate-900">{u.size || rt.size || '3x4 meter'}</p>
+                                                                                                            <span className="text-[10px] text-slate-500 font-semibold">Ruangan Kosong</span>
+                                                                                                        </div>
 
-                                                                                                    {/* 2. Kelengkapan Kamar */}
-                                                                                                    <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-2.5 sm:col-span-2">
-                                                                                                        <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider block mb-1">
-                                                                                                            🛋️ Fasilitas Terpasang
-                                                                                                        </span>
-                                                                                                        <div className="flex flex-wrap gap-1">
-                                                                                                            {(u.facilities && u.facilities.length > 0 ? u.facilities : (rt.roomFacilities.length > 0 ? rt.roomFacilities : ['Kosongan (Tanpa Perabot)'])).map((f: string, fi: number) => (
-                                                                                                                <span key={fi} className="px-1.5 py-0.5 bg-white border border-emerald-200 rounded text-[9.5px] font-bold text-emerald-900">
-                                                                                                                    {f}
-                                                                                                                </span>
-                                                                                                            ))}
-                                                                                                            {(u.bathroomFacilities || rt.bathroomFacilities || []).map((bf: string, bfi: number) => (
-                                                                                                                <span key={`bf_${bfi}`} className="px-1.5 py-0.5 bg-sky-50 border border-sky-200 rounded text-[9.5px] font-bold text-sky-900">
-                                                                                                                    {bf}
-                                                                                                                </span>
-                                                                                                            ))}
+                                                                                                        {/* 2. Kelengkapan Kamar */}
+                                                                                                        <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-2.5 sm:col-span-2">
+                                                                                                            <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider block mb-1">
+                                                                                                                🛋️ Fasilitas Terpasang
+                                                                                                            </span>
+                                                                                                            <div className="flex flex-wrap gap-1">
+                                                                                                                {uRoomFacilities.map((f: string, fi: number) => (
+                                                                                                                    <span key={fi} className="px-1.5 py-0.5 bg-white border border-emerald-200 rounded text-[9.5px] font-bold text-emerald-900">
+                                                                                                                        {f}
+                                                                                                                    </span>
+                                                                                                                ))}
+                                                                                                                {uBathFacilities.map((bf: string, bfi: number) => (
+                                                                                                                    <span key={`bf_${bfi}`} className="px-1.5 py-0.5 bg-sky-50 border border-sky-200 rounded text-[9.5px] font-bold text-sky-900">
+                                                                                                                        {bf}
+                                                                                                                    </span>
+                                                                                                                ))}
+                                                                                                                {uKitchenFacilities.map((kf: string, kfi: number) => (
+                                                                                                                    <span key={`kf_${kfi}`} className="px-1.5 py-0.5 bg-amber-50 border border-amber-200 rounded text-[9.5px] font-bold text-amber-900">
+                                                                                                                        {kf}
+                                                                                                                    </span>
+                                                                                                                ))}
+                                                                                                            </div>
                                                                                                         </div>
                                                                                                     </div>
-                                                                                                </div>
 
-                                                                                                {/* Surveyor Notes (Jika ada) */}
-                                                                                                {u.notes && (
-                                                                                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs">
-                                                                                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block mb-0.5">
-                                                                                                            📝 Catatan Kondisi Kamar
-                                                                                                        </span>
-                                                                                                        <p className="text-slate-700 italic font-medium">{u.notes}</p>
-                                                                                                    </div>
-                                                                                                )}
-                                                                                            </div>
-                                                                                        ))
+                                                                                                    {/* Dokumentasi Foto Unit Kamar (Dinamis) */}
+                                                                                                    {unitPhotos.length > 0 ? (
+                                                                                                        <div className="bg-emerald-50/40 border border-emerald-100 rounded-xl p-2.5 space-y-2">
+                                                                                                            <div className="flex items-center justify-between">
+                                                                                                                <span className="text-[9px] font-black text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
+                                                                                                                    <Camera size={13} className="text-emerald-700" />
+                                                                                                                    Foto Dokumentasi Unit ({unitPhotos.length})
+                                                                                                                </span>
+                                                                                                                <span className="text-[9px] font-bold text-slate-400">Hasil Survey</span>
+                                                                                                            </div>
+                                                                                                            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                                                                                                                {unitPhotos.map((photo: any, pi: number) => (
+                                                                                                                    <a
+                                                                                                                        key={pi}
+                                                                                                                        href={photo.url}
+                                                                                                                        target="_blank"
+                                                                                                                        rel="noopener noreferrer"
+                                                                                                                        className="relative w-20 h-14 sm:w-24 sm:h-16 rounded-lg overflow-hidden shrink-0 border border-emerald-200 hover:border-emerald-500 transition-all group cursor-pointer shadow-2xs block"
+                                                                                                                    >
+                                                                                                                        <img
+                                                                                                                            src={photo.url}
+                                                                                                                            alt={photo.label || `Foto ${u.name}`}
+                                                                                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                                                                                                        />
+                                                                                                                        {photo.label && (
+                                                                                                                            <div className="absolute inset-x-0 bottom-0 bg-black/60 backdrop-blur-xs py-0.5 px-1 text-[8px] text-white font-bold truncate text-center">
+                                                                                                                                {photo.label}
+                                                                                                                            </div>
+                                                                                                                        )}
+                                                                                                                    </a>
+                                                                                                                ))}
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    ) : (
+                                                                                                        <div className="bg-slate-50/60 border border-dashed border-slate-200 rounded-xl p-2.5 flex items-center gap-2 text-slate-400">
+                                                                                                            <Camera size={14} className="text-slate-400 shrink-0" />
+                                                                                                            <span className="text-[10px] font-semibold italic">
+                                                                                                                Dokumentasi Foto: Belum ada foto terunggah untuk unit ini
+                                                                                                            </span>
+                                                                                                        </div>
+                                                                                                    )}
+
+                                                                                                    {/* Surveyor Notes (Jika ada) */}
+                                                                                                    {u.notes && (
+                                                                                                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs">
+                                                                                                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block mb-0.5">
+                                                                                                                📝 Catatan Kondisi Kamar
+                                                                                                            </span>
+                                                                                                            <p className="text-slate-700 italic font-medium">{u.notes}</p>
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            );
+                                                                                        })
                                                                                     ) : (
                                                                                         <div className="p-4 bg-white rounded-xl border border-dashed border-emerald-200 text-center text-xs font-bold text-emerald-800">
                                                                                             Seluruh unit pada tipe kamar ini sedang terisi (0 kamar kosong).
