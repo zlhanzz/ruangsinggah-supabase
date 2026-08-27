@@ -2,6 +2,18 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 119. Pembersihan Label '📸 BUKTI' pada Seluruh Kotak Fasilitas di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar tulisan/badge `📸 BUKTI` pada kotak fasilitas dihapus agar tampilan lebih bersih dan minimalis.
+- **Implementasi & Peningkatan UI/UX**:
+  * **1. Pembersihan Badge Teks `📸 BUKTI`**:
+    - Menghapus badge teks `📸 BUKTI` dari baris atas seluruh kotak fasilitas terpadu, baik pada daftar Kamar Terisi (`occupiedUnits`) maupun Kamar Kosong (`vacantUnits`).
+    - Kotak fasilitas kini tampil bersih, elegan, dan proporsional hanya menampilkan Ikon + Nama Fasilitas Utama di baris atas dan sub-fasilitas ber-tab di baris bawah.
+  * **2. Keutuhan Korelasi Interaktif Hover Dua Arah**:
+    - Fungsi korelasi hover dua arah (hover kotak fasilitas ⇄ foto dokumentasi di bawahnya membesar, bersinar ring, dan memunculkan badge `"🎯 Bukti Foto"`) tetap bekerja 100% tanpa gangguan.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 118. Redesain Kotak Fasilitas Terpadu (Format Vertikal & Sub-Fasilitas Tab di Bawah) di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar kotak fasilitas terpadu tidak memanjang secara horizontal, melainkan berbentuk kartu/kotak terstruktur vertikal.

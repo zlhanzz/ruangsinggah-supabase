@@ -2370,19 +2370,12 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                                                             }`}
                                                                                                                             title={hasMatchingPhoto ? `Fasilitas "${uf.mainName}" (Sorot untuk melihat bukti foto)` : `Fasilitas "${uf.mainName}"`}
                                                                                                                         >
-                                                                                                                            {/* Baris Atas: Ikon + Nama Fasilitas Utama + Indikator Foto */}
+                                                                                                                            {/* Baris Atas: Ikon + Nama Fasilitas Utama */}
                                                                                                                             <div className="flex items-center justify-between gap-2.5">
                                                                                                                                 <span className="flex items-center gap-1.5">
                                                                                                                                     {getFacilityIcon(uf.mainName, 12)}
                                                                                                                                     <span className="font-black text-[10px]">{uf.mainName}</span>
                                                                                                                                 </span>
-                                                                                                                                {hasMatchingPhoto && (
-                                                                                                                                    <span className={`text-[8px] px-1.5 py-0.2 rounded font-black tracking-tighter shrink-0 ${
-                                                                                                                                        isHighlighted ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-800'
-                                                                                                                                    }`}>
-                                                                                                                                        📸 BUKTI
-                                                                                                                                    </span>
-                                                                                                                                )}
                                                                                                                             </div>
 
                                                                                                                             {/* Baris Bawah: Sub-Fasilitas (Tab / Indented Menjorok ke Dalam) */}
@@ -2616,19 +2609,12 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                                                              }`}
                                                                                                                              title={hasMatchingPhoto ? `Fasilitas "${uf.mainName}" (Sorot untuk melihat bukti foto)` : `Fasilitas "${uf.mainName}"`}
                                                                                                                          >
-                                                                                                                             {/* Baris Atas: Ikon + Nama Fasilitas Utama + Indikator Foto */}
+                                                                                                                             {/* Baris Atas: Ikon + Nama Fasilitas Utama */}
                                                                                                                              <div className="flex items-center justify-between gap-2.5">
                                                                                                                                  <span className="flex items-center gap-1.5">
                                                                                                                                      {getFacilityIcon(uf.mainName, 12)}
                                                                                                                                      <span className="font-black text-[10px]">{uf.mainName}</span>
                                                                                                                                  </span>
-                                                                                                                                 {hasMatchingPhoto && (
-                                                                                                                                     <span className={`text-[8px] px-1.5 py-0.2 rounded font-black tracking-tighter shrink-0 ${
-                                                                                                                                         isHighlighted ? 'bg-white/25 text-white' : 'bg-emerald-100 text-emerald-800'
-                                                                                                                                     }`}>
-                                                                                                                                         📸 BUKTI
-                                                                                                                                     </span>
-                                                                                                                                 )}
                                                                                                                              </div>
 
                                                                                                                              {/* Baris Bawah: Sub-Fasilitas (Tab / Indented Menjorok ke Dalam) */}
