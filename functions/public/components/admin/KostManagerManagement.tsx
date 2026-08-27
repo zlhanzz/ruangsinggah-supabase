@@ -27,7 +27,10 @@ import {
     Layers,
     MapPin,
     Navigation,
-    ShieldAlert
+    ShieldAlert,
+    DoorClosed,
+    Lock,
+    Users
 } from 'lucide-react';
 
 interface KostManagerManagementProps {
@@ -1466,11 +1469,6 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                             <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-black">
                                                                                 📍 {info.distance}
                                                                             </span>
-                                                                            {info.isLiveGoogleApi && (
-                                                                                <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[8px] font-black tracking-wider uppercase flex items-center gap-1 shadow-2xs animate-pulse">
-                                                                                    <span>●</span> LIVE MAPS API
-                                                                                </span>
-                                                                            )}
                                                                         </div>
                                                                     </div>
 
@@ -1539,6 +1537,28 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                             <div className="py-16 text-center text-slate-400 font-bold uppercase text-xs">Tidak ada data tipe kamar terdata.</div>
                                         );
 
+                                        // Hitung Ringkasan Statistik Kamar & Penghuni
+                                        let totalRooms = 0;
+                                        let occupiedRooms = 0;
+                                        let availableRooms = 0;
+                                        let totalOccupants = 0;
+
+                                        roomTypes.forEach((rt: any) => {
+                                            const tr = Number(rt.totalRooms || rt.total_rooms || (rt.rooms?.length || 1));
+                                            const ar = (rt.availableRooms !== undefined)
+                                                ? Number(rt.availableRooms)
+                                                : (rt.available_rooms !== undefined ? Number(rt.available_rooms) : Math.max(0, tr - Number(rt.occupiedRooms || rt.occupied_rooms || 0)));
+                                            const occ = Math.max(0, tr - ar);
+
+                                            totalRooms += tr;
+                                            availableRooms += ar;
+                                            occupiedRooms += occ;
+
+                                            const unitRooms = rt.rooms || rt.unit_rooms || [];
+                                            const registeredOccupants = unitRooms.filter((u: any) => Boolean(u?.occupant_name || u?.occupant_phone || u?.is_occupied || u?.status === 'occupied')).length;
+                                            totalOccupants += (registeredOccupants > 0 ? registeredOccupants : occ);
+                                        });
+
                                         const DEFAULT_ROOM_PHOTO_SLOTS = ['Interior Kamar', 'Kamar Mandi Dalam', 'Tempat Tidur', 'Lemari / Penyimpanan'];
 
                                         const getRoomPhotos = (room: any) => {
@@ -1566,6 +1586,73 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
 
                                         return (
                                             <div className="space-y-6 animate-in fade-in duration-300">
+                                                {/* GRID RINGKASAN HASIL PENDATAAN KAMAR & PENGHUNI */}
+                                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+                                                    {/* Total Kamar */}
+                                                    <div className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-2xs flex items-center gap-3.5 hover:shadow-xs transition-all">
+                                                        <span className="w-11 h-11 rounded-2xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                                                            <DoorClosed size={20}/>
+                                                        </span>
+                                                        <div className="min-w-0">
+                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block truncate">
+                                                                Total Kamar
+                                                            </span>
+                                                            <h4 className="text-lg font-black text-slate-900 leading-tight">
+                                                                {totalRooms} <span className="text-xs text-slate-500 font-bold">Unit</span>
+                                                            </h4>
+                                                            <span className="text-[10px] font-bold text-blue-600">Semua Tipe Kamar</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Kamar Terisi */}
+                                                    <div className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-2xs flex items-center gap-3.5 hover:shadow-xs transition-all">
+                                                        <span className="w-11 h-11 rounded-2xl bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                                                            <Lock size={20}/>
+                                                        </span>
+                                                        <div className="min-w-0">
+                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block truncate">
+                                                                Kamar Terisi
+                                                            </span>
+                                                            <h4 className="text-lg font-black text-amber-600 leading-tight">
+                                                                {occupiedRooms} <span className="text-xs text-slate-500 font-bold">Unit</span>
+                                                            </h4>
+                                                            <span className="text-[10px] font-bold text-amber-700">Sedang Dihuni</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Kamar Kosong */}
+                                                    <div className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-2xs flex items-center gap-3.5 hover:shadow-xs transition-all">
+                                                        <span className="w-11 h-11 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                                                            <Sparkles size={20}/>
+                                                        </span>
+                                                        <div className="min-w-0">
+                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block truncate">
+                                                                Kamar Kosong
+                                                            </span>
+                                                            <h4 className="text-lg font-black text-emerald-600 leading-tight">
+                                                                {availableRooms} <span className="text-xs text-slate-500 font-bold">Unit</span>
+                                                            </h4>
+                                                            <span className="text-[10px] font-bold text-emerald-700">Siap Pasarkan</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Total Penghuni */}
+                                                    <div className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-2xs flex items-center gap-3.5 hover:shadow-xs transition-all">
+                                                        <span className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                                                            <Users size={20}/>
+                                                        </span>
+                                                        <div className="min-w-0">
+                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block truncate">
+                                                                Total Penghuni
+                                                            </span>
+                                                            <h4 className="text-lg font-black text-indigo-600 leading-tight">
+                                                                {totalOccupants} <span className="text-xs text-slate-500 font-bold">Orang</span>
+                                                            </h4>
+                                                            <span className="text-[10px] font-bold text-indigo-700">Penyewa Terdata</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
                                                 {roomTypes.map((room: any, rtIdx: number) => {
                                                     const roomPhotos = getRoomPhotos(room);
                                                     const totalRooms = room.totalRooms || room.total_rooms || 1;
