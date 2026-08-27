@@ -627,19 +627,46 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                 })
                 .eq('id', req.id);
 
-            // 2. Update properties to active & is_managed = true
+            // 2. Update properties to active & is_managed = true & sync owner_uid
             const propId = prop?.id || req.property_id;
             if (propId) {
                 await supabase.from('properties')
                     .update({ 
                         status: 'active',
                         is_managed: true,
+                        owner_uid: req.user_id || prop?.owner_uid,
                         updated_at: new Date().toISOString()
                     })
                     .eq('id', propId);
             }
 
-            // 3. Update kostmanager_surveys to COMPLETED
+            // 3. Ensure mitra subscription_status = 'kostmanager'
+            if (req.user_id) {
+                const { data: existingMitra } = await supabase
+                    .from('mitra')
+                    .select('id')
+                    .eq('user_id', req.user_id)
+                    .maybeSingle();
+
+                if (existingMitra) {
+                    await supabase.from('mitra')
+                        .update({ 
+                            subscription_status: 'kostmanager',
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('user_id', req.user_id);
+                } else {
+                    await supabase.from('mitra')
+                        .insert({
+                            user_id: req.user_id,
+                            business_name: req.kost_name || 'Kost',
+                            business_address: req.kost_address || '',
+                            subscription_status: 'kostmanager'
+                        });
+                }
+            }
+
+            // 4. Update kostmanager_surveys to COMPLETED
             await supabase.from('kostmanager_surveys')
                 .update({ 
                     status: 'COMPLETED',
@@ -647,7 +674,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                 })
                 .eq('kostmanager_request_id', req.id);
 
-            // 4. Update survey_requests to COMPLETED if any
+            // 5. Update survey_requests to COMPLETED if any
             if (req.transaction_id) {
                 await supabase.from('survey_requests')
                     .update({ status: 'COMPLETED', updated_at: new Date().toISOString() })

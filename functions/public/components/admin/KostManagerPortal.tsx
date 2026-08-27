@@ -325,37 +325,38 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             setPackages(pkgs);
 
             // 1. Ambil owner (mitra) dengan status langganan kostmanager
-            const { data: mitras, error: mErr } = await supabase
+            const { data: mitras } = await supabase
                 .from('mitra')
                 .select('user_id, business_name, business_address')
                 .eq('subscription_status', 'kostmanager');
 
-            if (mErr) throw mErr;
-            const ownerIds = mitras?.map(m => m.user_id) || [];
+            const ownerIds = mitras?.map(m => m.user_id).filter(Boolean) || [];
 
             // 2. Ambil kostmanager_requests yang ACTIVE untuk property tambahan
             const { data: kmRequests } = await supabase
                 .from('kostmanager_requests')
-                .select('user_id, kost_name, empty_rooms')
+                .select('id, user_id, kost_name, empty_rooms, property_id')
                 .eq('status', 'ACTIVE');
 
-            const reqOwnerIds = kmRequests?.map(r => r.user_id) || [];
+            const reqOwnerIds = kmRequests?.map(r => r.user_id).filter(Boolean) || [];
 
-            // 3. Ambil semua owner_uid unik dari tabel properties yang sudah terdaftar (hanya yang dikelola KostManager)
-            const { data: allProps } = await supabase
+            // 3. Ambil SELURUH properti yang is_managed = true dan non-draft
+            const { data: props, error: pErr } = await supabase
                 .from('properties')
-                .select('owner_uid')
-                .eq('is_managed', true);
-            const propOwnerIds = allProps?.map(p => p.owner_uid).filter(Boolean) || [];
+                .select('*')
+                .eq('is_managed', true)
+                .neq('status', 'draft')
+                .order('created_at', { ascending: false });
 
-            // Hanya tampilkan jika pemilik memiliki langganan aktif ('kostmanager') atau pengajuan aktif
-            const activeOwnerIds = [...new Set([...ownerIds, ...reqOwnerIds])];
-            const allOwnerIds = activeOwnerIds;
+            if (pErr) throw pErr;
+
+            const propOwnerIds = props?.map(p => p.owner_uid).filter(Boolean) || [];
+            const allRelevantOwnerUids = [...new Set([...ownerIds, ...reqOwnerIds, ...propOwnerIds])];
 
             // 4. Ambil seluruh daftar pemilik (mitra) dari platform untuk dropdown modal
             const { data: allMitraUsers } = await supabase
                 .from('users')
-                .select('id, name, phone')
+                .select('id, name, phone, email')
                 .in('role', ['owner', 'mitra']);
             
             const finalOwnersList = allMitraUsers?.map(o => ({
@@ -365,48 +366,85 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             })) || [];
             setOwnersList(finalOwnersList);
 
-            if (allOwnerIds.length === 0) {
-                setProperties([]);
-                setTenants([]);
-                setInvoices([]);
-                setLoading(false);
-                return;
+            // 5. Ambil data users pemilik (mitra) untuk info kontak properti ter-load
+            let ownerMap = new Map();
+            if (allRelevantOwnerUids.length > 0) {
+                const { data: owners } = await supabase
+                    .from('users')
+                    .select('id, name, phone, email')
+                    .in('id', allRelevantOwnerUids);
+                ownerMap = new Map(owners?.map(o => [o.id, o]) || []);
             }
 
-            // 5. Ambil data users pemilik (mitra) untuk info kontak properti ter-load
-            const { data: owners } = await supabase
-                .from('users')
-                .select('id, name, phone')
-                .in('id', allOwnerIds);
-            const ownerMap = new Map(owners?.map(o => [o.id, o]) || []);
-
-            // 6. Ambil properti dari pemilik-pemilik tersebut
-            //    Hanya yang is_managed=true DAN sudah published (bukan draft)
-            //    Properti draft = pendataan agen belum diapprove admin, belum boleh masuk portal
-            const { data: props, error: pErr } = await supabase
-                .from('properties')
-                .select('*')
-                .in('owner_uid', allOwnerIds)
-                .eq('is_managed', true)
-                .neq('status', 'draft');
-
-            if (pErr) throw pErr;
-
-            // 5. Ambil data resident_status (semua penyewa)
+            // 6. Ambil data resident_status (penyewa online dari DB)
             const allResidents = await getResidentStatus();
-            // Filter hanya penyewa di properti KostManager yang sudah published (non-draft)
             const managedPropIds = props?.map(p => p.id) || [];
-            const managedResidents = (allResidents || []).filter((r: any) => managedPropIds.includes(r.kost_id));
+            const managedResidents: TenantRecord[] = (allResidents || []).filter((r: any) => managedPropIds.includes(r.kost_id));
 
-            // Map data properties
+            // 7. Ekstraksi penghuni terdata dari hasil pendataan kamar properti (offline/survey occupants)
+            const propertyTenants: TenantRecord[] = [];
+            (props || []).forEach(p => {
+                const roomList = Array.isArray(p.room_types) ? p.room_types : [];
+                roomList.forEach((rt: any, rIdx: number) => {
+                    const isOccupied = rt.isAvailable === false || rt.status === 'Terisi' || Boolean(rt.residentName || rt.tenantName);
+                    if (isOccupied) {
+                        const tenantName = rt.residentName || rt.tenantName || `Penghuni Kamar ${rt.name || rIdx + 1}`;
+                        const cleanRoomName = rt.name ? (String(rt.name).trim().toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${rIdx + 1}`;
+                        const rentPrice = Number(rt.price) || Number(rt.monthlyPrice) || (Array.isArray(rt.pricing) && rt.pricing[0]?.price) || Number(p.price) || 0;
+
+                        propertyTenants.push({
+                            id: `prop-resident-${p.id}-${rIdx}`,
+                            user_id: p.owner_uid,
+                            kost_id: p.id,
+                            room_type: cleanRoomName,
+                            start_date: rt.startDate || rt.leaseStartDate || rt.start_date || (p.created_at ? p.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
+                            end_date: rt.endDate || rt.leaseEndDate || rt.end_date || 'Sewa Berjalan',
+                            status: 'ACTIVE',
+                            metadata: {
+                                basePrice: rentPrice,
+                                price: rentPrice,
+                                facilityFee: 0,
+                                extraPersonFee: Number(rt.extraOccupantFee) || 0,
+                                billingPeriod: rt.paymentPeriod || rt.billingPeriod || 'bulanan',
+                                phone: rt.residentPhone || rt.tenantPhone || '-',
+                                isSurveyOccupant: true
+                            },
+                            user: {
+                                name: tenantName,
+                                phone: rt.residentPhone || rt.tenantPhone || '-',
+                                email: rt.residentEmail || rt.tenantEmail || '-',
+                                photo_url: rt.residentKtpUrl || ''
+                            },
+                            property: {
+                                title: p.title || 'Kost',
+                                address: p.address || ''
+                            }
+                        });
+                    }
+                });
+            });
+
+            // Gabungkan penyewa online + penghuni offline hasil survei (deduplikasi per kamar)
+            const combinedTenants: TenantRecord[] = [...managedResidents];
+            propertyTenants.forEach(pt => {
+                const exists = combinedTenants.some(ct => ct.kost_id === pt.kost_id && ct.room_type?.toLowerCase() === pt.room_type?.toLowerCase());
+                if (!exists) {
+                    combinedTenants.push(pt);
+                }
+            });
+
+            // Map data properties dengan jumlah penghuni akurat
             const mappedProperties: ManagedProperty[] = (props || []).map(p => {
-                const owner = ownerMap.get(p.owner_uid);
-                const req = kmRequests?.find(r => r.user_id === p.owner_uid && r.kost_name?.toLowerCase() === p.title?.toLowerCase());
-                const occupants = managedResidents.filter((r: any) => r.kost_id === p.id && r.status === 'ACTIVE');
+                const req = kmRequests?.find(r => r.property_id === p.id || (r.user_id === p.owner_uid && r.kost_name?.toLowerCase() === p.title?.toLowerCase()) || r.kost_name?.toLowerCase() === p.title?.toLowerCase());
+                const owner = ownerMap.get(p.owner_uid) || (req?.user_id ? ownerMap.get(req.user_id) : null);
+                const occupants = combinedTenants.filter(r => r.kost_id === p.id && r.status === 'ACTIVE');
+
+                const totalRooms = Array.isArray(p.room_types) ? p.room_types.length : 0;
+                const emptyRoomsCalculated = totalRooms > 0 ? Math.max(0, totalRooms - occupants.length) : (req?.empty_rooms ?? 0);
 
                 return {
                     id: p.id,
-                    title: p.title || 'Kost Tanpa Nama',
+                    title: p.title || req?.kost_name || 'Kost Tanpa Nama',
                     description: p.description || '',
                     address: p.address || '',
                     city: p.city || '',
@@ -415,8 +453,8 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     type: p.type || 'Campur',
                     price: Number(p.price) || 0,
                     room_types: Array.isArray(p.room_types) ? p.room_types : [],
-                    status: p.status || 'draft',
-                    empty_rooms: req?.empty_rooms ?? 0,
+                    status: p.status || 'active',
+                    empty_rooms: emptyRoomsCalculated,
                     owner_name: owner?.name || 'Owner RuangSinggah',
                     owner_phone: owner?.phone || '-',
                     occupant_count: occupants.length,
@@ -438,16 +476,11 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                 };
             });
 
-            // 6. Ambil tagihan manual (filter kategori sewa)
+            // 8. Ambil tagihan manual (filter kategori sewa)
             const allInvoices = await getManualInvoices();
-            // PERBAIKAN: Jika belum ada properti terkelola (published), jangan tampilkan tagihan apapun.
-            // Sebelumnya: (managedPropIds.length === 0 || ...) → saat length=0, kondisi TRUE → SEMUA tagihan tampil
-            // Sekarang: wajib cocok dengan property_id atau kost_name dari properti yang benar-benar terkelola
             const rentInvoices = managedPropIds.length === 0 ? [] : (allInvoices || []).filter((inv: any) => {
                 if (inv.category !== 'sewa') return false;
-                // Prioritas 1: Cocokkan via kost_id (field langsung, paling akurat)
                 if (inv.kost_id && managedPropIds.includes(inv.kost_id)) return true;
-                // Prioritas 2: Cocokkan via judul properti (exact match, bukan partial)
                 if (inv.kost_name) {
                     return mappedProperties.some(p =>
                         p.title?.toLowerCase().trim() === inv.kost_name?.toLowerCase().trim()
@@ -456,9 +489,8 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                 return false;
             });
 
-
             setProperties(mappedProperties);
-            setTenants(managedResidents);
+            setTenants(combinedTenants);
             setInvoices(rentInvoices);
         } catch (err) {
             console.error('Error loading KostManager Portal data:', err);
@@ -1153,7 +1185,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                 t.property?.title?.toLowerCase().includes(tenantSearch.toLowerCase())
                                             )
                                             .map(t => {
-                                                const basePrice = Number(t.metadata?.basePrice) || 0;
+                                                const basePrice = Number(t.metadata?.basePrice) || Number(t.metadata?.price) || Number(t.metadata?.monthlyPrice) || 0;
                                                 const facilityFee = Number(t.metadata?.facilityFee) || 0;
                                                 const extraFee = Number(t.metadata?.extraPersonFee) || 0;
                                                 const totalRent = basePrice + facilityFee + extraFee;

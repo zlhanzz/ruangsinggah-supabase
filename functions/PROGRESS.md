@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 131. Ekstraksi Penghuni Kamar Terdata & Sinkronisasi Komprehensif Tab Penghuni Portal KostManager (`KostManagerPortal.tsx` & `KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa setelah menyetujui (ACC) hasil pendataan KostManager (seperti Kost Madani), data properti dan daftar penghuninya tidak muncul di Portal Operasional KostManager (`KostManagerPortal.tsx`).
+  2. Tab "Penghuni" sebelumnya hanya membaca dari tabel transaksi online (`resident_status`), sementara data penghuni eksisting (offline) hasil survei agen tersimpan langsung di dalam struktur objek kamar `properties.room_types`.
+  3. Query properti portal juga membatasi `.in('owner_uid', allOwnerIds)` yang rentan terlewat jika `owner_uid` belum tersinkron dengan ID mitra.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Ekstraksi Otomatis Penghuni Kamar Terdata (`propertyTenants`)**:
+    - Memindai seluruh unit kamar berstatus `Terisi` atau `isAvailable === false` atau memiliki nama penghuni (`residentName` / `tenantName`).
+    - Mengonversi data kamar terisi menjadi entri `TenantRecord` lengkap dengan Nama Penghuni, No HP, Nama Kamar, Tanggal Sewa, dan Skema Tarif.
+    - Menggabungkan penyewa online (`resident_status`) dan penghuni offline hasil survei (dengan deduplikasi per kamar) ke state `tenants`.
+  * **2. Pembersihan Filter Query Properti KostManager**:
+    - Mengambil seluruh properti `is_managed = true` non-draft secara langsung dan memetakan kontak pemilik (`users` & `mitra`) secara komprehensif.
+    - Menghitung jumlah kamar kosong dan penghuni terisi secara akurat pada overview dashboard dan ringkasan properti.
+  * **3. Sinkronisasi Otomatis saat Approval Admin (`handleApproveAndActivate`)**:
+    - Memastikan `properties.owner_uid` disinkronkan ke ID mitra (`req.user_id`) dan memperbarui `mitra.subscription_status = 'kostmanager'`.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/public/components/admin/KostManagerManagement.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus 100% dengan 0 error dalam 52.07 detik (2526 modules transformed).
+
 ### 130. Perbaikan Layout Header 2-Baris pada Kartu Permohonan KostManager (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pada layout header kartu permohonan, penempatan lencana status sejajar 1 baris dengan Avatar, Nama Mitra, dan Nomor Telepon menyebabkan ruang horizontal sempit sehingga nama mitra terpotong menjadi `A..` dan nomor telepon terpotong menjadi `+6281527080...`.
