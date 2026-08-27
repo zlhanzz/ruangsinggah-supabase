@@ -71,11 +71,36 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
     const [realtimeDistances, setRealtimeDistances] = useState<Record<string, { distance: string; duration: string; walkDuration: string; motoDuration: string; carDuration: string; rawKm: number; isLiveGoogleApi?: boolean }>>({});
     const [loadingDistances, setLoadingDistances] = useState(false);
 
-    // Hitung Jarak & Durasi Real Google Maps (DistanceMatrixService & DirectionsService) dengan fallback Haversine
+    // Hitung Jarak & Durasi Real Google Maps (DistanceMatrixService & DirectionsService) dengan Cache-First (Write Once, Read Free)
     useEffect(() => {
         if (!reviewModalOpen || !reviewProperty) return;
         const campuses: any[] = reviewProperty?.campuses || [];
         if (campuses.length === 0) return;
+
+        // 1. CEK CACHE: Jika data durasi sudah tersimpan di database, gunakan langsung (0 API Call / $0 Cost)
+        const hasAllCachedDurations = campuses.every((c: any) => {
+            return Boolean(c && typeof c === 'object' && c.walkDuration && c.motoDuration);
+        });
+
+        if (hasAllCachedDurations) {
+            const cachedMap: Record<string, any> = {};
+            campuses.forEach((c: any) => {
+                const cName = typeof c === 'string' ? c : (c?.name || '');
+                cachedMap[cName] = {
+                    distance: c?.distance || '1.2 km',
+                    duration: c?.motoDuration || c?.duration || '3 mnt',
+                    walkDuration: c?.walkDuration || '17 mnt',
+                    motoDuration: c?.motoDuration || '3 mnt',
+                    carDuration: c?.carDuration || '5 mnt',
+                    rawKm: 1.2,
+                    isLiveGoogleApi: Boolean(c?.isLiveGoogleApi)
+                };
+            });
+            setRealtimeDistances(cachedMap);
+            setLoadingDistances(false);
+            console.log('[GoogleMaps Cache] ✅ Menggunakan data durasi tersimpan dari database (0 API Call - $0 Cost)');
+            return;
+        }
 
         const kostLat = parseFloat(reviewProperty?.location?.lat || reviewProperty?.latitude || -5.147665);
         const kostLng = parseFloat(reviewProperty?.location?.lng || reviewProperty?.longitude || 119.432731);
@@ -271,6 +296,44 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
 
                             if (hasLiveSuccess) {
                                 setRealtimeDistances(updatedMap);
+
+                                // Auto-Save ke database Supabase agar ke depannya 0 API call ($0 Cost)
+                                const enrichedCampuses = campuses.map((c: any, idx: number) => {
+                                    const cName = typeof c === 'string' ? c : (c?.name || `landmark_${idx}`);
+                                    const distInfo = updatedMap[cName];
+                                    if (distInfo) {
+                                        return {
+                                            ...(typeof c === 'object' ? c : { name: cName }),
+                                            distance: distInfo.distance,
+                                            walkDuration: distInfo.walkDuration,
+                                            motoDuration: distInfo.motoDuration,
+                                            carDuration: distInfo.carDuration,
+                                            isLiveGoogleApi: Boolean(distInfo.isLiveGoogleApi)
+                                        };
+                                    }
+                                    return c;
+                                });
+
+                                if (reviewProperty?.id) {
+                                    supabase
+                                        .from('properties')
+                                        .update({ campuses: enrichedCampuses })
+                                        .eq('id', reviewProperty.id)
+                                        .then(() => {
+                                            console.log('[GoogleMaps Auto-Save] ✅ Data durasi Google Maps disimpan permanen ke tabel properties');
+                                        })
+                                        .catch((e: any) => console.warn('[GoogleMaps Auto-Save] Warning:', e));
+                                }
+
+                                if (reviewRequest?.id) {
+                                    const prevMeta = reviewRequest.metadata || {};
+                                    supabase
+                                        .from('kostmanager_requests')
+                                        .update({ metadata: { ...prevMeta, campuses: enrichedCampuses } })
+                                        .eq('id', reviewRequest.id)
+                                        .then(() => {})
+                                        .catch(() => {});
+                                }
                             }
                         }).catch((err) => {
                             if (isCancelled) return;

@@ -2,6 +2,20 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 101. Arsitektur Hemat Biaya: Cache-First & Auto-Save Google Maps Duration ke Database Supabase (`KostManagerManagement.tsx`, `KostDetail.tsx`, `types.ts`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta arsitektur hemat biaya agar API Google Maps hanya dipanggil 1 kali saja di awal saat pendataan/peninjauan kost, dan tidak berjalan terus-menerus yang dapat membengkakkan tagihan Google Cloud.
+  2. Seluruh pengunjung web/calon penyewa harus membaca data jarak & durasi dari database secara instan tanpa mengonsumsi kuota API Google.
+- **Implementasi & Perbaikan**:
+  * **1. Cache-First Check di Modal Peninjauan**:
+    - Sebelum memanggil Google Maps API, sistem mengecek apakah data kampus sudah memiliki `walkDuration` dan `motoDuration` di database Supabase. Jika ada, sistem langsung menggunakan cache lokal (**0 API Request, $0 Cost**).
+  * **2. Auto-Save Hasil Hitungan ke Database Supabase**:
+    - Saat Google Maps API berhasil menghitung rute di awal peninjauan/pendataan, data durasi (`walkDuration`, `motoDuration`, `carDuration`, `distance`) langsung disimpan permanen ke kolom `campuses` di tabel `properties` dan `kostmanager_requests.metadata`.
+  * **3. Read Free di Halaman Publik Calon Penyewa (`KostDetail.tsx`)**:
+    - Halaman detail kost publik langsung membaca nilai durasi dan jarak dari record database tanpa memanggil API Google Maps sama sekali.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`, `functions/public/pages/KostDetail.tsx`, `functions/public/types.ts`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 100. Integrasi Penuh Google Maps Live API (Distance Matrix & Routes) + Badge Indikator (`KostManagerManagement.tsx`, `index.html`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna telah mengaktifkan seluruh API yang dibutuhkan di Google Cloud Console (*Directions API, Distance Matrix API, Routes API, Route Optimization API*).

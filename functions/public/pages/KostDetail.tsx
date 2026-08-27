@@ -613,24 +613,32 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                   </a>
                                 )}
                               </div>
-                              {campus.distance && (() => {
-                                const kmMatch = campus.distance.match(/[\d.]+/);
-                                if (kmMatch) {
-                                  const km = parseFloat(kmMatch[0]);
-                                  const walk = Math.ceil((km / 5) * 60);
-                                  const moto = Math.ceil((km / 30) * 60) + 2;
-                                  const car = Math.ceil((km / 20) * 60) + 5;
-                                  return (
-                                    <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-gray-500 bg-white px-3 py-2 rounded-xl border border-gray-100/50">
-                                      <span className="flex items-center gap-1" title="Jalan Kaki">🚶 {walk}m</span>
-                                      <span className="text-gray-200">|</span>
-                                      <span className="flex items-center gap-1" title="Motor">🏍️ {moto}m</span>
-                                      <span className="text-gray-200">|</span>
-                                      <span className="flex items-center gap-1" title="Mobil">🚗 {car}m</span>
-                                    </div>
-                                  );
-                                }
-                                return null;
+                              {(() => {
+                                const walkText = campus.walkDuration || (() => {
+                                  const kmMatch = campus.distance?.match(/[\d.]+/);
+                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
+                                  return `${Math.ceil((km / 4.2) * 60)}m`;
+                                })();
+                                const motoText = campus.motoDuration || (() => {
+                                  const kmMatch = campus.distance?.match(/[\d.]+/);
+                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
+                                  return `${Math.ceil((km / 28) * 60) + 1}m`;
+                                })();
+                                const carText = campus.carDuration || (() => {
+                                  const kmMatch = campus.distance?.match(/[\d.]+/);
+                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
+                                  return `${Math.ceil((km / 18) * 60) + 2}m`;
+                                })();
+
+                                return (
+                                  <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-gray-500 bg-white px-3 py-2 rounded-xl border border-gray-100/50 shadow-2xs">
+                                    <span className="flex items-center gap-1" title="Jalan Kaki">🚶 {walkText}</span>
+                                    <span className="text-gray-200">|</span>
+                                    <span className="flex items-center gap-1" title="Motor">🏍️ {motoText}</span>
+                                    <span className="text-gray-200">|</span>
+                                    <span className="flex items-center gap-1" title="Mobil">🚗 {carText}</span>
+                                  </div>
+                                );
                               })()}
                             </div>
                           </div>
@@ -662,24 +670,32 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                   </a>
                                 )}
                               </div>
-                              {fac.distance && (() => {
-                                const kmMatch = fac.distance.match(/[\d.]+/);
-                                if (kmMatch) {
-                                  const km = parseFloat(kmMatch[0]);
-                                  const walk = Math.ceil((km / 5) * 60);
-                                  const moto = Math.ceil((km / 30) * 60) + 2;
-                                  const car = Math.ceil((km / 20) * 60) + 5;
-                                  return (
-                                    <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-gray-500 bg-white px-3 py-2 rounded-xl border border-gray-100/50">
-                                      <span className="flex items-center gap-1" title="Jalan Kaki">🚶 {walk}m</span>
-                                      <span className="text-gray-200">|</span>
-                                      <span className="flex items-center gap-1" title="Motor">🏍️ {moto}m</span>
-                                      <span className="text-gray-200">|</span>
-                                      <span className="flex items-center gap-1" title="Mobil">🚗 {car}m</span>
-                                    </div>
-                                  );
-                                }
-                                return null;
+                              {(() => {
+                                const walkText = fac.walkDuration || (() => {
+                                  const kmMatch = fac.distance?.match(/[\d.]+/);
+                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
+                                  return `${Math.ceil((km / 4.2) * 60)}m`;
+                                })();
+                                const motoText = fac.motoDuration || (() => {
+                                  const kmMatch = fac.distance?.match(/[\d.]+/);
+                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
+                                  return `${Math.ceil((km / 28) * 60) + 1}m`;
+                                })();
+                                const carText = fac.carDuration || (() => {
+                                  const kmMatch = fac.distance?.match(/[\d.]+/);
+                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
+                                  return `${Math.ceil((km / 18) * 60) + 2}m`;
+                                })();
+
+                                return (
+                                  <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-gray-500 bg-white px-3 py-2 rounded-xl border border-gray-100/50 shadow-2xs">
+                                    <span className="flex items-center gap-1" title="Jalan Kaki">🚶 {walkText}</span>
+                                    <span className="text-gray-200">|</span>
+                                    <span className="flex items-center gap-1" title="Motor">🏍️ {motoText}</span>
+                                    <span className="text-gray-200">|</span>
+                                    <span className="flex items-center gap-1" title="Mobil">🚗 {carText}</span>
+                                  </div>
+                                );
                               })()}
                             </div>
                           </div>

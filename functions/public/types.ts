@@ -91,8 +91,8 @@ export interface Kost {
   rules: string[];
 
   // Arrays for locations and facilities
-  campuses?: { name: string; distance: string; transportMode?: 'walk' | 'motorcycle' | 'car' | 'transit'; lat?: number; lng?: number }[];
-  publicFacilities?: { name: string; distance: string; transportMode?: 'walk' | 'motorcycle' | 'car' | 'transit'; lat?: number; lng?: number }[];
+  campuses?: { name: string; distance: string; transportMode?: 'walk' | 'motorcycle' | 'car' | 'transit'; lat?: number; lng?: number; walkDuration?: string; motoDuration?: string; carDuration?: string; isLiveGoogleApi?: boolean }[];
+  publicFacilities?: { name: string; distance: string; transportMode?: 'walk' | 'motorcycle' | 'car' | 'transit'; lat?: number; lng?: number; walkDuration?: string; motoDuration?: string; carDuration?: string; isLiveGoogleApi?: boolean }[];
   roomTypes: RoomType[];
   reviews: Review[];
   virtualTourUrl?: string;
