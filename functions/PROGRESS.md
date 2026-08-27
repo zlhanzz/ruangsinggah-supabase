@@ -2286,3 +2286,18 @@
 - **Pencarian Real-time Nama & No HP**: Memungkinkan admin/pengelola untuk mengetik sebagian nama atau nomor telepon mitra pada kolom input teks filter. Daftar mitra disaring secara dinamis berdasarkan masukan kata kunci tersebut.
 - **Visualisasi & Animasi Premium**: Menambahkan visualisasi state aktif/pilih, tombol reset (Clear) instan, state jika data kosong ("Tidak ada mitra yang cocok"), serta transisi CSS lembut dan scrollbar dropdown yang rapi.
 - **Pencegahan Klik Luar (Click Outside)**: Menggunakan event listener mousedown global dan React Ref (`ownerDropdownRef`) untuk menutup dropdown panel secara otomatis jika pengguna mengklik di luar area dropdown.
+
+### 124. Implementasi Sistem Evaluasi & Permintaan Revisi Pendataan KostManager (Agustus 2026)
+- **Notifikasi & Pengiriman Email Evaluasi**:
+  - Memperbarui `notifySurveyRevisionRequested` di `notificationService.ts` untuk memuat email surveyor (`users.email`) dan mengirimkan email evaluasi langsung ke surveyor via FormSubmit endpoint selain in-app notification.
+  - Memperbarui Cloud Function `sendSurveyStatusEmail` di `functions/src/index.ts` untuk mengenali tabel `kostmanager_surveys` dan `kostmanager_requests` serta menyediakan template HTML email khusus status `REVISION_REQUIRED`.
+- **Sinkronisasi Status di Admin Service**:
+  - Memperbarui `getAdminSurveyRequests` di `adminService.ts` agar memetakan status `REVISION_REQUIRED` dan `notes` evaluasi secara tepat tanpa tertimpa atau terlewat.
+- **Visual Alert Box pada Dashboard Agen**:
+  - Menambahkan styling `REVISION_REQUIRED` pada `statusColorMap` (`bg-amber-100 text-amber-950 border-2 border-amber-400 font-extrabold shadow-md animate-pulse`) dan `labelMap` (`⚠️ PERLU REVISI / EVALUASI ADMIN`).
+  - Menambahkan **Alert Box Evaluasi** dengan pesan detail catatan admin dan tombol aksi cepat `⚠️ Buka & Perbaiki Bagian yang Dievaluasi` pada kartu tugas aktif surveyor di `AgentDashboard.tsx`.
+- **Interaktivitas Formulir Onboarding Berbasis Evaluasi Admin**:
+  - Menambahkan Stepper Indicator Alert Badge (`⚠️ REVISI`) pada Step 1 (Properti), Step 2 (Data Kamar), dan Step 3 (Review).
+  - Menambahkan banner evaluasi teratas lengkap dengan **Quick-Jump Pill Buttons** untuk langsung beralih ke Step formulir yang perlu direvisi.
+  - Menambahkan conditional amber border & warning badge (`⚠️ Perlu Revisi Admin`) pada section Profil & Fasad, GPS & Lokasi Maps, Fasilitas Umum, Aturan Kost, Data Kamar, Syarat Mitra, dan Tanda Tangan Digital Pemilik.
+

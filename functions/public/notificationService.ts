@@ -219,7 +219,27 @@ export const notifySurveyRevisionRequested = async (
     const catStr = categories.length > 0 ? ` [Kategori: ${categories.join(', ')}]` : '';
     const message = `Admin meminta evaluasi/revisi pendataan untuk ${kostName}${catStr}. Catatan: "${notes || 'Mohon lengkapi dan perbaiki data survei.'}"`;
 
+    let agentEmail = '';
+    let agentName = 'Surveyor';
+
+    // 1. Ambil data agent dari DB untuk pengiriman email & in-app notification
     if (agentId) {
+      try {
+        const { data: agentUser } = await supabase
+          .from('users')
+          .select('email, full_name, name')
+          .eq('id', agentId)
+          .maybeSingle();
+
+        if (agentUser) {
+          agentEmail = agentUser.email || '';
+          agentName = agentUser.full_name || agentUser.name || 'Surveyor';
+        }
+      } catch (e) {
+        console.warn('[NotificationService] Failed to query agent profile:', e);
+      }
+
+      // Kirim In-App Notification
       await sendNotification(
         agentId,
         title,
@@ -230,6 +250,32 @@ export const notifySurveyRevisionRequested = async (
       );
     }
 
+    // 2. Kirim Email Langsung ke Surveyor via FormSubmit Gateway
+    if (agentEmail) {
+      try {
+        const emailData = {
+          _subject: `⚠️ Permintaan Revisi & Evaluasi Survei: ${kostName}`,
+          "Kepada": agentName,
+          "Nama Properti Kost": kostName,
+          "Status Pendataan": "PERLU REVISI / EVALUASI ADMIN",
+          "Bagian yang Perlu Diperbaiki": categories.join(', ') || 'Semua Elemen Data',
+          "Catatan Evaluasi & Koreksi Admin": notes || 'Mohon perbaiki dan lengkapi data pendataan.',
+          "Akses Dashboard Agen": `${window.location.origin}/dashboard-agent`,
+          "Waktu Evaluasi": new Date().toLocaleString('id-ID')
+        };
+        fetch(`https://formsubmit.co/ajax/${agentEmail}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(emailData)
+        }).then(res => {
+          if (res.ok) console.log(`[NotificationService] Email evaluasi berhasil dikirim ke ${agentEmail}`);
+        }).catch(err => console.warn('[NotificationService] FormSubmit email to agent warning:', err));
+      } catch (emailErr) {
+        console.warn('[NotificationService] Error sending direct email to agent:', emailErr);
+      }
+    }
+
+    // 3. Panggil Cloud Function Trigger (Brevo integration)
     try {
       const emailEndpoint = 'https://us-central1-ruangsinggahid-3afb2.cloudfunctions.net/sendSurveyStatusEmail';
       fetch(emailEndpoint, {
@@ -239,6 +285,9 @@ export const notifySurveyRevisionRequested = async (
           surveyId,
           status: 'REVISION_REQUIRED',
           recipientRole: 'agent',
+          agentEmail,
+          agentName,
+          kostName,
           notes,
           categories
         })

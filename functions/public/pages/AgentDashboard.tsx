@@ -4075,6 +4075,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                 'HEADING_TO_LOCATION': 'bg-indigo-100 text-indigo-900 border border-indigo-200',
                                                 'SURVEYING': 'bg-orange-100 text-orange-900 border border-orange-200',
                                                 'SUBMITTED': 'bg-emerald-100 text-emerald-950 border border-emerald-300 font-bold',
+                                                'REVISION_REQUIRED': 'bg-amber-100 text-amber-950 border-2 border-amber-400 font-extrabold shadow-md animate-pulse',
+                                                'NEED_REVISION': 'bg-amber-100 text-amber-950 border-2 border-amber-400 font-extrabold shadow-md animate-pulse',
                                                 'COMPLETED': 'bg-green-100 text-green-900 border border-green-200',
                                                 'RESCHEDULED': 'bg-amber-100 text-amber-900 border border-amber-200'
                                             };
@@ -4086,6 +4088,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                 'HEADING_TO_LOCATION': 'OTW KE LOKASI',
                                                 'SURVEYING': 'SEDANG SURVEY',
                                                 'SUBMITTED': 'DATA DIKIRIM (MENUNGGU TINJAUAN ADMIN)',
+                                                'REVISION_REQUIRED': '⚠️ PERLU REVISI / EVALUASI ADMIN',
+                                                'NEED_REVISION': '⚠️ PERLU REVISI / EVALUASI ADMIN',
                                                 'COMPLETED': 'SELESAI',
                                                 'RESCHEDULED': 'JADWAL ULANG'
                                             };
@@ -4310,7 +4314,26 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                                         {agentTab === 'active' && (
                                             <>
-                                                {req.status === 'SUBMITTED' ? (
+                                                {req.status === 'REVISION_REQUIRED' || req.notes?.includes('[REVISI') ? (
+                                                    <div className="flex flex-col gap-2.5">
+                                                        <div className="bg-amber-50 border-2 border-amber-400 p-4 rounded-2xl flex flex-col gap-2 shadow-sm">
+                                                            <div className="flex items-center gap-2 text-amber-900 font-black text-xs uppercase tracking-wide">
+                                                                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 animate-bounce" />
+                                                                <span>⚠️ PERMINTAAN REVISI / EVALUASI ADMIN</span>
+                                                            </div>
+                                                            <p className="text-xs text-amber-950 font-bold whitespace-pre-wrap leading-relaxed bg-white/90 p-3 rounded-xl border border-amber-200">
+                                                                {req.notes || 'Admin meminta evaluasi dan perbaikan data hasil survei lapangan. Silakan buka formulir untuk melihat rincian bagian yang perlu diperbaiki.'}
+                                                            </p>
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => openKostManagerListing(req)} 
+                                                            className="w-full bg-amber-600 hover:bg-amber-700 text-white py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-black text-xs uppercase tracking-wider shadow-md active:scale-95 cursor-pointer"
+                                                        >
+                                                            <Edit className="w-4 h-4 inline shrink-0" />
+                                                            ⚠️ Buka &amp; Perbaiki Bagian yang Dievaluasi
+                                                        </button>
+                                                    </div>
+                                                ) : req.status === 'SUBMITTED' ? (
                                                     <div className="flex flex-col gap-2.5">
                                                         <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex items-start gap-2 text-xs text-emerald-950">
                                                             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -5524,45 +5547,182 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                 <button onClick={closeKostManagerListingWithSave} className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded-full hover:bg-gray-50 transition-colors">&times;</button>
                             </div>
 
-                            {/* Stepper Indicator */}
-                            <div className="bg-white border-b border-[#e0c0af] py-3 px-6 shrink-0 flex items-center justify-between gap-1">
-                                <div className="flex flex-col items-center gap-1 flex-1">
-                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 shadow-sm transition-all ${kmStep >= 1 ? 'bg-[#ff7a00] text-white' : 'bg-[#d3e4fe] text-[#584235]'}`}>1</div>
-                                    <div className={`text-[9px] text-center font-bold uppercase tracking-wider ${kmStep >= 1 ? 'text-[#ff7a00]' : 'text-gray-400'}`}>PROPERTI</div>
-                                </div>
-                                <div className="h-px bg-[#e0c0af] w-8 shrink-0 -translate-y-3"></div>
-                                <div className="flex flex-col items-center gap-1 flex-1">
-                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 transition-all ${kmStep >= 2 ? 'bg-[#ff7a00] text-white' : 'bg-[#d3e4fe] text-[#584235]'}`}>2</div>
-                                    <div className={`text-[9px] text-center font-bold uppercase tracking-wider ${kmStep >= 2 ? 'text-[#ff7a00]' : 'text-gray-400'}`}>DATA KAMAR</div>
-                                </div>
-                                <div className="h-px bg-[#e0c0af] w-8 shrink-0 -translate-y-3"></div>
-                                <div className="flex flex-col items-center gap-1 flex-1">
-                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 transition-all ${kmStep >= 3 ? 'bg-[#ff7a00] text-white' : 'bg-[#d3e4fe] text-[#584235]'}`}>3</div>
-                                    <div className={`text-[9px] text-center font-bold uppercase tracking-wider ${kmStep >= 3 ? 'text-[#ff7a00]' : 'text-gray-400'}`}>REVIEW</div>
-                                </div>
-                            </div>
+                            {/* Stepper Indicator with Revision Alert Badges */}
+                            {(() => {
+                                const notes = isEditingKostManager?.notes || '';
+                                const n = notes.toLowerCase();
+                                const facade = n.includes('foto utama') || n.includes('fasad') || n.includes('foto depan');
+                                const gps = n.includes('titik koordinat') || n.includes('gps') || n.includes('maps');
+                                const facilities = n.includes('fasilitas umum');
+                                const rules = n.includes('deskripsi & peraturan') || n.includes('peraturan kost') || n.includes('deskripsi');
+                                const landmark = n.includes('landmark') || n.includes('kampus') || n.includes('estimasi jarak');
+                                const hasProperty = facade || gps || facilities || rules || landmark || n.includes('properti umum');
 
-                            {/* Main Scrollable Form */}
+                                const roomSize = n.includes('ukuran & dimensi') || n.includes('ukuran') || n.includes('dimensi');
+                                const roomFacilities = n.includes('fasilitas utama kamar') || n.includes('fasilitas kamar mandi') || n.includes('fasilitas dapur');
+                                const roomPhotos = n.includes('foto dokumentasi unit') || n.includes('foto unit') || n.includes('foto kamar');
+                                const occupants = n.includes('status kamar (terisi') || n.includes('identitas penghuni') || n.includes('penghuni');
+                                const pricing = n.includes('tarif sewa') || n.includes('periode sewa') || n.includes('harga sewa');
+                                const hasRoom = roomSize || roomFacilities || roomPhotos || occupants || pricing || n.includes('kamar & fasilitas') || n.includes('data penghuni');
+
+                                const bank = n.includes('rekening bank') || n.includes('nomor rekening');
+                                const partner = n.includes('kontak pemilik') || n.includes('syarat & ketentuan') || n.includes('mitra & kerjasama');
+                                const signature = n.includes('tanda tangan digital') || n.includes('tanda tangan');
+                                const hasPartner = bank || partner || signature || n.includes('mitra & kerjasama');
+
+                                return (
+                                    <div className="bg-white border-b border-[#e0c0af] py-3 px-6 shrink-0 flex items-center justify-between gap-1">
+                                        <button 
+                                            type="button"
+                                            onClick={() => setKmStep(1)}
+                                            className="flex flex-col items-center gap-1 flex-1 relative cursor-pointer"
+                                        >
+                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 shadow-sm transition-all relative ${
+                                                kmStep >= 1 ? 'bg-[#ff7a00] text-white' : 'bg-[#d3e4fe] text-[#584235]'
+                                            } ${hasProperty ? 'ring-4 ring-amber-400 ring-offset-1 animate-pulse' : ''}`}>
+                                                1
+                                            </div>
+                                            <div className={`text-[9px] text-center font-bold uppercase tracking-wider flex items-center gap-1 ${
+                                                kmStep >= 1 ? 'text-[#ff7a00]' : 'text-gray-400'
+                                            }`}>
+                                                PROPERTI
+                                                {hasProperty && (
+                                                    <span className="px-1 py-0.2 text-[8px] bg-amber-500 text-white rounded font-black">⚠️ REVISI</span>
+                                                )}
+                                            </div>
+                                        </button>
+                                        <div className="h-px bg-[#e0c0af] w-8 shrink-0 -translate-y-3"></div>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setKmStep(2)}
+                                            className="flex flex-col items-center gap-1 flex-1 relative cursor-pointer"
+                                        >
+                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 transition-all relative ${
+                                                kmStep >= 2 ? 'bg-[#ff7a00] text-white' : 'bg-[#d3e4fe] text-[#584235]'
+                                            } ${hasRoom ? 'ring-4 ring-amber-400 ring-offset-1 animate-pulse' : ''}`}>
+                                                2
+                                            </div>
+                                            <div className={`text-[9px] text-center font-bold uppercase tracking-wider flex items-center gap-1 ${
+                                                kmStep >= 2 ? 'text-[#ff7a00]' : 'text-gray-400'
+                                            }`}>
+                                                DATA KAMAR
+                                                {hasRoom && (
+                                                    <span className="px-1 py-0.2 text-[8px] bg-amber-500 text-white rounded font-black">⚠️ REVISI</span>
+                                                )}
+                                            </div>
+                                        </button>
+                                        <div className="h-px bg-[#e0c0af] w-8 shrink-0 -translate-y-3"></div>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setKmStep(3)}
+                                            className="flex flex-col items-center gap-1 flex-1 relative cursor-pointer"
+                                        >
+                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 transition-all relative ${
+                                                kmStep >= 3 ? 'bg-[#ff7a00] text-white' : 'bg-[#d3e4fe] text-[#584235]'
+                                            } ${hasPartner ? 'ring-4 ring-amber-400 ring-offset-1 animate-pulse' : ''}`}>
+                                                3
+                                            </div>
+                                            <div className={`text-[9px] text-center font-bold uppercase tracking-wider flex items-center gap-1 ${
+                                                kmStep >= 3 ? 'text-[#ff7a00]' : 'text-gray-400'
+                                            }`}>
+                                                REVIEW
+                                                {hasPartner && (
+                                                    <span className="px-1 py-0.2 text-[8px] bg-amber-500 text-white rounded font-black">⚠️ REVISI</span>
+                                                )}
+                                            </div>
+                                        </button>
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Main Scrollable Form Container */}
                             <div className="flex-grow overflow-y-auto p-6 space-y-6 hide-scrollbar">
                                 
-                                {/* Banner Catatan Evaluasi Admin / Permintaan Revisi */}
-                                {(isEditingKostManager?.status === 'REVISION_REQUIRED' || isEditingKostManager?.notes?.includes('[REVISI')) && (
-                                    <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 shadow-sm flex items-start gap-3.5 animate-in fade-in">
-                                        <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 mt-0.5">
-                                            <AlertTriangle size={20} />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="px-2.5 py-0.5 rounded-md bg-amber-200 text-amber-900 font-black text-[10px] uppercase tracking-wider">
-                                                    ⚠️ Catatan Evaluasi & Permintaan Revisi dari Admin
-                                                </span>
+                                {/* Banner Catatan Evaluasi Admin / Permintaan Revisi dengan Quick-Jump */}
+                                {(() => {
+                                    const notes = isEditingKostManager?.notes || '';
+                                    const n = notes.toLowerCase();
+                                    const facade = n.includes('foto utama') || n.includes('fasad') || n.includes('foto depan');
+                                    const gps = n.includes('titik koordinat') || n.includes('gps') || n.includes('maps');
+                                    const facilities = n.includes('fasilitas umum');
+                                    const rules = n.includes('deskripsi & peraturan') || n.includes('peraturan kost') || n.includes('deskripsi');
+                                    const landmark = n.includes('landmark') || n.includes('kampus') || n.includes('estimasi jarak');
+                                    const hasProperty = facade || gps || facilities || rules || landmark || n.includes('properti umum');
+
+                                    const roomSize = n.includes('ukuran & dimensi') || n.includes('ukuran') || n.includes('dimensi');
+                                    const roomFacilities = n.includes('fasilitas utama kamar') || n.includes('fasilitas kamar mandi') || n.includes('fasilitas dapur');
+                                    const roomPhotos = n.includes('foto dokumentasi unit') || n.includes('foto unit') || n.includes('foto kamar');
+                                    const occupants = n.includes('status kamar (terisi') || n.includes('identitas penghuni') || n.includes('penghuni');
+                                    const pricing = n.includes('tarif sewa') || n.includes('periode sewa') || n.includes('harga sewa');
+                                    const hasRoom = roomSize || roomFacilities || roomPhotos || occupants || pricing || n.includes('kamar & fasilitas') || n.includes('data penghuni');
+
+                                    const bank = n.includes('rekening bank') || n.includes('nomor rekening');
+                                    const partner = n.includes('kontak pemilik') || n.includes('syarat & ketentuan') || n.includes('mitra & kerjasama');
+                                    const signature = n.includes('tanda tangan digital') || n.includes('tanda tangan');
+                                    const hasPartner = bank || partner || signature || n.includes('mitra & kerjasama');
+
+                                    const hasAny = n.includes('[revisi') || isEditingKostManager?.status === 'REVISION_REQUIRED' || hasProperty || hasRoom || hasPartner;
+
+                                    if (!hasAny) return null;
+
+                                    return (
+                                        <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-400 shadow-md flex flex-col gap-3 animate-in fade-in">
+                                            <div className="flex items-start gap-3">
+                                                <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                                                    <AlertTriangle size={20} className="animate-bounce" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="px-2.5 py-0.5 rounded-md bg-amber-500 text-white font-black text-[10px] uppercase tracking-wider">
+                                                            ⚠️ PERMINTAAN REVISI &amp; EVALUASI ADMIN
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-amber-950 font-bold mt-1.5 whitespace-pre-wrap leading-relaxed bg-white/90 p-3 rounded-xl border border-amber-200">
+                                                        {isEditingKostManager?.notes || 'Mohon lengkapi dan perbaiki bagian data pendataan yang belum sesuai.'}
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <p className="text-xs text-amber-950 font-bold mt-1.5 whitespace-pre-wrap leading-relaxed">
-                                                {isEditingKostManager?.notes || 'Mohon lengkapi dan perbaiki bagian data pendataan yang belum sesuai.'}
-                                            </p>
+
+                                            {/* Quick Jump Buttons */}
+                                            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-amber-200">
+                                                <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider">Loncat Cepat ke Bagian Revisi:</span>
+                                                {hasProperty && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setKmStep(1)}
+                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                                            kmStep === 1 ? 'bg-amber-600 text-white shadow-sm' : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-100'
+                                                        }`}
+                                                    >
+                                                        🏢 Step 1 (Properti) {kmStep === 1 && '✓'}
+                                                    </button>
+                                                )}
+                                                {hasRoom && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setKmStep(2)}
+                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                                            kmStep === 2 ? 'bg-amber-600 text-white shadow-sm' : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-100'
+                                                        }`}
+                                                    >
+                                                        🛏️ Step 2 (Data Kamar) {kmStep === 2 && '✓'}
+                                                    </button>
+                                                )}
+                                                {hasPartner && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setKmStep(3)}
+                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                                            kmStep === 3 ? 'bg-amber-600 text-white shadow-sm' : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-100'
+                                                        }`}
+                                                    >
+                                                        📋 Step 3 (Mitra / Rekening) {kmStep === 3 && '✓'}
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    );
+                                })()}
 
                                 {/* STEP 1: PROPERTI */}
                                 {kmStep === 1 && (
@@ -8197,11 +8357,22 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         </section>
 
                                         {/* Syarat & Ketentuan */}
-                                        <section className="bg-white border border-[#e0c0af] rounded-2xl p-5 flex flex-col gap-4 shadow-sm">
-                                            <h3 className="font-bold text-sm text-[#0b1c30] border-b border-gray-100 pb-2">Syarat & Ketentuan</h3>
+                                        <section className={`bg-white border rounded-2xl p-5 flex flex-col gap-4 shadow-sm transition-all ${
+                                            isEditingKostManager?.notes?.toLowerCase().includes('syarat') || isEditingKostManager?.notes?.toLowerCase().includes('mitra') || isEditingKostManager?.notes?.toLowerCase().includes('kerjasama') || isEditingKostManager?.notes?.toLowerCase().includes('rekening')
+                                            ? 'border-amber-400 ring-2 ring-amber-300 shadow-amber-50'
+                                            : 'border-[#e0c0af]'
+                                        }`}>
+                                            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                                                <h3 className="font-bold text-sm text-[#0b1c30]">Syarat &amp; Ketentuan Kerjasama Mitra</h3>
+                                                {(isEditingKostManager?.notes?.toLowerCase().includes('syarat') || isEditingKostManager?.notes?.toLowerCase().includes('mitra') || isEditingKostManager?.notes?.toLowerCase().includes('kerjasama') || isEditingKostManager?.notes?.toLowerCase().includes('rekening')) && (
+                                                    <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white font-black text-[9px] uppercase tracking-wider animate-pulse">
+                                                        ⚠️ Perlu Revisi Admin
+                                                    </span>
+                                                )}
+                                            </div>
                                             
                                             <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 max-h-[140px] overflow-y-auto text-[10px] text-gray-650 leading-relaxed font-semibold">
-                                                <p className="font-black text-gray-800 mb-1 text-[11px]">Syarat & Ketentuan Penggunaan KostManager</p>
+                                                <p className="font-black text-gray-800 mb-1 text-[11px]">Syarat &amp; Ketentuan Penggunaan KostManager</p>
                                                 <p className="mb-2">Dengan mendaftarkan properti Anda di KostManager, Anda menyetujui persyaratan berikut:</p>
                                                 <p className="mb-1">1. <b>Mekanisme Listing:</b> Properti yang didaftarkan akan diverifikasi oleh tim internal sebelum status dinyatakan aktif secara penuh.</p>
                                                 <p className="mb-1">2. <b>Akurasi Data:</b> Mitra bertanggung jawab sepenuhnya atas kebenaran seluruh informasi properti, fasilitas, dan kamar yang didata oleh agen survey.</p>
@@ -8222,13 +8393,22 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         </section>
 
                                         {/* Tanda Tangan Digital Pemilik */}
-                                        <section className="bg-white border border-[#e0c0af] rounded-2xl p-5 flex flex-col gap-4 shadow-sm">
+                                        <section className={`bg-white border rounded-2xl p-5 flex flex-col gap-4 shadow-sm transition-all ${
+                                            isEditingKostManager?.notes?.toLowerCase().includes('tanda tangan') || isEditingKostManager?.notes?.toLowerCase().includes('signature')
+                                            ? 'border-amber-400 ring-2 ring-amber-300 shadow-amber-50'
+                                            : 'border-[#e0c0af]'
+                                        }`}>
                                             <div className="flex justify-between items-center border-b border-gray-100 pb-2">
                                                 <div className="flex items-center gap-2">
                                                     <h3 className="font-bold text-sm text-[#0b1c30]">Tanda Tangan Digital Pemilik</h3>
                                                     {signatureData && (
                                                         <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
                                                             <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Tersimpan
+                                                        </span>
+                                                    )}
+                                                    {(isEditingKostManager?.notes?.toLowerCase().includes('tanda tangan') || isEditingKostManager?.notes?.toLowerCase().includes('signature')) && (
+                                                        <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white font-black text-[9px] uppercase tracking-wider animate-pulse">
+                                                            ⚠️ Perlu Revisi Admin
                                                         </span>
                                                     )}
                                                 </div>

@@ -2666,7 +2666,9 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
     if (!kmErr && kmSurveys) {
       mappedKmSurveys = kmSurveys.map((ks: any) => {
         let computedStatus = ks.status;
-        if (ks.status === 'SUBMITTED' || ks.request?.status === 'PENDING_ONBOARDING') {
+        if (ks.status === 'REVISION_REQUIRED' || ks.request?.status === 'REVISION_REQUIRED') {
+          computedStatus = 'REVISION_REQUIRED';
+        } else if (ks.status === 'SUBMITTED' || ks.request?.status === 'PENDING_ONBOARDING') {
           computedStatus = 'SUBMITTED';
         } else if (ks.status === 'SURVEYING' && ks.request?.status === 'AGENT_ASSIGNED') {
           computedStatus = 'PENDING_ASSIGNMENT';
@@ -2690,7 +2692,7 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
           kost_address: ks.request?.kost_address || '',
           kost_type: ks.request?.kost_type || '',
           empty_rooms: ks.request?.empty_rooms || 0,
-          notes: ks.request?.notes || '',
+          notes: ks.request?.notes || ks.notes || '',
           survey_date: ks.request?.survey_date,
           user: ks.request?.user,
           transaction: ks.request?.transaction
@@ -2702,7 +2704,7 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
   // Bersihkan duplikat record PENDING_ASSIGNMENT jika transaksi sudah memiliki record terproses (COMPLETED / SUBMITTED / DLL)
   const processedTxIds = new Set(
     mappedSurveys
-      .filter((s: any) => s.transaction_id && ['COMPLETED', 'SUBMITTED', 'SURVEYING', 'HEADING_TO_LOCATION', 'AGENT_ASSIGNED', 'RESCHEDULED', 'ACTIVE'].includes(s.status))
+      .filter((s: any) => s.transaction_id && ['COMPLETED', 'SUBMITTED', 'REVISION_REQUIRED', 'SURVEYING', 'HEADING_TO_LOCATION', 'AGENT_ASSIGNED', 'RESCHEDULED', 'ACTIVE'].includes(s.status))
       .map((s: any) => s.transaction_id)
   );
 

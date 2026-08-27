@@ -2482,10 +2482,10 @@ export const testEmailNotification = functions.https.onRequest({ cors: true }, a
  * sendSurveyStatusEmail: Sends email notification for survey lifecycle events.
  */
 export const sendSurveyStatusEmail = functions.https.onRequest({ cors: true }, async (req, res) => {
-  const { surveyId, status, recipientRole } = req.body;
+  const { surveyId, status, recipientRole, notes, categories, agentEmail: directAgentEmail, agentName: directAgentName, kostName: directKostName } = req.body;
   console.log(`SURVEY_EMAIL: Start (ID: ${surveyId}, Status: ${status}, Role: ${recipientRole})`);
 
-  if (!surveyId || !status) {
+  if ((!surveyId && !directAgentEmail) || !status) {
     res.status(400).send({ message: 'Missing surveyId or status' });
     return;
   }
@@ -2494,24 +2494,43 @@ export const sendSurveyStatusEmail = functions.https.onRequest({ cors: true }, a
     const supabase = getSupabase();
     if (!supabase) throw new Error('DB Error');
 
-    // Fetch survey details with user and agent info
-    const { data: survey, error: surveyError } = await supabase
-      .from('survey_requests')
-      .select('*, users!survey_requests_user_id_fkey(email, full_name)')
-      .eq('id', surveyId)
-      .single();
+    let survey: any = null;
+    if (surveyId) {
+      // 1. Coba cari di survey_requests
+      const { data: sReq } = await supabase
+        .from('survey_requests')
+        .select('*, users!survey_requests_user_id_fkey(email, full_name)')
+        .eq('id', surveyId)
+        .maybeSingle();
 
-    if (surveyError || !survey) {
-      console.error("SURVEY_EMAIL: Survey not found:", surveyId, surveyError);
-      res.status(404).send({ message: 'Survey not found' });
-      return;
+      if (sReq) {
+        survey = sReq;
+      } else {
+        // 2. Fallback cari di kostmanager_surveys / kostmanager_requests
+        const { data: kmSurv } = await supabase
+          .from('kostmanager_surveys')
+          .select('*, kostmanager_requests(*, users:user_id(email, full_name))')
+          .eq('id', surveyId)
+          .maybeSingle();
+
+        if (kmSurv) {
+          survey = {
+            id: kmSurv.id,
+            kost_name: kmSurv.kostmanager_requests?.kost_name || directKostName || 'Kost',
+            kost_address: kmSurv.kostmanager_requests?.kost_address || '',
+            assigned_agent_id: kmSurv.assigned_agent_id,
+            users: kmSurv.kostmanager_requests?.users,
+            notes: kmSurv.notes || kmSurv.kostmanager_requests?.notes
+          };
+        }
+      }
     }
 
-    const userName = survey.users?.full_name || 'Pelanggan';
-    const userEmail = survey.users?.email;
-    const kostName = survey.kost_name || 'Kost';
-    const surveyDate = survey.survey_date;
-    const surveyTime = survey.survey_time;
+    const userName = survey?.users?.full_name || 'Pelanggan';
+    const userEmail = survey?.users?.email;
+    const kostName = directKostName || survey?.kost_name || 'Kost';
+    const surveyDate = survey?.survey_date || '-';
+    const surveyTime = survey?.survey_time || '-';
 
     let targetEmail = '';
     let targetName = '';
@@ -2523,34 +2542,68 @@ export const sendSurveyStatusEmail = functions.https.onRequest({ cors: true }, a
 
     // Logic based on status and recipient
     if (recipientRole === 'agent') {
-      // Notification to Agent about NEW assignment
-      const { data: agent } = await supabase.from('users').select('email, full_name').eq('id', survey.assigned_agent_id).single();
-      if (!agent || !agent.email) {
-          console.warn("SURVEY_EMAIL: Agent email not found");
-          res.status(200).send({ message: 'Agent email not found, skipping' });
-          return;
+      if (directAgentEmail) {
+        targetEmail = directAgentEmail;
+        targetName = directAgentName || 'Surveyor';
+      } else if (survey?.assigned_agent_id) {
+        const { data: agent } = await supabase.from('users').select('email, full_name').eq('id', survey.assigned_agent_id).single();
+        if (agent && agent.email) {
+          targetEmail = agent.email;
+          targetName = agent.full_name || 'Surveyor';
+        }
       }
-      targetEmail = agent.email;
-      targetName = agent.full_name || 'Surveyor';
-      subject = `Tugas Survey Baru: ${kostName} 📋`;
-      htmlContent = `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 12px;">
-          <h2 style="color: #f97316;">Halo, ${targetName}!</h2>
-          <p>Anda telah ditugaskan untuk melakukan survey lapangan untuk properti berikut:</p>
-          <div style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin: 20px 0;">
-            <table style="width: 100%; font-size: 14px;">
-              <tr><td style="padding: 5px 0; width: 35%;"><strong>Kost</strong></td><td>: ${kostName}</td></tr>
-              <tr><td style="padding: 5px 0;"><strong>Alamat</strong></td><td>: ${survey.kost_address}</td></tr>
-              <tr><td style="padding: 5px 0;"><strong>Jadwal</strong></td><td>: ${surveyDate} @ ${surveyTime}</td></tr>
-              <tr><td style="padding: 5px 0;"><strong>Catatan</strong></td><td>: ${survey.notes || '-'}</td></tr>
-            </table>
+
+      if (!targetEmail) {
+        console.warn("SURVEY_EMAIL: Agent email not found");
+        res.status(200).send({ message: 'Agent email not found, skipping' });
+        return;
+      }
+
+      if (status === 'REVISION_REQUIRED') {
+        const catList = Array.isArray(categories) && categories.length > 0 ? categories.join(', ') : 'Semua Data';
+        subject = `⚠️ Permintaan Revisi & Evaluasi Survei: ${kostName}`;
+        htmlContent = `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #fed7aa; border-radius: 16px; background: #fff;">
+            <div style="text-align: center; margin-bottom: 20px;">
+              <h2 style="color: #ea580c; margin: 0;">⚠️ Permintaan Evaluasi & Revisi</h2>
+              <p style="color: #7c2d12; font-weight: bold; margin-top: 5px;">RuangSinggah KostManager</p>
+            </div>
+            <p>Halo, <strong>${targetName}</strong>!</p>
+            <p>Admin telah meninjau hasil pendataan survei Anda untuk <strong>${kostName}</strong> dan meminta perbaikan data pada bagian berikut:</p>
+            <div style="background: #fffbeb; padding: 18px; border-radius: 12px; border: 1px solid #fde68a; margin: 15px 0;">
+              <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>📌 Bagian yang Perlu Diperbaiki:</strong><br/>${catList}</p>
+              <p style="margin: 0; font-size: 14px;"><strong>📝 Catatan Evaluasi Admin:</strong><br/>${notes || 'Mohon lengkapi perbaikan data survei sesuai petunjuk.'}</p>
+            </div>
+            <p>Silakan buka Dashboard Agen Anda untuk memperbarui data listing dan mengirim ulang ke Admin.</p>
+            <div style="text-align: center; margin: 25px 0;">
+              <a href="https://ruangsinggah.id/dashboard-agent" style="display: inline-block; background: #ea580c; color: white; padding: 14px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 14px;">BUKA DASHBOARD AGEN & PERBAIKI</a>
+            </div>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+            <p style="font-size: 12px; color: #888; text-align: center;">Salam hangat,<br />Tim RuangSinggah.id</p>
           </div>
-          <p>Silakan buka Dashboard Agen Anda untuk menerima tugas ini.</p>
-          <a href="https://ruangsinggah.id/dashboard-agent" style="display: inline-block; background: #f97316; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">BUKA DASHBOARD AGEN</a>
-          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p style="font-size: 12px; color: #666;">Salam,<br />Tim RuangSinggah.id</p>
-        </div>
-      `;
+        `;
+      } else {
+        // Notification to Agent about NEW assignment
+        subject = `Tugas Survey Baru: ${kostName} 📋`;
+        htmlContent = `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 12px;">
+            <h2 style="color: #f97316;">Halo, ${targetName}!</h2>
+            <p>Anda telah ditugaskan untuk melakukan survey lapangan untuk properti berikut:</p>
+            <div style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin: 20px 0;">
+              <table style="width: 100%; font-size: 14px;">
+                <tr><td style="padding: 5px 0; width: 35%;"><strong>Kost</strong></td><td>: ${kostName}</td></tr>
+                <tr><td style="padding: 5px 0;"><strong>Alamat</strong></td><td>: ${survey?.kost_address || '-'}</td></tr>
+                <tr><td style="padding: 5px 0;"><strong>Jadwal</strong></td><td>: ${surveyDate} @ ${surveyTime}</td></tr>
+                <tr><td style="padding: 5px 0;"><strong>Catatan</strong></td><td>: ${survey?.notes || '-'}</td></tr>
+              </table>
+            </div>
+            <p>Silakan buka Dashboard Agen Anda untuk menerima tugas ini.</p>
+            <a href="https://ruangsinggah.id/dashboard-agent" style="display: inline-block; background: #f97316; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">BUKA DASHBOARD AGEN</a>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+            <p style="font-size: 12px; color: #666;">Salam,<br />Tim RuangSinggah.id</p>
+          </div>
+        `;
+      }
     } else {
       // Notifications to USER
       if (!userEmail) {
