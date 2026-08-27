@@ -1,6 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabase';
 import { FORMAT_CURRENCY } from '../../constants';
+import { 
+    Users, 
+    Calendar, 
+    Clock, 
+    AlertTriangle, 
+    CheckCircle2, 
+    DollarSign, 
+    DoorClosed, 
+    RotateCw, 
+    LogOut, 
+    MessageSquare, 
+    Phone, 
+    FileText, 
+    Eye, 
+    Search, 
+    Sparkles, 
+    Bed, 
+    CreditCard, 
+    X,
+    Building2,
+    ShieldAlert
+} from 'lucide-react';
 import { KostManagerPackage } from '../../types';
 import { 
     getResidentStatus, 
@@ -215,6 +237,148 @@ interface InvoiceRecord {
     created_at: string;
 }
 
+
+// --- TENANT LIFECYCLE ENGINE TYPES & HELPERS ---
+export interface TenantLifecycleInfo {
+    status: 'ACTIVE_RUNNING' | 'DUE_SOON' | 'OVERDUE' | 'CHECKOUT_PLANNED' | 'CHECKED_OUT';
+    label: string;
+    color: string;
+    badgeClass: string;
+    daysDiff: number;
+    daysText: string;
+    dueDateFormatted: string;
+    isOverdue: boolean;
+    isDueSoon: boolean;
+}
+
+export const calculateTenantLifecycle = (startDate?: string, endDate?: string, status?: string): TenantLifecycleInfo => {
+    if (status === 'CHECKED_OUT' || status === 'INACTIVE' || status === 'Habis') {
+        return {
+            status: 'CHECKED_OUT',
+            label: 'Alumni / Keluar',
+            color: 'slate',
+            badgeClass: 'bg-slate-100 text-slate-600 border-slate-200',
+            daysDiff: 0,
+            daysText: 'Sewa Selesai',
+            dueDateFormatted: endDate || '-',
+            isOverdue: false,
+            isDueSoon: false
+        };
+    }
+
+    if (status === 'CHECKOUT_PLANNED') {
+        return {
+            status: 'CHECKOUT_PLANNED',
+            label: 'Rencana Keluar',
+            color: 'purple',
+            badgeClass: 'bg-purple-50 text-purple-700 border-purple-200 ring-1 ring-purple-400/20',
+            daysDiff: 0,
+            daysText: 'Move-Out Disiapkan',
+            dueDateFormatted: endDate || '-',
+            isOverdue: false,
+            isDueSoon: false
+        };
+    }
+
+    if (!endDate || endDate === 'Sewa Berjalan') {
+        return {
+            status: 'ACTIVE_RUNNING',
+            label: 'Sewa Berjalan',
+            color: 'emerald',
+            badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+            daysDiff: 999,
+            daysText: 'Sewa Berjalan',
+            dueDateFormatted: 'Sewa Berjalan',
+            isOverdue: false,
+            isDueSoon: false
+        };
+    }
+
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    const due = new Date(endDate);
+    due.setHours(0, 0, 0, 0);
+
+    if (isNaN(due.getTime())) {
+        return {
+            status: 'ACTIVE_RUNNING',
+            label: 'Sewa Berjalan',
+            color: 'emerald',
+            badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+            daysDiff: 999,
+            daysText: 'Sewa Berjalan',
+            dueDateFormatted: endDate,
+            isOverdue: false,
+            isDueSoon: false
+        };
+    }
+
+    const diffTime = due.getTime() - now.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+        const daysLate = Math.abs(diffDays);
+        return {
+            status: 'OVERDUE',
+            label: `Menunggak (+${daysLate} Hari)`,
+            color: 'rose',
+            badgeClass: 'bg-rose-50 text-rose-700 border-rose-300 ring-2 ring-rose-500/20 font-black animate-pulse',
+            daysDiff: diffDays,
+            daysText: `Terlambat ${daysLate} hari`,
+            dueDateFormatted: endDate,
+            isOverdue: true,
+            isDueSoon: false
+        };
+    } else if (diffDays <= 7) {
+        return {
+            status: 'DUE_SOON',
+            label: diffDays === 0 ? 'Jatuh Tempo Hari Ini!' : `Jatuh Tempo H-${diffDays}`,
+            color: 'amber',
+            badgeClass: 'bg-amber-50 text-amber-900 border-amber-300 ring-2 ring-amber-500/20 font-black',
+            daysDiff: diffDays,
+            daysText: diffDays === 0 ? 'Hari ini' : `${diffDays} hari lagi`,
+            dueDateFormatted: endDate,
+            isOverdue: false,
+            isDueSoon: true
+        };
+    } else {
+        return {
+            status: 'ACTIVE_RUNNING',
+            label: 'Sewa Berjalan',
+            color: 'emerald',
+            badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+            daysDiff: diffDays,
+            daysText: `${diffDays} hari lagi`,
+            dueDateFormatted: endDate,
+            isOverdue: false,
+            isDueSoon: false
+        };
+    }
+};
+
+export const generateTenantWhatsAppReminder = (t: TenantRecord) => {
+    const phone = (t.user?.phone || t.metadata?.phone || '').replace(/[^0-9]/g, '');
+    if (!phone) return '#';
+
+    const life = calculateTenantLifecycle(t.start_date, t.end_date, t.status);
+    const tenantName = t.user?.name || 'Kak';
+    const kostTitle = t.property?.title || 'Kost';
+    const roomName = t.room_type || 'Kamar';
+    const rentAmount = FORMAT_CURRENCY(Number(t.metadata?.basePrice) || Number(t.metadata?.price) || 0);
+
+    let msg = '';
+    if (life.isOverdue) {
+        msg = `Halo Kak *${tenantName}* 👋,\n\nKami dari Manajemen *${kostTitle}* (RuangSinggah KostManager) ingin menginformasikan bahwa tagihan sewa bulanan untuk unit *${roomName}* sebesar *${rentAmount}* telah melewati tanggal jatuh tempo (${life.dueDateFormatted}).\n\nMohon untuk segera melakukan pembayaran atau konfirmasi kepada kami. Terima kasih atas kerjasamanya! 🙏`;
+    } else if (life.isDueSoon) {
+        msg = `Halo Kak *${tenantName}* 👋,\n\nPengingat ramah dari Manajemen *${kostTitle}* (RuangSinggah KostManager):\nTagihan sewa bulanan untuk unit *${roomName}* sebesar *${rentAmount}* akan jatuh tempo pada *${life.dueDateFormatted}* (${life.daysText}).\n\nMohon konfirmasi pembayaran atau perpanjangan sewa. Terima kasih banyak! ✨`;
+    } else {
+        msg = `Halo Kak *${tenantName}* 👋,\n\nSalam dari Manajemen *${kostTitle}* (RuangSinggah KostManager).\nIni rincian data sewa unit *${roomName}* Anda (Tarif: *${rentAmount}*).\n\nAda yang bisa kami bantu terkait fasilitas atau kenyamanan kamar Anda?`;
+    }
+
+    return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+};
+
 const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMenu, onMenuChange, onBack }) => {
     // --- TABS STATE & ROUTING ---
     const activeTab = (() => {
@@ -312,6 +476,20 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     const [invoiceSearch, setInvoiceSearch] = useState('');
     const [selectedPropForRoomDetail, setSelectedPropForRoomDetail] = useState<ManagedProperty | null>(null);
     const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
+
+    // Lifecycle Filter Tab State
+    const [tenantLifecycleFilter, setTenantLifecycleFilter] = useState<'ALL' | 'ACTIVE' | 'DUE_SOON' | 'OVERDUE' | 'CHECKOUT'>('ALL');
+
+    // Operational Modals States (Renew, Checkout, Detail)
+    const [selectedTenantForRenew, setSelectedTenantForRenew] = useState<TenantRecord | null>(null);
+    const [renewMonths, setRenewMonths] = useState<number>(1);
+    const [isRenewing, setIsRenewing] = useState<boolean>(false);
+
+    const [selectedTenantForCheckout, setSelectedTenantForCheckout] = useState<TenantRecord | null>(null);
+    const [checkoutNotes, setCheckoutNotes] = useState<string>('');
+    const [isCheckingOut, setIsCheckingOut] = useState<boolean>(false);
+
+    const [selectedTenantForDetail, setSelectedTenantForDetail] = useState<TenantRecord | null>(null);
 
 
 
@@ -502,6 +680,126 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     useEffect(() => {
         loadAllData();
     }, []);
+
+    
+    // Handler: Perpanjang Masa Sewa Penghuni
+    const handleRenewLease = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedTenantForRenew) return;
+
+        setIsRenewing(true);
+        try {
+            const tenant = selectedTenantForRenew;
+            const prop = properties.find(p => p.id === tenant.kost_id);
+            if (!prop) throw new Error('Data properti tidak ditemukan');
+
+            // Hitung tanggal akhir baru
+            const currentEndDate = tenant.end_date && tenant.end_date !== 'Sewa Berjalan' ? new Date(tenant.end_date) : new Date();
+            const newEndDate = new Date(currentEndDate);
+            newEndDate.setMonth(newEndDate.getMonth() + Number(renewMonths));
+            const newEndDateStr = newEndDate.toISOString().split('T')[0];
+            const newStartDateStr = currentEndDate.toISOString().split('T')[0];
+
+            // Update room_types di database
+            const currentRooms = Array.isArray(prop.room_types) ? [...prop.room_types] : [];
+            let updated = false;
+
+            const newRooms = currentRooms.map((rt: any, idx: number) => {
+                const rName = rt.name ? (String(rt.name).trim().toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${idx + 1}`;
+                if (rName.toLowerCase() === tenant.room_type?.toLowerCase() || rt.residentName === tenant.user?.name) {
+                    updated = true;
+                    return {
+                        ...rt,
+                        startDate: newStartDateStr,
+                        endDate: newEndDateStr,
+                        status: 'Terisi',
+                        isAvailable: false
+                    };
+                }
+                return rt;
+            });
+
+            if (!updated && newRooms.length > 0) {
+                newRooms[0] = {
+                    ...newRooms[0],
+                    startDate: newStartDateStr,
+                    endDate: newEndDateStr,
+                    status: 'Terisi',
+                    isAvailable: false
+                };
+            }
+
+            const { error: pErr } = await supabase
+                .from('properties')
+                .update({ 
+                    room_types: newRooms,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', prop.id);
+
+            if (pErr) throw pErr;
+
+            alert(`✅ Masa sewa untuk ${tenant.user?.name} (${tenant.room_type}) berhasil diperpanjang ${renewMonths} bulan hingga ${newEndDateStr}!`);
+            setSelectedTenantForRenew(null);
+            await loadAllData();
+        } catch (err: any) {
+            console.error('Error renewing lease:', err);
+            alert('Gagal memperpanjang sewa: ' + err.message);
+        } finally {
+            setIsRenewing(false);
+        }
+    };
+
+    // Handler: Check-Out / Pelepasan Kamar Penghuni
+    const handleCheckoutTenant = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedTenantForCheckout) return;
+
+        setIsCheckingOut(true);
+        try {
+            const tenant = selectedTenantForCheckout;
+            const prop = properties.find(p => p.id === tenant.kost_id);
+            if (!prop) throw new Error('Data properti tidak ditemukan');
+
+            // Update room_types di database: kosongkan kamar
+            const currentRooms = Array.isArray(prop.room_types) ? [...prop.room_types] : [];
+            const newRooms = currentRooms.map((rt: any, idx: number) => {
+                const rName = rt.name ? (String(rt.name).trim().toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${idx + 1}`;
+                if (rName.toLowerCase() === tenant.room_type?.toLowerCase() || rt.residentName === tenant.user?.name) {
+                    return {
+                        ...rt,
+                        status: 'Kosong',
+                        isAvailable: true,
+                        residentName: '',
+                        residentPhone: '',
+                        startDate: '',
+                        endDate: ''
+                    };
+                }
+                return rt;
+            });
+
+            const { error: pErr } = await supabase
+                .from('properties')
+                .update({ 
+                    room_types: newRooms,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', prop.id);
+
+            if (pErr) throw pErr;
+
+            alert(`✅ Proses check-out selesai! Unit ${tenant.room_type} di "${prop.title}" kini kembali KOSONG dan siap dipasarkan.`);
+            setSelectedTenantForCheckout(null);
+            setCheckoutNotes('');
+            await loadAllData();
+        } catch (err: any) {
+            console.error('Error checking out tenant:', err);
+            alert('Gagal melakukan check-out: ' + err.message);
+        } finally {
+            setIsCheckingOut(false);
+        }
+    };
 
     const handleSavePackage = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -1150,95 +1448,546 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     )}
 
                     {/* =========================================== */}
-                    {/* TAB: TENANTS                                */}
+                    {/* TAB: TENANTS (AUTO-PILOT LIFECYCLE ENGINE) */}
                     {/* =========================================== */}
-                    {activeTab === 'tenants' && (
-                        <div className="bg-white border border-gray-100 rounded-3xl shadow-sm overflow-hidden">
-                            {/* Search Header */}
-                            <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Penghuni Kost Aktif</h3>
-                                <input
-                                    type="text"
-                                    placeholder="🔍 Cari nama penghuni atau kost..."
-                                    value={tenantSearch}
-                                    onChange={e => setTenantSearch(e.target.value)}
-                                    className="border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400 w-full sm:max-w-xs"
-                                />
-                            </div>
+                    {activeTab === 'tenants' && (() => {
+                        // Compute Lifecycle for all tenants
+                        const enrichedTenants = tenants.map(t => {
+                            const life = calculateTenantLifecycle(t.start_date, t.end_date, t.status);
+                            const basePrice = Number(t.metadata?.basePrice) || Number(t.metadata?.price) || Number(t.metadata?.monthlyPrice) || 0;
+                            const facilityFee = Number(t.metadata?.facilityFee) || 0;
+                            const extraFee = Number(t.metadata?.extraPersonFee) || 0;
+                            const totalRent = basePrice + facilityFee + extraFee;
 
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-xs text-left">
-                                    <thead>
-                                        <tr className="bg-gray-50 border-b border-gray-100">
-                                            <th className="px-6 py-4 font-black text-gray-500 uppercase tracking-wider">Nama Penghuni</th>
-                                            <th className="px-6 py-4 font-black text-gray-500 uppercase tracking-wider">Properti & Kamar</th>
-                                            <th className="px-6 py-4 font-black text-gray-500 uppercase tracking-wider">Masa Sewa</th>
-                                            <th className="px-6 py-4 font-black text-gray-500 uppercase tracking-wider">Harga Sewa</th>
-                                            <th className="px-6 py-4 font-black text-gray-500 uppercase tracking-wider">Status</th>
-                                            <th className="px-6 py-4 font-black text-gray-500 uppercase tracking-wider">Aksi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {tenants
-                                            .filter(t => !tenantSearch || 
-                                                t.user?.name?.toLowerCase().includes(tenantSearch.toLowerCase()) ||
-                                                t.property?.title?.toLowerCase().includes(tenantSearch.toLowerCase())
-                                            )
-                                            .map(t => {
-                                                const basePrice = Number(t.metadata?.basePrice) || Number(t.metadata?.price) || Number(t.metadata?.monthlyPrice) || 0;
-                                                const facilityFee = Number(t.metadata?.facilityFee) || 0;
-                                                const extraFee = Number(t.metadata?.extraPersonFee) || 0;
-                                                const totalRent = basePrice + facilityFee + extraFee;
+                            return {
+                                ...t,
+                                lifecycle: life,
+                                totalRent
+                            };
+                        });
 
-                                                return (
-                                                    <tr key={t.id} className="hover:bg-gray-50/50">
-                                                        <td className="px-6 py-4">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold">
-                                                                    {t.user?.name?.charAt(0).toUpperCase()}
-                                                                </div>
-                                                                <div>
-                                                                    <p className="font-bold text-gray-900">{t.user?.name || 'Penyewa'}</p>
-                                                                    <p className="text-gray-400 mt-0.5 font-semibold">📱 {t.user?.phone || '-'}</p>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <p className="font-bold text-gray-800">{t.property?.title || 'Kost RuangSinggah'}</p>
-                                                            <p className="text-gray-400 mt-0.5 font-semibold uppercase tracking-wider text-[9px]">{t.room_type || 'Standard'}</p>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <p className="font-bold text-gray-800">{t.start_date} s/d {t.end_date}</p>
-                                                        </td>
-                                                        <td className="px-6 py-4 font-bold text-orange-600 text-sm">
-                                                            {FORMAT_CURRENCY(totalRent)}
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <span className={`text-[9px] px-2 py-0.5 rounded font-black uppercase tracking-widest ${
-                                                                t.status === 'ACTIVE' ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-red-50 text-red-600 border border-red-100'
-                                                            }`}>
-                                                                {t.status === 'ACTIVE' ? 'Aktif' : 'Habis'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <button
-                                                                onClick={() => {
-                                                                    setSelectedTenantIdForBill(t.id);
-                                                                    setIsAddBillOpen(true);
-                                                                }}
-                                                                className="bg-orange-50 hover:bg-orange-100 text-orange-600 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
-                                                            >
-                                                                🧾 Tagih Sewa
-                                                            </button>
+                        // Calculate KPIs
+                        const totalTenantsCount = enrichedTenants.length;
+                        const totalMonthlyRevenue = enrichedTenants.reduce((sum, t) => sum + (t.totalRent || 0), 0);
+                        const overdueTenants = enrichedTenants.filter(t => t.lifecycle.isOverdue);
+                        const dueSoonTenants = enrichedTenants.filter(t => t.lifecycle.isDueSoon);
+                        const totalVacantRooms = properties.reduce((sum, p) => sum + (p.empty_rooms || 0), 0);
+                        const totalRoomsAll = properties.reduce((sum, p) => sum + (Array.isArray(p.room_types) ? p.room_types.length : 0), 0);
+                        const occupancyRate = totalRoomsAll > 0 ? Math.round((totalTenantsCount / totalRoomsAll) * 100) : 0;
+
+                        // Filter by tab pipeline & search
+                        const filteredTenants = enrichedTenants.filter(t => {
+                            // 1. Pipeline Filter
+                            if (tenantLifecycleFilter === 'ACTIVE' && t.lifecycle.status !== 'ACTIVE_RUNNING') return false;
+                            if (tenantLifecycleFilter === 'DUE_SOON' && !t.lifecycle.isDueSoon) return false;
+                            if (tenantLifecycleFilter === 'OVERDUE' && !t.lifecycle.isOverdue) return false;
+                            if (tenantLifecycleFilter === 'CHECKOUT' && t.lifecycle.status !== 'CHECKOUT_PLANNED' && t.lifecycle.status !== 'CHECKED_OUT') return false;
+
+                            // 2. Search Filter
+                            if (tenantSearch.trim()) {
+                                const q = tenantSearch.toLowerCase();
+                                const matchName = t.user?.name?.toLowerCase().includes(q);
+                                const matchKost = t.property?.title?.toLowerCase().includes(q);
+                                const matchRoom = t.room_type?.toLowerCase().includes(q);
+                                const matchPhone = (t.user?.phone || '').includes(q);
+                                return matchName || matchKost || matchRoom || matchPhone;
+                            }
+                            return true;
+                        });
+
+                        return (
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                {/* 1. TOP KPI GLANCE CARDS */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    {/* Card 1: Total Penghuni */}
+                                    <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-soft flex items-center justify-between">
+                                        <div>
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Penghuni Aktif</span>
+                                            <div className="flex items-baseline gap-2 mt-1">
+                                                <span className="text-2xl font-black text-slate-900">{totalTenantsCount}</span>
+                                                <span className="text-xs text-slate-500 font-bold">Orang ({occupancyRate}% Terisi)</span>
+                                            </div>
+                                        </div>
+                                        <div className="w-12 h-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center shadow-2xs">
+                                            <Users size={22} />
+                                        </div>
+                                    </div>
+
+                                    {/* Card 2: Estimasi Omset */}
+                                    <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-soft flex items-center justify-between">
+                                        <div>
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Omset Sewa / Bulan</span>
+                                            <div className="mt-1">
+                                                <span className="text-xl font-black text-slate-900">{FORMAT_CURRENCY(totalMonthlyRevenue)}</span>
+                                            </div>
+                                        </div>
+                                        <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-2xs">
+                                            <DollarSign size={22} />
+                                        </div>
+                                    </div>
+
+                                    {/* Card 3: Perlu Ditindak (Due Soon & Overdue) */}
+                                    <div className={`bg-white rounded-3xl p-5 border shadow-soft flex items-center justify-between ${
+                                        overdueTenants.length > 0 ? 'border-rose-300 ring-2 ring-rose-500/10' : 'border-slate-200/90'
+                                    }`}>
+                                        <div>
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Perlu Ditindak</span>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className={`text-2xl font-black ${overdueTenants.length > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+                                                    {dueSoonTenants.length + overdueTenants.length}
+                                                </span>
+                                                <span className="text-[10px] font-bold text-slate-500">
+                                                    (🟡 {dueSoonTenants.length} H-7 • 🔴 {overdueTenants.length} Nunggak)
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-2xs ${
+                                            overdueTenants.length > 0 ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'
+                                        }`}>
+                                            <AlertTriangle size={22} />
+                                        </div>
+                                    </div>
+
+                                    {/* Card 4: Kamar Kosong Siap Huni */}
+                                    <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-soft flex items-center justify-between">
+                                        <div>
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Kamar Kosong</span>
+                                            <div className="flex items-baseline gap-2 mt-1">
+                                                <span className="text-2xl font-black text-emerald-600">{totalVacantRooms}</span>
+                                                <span className="text-xs text-slate-500 font-bold">Kamar Siap Huni</span>
+                                            </div>
+                                        </div>
+                                        <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center shadow-2xs">
+                                            <DoorClosed size={22} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 2. PIPELINE FILTER TABS & SEARCH BAR */}
+                                <div className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-soft flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
+                                    {/* Pipeline Filters */}
+                                    <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 hide-scrollbar">
+                                        {[
+                                            { key: 'ALL', label: 'Semua Penghuni', count: enrichedTenants.length, color: 'bg-slate-100 text-slate-800' },
+                                            { key: 'ACTIVE', label: '🟢 Sewa Berjalan', count: enrichedTenants.filter(t => t.lifecycle.status === 'ACTIVE_RUNNING').length, color: 'bg-emerald-100 text-emerald-800' },
+                                            { key: 'DUE_SOON', label: '🟡 Jatuh Tempo (H-7)', count: dueSoonTenants.length, color: 'bg-amber-100 text-amber-800 font-black' },
+                                            { key: 'OVERDUE', label: '🔴 Menunggak', count: overdueTenants.length, color: 'bg-rose-100 text-rose-800 font-black' },
+                                            { key: 'CHECKOUT', label: '📦 Rencana Keluar', count: enrichedTenants.filter(t => t.lifecycle.status === 'CHECKOUT_PLANNED' || t.lifecycle.status === 'CHECKED_OUT').length, color: 'bg-purple-100 text-purple-800' }
+                                        ].map(tab => (
+                                            <button
+                                                key={tab.key}
+                                                type="button"
+                                                onClick={() => setTenantLifecycleFilter(tab.key as any)}
+                                                className={`px-3.5 py-2 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shrink-0 transition-all cursor-pointer border ${
+                                                    tenantLifecycleFilter === tab.key
+                                                        ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                                                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200/80'
+                                                }`}
+                                            >
+                                                <span>{tab.label}</span>
+                                                <span className={`px-1.5 py-0.2 rounded-md text-[9px] font-black ${tab.color}`}>
+                                                    {tab.count}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* Search Input */}
+                                    <div className="relative w-full md:max-w-xs shrink-0">
+                                        <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Cari nama, kost, unit, No. HP..."
+                                            value={tenantSearch}
+                                            onChange={e => setTenantSearch(e.target.value)}
+                                            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* 3. TABLE OF TENANTS (ENTERPRISE GRADE) */}
+                                <div className="bg-white border border-slate-200/90 rounded-3xl shadow-soft overflow-hidden">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-xs text-left">
+                                            <thead>
+                                                <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-black uppercase tracking-wider text-[10px]">
+                                                    <th className="px-6 py-4">Profil Penghuni</th>
+                                                    <th className="px-6 py-4">Properti & Unit Kamar</th>
+                                                    <th className="px-6 py-4">Periode & Jatuh Tempo</th>
+                                                    <th className="px-6 py-4">Tarif Sewa</th>
+                                                    <th className="px-6 py-4">Status Siklus Hidup</th>
+                                                    <th className="px-6 py-4 text-right">Aksi Manajemen</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 font-medium">
+                                                {filteredTenants.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-bold uppercase tracking-wider text-xs">
+                                                            Tidak ada data penghuni dalam kategori filter ini.
                                                         </td>
                                                     </tr>
-                                                );
-                                            })}
-                                    </tbody>
-                                </table>
+                                                ) : (
+                                                    filteredTenants.map(t => {
+                                                        const cleanPhone = (t.user?.phone || t.metadata?.phone || '').replace(/[^0-9]/g, '');
+                                                        const waLink = generateTenantWhatsAppReminder(t);
+
+                                                        return (
+                                                            <tr key={t.id} className="hover:bg-slate-50/60 transition-colors group">
+                                                                {/* 1. Profil Penghuni */}
+                                                                <td className="px-6 py-4">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-400 to-amber-500 text-white flex items-center justify-center font-black text-sm uppercase shadow-2xs shrink-0">
+                                                                            {(t.user?.name || 'P').charAt(0)}
+                                                                        </div>
+                                                                        <div className="min-w-0">
+                                                                            <div className="flex items-center gap-1.5">
+                                                                                <p className="font-black text-slate-900 text-xs truncate">{t.user?.name || 'Penghuni Terdata'}</p>
+                                                                                <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded">
+                                                                                    {t.metadata?.billingPeriod || 'Bulanan'}
+                                                                                </span>
+                                                                            </div>
+                                                                            {cleanPhone ? (
+                                                                                <a
+                                                                                    href={`https://wa.me/${cleanPhone}`}
+                                                                                    target="_blank"
+                                                                                    rel="noopener noreferrer"
+                                                                                    className="text-[11px] text-emerald-600 font-bold hover:text-emerald-700 flex items-center gap-1 mt-0.5"
+                                                                                >
+                                                                                    <Phone size={10} className="text-emerald-500 shrink-0" />
+                                                                                    <span>+{cleanPhone}</span>
+                                                                                </a>
+                                                                            ) : (
+                                                                                <span className="text-[10px] text-slate-400">-</span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+
+                                                                {/* 2. Properti & Unit Kamar */}
+                                                                <td className="px-6 py-4">
+                                                                    <p className="font-black text-slate-900 text-xs">{t.property?.title || 'Kost RuangSinggah'}</p>
+                                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                                        <span className="px-2 py-0.5 rounded-md bg-orange-50 border border-orange-200/80 text-[#ff7a00] font-black text-[9px] uppercase tracking-wider flex items-center gap-1">
+                                                                            <DoorClosed size={10} />
+                                                                            {t.room_type || 'Kamar'}
+                                                                        </span>
+                                                                    </div>
+                                                                </td>
+
+                                                                {/* 3. Periode & Jatuh Tempo */}
+                                                                <td className="px-6 py-4">
+                                                                    <p className="font-bold text-slate-800 text-[11px] font-mono">
+                                                                        {t.start_date} <span className="text-slate-400 font-normal">s/d</span> {t.end_date}
+                                                                    </p>
+                                                                    <p className="text-[10px] font-bold text-slate-500 mt-0.5 flex items-center gap-1">
+                                                                        <Clock size={10} className="text-slate-400" />
+                                                                        <span>{t.lifecycle.daysText}</span>
+                                                                    </p>
+                                                                </td>
+
+                                                                {/* 4. Tarif Sewa */}
+                                                                <td className="px-6 py-4">
+                                                                    <span className="font-black text-slate-900 text-sm">
+                                                                        {FORMAT_CURRENCY(t.totalRent)}
+                                                                    </span>
+                                                                    <span className="text-[9px] text-slate-400 font-bold block">
+                                                                        / {t.metadata?.billingPeriod || 'bulan'}
+                                                                    </span>
+                                                                </td>
+
+                                                                {/* 5. Status Siklus Hidup */}
+                                                                <td className="px-6 py-4">
+                                                                    <span className={`text-[9px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider border shadow-2xs inline-flex items-center gap-1.5 ${t.lifecycle.badgeClass}`}>
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                                                                        <span>{t.lifecycle.label}</span>
+                                                                    </span>
+                                                                </td>
+
+                                                                {/* 6. Aksi Cepat Multi-Fungsi */}
+                                                                <td className="px-6 py-4 text-right">
+                                                                    <div className="flex items-center justify-end gap-1.5">
+                                                                        {/* Tombol 1: WA Reminder Link */}
+                                                                        {cleanPhone && (
+                                                                            <a
+                                                                                href={waLink}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 transition-all cursor-pointer shadow-2xs"
+                                                                                title="Kirim Reminder WA Otomatis"
+                                                                            >
+                                                                                <MessageSquare size={13} />
+                                                                            </a>
+                                                                        )}
+
+                                                                        {/* Tombol 2: Tagih Sewa */}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setSelectedTenantIdForBill(t.id);
+                                                                                setBillForm({
+                                                                                    ...billForm,
+                                                                                    rentalAmount: t.totalRent || 0
+                                                                                });
+                                                                                setIsAddBillOpen(true);
+                                                                            }}
+                                                                            className="px-2.5 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#ff7a00] border border-orange-200/80 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
+                                                                            title="Terbitkan Tagihan Sewa"
+                                                                        >
+                                                                            🧾 Tagih
+                                                                        </button>
+
+                                                                        {/* Tombol 3: Perpanjang Sewa */}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setSelectedTenantForRenew(t);
+                                                                                setRenewMonths(1);
+                                                                            }}
+                                                                            className="p-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 transition-all cursor-pointer shadow-2xs"
+                                                                            title="Perpanjang Masa Sewa"
+                                                                        >
+                                                                            <RotateCw size={13} />
+                                                                        </button>
+
+                                                                        {/* Tombol 4: Check-out Kamar */}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setSelectedTenantForCheckout(t);
+                                                                                setCheckoutNotes('');
+                                                                            }}
+                                                                            className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 transition-all cursor-pointer shadow-2xs"
+                                                                            title="Proses Check-Out / Kosongkan Kamar"
+                                                                        >
+                                                                            <LogOut size={13} />
+                                                                        </button>
+
+                                                                        {/* Tombol 5: Detail & KTP */}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setSelectedTenantForDetail(t)}
+                                                                            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer shadow-2xs"
+                                                                            title="Lihat Detail Profil & Dokumen"
+                                                                        >
+                                                                            <Eye size={13} />
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* ========================================================= */}
+                                {/* MODAL 1: PERPANJANG MASA SEWA (LEASE RENEWAL MODAL)       */}
+                                {/* ========================================================= */}
+                                {selectedTenantForRenew && (
+                                    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-in fade-in">
+                                        <div className="bg-white rounded-[2rem] shadow-2xl max-w-md w-full overflow-hidden flex flex-col border border-slate-100 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                                            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/70">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center">
+                                                        <RotateCw size={16} />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">Perpanjang Masa Sewa</h3>
+                                                        <p className="text-[10px] text-slate-500 font-bold">{selectedTenantForRenew.user?.name} - {selectedTenantForRenew.room_type}</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => setSelectedTenantForRenew(null)}
+                                                    className="p-2 hover:bg-slate-200/70 rounded-full text-slate-400 transition-colors"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+
+                                            <form onSubmit={handleRenewLease} className="p-6 space-y-4">
+                                                <div className="p-3 bg-blue-50/60 rounded-2xl border border-blue-100 text-xs space-y-1">
+                                                    <p className="text-blue-900 font-bold">Properti: {selectedTenantForRenew.property?.title}</p>
+                                                    <p className="text-blue-700 text-[11px]">Masa sewa saat ini: <span className="font-mono font-bold">{selectedTenantForRenew.start_date} s/d {selectedTenantForRenew.end_date}</span></p>
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Tambah Durasi Sewa</label>
+                                                    <select
+                                                        value={renewMonths}
+                                                        onChange={e => setRenewMonths(Number(e.target.value))}
+                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-orange-500/20"
+                                                    >
+                                                        <option value={1}>+1 Bulan (Bulanan)</option>
+                                                        <option value={2}>+2 Bulan</option>
+                                                        <option value={3}>+3 Bulan (Triwulan)</option>
+                                                        <option value={6}>+6 Bulan (Semester)</option>
+                                                        <option value={12}>+12 Bulan (Tahunan)</option>
+                                                    </select>
+                                                </div>
+
+                                                <div className="flex gap-2 pt-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedTenantForRenew(null)}
+                                                        className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-black uppercase tracking-wider hover:bg-slate-100 transition-all cursor-pointer"
+                                                    >
+                                                        Batal
+                                                    </button>
+                                                    <button
+                                                        type="submit"
+                                                        disabled={isRenewing}
+                                                        className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                                                    >
+                                                        {isRenewing ? 'Menyimpan...' : 'Konfirmasi Perpanjang'}
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* ========================================================= */}
+                                {/* MODAL 2: CHECK-OUT / RELEASE KAMAR (MOVE-OUT MODAL)       */}
+                                {/* ========================================================= */}
+                                {selectedTenantForCheckout && (
+                                    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-in fade-in">
+                                        <div className="bg-white rounded-[2rem] shadow-2xl max-w-md w-full overflow-hidden flex flex-col border border-slate-100 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                                            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-rose-50/70">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center">
+                                                        <LogOut size={16} />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-base font-black text-rose-950 uppercase tracking-tight">Proses Check-Out Penghuni</h3>
+                                                        <p className="text-[10px] text-rose-700 font-bold">{selectedTenantForCheckout.user?.name} - {selectedTenantForCheckout.room_type}</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => setSelectedTenantForCheckout(null)}
+                                                    className="p-2 hover:bg-slate-200/70 rounded-full text-slate-400 transition-colors"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+
+                                            <form onSubmit={handleCheckoutTenant} className="p-6 space-y-4">
+                                                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-xs space-y-1">
+                                                    <p className="text-amber-900 font-bold flex items-center gap-1">
+                                                        <AlertTriangle size={12} className="text-amber-600" />
+                                                        Perhatian Pelepasan Unit Kamar
+                                                    </p>
+                                                    <p className="text-amber-800 text-[11px] leading-relaxed">
+                                                        Setelah proses check-out dikonfirmasi, unit <strong>{selectedTenantForCheckout.room_type}</strong> di <strong>{selectedTenantForCheckout.property?.title}</strong> akan otomatis diubah statusnya menjadi <strong>KOSONG (Tersedia)</strong> dan siap dipasarkan ke pencari kost baru.
+                                                    </p>
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Catatan Serah Terima / Kondisi Kamar (Opsional)</label>
+                                                    <textarea
+                                                        rows={3}
+                                                        placeholder="Kunci diterima lengkap, meteran listrik 1420 kWh, tidak ada kerusakan..."
+                                                        value={checkoutNotes}
+                                                        onChange={e => setCheckoutNotes(e.target.value)}
+                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-rose-500/20"
+                                                    />
+                                                </div>
+
+                                                <div className="flex gap-2 pt-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedTenantForCheckout(null)}
+                                                        className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-black uppercase tracking-wider hover:bg-slate-100 transition-all cursor-pointer"
+                                                    >
+                                                        Batal
+                                                    </button>
+                                                    <button
+                                                        type="submit"
+                                                        disabled={isCheckingOut}
+                                                        className="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                                                    >
+                                                        {isCheckingOut ? 'Memproses...' : 'Kosongkan Unit Kamar'}
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* ========================================================= */}
+                                {/* MODAL 3: DETAIL PROFIL & DOKUMEN PENGHUNI                */}
+                                {/* ========================================================= */}
+                                {selectedTenantForDetail && (
+                                    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-in fade-in">
+                                        <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden flex flex-col border border-slate-100 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                                            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/70">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-400 to-amber-500 text-white flex items-center justify-center font-black text-sm uppercase shadow-xs">
+                                                        {(selectedTenantForDetail.user?.name || 'P').charAt(0)}
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">{selectedTenantForDetail.user?.name}</h3>
+                                                        <p className="text-[10px] text-slate-500 font-bold">{selectedTenantForDetail.property?.title} - {selectedTenantForDetail.room_type}</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => setSelectedTenantForDetail(null)}
+                                                    className="p-2 hover:bg-slate-200/70 rounded-full text-slate-400 transition-colors"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+
+                                            <div className="p-6 space-y-4 overflow-y-auto max-h-[75vh]">
+                                                {/* Info Grid */}
+                                                <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                                    <div>
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">No. WhatsApp</span>
+                                                        <span className="font-bold text-slate-800">{selectedTenantForDetail.user?.phone || '-'}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Tarif Sewa</span>
+                                                        <span className="font-bold text-orange-600">{FORMAT_CURRENCY(selectedTenantForDetail.totalRent || 0)} / bln</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Mulai Sewa</span>
+                                                        <span className="font-bold text-slate-800 font-mono">{selectedTenantForDetail.start_date || '-'}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Jatuh Tempo</span>
+                                                        <span className="font-bold text-slate-800 font-mono">{selectedTenantForDetail.end_date || '-'}</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Foto KTP jika ada */}
+                                                {selectedTenantForDetail.user?.photo_url && (
+                                                    <div>
+                                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Foto Dokumen KTP Penghuni</label>
+                                                        <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-900/5 max-h-56 flex items-center justify-center">
+                                                            <img
+                                                                src={selectedTenantForDetail.user.photo_url}
+                                                                alt="KTP Penghuni"
+                                                                className="w-full h-full object-contain"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedTenantForDetail(null)}
+                                                    className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+                                                >
+                                                    Tutup
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                        </div>
-                    )}
+                        );
+                    })}
 
                     {/* =========================================== */}
                     {/* TAB: BILLING                                */}

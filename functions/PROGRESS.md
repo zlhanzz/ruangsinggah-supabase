@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 132. Transformasi Auto-Pilot Tenant Lifecycle Engine pada Portal Operasional KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta tinjauan kritis (*devil's advocate*) dan brainstorming untuk meningkatkan tampilan tab Penghuni KostManager agar tidak sekadar menjadi buku kontak statis, melainkan memiliki manajemen siklus hidup sewa (*tenant lifecycle*), pengkategorian status sewa berjalan, tenggat sewa, dsb.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Tenant Lifecycle Calculation Engine (`calculateTenantLifecycle`)**:
+    - Kalkulasi otomatis status sewa secara real-time berdasarkan tanggal akhir/jatuh tempo:
+      - 🟢 **Sewa Berjalan (*Active Running*)**: Sisa waktu sewa > 7 hari.
+      - 🟡 **Jatuh Tempo Segera (*Due Soon*)**: H-7 s/d H-0 (badge countdown interaktif).
+      - 🔴 **Menunggak (*Overdue*)**: H+1 ke atas (badge glowing berdenyut + counter hari terlambat).
+      - 📦 **Rencana Keluar (*Move-Out Scheduled*)**: Notifikasi unit akan segera dilepas.
+      - ⚪ **Alumni / Riwayat (*Checked Out*)**: Status sewa selesai.
+  * **2. Top KPI Glance Metrics Bar**:
+    - 4 Kartu Metrik Cepat: **Penghuni Aktif** (dengan % okupansi), **Estimasi Omset Sewa/Bulan**, **Perlu Ditindak** (Total H-7 & Nunggak), dan **Kamar Kosong Siap Huni**.
+  * **3. Smart Pipeline Filter Tabs**:
+    - Tab filter dengan badge counter dinamis: `Semua Penghuni`, `🟢 Sewa Berjalan`, `🟡 Jatuh Tempo (H-7)`, `🔴 Menunggak`, dan `📦 Rencana Keluar`.
+  * **4. Action Hub Terintegrasi & WhatsApp Generator**:
+    - **💬 WhatsApp Reminder Generator**: Pesan WhatsApp cerdas otomatis sesuai status (pengingat ramah H-3, pengingat H-0, dan surat teguran tunggakan H+1) dengan 1 klik.
+    - **🔄 1-Click Lease Renewal Modal**: Perpanjang durasi sewa (1, 2, 3, 6, 12 bulan) yang langsung memajukan periode sewa di database.
+    - **🚪 Move-Out / Check-Out Modal**: Proses pelepasan kamar terstruktur yang otomatis mengubah status unit di `properties.room_types` kembali menjadi **KOSONG / Tersedia** untuk dipasarkan kembali.
+    - **📄 Detail Profil & Dokumen Modal**: Modal preview kontak, tanggal sewa, rincian tarif, dan foto KTP penghuni.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus 100% dengan 0 error dalam 24.70 detik (2526 modules transformed).
+
 ### 131. Ekstraksi Penghuni Kamar Terdata & Sinkronisasi Komprehensif Tab Penghuni Portal KostManager (`KostManagerPortal.tsx` & `KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa setelah menyetujui (ACC) hasil pendataan KostManager (seperti Kost Madani), data properti dan daftar penghuninya tidak muncul di Portal Operasional KostManager (`KostManagerPortal.tsx`).
