@@ -2,6 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 109. Struktur Hierarki Parent-Child (Tipe Kamar ➔ Kamar Terisi & Kamar Kosong) dengan Kartu Detail Lengkap di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta pengaturan tampilan kartu hasil pendataan di Tab 2 menggunakan sistem hierarki *Minimize/Maximize (Parent and Child)*.
+  2. Dimulai dari Level 1 (Parent): **Tipe Kamar** (misal *Standard*).
+  3. Ketika Tipe Kamar dibuka/maximize, menyajikan ringkasan fasilitas utama dan 2 sub-accordion (Level 2 Child):
+     - 🔒 **KAMAR SEDANG DIHUNI / TERISI**: Jika di-maximize, menampilkan kartu-kartu detail unit terisi lengkap dengan data penghuni (Nama, No. WhatsApp, Jumlah Penghuni, Periode Sewa, Tanggal Masuk/Bayar, Tagihan Berikutnya, Anggota Tambahan, dan Catatan Surveyor).
+     - ✨ **KAMAR KOSONG / SIAP HUNI**: Jika di-maximize, menampilkan kartu-kartu detail unit kosong lengkap dengan spesifikasi kamar (Ukuran, Fasilitas Terpasang, Status Siap Huni, Tarif Sewa, dan Catatan Surveyor).
+- **Implementasi & Perbaikan**:
+  * **1. Normalisasi Data Unit Per Tipe Kamar**:
+    - Memetakan array `room.rooms` / `room.unit_rooms` atau fallback survey data ke dalam unit-unit terisi (`occupiedUnits`) dan unit-unit kosong (`vacantUnits`).
+  * **2. Kartu Unit Terisi (Occupied Resident Card)**:
+    - Merender container card modern dengan badge status 🔒 `Dihuni`, grid data penghuni, link direct chat WhatsApp, detail tanggal bayar & jatuh tempo tagihan, dan daftar anggota tambahan.
+  * **3. Kartu Unit Kosong (Vacant Room Card)**:
+    - Merender container card modern dengan badge status ✨ `Siap Huni`, dimensi ruangan, pill badges fasilitas kamar & kamar mandi, serta catatan kondisi kamar.
+  * **4. Desain Bersih & Hirarkis**:
+    - Menghilangkan duplikasi hero carousel internal pada room type dan menyajikan hierarki accordion bertingkat yang rapi, responsif, dan intuitif.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 108. Floating Overlay Card Detail Kamar pada Hero Galeri Utama Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta penambahan kartu informasi mengambang (*floating overlay card*) pada Hero Carousel Galeri Utama di Tab 2 persis seperti yang ada pada carousel per-kamar di accordion bawah.

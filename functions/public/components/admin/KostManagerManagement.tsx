@@ -1941,19 +1941,80 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                     const bathroomFacilities: string[] = room.bathroomFacilities || room.bathroom_facilities || [];
                                                     const kitchenFacilities: string[] = room.kitchenFacilities || room.kitchen_facilities || [];
 
-                                                    const occupied: string[] = [];
-                                                    const available: string[] = [];
-                                                    (room.rooms || room.unit_rooms || []).forEach((u: any, ui: number) => {
-                                                        const uName = formatRoomName(u?.name || u?.room_number || String(ui + 1), ui);
-                                                        const isUnitOcc = u?.status === 'Terisi' || u?.status === 'occupied' || u?.is_occupied === true || u?.isAvailable === false || Boolean(u?.occupant_name || u?.occupant_phone);
-                                                        if (isUnitOcc) occupied.push(uName);
-                                                        else available.push(uName);
-                                                    });
-                                                    if (occupied.length === 0 && occupiedRooms > 0) {
-                                                        for (let i = 0; i < occupiedRooms; i++) occupied.push(formatRoomName(room.name, rtIdx));
+                                                    const units: any[] = (room.rooms || room.unit_rooms || []);
+                                                    const occupiedUnits: any[] = [];
+                                                    const vacantUnits: any[] = [];
+
+                                                    if (units.length > 0) {
+                                                        units.forEach((u: any, uIdx: number) => {
+                                                            const isUnitOcc = u?.status === 'Terisi' || u?.status === 'occupied' || u?.is_occupied === true || u?.isAvailable === false || Boolean(u?.occupant_name || u?.occupant_phone || u?.residentName || u?.residentPhone);
+                                                            const normalizedUnit = {
+                                                                id: u?.id || `unit_${rtIdx}_${uIdx}`,
+                                                                name: formatRoomName(u?.name || u?.room_number || String(uIdx + 1), uIdx),
+                                                                rawName: u?.name || u?.room_number || `Kamar ${uIdx + 1}`,
+                                                                residentName: u?.residentName || u?.occupant_name || u?.occupantName || room.residentName || room.occupant_name || room.occupantName || '-',
+                                                                residentPhone: u?.residentPhone || u?.occupant_phone || u?.occupantPhone || room.residentPhone || room.occupant_phone || room.occupantPhone || '-',
+                                                                paymentPeriod: u?.paymentPeriod || u?.rentPeriod || room.paymentPeriod || room.rentPeriod || 'Bulanan',
+                                                                startDate: u?.startDate || u?.rentStartDate || room.startDate || room.rentStartDate || '',
+                                                                endDate: u?.endDate || u?.rentEndDate || room.endDate || room.rentEndDate || '',
+                                                                currentOccupants: Number(u?.currentOccupants || room.currentOccupants || 1),
+                                                                additionalOccupants: u?.additionalOccupants || room.additionalOccupants || [],
+                                                                size: u?.size || room.size || '3x4 meter',
+                                                                price: Number(u?.price || room.price || 0),
+                                                                facilities: u?.facilities || u?.roomFacilities || roomFacilities,
+                                                                bathroomFacilities: u?.bathroomFacilities || bathroomFacilities,
+                                                                photos: getRoomPhotos(u).length > 0 ? getRoomPhotos(u) : roomPhotos,
+                                                                notes: u?.notes || room.notes || room.surveyorNotes || '',
+                                                                isOccupied: isUnitOcc
+                                                            };
+                                                            if (isUnitOcc) {
+                                                                occupiedUnits.push(normalizedUnit);
+                                                            } else {
+                                                                vacantUnits.push(normalizedUnit);
+                                                            }
+                                                        });
                                                     }
-                                                    if (available.length === 0 && availableRooms > 0) {
-                                                        for (let i = 0; i < availableRooms; i++) available.push(formatRoomName(room.name, rtIdx));
+
+                                                    // Fallback jika surveyor belum memecah ke unit individual
+                                                    if (occupiedUnits.length === 0 && occupiedRooms > 0) {
+                                                        for (let i = 0; i < occupiedRooms; i++) {
+                                                            occupiedUnits.push({
+                                                                id: `occ_fallback_${rtIdx}_${i}`,
+                                                                name: formatRoomName(room.name || `Kamar ${i + 1}`, rtIdx),
+                                                                rawName: room.name || `Kamar ${i + 1}`,
+                                                                residentName: room.residentName || room.occupant_name || room.occupantName || 'Penghuni Terdaftar',
+                                                                residentPhone: room.residentPhone || room.occupant_phone || room.occupantPhone || '-',
+                                                                paymentPeriod: room.paymentPeriod || room.rentPeriod || 'Bulanan',
+                                                                startDate: room.startDate || room.rentStartDate || '',
+                                                                endDate: room.endDate || room.rentEndDate || '',
+                                                                currentOccupants: Number(room.currentOccupants || 1),
+                                                                additionalOccupants: room.additionalOccupants || [],
+                                                                size: room.size || '3x4 meter',
+                                                                price: Number(room.price || 0),
+                                                                facilities: roomFacilities,
+                                                                bathroomFacilities: bathroomFacilities,
+                                                                photos: roomPhotos,
+                                                                notes: room.notes || room.surveyorNotes || '',
+                                                                isOccupied: true
+                                                            });
+                                                        }
+                                                    }
+
+                                                    if (vacantUnits.length === 0 && availableRooms > 0) {
+                                                        for (let i = 0; i < availableRooms; i++) {
+                                                            vacantUnits.push({
+                                                                id: `avail_fallback_${rtIdx}_${i}`,
+                                                                name: formatRoomName(room.name || `Kamar ${i + 1}`, rtIdx),
+                                                                rawName: room.name || `Kamar ${i + 1}`,
+                                                                size: room.size || '3x4 meter',
+                                                                price: Number(room.price || 0),
+                                                                facilities: roomFacilities,
+                                                                bathroomFacilities: bathroomFacilities,
+                                                                photos: roomPhotos,
+                                                                notes: room.notes || room.surveyorNotes || '',
+                                                                isOccupied: false
+                                                            });
+                                                        }
                                                     }
 
                                                     const occupiedKey = `rt${rtIdx}_occ`;
@@ -1961,7 +2022,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
 
                                                     return (
                                                         <div key={rtIdx} className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-                                                            {/* ACCORDION HEADER TIPE KAMAR */}
+                                                            {/* LEVEL 1: ACCORDION HEADER TIPE KAMAR (PARENT) */}
                                                             <button type="button"
                                                                 onClick={() => {
                                                                     setSelectedRoomGalleryFilter('all');
@@ -1988,63 +2049,9 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                 </div>
                                                             </button>
 
+                                                            {/* LEVEL 2: BODY TIPE KAMAR (CHILDREN) */}
                                                             {isExpanded && (
                                                                 <div className="border-t border-slate-100 p-5 space-y-5">
-
-                                                                    {/* HERO CAROUSEL FOTO KAMAR */}
-                                                                    {roomPhotos.length > 0 && (() => {
-                                                                        const pIdx = Math.min(selectedIsolatedPhotoIndex, roomPhotos.length - 1);
-                                                                        const p = roomPhotos[pIdx];
-                                                                        return (
-                                                                            <div className="rounded-2xl overflow-hidden border border-slate-200 bg-black shadow-sm">
-                                                                                <div className="relative" style={{aspectRatio:'16/9'}}>
-                                                                                    <img src={p.url} alt={p.label} className="w-full h-full object-cover opacity-90"/>
-                                                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"/>
-                                                                                    {/* Card Overlay Mengambang */}
-                                                                                    <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm rounded-xl p-3 text-white space-y-1 min-w-[180px]">
-                                                                                        <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Nomor Kamar</p>
-                                                                                        <p className="text-base font-black">{formatRoomName(room.name, rtIdx)}</p>
-                                                                                        <p className="text-[10px] font-bold text-slate-300">{room.size || '3x4 meter'}</p>
-                                                                                        <p className="text-sm font-black text-emerald-400">TARIF {FORMAT_CURRENCY(room.price)}/bln</p>
-                                                                                        {roomFacilities.slice(0, 3).map((f: string, i: number) => (
-                                                                                            <span key={i} className="inline-block px-1.5 py-0.5 rounded bg-white/20 text-[9px] font-black mr-1">{f}</span>
-                                                                                        ))}
-                                                                                    </div>
-                                                                                    {/* Counter */}
-                                                                                    <span className="absolute top-3 right-12 px-2 py-0.5 rounded bg-black/60 text-white text-[10px] font-black">
-                                                                                        {pIdx + 1} / {roomPhotos.length}
-                                                                                    </span>
-                                                                                    <button onClick={() => setLightboxPhoto(p)} className="absolute top-3 right-3 p-1 rounded-lg bg-black/50 text-white hover:bg-black/70">
-                                                                                        <ZoomIn size={12}/>
-                                                                                    </button>
-                                                                                    {roomPhotos.length > 1 && (
-                                                                                        <>
-                                                                                            <button onClick={() => setSelectedIsolatedPhotoIndex(Math.max(0, pIdx - 1))} disabled={pIdx === 0}
-                                                                                                className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center disabled:opacity-30">
-                                                                                                <ChevronLeft size={14}/>
-                                                                                            </button>
-                                                                                            <button onClick={() => setSelectedIsolatedPhotoIndex(Math.min(roomPhotos.length - 1, pIdx + 1))} disabled={pIdx === roomPhotos.length - 1}
-                                                                                                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center disabled:opacity-30">
-                                                                                                <ChevronRight size={14}/>
-                                                                                            </button>
-                                                                                        </>
-                                                                                    )}
-                                                                                </div>
-                                                                                {/* Thumbnail strip */}
-                                                                                <div className="flex gap-1 p-1.5 bg-slate-900 overflow-x-auto">
-                                                                                    {roomPhotos.map((ph: any, pi: number) => (
-                                                                                        <button key={pi} onClick={() => setSelectedIsolatedPhotoIndex(pi)}
-                                                                                            className={`shrink-0 w-12 h-8 rounded overflow-hidden border-2 transition-all ${
-                                                                                                pi === pIdx ? 'border-emerald-400 opacity-100' : 'border-transparent opacity-40 hover:opacity-70'
-                                                                                            }`}>
-                                                                                            <img src={ph.url} alt={ph.label} className="w-full h-full object-cover"/>
-                                                                                        </button>
-                                                                                    ))}
-                                                                                </div>
-                                                                            </div>
-                                                                        );
-                                                                    })()}
-
                                                                     {/* KELENGKAPAN & FASILITAS KAMAR — 3 Kotak Menyamping */}
                                                                     {(roomFacilities.length > 0 || bathroomFacilities.length > 0 || kitchenFacilities.length > 0) && (
                                                                         <div>
@@ -2093,80 +2100,220 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                         </div>
                                                                     )}
 
-                                                                    {/* DOKUMENTASI FOTO KAMAR GRID */}
-                                                                    {roomPhotos.length > 0 && (
-                                                                        <div>
-                                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
-                                                                                <Camera size={12} className="inline mr-1"/> Dokumentasi Foto Kamar ({roomPhotos.length})
-                                                                            </span>
-                                                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                                                                                {roomPhotos.map((photo: any, pIdx2: number) => (
-                                                                                    <div key={pIdx2} onClick={() => setLightboxPhoto(photo)}
-                                                                                        className="group relative rounded-xl overflow-hidden border border-slate-200 bg-slate-100 cursor-pointer hover:shadow-md transition-all hover:scale-[1.02]" style={{aspectRatio:'4/3'}}>
-                                                                                        <img src={photo.url} alt={photo.label} className="w-full h-full object-cover"/>
-                                                                                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 flex items-end">
-                                                                                            <span className="text-[9px] font-black text-white uppercase tracking-wider truncate">{photo.label}</span>
-                                                                                        </div>
-                                                                                        <span className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                                            <ZoomIn size={10}/>
-                                                                                        </span>
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
-
-                                                                    {/* NESTED ACCORDION: KAMAR TERISI & KOSONG */}
-                                                                    <div className="space-y-2">
-                                                                        {/* Card Amber: KAMAR TERISI */}
+                                                                    {/* CHILD ACCORDIONS: 1. KAMAR TERISI & 2. KAMAR KOSONG */}
+                                                                    <div className="space-y-3">
+                                                                        {/* Child Accordion 1: KAMAR TERISI */}
                                                                         {occupiedRooms > 0 && (
-                                                                            <div className="rounded-2xl border border-amber-200 overflow-hidden">
+                                                                            <div className="rounded-2xl border border-amber-200 overflow-hidden bg-white shadow-2xs">
                                                                                 <button type="button"
                                                                                     onClick={() => setExpandedStatusSections(prev => ({...prev, [occupiedKey]: !prev[occupiedKey]}))}
-                                                                                    className="w-full flex items-center justify-between p-4 bg-amber-50 hover:bg-amber-100 transition-colors">
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <span className="text-lg">🔒</span>
-                                                                                        <div className="text-left">
+                                                                                    className="w-full flex items-center justify-between p-4 bg-amber-50/80 hover:bg-amber-100/80 transition-colors text-left">
+                                                                                    <div className="flex items-center gap-2.5">
+                                                                                        <span className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-black text-sm shrink-0">
+                                                                                            🔒
+                                                                                        </span>
+                                                                                        <div>
                                                                                             <span className="text-xs font-black text-amber-900 uppercase tracking-wide">KAMAR SEDANG DIHUNI / TERISI</span>
-                                                                                            <span className="ml-2 px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[9px] font-black">{occupiedRooms} UNIT</span>
+                                                                                            <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-black">{occupiedUnits.length || occupiedRooms} UNIT</span>
                                                                                         </div>
                                                                                     </div>
-                                                                                    <div className="flex items-center gap-1 text-amber-700 text-[10px] font-black">
-                                                                                        <span>BUKA LIST</span>
-                                                                                        {expandedStatusSections[occupiedKey] ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                                                                                    <div className="flex items-center gap-1 text-amber-700 text-[10px] font-black uppercase tracking-wider">
+                                                                                        <span>{expandedStatusSections[occupiedKey] ? 'TUTUP LIST' : 'BUKA LIST'}</span>
+                                                                                        {expandedStatusSections[occupiedKey] ? <ChevronUp size={15}/> : <ChevronDown size={15}/>}
                                                                                     </div>
                                                                                 </button>
                                                                                 {expandedStatusSections[occupiedKey] && (
-                                                                                    <div className="p-3 bg-amber-50/50 border-t border-amber-100 flex flex-wrap gap-2">
-                                                                                        {occupied.map((name, ni) => (
-                                                                                            <span key={ni} className="px-3 py-1.5 bg-amber-100 border border-amber-200 rounded-xl text-xs font-black text-amber-900">🔒 {name}</span>
+                                                                                    <div className="p-4 bg-amber-50/30 border-t border-amber-100 space-y-3">
+                                                                                        {/* Kartu Detail Unit Kamar Terisi */}
+                                                                                        {occupiedUnits.map((u: any, uIdx: number) => (
+                                                                                            <div key={u.id || uIdx} className="bg-white border border-amber-200/90 rounded-2xl p-4 shadow-sm space-y-3 hover:border-amber-300 transition-all">
+                                                                                                {/* Top Bar: Room Name & Status */}
+                                                                                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-100/80 pb-2.5">
+                                                                                                    <div className="flex items-center gap-2.5">
+                                                                                                        <span className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-black text-sm">
+                                                                                                            <Lock size={15} />
+                                                                                                        </span>
+                                                                                                        <div>
+                                                                                                            <div className="flex items-center gap-1.5">
+                                                                                                                <span className="text-[9px] font-black text-amber-800 uppercase tracking-widest">UNIT KAMAR</span>
+                                                                                                                <span className="px-2 py-0.2 rounded-full bg-amber-100 border border-amber-200 text-amber-900 text-[9px] font-black uppercase">
+                                                                                                                    🔒 Dihuni
+                                                                                                                </span>
+                                                                                                            </div>
+                                                                                                            <h5 className="text-sm font-black text-slate-900 leading-tight">{u.name}</h5>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                    <div className="text-right">
+                                                                                                        <span className="text-[9px] font-bold text-slate-400 block uppercase">Tarif Sewa</span>
+                                                                                                        <span className="text-xs font-black text-emerald-700">{FORMAT_CURRENCY(u.price || room.price)}<span className="text-[9px] text-slate-400 font-bold">/bln</span></span>
+                                                                                                    </div>
+                                                                                                </div>
+
+                                                                                                {/* Grid Data Penghuni & Detail Sewa */}
+                                                                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 text-xs">
+                                                                                                    {/* 1. Nama Penghuni */}
+                                                                                                    <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2.5">
+                                                                                                        <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider block mb-1">
+                                                                                                            👤 Nama Penghuni
+                                                                                                        </span>
+                                                                                                        <p className="font-black text-slate-900 truncate">{u.residentName || '-'}</p>
+                                                                                                        <span className="text-[10px] text-slate-500 font-semibold">{u.currentOccupants || 1} Orang Penghuni</span>
+                                                                                                    </div>
+
+                                                                                                    {/* 2. Kontak WhatsApp */}
+                                                                                                    <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2.5">
+                                                                                                        <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider block mb-1">
+                                                                                                            📱 Kontak WhatsApp
+                                                                                                        </span>
+                                                                                                        <p className="font-black text-slate-900">{u.residentPhone || '-'}</p>
+                                                                                                        {u.residentPhone && u.residentPhone !== '-' && (
+                                                                                                            <a 
+                                                                                                                href={`https://wa.me/${u.residentPhone.replace(/\D/g, '')}`} 
+                                                                                                                target="_blank" 
+                                                                                                                rel="noreferrer" 
+                                                                                                                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 hover:underline mt-0.5"
+                                                                                                            >
+                                                                                                                Hubungi via WA ↗
+                                                                                                            </a>
+                                                                                                        )}
+                                                                                                    </div>
+
+                                                                                                    {/* 3. Periode & Tagihan */}
+                                                                                                    <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2.5 sm:col-span-2 md:col-span-1">
+                                                                                                        <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider block mb-1">
+                                                                                                            📅 Periode &amp; Tagihan
+                                                                                                        </span>
+                                                                                                        <p className="font-bold text-slate-800 text-[11px]">
+                                                                                                            Langganan: <span className="font-black capitalize">{u.paymentPeriod || 'Bulanan'}</span>
+                                                                                                        </p>
+                                                                                                        <div className="flex flex-col text-[10px] text-slate-600 font-semibold mt-0.5 space-y-0.5">
+                                                                                                            {u.startDate && <span>Bayar Terakhir: <strong className="text-slate-800">{u.startDate}</strong></span>}
+                                                                                                            {u.endDate && <span>Tagihan Berikutnya: <strong className="text-amber-800">{u.endDate}</strong></span>}
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                </div>
+
+                                                                                                {/* Additional Occupants (Jika ada) */}
+                                                                                                {u.additionalOccupants && u.additionalOccupants.length > 0 && (
+                                                                                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1.5">
+                                                                                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block">
+                                                                                                            👥 Anggota Penghuni Tambahan ({u.additionalOccupants.length})
+                                                                                                        </span>
+                                                                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                                                                            {u.additionalOccupants.map((occ: any, oi: number) => (
+                                                                                                                <div key={oi} className="bg-white border border-slate-200 rounded-lg p-2 flex items-center justify-between text-xs">
+                                                                                                                    <span className="font-black text-slate-800">{occ.name || `Anggota ${oi + 2}`}</span>
+                                                                                                                    <span className="text-[10px] font-bold text-slate-500">{occ.phone || '-'}</span>
+                                                                                                                </div>
+                                                                                                            ))}
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                )}
+
+                                                                                                {/* Surveyor Notes (Jika ada) */}
+                                                                                                {u.notes && (
+                                                                                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs">
+                                                                                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block mb-0.5">
+                                                                                                            📝 Catatan Pendataan Surveyor
+                                                                                                        </span>
+                                                                                                        <p className="text-slate-700 italic font-medium">{u.notes}</p>
+                                                                                                    </div>
+                                                                                                )}
+                                                                                            </div>
                                                                                         ))}
                                                                                     </div>
                                                                                 )}
                                                                             </div>
                                                                         )}
-                                                                        {/* Card Hijau: KAMAR KOSONG */}
+
+                                                                        {/* Child Accordion 2: KAMAR KOSONG */}
                                                                         {availableRooms > 0 && (
-                                                                            <div className="rounded-2xl border border-emerald-200 overflow-hidden">
+                                                                            <div className="rounded-2xl border border-emerald-200 overflow-hidden bg-white shadow-2xs">
                                                                                 <button type="button"
                                                                                     onClick={() => setExpandedStatusSections(prev => ({...prev, [availableKey]: !prev[availableKey]}))}
-                                                                                    className="w-full flex items-center justify-between p-4 bg-emerald-50 hover:bg-emerald-100 transition-colors">
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <span className="text-lg">✨</span>
-                                                                                        <div className="text-left">
+                                                                                    className="w-full flex items-center justify-between p-4 bg-emerald-50/80 hover:bg-emerald-100/80 transition-colors text-left">
+                                                                                    <div className="flex items-center gap-2.5">
+                                                                                        <span className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-sm shrink-0">
+                                                                                            ✨
+                                                                                        </span>
+                                                                                        <div>
                                                                                             <span className="text-xs font-black text-emerald-900 uppercase tracking-wide">KAMAR KOSONG / SIAP HUNI</span>
-                                                                                            <span className="ml-2 px-1.5 py-0.5 rounded-full bg-emerald-200 text-emerald-900 text-[9px] font-black">{availableRooms} UNIT</span>
+                                                                                            <span className="ml-2 px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 text-[10px] font-black">{vacantUnits.length || availableRooms} UNIT</span>
                                                                                         </div>
                                                                                     </div>
-                                                                                    <div className="flex items-center gap-1 text-emerald-700 text-[10px] font-black">
-                                                                                        <span>BUKA LIST</span>
-                                                                                        {expandedStatusSections[availableKey] ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                                                                                    <div className="flex items-center gap-1 text-emerald-700 text-[10px] font-black uppercase tracking-wider">
+                                                                                        <span>{expandedStatusSections[availableKey] ? 'TUTUP LIST' : 'BUKA LIST'}</span>
+                                                                                        {expandedStatusSections[availableKey] ? <ChevronUp size={15}/> : <ChevronDown size={15}/>}
                                                                                     </div>
                                                                                 </button>
                                                                                 {expandedStatusSections[availableKey] && (
-                                                                                    <div className="p-3 bg-emerald-50/50 border-t border-emerald-100 flex flex-wrap gap-2">
-                                                                                        {available.map((name, ni) => (
-                                                                                            <span key={ni} className="px-3 py-1.5 bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-black text-emerald-900">✨ {name}</span>
+                                                                                    <div className="p-4 bg-emerald-50/30 border-t border-emerald-100 space-y-3">
+                                                                                        {/* Kartu Detail Unit Kamar Kosong */}
+                                                                                        {vacantUnits.map((u: any, uIdx: number) => (
+                                                                                            <div key={u.id || uIdx} className="bg-white border border-emerald-200/90 rounded-2xl p-4 shadow-sm space-y-3 hover:border-emerald-300 transition-all">
+                                                                                                {/* Top Bar: Room Name & Status */}
+                                                                                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100/80 pb-2.5">
+                                                                                                    <div className="flex items-center gap-2.5">
+                                                                                                        <span className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-sm">
+                                                                                                            <Sparkles size={15} />
+                                                                                                        </span>
+                                                                                                        <div>
+                                                                                                            <div className="flex items-center gap-1.5">
+                                                                                                                <span className="text-[9px] font-black text-emerald-800 uppercase tracking-widest">UNIT KAMAR</span>
+                                                                                                                <span className="px-2 py-0.2 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-900 text-[9px] font-black uppercase">
+                                                                                                                    ✨ Siap Huni
+                                                                                                                </span>
+                                                                                                            </div>
+                                                                                                            <h5 className="text-sm font-black text-slate-900 leading-tight">{u.name}</h5>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                    <div className="text-right">
+                                                                                                        <span className="text-[9px] font-bold text-slate-400 block uppercase">Tarif Sewa</span>
+                                                                                                        <span className="text-xs font-black text-emerald-700">{FORMAT_CURRENCY(u.price || room.price)}<span className="text-[9px] text-slate-400 font-bold">/bln</span></span>
+                                                                                                    </div>
+                                                                                                </div>
+
+                                                                                                {/* Grid Spesifikasi Kamar & Kelengkapan */}
+                                                                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                                                                                                    {/* 1. Dimensi Kamar */}
+                                                                                                    <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-2.5">
+                                                                                                        <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider block mb-1">
+                                                                                                            📐 Ukuran Kamar
+                                                                                                        </span>
+                                                                                                        <p className="font-black text-slate-900">{u.size || room.size || '3x4 meter'}</p>
+                                                                                                        <span className="text-[10px] text-slate-500 font-semibold">Ruangan Kosong</span>
+                                                                                                    </div>
+
+                                                                                                    {/* 2. Kelengkapan Kamar */}
+                                                                                                    <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-2.5 sm:col-span-2">
+                                                                                                        <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider block mb-1">
+                                                                                                            🛋️ Fasilitas Terpasang
+                                                                                                        </span>
+                                                                                                        <div className="flex flex-wrap gap-1">
+                                                                                                            {(roomFacilities.length > 0 ? roomFacilities : ['Kosongan (Tanpa Perabot)']).map((f: string, fi: number) => (
+                                                                                                                <span key={fi} className="px-1.5 py-0.5 bg-white border border-emerald-200 rounded text-[9.5px] font-bold text-emerald-900">
+                                                                                                                    {f}
+                                                                                                                </span>
+                                                                                                            ))}
+                                                                                                            {bathroomFacilities.map((bf: string, bfi: number) => (
+                                                                                                                <span key={`bf_${bfi}`} className="px-1.5 py-0.5 bg-sky-50 border border-sky-200 rounded text-[9.5px] font-bold text-sky-900">
+                                                                                                                    {bf}
+                                                                                                                </span>
+                                                                                                            ))}
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                </div>
+
+                                                                                                {/* Surveyor Notes (Jika ada) */}
+                                                                                                {u.notes && (
+                                                                                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs">
+                                                                                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block mb-0.5">
+                                                                                                            📝 Catatan Kondisi Kamar
+                                                                                                        </span>
+                                                                                                        <p className="text-slate-700 italic font-medium">{u.notes}</p>
+                                                                                                    </div>
+                                                                                                )}
+                                                                                            </div>
                                                                                         ))}
                                                                                     </div>
                                                                                 )}
