@@ -48,7 +48,14 @@ import {
     CheckCircle2,
     PenTool,
     Home,
-    Calendar
+    Calendar,
+    ClipboardCheck,
+    Eye,
+    Folder,
+    UserCheck,
+    Compass,
+    ExternalLink,
+    MessageSquare
 } from 'lucide-react';
 
 // Master Data Skema Detail Evaluasi & Permintaan Revisi Terstruktur
@@ -993,6 +1000,50 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
         }).filter(item => Boolean(item.url));
     };
 
+    // Helper to parse request notes and revision timeline
+    const parseRequestNotesSummary = (rawNotes: string) => {
+        if (!rawNotes) return { hasRevision: false, cleanText: '', latestRevisionDate: '', latestAdminNote: '', revisionItems: [] };
+        const hasRevision = rawNotes.includes('[REVISI');
+        
+        if (!hasRevision) {
+            const cleanText = rawNotes.replace(/https?:\/\/[^\s]+/g, '').replace(/📍\s*Link GPS:[^,\n]*/g, '').trim();
+            return { hasRevision: false, cleanText, latestRevisionDate: '', latestAdminNote: '', revisionItems: [] };
+        }
+
+        // Split [REVISI ...] blocks
+        const blocks = rawNotes.split(/\[REVISI\s*([^\]]*)\]/i);
+        let latestDate = '';
+        let latestBlock = rawNotes;
+
+        if (blocks.length > 1) {
+            latestDate = blocks[blocks.length - 2]?.trim() || '';
+            latestBlock = blocks[blocks.length - 1]?.trim() || '';
+        }
+
+        let adminNote = '';
+        const adminMatch = latestBlock.match(/(?:Catatan Evaluasi Admin:|Catatan:|📝)\s*([^\n\[]+)/i);
+        if (adminMatch) {
+            adminNote = adminMatch[1].trim();
+        }
+
+        const items: string[] = [];
+        const itemMatches = latestBlock.matchAll(/[-•*]\s*([^\n📝\[]+)/g);
+        for (const m of itemMatches) {
+            const cleaned = m[1].replace(/^[🏢🛏️👥📋]\s*/, '').trim();
+            if (cleaned && !cleaned.includes('Catatan Evaluasi') && !items.includes(cleaned)) {
+                items.push(cleaned);
+            }
+        }
+
+        return {
+            hasRevision: true,
+            cleanText: latestBlock,
+            latestRevisionDate: latestDate,
+            latestAdminNote: adminNote,
+            revisionItems: items
+        };
+    };
+
     // Global room category computer matching AgentDashboard
     const computeDynamicRoomPhotoCategories = (roomFacilities: string[] = [], status: string = 'Kosong'): string[] => {
         const isOcc = status === 'Terisi' || status === 'occupied';
@@ -1168,6 +1219,8 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {filteredRequests.map(req => {
                                 const isReadyForReview = req.status === 'PENDING_ONBOARDING' || req.status === 'SUBMITTED' || req.status === 'REVISION_REQUIRED' || req.status === 'NEED_REVISION';
+                                const isNeedRevision = req.status === 'REVISION_REQUIRED' || req.status === 'NEED_REVISION';
+                                const notesMeta = parseRequestNotesSummary(req.notes || '');
 
                                 // Extract coordinates from notes or metadata
                                 const extractCoords = (text: string) => {
@@ -1183,106 +1236,211 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                 };
                                 const coords = extractCoords(req.notes) || (req.transaction?.metadata?.latitude && req.transaction?.metadata?.longitude ? { lat: req.transaction.metadata.latitude, lng: req.transaction.metadata.longitude } : null);
 
+                                const totalRoomsCount = req.transaction?.metadata?.totalRooms || req.transaction?.metadata?.total_rooms || req.total_rooms || '-';
+                                const emptyRoomsCount = req.empty_rooms !== undefined ? req.empty_rooms : 0;
+                                const ownerPhoneClean = (req.user?.phone || req.owner_phone || '').replace(/[^0-9]/g, '');
+
                                 return (
                                     <div 
                                         key={req.id} 
-                                        className={`bg-white rounded-3xl p-6 flex flex-col justify-between transition-all ${
-                                            isReadyForReview 
-                                                ? 'border-2 border-emerald-300 shadow-md ring-4 ring-emerald-500/10 bg-gradient-to-b from-emerald-50/20 via-white to-white' 
-                                                : 'border border-gray-150 shadow-soft hover:shadow-md'
+                                        className={`bg-white rounded-[2rem] p-6 flex flex-col justify-between transition-all duration-300 relative group overflow-hidden border ${
+                                            isNeedRevision
+                                                ? 'border-amber-300 shadow-md ring-4 ring-amber-500/10 bg-gradient-to-b from-amber-50/25 via-white to-white'
+                                                : isReadyForReview 
+                                                    ? 'border-emerald-300 shadow-md ring-4 ring-emerald-500/10 bg-gradient-to-b from-emerald-50/25 via-white to-white' 
+                                                    : req.status === 'PENDING_ASSIGNMENT'
+                                                        ? 'border-amber-200 shadow-soft hover:shadow-md bg-gradient-to-b from-amber-50/15 via-white to-white'
+                                                        : 'border-slate-200/90 shadow-soft hover:shadow-md hover:border-slate-300 bg-white'
                                         }`}
                                     >
-                                        <div>
-                                            {/* Profil Mitra Pengaju (Interactive Header) */}
-                                            <div className="flex items-center gap-3 pb-4 border-b border-gray-100 mb-4">
-                                                <div 
-                                                    onClick={() => {
-                                                        setSelectedMitra(req.user || { name: 'Mitra', phone: req.owner_phone || '-' });
-                                                        setIsMitraModalOpen(true);
-                                                    }}
-                                                    className="w-10 h-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-black text-sm uppercase cursor-pointer hover:bg-orange-200 transition-all shadow-sm"
-                                                >
-                                                    {(req.user?.name || req.user?.email || 'M').charAt(0)}
-                                                </div>
-                                                <div className="min-w-0 flex-1">
-                                                    <span 
+                                        {/* Top Accent Gradient Bar */}
+                                        <div className={`absolute top-0 inset-x-0 h-1.5 ${
+                                            isNeedRevision
+                                                ? 'bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500'
+                                                : isReadyForReview 
+                                                    ? 'bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-500' 
+                                                    : req.status === 'PENDING_ASSIGNMENT'
+                                                        ? 'bg-gradient-to-r from-amber-400 to-orange-400'
+                                                        : req.status === 'ACTIVE'
+                                                            ? 'bg-gradient-to-r from-green-500 to-emerald-500'
+                                                            : 'bg-gradient-to-r from-slate-300 to-slate-400'
+                                        }`} />
+
+                                        <div className="space-y-4">
+                                            {/* 1. Header Profil Mitra & Status Badge */}
+                                            <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-slate-100">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div 
                                                         onClick={() => {
                                                             setSelectedMitra(req.user || { name: 'Mitra', phone: req.owner_phone || '-' });
                                                             setIsMitraModalOpen(true);
                                                         }}
-                                                        className="text-xs font-black text-gray-900 uppercase tracking-tight hover:text-orange-600 cursor-pointer block truncate"
+                                                        className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-400 to-amber-500 text-white flex items-center justify-center font-black text-sm uppercase cursor-pointer hover:scale-105 transition-transform shadow-xs shrink-0"
                                                     >
-                                                        {req.user?.name || 'Mitra Pengaju'}
-                                                    </span>
-                                                    <a 
-                                                        href={`https://wa.me/${(req.user?.phone || req.owner_phone || '').replace(/[^0-9]/g, '')}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-[10px] text-gray-500 font-bold block hover:text-orange-500 transition-colors"
-                                                    >
-                                                        📞 {req.user?.phone || req.owner_phone || '-'}
-                                                    </a>
+                                                        {(req.user?.name || req.user?.email || 'M').charAt(0)}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span 
+                                                                onClick={() => {
+                                                                    setSelectedMitra(req.user || { name: 'Mitra', phone: req.owner_phone || '-' });
+                                                                    setIsMitraModalOpen(true);
+                                                                }}
+                                                                className="text-xs font-black text-slate-900 uppercase tracking-tight hover:text-orange-600 cursor-pointer truncate block"
+                                                            >
+                                                                {req.user?.name || 'Mitra Pengaju'}
+                                                            </span>
+                                                            <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded">
+                                                                Owner
+                                                            </span>
+                                                        </div>
+                                                        {ownerPhoneClean ? (
+                                                            <a 
+                                                                href={`https://wa.me/${ownerPhoneClean}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-[11px] text-emerald-600 font-bold hover:text-emerald-700 transition-colors flex items-center gap-1 mt-0.5"
+                                                            >
+                                                                <Phone size={10} className="text-emerald-500 shrink-0" />
+                                                                <span>+{ownerPhoneClean}</span>
+                                                            </a>
+                                                        ) : (
+                                                            <span className="text-[10px] text-slate-400 font-bold block mt-0.5">-</span>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <span className={`ml-auto px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-xs ${getStatusBadge(req.status)}`}>
-                                                    {getStatusLabel(req.status)}
+
+                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-2xs shrink-0 flex items-center gap-1.5 ${getStatusBadge(req.status)}`}>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                                                    <span>{getStatusLabel(req.status)}</span>
                                                 </span>
                                             </div>
 
-                                            {/* Detail Properti */}
-                                            <div className="space-y-2.5">
-                                                <h3 className="text-base font-black text-gray-900 uppercase tracking-tight leading-tight">{req.kost_name}</h3>
-                                                <p className="text-[10px] text-gray-400 font-black uppercase tracking-wider flex items-center gap-1.5">
-                                                    <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700">{req.kost_type || 'Campur'}</span>
-                                                    <span>•</span>
-                                                    <span>Kamar: {req.transaction?.metadata?.totalRooms || req.transaction?.metadata?.total_rooms || '-'} Total / {req.empty_rooms || 0} Kosong</span>
-                                                </p>
-                                                <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">{req.kost_address}</p>
+                                            {/* 2. Identitas Properti & Chips Info */}
+                                            <div className="space-y-2">
+                                                <h3 className="text-base font-black text-slate-900 uppercase tracking-tight leading-snug group-hover:text-orange-600 transition-colors line-clamp-1">
+                                                    {req.kost_name}
+                                                </h3>
 
-                                                {/* Maps Mini Iframe Embed */}
+                                                {/* Meta Pills */}
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    <span className="px-2.5 py-1 rounded-xl bg-orange-50 text-orange-900 border border-orange-200/80 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                                                        <Building2 size={11} className="text-orange-600 shrink-0" />
+                                                        <span>{req.kost_type || 'Campur'}</span>
+                                                    </span>
+                                                    <span className="px-2.5 py-1 rounded-xl bg-slate-100 text-slate-800 border border-slate-200/80 text-[10px] font-bold flex items-center gap-1">
+                                                        <Bed size={11} className="text-slate-500 shrink-0" />
+                                                        <span>{totalRoomsCount} Kamar ({emptyRoomsCount} Kosong)</span>
+                                                    </span>
+                                                </div>
+
+                                                {/* Alamat Properti */}
+                                                <div className="flex items-start gap-1.5 pt-0.5">
+                                                    <MapPin size={13} className="text-orange-500 shrink-0 mt-0.5" />
+                                                    <p className="text-xs text-slate-600 font-medium line-clamp-2 leading-relaxed">
+                                                        {req.kost_address || 'Alamat properti belum diisi'}
+                                                    </p>
+                                                </div>
+
+                                                {/* 3. Location Action Link */}
                                                 {coords && (
-                                                    <div className="w-full h-28 rounded-2xl overflow-hidden border border-gray-150 relative mt-2 shadow-inner">
-                                                        <iframe
-                                                            title={`map-${req.id}`}
-                                                            width="100%"
-                                                            height="100%"
-                                                            frameBorder="0"
-                                                            marginHeight={0}
-                                                            marginWidth={0}
-                                                            src={`https://maps.google.com/maps?q=${coords.lat},${coords.lng}&z=14&output=embed`}
-                                                            className="absolute inset-0"
-                                                        />
+                                                    <div className="pt-1">
+                                                        <a
+                                                            href={req.maps_link || `https://www.google.com/maps?q=${coords.lat},${coords.lng}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="w-full py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-[11px] font-bold text-slate-700 transition-all flex items-center justify-between group/link"
+                                                        >
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <span className="w-6 h-6 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                                                                    <Compass size={13} />
+                                                                </span>
+                                                                <span className="truncate text-slate-600 font-mono text-[10px]">
+                                                                    {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
+                                                                </span>
+                                                            </div>
+                                                            <span className="text-[10px] font-black text-blue-600 flex items-center gap-0.5 shrink-0 group-hover/link:translate-x-0.5 transition-transform">
+                                                                Buka Maps ↗
+                                                            </span>
+                                                        </a>
                                                     </div>
                                                 )}
 
-                                                {req.notes && (
-                                                    <div className="text-[9px] bg-slate-50 border border-slate-100 p-2.5 rounded-xl text-slate-500 font-bold leading-normal normal-case mt-2">
-                                                        📝 Catatan: {req.notes.replace(/https?:\/\/[^\s]+/, '').trim() || 'Ada koordinat GPS'}
+                                                {/* 4. Structured Revision & Notes Card */}
+                                                {notesMeta.hasRevision ? (
+                                                    <div className="bg-amber-50/80 border border-amber-200/90 p-3 rounded-2xl space-y-1.5 mt-2">
+                                                        <div className="flex items-center justify-between text-[10px] font-black text-amber-900">
+                                                            <span className="flex items-center gap-1">
+                                                                <AlertTriangle size={12} className="text-amber-600" />
+                                                                Evaluasi Terakhir Surveyor
+                                                            </span>
+                                                            {notesMeta.latestRevisionDate && (
+                                                                <span className="text-[8px] text-amber-800 bg-amber-200/60 px-1.5 py-0.5 rounded font-black">
+                                                                    {notesMeta.latestRevisionDate}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {notesMeta.latestAdminNote ? (
+                                                            <p className="text-[11px] text-slate-700 font-bold leading-relaxed line-clamp-2">
+                                                                "{notesMeta.latestAdminNote}"
+                                                            </p>
+                                                        ) : (
+                                                            <p className="text-[10px] text-amber-800 font-bold">
+                                                                Terdapat catatan perbaikan pada data pendataan lapangan.
+                                                            </p>
+                                                        )}
                                                     </div>
-                                                )}
+                                                ) : notesMeta.cleanText ? (
+                                                    <div className="bg-slate-50 border border-slate-200/80 p-2.5 rounded-2xl flex items-start gap-2 text-[11px] text-slate-600 font-medium mt-2">
+                                                        <FileText size={13} className="text-slate-400 shrink-0 mt-0.5" />
+                                                        <span className="line-clamp-2 leading-relaxed">{notesMeta.cleanText}</span>
+                                                    </div>
+                                                ) : null}
                                             </div>
                                         </div>
 
-                                        <div className="mt-4 pt-4 border-t border-gray-100 space-y-3 shrink-0">
-                                            {/* Highlight Action Banner for PENDING_ONBOARDING / SUBMITTED */}
+                                        {/* Bottom Action Area */}
+                                        <div className="mt-5 pt-4 border-t border-slate-100 space-y-3 shrink-0">
+                                            {/* Highlight Action Banner for PENDING_ONBOARDING / SUBMITTED / REVISION */}
                                             {isReadyForReview && (
-                                                <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl flex flex-col gap-2.5 shadow-xs">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="flex h-2 w-2 relative">
-                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+                                                <div className={`p-4 rounded-2xl space-y-3 shadow-2xs border ${
+                                                    isNeedRevision
+                                                        ? 'bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-orange-500/10 border-amber-200/90'
+                                                        : 'bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-teal-500/10 border-emerald-200/90'
+                                                }`}>
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="relative flex h-2.5 w-2.5">
+                                                                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isNeedRevision ? 'bg-amber-400' : 'bg-emerald-400'}`}></span>
+                                                                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isNeedRevision ? 'bg-amber-600' : 'bg-emerald-600'}`}></span>
+                                                            </span>
+                                                            <span className={`text-[11px] font-black uppercase tracking-wider ${isNeedRevision ? 'text-amber-950' : 'text-emerald-950'}`}>
+                                                                {isNeedRevision ? 'Menunggu Perbaikan Surveyor' : 'Hasil Survey Siap Ditinjau'}
+                                                            </span>
+                                                        </div>
+                                                        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                                                            isNeedRevision ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                                                        }`}>
+                                                            {isNeedRevision ? 'Revisi Aktif' : 'Survey Lengkap'}
                                                         </span>
-                                                        <span className="text-[11px] font-black text-emerald-950 uppercase tracking-wider">Hasil Survey Siap Ditinjau</span>
                                                     </div>
-                                                    <p className="text-[10px] text-emerald-800 font-medium leading-relaxed">
-                                                        Data properti, kamar, dan foto hasil survey telah dikirim oleh surveyor lapangan.
+                                                    <p className={`text-[11px] font-medium leading-relaxed ${isNeedRevision ? 'text-amber-900/80' : 'text-emerald-900/80'}`}>
+                                                        {isNeedRevision
+                                                            ? 'Data pendataan sedang diperbaiki oleh surveyor atau siap dievaluasi ulang.'
+                                                            : 'Data properti, kamar, dan foto hasil survey telah dikirim oleh surveyor lapangan.'
+                                                        }
                                                     </p>
                                                     <button
                                                         type="button"
                                                         onClick={() => openReviewModal(req)}
-                                                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                        className={`w-full text-white py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all active:scale-98 flex items-center justify-center gap-2 cursor-pointer ${
+                                                            isNeedRevision
+                                                                ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700'
+                                                                : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700'
+                                                        }`}
                                                     >
-                                                        <span className="material-symbols-outlined text-base">fact_check</span>
-                                                        Tinjau Hasil Pendataan Lengkap
+                                                        <ClipboardCheck size={16} />
+                                                        <span>Tinjau Hasil Pendataan Lengkap</span>
                                                     </button>
                                                 </div>
                                             )}
@@ -1292,22 +1450,25 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                 <button
                                                     type="button"
                                                     onClick={() => openReviewModal(req)}
-                                                    className="w-full bg-gray-900 hover:bg-gray-800 text-white py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                    className="w-full bg-slate-900 hover:bg-slate-800 text-white py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-98 flex items-center justify-center gap-2 shadow-sm cursor-pointer"
                                                 >
-                                                    <span className="material-symbols-outlined text-base">visibility</span>
-                                                    Lihat Detail Listing &amp; Data
+                                                    <Eye size={15} />
+                                                    <span>Lihat Detail Listing & Data</span>
                                                 </button>
                                             )}
 
                                             {/* Agent Assignment Info / Dropdown Inline */}
                                             {req.status === 'PENDING_ASSIGNMENT' ? (
-                                                <div className="bg-orange-50/50 border border-orange-100 p-3 rounded-2xl space-y-2">
-                                                    <label className="text-[9px] font-black text-orange-700 uppercase tracking-widest block">Tugaskan Agen Survey</label>
+                                                <div className="bg-amber-50/70 border border-amber-200/80 p-3.5 rounded-2xl space-y-2.5">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <UserCheck size={13} className="text-amber-700" />
+                                                        <label className="text-[9px] font-black text-amber-900 uppercase tracking-widest block">Tugaskan Agen Survey Lapangan</label>
+                                                    </div>
                                                     <div className="flex gap-2">
                                                         <select
                                                             value={assignAgentMap[req.id] || ''}
                                                             onChange={e => setAssignAgentMap({ ...assignAgentMap, [req.id]: e.target.value })}
-                                                            className="flex-1 bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-orange-500/20"
+                                                            className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-orange-500/20 shadow-2xs"
                                                         >
                                                             <option value="">-- Pilih Agen --</option>
                                                             {agents.map(agent => (
@@ -1317,26 +1478,32 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                         <button
                                                             type="button"
                                                             onClick={() => handleAssignAgentInline(req.id, assignAgentMap[req.id])}
-                                                            className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shrink-0"
+                                                            className="bg-[#ff7a00] hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shrink-0 shadow-xs cursor-pointer"
                                                         >
                                                             Tugaskan
                                                         </button>
                                                     </div>
                                                 </div>
                                             ) : req.agent_name ? (
-                                                <div className="bg-slate-50 border border-slate-100 p-3 rounded-2xl flex justify-between items-center text-xs font-bold">
-                                                    <div>
-                                                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Agen Survey Lapangan</span>
-                                                        <span className="font-bold text-slate-800">{req.agent_name}</span>
+                                                <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-2xl flex justify-between items-center text-xs font-bold">
+                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                        <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-black text-xs shrink-0">
+                                                            {req.agent_name.charAt(0)}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Agen Survey Lapangan</span>
+                                                            <span className="font-black text-slate-800 truncate block text-xs">{req.agent_name}</span>
+                                                        </div>
                                                     </div>
                                                     {req.result_drive_link && (
                                                         <a
                                                             href={req.result_drive_link}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-100 text-blue-600 font-bold hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-1"
+                                                            className="px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200/80 text-blue-700 font-black text-[10px] hover:bg-blue-100 transition-all flex items-center gap-1.5 shrink-0 shadow-2xs"
                                                         >
-                                                            📂 GDrive
+                                                            <Folder size={12} className="text-blue-600" />
+                                                            <span>GDrive</span>
                                                         </a>
                                                     )}
                                                 </div>
@@ -1345,8 +1512,8 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                             {/* Transaksi & Action Buttons */}
                                             <div className="flex justify-between items-center pt-2">
                                                 <div>
-                                                    <span className="text-[8px] font-black text-gray-400 uppercase tracking-wider block">Total Bayar</span>
-                                                    <span className="font-black text-gray-900 text-sm">{FORMAT_CURRENCY(req.transaction?.amount || 150000)}</span>
+                                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Total Bayar</span>
+                                                    <span className="font-black text-slate-900 text-sm">{FORMAT_CURRENCY(req.transaction?.amount || 150000)}</span>
                                                 </div>
                                                 <div className="flex gap-2">
                                                     <button
@@ -1358,14 +1525,14 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                 result_drive_link: req.result_drive_link || ''
                                                             });
                                                         }}
-                                                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
+                                                        className="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
                                                     >
                                                         Kelola
                                                     </button>
                                                     <button
                                                         type="button"
                                                         onClick={() => handleDelete(req.id, req.kost_name)}
-                                                        className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
+                                                        className="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-100 transition-colors cursor-pointer"
                                                     >
                                                         Hapus
                                                     </button>

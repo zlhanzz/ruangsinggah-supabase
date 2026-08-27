@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 129. Redesain Modern UI/UX Kartu Permohonan & Peninjauan KostManager pada Dashboard Admin (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mengkritik tampilan kartu peninjauan KostManager di dashboard admin yang kaku, cluttered, dan belum mencerminkan standar estetika web modern.
+  2. Teks catatan/log revisi (`req.notes`) tercetak mentah berantakan, preview peta iframe sempit dengan teks default Google yang menumpuk, dan tombol aksi hijau dominan yang kaku.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Neo-Modern Glassmorphism & High-Contrast Cards**:
+    - Kartu berbingkai `rounded-[2rem]` dengan aksen gradasi top bar dinamis sesuai status (Emerald untuk siap review, Amber untuk butuh revisi/butuh agen, Hijau untuk aktif).
+  * **2. Header Mitra Berkelas & Akses WhatsApp Langsung**:
+    - Avatar mitra dengan gradasi halus (`from-orange-400 to-amber-500`), badge owner, nomor telepon dengan link WhatsApp aktif (`+62...`), dan status badge ber-glowing micro-dot.
+  * **3. Identitas Properti & Chip Info Terstruktur**:
+    - Chip tipe gender (`🏢 Campur`) dan status kamar (`🛏️ Total / Kosong`) bernuansa modern.
+    - Alamat properti dengan icon vector `MapPin` rapi.
+  * **4. Pembersihan Preview Lokasi & Quick Action**:
+    - Mengganti iframe yang penuh teks kontrol default dengan preview link lokasi bersih ber-icon `Compass` dan tombol cepat `Buka Maps ↗`.
+  * **5. Parser Log Catatan & Riwayat Evaluasi Terstruktur (`parseRequestNotesSummary`)**:
+    - Memisahkan teks mentah menjadi chip timeline evaluasi terstruktur: menampilkan cuplikan catatan admin terbaru dalam callout bubble modern dengan tanggal revisi.
+  * **6. Action Hub & Tombol Peninjauan Shimmering**:
+    - Action banner elegan dengan animasi pulse, badge status, dan tombol `Tinjau Hasil Pendataan Lengkap` bergradasi modern dan icon pure vector `ClipboardCheck` dari `lucide-react`.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerManagement.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus 100% dengan 0 error dalam 26.08 detik (2526 modules transformed).
+
 ### 128. Penanda Status Kamar (Terisi vs Kosong) & Penyempurnaan Slot Kategori Foto pada Mode Audit Evaluasi KostManager (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta deretan tombol pemilih kamar (*Room Selector Strip*) di Step 2 Mode Audit Evaluasi diberikan penanda visual yang jelas untuk membedakan unit kamar mana yang **Terisi (Occupied)** dan kamar mana yang **Kosong (Vacant)**.
