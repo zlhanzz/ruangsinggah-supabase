@@ -1761,99 +1761,121 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                             </div>
 
                                                             {/* Hero Carousel Frame Display */}
-                                                            {displayedRoomPhotos.length > 0 && currentActivePhoto ? (
-                                                                <div className="space-y-3">
-                                                                    {/* Main Hero Photo Box */}
-                                                                    <div className="relative aspect-video sm:aspect-21/9 max-h-[360px] w-full rounded-2xl overflow-hidden bg-slate-950 group shadow-inner flex items-center justify-center">
-                                                                        <img
-                                                                            src={currentActivePhoto.url}
-                                                                            alt={currentActivePhoto.label || 'Foto Kamar'}
-                                                                            className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-[1.01]"
-                                                                        />
+                                                            {displayedRoomPhotos.length > 0 && currentActivePhoto ? (() => {
+                                                                const activeRt = roomTypes[currentActivePhoto.rtIdx];
+                                                                const activeFacilities: string[] = activeRt ? [...(activeRt.roomFacilities || activeRt.room_facilities || []), ...(activeRt.bathroomFacilities || activeRt.bathroom_facilities || [])] : [];
 
-                                                                        {/* Overlay Badges */}
-                                                                        <div className="absolute top-3 left-3 flex flex-wrap items-center gap-1.5 pointer-events-none">
-                                                                            <span className="px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1">
-                                                                                <Bed size={12} className="text-orange-400" />
-                                                                                {currentActivePhoto.roomName}
-                                                                            </span>
-                                                                            <span className="px-2.5 py-1 rounded-lg bg-[#ff7a00]/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider shadow-sm">
-                                                                                {currentActivePhoto.label || 'Foto Kamar'}
-                                                                            </span>
+                                                                return (
+                                                                    <div className="space-y-3">
+                                                                        {/* Main Hero Photo Box */}
+                                                                        <div className="relative aspect-video sm:aspect-21/9 max-h-[360px] w-full rounded-2xl overflow-hidden bg-slate-950 group shadow-inner flex items-center justify-center">
+                                                                            <img
+                                                                                src={currentActivePhoto.url}
+                                                                                alt={currentActivePhoto.label || 'Foto Kamar'}
+                                                                                className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-[1.01]"
+                                                                            />
+
+                                                                            {/* Gradient Overlay for card contrast */}
+                                                                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+
+                                                                            {/* Top Category Badge */}
+                                                                            <div className="absolute top-3 left-3 flex flex-wrap items-center gap-1.5 pointer-events-none">
+                                                                                <span className="px-2.5 py-1 rounded-lg bg-[#ff7a00]/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1">
+                                                                                    <Camera size={11} />
+                                                                                    {currentActivePhoto.label || 'Foto Kamar'}
+                                                                                </span>
+                                                                            </div>
+
+                                                                            {/* Floating Room Detail Card (Bottom-Left) */}
+                                                                            <div className="absolute bottom-3 left-3 bg-black/75 backdrop-blur-sm rounded-xl p-3 text-white space-y-1 min-w-[180px] max-w-[280px] sm:max-w-none text-left z-10 pointer-events-none shadow-md border border-white/10">
+                                                                                <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Nomor Kamar</p>
+                                                                                <p className="text-base font-black leading-tight">{currentActivePhoto.roomName}</p>
+                                                                                <p className="text-[10px] font-bold text-slate-300">{activeRt?.size || '3x4 meter'}</p>
+                                                                                {activeRt?.price ? (
+                                                                                    <p className="text-sm font-black text-emerald-400">TARIF {FORMAT_CURRENCY(activeRt.price)}/bln</p>
+                                                                                ) : null}
+                                                                                {activeFacilities.length > 0 && (
+                                                                                    <div className="flex flex-wrap gap-1 pt-0.5">
+                                                                                        {activeFacilities.slice(0, 3).map((f: string, i: number) => (
+                                                                                            <span key={i} className="inline-block px-1.5 py-0.5 rounded bg-white/20 text-[9px] font-black text-white">{f}</span>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+
+                                                                            {/* Photo Counter */}
+                                                                            <div className="absolute top-3 right-3 pointer-events-none">
+                                                                                <span className="px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur-md text-white text-[10px] font-black tracking-widest shadow-sm">
+                                                                                    {activePhotoIndex + 1} / {displayedRoomPhotos.length}
+                                                                                </span>
+                                                                            </div>
+
+                                                                            {/* Navigation Left / Right Buttons */}
+                                                                            {displayedRoomPhotos.length > 1 && (
+                                                                                <>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setSelectedRoomGalleryPhotoIndex(prev => (prev > 0 ? prev - 1 : displayedRoomPhotos.length - 1));
+                                                                                        }}
+                                                                                        className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-slate-900/60 hover:bg-slate-900/90 text-white backdrop-blur-md flex items-center justify-center transition-all opacity-80 hover:opacity-100 hover:scale-110 z-20"
+                                                                                    >
+                                                                                        <ChevronLeft size={20} />
+                                                                                    </button>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setSelectedRoomGalleryPhotoIndex(prev => (prev < displayedRoomPhotos.length - 1 ? prev + 1 : 0));
+                                                                                        }}
+                                                                                        className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-slate-900/60 hover:bg-slate-900/90 text-white backdrop-blur-md flex items-center justify-center transition-all opacity-80 hover:opacity-100 hover:scale-110 z-20"
+                                                                                        >
+                                                                                        <ChevronRight size={20} />
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
                                                                         </div>
 
-                                                                        {/* Photo Counter */}
-                                                                        <div className="absolute top-3 right-3 pointer-events-none">
-                                                                            <span className="px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur-md text-white text-[10px] font-black tracking-widest shadow-sm">
-                                                                                {activePhotoIndex + 1} / {displayedRoomPhotos.length}
-                                                                            </span>
-                                                                        </div>
-
-                                                                        {/* Navigation Left / Right Buttons */}
+                                                                        {/* Horizontal Thumbnail Strip */}
                                                                         {displayedRoomPhotos.length > 1 && (
-                                                                            <>
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        setSelectedRoomGalleryPhotoIndex(prev => (prev > 0 ? prev - 1 : displayedRoomPhotos.length - 1));
-                                                                                    }}
-                                                                                    className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-slate-900/60 hover:bg-slate-900/90 text-white backdrop-blur-md flex items-center justify-center transition-all opacity-80 hover:opacity-100 hover:scale-110"
-                                                                                >
-                                                                                    <ChevronLeft size={20} />
-                                                                                </button>
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        setSelectedRoomGalleryPhotoIndex(prev => (prev < displayedRoomPhotos.length - 1 ? prev + 1 : 0));
-                                                                                    }}
-                                                                                    className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-slate-900/60 hover:bg-slate-900/90 text-white backdrop-blur-md flex items-center justify-center transition-all opacity-80 hover:opacity-100 hover:scale-110"
-                                                                                >
-                                                                                    <ChevronRight size={20} />
-                                                                                </button>
-                                                                            </>
+                                                                            <div className="flex gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin">
+                                                                                {displayedRoomPhotos.map((p, pIdx) => {
+                                                                                    const isThumbActive = pIdx === activePhotoIndex;
+                                                                                    return (
+                                                                                        <button
+                                                                                            key={pIdx}
+                                                                                            type="button"
+                                                                                            onClick={() => setSelectedRoomGalleryPhotoIndex(pIdx)}
+                                                                                            className={`relative w-24 h-16 rounded-xl overflow-hidden shrink-0 border-2 transition-all group cursor-pointer ${
+                                                                                                isThumbActive
+                                                                                                    ? 'border-[#ff7a00] ring-2 ring-orange-400/30 scale-105 shadow-md'
+                                                                                                    : 'border-slate-200 opacity-65 hover:opacity-100'
+                                                                                            }`}
+                                                                                        >
+                                                                                            <img
+                                                                                                src={p.url}
+                                                                                                alt={p.label}
+                                                                                                className="w-full h-full object-cover"
+                                                                                            />
+                                                                                            {/* Tag Nomor Kamar (Jika Tampil Semua) */}
+                                                                                            {selectedRoomGalleryFilter === 'all' && (
+                                                                                                <span className="absolute top-1 left-1 bg-slate-900/85 text-[8px] font-black text-orange-300 px-1.5 py-0.2 rounded-md shadow-xs pointer-events-none">
+                                                                                                    {p.roomName}
+                                                                                                </span>
+                                                                                            )}
+                                                                                            {/* Label Kategori Foto Fasilitas */}
+                                                                                            <span className="absolute bottom-0 inset-x-0 bg-slate-900/85 backdrop-blur-xs text-white text-[8.5px] font-bold px-1.5 py-0.5 truncate text-center block">
+                                                                                                {p.label || 'Foto Kamar'}
+                                                                                            </span>
+                                                                                        </button>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
                                                                         )}
                                                                     </div>
-
-                                                                    {/* Horizontal Thumbnail Strip */}
-                                                                    {displayedRoomPhotos.length > 1 && (
-                                                                        <div className="flex gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin">
-                                                                            {displayedRoomPhotos.map((p, pIdx) => {
-                                                                                const isThumbActive = pIdx === activePhotoIndex;
-                                                                                return (
-                                                                                    <button
-                                                                                        key={pIdx}
-                                                                                        type="button"
-                                                                                        onClick={() => setSelectedRoomGalleryPhotoIndex(pIdx)}
-                                                                                        className={`relative w-24 h-16 rounded-xl overflow-hidden shrink-0 border-2 transition-all group cursor-pointer ${
-                                                                                            isThumbActive
-                                                                                                ? 'border-[#ff7a00] ring-2 ring-orange-400/30 scale-105 shadow-md'
-                                                                                                : 'border-slate-200 opacity-65 hover:opacity-100'
-                                                                                        }`}
-                                                                                    >
-                                                                                        <img
-                                                                                            src={p.url}
-                                                                                            alt={p.label}
-                                                                                            className="w-full h-full object-cover"
-                                                                                        />
-                                                                                        {/* Tag Nomor Kamar (Jika Tampil Semua) */}
-                                                                                        {selectedRoomGalleryFilter === 'all' && (
-                                                                                            <span className="absolute top-1 left-1 bg-slate-900/85 text-[8px] font-black text-orange-300 px-1.5 py-0.2 rounded-md shadow-xs pointer-events-none">
-                                                                                                {p.roomName}
-                                                                                            </span>
-                                                                                        )}
-                                                                                        {/* Label Kategori Foto Fasilitas */}
-                                                                                        <span className="absolute bottom-0 inset-x-0 bg-slate-900/85 backdrop-blur-xs text-white text-[8.5px] font-bold px-1.5 py-0.5 truncate text-center block">
-                                                                                            {p.label || 'Foto Kamar'}
-                                                                                        </span>
-                                                                                    </button>
-                                                                                );
-                                                                            })}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            ) : (
+                                                                );
+                                                            })() : (
                                                                 <div className="py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                                                                     <Camera className="w-8 h-8 text-slate-300 mx-auto mb-1.5" />
                                                                     <p className="text-xs text-slate-500 font-bold">

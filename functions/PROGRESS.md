@@ -2,6 +2,20 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 108. Floating Overlay Card Detail Kamar pada Hero Galeri Utama Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta penambahan kartu informasi mengambang (*floating overlay card*) pada Hero Carousel Galeri Utama di Tab 2 persis seperti yang ada pada carousel per-kamar di accordion bawah.
+  2. Kartu harus menyajikan informasi nomor kamar, ukuran kamar, tarif bulanan, serta pill badges fasilitas kamar yang terdata.
+- **Implementasi & Perbaikan**:
+  * **1. Ekstraksi Data Kamar & Fasilitas Terdata**:
+    - Membaca data tipe kamar aktif `activeRt = roomTypes[currentActivePhoto.rtIdx]` beserta daftar fasilitas kamar & kamar mandi.
+  * **2. Floating Overlay Card Display**:
+    - Merender container dark glassmorphism (`bg-black/75 backdrop-blur-sm rounded-xl p-3 text-white border border-white/10`) di sudut kiri bawah hero photo.
+    - Menampilkan label `NOMOR KAMAR`, nama kamar `{currentActivePhoto.roomName}`, ukuran `{activeRt.size}`, tarif sewa bulanan `<span className="text-emerald-400">TARIF {FORMAT_CURRENCY(activeRt.price)}/bln</span>`, serta chip fasilitas terdata.
+    - Menambahkan gradient overlay gelap halus (`from-black/80 via-transparent`) untuk menjamin kontras keterbacaan teks yang maksimal.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 107. Keterangan Kategori Fasilitas Foto pada Thumbnail Strip & Hero Gallery Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menemukan bahwa pada thumbnail strip semua foto hanya menampilkan keterangan kamar yang sama (`Kamar 3`, `Kamar 3`, `Kamar 3`), tanpa menunjukkan kategori fasilitas apa yang diwakili oleh masing-masing foto.
