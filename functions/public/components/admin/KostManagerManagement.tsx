@@ -3534,41 +3534,26 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                 {/* STEP 1: DATA PROPERTI UMUM SIMULATION */}
                                 {auditStep === 1 && (
                                     <div className="space-y-4 animate-in fade-in duration-200">
-                                        {/* 1. Profil & Fasad Gedung */}
+                                        {/* 1. Profil & Informasi Umum Properti */}
                                         {renderAuditCard(
-                                            'property_facade',
-                                            'Profil & Foto Fasad Gedung Kost',
+                                            'property_profile',
+                                            'Profil & Informasi Umum Properti',
                                             <Home size={16} />,
-                                            <div className="space-y-3">
-                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Nama Kost</span>
-                                                        <p className="text-xs font-black text-slate-800">{reviewProperty?.name || reviewRequest?.kost_name || '-'}</p>
-                                                    </div>
-                                                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Tipe / Gender</span>
-                                                        <p className="text-xs font-black text-[#ff7a00] uppercase">{reviewProperty?.gender || reviewProperty?.type || 'Campur'}</p>
-                                                    </div>
-                                                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Total Kamar</span>
-                                                        <p className="text-xs font-black text-slate-800">{reviewProperty?.total_rooms || reviewRequest?.total_rooms || rawRoomList.length || '-'} Unit</p>
-                                                    </div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Nama Kost</span>
+                                                    <p className="text-xs font-black text-slate-800">{reviewProperty?.name || reviewRequest?.kost_name || '-'}</p>
                                                 </div>
-                                                {/* Fasad photos */}
-                                                {reviewProperty?.image_urls && reviewProperty.image_urls.length > 0 && (
-                                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-1">
-                                                        {normalizePhotos(reviewProperty.image_urls).slice(0, 4).map((p, pIdx) => (
-                                                            <div key={pIdx} className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 relative group bg-slate-100">
-                                                                <img src={p.url} alt={p.label} className="w-full h-full object-cover" />
-                                                                <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[8px] font-bold p-1 truncate text-center">
-                                                                    {p.label || `Foto #${pIdx+1}`}
-                                                                </span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
+                                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Tipe / Gender</span>
+                                                    <p className="text-xs font-black text-[#ff7a00] uppercase">{reviewProperty?.gender || reviewProperty?.type || 'Campur'}</p>
+                                                </div>
+                                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Total Kamar</span>
+                                                    <p className="text-xs font-black text-slate-800">{reviewProperty?.total_rooms || reviewRequest?.total_rooms || rawRoomList.length || '-'} Unit</p>
+                                                </div>
                                             </div>,
-                                            'Contoh: Foto tampak depan gedung buram, mohon upload foto beresolusi jelas saat siang hari.'
+                                            'Contoh: Nama kost salah ketik atau tipe gender kost tidak sesuai (harus Putri).'
                                         )}
 
                                         {/* 2. Titik Koordinat GPS & Lokasi */}
@@ -3652,28 +3637,122 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                             'Contoh: Fasilitas area parkir mobil dan dapur bersama belum dicentang.'
                                         )}
 
-                                        {/* 5. Foto Area Properti & Lingkungan */}
+                                        {/* 5. Dokumentasi Area Umum & Fasilitas Properti */}
                                         {renderAuditCard(
                                             'property_photos',
-                                            'Foto Area Properti & Lingkungan',
+                                            'Dokumentasi Area Umum & Fasilitas Properti',
                                             <Camera size={16} />,
-                                            <div className="space-y-2">
-                                                {reviewProperty?.image_urls && reviewProperty.image_urls.length > 0 ? (
-                                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                                                        {normalizePhotos(reviewProperty.image_urls).map((p, pIdx) => (
-                                                            <div key={pIdx} className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 relative group bg-slate-100">
-                                                                <img src={p.url} alt={p.label} className="w-full h-full object-cover" />
-                                                                <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[8px] font-bold p-1 truncate text-center">
-                                                                    {p.label || `Area #${pIdx+1}`}
-                                                                </span>
-                                                            </div>
-                                                        ))}
+                                            (() => {
+                                                const rawImgs = reviewProperty?.image_urls || [];
+                                                const normPhotos = normalizePhotos(rawImgs);
+                                                const baseCats = ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'];
+                                                
+                                                // Add dynamic categories from facilities if available
+                                                (reviewProperty?.facilities || []).forEach((f: any) => {
+                                                    const fName = typeof f === 'string' ? f : (f?.name || '');
+                                                    if (/(dapur|kitchen)/i.test(fName) && !baseCats.includes('Dapur Bersama')) baseCats.push('Dapur Bersama');
+                                                    if (/(ruang tamu|living room)/i.test(fName) && !baseCats.includes('Ruang Tamu')) baseCats.push('Ruang Tamu');
+                                                    if (/(rooftop|jemuran|balkon)/i.test(fName) && !baseCats.includes('Area Jemur / Rooftop')) baseCats.push('Area Jemur / Rooftop');
+                                                });
+
+                                                return (
+                                                    <div className="space-y-3">
+                                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                                                            {baseCats.map((catName: string, catIdx: number) => {
+                                                                const matched = normPhotos.filter(p => {
+                                                                    const l = (p.label || '').toLowerCase();
+                                                                    const c = catName.toLowerCase();
+                                                                    return l === c || l.includes(c) || c.includes(l);
+                                                                });
+                                                                const hasPhoto = matched.length > 0;
+                                                                const firstPhoto = matched[0];
+
+                                                                return (
+                                                                    <div 
+                                                                        key={catIdx} 
+                                                                        className={`rounded-2xl overflow-hidden border p-2.5 flex flex-col justify-between transition-all ${
+                                                                            hasPhoto 
+                                                                                ? 'bg-white border-slate-200 shadow-2xs hover:shadow-xs' 
+                                                                                : 'bg-slate-50 border-dashed border-slate-300'
+                                                                        }`}
+                                                                    >
+                                                                        <div className="flex items-center justify-between gap-1 mb-1.5">
+                                                                            <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight truncate">
+                                                                                🏢 {catName}
+                                                                            </span>
+                                                                            {hasPhoto ? (
+                                                                                <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[9px] shrink-0 font-bold">
+                                                                                    ✓
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-[8px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
+                                                                                    Kosong
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {hasPhoto ? (
+                                                                            <div 
+                                                                                onClick={() => setLightboxPhoto({ url: firstPhoto.url, label: `Area Properti - ${catName}` })}
+                                                                                className="aspect-[4/3] rounded-xl overflow-hidden relative group cursor-pointer bg-slate-950"
+                                                                            >
+                                                                                <img 
+                                                                                    src={firstPhoto.url} 
+                                                                                    alt={catName} 
+                                                                                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
+                                                                                />
+                                                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                                                                    <ZoomIn size={16} />
+                                                                                </div>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="aspect-[4/3] rounded-xl border border-dashed border-slate-300 flex flex-col items-center justify-center p-2 text-center bg-white/60">
+                                                                                <Camera size={18} className="text-slate-300 mb-1" />
+                                                                                <span className="text-[9px] text-slate-400 font-bold leading-tight">Foto Belum Diunggah</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+
+                                                        {/* Additional Photos if any */}
+                                                        {(() => {
+                                                            const matchedUrls = new Set(baseCats.flatMap(c => normPhotos.filter(p => {
+                                                                const l = (p.label || '').toLowerCase();
+                                                                const target = c.toLowerCase();
+                                                                return l === target || l.includes(target) || target.includes(l);
+                                                            }).map(p => p.url)));
+
+                                                            const extras = normPhotos.filter(p => !matchedUrls.has(p.url));
+                                                            if (extras.length === 0) return null;
+
+                                                            return (
+                                                                <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                                                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">
+                                                                        Foto Area Properti Tambahan (${extras.length}):
+                                                                    </span>
+                                                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                                                        {extras.map((p, pIdx) => (
+                                                                            <div 
+                                                                                key={pIdx} 
+                                                                                onClick={() => setLightboxPhoto({ url: p.url, label: `Area Tambahan - ${p.label}` })}
+                                                                                className="aspect-[4/3] rounded-xl overflow-hidden border border-slate-200 relative group cursor-pointer bg-slate-100"
+                                                                            >
+                                                                                <img src={p.url} alt={p.label} className="w-full h-full object-cover" />
+                                                                                <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[8px] font-bold p-1 truncate text-center">
+                                                                                    {p.label}
+                                                                                </span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </div>
-                                                ) : (
-                                                    <p className="text-xs text-slate-400 italic">Belum ada foto area umum yang diunggah.</p>
-                                                )}
-                                            </div>,
-                                            'Contoh: Foto area parkiran motor dan koridor lantai 2 mohon dilengkapi.'
+                                                );
+                                            })(),
+                                            'Contoh: Foto tampak depan gedung buram atau foto area parkiran motor belum ada.'
                                         )}
 
                                         {/* 6. Peraturan Kost */}
