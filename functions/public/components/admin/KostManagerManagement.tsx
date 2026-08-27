@@ -1052,14 +1052,6 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                 );
                                             })()}
 
-                                            {/* Deskripsi Properti */}
-                                            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-2">
-                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Deskripsi &amp; Profil Kost</span>
-                                                <p className="text-sm text-slate-800 font-medium leading-relaxed whitespace-pre-line">
-                                                    {reviewProperty?.description || 'Tidak ada deskripsi rinci dari agen.'}
-                                                </p>
-                                            </div>
-
                                             {/* Lokasi & Peta GPS */}
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div className="space-y-4">

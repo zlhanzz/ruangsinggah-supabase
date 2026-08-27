@@ -2,6 +2,17 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 96. Penghapusan Card Deskripsi & Profil Kost pada Modal Peninjauan (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menyampaikan bahwa card *"DESKRIPSI & PROFIL KOST"* tidak perlu ada karena pada formulir pendataan KostManager di Dashboard Agen tidak terdapat input pengisian deskripsi kost.
+  2. Menampilkan card fallback *"Tidak ada deskripsi rinci dari agen."* tidak relevan dan membuat tata letak kurang ringkas.
+- **Implementasi & Perbaikan**:
+  * **1. Pembersihan Card Deskripsi**:
+    - Menghapus blok JSX card *"Deskripsi & Profil Kost"* dari Tab 1 (Data Properti Umum).
+    - Menjadikan alur tampilan Tab 1 lebih bersih, langsung dari Hero Carousel & Fasilitas Umum ke Alamat & Peta GPS.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 95. Pembaharuan Aturan Baku: Wajib Git Push ke Branch Non-Production (`bukan-productions`) Setiap Selesai Progres (`AGENTS.md`, `GEMINI.md`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta penambahan aturan baku baru pada workspace rules agar setiap progres/fitur yang berhasil diselesaikan langsung di-push ke repository GitHub pada branch non-production (`bukan-productions`), untuk mencegah kehilangan progres dan menjaga backup awan selalu mutakhir.
