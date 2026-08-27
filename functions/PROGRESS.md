@@ -2,6 +2,24 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 122. Implementasi Sub-Checklist Detail Dinamis & Objektif pada Formulir Evaluasi Permintaan Revisi Survei (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar saat beberapa pilihan kategori evaluasi dicentang, antarmuka langsung membuka/menampilkan sub-checklist rincian elemen data spesifik yang terkandung di dalamnya.
+  2. Evaluasi diharapkan menjadi lebih objektif dan presisi sehingga surveyor dapat langsung mengetahui poin mana saja yang perlu diperbaiki.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Master Data Skema Detail Evaluasi (`REVISION_DETAIL_SCHEMA`)**:
+    - **🏢 Data Properti Umum**: *Foto Utama / Fasad Bangunan, Titik Koordinat GPS & Link Maps, Fasilitas Umum Kost, Deskripsi & Peraturan Kost, Estimasi Jarak Landmark / Kampus*.
+    - **🛏️ Kamar & Fasilitas Unit**: *Ukuran & Dimensi Kamar, Fasilitas Utama Kamar (Kasur, Lemari, Meja, AC, Kipas), Fasilitas Kamar Mandi, Fasilitas Dapur Unit, Foto Dokumentasi Unit Kamar*.
+    - **👥 Data Penghuni & Status Sewa**: *Tarif Sewa Kamar, Status Kamar (Terisi vs Kosong), Kelengkapan Identitas Penghuni, Periode Sewa & Jatuh Tempo*.
+    - **📋 Mitra & Kerjasama**: *Nomor Rekening Bank Mitra, Data Kontak Pemilik / Pengelola, Syarat & Ketentuan Kerjasama, Tanda Tangan Digital Mitra*.
+  * **2. Interaksi Sub-Checklist Dinamis & Multi-Pilihan**:
+    - Membuka kotak rincian dinamis secara otomatis saat kartu kategori induk dicentang.
+    - Dilengkapi counter badge jumlah sub-item terpilih (misal: `3/5 item dipilih`) serta tombol toggle cepat **Pilih Semua / Hapus Semua**.
+    - Mengintegrasikan sub-item spesifik ke dalam perakitan catatan evaluasi di database dan format pengiriman WhatsApp otomatis ke nomor surveyor.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 121. Implementasi Fitur Evaluasi & Pengembalian Revisi Pendataan dari Admin ke Surveyor (Notifikasi In-App, Email, & WhatsApp) (`KostManagerManagement.tsx` & `AgentDashboard.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar pada modal peninjauan hasil survei (*Review Modal*) tersedia aksi evaluasi untuk menindaklanjuti data survei yang keliru, kurang lengkap, atau perlu diperbaiki oleh agen survei lapangan.

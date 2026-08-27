@@ -43,6 +43,56 @@ import {
     Utensils
 } from 'lucide-react';
 
+// Master Data Skema Detail Evaluasi & Permintaan Revisi Terstruktur
+const REVISION_DETAIL_SCHEMA = [
+    {
+        id: 'Properti Umum',
+        label: '🏢 Data Properti Umum',
+        desc: 'Foto depan/fasad, fasilitas umum, titik GPS, aturan kost',
+        subItems: [
+            { id: 'Foto Utama / Fasad Bangunan', label: '📸 Foto Utama / Fasad Bangunan', desc: 'Foto tampak depan gedung, pagar, & jalan akses masuk' },
+            { id: 'Titik Koordinat GPS & Link Maps', label: '📍 Titik Koordinat GPS & Link Maps', desc: 'Akurasi pin lokasi peta dan kelengkapan alamat' },
+            { id: 'Fasilitas Umum Kost', label: '🛋️ Fasilitas Umum Kost', desc: 'WiFi, parkir motor/mobil, dapur bersama, jemuran, CCTV' },
+            { id: 'Deskripsi & Peraturan Kost', label: '📝 Deskripsi & Peraturan Kost', desc: 'Tipe kost (putra/putri/campur), jam malam, & aturan tamu' },
+            { id: 'Estimasi Jarak Landmark / Kampus', label: '🏫 Estimasi Jarak Landmark / Kampus', desc: 'Radius dan durasi tempuh ke kampus/kantor terdekat' }
+        ]
+    },
+    {
+        id: 'Kamar & Fasilitas',
+        label: '🛏️ Kamar & Fasilitas Unit',
+        desc: 'Ukuran kamar, kasur, kamar mandi, AC/kipas, foto unit',
+        subItems: [
+            { id: 'Ukuran & Dimensi Kamar', label: '📐 Ukuran & Dimensi Kamar', desc: 'Kesesuaian ukuran Panjang x Lebar meter setiap kamar' },
+            { id: 'Fasilitas Utama Kamar', label: '🛏️ Fasilitas Utama Kamar', desc: 'Kasur/springbed, lemari pakaian, meja belajar/kerja, AC/kipas, jendela' },
+            { id: 'Fasilitas Kamar Mandi', label: '🚿 Fasilitas Kamar Mandi', desc: 'Kamar mandi dalam/luar, kloset duduk/jongkok, shower, water heater' },
+            { id: 'Fasilitas Dapur Unit', label: '🍳 Fasilitas Dapur Unit', desc: 'Dapur dalam kamar, kompor, sink cuci piring' },
+            { id: 'Foto Dokumentasi Unit Kamar', label: '📸 Foto Dokumentasi Unit Kamar', desc: 'Foto interior ruangan kamar, kasur, WC, dan jendela luar' }
+        ]
+    },
+    {
+        id: 'Data Penghuni',
+        label: '👥 Data Penghuni & Status Sewa',
+        desc: 'Tarif sewa, kesesuaian kamar terisi/kosong, data penyewa',
+        subItems: [
+            { id: 'Tarif Sewa Kamar', label: '💰 Tarif Sewa Kamar', desc: 'Nominal harga sewa per bulan atau per tahun' },
+            { id: 'Status Kamar Terisi vs Kosong', label: '🚪 Status Kamar (Terisi vs Kosong)', desc: 'Ketepatan kamar yang ditandai terisi atau kosong' },
+            { id: 'Identitas & Kontak Penghuni', label: '👤 Kelengkapan Identitas Penghuni', desc: 'Nama penyewa aktif dan nomor WhatsApp penghuni' },
+            { id: 'Periode Sewa & Jatuh Tempo', label: '📅 Periode Sewa & Jatuh Tempo', desc: 'Tanggal mulai sewa dan tanggal tagihan berikutnya' }
+        ]
+    },
+    {
+        id: 'Mitra & Dokumen',
+        label: '📋 Mitra & Kerjasama',
+        desc: 'Nomor rekening bank, data pemilik, tanda tangan digital',
+        subItems: [
+            { id: 'Rekening Bank Mitra', label: '🏦 Nomor Rekening Bank Mitra', desc: 'Nama bank, nomor rekening, dan nama pemilik rekening' },
+            { id: 'Kontak Pemilik / Pengelola', label: '👤 Data Kontak Pemilik / Pengelola', desc: 'Nomor WhatsApp dan nama pemilik kost' },
+            { id: 'Syarat Ketentuan Auto-Pilot', label: '📝 Syarat & Ketentuan Kerjasama', desc: 'Klausul kesepakatan pengelolaan sistem' },
+            { id: 'Tanda Tangan Digital Mitra', label: '✍️ Tanda Tangan Digital Mitra', desc: 'Keabsahan dan kejelasan goresan tanda tangan digital' }
+        ]
+    }
+];
+
 interface KostManagerManagementProps {
     isAdmin: boolean;
     refreshData: () => void;
@@ -93,8 +143,51 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
     // Evaluation & Revision Modal States
     const [revisionModalOpen, setRevisionModalOpen] = useState(false);
     const [revisionCategories, setRevisionCategories] = useState<string[]>([]);
+    const [revisionSubItems, setRevisionSubItems] = useState<Record<string, string[]>>({});
     const [revisionNotes, setRevisionNotes] = useState('');
     const [isSubmittingRevision, setIsSubmittingRevision] = useState(false);
+
+    // Helpers to toggle main category and its sub-items
+    const toggleRevisionCategory = (catId: string) => {
+        const isChecked = revisionCategories.includes(catId);
+        if (isChecked) {
+            setRevisionCategories(prev => prev.filter(c => c !== catId));
+            setRevisionSubItems(prev => {
+                const next = { ...prev };
+                delete next[catId];
+                return next;
+            });
+        } else {
+            setRevisionCategories(prev => [...prev, catId]);
+            // Default select all subItems when main category is checked
+            const catObj = REVISION_DETAIL_SCHEMA.find(s => s.id === catId);
+            if (catObj) {
+                setRevisionSubItems(prev => ({
+                    ...prev,
+                    [catId]: catObj.subItems.map(si => si.id)
+                }));
+            }
+        }
+    };
+
+    const toggleRevisionSubItem = (catId: string, subItemId: string) => {
+        setRevisionSubItems(prev => {
+            const current = prev[catId] || [];
+            const updated = current.includes(subItemId)
+                ? current.filter(id => id !== subItemId)
+                : [...current, subItemId];
+            return { ...prev, [catId]: updated };
+        });
+    };
+
+    const toggleAllSubItems = (catId: string, selectAll: boolean) => {
+        const catObj = REVISION_DETAIL_SCHEMA.find(s => s.id === catId);
+        if (!catObj) return;
+        setRevisionSubItems(prev => ({
+            ...prev,
+            [catId]: selectAll ? catObj.subItems.map(si => si.id) : []
+        }));
+    };
 
     // Hitung Jarak & Durasi Real Google Maps (DistanceMatrixService & DirectionsService) dengan Cache-First (Write Once, Read Free)
     useEffect(() => {
@@ -565,8 +658,28 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
             const kostName = reviewRequest.kost_name || reviewProperty?.name || 'Kost';
             const timestamp = new Date().toISOString();
 
+            // Compile structured category + subItems
+            const formattedCategoriesPayload: string[] = [];
+            const formattedLines: string[] = [];
+
+            revisionCategories.forEach(catId => {
+                const subs = revisionSubItems[catId] || [];
+                const catObj = REVISION_DETAIL_SCHEMA.find(s => s.id === catId);
+                const catName = catObj?.label || catId;
+                if (subs.length > 0) {
+                    formattedCategoriesPayload.push(`${catId} (${subs.join(', ')})`);
+                    formattedLines.push(`• ${catName}:\n  - ${subs.join('\n  - ')}`);
+                } else {
+                    formattedCategoriesPayload.push(catId);
+                    formattedLines.push(`• ${catName}`);
+                }
+            });
+
+            const structuredDetails = formattedLines.length > 0
+                ? `📌 Bagian yang Perlu Diperbaiki:\n${formattedLines.join('\n')}\n\n`
+                : '';
             const existingNotes = reviewRequest.notes ? `${reviewRequest.notes}\n\n` : '';
-            const newRevisionNote = `[REVISI ${new Date().toLocaleDateString('id-ID')}]: Kategori: ${revisionCategories.join(', ') || 'Umum'} | Catatan: ${revisionNotes}`;
+            const newRevisionNote = `[REVISI ${new Date().toLocaleDateString('id-ID')}]:\n${structuredDetails}📝 Catatan Evaluasi Admin:\n${revisionNotes || '-'}`;
 
             // 1. Update kostmanager_requests
             await supabase.from('kostmanager_requests')
@@ -613,7 +726,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                 await notifySurveyRevisionRequested(
                     agentId,
                     kostName,
-                    revisionCategories,
+                    formattedCategoriesPayload,
                     revisionNotes,
                     survId || reviewRequest.id
                 );
@@ -623,6 +736,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
             setRevisionModalOpen(false);
             setReviewModalOpen(false);
             setRevisionCategories([]);
+            setRevisionSubItems({});
             setRevisionNotes('');
             await loadData();
             refreshData();
@@ -3027,9 +3141,9 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
             {/* MODAL DIALOG EVALUASI & MINTA REVISI KE SURVEYOR */}
             {revisionModalOpen && reviewRequest && (
                 <div className="fixed inset-0 z-[160] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-                    <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95">
+                    <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
                         {/* Header Modal */}
-                        <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100">
+                        <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100 sticky top-0 bg-white z-10">
                             <div className="flex items-center gap-3">
                                 <div className="w-11 h-11 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200 shadow-2xs">
                                     <AlertTriangle size={22} />
@@ -3051,54 +3165,130 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                         </div>
 
                         {/* Form Input Evaluasi */}
-                        <form onSubmit={handleRequestRevision} className="space-y-4">
-                            {/* 1. Checklist Kategori Perbaikan */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-black text-slate-900 uppercase tracking-wider block">
-                                    1. Pilih Bagian Data yang Perlu Diperbaiki
-                                </label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    {[
-                                        { id: 'Properti Umum', label: '🏢 Data Properti Umum', desc: 'Foto hero, fasilitas umum, koordinat GPS' },
-                                        { id: 'Kamar & Fasilitas', label: '🛏️ Kamar & Fasilitas', desc: 'Ukuran, kelengkapan kasur/WC/AC, foto unit' },
-                                        { id: 'Data Penghuni', label: '👥 Data Penghuni & Sewa', desc: 'Tarif sewa, status kamar terisi/kosong' },
-                                        { id: 'Mitra & Dokumen', label: '📋 Mitra & Kerjasama', desc: 'No. rekening, kesepakatan, tanda tangan' }
-                                    ].map(item => {
+                        <form onSubmit={handleRequestRevision} className="space-y-5">
+                            {/* 1. Checklist Kategori Utama */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs font-black text-slate-900 uppercase tracking-wider block">
+                                        1. Pilih Bagian Data yang Perlu Diperbaiki
+                                    </label>
+                                    <span className="text-[11px] text-slate-500 font-bold">
+                                        {revisionCategories.length} Kategori Dipilih
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                    {REVISION_DETAIL_SCHEMA.map(item => {
                                         const isChecked = revisionCategories.includes(item.id);
+                                        const selectedCount = (revisionSubItems[item.id] || []).length;
+                                        const totalCount = item.subItems.length;
+
                                         return (
                                             <button
                                                 key={item.id}
                                                 type="button"
-                                                onClick={() => {
-                                                    setRevisionCategories(prev =>
-                                                        isChecked ? prev.filter(c => c !== item.id) : [...prev, item.id]
-                                                    );
-                                                }}
-                                                className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-2.5 ${
+                                                onClick={() => toggleRevisionCategory(item.id)}
+                                                className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
                                                     isChecked
-                                                        ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-300 text-amber-950 shadow-xs'
+                                                        ? 'bg-amber-500/10 border-amber-400 ring-2 ring-amber-300 text-amber-950 shadow-xs'
                                                         : 'bg-slate-50/70 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
                                                 }`}
                                             >
-                                                <span className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 mt-0.5 ${
+                                                <span className={`w-4.5 h-4.5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
                                                     isChecked ? 'bg-amber-600 border-amber-600 text-white' : 'border-slate-300 bg-white'
                                                 }`}>
                                                     {isChecked && <Check size={12} strokeWidth={3} />}
                                                 </span>
-                                                <div className="min-w-0">
-                                                    <p className="text-xs font-black leading-tight">{item.label}</p>
-                                                    <p className="text-[10px] text-slate-500 font-medium leading-tight mt-0.5">{item.desc}</p>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center justify-between gap-1">
+                                                        <p className="text-xs font-black leading-tight">{item.label}</p>
+                                                        {isChecked && (
+                                                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-amber-200 text-amber-900 shrink-0">
+                                                                {selectedCount}/{totalCount}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-500 font-medium leading-tight mt-1">{item.desc}</p>
                                                 </div>
                                             </button>
                                         );
                                     })}
                                 </div>
+
+                                {/* SUB-CHECKLIST RINCIAN ELEMEN SPESIFIK */}
+                                {revisionCategories.length > 0 && (
+                                    <div className="space-y-3 pt-3 border-t border-slate-100 animate-in fade-in duration-200">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-[11px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                                                <Sparkles size={14} className="text-amber-600 shrink-0" /> Rincian Elemen Spesifik yang Perlu Direvisi:
+                                            </p>
+                                            <span className="text-[10px] text-slate-400 font-bold">Pilih item detail di bawah</span>
+                                        </div>
+
+                                        {REVISION_DETAIL_SCHEMA.filter(cat => revisionCategories.includes(cat.id)).map(cat => {
+                                            const selectedSubs = revisionSubItems[cat.id] || [];
+                                            const allSelected = selectedSubs.length === cat.subItems.length;
+
+                                            return (
+                                                <div key={cat.id} className="bg-amber-50/60 border border-amber-200/90 rounded-2xl p-3.5 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                                                    <div className="flex items-center justify-between pb-2 border-b border-amber-200/70">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-black text-amber-950">{cat.label}</span>
+                                                            <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-black text-[9px]">
+                                                                {selectedSubs.length} dari {cat.subItems.length} item dipilih
+                                                            </span>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleAllSubItems(cat.id, !allSelected)}
+                                                            className="text-[10px] font-black text-amber-800 hover:text-amber-950 underline cursor-pointer"
+                                                        >
+                                                            {allSelected ? 'Hapus Semua' : 'Pilih Semua'}
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                        {cat.subItems.map(sub => {
+                                                            const isSubChecked = selectedSubs.includes(sub.id);
+                                                            return (
+                                                                <button
+                                                                    key={sub.id}
+                                                                    type="button"
+                                                                    onClick={() => toggleRevisionSubItem(cat.id, sub.id)}
+                                                                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-2.5 ${
+                                                                        isSubChecked
+                                                                            ? 'bg-white border-amber-400 ring-1 ring-amber-300 text-amber-950 shadow-2xs'
+                                                                            : 'bg-white/60 border-slate-200/80 text-slate-500 hover:bg-white hover:text-slate-700'
+                                                                    }`}
+                                                                >
+                                                                    <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 mt-0.5 ${
+                                                                        isSubChecked ? 'bg-amber-600 border-amber-600 text-white' : 'border-slate-300 bg-white'
+                                                                    }`}>
+                                                                        {isSubChecked && <Check size={11} strokeWidth={3} />}
+                                                                    </span>
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <p className={`text-[11px] font-black leading-tight ${isSubChecked ? 'text-slate-900' : 'text-slate-600'}`}>
+                                                                            {sub.label}
+                                                                        </p>
+                                                                        <p className="text-[9px] text-slate-400 font-medium leading-tight mt-0.5">
+                                                                            {sub.desc}
+                                                                        </p>
+                                                                    </div>
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
 
                             {/* 2. Textarea Catatan & Poin Perbaikan */}
                             <div className="space-y-1.5">
                                 <label className="text-xs font-black text-slate-900 uppercase tracking-wider block">
-                                    2. Catatan Evaluasi & Poin Koreksi Spesifik <span className="text-rose-500">*</span>
+                                    2. Catatan Evaluasi & Poin Koreksi Tambahan <span className="text-rose-500">*</span>
                                 </label>
                                 <textarea
                                     required
@@ -3115,10 +3305,25 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                 const assignedAgent = agents.find(a => a.id === reviewRequest?.assigned_agent_id);
                                 const agentPhone = assignedAgent?.phone || reviewRequest?.agent_phone || '';
                                 const cleanPhone = agentPhone.replace(/\D/g, '').replace(/^0/, '62');
+
+                                // Compile list for WhatsApp
+                                const formattedLinesForWa: string[] = [];
+                                revisionCategories.forEach(catId => {
+                                    const subs = revisionSubItems[catId] || [];
+                                    const catObj = REVISION_DETAIL_SCHEMA.find(s => s.id === catId);
+                                    const catName = catObj?.label || catId;
+                                    if (subs.length > 0) {
+                                        formattedLinesForWa.push(`*${catName}:*\n  - ${subs.join('\n  - ')}`);
+                                    } else {
+                                        formattedLinesForWa.push(`*${catName}*`);
+                                    }
+                                });
+
                                 const waMessage = encodeURIComponent(
-                                    `Halo ${assignedAgent?.name || reviewRequest?.agent_name || 'Surveyor'},\n\nTerkait peninjauan hasil survei pendataan Kost *${reviewRequest?.kost_name}*:\n` +
-                                    (revisionCategories.length > 0 ? `📌 *Bagian yang Perlu Diperbaiki:* ${revisionCategories.join(', ')}\n` : '') +
-                                    `📝 *Catatan Evaluasi Admin:*\n${revisionNotes || '(Mohon lengkapi data)'}\n\n` +
+                                    `Halo ${assignedAgent?.name || reviewRequest?.agent_name || 'Surveyor'},\n\n` +
+                                    `Terkait peninjauan hasil survei pendataan Kost *${reviewRequest?.kost_name}*:\n\n` +
+                                    (formattedLinesForWa.length > 0 ? `📌 *Bagian yang Perlu Diperbaiki:*\n${formattedLinesForWa.join('\n')}\n\n` : '') +
+                                    `📝 *Catatan Evaluasi Admin:*\n${revisionNotes || '(Mohon lengkapi perbaikan di atas)'}\n\n` +
                                     `Silakan buka dashboard agen Anda untuk melakukan perbaikan dan kirim ulang. Terima kasih! 🙏`
                                 );
                                 const waUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${waMessage}` : null;
