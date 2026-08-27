@@ -1707,6 +1707,22 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                         });
                                                     });
 
+                                                    // Saring kamar yang berhak tampil di navigasi: HANYA kamar KOSONG dan memiliki FOTO > 0
+                                                    const eligibleRoomsForFilter = roomTypes
+                                                        .map((rt: any, idx: number) => {
+                                                            const photos = getRoomPhotos(rt);
+                                                            const stats = getRoomStats(rt);
+                                                            const isVacant = stats.available > 0 || (rt.status !== 'Terisi' && rt.status !== 'occupied' && rt.isAvailable !== false);
+                                                            return {
+                                                                rt,
+                                                                idx,
+                                                                rName: formatRoomName(rt.name, idx),
+                                                                photosCount: photos.length,
+                                                                isValid: photos.length > 0 && isVacant
+                                                            };
+                                                        })
+                                                        .filter(item => item.isValid);
+
                                                     const displayedRoomPhotos = selectedRoomGalleryFilter === 'all'
                                                         ? allRoomPhotosWithMetadata
                                                         : allRoomPhotosWithMetadata.filter(p => p.rtIdx === selectedRoomGalleryFilter);
@@ -1715,6 +1731,8 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                         ? Math.min(selectedRoomGalleryPhotoIndex, displayedRoomPhotos.length - 1)
                                                         : 0;
                                                     const currentActivePhoto = displayedRoomPhotos[activePhotoIndex] || null;
+
+                                                    if (allRoomPhotosWithMetadata.length === 0) return null;
 
                                                     return (
                                                         <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs space-y-4">
@@ -1730,7 +1748,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                         </h3>
                                                                         <p className="text-[10px] text-slate-400 font-bold">
                                                                             {selectedRoomGalleryFilter === 'all'
-                                                                                ? `Menampilkan seluruh ${allRoomPhotosWithMetadata.length} foto dari semua unit kamar`
+                                                                                ? `Menampilkan seluruh ${allRoomPhotosWithMetadata.length} foto kamar yang terkumpul`
                                                                                 : `Menampilkan foto terisolasi untuk ${formatRoomName(roomTypes[selectedRoomGalleryFilter]?.name, selectedRoomGalleryFilter)} (Klik ulang tombol untuk kembali)`}
                                                                         </p>
                                                                     </div>
@@ -1837,42 +1855,25 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                 </div>
                                                             )}
 
-                                                            {/* Filter Navigasi Kamar (Ditempatkan di Bagian Bawah Carousel) */}
-                                                            {roomTypes.length > 0 && (
+                                                            {/* Filter Navigasi Kamar: Hanya Kamar Kosong yang Ada Foto */}
+                                                            {eligibleRoomsForFilter.length > 0 && (
                                                                 <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
-                                                                    <div className="flex items-center justify-between">
-                                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                                                                            Filter Foto Berdasarkan Kamar:
-                                                                        </span>
-                                                                        {selectedRoomGalleryFilter !== 'all' && (
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => {
-                                                                                    setSelectedRoomGalleryFilter('all');
-                                                                                    setSelectedRoomGalleryPhotoIndex(0);
-                                                                                }}
-                                                                                className="text-[10px] font-black text-[#ff7a00] hover:text-orange-700 uppercase tracking-wider underline cursor-pointer"
-                                                                            >
-                                                                                ↺ Tampilkan Seluruh Kamar
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
+                                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                                        PILIH UNIT KAMAR KOSONG:
+                                                                    </span>
                                                                     <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-                                                                        {roomTypes.map((rt: any, idx: number) => {
-                                                                            const rName = formatRoomName(rt.name, idx);
-                                                                            const rPhotosCount = getRoomPhotos(rt).length;
-                                                                            const isSelected = selectedRoomGalleryFilter === idx;
-
+                                                                        {eligibleRoomsForFilter.map((item) => {
+                                                                            const isSelected = selectedRoomGalleryFilter === item.idx;
                                                                             return (
                                                                                 <button
-                                                                                    key={idx}
+                                                                                    key={item.idx}
                                                                                     type="button"
                                                                                     onClick={(e) => {
                                                                                         e.stopPropagation();
                                                                                         if (isSelected) {
                                                                                             setSelectedRoomGalleryFilter('all');
                                                                                         } else {
-                                                                                            setSelectedRoomGalleryFilter(idx);
+                                                                                            setSelectedRoomGalleryFilter(item.idx);
                                                                                         }
                                                                                         setSelectedRoomGalleryPhotoIndex(0);
                                                                                     }}
@@ -1883,11 +1884,11 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                     }`}
                                                                                 >
                                                                                     <Bed size={13} />
-                                                                                    <span>{rName}</span>
+                                                                                    <span>{item.rName}</span>
                                                                                     <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
                                                                                         isSelected ? 'bg-orange-600 text-white' : 'bg-orange-200/70 text-[#d45e00]'
                                                                                     }`}>
-                                                                                        {rPhotosCount}
+                                                                                        {item.photosCount}
                                                                                     </span>
                                                                                 </button>
                                                                             );

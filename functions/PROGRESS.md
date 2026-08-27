@@ -2,6 +2,21 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 106. Penyaringan Presisi Navigasi Kamar (Hanya Kamar Kosong Berfoto) & Pembersihan UI Galeri Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta deretan tombol navigasi kamar HANYA memunculkan unit kamar yang memiliki foto riil (`photos.length > 0`) DAN sedang berstatus kosong/tidak terisi (`isVacant`).
+  2. Kamar dengan 0 foto (seperti Kamar 1 (0) dan Kamar 2 (0)) serta kamar yang terisi/dihuni tidak boleh muncul sebagai tombol navigasi.
+  3. Menghapus tulisan/tombol teks "↺ TAMPILKAN SELURUH KAMAR" demi kebersihan visual antarmuka (clean & minimal design).
+- **Implementasi & Perbaikan**:
+  * **1. Filter Presisi `eligibleRoomsForFilter`**:
+    - Memvalidasi setiap tipe kamar dengan syarat `photos.length > 0 && isVacant` (`stats.available > 0` atau status bukan Terisi/Occupied).
+    - Hanya kamar yang lulus validasi yang dirender sebagai tombol pill navigasi di bagian bawah galeri.
+  * **2. Pembersihan Redundan & Peningkatan Visual UI/UX**:
+    - Menghapus tombol teks "Tampilkan Seluruh Kamar".
+    - Menyempurnakan tipografi header label, frame rasio sinematik gambar, dan highlight aktif tombol kamar.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 105. Penempatan Navigasi Kamar di Bawah Carousel & Logika Toggle Isolasi Foto Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta posisi tombol navigasi nomor kamar dipindahkan ke bawah carousel foto.
