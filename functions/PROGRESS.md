@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 97. Redesain Estetika Landmark Terdekat, Integrasi Rute Google Maps & Estimasi Waktu Tempuh Riil (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta tampilan Landmark Terdekat dan Peraturan Kost dievaluasi agar lebih elegan dan tidak kaku.
+  2. Pengguna meminta agar setiap landmark memiliki tombol interaktif untuk membuka rute Google Maps dari titik lokasi kost ke landmark tersebut.
+  3. Pengguna meminta agar data jarak dan estimasi waktu tempuh moda transportasi dihitung secara riil sesuai rute Google Maps API.
+- **Implementasi & Perbaikan**:
+  * **1. Integrasi Google Maps DistanceMatrixService & Fallback**:
+    - Mengintegrasikan `google.maps.DistanceMatrixService` untuk menarik data jarak tempuh riil (`distance.text`) dan durasi berkendara (`duration.text`) langsung dari Google Maps API jika service aktif di browser.
+    - Menyiapkan fallback kalkulasi Haversine + faktor kurvatur jalanan Makassar (1.3x) dengan database koordinat kampus & landmark ternama (*PNUP, UNHAS, UIM, UMI, UNM, MTOS, Mall Panakkukang, Nipah Mall, Trans Studio Mall*).
+  * **2. Redesain Kartu Landmark Terdekat**:
+    - Menampilkan landmark sebagai kartu modern dengan:
+      - Icon kategori tematik (🏫), nama landmark, dan pin koordinat.
+      - Badge jarak riil (*"1.4 km"*, *"850 m"*).
+      - Bar estimasi waktu tempuh moda transportasi (*🚶 Jalan Kaki*, *🏍️ Sepeda Motor*, *🚗 Mobil*).
+      - **Tombol Rute Google Maps Interaktif**: `[🗺️ Lihat Rute di Google Maps ↗]` yang langsung membuka navigasi `https://www.google.com/maps/dir/?api=1&origin=${lat},${lng}&destination=${destParam}` di tab baru.
+  * **3. Redesain Kartu Peraturan Kost**:
+    - Merapikan kartu peraturan dengan layout soft-rose cards, icon `ShieldAlert` / `⛔`, dan tipografi berimbang.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 96. Penghapusan Card Deskripsi & Profil Kost pada Modal Peninjauan (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menyampaikan bahwa card *"DESKRIPSI & PROFIL KOST"* tidak perlu ada karena pada formulir pendataan KostManager di Dashboard Agen tidak terdapat input pengisian deskripsi kost.
