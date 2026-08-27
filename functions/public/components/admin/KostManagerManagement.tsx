@@ -993,23 +993,113 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
         }).filter(item => Boolean(item.url));
     };
 
-    // Global helper for room photos
-    const DEFAULT_GLOBAL_ROOM_SLOTS = ['Interior Kamar', 'Kamar Mandi Dalam', 'Tempat Tidur', 'Lemari / Penyimpanan'];
-    const getRoomPhotos = (room: any) => {
+    // Global room category computer matching AgentDashboard
+    const computeDynamicRoomPhotoCategories = (roomFacilities: string[] = [], status: string = 'Kosong'): string[] => {
+        const isOcc = status === 'Terisi' || status === 'occupied';
+        const baseLabel = isOcc ? 'Interior Kamar (Opsional)' : 'Interior Kamar';
+        const categories: string[] = [baseLabel];
+
+        const facilityPhotoMapping: { [key: string]: string } = {
+            'kamar mandi dalam': 'Kamar Mandi',
+            'dapur dalam': 'Dapur Dalam',
+            'kasur': 'Tempat Tidur',
+            'tempat tidur': 'Tempat Tidur',
+            'lemari': 'Lemari / Storage',
+            'lemari pakaian': 'Lemari / Storage',
+            'meja belajar': 'Meja Belajar',
+            'meja belajar/kerja': 'Meja Belajar',
+            'ac': 'AC',
+            'kipas angin': 'Kipas Angin',
+            'jendela luar': 'Jendela Luar',
+            'water heater': 'Water Heater'
+        };
+
+        (roomFacilities || []).forEach(fac => {
+            const lower = (fac || '').toLowerCase().trim();
+            if (lower === 'kosongan (tanpa perabot)') return;
+
+            const mapped = facilityPhotoMapping[lower];
+            if (mapped) {
+                if (!categories.includes(mapped)) {
+                    categories.push(mapped);
+                }
+            }
+        });
+
+        return categories;
+    };
+
+    // Helper to get photos for a specific category
+    const getPhotosForCategory = (room: any, catName: string): string[] => {
         if (!room) return [];
-        const rawImages = room.images || room.image_urls || room.photos || [];
-        return rawImages.map((img: any, imgIdx: number) => {
-            if (!img) return null;
-            const url = typeof img === 'string' ? img : (img?.url || img?.original || '');
-            if (!url) return null;
-            let label = '';
-            if (room.photoCategories?.[imgIdx]) label = room.photoCategories[imgIdx];
-            else if (typeof img === 'object' && img?.label) label = img.label;
-            else if (imgIdx < DEFAULT_GLOBAL_ROOM_SLOTS.length) label = DEFAULT_GLOBAL_ROOM_SLOTS[imgIdx];
-            else label = `Foto Tambahan ${imgIdx - DEFAULT_GLOBAL_ROOM_SLOTS.length + 1}`;
+        const normalizedTarget = catName.toLowerCase().replace(/\s*\*wajib/i, '').replace(/\(opsional\)/i, '').trim();
+
+        // 1. From categorizedPhotos
+        if (room.categorizedPhotos && typeof room.categorizedPhotos === 'object' && !Array.isArray(room.categorizedPhotos)) {
+            for (const [key, val] of Object.entries(room.categorizedPhotos)) {
+                const cleanKey = key.toLowerCase().replace(/\s*\*wajib/i, '').replace(/\(opsional\)/i, '').trim();
+                if (cleanKey === normalizedTarget || cleanKey.includes(normalizedTarget) || normalizedTarget.includes(cleanKey)) {
+                    if (Array.isArray(val)) return val.filter((u: any) => typeof u === 'string' && (u.startsWith('http') || u.startsWith('data:') || u.startsWith('blob:')));
+                    if (typeof val === 'string' && (val.startsWith('http') || val.startsWith('data:') || val.startsWith('blob:'))) return [val];
+                }
+            }
+        }
+
+        // 2. From parallel arrays (images / photoCategories)
+        const rawImages = Array.isArray(room.images) ? room.images : (Array.isArray(room.image_urls) ? room.image_urls : (Array.isArray(room.photos) ? room.photos : []));
+        const categories = Array.isArray(room.photoCategories) ? room.photoCategories : [];
+
+        const matchedUrls: string[] = [];
+        rawImages.forEach((img: any, idx: number) => {
+            const urlStr = typeof img === 'string' ? img : (img?.url || img?.original || '');
+            if (!urlStr || (!urlStr.startsWith('http') && !urlStr.startsWith('data:') && !urlStr.startsWith('blob:'))) return;
+            const imgCat = (categories[idx] || (typeof img === 'object' && img?.label) || '').toLowerCase().replace(/\s*\*wajib/i, '').replace(/\(opsional\)/i, '').trim();
+
+            if (imgCat === normalizedTarget || imgCat.includes(normalizedTarget) || normalizedTarget.includes(imgCat)) {
+                matchedUrls.push(urlStr);
+            }
+        });
+
+        return matchedUrls;
+    };
+
+    // Helper to get all room photos list
+    const getAllRoomPhotosList = (room: any): { url: string; label: string }[] => {
+        if (!room) return [];
+        const list: { url: string; label: string }[] = [];
+
+        // Check categorizedPhotos
+        if (room.categorizedPhotos && typeof room.categorizedPhotos === 'object' && !Array.isArray(room.categorizedPhotos)) {
+            Object.entries(room.categorizedPhotos).forEach(([catKey, urls]: [string, any]) => {
+                const cleanCat = catKey.replace(/\s*\*Wajib/i, '').replace(/\(Opsional\)/i, '').trim();
+                const urlArr = Array.isArray(urls) ? urls : [urls];
+                urlArr.forEach((u: any, uIdx: number) => {
+                    const urlStr = typeof u === 'string' ? u : (u?.url || u?.original || '');
+                    if (urlStr && (urlStr.startsWith('http') || urlStr.startsWith('data:') || urlStr.startsWith('blob:'))) {
+                        list.push({
+                            url: urlStr,
+                            label: urlArr.length > 1 ? `${cleanCat} #${uIdx + 1}` : cleanCat
+                        });
+                    }
+                });
+            });
+        }
+
+        // Check flat arrays
+        const rawImages = Array.isArray(room.images) ? room.images : (Array.isArray(room.image_urls) ? room.image_urls : (Array.isArray(room.photos) ? room.photos : []));
+        const categories = Array.isArray(room.photoCategories) ? room.photoCategories : [];
+
+        rawImages.forEach((img: any, idx: number) => {
+            const urlStr = typeof img === 'string' ? img : (img?.url || img?.original || '');
+            if (!urlStr || (!urlStr.startsWith('http') && !urlStr.startsWith('data:') && !urlStr.startsWith('blob:'))) return;
+            if (list.some(item => item.url === urlStr)) return;
+
+            let label = categories[idx] || (typeof img === 'object' && img?.label) || `Foto #${idx + 1}`;
             label = label.replace(/\s*\*Wajib/i, '').replace(/\(Opsional\)/i, '').trim();
-            return { url, label };
-        }).filter(Boolean) as { url: string; label: string }[];
+            list.push({ url: urlStr, label });
+        });
+
+        return list;
     };
 
     const formatRoomName = (name: string, idx: number) => {
@@ -3661,7 +3751,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                         </div>
                                                         <div>
                                                             <h4 className="text-xs font-black text-slate-900 uppercase">
-                                                                {activeRoom.name ? (String(activeRoom.name).toLowerCase().startsWith('kamar') ? activeRoom.name : `Kamar ${activeRoom.name}`) : `Kamar ${auditActiveRoomIdx + 1}`}
+                                                                {formatRoomName(activeRoom.name, auditActiveRoomIdx)}
                                                             </h4>
                                                             <p className="text-[10px] text-slate-500 font-bold">
                                                                 {activeRoom.floor || 'Lantai 1'} • {activeRoom.type || 'Standard'} • {activeRoom.isAvailable === false || activeRoom.status === 'Terisi' ? '🔒 Sedang Terisi' : '✨ Siap Huni'}
@@ -3673,7 +3763,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                 {/* 1. Ukuran & Dimensi Kamar */}
                                                 {renderAuditCard(
                                                     `room_size_${auditActiveRoomIdx}`,
-                                                    `Ukuran & Dimensi ${activeRoom.name || `Kamar ${auditActiveRoomIdx+1}`}`,
+                                                    `Ukuran & Dimensi ${formatRoomName(activeRoom.name, auditActiveRoomIdx)}`,
                                                     <Layers size={16} />,
                                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                                                         <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
@@ -3689,13 +3779,13 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                             <p className="text-xs font-black text-[#ff7a00]">{activeRoom.type || 'Standard'}</p>
                                                         </div>
                                                     </div>,
-                                                    `Contoh: Ukuran kamar ${activeRoom.name || auditActiveRoomIdx+1} tertulis 3x4 meter padahal riil 3x3 meter.`
+                                                    `Contoh: Ukuran ${formatRoomName(activeRoom.name, auditActiveRoomIdx)} tertulis 3x4 meter padahal riil 3x3 meter.`
                                                 )}
 
                                                 {/* 2. Status Ketersediaan & Data Penghuni */}
                                                 {renderAuditCard(
                                                     `room_status_${auditActiveRoomIdx}`,
-                                                    `Status Sewa & Data Penghuni ${activeRoom.name || `Kamar ${auditActiveRoomIdx+1}`}`,
+                                                    `Status Sewa & Data Penghuni ${formatRoomName(activeRoom.name, auditActiveRoomIdx)}`,
                                                     <Users size={16} />,
                                                     <div className="space-y-2">
                                                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
@@ -3713,13 +3803,13 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                             )}
                                                         </div>
                                                     </div>,
-                                                    `Contoh: Kamar ${activeRoom.name || auditActiveRoomIdx+1} terisi tapi nomor WhatsApp penyewa belum lengkap.`
+                                                    `Contoh: ${formatRoomName(activeRoom.name, auditActiveRoomIdx)} terisi tapi nomor WhatsApp penyewa belum lengkap.`
                                                 )}
 
                                                 {/* 3. Skema Tarif Sewa */}
                                                 {renderAuditCard(
                                                     `room_pricing_${auditActiveRoomIdx}`,
-                                                    `Skema Tarif Sewa ${activeRoom.name || `Kamar ${auditActiveRoomIdx+1}`}`,
+                                                    `Skema Tarif Sewa ${formatRoomName(activeRoom.name, auditActiveRoomIdx)}`,
                                                     <CreditCard size={16} />,
                                                     <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
                                                         <div>
@@ -3735,13 +3825,13 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                             </div>
                                                         )}
                                                     </div>,
-                                                    `Contoh: Tarif sewa bulanan ${activeRoom.name || auditActiveRoomIdx+1} keliru ketik nominal.`
+                                                    `Contoh: Tarif sewa bulanan ${formatRoomName(activeRoom.name, auditActiveRoomIdx)} keliru ketik nominal.`
                                                 )}
 
                                                 {/* 4. Fasilitas Kamar */}
                                                 {renderAuditCard(
                                                     `room_facilities_${auditActiveRoomIdx}`,
-                                                    `Fasilitas ${activeRoom.name || `Kamar ${auditActiveRoomIdx+1}`}`,
+                                                    `Fasilitas ${formatRoomName(activeRoom.name, auditActiveRoomIdx)}`,
                                                     <Bed size={16} />,
                                                     <div className="space-y-2">
                                                         {activeRoom.roomFacilities && activeRoom.roomFacilities.length > 0 ? (
@@ -3756,31 +3846,108 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                             <p className="text-xs text-slate-400 italic">Tidak ada fasilitas khusus tercatat.</p>
                                                         )}
                                                     </div>,
-                                                    `Contoh: Fasilitas kasur dan lemari kamar ${activeRoom.name || auditActiveRoomIdx+1} belum dicentang.`
+                                                    `Contoh: Fasilitas kasur dan lemari ${formatRoomName(activeRoom.name, auditActiveRoomIdx)} belum dicentang.`
                                                 )}
 
-                                                {/* 5. Foto Dokumentasi Kamar */}
+                                                {/* 5. Foto Dokumentasi Kamar (Categorized Matching Agent Form) */}
                                                 {renderAuditCard(
                                                     `room_photos_${auditActiveRoomIdx}`,
-                                                    `Foto Dokumentasi ${activeRoom.name || `Kamar ${auditActiveRoomIdx+1}`}`,
+                                                    `Foto Dokumentasi ${formatRoomName(activeRoom.name, auditActiveRoomIdx)}`,
                                                     <Camera size={16} />,
-                                                    <div className="space-y-2">
-                                                        {getRoomPhotos(activeRoom).length > 0 ? (
-                                                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                                                                {getRoomPhotos(activeRoom).map((imgUrl: string, pIdx: number) => (
-                                                                    <div key={pIdx} className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 relative group bg-slate-100">
-                                                                        <img src={imgUrl} alt={`Foto kamar ${pIdx+1}`} className="w-full h-full object-cover" />
-                                                                        <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[8px] font-bold p-1 truncate text-center">
-                                                                            Foto #{pIdx+1}
-                                                                        </span>
-                                                                    </div>
-                                                                ))}
+                                                    (() => {
+                                                        const expectedCats = computeDynamicRoomPhotoCategories(activeRoom.roomFacilities, activeRoom.status || (activeRoom.isAvailable === false ? 'Terisi' : 'Kosong'));
+                                                        const allPhotos = getAllRoomPhotosList(activeRoom);
+
+                                                        return (
+                                                            <div className="space-y-3">
+                                                                {/* Categorized Slots Matching Agent Form */}
+                                                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                                                                    {expectedCats.map((catName: string, catIdx: number) => {
+                                                                        const matchedPhotos = getPhotosForCategory(activeRoom, catName);
+                                                                        const hasPhoto = matchedPhotos.length > 0;
+                                                                        const photoUrl = matchedPhotos[0];
+
+                                                                        return (
+                                                                            <div 
+                                                                                key={catIdx} 
+                                                                                className={`rounded-2xl overflow-hidden border p-2.5 flex flex-col justify-between transition-all ${
+                                                                                    hasPhoto 
+                                                                                        ? 'bg-white border-slate-200 shadow-2xs hover:shadow-xs' 
+                                                                                        : 'bg-slate-50 border-dashed border-slate-300'
+                                                                                }`}
+                                                                            >
+                                                                                <div className="flex items-center justify-between gap-1 mb-1.5">
+                                                                                    <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight truncate">
+                                                                                        📸 {catName}
+                                                                                    </span>
+                                                                                    {hasPhoto ? (
+                                                                                        <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[9px] shrink-0 font-bold">
+                                                                                            ✓
+                                                                                        </span>
+                                                                                    ) : (
+                                                                                        <span className="text-[8px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
+                                                                                            Kosong
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+
+                                                                                {hasPhoto ? (
+                                                                                    <div 
+                                                                                        onClick={() => setLightboxPhoto({ url: photoUrl, label: `${formatRoomName(activeRoom.name, auditActiveRoomIdx)} - ${catName}` })}
+                                                                                        className="aspect-[4/3] rounded-xl overflow-hidden relative group cursor-pointer bg-slate-950"
+                                                                                    >
+                                                                                        <img 
+                                                                                            src={photoUrl} 
+                                                                                            alt={catName} 
+                                                                                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
+                                                                                        />
+                                                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                                                                            <ZoomIn size={16} />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="aspect-[4/3] rounded-xl border border-dashed border-slate-300 flex flex-col items-center justify-center p-2 text-center bg-white/60">
+                                                                                        <Camera size={18} className="text-slate-300 mb-1" />
+                                                                                        <span className="text-[9px] text-slate-400 font-bold leading-tight">Foto Belum Diunggah</span>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+
+                                                                {/* Additional Photos if any */}
+                                                                {(() => {
+                                                                    const categorizedUrls = new Set(expectedCats.flatMap(c => getPhotosForCategory(activeRoom, c)));
+                                                                    const extraPhotos = allPhotos.filter(p => !categorizedUrls.has(p.url));
+                                                                    if (extraPhotos.length === 0) return null;
+
+                                                                    return (
+                                                                        <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                                                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">
+                                                                                Foto Dokumentasi Tambahan ({extraPhotos.length}):
+                                                                            </span>
+                                                                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                                                                {extraPhotos.map((p, pIdx) => (
+                                                                                    <div 
+                                                                                        key={pIdx} 
+                                                                                        onClick={() => setLightboxPhoto({ url: p.url, label: `${formatRoomName(activeRoom.name, auditActiveRoomIdx)} - ${p.label}` })}
+                                                                                        className="aspect-[4/3] rounded-xl overflow-hidden border border-slate-200 relative group cursor-pointer bg-slate-100"
+                                                                                    >
+                                                                                        <img src={p.url} alt={p.label} className="w-full h-full object-cover" />
+                                                                                        <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[8px] font-bold p-1 truncate text-center">
+                                                                                            {p.label}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })()}
                                                             </div>
-                                                        ) : (
-                                                            <p className="text-xs text-slate-400 italic">Belum ada foto kamar yang diunggah untuk unit ini.</p>
-                                                        )}
-                                                    </div>,
-                                                    `Contoh: Foto interior kamar ${activeRoom.name || auditActiveRoomIdx+1} gelap dan foto kamar mandi belum ada.`
+                                                        );
+                                                    })(),
+                                                    `Contoh: Foto interior kamar ${formatRoomName(activeRoom.name, auditActiveRoomIdx)} gelap dan foto kamar mandi belum ada.`
                                                 )}
                                             </div>
                                         ) : (
