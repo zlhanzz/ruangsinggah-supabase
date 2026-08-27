@@ -1996,7 +1996,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
 
                                                     return (
                                                         <div key={rt.id || rtIdx} className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-                                                            {/* LEVEL 1: ACCORDION HEADER TIPE KAMAR (PARENT) */}
+                                                            {/* LEVEL 1: ACCORDION HEADER TIPE KAMAR (PARENT - TAMPILAN MINIMIZE & MAXIMIZE) */}
                                                             <button type="button"
                                                                 onClick={() => {
                                                                     setSelectedRoomGalleryFilter('all');
@@ -2012,24 +2012,26 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tipe Kamar #{rtIdx + 1}</span>
                                                                         </div>
                                                                         <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{rt.name}</h4>
-                                                                        {/* Specs & Facility Chips in Header */}
-                                                                        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                                                                            <span className="text-xs text-slate-600 font-bold flex items-center gap-1">
+                                                                        {/* Specs & Full Facility Chips in Header (Always visible in minimize) */}
+                                                                        <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                                                                            <span className="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200/80 text-[10px] font-black text-blue-800 flex items-center gap-1">
                                                                                 📐 {rt.size}
                                                                             </span>
-                                                                            {rt.roomFacilities.length > 0 && (
-                                                                                <span className="text-slate-300">•</span>
-                                                                            )}
-                                                                            {rt.roomFacilities.slice(0, 3).map((f: string, fi: number) => (
-                                                                                <span key={fi} className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200/80 text-[10px] font-bold text-slate-700">
+                                                                            {rt.roomFacilities.map((f: string, fi: number) => (
+                                                                                <span key={`rf_${fi}`} className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200/80 text-[10px] font-bold text-slate-700">
                                                                                     {f}
                                                                                 </span>
                                                                             ))}
-                                                                            {rt.bathroomFacilities.length > 0 && (
-                                                                                <span className="px-2 py-0.5 rounded-md bg-sky-50 border border-sky-200/80 text-[10px] font-bold text-sky-800">
-                                                                                    {rt.bathroomFacilities[0]}
+                                                                            {rt.bathroomFacilities.map((bf: string, bfi: number) => (
+                                                                                <span key={`rbf_${bfi}`} className="px-2 py-0.5 rounded-md bg-sky-50 border border-sky-200/80 text-[10px] font-bold text-sky-800">
+                                                                                    {bf}
                                                                                 </span>
-                                                                            )}
+                                                                            ))}
+                                                                            {rt.kitchenFacilities.map((kf: string, kfi: number) => (
+                                                                                <span key={`rkf_${kfi}`} className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200/80 text-[10px] font-bold text-amber-800">
+                                                                                    {kf}
+                                                                                </span>
+                                                                            ))}
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -2041,69 +2043,9 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                 </div>
                                                             </button>
 
-                                                            {/* LEVEL 2: BODY TIPE KAMAR (CHILDREN) */}
+                                                            {/* LEVEL 2: BODY TIPE KAMAR (CHILDREN - LANGSUNG MENAMPILKAN TERISI & KOSONG) */}
                                                             {isExpanded && (
-                                                                <div className="border-t border-slate-100 p-5 space-y-5">
-                                                                    {/* SPESIFIKASI & FASILITAS BAWAAN TIPE KAMAR */}
-                                                                    {(rt.roomFacilities.length > 0 || rt.bathroomFacilities.length > 0 || rt.kitchenFacilities.length > 0) && (
-                                                                        <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 space-y-2.5">
-                                                                            <div className="flex items-center justify-between gap-2 border-b border-slate-200/60 pb-2">
-                                                                                <div className="flex items-center gap-2">
-                                                                                    <span className="w-5 h-5 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-black">
-                                                                                        ✓
-                                                                                    </span>
-                                                                                    <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider">
-                                                                                        Spesifikasi &amp; Fasilitas Bawaan {rt.name}
-                                                                                    </span>
-                                                                                </div>
-                                                                                <span className="text-[10px] text-slate-400 font-bold">
-                                                                                    Standar Unit Tipe Ini
-                                                                                </span>
-                                                                            </div>
-                                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-0.5">
-                                                                                {rt.roomFacilities.length > 0 && (
-                                                                                    <div className="bg-white border border-slate-200/90 rounded-xl p-2.5 space-y-1.5 shadow-2xs">
-                                                                                        <div className="flex items-center gap-1.5 text-slate-600">
-                                                                                            <Bed size={13} className="text-slate-500"/>
-                                                                                            <span className="text-[9px] font-black uppercase tracking-wider">Fasilitas Kamar</span>
-                                                                                        </div>
-                                                                                        <div className="flex flex-wrap gap-1">
-                                                                                            {rt.roomFacilities.map((f: string, i: number) => (
-                                                                                                <span key={i} className="px-1.5 py-0.5 bg-slate-100 rounded text-[9.5px] font-bold text-slate-700">{f}</span>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
-                                                                                {rt.bathroomFacilities.length > 0 && (
-                                                                                    <div className="bg-white border border-sky-100 rounded-xl p-2.5 space-y-1.5 shadow-2xs">
-                                                                                        <div className="flex items-center gap-1.5 text-sky-700">
-                                                                                            <Bath size={13} className="text-sky-600"/>
-                                                                                            <span className="text-[9px] font-black uppercase tracking-wider">Kamar Mandi</span>
-                                                                                        </div>
-                                                                                        <div className="flex flex-wrap gap-1">
-                                                                                            {rt.bathroomFacilities.map((f: string, i: number) => (
-                                                                                                <span key={i} className="px-1.5 py-0.5 bg-sky-50 border border-sky-100 rounded text-[9.5px] font-bold text-sky-800">{f}</span>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
-                                                                                {rt.kitchenFacilities.length > 0 && (
-                                                                                    <div className="bg-white border border-amber-100 rounded-xl p-2.5 space-y-1.5 shadow-2xs">
-                                                                                        <div className="flex items-center gap-1.5 text-amber-700">
-                                                                                            <CookingPot size={13} className="text-amber-600"/>
-                                                                                            <span className="text-[9px] font-black uppercase tracking-wider">Dapur</span>
-                                                                                        </div>
-                                                                                        <div className="flex flex-wrap gap-1">
-                                                                                            {rt.kitchenFacilities.map((f: string, i: number) => (
-                                                                                                <span key={i} className="px-1.5 py-0.5 bg-amber-50 border border-amber-100 rounded text-[9.5px] font-bold text-amber-800">{f}</span>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
-
+                                                                <div className="border-t border-slate-100 p-5 space-y-4">
                                                                     {/* DUA SUB-PARENT ACCORDIONS: 1. TERISI & 2. KOSONG (SELALU MUNCUL BERPASANGAN) */}
                                                                     <div className="space-y-3">
                                                                         {/* Sub-Parent 1: KAMAR TERISI */}

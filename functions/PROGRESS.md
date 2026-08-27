@@ -2,6 +2,20 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 112. Pemindahan Spesifikasi & Fasilitas Kamar ke Header Minimize Tipe Kamar di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan mengapa informasi fasilitas harus di-maximize terlebih dahulu baru muncul, padahal fasilitas merupakan bagian penting yang seharusnya langsung dapat dilihat pada tampilan minimize.
+  2. Pengguna meminta agar seluruh kelengkapan fasilitas tipe kamar langsung terlihat permanen pada kartu bentuk minimize.
+- **Implementasi & Perbaikan**:
+  * **1. Header Minimize Memuat Seluruh Fasilitas**:
+    - Seluruh daftar fasilitas kamar (`rt.roomFacilities`), fasilitas kamar mandi (`rt.bathroomFacilities`), fasilitas dapur (`rt.kitchenFacilities`), serta dimensi kamar (`rt.size`) disajikan langsung dan lengkap di dalam header kartu Tipe Kamar.
+    - Informasi ini tampil permanen baik saat kartu dalam kondisi *minimize* (tertutup) maupun *maximize* (terbuka).
+  * **2. Body Maximize Langsung Fokus ke 2 Sub-Parent (Terisi & Kosong)**:
+    - Menghapus duplikasi container fasilitas di dalam body accordion.
+    - Saat kartu Tipe Kamar dibuka/maximize, tampilannya langsung to-the-point menyajikan dua sub-parent: 🔒 **KAMAR SEDANG DIHUNI / TERISI** dan ✨ **KAMAR KOSONG / SIAP HUNI**.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 111. Redesain UI/UX Fasilitas Tipe Kamar (Header Chips & Integrated Specification Card) di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menilai penyajian fasilitas kamar sebelumnya tampak seperti *"anomali/elemen asing"* yang membingungkan alur visual karena tampil sebagai kotak abu-abu kaku yang terpisah.
