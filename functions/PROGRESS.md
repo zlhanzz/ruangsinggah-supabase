@@ -2,6 +2,20 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 111. Redesain UI/UX Fasilitas Tipe Kamar (Header Chips & Integrated Specification Card) di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menilai penyajian fasilitas kamar sebelumnya tampak seperti *"anomali/elemen asing"* yang membingungkan alur visual karena tampil sebagai kotak abu-abu kaku yang terpisah.
+  2. Pengguna meminta perbaikan UI/UX agar informasi kelengkapan & fasilitas kamar tampil menyatu, elegan, dan langsung dapat dimengerti sebagai bagian resmi dari spesifikasi Tipe Kamar Standard.
+- **Implementasi & Perbaikan**:
+  * **1. Header Facility Chips Terintegrasi**:
+    - Menambahkan chip fasilitas dan dimensi ruangan langsung di baris header Tipe Kamar Level 1: `📐 2x2 meter` • `[ 🛏️ Kosongan (Tanpa Perabot) ]` `[ 🪟 Jendela Luar ]`.
+    - Memberikan konteks instan kepada peninjau/admin bahkan sebelum accordion dibuka.
+  * **2. Integrated Specification Card Bawaan Tipe Kamar**:
+    - Mengganti container lama dengan card modern berlatar soft (`bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4`) berlabel jelas: `✓ Spesifikasi & Fasilitas Bawaan {rt.name}`.
+    - Mengelompokkan pill badges Fasilitas Kamar, Kamar Mandi, dan Dapur secara harmonis dengan bayangan lembut (*shadow-2xs*) dan icon vector `lucide-react`.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 110. Pengelompokan Tipe Kamar Sejati (Tipe Standard/Deluxe ➔ Terisi & Kosong ➔ Kartu Unit Kamar Individual) di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna mengoreksi bahwa nomor kamar (misal "1", "2", "3") bukanlah tipe kamar terpisah. Tipe kamar yang sebenarnya adalah kategori spesifikasi seperti **Tipe Standard**, **Tipe Deluxe**, dsb.

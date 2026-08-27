@@ -2003,22 +2003,40 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                     setExpandedRoomTypes(prev => ({...prev, [rtIdx]: !isExpanded}));
                                                                 }}
                                                                 className="w-full flex items-center justify-between p-5 hover:bg-slate-50 transition-colors text-left cursor-pointer">
-                                                                <div className="flex items-center gap-3 min-w-0">
-                                                                    <span className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
-                                                                        <Bed size={18}/>
+                                                                <div className="flex items-center gap-3.5 min-w-0">
+                                                                    <span className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100 shadow-2xs">
+                                                                        <Bed size={20}/>
                                                                     </span>
                                                                     <div className="min-w-0">
                                                                         <div className="flex items-center gap-2 flex-wrap">
                                                                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tipe Kamar #{rtIdx + 1}</span>
                                                                         </div>
                                                                         <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{rt.name}</h4>
-                                                                        <p className="text-xs text-slate-500 font-bold">Ukuran Rata-rata: {rt.size}</p>
+                                                                        {/* Specs & Facility Chips in Header */}
+                                                                        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                                                            <span className="text-xs text-slate-600 font-bold flex items-center gap-1">
+                                                                                📐 {rt.size}
+                                                                            </span>
+                                                                            {rt.roomFacilities.length > 0 && (
+                                                                                <span className="text-slate-300">•</span>
+                                                                            )}
+                                                                            {rt.roomFacilities.slice(0, 3).map((f: string, fi: number) => (
+                                                                                <span key={fi} className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200/80 text-[10px] font-bold text-slate-700">
+                                                                                    {f}
+                                                                                </span>
+                                                                            ))}
+                                                                            {rt.bathroomFacilities.length > 0 && (
+                                                                                <span className="px-2 py-0.5 rounded-md bg-sky-50 border border-sky-200/80 text-[10px] font-bold text-sky-800">
+                                                                                    {rt.bathroomFacilities[0]}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex items-center gap-2 shrink-0 ml-3">
                                                                     <span className="text-sm font-black text-emerald-700">{FORMAT_CURRENCY(rt.price)}<span className="text-[10px] text-slate-400 font-bold">/bln</span></span>
-                                                                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black">✨ {rt.vacantUnits.length} Kosong</span>
-                                                                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black">🔒 {rt.occupiedUnits.length} Dihuni</span>
+                                                                    <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black">✨ {rt.vacantUnits.length} Kosong</span>
+                                                                    <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black">🔒 {rt.occupiedUnits.length} Dihuni</span>
                                                                     {isExpanded ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
                                                                 </div>
                                                             </button>
@@ -2026,46 +2044,58 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                             {/* LEVEL 2: BODY TIPE KAMAR (CHILDREN) */}
                                                             {isExpanded && (
                                                                 <div className="border-t border-slate-100 p-5 space-y-5">
-                                                                    {/* KELENGKAPAN & FASILITAS KAMAR — 3 Kotak Menyamping */}
+                                                                    {/* SPESIFIKASI & FASILITAS BAWAAN TIPE KAMAR */}
                                                                     {(rt.roomFacilities.length > 0 || rt.bathroomFacilities.length > 0 || rt.kitchenFacilities.length > 0) && (
-                                                                        <div>
-                                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Kelengkapan &amp; Fasilitas Kamar</span>
-                                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                                        <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 space-y-2.5">
+                                                                            <div className="flex items-center justify-between gap-2 border-b border-slate-200/60 pb-2">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="w-5 h-5 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-black">
+                                                                                        ✓
+                                                                                    </span>
+                                                                                    <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider">
+                                                                                        Spesifikasi &amp; Fasilitas Bawaan {rt.name}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <span className="text-[10px] text-slate-400 font-bold">
+                                                                                    Standar Unit Tipe Ini
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-0.5">
                                                                                 {rt.roomFacilities.length > 0 && (
-                                                                                    <div className="bg-slate-100 border border-slate-200 rounded-2xl p-3 space-y-2">
-                                                                                        <div className="flex items-center gap-1.5">
-                                                                                            <Bed size={13} className="text-slate-600"/>
-                                                                                            <span className="text-[9px] font-black text-slate-600 uppercase tracking-wider">Fasilitas Utama</span>
+                                                                                    <div className="bg-white border border-slate-200/90 rounded-xl p-2.5 space-y-1.5 shadow-2xs">
+                                                                                        <div className="flex items-center gap-1.5 text-slate-600">
+                                                                                            <Bed size={13} className="text-slate-500"/>
+                                                                                            <span className="text-[9px] font-black uppercase tracking-wider">Fasilitas Kamar</span>
                                                                                         </div>
                                                                                         <div className="flex flex-wrap gap-1">
                                                                                             {rt.roomFacilities.map((f: string, i: number) => (
-                                                                                                <span key={i} className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[10px] font-bold text-slate-700">{f}</span>
+                                                                                                <span key={i} className="px-1.5 py-0.5 bg-slate-100 rounded text-[9.5px] font-bold text-slate-700">{f}</span>
                                                                                             ))}
                                                                                         </div>
                                                                                     </div>
                                                                                 )}
                                                                                 {rt.bathroomFacilities.length > 0 && (
-                                                                                    <div className="bg-sky-50 border border-sky-200 rounded-2xl p-3 space-y-2">
-                                                                                        <div className="flex items-center gap-1.5">
+                                                                                    <div className="bg-white border border-sky-100 rounded-xl p-2.5 space-y-1.5 shadow-2xs">
+                                                                                        <div className="flex items-center gap-1.5 text-sky-700">
                                                                                             <Bath size={13} className="text-sky-600"/>
-                                                                                            <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider">Kamar Mandi / WC</span>
+                                                                                            <span className="text-[9px] font-black uppercase tracking-wider">Kamar Mandi</span>
                                                                                         </div>
                                                                                         <div className="flex flex-wrap gap-1">
                                                                                             {rt.bathroomFacilities.map((f: string, i: number) => (
-                                                                                                <span key={i} className="px-1.5 py-0.5 bg-white border border-sky-200 rounded text-[10px] font-bold text-sky-800">{f}</span>
+                                                                                                <span key={i} className="px-1.5 py-0.5 bg-sky-50 border border-sky-100 rounded text-[9.5px] font-bold text-sky-800">{f}</span>
                                                                                             ))}
                                                                                         </div>
                                                                                     </div>
                                                                                 )}
                                                                                 {rt.kitchenFacilities.length > 0 && (
-                                                                                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 space-y-2">
-                                                                                        <div className="flex items-center gap-1.5">
+                                                                                    <div className="bg-white border border-amber-100 rounded-xl p-2.5 space-y-1.5 shadow-2xs">
+                                                                                        <div className="flex items-center gap-1.5 text-amber-700">
                                                                                             <CookingPot size={13} className="text-amber-600"/>
-                                                                                            <span className="text-[9px] font-black text-amber-700 uppercase tracking-wider">Dapur Dalam</span>
+                                                                                            <span className="text-[9px] font-black uppercase tracking-wider">Dapur</span>
                                                                                         </div>
                                                                                         <div className="flex flex-wrap gap-1">
                                                                                             {rt.kitchenFacilities.map((f: string, i: number) => (
-                                                                                                <span key={i} className="px-1.5 py-0.5 bg-white border border-amber-200 rounded text-[10px] font-bold text-amber-800">{f}</span>
+                                                                                                <span key={i} className="px-1.5 py-0.5 bg-amber-50 border border-amber-100 rounded text-[9.5px] font-bold text-amber-800">{f}</span>
                                                                                             ))}
                                                                                         </div>
                                                                                     </div>
