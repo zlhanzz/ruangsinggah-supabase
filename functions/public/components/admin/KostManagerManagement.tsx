@@ -2361,7 +2361,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                                                             key={uf.id}
                                                                                                                             onMouseEnter={() => setHoveredFacility({ unitId: u.id, facilityId: uf.id, keywords: uf.allKeywords })}
                                                                                                                             onMouseLeave={() => setHoveredFacility(null)}
-                                                                                                                            className={`inline-flex items-center flex-wrap gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all duration-200 cursor-pointer select-none ${
+                                                                                                                            className={`inline-flex flex-col justify-center px-3 py-1.5 rounded-xl border transition-all duration-200 cursor-pointer select-none gap-1 ${
                                                                                                                                 isHighlighted
                                                                                                                                     ? 'bg-amber-600 text-white border-amber-700 shadow-md ring-2 ring-amber-400 scale-105 z-10'
                                                                                                                                     : hasMatchingPhoto
@@ -2370,36 +2370,40 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                                                             }`}
                                                                                                                             title={hasMatchingPhoto ? `Fasilitas "${uf.mainName}" (Sorot untuk melihat bukti foto)` : `Fasilitas "${uf.mainName}"`}
                                                                                                                         >
-                                                                                                                            <span className="flex items-center gap-1.5">
-                                                                                                                                {getFacilityIcon(uf.mainName, 12)}
-                                                                                                                                <span className="font-black">{uf.mainName}</span>
-                                                                                                                            </span>
+                                                                                                                            {/* Baris Atas: Ikon + Nama Fasilitas Utama + Indikator Foto */}
+                                                                                                                            <div className="flex items-center justify-between gap-2.5">
+                                                                                                                                <span className="flex items-center gap-1.5">
+                                                                                                                                    {getFacilityIcon(uf.mainName, 12)}
+                                                                                                                                    <span className="font-black text-[10px]">{uf.mainName}</span>
+                                                                                                                                </span>
+                                                                                                                                {hasMatchingPhoto && (
+                                                                                                                                    <span className={`text-[8px] px-1.5 py-0.2 rounded font-black tracking-tighter shrink-0 ${
+                                                                                                                                        isHighlighted ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-800'
+                                                                                                                                    }`}>
+                                                                                                                                        📸 BUKTI
+                                                                                                                                    </span>
+                                                                                                                                )}
+                                                                                                                            </div>
 
-                                                                                                                            {/* Sub-fasilitas di dalam kotak yang sama */}
+                                                                                                                            {/* Baris Bawah: Sub-Fasilitas (Tab / Indented Menjorok ke Dalam) */}
                                                                                                                             {uf.subFacilities.length > 0 && (
-                                                                                                                                <span className="inline-flex items-center gap-1 pl-1 border-l border-slate-200">
+                                                                                                                                <div className={`flex flex-wrap items-center gap-1 pl-4.5 pt-1 border-t ${
+                                                                                                                                    isHighlighted ? 'border-white/20' : 'border-amber-100/80'
+                                                                                                                                }`}>
                                                                                                                                     {uf.subFacilities.map((sub, sIdx) => (
                                                                                                                                         <span 
                                                                                                                                             key={sIdx}
-                                                                                                                                            className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                                                                                                                            className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[8.5px] font-bold ${
                                                                                                                                                 isHighlighted
                                                                                                                                                     ? 'bg-white/20 text-white'
-                                                                                                                                                    : 'bg-amber-100 text-amber-900'
+                                                                                                                                                    : 'bg-amber-50 border border-amber-200/80 text-amber-900'
                                                                                                                                             }`}
                                                                                                                                         >
-                                                                                                                                            {sub}
+                                                                                                                                            <span className="text-[7.5px] opacity-70">↳</span>
+                                                                                                                                            <span>{sub}</span>
                                                                                                                                         </span>
                                                                                                                                     ))}
-                                                                                                                                </span>
-                                                                                                                            )}
-
-                                                                                                                            {/* Indikator Bukti Foto */}
-                                                                                                                            {hasMatchingPhoto && (
-                                                                                                                                <span className={`text-[8px] px-1 py-0.2 rounded font-black tracking-tighter ${
-                                                                                                                                    isHighlighted ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-800'
-                                                                                                                                }`}>
-                                                                                                                                    📸 BUKTI
-                                                                                                                                </span>
+                                                                                                                                </div>
                                                                                                                             )}
                                                                                                                         </div>
                                                                                                                     );
@@ -2603,7 +2607,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                                                              key={uf.id}
                                                                                                                              onMouseEnter={() => setHoveredFacility({ unitId: u.id, facilityId: uf.id, keywords: uf.allKeywords })}
                                                                                                                              onMouseLeave={() => setHoveredFacility(null)}
-                                                                                                                             className={`inline-flex items-center flex-wrap gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all duration-200 cursor-pointer select-none ${
+                                                                                                                             className={`inline-flex flex-col justify-center px-3 py-1.5 rounded-xl border transition-all duration-200 cursor-pointer select-none gap-1 ${
                                                                                                                                  isHighlighted
                                                                                                                                      ? 'bg-emerald-600 text-white border-emerald-700 shadow-md ring-2 ring-emerald-400 scale-105 z-10'
                                                                                                                                      : hasMatchingPhoto
@@ -2612,36 +2616,40 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                                                              }`}
                                                                                                                              title={hasMatchingPhoto ? `Fasilitas "${uf.mainName}" (Sorot untuk melihat bukti foto)` : `Fasilitas "${uf.mainName}"`}
                                                                                                                          >
-                                                                                                                             <span className="flex items-center gap-1.5">
-                                                                                                                                 {getFacilityIcon(uf.mainName, 12)}
-                                                                                                                                 <span className="font-black">{uf.mainName}</span>
-                                                                                                                             </span>
+                                                                                                                             {/* Baris Atas: Ikon + Nama Fasilitas Utama + Indikator Foto */}
+                                                                                                                             <div className="flex items-center justify-between gap-2.5">
+                                                                                                                                 <span className="flex items-center gap-1.5">
+                                                                                                                                     {getFacilityIcon(uf.mainName, 12)}
+                                                                                                                                     <span className="font-black text-[10px]">{uf.mainName}</span>
+                                                                                                                                 </span>
+                                                                                                                                 {hasMatchingPhoto && (
+                                                                                                                                     <span className={`text-[8px] px-1.5 py-0.2 rounded font-black tracking-tighter shrink-0 ${
+                                                                                                                                         isHighlighted ? 'bg-white/25 text-white' : 'bg-emerald-100 text-emerald-800'
+                                                                                                                                     }`}>
+                                                                                                                                         📸 BUKTI
+                                                                                                                                     </span>
+                                                                                                                                 )}
+                                                                                                                             </div>
 
-                                                                                                                             {/* Sub-fasilitas di dalam kotak yang sama */}
+                                                                                                                             {/* Baris Bawah: Sub-Fasilitas (Tab / Indented Menjorok ke Dalam) */}
                                                                                                                              {uf.subFacilities.length > 0 && (
-                                                                                                                                 <span className="inline-flex items-center gap-1 pl-1 border-l border-emerald-200">
+                                                                                                                                 <div className={`flex flex-wrap items-center gap-1 pl-4.5 pt-1 border-t ${
+                                                                                                                                     isHighlighted ? 'border-white/20' : 'border-emerald-100/80'
+                                                                                                                                 }`}>
                                                                                                                                      {uf.subFacilities.map((sub, sIdx) => (
                                                                                                                                          <span 
                                                                                                                                              key={sIdx}
-                                                                                                                                             className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                                                                                                                             className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[8.5px] font-bold ${
                                                                                                                                                  isHighlighted
                                                                                                                                                      ? 'bg-white/20 text-white'
-                                                                                                                                                     : 'bg-emerald-100 text-emerald-900'
+                                                                                                                                                     : 'bg-emerald-50 border border-emerald-200/80 text-emerald-900'
                                                                                                                                              }`}
                                                                                                                                          >
-                                                                                                                                             {sub}
+                                                                                                                                             <span className="text-[7.5px] opacity-70">↳</span>
+                                                                                                                                             <span>{sub}</span>
                                                                                                                                          </span>
                                                                                                                                      ))}
-                                                                                                                                 </span>
-                                                                                                                             )}
-
-                                                                                                                             {/* Indikator Bukti Foto */}
-                                                                                                                             {hasMatchingPhoto && (
-                                                                                                                                 <span className={`text-[8px] px-1 py-0.2 rounded font-black tracking-tighter ${
-                                                                                                                                     isHighlighted ? 'bg-white/25 text-white' : 'bg-emerald-100 text-emerald-800'
-                                                                                                                                 }`}>
-                                                                                                                                     📸 BUKTI
-                                                                                                                                 </span>
+                                                                                                                                 </div>
                                                                                                                              )}
                                                                                                                          </div>
                                                                                                                      );

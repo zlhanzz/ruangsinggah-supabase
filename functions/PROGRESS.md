@@ -2,6 +2,21 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 118. Redesain Kotak Fasilitas Terpadu (Format Vertikal & Sub-Fasilitas Tab di Bawah) di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar kotak fasilitas terpadu tidak memanjang secara horizontal, melainkan berbentuk kartu/kotak terstruktur vertikal.
+  2. Sub-fasilitas diletakkan di baris bawah nama fasilitas induk dengan format agak masuk ke dalam (*tab / indented*).
+- **Implementasi & Peningkatan UI/UX**:
+  * **1. Format Kartu Vertikal Berstruktur**:
+    - **Baris Atas (Induk Fasilitas)**: Menampilkan Ikon Fasilitas + Nama Utama (misal: `🚿 Kamar Mandi Dalam` atau `🍳 Dapur Dalam`) + Badge `📸 BUKTI` di sisi kanan.
+    - **Baris Bawah (Sub-Fasilitas Tabbed / Indented)**: Sub-fasilitas (`Kloset Duduk`, `Shower`, `Kompor`, dll.) ditempatkan di baris bawah dengan indentation `pl-4.5`, garis pembatas halus di atasnya, serta marker alur anak `↳`.
+  * **2. Fasilitas Tunggal Proporsional**:
+    - Fasilitas tanpa sub-elemen (`🛏️ Kasur`, `🪟 Jendela Luar`, `💨 AC`, dll.) tampil ringkas dan rapi 1 baris yang serasi.
+  * **3. Keutuhan Reaktif Multi-Keyword**:
+    - Seluruh area kotak (induk + sub-fasilitas) tetap menjadi 1 trigger hover kesatuan yang mengaktifkan seluruh foto dokumentasi terkait di bawahnya secara instan.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 117. Penyatuan Fasilitas dan Sub-Fasilitas dalam 1 Kotak Terpadu (1 Fasilitas = 1 Kotak) & Korelasi Reaktif Multi-Keyword di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar fasilitas utama dan sub-fasilitasnya digabungkan di dalam kotak yang sama (*1 Fasilitas & Sub-Fasilitas = 1 Kotak Terpadu*).
