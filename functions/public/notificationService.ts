@@ -207,6 +207,53 @@ export const notifySurveyStatusUpdate = async (surveyId: string, newStatus: stri
   }
 };
 
+export const notifySurveyRevisionRequested = async (
+  agentId: string,
+  kostName: string,
+  categories: string[] = [],
+  notes: string = '',
+  surveyId?: string
+) => {
+  try {
+    const title = `⚠️ Permintaan Revisi Survei: ${kostName}`;
+    const catStr = categories.length > 0 ? ` [Kategori: ${categories.join(', ')}]` : '';
+    const message = `Admin meminta evaluasi/revisi pendataan untuk ${kostName}${catStr}. Catatan: "${notes || 'Mohon lengkapi dan perbaiki data survei.'}"`;
+
+    if (agentId) {
+      await sendNotification(
+        agentId,
+        title,
+        message,
+        'warning',
+        { surveyId, status: 'REVISION_REQUIRED', categories, notes },
+        '/agent-dashboard'
+      );
+    }
+
+    try {
+      const emailEndpoint = 'https://us-central1-ruangsinggahid-3afb2.cloudfunctions.net/sendSurveyStatusEmail';
+      fetch(emailEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          surveyId,
+          status: 'REVISION_REQUIRED',
+          recipientRole: 'agent',
+          notes,
+          categories
+        })
+      }).catch(err => console.error('[NotificationService] Revision email trigger failed:', err));
+    } catch (e) {
+      console.error('[NotificationService] Error triggering revision email:', e);
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Error in notifySurveyRevisionRequested:', err);
+    return false;
+  }
+};
+
 export const notificationService = {
   sendNotification,
   createNotification: sendNotification,
@@ -214,7 +261,8 @@ export const notificationService = {
   markAsRead,
   markAllAsRead,
   subscribeToNotifications,
-  notifySurveyStatusUpdate
+  notifySurveyStatusUpdate,
+  notifySurveyRevisionRequested
 };
 
 export default notificationService;

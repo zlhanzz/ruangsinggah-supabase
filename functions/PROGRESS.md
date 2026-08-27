@@ -2,6 +2,34 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 121. Implementasi Fitur Evaluasi & Pengembalian Revisi Pendataan dari Admin ke Surveyor (Notifikasi In-App, Email, & WhatsApp) (`KostManagerManagement.tsx` & `AgentDashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar pada modal peninjauan hasil survei (*Review Modal*) tersedia aksi evaluasi untuk menindaklanjuti data survei yang keliru, kurang lengkap, atau perlu diperbaiki oleh agen survei lapangan.
+  2. Evaluasi harus mencakup seluruh elemen data (Properti Umum, Kamar & Fasilitas, Data Penghuni, Mitra & Dokumen) dan dapat dikirimkan kembali ke surveyor via notifikasi In-App, email, maupun WhatsApp.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Tombol Aksi Evaluasi di Footer Modal Peninjauan (`KostManagerManagement.tsx`)**:
+    - Menambahkan tombol aksi berwarna amber **`⚠️ Minta Revisi / Evaluasi Surveyor`** pada footer modal peninjauan di samping tombol persetujuan LIVE.
+  * **2. Modal Dialog Form Evaluasi & Catatan Koreksi Terstruktur**:
+    - **Checklist Kategori Multi-Pilihan**:
+      - 🏢 *Data Properti Umum* (Foto depan, fasilitas umum, titik koordinat maps)
+      - 🛏️ *Data Kamar & Fasilitas Unit* (Ukuran kamar, foto dokumentasi, kelengkapan perabot)
+      - 👥 *Data Penghuni & Sewa* (Tarif sewa, status kamar terisi/kosong, data penyewa)
+      - 📋 *Data Mitra & Kerjasama* (No. rekening, kesepakatan kerjasama, tanda tangan)
+    - **Textarea Catatan Detail**: Input instruksi perbaikan spesifik bagi surveyor.
+    - **Integrasi Multi-Channel**:
+      - **In-App Notification**: Mengirim notifikasi berstatus `warning` langsung ke akun agen via `notifySurveyRevisionRequested`.
+      - **Email Cloud Trigger**: Memicu pengiriman email instruksi revisi ke surveyor.
+      - **Direct WhatsApp Chat**: Tombol 1-klik yang otomatis membuka chat WhatsApp surveyor dengan template teks rincian perbaikan yang rapi.
+  * **3. Respon Interaktif di Dashboard Surveyor (`AgentDashboard.tsx`)**:
+    - Status tugas otomatis diperbarui menjadi **`REVISION_REQUIRED`** (Perlu Revisi).
+    - Modal/form onboarding survei menampilkan banner peringatan amber di bagian atas berisi catatan evaluasi dari admin.
+    - Tombol submit berubah secara otomatis menjadi **`🔄 Kirim Ulang Hasil Revisi ke Admin`**.
+- **File Tersentuh**:
+  - `functions/public/notificationService.ts`
+  - `functions/public/components/admin/KostManagerManagement.tsx`
+  - `functions/public/pages/AgentDashboard.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 120. Perbaikan Engine Korelasi Presisi 1-ke-1 Fasilitas ⇄ Foto Dokumentasi Sesuai Form Pendataan Lapangan Agen di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa saat menyentuh/hover fasilitas **Kasur**, foto dengan label **Interior Kamar** dan **Kamar Mandi** ikut bereaksi dan berstatus `Bukti Foto`, padahal tidak termasuk.

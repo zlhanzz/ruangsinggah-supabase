@@ -7,6 +7,7 @@ import {
     getSurveyAgents,
     generateManualDriveFolder
 } from '../../adminService';
+import { notifySurveyRevisionRequested } from '../../notificationService';
 import { 
     FolderOpen, 
     Building2, 
@@ -22,6 +23,7 @@ import {
     ParkingCircle,
     Sparkles,
     AlertCircle,
+    AlertTriangle,
     Check,
     ZoomIn,
     Layers,
@@ -87,6 +89,12 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
     // Interactive Hover between Facility & Photo Documentation
     const [hoveredFacility, setHoveredFacility] = useState<{ unitId: string; facilityId: string; keywords: string[] } | null>(null);
     const [hoveredPhoto, setHoveredPhoto] = useState<{ unitId: string; photoIdx: number; label: string } | null>(null);
+
+    // Evaluation & Revision Modal States
+    const [revisionModalOpen, setRevisionModalOpen] = useState(false);
+    const [revisionCategories, setRevisionCategories] = useState<string[]>([]);
+    const [revisionNotes, setRevisionNotes] = useState('');
+    const [isSubmittingRevision, setIsSubmittingRevision] = useState(false);
 
     // Hitung Jarak & Durasi Real Google Maps (DistanceMatrixService & DirectionsService) dengan Cache-First (Write Once, Read Free)
     useEffect(() => {
@@ -542,6 +550,90 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
         }
     };
 
+    // Request Revision / Send Evaluation to Surveyor
+    const handleRequestRevision = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!reviewRequest) return;
+        if (!revisionNotes.trim() && revisionCategories.length === 0) {
+            alert('Mohon pilih setidaknya satu kategori perbaikan atau tuliskan catatan evaluasi.');
+            return;
+        }
+
+        setIsSubmittingRevision(true);
+        try {
+            const agentId = reviewRequest.assigned_agent_id || reviewSurvey?.assigned_agent_id;
+            const kostName = reviewRequest.kost_name || reviewProperty?.name || 'Kost';
+            const timestamp = new Date().toISOString();
+
+            const existingNotes = reviewRequest.notes ? `${reviewRequest.notes}\n\n` : '';
+            const newRevisionNote = `[REVISI ${new Date().toLocaleDateString('id-ID')}]: Kategori: ${revisionCategories.join(', ') || 'Umum'} | Catatan: ${revisionNotes}`;
+
+            // 1. Update kostmanager_requests
+            await supabase.from('kostmanager_requests')
+                .update({
+                    status: 'REVISION_REQUIRED',
+                    notes: `${existingNotes}${newRevisionNote}`,
+                    updated_at: timestamp
+                })
+                .eq('id', reviewRequest.id);
+
+            // 2. Update kostmanager_surveys
+            const survId = reviewSurvey?.id || (reviewRequest as any).kostmanager_survey_id;
+            if (survId) {
+                await supabase.from('kostmanager_surveys')
+                    .update({
+                        status: 'REVISION_REQUIRED',
+                        notes: newRevisionNote,
+                        updated_at: timestamp
+                    })
+                    .eq('id', survId);
+            } else {
+                await supabase.from('kostmanager_surveys')
+                    .update({
+                        status: 'REVISION_REQUIRED',
+                        notes: newRevisionNote,
+                        updated_at: timestamp
+                    })
+                    .eq('kostmanager_request_id', reviewRequest.id);
+            }
+
+            // 3. Update survey_requests if linked
+            if (reviewRequest.transaction_id) {
+                await supabase.from('survey_requests')
+                    .update({
+                        status: 'REVISION_REQUIRED',
+                        notes: newRevisionNote,
+                        updated_at: timestamp
+                    })
+                    .eq('transaction_id', reviewRequest.transaction_id);
+            }
+
+            // 4. Trigger In-App Notification & Email
+            if (agentId) {
+                await notifySurveyRevisionRequested(
+                    agentId,
+                    kostName,
+                    revisionCategories,
+                    revisionNotes,
+                    survId || reviewRequest.id
+                );
+            }
+
+            alert(`✅ Evaluasi berhasil dikirim ke Surveyor!\n\nStatus pendataan diperbarui menjadi "PERLU REVISI". Surveyor telah menerima notifikasi dan instruksi perbaikan.`);
+            setRevisionModalOpen(false);
+            setReviewModalOpen(false);
+            setRevisionCategories([]);
+            setRevisionNotes('');
+            await loadData();
+            refreshData();
+        } catch (err) {
+            console.error('Error submitting survey revision:', err);
+            alert('Gagal mengirim evaluasi: ' + (err as Error).message);
+        } finally {
+            setIsSubmittingRevision(false);
+        }
+    };
+
     const handleUpdateStatusAndAgent = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingRequest) return;
@@ -620,6 +712,9 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
             case 'PENDING_ONBOARDING':
             case 'SUBMITTED':
                 return 'bg-emerald-100 text-emerald-950 border-emerald-300 font-bold';
+            case 'REVISION_REQUIRED':
+            case 'NEED_REVISION':
+                return 'bg-amber-100 text-amber-950 border-amber-300 font-bold';
             case 'ACTIVE':
                 return 'bg-green-100 text-green-900 border-green-300 font-bold';
             default:
@@ -634,6 +729,8 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
             case 'SURVEYING': return 'Sedang Disurvey';
             case 'PENDING_ONBOARDING':
             case 'SUBMITTED': return 'Menunggu Onboarding Admin';
+            case 'REVISION_REQUIRED':
+            case 'NEED_REVISION': return 'Perlu Revisi Surveyor';
             case 'ACTIVE': return 'Aktif (Auto-Pilot)';
             default: return status;
         }
@@ -668,7 +765,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
         if (activeTab === 'ALL') return true;
         if (activeTab === 'NEED_AGENT') return req.status === 'PENDING_ASSIGNMENT';
         if (activeTab === 'SURVEYING') return req.status === 'AGENT_ASSIGNED' || req.status === 'SURVEYING';
-        if (activeTab === 'VERIFICATION') return req.status === 'PENDING_ONBOARDING' || req.status === 'SUBMITTED';
+        if (activeTab === 'VERIFICATION') return req.status === 'PENDING_ONBOARDING' || req.status === 'SUBMITTED' || req.status === 'REVISION_REQUIRED' || req.status === 'NEED_REVISION';
         if (activeTab === 'ACTIVE') return req.status === 'ACTIVE';
         return true;
     });
@@ -676,7 +773,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
     const totalAll = requests.length;
     const totalNeedAgent = requests.filter(r => r.status === 'PENDING_ASSIGNMENT').length;
     const totalSurveying = requests.filter(r => r.status === 'AGENT_ASSIGNED' || r.status === 'SURVEYING').length;
-    const totalVerification = requests.filter(r => r.status === 'PENDING_ONBOARDING' || r.status === 'SUBMITTED').length;
+    const totalVerification = requests.filter(r => r.status === 'PENDING_ONBOARDING' || r.status === 'SUBMITTED' || r.status === 'REVISION_REQUIRED' || r.status === 'NEED_REVISION').length;
     const totalActive = requests.filter(r => r.status === 'ACTIVE').length;
 
     // Helper for photos array
@@ -750,7 +847,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {filteredRequests.map(req => {
-                                const isReadyForReview = req.status === 'PENDING_ONBOARDING' || req.status === 'SUBMITTED';
+                                const isReadyForReview = req.status === 'PENDING_ONBOARDING' || req.status === 'SUBMITTED' || req.status === 'REVISION_REQUIRED' || req.status === 'NEED_REVISION';
 
                                 // Extract coordinates from notes or metadata
                                 const extractCoords = (text: string) => {
@@ -2895,20 +2992,177 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                             </div>
 
                             {reviewRequest.status !== 'ACTIVE' ? (
-                                <button
-                                    type="button"
-                                    disabled={isSubmitting}
-                                    onClick={() => handleApproveAndActivate(reviewRequest, reviewProperty)}
-                                    className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
-                                >
-                                    🚀 {isSubmitting ? 'Mengaktifkan...' : 'Setujui & Aktifkan Layanan Auto-Pilot (LIVE)'}
-                                </button>
+                                <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
+                                    <button
+                                        type="button"
+                                        disabled={isSubmitting}
+                                        onClick={() => {
+                                            setRevisionCategories([]);
+                                            setRevisionNotes('');
+                                            setRevisionModalOpen(true);
+                                        }}
+                                        className="w-full sm:w-auto px-5 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-200 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                                    >
+                                        <AlertTriangle size={15} /> Minta Revisi / Evaluasi
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={isSubmitting}
+                                        onClick={() => handleApproveAndActivate(reviewRequest, reviewProperty)}
+                                        className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                                    >
+                                        🚀 {isSubmitting ? 'Mengaktifkan...' : 'Setujui & Aktifkan Layanan Auto-Pilot (LIVE)'}
+                                    </button>
+                                </div>
                             ) : (
                                 <div className="px-4 py-2 bg-green-100 border border-green-200 text-green-900 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
                                     <Check size={14}/> Layanan Sedang Aktif di Platform
                                 </div>
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DIALOG EVALUASI & MINTA REVISI KE SURVEYOR */}
+            {revisionModalOpen && reviewRequest && (
+                <div className="fixed inset-0 z-[160] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95">
+                        {/* Header Modal */}
+                        <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100">
+                            <div className="flex items-center gap-3">
+                                <div className="w-11 h-11 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200 shadow-2xs">
+                                    <AlertTriangle size={22} />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-black text-slate-900 tracking-tight">Evaluasi & Permintaan Revisi</h3>
+                                    <p className="text-xs text-slate-500 font-bold">
+                                        Kost: <span className="text-slate-900 font-black">{reviewRequest.kost_name}</span> • Surveyor: <span className="text-amber-700 font-black">{reviewRequest.agent_name || 'Agen Terkait'}</span>
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setRevisionModalOpen(false)}
+                                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Form Input Evaluasi */}
+                        <form onSubmit={handleRequestRevision} className="space-y-4">
+                            {/* 1. Checklist Kategori Perbaikan */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-black text-slate-900 uppercase tracking-wider block">
+                                    1. Pilih Bagian Data yang Perlu Diperbaiki
+                                </label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {[
+                                        { id: 'Properti Umum', label: '🏢 Data Properti Umum', desc: 'Foto hero, fasilitas umum, koordinat GPS' },
+                                        { id: 'Kamar & Fasilitas', label: '🛏️ Kamar & Fasilitas', desc: 'Ukuran, kelengkapan kasur/WC/AC, foto unit' },
+                                        { id: 'Data Penghuni', label: '👥 Data Penghuni & Sewa', desc: 'Tarif sewa, status kamar terisi/kosong' },
+                                        { id: 'Mitra & Dokumen', label: '📋 Mitra & Kerjasama', desc: 'No. rekening, kesepakatan, tanda tangan' }
+                                    ].map(item => {
+                                        const isChecked = revisionCategories.includes(item.id);
+                                        return (
+                                            <button
+                                                key={item.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setRevisionCategories(prev =>
+                                                        isChecked ? prev.filter(c => c !== item.id) : [...prev, item.id]
+                                                    );
+                                                }}
+                                                className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-2.5 ${
+                                                    isChecked
+                                                        ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-300 text-amber-950 shadow-xs'
+                                                        : 'bg-slate-50/70 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                <span className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 mt-0.5 ${
+                                                    isChecked ? 'bg-amber-600 border-amber-600 text-white' : 'border-slate-300 bg-white'
+                                                }`}>
+                                                    {isChecked && <Check size={12} strokeWidth={3} />}
+                                                </span>
+                                                <div className="min-w-0">
+                                                    <p className="text-xs font-black leading-tight">{item.label}</p>
+                                                    <p className="text-[10px] text-slate-500 font-medium leading-tight mt-0.5">{item.desc}</p>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* 2. Textarea Catatan & Poin Perbaikan */}
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-black text-slate-900 uppercase tracking-wider block">
+                                    2. Catatan Evaluasi & Poin Koreksi Spesifik <span className="text-rose-500">*</span>
+                                </label>
+                                <textarea
+                                    required
+                                    rows={4}
+                                    value={revisionNotes}
+                                    onChange={e => setRevisionNotes(e.target.value)}
+                                    placeholder="Contoh: Foto dokumentasi kasur dan jendela kamar 5 mohon diupload ulang dengan pencahayaan lebih jelas. Ukuran kamar 2 mohon dicek kembali."
+                                    className="w-full p-3.5 rounded-2xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none text-xs text-slate-900 font-bold transition-all placeholder:text-slate-400 leading-relaxed resize-none"
+                                />
+                            </div>
+
+                            {/* Direct WhatsApp Share Preview */}
+                            {(() => {
+                                const assignedAgent = agents.find(a => a.id === reviewRequest?.assigned_agent_id);
+                                const agentPhone = assignedAgent?.phone || reviewRequest?.agent_phone || '';
+                                const cleanPhone = agentPhone.replace(/\D/g, '').replace(/^0/, '62');
+                                const waMessage = encodeURIComponent(
+                                    `Halo ${assignedAgent?.name || reviewRequest?.agent_name || 'Surveyor'},\n\nTerkait peninjauan hasil survei pendataan Kost *${reviewRequest?.kost_name}*:\n` +
+                                    (revisionCategories.length > 0 ? `📌 *Bagian yang Perlu Diperbaiki:* ${revisionCategories.join(', ')}\n` : '') +
+                                    `📝 *Catatan Evaluasi Admin:*\n${revisionNotes || '(Mohon lengkapi data)'}\n\n` +
+                                    `Silakan buka dashboard agen Anda untuk melakukan perbaikan dan kirim ulang. Terima kasih! 🙏`
+                                );
+                                const waUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${waMessage}` : null;
+
+                                return (
+                                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <span className="text-base shrink-0">💬</span>
+                                            <p className="text-[11px] text-slate-600 font-bold truncate">
+                                                Kirim salinan chat langsung ke WhatsApp Surveyor ({cleanPhone ? `+${cleanPhone}` : 'Nomor tidak tersedia'})
+                                            </p>
+                                        </div>
+                                        {waUrl && (
+                                            <a
+                                                href={waUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 shrink-0 transition-colors shadow-2xs"
+                                            >
+                                                WhatsApp ↗
+                                            </a>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Footer Modal Actions */}
+                            <div className="flex flex-col sm:flex-row items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setRevisionModalOpen(false)}
+                                    className="w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider transition-colors"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmittingRevision}
+                                    className="w-full sm:w-auto px-6 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs uppercase tracking-wider transition-all shadow-md shadow-amber-200 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95"
+                                >
+                                    {isSubmittingRevision ? 'Mengirim...' : '⚠️ Kirim Evaluasi & Minta Revisi'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

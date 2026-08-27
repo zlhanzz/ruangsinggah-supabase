@@ -5545,6 +5545,25 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             {/* Main Scrollable Form */}
                             <div className="flex-grow overflow-y-auto p-6 space-y-6 hide-scrollbar">
                                 
+                                {/* Banner Catatan Evaluasi Admin / Permintaan Revisi */}
+                                {(isEditingKostManager?.status === 'REVISION_REQUIRED' || isEditingKostManager?.notes?.includes('[REVISI')) && (
+                                    <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 shadow-sm flex items-start gap-3.5 animate-in fade-in">
+                                        <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 mt-0.5">
+                                            <AlertTriangle size={20} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className="px-2.5 py-0.5 rounded-md bg-amber-200 text-amber-900 font-black text-[10px] uppercase tracking-wider">
+                                                    ⚠️ Catatan Evaluasi & Permintaan Revisi dari Admin
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-amber-950 font-bold mt-1.5 whitespace-pre-wrap leading-relaxed">
+                                                {isEditingKostManager?.notes || 'Mohon lengkapi dan perbaiki bagian data pendataan yang belum sesuai.'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* STEP 1: PROPERTI */}
                                 {kmStep === 1 && (
                                     <div className="space-y-6">
@@ -8350,7 +8369,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                             className={`flex-[2] h-[48px] rounded-full font-bold text-xs uppercase tracking-wider shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 ${(agreedToTerms && signatureData) ? (isEditingKostManager?.status === 'SUBMITTED' ? 'bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-lg' : 'bg-[#ff7a00] hover:bg-orange-600 text-white hover:shadow-lg') : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'}`}
                                         >
                                             <UploadCloud className="w-4 h-4 shrink-0" />
-                                            {isSubmitting ? 'Mengirim...' : (isEditingKostManager?.status === 'SUBMITTED' ? '🔄 Perbarui & Kirim Ulang ke Admin' : 'Selesaikan & Submit')}
+                                            {isSubmitting ? 'Mengirim...' : ((isEditingKostManager?.status === 'REVISION_REQUIRED' || isEditingKostManager?.notes?.includes('[REVISI')) ? '🔄 Kirim Ulang Hasil Revisi ke Admin' : isEditingKostManager?.status === 'SUBMITTED' ? '🔄 Perbarui & Kirim Ulang ke Admin' : 'Selesaikan & Submit')}
                                         </button>
                                     </>
                                 )}
