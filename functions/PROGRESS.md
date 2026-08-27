@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 110. Pengelompokan Tipe Kamar Sejati (Tipe Standard/Deluxe ➔ Terisi & Kosong ➔ Kartu Unit Kamar Individual) di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mengoreksi bahwa nomor kamar (misal "1", "2", "3") bukanlah tipe kamar terpisah. Tipe kamar yang sebenarnya adalah kategori spesifikasi seperti **Tipe Standard**, **Tipe Deluxe**, dsb.
+  2. Ketika Tipe Kamar (misal *Tipe Standard*) di-maximize, harus memunculkan 2 sub-parent berpasangan: **🔒 KAMAR SEDANG DIHUNI / TERISI** dan **✨ KAMAR KOSONG / SIAP HUNI**.
+  3. Ketika salah satu sub-parent di-maximize, barulah menampilkan kartu kamar masing-masing unit:
+     - 🔒 **TERISI**: Menampilkan kartu unit individual yang terisi (**Kamar 1**, **Kamar 2**, dll.) lengkap dengan data penghuni (Nama, No. WA, Jumlah Orang, Periode Sewa, Tanggal Bayar Terakhir, Jatuh Tempo Tagihan Berikutnya, Anggota Tambahan, Catatan).
+     - ✨ **KOSONG**: Menampilkan kartu unit individual yang kosong (**Kamar 3**, dll.) lengkap dengan data spesifikasi kamar (Ukuran, Fasilitas Terpasang, Status Siap Huni, Tarif Sewa, Catatan Kondisi).
+- **Implementasi & Perbaikan**:
+  * **1. Helper Cerdas `groupIntoRoomTypes`**:
+    - Mengelompokkan kamar-kamar yang didata surveyor ke dalam Tipe Kamar sejati (seperti *Tipe Standard* / *Tipe Deluxe*).
+    - Memisahkan unit-unit kamar di dalamnya ke dalam array `occupiedUnits` dan `vacantUnits`.
+  * **2. Hierarki 3-Level Bersih & Intuitif**:
+    - **Level 1 (Top Parent)**: Header Tipe Kamar (misal *Tipe Standard*, Ukuran 2x2 meter, Rp 400.000/bln, Counter `✨ 1 Kosong` & `🔒 2 Dihuni`) + Ringkasan Fasilitas Utama, Kamar Mandi, dan Dapur.
+    - **Level 2 (Sub-Parents)**: 2 Sub-Accordion yang selalu tampil berpasangan (🔒 Terisi & ✨ Kosong) dengan badge jumlah unit dan tombol Buka/Tutup List.
+    - **Level 3 (Unit Cards)**: Kartu individual per unit kamar dengan data pendataan 100% lengkap & akurat.
+  * **3. Sinkronisasi Carousel Galeri Foto**:
+    - Galeri atas menyaring unit kamar kosong yang memiliki foto, serta floating card overlay menampilkan nama nomor kamar aktif secara presisi.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 109. Struktur Hierarki Parent-Child (Tipe Kamar ➔ Kamar Terisi & Kamar Kosong) dengan Kartu Detail Lengkap di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta pengaturan tampilan kartu hasil pendataan di Tab 2 menggunakan sistem hierarki *Minimize/Maximize (Parent and Child)*.

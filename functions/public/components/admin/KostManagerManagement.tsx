@@ -1536,71 +1536,15 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
 
                                     {/* ================= TAB 2: DATA KAMAR & PENGHUNI ================= */}
                                     {reviewActiveTab === 'rooms' && (() => {
-                                        const roomTypes = reviewProperty?.room_types || [];
-                                        if (roomTypes.length === 0) return (
+                                        const rawRoomTypes = reviewProperty?.room_types || [];
+                                        if (rawRoomTypes.length === 0) return (
                                             <div className="py-16 text-center text-slate-400 font-bold uppercase text-xs">Tidak ada data tipe kamar terdata.</div>
                                         );
-
-                                        // Helper Terpadu Penghitung Statistik Kamar & Penghuni yang Akurat
-                                        const getRoomStats = (room: any) => {
-                                            const unitList = Array.isArray(room.rooms) ? room.rooms : (Array.isArray(room.unit_rooms) ? room.unit_rooms : []);
-                                            if (unitList.length > 0) {
-                                                let occCount = 0;
-                                                let availCount = 0;
-                                                let occupantCount = 0;
-                                                unitList.forEach((u: any) => {
-                                                    const isOcc = u?.status === 'Terisi' || u?.status === 'occupied' || u?.is_occupied === true || u?.isAvailable === false || Boolean(u?.occupant_name || u?.occupant_phone);
-                                                    if (isOcc) {
-                                                        occCount++;
-                                                        occupantCount++;
-                                                    } else {
-                                                        availCount++;
-                                                    }
-                                                });
-                                                return { total: unitList.length, occupied: occCount, available: availCount, occupants: occupantCount };
-                                            }
-
-                                            const isExplicitlyOccupied = room.status === 'Terisi' || room.status === 'occupied' || room.isAvailable === false || room.is_occupied === true || Boolean(room.occupant_name || room.occupantName);
-
-                                            if (room.totalRooms !== undefined || room.total_rooms !== undefined) {
-                                                const total = Number(room.totalRooms || room.total_rooms || 1);
-                                                let avail = 0;
-                                                if (room.availableRooms !== undefined || room.available_rooms !== undefined) {
-                                                    avail = Number(room.availableRooms || room.available_rooms);
-                                                } else if (isExplicitlyOccupied) {
-                                                    avail = 0;
-                                                } else {
-                                                    avail = total;
-                                                }
-                                                const occ = Math.max(0, total - avail);
-                                                const occs = isExplicitlyOccupied ? Math.max(1, occ) : occ;
-                                                return { total, occupied: occ, available: avail, occupants: occs };
-                                            }
-
-                                            if (isExplicitlyOccupied) {
-                                                return { total: 1, occupied: 1, available: 0, occupants: 1 };
-                                            } else {
-                                                return { total: 1, occupied: 0, available: 1, occupants: 0 };
-                                            }
-                                        };
-
-                                        // Hitung Ringkasan Statistik Kamar & Penghuni
-                                        let totalRooms = 0;
-                                        let occupiedRooms = 0;
-                                        let availableRooms = 0;
-                                        let totalOccupants = 0;
-
-                                        roomTypes.forEach((rt: any) => {
-                                            const stats = getRoomStats(rt);
-                                            totalRooms += stats.total;
-                                            occupiedRooms += stats.occupied;
-                                            availableRooms += stats.available;
-                                            totalOccupants += stats.occupants;
-                                        });
 
                                         const DEFAULT_ROOM_PHOTO_SLOTS = ['Interior Kamar', 'Kamar Mandi Dalam', 'Tempat Tidur', 'Lemari / Penyimpanan'];
 
                                         const getRoomPhotos = (room: any) => {
+                                            if (!room) return [];
                                             const rawImages = room.images || room.image_urls || room.photos || [];
                                             return rawImages.map((img: any, imgIdx: number) => {
                                                 if (!img) return null;
@@ -1618,10 +1562,155 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
 
                                         const formatRoomName = (name: string, idx: number) => {
                                             if (!name) return `Kamar ${idx + 1}`;
-                                            if (/^\d+$/.test(name.trim())) return `Kamar ${name.trim()}`;
-                                            if (/^kamar/i.test(name.trim())) return name.trim();
-                                            return name.trim();
+                                            const clean = String(name).trim();
+                                            if (/^\d+$/.test(clean)) return `Kamar ${clean}`;
+                                            if (/^kamar/i.test(clean)) return clean;
+                                            return clean;
                                         };
+
+                                        // Pengelompokan Tipe Kamar Sejati (misal Tipe Standard, Tipe Deluxe) yang menaungi unit-unit kamar (Kamar 1, Kamar 2, Kamar 3)
+                                        const groupIntoRoomTypes = (rawList: any[]) => {
+                                            if (!Array.isArray(rawList) || rawList.length === 0) return [];
+
+                                            const hasExplicitSubUnits = rawList.some(rt => (Array.isArray(rt.rooms) && rt.rooms.length > 0) || (Array.isArray(rt.unit_rooms) && rt.unit_rooms.length > 0));
+
+                                            if (hasExplicitSubUnits) {
+                                                return rawList.map((rt, idx) => {
+                                                    const rawUnits = (Array.isArray(rt.rooms) && rt.rooms.length > 0) ? rt.rooms : (Array.isArray(rt.unit_rooms) ? rt.unit_rooms : [rt]);
+                                                    const occupiedUnits: any[] = [];
+                                                    const vacantUnits: any[] = [];
+
+                                                    rawUnits.forEach((u: any, uIdx: number) => {
+                                                        const isUnitOcc = u?.status === 'Terisi' || u?.status === 'occupied' || u?.is_occupied === true || u?.isAvailable === false || Boolean(u?.occupant_name || u?.occupant_phone || u?.residentName || u?.residentPhone);
+                                                        const unitName = formatRoomName(u?.name || u?.room_number || String(uIdx + 1), uIdx);
+                                                        const normalizedUnit = {
+                                                            id: u?.id || `unit_${idx}_${uIdx}`,
+                                                            name: unitName,
+                                                            rawName: u?.name || u?.room_number || `Kamar ${uIdx + 1}`,
+                                                            residentName: u?.residentName || u?.occupant_name || u?.occupantName || rt.residentName || rt.occupant_name || '-',
+                                                            residentPhone: u?.residentPhone || u?.occupant_phone || u?.occupantPhone || rt.residentPhone || rt.occupant_phone || '-',
+                                                            paymentPeriod: u?.paymentPeriod || u?.rentPeriod || rt.paymentPeriod || rt.rentPeriod || 'Bulanan',
+                                                            startDate: u?.startDate || u?.rentStartDate || rt.startDate || rt.rentStartDate || '',
+                                                            endDate: u?.endDate || u?.rentEndDate || rt.endDate || rt.rentEndDate || '',
+                                                            currentOccupants: Number(u?.currentOccupants || rt.currentOccupants || 1),
+                                                            additionalOccupants: u?.additionalOccupants || rt.additionalOccupants || [],
+                                                            size: u?.size || rt.size || '3x4 meter',
+                                                            price: Number(u?.price || rt.price || 0),
+                                                            facilities: u?.facilities || u?.roomFacilities || rt.roomFacilities || rt.room_facilities || [],
+                                                            bathroomFacilities: u?.bathroomFacilities || rt.bathroomFacilities || rt.bathroom_facilities || [],
+                                                            photos: getRoomPhotos(u).length > 0 ? getRoomPhotos(u) : getRoomPhotos(rt),
+                                                            notes: u?.notes || rt.notes || rt.surveyorNotes || '',
+                                                            isOccupied: isUnitOcc
+                                                        };
+                                                        if (isUnitOcc) occupiedUnits.push(normalizedUnit);
+                                                        else vacantUnits.push(normalizedUnit);
+                                                    });
+
+                                                    let typeTitle = rt.typeName || rt.type || '';
+                                                    if (!typeTitle || /^\d+$/.test(String(rt.name).trim()) || /^kamar\s*\d+/i.test(String(rt.name).trim())) {
+                                                        typeTitle = rawList.length > 1 ? `Tipe Kamar #${idx + 1}` : 'Tipe Standard';
+                                                    } else {
+                                                        typeTitle = /^tipe/i.test(String(rt.name).trim()) ? rt.name.trim() : `Tipe ${rt.name.trim()}`;
+                                                    }
+
+                                                    return {
+                                                        id: rt.id || `rt_${idx}`,
+                                                        name: typeTitle,
+                                                        size: rt.size || '3x4 meter',
+                                                        price: Number(rt.price || 0),
+                                                        roomFacilities: rt.roomFacilities || rt.room_facilities || [],
+                                                        bathroomFacilities: rt.bathroomFacilities || rt.bathroom_facilities || [],
+                                                        kitchenFacilities: rt.kitchenFacilities || rt.kitchen_facilities || [],
+                                                        photos: getRoomPhotos(rt),
+                                                        occupiedUnits,
+                                                        vacantUnits,
+                                                        totalUnits: occupiedUnits.length + vacantUnits.length
+                                                    };
+                                                });
+                                            }
+
+                                            // Mengelompokkan kamar-kamar yang didata surveyor ke Tipe Kamar
+                                            const typeGroups: { [key: string]: any } = {};
+
+                                            rawList.forEach((roomItem: any, idx: number) => {
+                                                let typeName = roomItem.typeName || roomItem.type || '';
+                                                const rawName = String(roomItem.name || '').trim();
+                                                if (!typeName) {
+                                                    if (rawName && !/^\d+$/.test(rawName) && !/^kamar\s*\d+/i.test(rawName)) {
+                                                        typeName = rawName;
+                                                    } else {
+                                                        typeName = 'Standard';
+                                                    }
+                                                }
+                                                const groupKey = `${typeName}_${roomItem.size || '3x4'}_${roomItem.price || 0}`;
+
+                                                if (!typeGroups[groupKey]) {
+                                                    typeGroups[groupKey] = {
+                                                        id: `rt_group_${idx}`,
+                                                        name: /^tipe/i.test(typeName) ? typeName : `Tipe ${typeName}`,
+                                                        size: roomItem.size || '3x4 meter',
+                                                        price: Number(roomItem.price || 0),
+                                                        roomFacilities: roomItem.roomFacilities || roomItem.room_facilities || [],
+                                                        bathroomFacilities: roomItem.bathroomFacilities || roomItem.bathroom_facilities || [],
+                                                        kitchenFacilities: roomItem.kitchenFacilities || roomItem.kitchen_facilities || [],
+                                                        photos: getRoomPhotos(roomItem),
+                                                        occupiedUnits: [],
+                                                        vacantUnits: []
+                                                    };
+                                                }
+
+                                                const isUnitOcc = roomItem.status === 'Terisi' || roomItem.status === 'occupied' || roomItem.is_occupied === true || roomItem.isAvailable === false || Boolean(roomItem.occupant_name || roomItem.occupant_phone || roomItem.residentName || roomItem.residentPhone);
+                                                const unitName = formatRoomName(roomItem.name || String(idx + 1), idx);
+
+                                                const normalizedUnit = {
+                                                    id: roomItem.id || `unit_${idx}`,
+                                                    name: unitName,
+                                                    rawName: roomItem.name || `Kamar ${idx + 1}`,
+                                                    residentName: roomItem.residentName || roomItem.occupant_name || roomItem.occupantName || '-',
+                                                    residentPhone: roomItem.residentPhone || roomItem.occupant_phone || roomItem.occupantPhone || '-',
+                                                    paymentPeriod: roomItem.paymentPeriod || roomItem.rentPeriod || 'Bulanan',
+                                                    startDate: roomItem.startDate || roomItem.rentStartDate || '',
+                                                    endDate: roomItem.endDate || roomItem.rentEndDate || '',
+                                                    currentOccupants: Number(roomItem.currentOccupants || 1),
+                                                    additionalOccupants: roomItem.additionalOccupants || [],
+                                                    size: roomItem.size || typeGroups[groupKey].size,
+                                                    price: Number(roomItem.price || typeGroups[groupKey].price),
+                                                    facilities: roomItem.roomFacilities || roomItem.room_facilities || typeGroups[groupKey].roomFacilities,
+                                                    bathroomFacilities: roomItem.bathroomFacilities || roomItem.bathroom_facilities || typeGroups[groupKey].bathroomFacilities,
+                                                    photos: getRoomPhotos(roomItem),
+                                                    notes: roomItem.notes || roomItem.surveyorNotes || '',
+                                                    isOccupied: isUnitOcc
+                                                };
+
+                                                if (isUnitOcc) {
+                                                    typeGroups[groupKey].occupiedUnits.push(normalizedUnit);
+                                                } else {
+                                                    typeGroups[groupKey].vacantUnits.push(normalizedUnit);
+                                                }
+                                            });
+
+                                            return Object.values(typeGroups).map(g => ({
+                                                ...g,
+                                                totalUnits: g.occupiedUnits.length + g.vacantUnits.length
+                                            }));
+                                        };
+
+                                        const groupedRoomTypes = groupIntoRoomTypes(rawRoomTypes);
+
+                                        // Hitung Ringkasan Statistik Kamar & Penghuni
+                                        let totalRooms = 0;
+                                        let occupiedRooms = 0;
+                                        let availableRooms = 0;
+                                        let totalOccupants = 0;
+
+                                        groupedRoomTypes.forEach((gt: any) => {
+                                            totalRooms += gt.totalUnits;
+                                            occupiedRooms += gt.occupiedUnits.length;
+                                            availableRooms += gt.vacantUnits.length;
+                                            gt.occupiedUnits.forEach((u: any) => {
+                                                totalOccupants += Number(u.currentOccupants || 1);
+                                            });
+                                        });
 
                                         return (
                                             <div className="space-y-6 animate-in fade-in duration-300">
@@ -1695,33 +1784,33 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                 {/* CAROUSEL GALERI FOTO SELURUH KAMAR & FILTER PER-KAMAR */}
                                                 {(() => {
                                                     const allRoomPhotosWithMetadata: { url: string; label: string; roomName: string; rtIdx: number }[] = [];
-                                                    roomTypes.forEach((rt: any, idx: number) => {
-                                                        const rName = formatRoomName(rt.name, idx);
-                                                        const photos = getRoomPhotos(rt);
-                                                        photos.forEach(p => {
-                                                            allRoomPhotosWithMetadata.push({
-                                                                ...p,
-                                                                roomName: rName,
-                                                                rtIdx: idx
+                                                    const eligibleRoomsForFilter: { rt: any; idx: number; rName: string; photosCount: number; isValid: boolean }[] = [];
+                                                    let unitPhotoCounter = 0;
+
+                                                    groupedRoomTypes.forEach((gt: any) => {
+                                                        const allUnits = [...gt.vacantUnits, ...gt.occupiedUnits];
+                                                        allUnits.forEach((u: any) => {
+                                                            const uPhotos = getRoomPhotos(u);
+                                                            const currentUnitIdx = unitPhotoCounter;
+                                                            uPhotos.forEach(p => {
+                                                                allRoomPhotosWithMetadata.push({
+                                                                    ...p,
+                                                                    roomName: u.name,
+                                                                    rtIdx: currentUnitIdx
+                                                                });
                                                             });
+                                                            if (uPhotos.length > 0 && !u.isOccupied) {
+                                                                eligibleRoomsForFilter.push({
+                                                                    rt: u,
+                                                                    idx: currentUnitIdx,
+                                                                    rName: u.name,
+                                                                    photosCount: uPhotos.length,
+                                                                    isValid: true
+                                                                });
+                                                            }
+                                                            unitPhotoCounter++;
                                                         });
                                                     });
-
-                                                    // Saring kamar yang berhak tampil di navigasi: HANYA kamar KOSONG dan memiliki FOTO > 0
-                                                    const eligibleRoomsForFilter = roomTypes
-                                                        .map((rt: any, idx: number) => {
-                                                            const photos = getRoomPhotos(rt);
-                                                            const stats = getRoomStats(rt);
-                                                            const isVacant = stats.available > 0 || (rt.status !== 'Terisi' && rt.status !== 'occupied' && rt.isAvailable !== false);
-                                                            return {
-                                                                rt,
-                                                                idx,
-                                                                rName: formatRoomName(rt.name, idx),
-                                                                photosCount: photos.length,
-                                                                isValid: photos.length > 0 && isVacant
-                                                            };
-                                                        })
-                                                        .filter(item => item.isValid);
 
                                                     const displayedRoomPhotos = selectedRoomGalleryFilter === 'all'
                                                         ? allRoomPhotosWithMetadata
@@ -1733,6 +1822,20 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                     const currentActivePhoto = displayedRoomPhotos[activePhotoIndex] || null;
 
                                                     if (allRoomPhotosWithMetadata.length === 0) return null;
+
+                                                    // Mencari info unit aktif untuk floating overlay
+                                                    let activeUnitData: any = null;
+                                                    if (currentActivePhoto) {
+                                                        for (const gt of groupedRoomTypes) {
+                                                            const found = [...gt.vacantUnits, ...gt.occupiedUnits].find(u => u.name === currentActivePhoto.roomName);
+                                                            if (found) {
+                                                                activeUnitData = found;
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+
+                                                    const activeFacilities: string[] = activeUnitData ? [...(activeUnitData.facilities || []), ...(activeUnitData.bathroomFacilities || [])] : [];
 
                                                     return (
                                                         <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs space-y-4">
@@ -1749,7 +1852,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                         <p className="text-[10px] text-slate-400 font-bold">
                                                                             {selectedRoomGalleryFilter === 'all'
                                                                                 ? `Menampilkan seluruh ${allRoomPhotosWithMetadata.length} foto kamar yang terkumpul`
-                                                                                : `Menampilkan foto terisolasi untuk ${formatRoomName(roomTypes[selectedRoomGalleryFilter]?.name, selectedRoomGalleryFilter)} (Klik ulang tombol untuk kembali)`}
+                                                                                : `Menampilkan foto terisolasi untuk ${currentActivePhoto?.roomName || 'Kamar'} (Klik ulang tombol untuk kembali)`}
                                                                         </p>
                                                                     </div>
                                                                 </div>
@@ -1761,121 +1864,116 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                             </div>
 
                                                             {/* Hero Carousel Frame Display */}
-                                                            {displayedRoomPhotos.length > 0 && currentActivePhoto ? (() => {
-                                                                const activeRt = roomTypes[currentActivePhoto.rtIdx];
-                                                                const activeFacilities: string[] = activeRt ? [...(activeRt.roomFacilities || activeRt.room_facilities || []), ...(activeRt.bathroomFacilities || activeRt.bathroom_facilities || [])] : [];
+                                                            {displayedRoomPhotos.length > 0 && currentActivePhoto ? (
+                                                                <div className="space-y-3">
+                                                                    {/* Main Hero Photo Box */}
+                                                                    <div className="relative aspect-video sm:aspect-21/9 max-h-[360px] w-full rounded-2xl overflow-hidden bg-slate-950 group shadow-inner flex items-center justify-center">
+                                                                        <img
+                                                                            src={currentActivePhoto.url}
+                                                                            alt={currentActivePhoto.label || 'Foto Kamar'}
+                                                                            className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-[1.01]"
+                                                                        />
 
-                                                                return (
-                                                                    <div className="space-y-3">
-                                                                        {/* Main Hero Photo Box */}
-                                                                        <div className="relative aspect-video sm:aspect-21/9 max-h-[360px] w-full rounded-2xl overflow-hidden bg-slate-950 group shadow-inner flex items-center justify-center">
-                                                                            <img
-                                                                                src={currentActivePhoto.url}
-                                                                                alt={currentActivePhoto.label || 'Foto Kamar'}
-                                                                                className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-[1.01]"
-                                                                            />
+                                                                        {/* Gradient Overlay for card contrast */}
+                                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
 
-                                                                            {/* Gradient Overlay for card contrast */}
-                                                                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+                                                                        {/* Top Category Badge */}
+                                                                        <div className="absolute top-3 left-3 flex flex-wrap items-center gap-1.5 pointer-events-none">
+                                                                            <span className="px-2.5 py-1 rounded-lg bg-[#ff7a00]/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1">
+                                                                                <Camera size={11} />
+                                                                                {currentActivePhoto.label || 'Foto Kamar'}
+                                                                            </span>
+                                                                        </div>
 
-                                                                            {/* Top Category Badge */}
-                                                                            <div className="absolute top-3 left-3 flex flex-wrap items-center gap-1.5 pointer-events-none">
-                                                                                <span className="px-2.5 py-1 rounded-lg bg-[#ff7a00]/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1">
-                                                                                    <Camera size={11} />
-                                                                                    {currentActivePhoto.label || 'Foto Kamar'}
-                                                                                </span>
-                                                                            </div>
-
-                                                                            {/* Floating Room Detail Card (Bottom-Left) */}
-                                                                            <div className="absolute bottom-3 left-3 bg-black/75 backdrop-blur-sm rounded-xl p-3 text-white space-y-1 min-w-[180px] max-w-[280px] sm:max-w-none text-left z-10 pointer-events-none shadow-md border border-white/10">
-                                                                                <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Nomor Kamar</p>
-                                                                                <p className="text-base font-black leading-tight">{currentActivePhoto.roomName}</p>
-                                                                                <p className="text-[10px] font-bold text-slate-300">{activeRt?.size || '3x4 meter'}</p>
-                                                                                {activeRt?.price ? (
-                                                                                    <p className="text-sm font-black text-emerald-400">TARIF {FORMAT_CURRENCY(activeRt.price)}/bln</p>
-                                                                                ) : null}
-                                                                                {activeFacilities.length > 0 && (
-                                                                                    <div className="flex flex-wrap gap-1 pt-0.5">
-                                                                                        {activeFacilities.slice(0, 3).map((f: string, i: number) => (
-                                                                                            <span key={i} className="inline-block px-1.5 py-0.5 rounded bg-white/20 text-[9px] font-black text-white">{f}</span>
-                                                                                        ))}
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-
-                                                                            {/* Photo Counter */}
-                                                                            <div className="absolute top-3 right-3 pointer-events-none">
-                                                                                <span className="px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur-md text-white text-[10px] font-black tracking-widest shadow-sm">
-                                                                                    {activePhotoIndex + 1} / {displayedRoomPhotos.length}
-                                                                                </span>
-                                                                            </div>
-
-                                                                            {/* Navigation Left / Right Buttons */}
-                                                                            {displayedRoomPhotos.length > 1 && (
-                                                                                <>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            setSelectedRoomGalleryPhotoIndex(prev => (prev > 0 ? prev - 1 : displayedRoomPhotos.length - 1));
-                                                                                        }}
-                                                                                        className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-slate-900/60 hover:bg-slate-900/90 text-white backdrop-blur-md flex items-center justify-center transition-all opacity-80 hover:opacity-100 hover:scale-110 z-20"
-                                                                                    >
-                                                                                        <ChevronLeft size={20} />
-                                                                                    </button>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            setSelectedRoomGalleryPhotoIndex(prev => (prev < displayedRoomPhotos.length - 1 ? prev + 1 : 0));
-                                                                                        }}
-                                                                                        className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-slate-900/60 hover:bg-slate-900/90 text-white backdrop-blur-md flex items-center justify-center transition-all opacity-80 hover:opacity-100 hover:scale-110 z-20"
-                                                                                        >
-                                                                                        <ChevronRight size={20} />
-                                                                                    </button>
-                                                                                </>
+                                                                        {/* Floating Room Detail Card (Bottom-Left) */}
+                                                                        <div className="absolute bottom-3 left-3 bg-black/75 backdrop-blur-sm rounded-xl p-3 text-white space-y-1 min-w-[180px] max-w-[280px] sm:max-w-none text-left z-10 pointer-events-none shadow-md border border-white/10">
+                                                                            <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Nomor Kamar</p>
+                                                                            <p className="text-base font-black leading-tight">{currentActivePhoto.roomName}</p>
+                                                                            <p className="text-[10px] font-bold text-slate-300">{activeUnitData?.size || '3x4 meter'}</p>
+                                                                            {activeUnitData?.price ? (
+                                                                                <p className="text-sm font-black text-emerald-400">TARIF {FORMAT_CURRENCY(activeUnitData.price)}/bln</p>
+                                                                            ) : null}
+                                                                            {activeFacilities.length > 0 && (
+                                                                                <div className="flex flex-wrap gap-1 pt-0.5">
+                                                                                    {activeFacilities.slice(0, 3).map((f: string, i: number) => (
+                                                                                        <span key={i} className="inline-block px-1.5 py-0.5 rounded bg-white/20 text-[9px] font-black text-white">{f}</span>
+                                                                                    ))}
+                                                                                </div>
                                                                             )}
                                                                         </div>
 
-                                                                        {/* Horizontal Thumbnail Strip */}
+                                                                        {/* Photo Counter */}
+                                                                        <div className="absolute top-3 right-3 pointer-events-none">
+                                                                            <span className="px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur-md text-white text-[10px] font-black tracking-widest shadow-sm">
+                                                                                {activePhotoIndex + 1} / {displayedRoomPhotos.length}
+                                                                            </span>
+                                                                        </div>
+
+                                                                        {/* Navigation Left / Right Buttons */}
                                                                         {displayedRoomPhotos.length > 1 && (
-                                                                            <div className="flex gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin">
-                                                                                {displayedRoomPhotos.map((p, pIdx) => {
-                                                                                    const isThumbActive = pIdx === activePhotoIndex;
-                                                                                    return (
-                                                                                        <button
-                                                                                            key={pIdx}
-                                                                                            type="button"
-                                                                                            onClick={() => setSelectedRoomGalleryPhotoIndex(pIdx)}
-                                                                                            className={`relative w-24 h-16 rounded-xl overflow-hidden shrink-0 border-2 transition-all group cursor-pointer ${
-                                                                                                isThumbActive
-                                                                                                    ? 'border-[#ff7a00] ring-2 ring-orange-400/30 scale-105 shadow-md'
-                                                                                                    : 'border-slate-200 opacity-65 hover:opacity-100'
-                                                                                            }`}
-                                                                                        >
-                                                                                            <img
-                                                                                                src={p.url}
-                                                                                                alt={p.label}
-                                                                                                className="w-full h-full object-cover"
-                                                                                            />
-                                                                                            {/* Tag Nomor Kamar (Jika Tampil Semua) */}
-                                                                                            {selectedRoomGalleryFilter === 'all' && (
-                                                                                                <span className="absolute top-1 left-1 bg-slate-900/85 text-[8px] font-black text-orange-300 px-1.5 py-0.2 rounded-md shadow-xs pointer-events-none">
-                                                                                                    {p.roomName}
-                                                                                                </span>
-                                                                                            )}
-                                                                                            {/* Label Kategori Foto Fasilitas */}
-                                                                                            <span className="absolute bottom-0 inset-x-0 bg-slate-900/85 backdrop-blur-xs text-white text-[8.5px] font-bold px-1.5 py-0.5 truncate text-center block">
-                                                                                                {p.label || 'Foto Kamar'}
-                                                                                            </span>
-                                                                                        </button>
-                                                                                    );
-                                                                                })}
-                                                                            </div>
+                                                                            <>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setSelectedRoomGalleryPhotoIndex(prev => (prev > 0 ? prev - 1 : displayedRoomPhotos.length - 1));
+                                                                                    }}
+                                                                                    className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-slate-900/60 hover:bg-slate-900/90 text-white backdrop-blur-md flex items-center justify-center transition-all opacity-80 hover:opacity-100 hover:scale-110 z-20"
+                                                                                >
+                                                                                    <ChevronLeft size={20} />
+                                                                                </button>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setSelectedRoomGalleryPhotoIndex(prev => (prev < displayedRoomPhotos.length - 1 ? prev + 1 : 0));
+                                                                                    }}
+                                                                                    className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-slate-900/60 hover:bg-slate-900/90 text-white backdrop-blur-md flex items-center justify-center transition-all opacity-80 hover:opacity-100 hover:scale-110 z-20"
+                                                                                >
+                                                                                    <ChevronRight size={20} />
+                                                                                </button>
+                                                                            </>
                                                                         )}
                                                                     </div>
-                                                                );
-                                                            })() : (
+
+                                                                    {/* Horizontal Thumbnail Strip */}
+                                                                    {displayedRoomPhotos.length > 1 && (
+                                                                        <div className="flex gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin">
+                                                                            {displayedRoomPhotos.map((p, pIdx) => {
+                                                                                const isThumbActive = pIdx === activePhotoIndex;
+                                                                                return (
+                                                                                    <button
+                                                                                        key={pIdx}
+                                                                                        type="button"
+                                                                                        onClick={() => setSelectedRoomGalleryPhotoIndex(pIdx)}
+                                                                                        className={`relative w-24 h-16 rounded-xl overflow-hidden shrink-0 border-2 transition-all group cursor-pointer ${
+                                                                                            isThumbActive
+                                                                                                ? 'border-[#ff7a00] ring-2 ring-orange-400/30 scale-105 shadow-md'
+                                                                                                : 'border-slate-200 opacity-65 hover:opacity-100'
+                                                                                        }`}
+                                                                                    >
+                                                                                        <img
+                                                                                            src={p.url}
+                                                                                            alt={p.label}
+                                                                                            className="w-full h-full object-cover"
+                                                                                        />
+                                                                                        {/* Tag Nomor Kamar (Jika Tampil Semua) */}
+                                                                                        {selectedRoomGalleryFilter === 'all' && (
+                                                                                            <span className="absolute top-1 left-1 bg-slate-900/85 text-[8px] font-black text-orange-300 px-1.5 py-0.2 rounded-md shadow-xs pointer-events-none">
+                                                                                                {p.roomName}
+                                                                                            </span>
+                                                                                        )}
+                                                                                        {/* Label Kategori Foto Fasilitas */}
+                                                                                        <span className="absolute bottom-0 inset-x-0 bg-slate-900/85 backdrop-blur-xs text-white text-[8.5px] font-bold px-1.5 py-0.5 truncate text-center block">
+                                                                                            {p.label || 'Foto Kamar'}
+                                                                                        </span>
+                                                                                    </button>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
                                                                 <div className="py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                                                                     <Camera className="w-8 h-8 text-slate-300 mx-auto mb-1.5" />
                                                                     <p className="text-xs text-slate-500 font-bold">
@@ -1883,168 +1981,44 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                     </p>
                                                                 </div>
                                                             )}
-
-                                                            {/* Filter Navigasi Kamar: Hanya Kamar Kosong yang Ada Foto */}
-                                                            {eligibleRoomsForFilter.length > 0 && (
-                                                                <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
-                                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                                        PILIH UNIT KAMAR KOSONG:
-                                                                    </span>
-                                                                    <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-                                                                        {eligibleRoomsForFilter.map((item) => {
-                                                                            const isSelected = selectedRoomGalleryFilter === item.idx;
-                                                                            return (
-                                                                                <button
-                                                                                    key={item.idx}
-                                                                                    type="button"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        if (isSelected) {
-                                                                                            setSelectedRoomGalleryFilter('all');
-                                                                                        } else {
-                                                                                            setSelectedRoomGalleryFilter(item.idx);
-                                                                                        }
-                                                                                        setSelectedRoomGalleryPhotoIndex(0);
-                                                                                    }}
-                                                                                    className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
-                                                                                        isSelected
-                                                                                            ? 'bg-[#ff7a00] text-white shadow-md ring-2 ring-orange-500/30 scale-[1.02]'
-                                                                                            : 'bg-orange-50/70 hover:bg-orange-100 text-[#d45e00] border border-orange-100'
-                                                                                    }`}
-                                                                                >
-                                                                                    <Bed size={13} />
-                                                                                    <span>{item.rName}</span>
-                                                                                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                                                                                        isSelected ? 'bg-orange-600 text-white' : 'bg-orange-200/70 text-[#d45e00]'
-                                                                                    }`}>
-                                                                                        {item.photosCount}
-                                                                                    </span>
-                                                                                </button>
-                                                                            );
-                                                                        })}
-                                                                    </div>
-                                                                </div>
-                                                            )}
                                                         </div>
                                                     );
                                                 })()}
 
-                                                {roomTypes.map((room: any, rtIdx: number) => {
-                                                    const roomPhotos = getRoomPhotos(room);
-                                                    const rStats = getRoomStats(room);
-                                                    const totalRooms = rStats.total;
-                                                    const availableRooms = rStats.available;
-                                                    const occupiedRooms = rStats.occupied;
+                                                {/* LIST TIPE KAMAR SEJATI (LEVEL 1 PARENT) */}
+                                                {groupedRoomTypes.map((rt: any, rtIdx: number) => {
                                                     const isExpanded = expandedRoomTypes[rtIdx] !== false; // default expanded
-
-                                                    const roomFacilities: string[] = room.roomFacilities || room.room_facilities || [];
-                                                    const bathroomFacilities: string[] = room.bathroomFacilities || room.bathroom_facilities || [];
-                                                    const kitchenFacilities: string[] = room.kitchenFacilities || room.kitchen_facilities || [];
-
-                                                    const units: any[] = (room.rooms || room.unit_rooms || []);
-                                                    const occupiedUnits: any[] = [];
-                                                    const vacantUnits: any[] = [];
-
-                                                    if (units.length > 0) {
-                                                        units.forEach((u: any, uIdx: number) => {
-                                                            const isUnitOcc = u?.status === 'Terisi' || u?.status === 'occupied' || u?.is_occupied === true || u?.isAvailable === false || Boolean(u?.occupant_name || u?.occupant_phone || u?.residentName || u?.residentPhone);
-                                                            const normalizedUnit = {
-                                                                id: u?.id || `unit_${rtIdx}_${uIdx}`,
-                                                                name: formatRoomName(u?.name || u?.room_number || String(uIdx + 1), uIdx),
-                                                                rawName: u?.name || u?.room_number || `Kamar ${uIdx + 1}`,
-                                                                residentName: u?.residentName || u?.occupant_name || u?.occupantName || room.residentName || room.occupant_name || room.occupantName || '-',
-                                                                residentPhone: u?.residentPhone || u?.occupant_phone || u?.occupantPhone || room.residentPhone || room.occupant_phone || room.occupantPhone || '-',
-                                                                paymentPeriod: u?.paymentPeriod || u?.rentPeriod || room.paymentPeriod || room.rentPeriod || 'Bulanan',
-                                                                startDate: u?.startDate || u?.rentStartDate || room.startDate || room.rentStartDate || '',
-                                                                endDate: u?.endDate || u?.rentEndDate || room.endDate || room.rentEndDate || '',
-                                                                currentOccupants: Number(u?.currentOccupants || room.currentOccupants || 1),
-                                                                additionalOccupants: u?.additionalOccupants || room.additionalOccupants || [],
-                                                                size: u?.size || room.size || '3x4 meter',
-                                                                price: Number(u?.price || room.price || 0),
-                                                                facilities: u?.facilities || u?.roomFacilities || roomFacilities,
-                                                                bathroomFacilities: u?.bathroomFacilities || bathroomFacilities,
-                                                                photos: getRoomPhotos(u).length > 0 ? getRoomPhotos(u) : roomPhotos,
-                                                                notes: u?.notes || room.notes || room.surveyorNotes || '',
-                                                                isOccupied: isUnitOcc
-                                                            };
-                                                            if (isUnitOcc) {
-                                                                occupiedUnits.push(normalizedUnit);
-                                                            } else {
-                                                                vacantUnits.push(normalizedUnit);
-                                                            }
-                                                        });
-                                                    }
-
-                                                    // Fallback jika surveyor belum memecah ke unit individual
-                                                    if (occupiedUnits.length === 0 && occupiedRooms > 0) {
-                                                        for (let i = 0; i < occupiedRooms; i++) {
-                                                            occupiedUnits.push({
-                                                                id: `occ_fallback_${rtIdx}_${i}`,
-                                                                name: formatRoomName(room.name || `Kamar ${i + 1}`, rtIdx),
-                                                                rawName: room.name || `Kamar ${i + 1}`,
-                                                                residentName: room.residentName || room.occupant_name || room.occupantName || 'Penghuni Terdaftar',
-                                                                residentPhone: room.residentPhone || room.occupant_phone || room.occupantPhone || '-',
-                                                                paymentPeriod: room.paymentPeriod || room.rentPeriod || 'Bulanan',
-                                                                startDate: room.startDate || room.rentStartDate || '',
-                                                                endDate: room.endDate || room.rentEndDate || '',
-                                                                currentOccupants: Number(room.currentOccupants || 1),
-                                                                additionalOccupants: room.additionalOccupants || [],
-                                                                size: room.size || '3x4 meter',
-                                                                price: Number(room.price || 0),
-                                                                facilities: roomFacilities,
-                                                                bathroomFacilities: bathroomFacilities,
-                                                                photos: roomPhotos,
-                                                                notes: room.notes || room.surveyorNotes || '',
-                                                                isOccupied: true
-                                                            });
-                                                        }
-                                                    }
-
-                                                    if (vacantUnits.length === 0 && availableRooms > 0) {
-                                                        for (let i = 0; i < availableRooms; i++) {
-                                                            vacantUnits.push({
-                                                                id: `avail_fallback_${rtIdx}_${i}`,
-                                                                name: formatRoomName(room.name || `Kamar ${i + 1}`, rtIdx),
-                                                                rawName: room.name || `Kamar ${i + 1}`,
-                                                                size: room.size || '3x4 meter',
-                                                                price: Number(room.price || 0),
-                                                                facilities: roomFacilities,
-                                                                bathroomFacilities: bathroomFacilities,
-                                                                photos: roomPhotos,
-                                                                notes: room.notes || room.surveyorNotes || '',
-                                                                isOccupied: false
-                                                            });
-                                                        }
-                                                    }
-
                                                     const occupiedKey = `rt${rtIdx}_occ`;
                                                     const availableKey = `rt${rtIdx}_avail`;
 
+                                                    const isOccExpanded = expandedStatusSections[occupiedKey] !== false; // default open or toggle
+                                                    const isAvailExpanded = expandedStatusSections[availableKey] !== false;
+
                                                     return (
-                                                        <div key={rtIdx} className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+                                                        <div key={rt.id || rtIdx} className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
                                                             {/* LEVEL 1: ACCORDION HEADER TIPE KAMAR (PARENT) */}
                                                             <button type="button"
                                                                 onClick={() => {
                                                                     setSelectedRoomGalleryFilter('all');
                                                                     setExpandedRoomTypes(prev => ({...prev, [rtIdx]: !isExpanded}));
                                                                 }}
-                                                                className="w-full flex items-center justify-between p-5 hover:bg-slate-50 transition-colors text-left">
+                                                                className="w-full flex items-center justify-between p-5 hover:bg-slate-50 transition-colors text-left cursor-pointer">
                                                                 <div className="flex items-center gap-3 min-w-0">
-                                                                    <span className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                                                                    <span className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
                                                                         <Bed size={18}/>
                                                                     </span>
                                                                     <div className="min-w-0">
                                                                         <div className="flex items-center gap-2 flex-wrap">
                                                                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tipe Kamar #{rtIdx + 1}</span>
                                                                         </div>
-                                                                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{room.name || `Tipe ${rtIdx + 1}`}</h4>
-                                                                        <p className="text-xs text-slate-500 font-bold">Ukuran Rata-rata: {room.size || '3x4 meter'}</p>
+                                                                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{rt.name}</h4>
+                                                                        <p className="text-xs text-slate-500 font-bold">Ukuran Rata-rata: {rt.size}</p>
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex items-center gap-2 shrink-0 ml-3">
-                                                                    <span className="text-sm font-black text-emerald-700">{FORMAT_CURRENCY(room.price)}<span className="text-[10px] text-slate-400 font-bold">/bln</span></span>
-                                                                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black">✨ {availableRooms} Kosong</span>
-                                                                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black">🔒 {occupiedRooms} Dihuni</span>
+                                                                    <span className="text-sm font-black text-emerald-700">{FORMAT_CURRENCY(rt.price)}<span className="text-[10px] text-slate-400 font-bold">/bln</span></span>
+                                                                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black">✨ {rt.vacantUnits.length} Kosong</span>
+                                                                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black">🔒 {rt.occupiedUnits.length} Dihuni</span>
                                                                     {isExpanded ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
                                                                 </div>
                                                             </button>
@@ -2053,44 +2027,44 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                             {isExpanded && (
                                                                 <div className="border-t border-slate-100 p-5 space-y-5">
                                                                     {/* KELENGKAPAN & FASILITAS KAMAR — 3 Kotak Menyamping */}
-                                                                    {(roomFacilities.length > 0 || bathroomFacilities.length > 0 || kitchenFacilities.length > 0) && (
+                                                                    {(rt.roomFacilities.length > 0 || rt.bathroomFacilities.length > 0 || rt.kitchenFacilities.length > 0) && (
                                                                         <div>
                                                                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Kelengkapan &amp; Fasilitas Kamar</span>
                                                                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                                                                {roomFacilities.length > 0 && (
+                                                                                {rt.roomFacilities.length > 0 && (
                                                                                     <div className="bg-slate-100 border border-slate-200 rounded-2xl p-3 space-y-2">
                                                                                         <div className="flex items-center gap-1.5">
                                                                                             <Bed size={13} className="text-slate-600"/>
                                                                                             <span className="text-[9px] font-black text-slate-600 uppercase tracking-wider">Fasilitas Utama</span>
                                                                                         </div>
                                                                                         <div className="flex flex-wrap gap-1">
-                                                                                            {roomFacilities.map((f: string, i: number) => (
+                                                                                            {rt.roomFacilities.map((f: string, i: number) => (
                                                                                                 <span key={i} className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[10px] font-bold text-slate-700">{f}</span>
                                                                                             ))}
                                                                                         </div>
                                                                                     </div>
                                                                                 )}
-                                                                                {bathroomFacilities.length > 0 && (
+                                                                                {rt.bathroomFacilities.length > 0 && (
                                                                                     <div className="bg-sky-50 border border-sky-200 rounded-2xl p-3 space-y-2">
                                                                                         <div className="flex items-center gap-1.5">
                                                                                             <Bath size={13} className="text-sky-600"/>
                                                                                             <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider">Kamar Mandi / WC</span>
                                                                                         </div>
                                                                                         <div className="flex flex-wrap gap-1">
-                                                                                            {bathroomFacilities.map((f: string, i: number) => (
+                                                                                            {rt.bathroomFacilities.map((f: string, i: number) => (
                                                                                                 <span key={i} className="px-1.5 py-0.5 bg-white border border-sky-200 rounded text-[10px] font-bold text-sky-800">{f}</span>
                                                                                             ))}
                                                                                         </div>
                                                                                     </div>
                                                                                 )}
-                                                                                {kitchenFacilities.length > 0 && (
+                                                                                {rt.kitchenFacilities.length > 0 && (
                                                                                     <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 space-y-2">
                                                                                         <div className="flex items-center gap-1.5">
                                                                                             <CookingPot size={13} className="text-amber-600"/>
                                                                                             <span className="text-[9px] font-black text-amber-700 uppercase tracking-wider">Dapur Dalam</span>
                                                                                         </div>
                                                                                         <div className="flex flex-wrap gap-1">
-                                                                                            {kitchenFacilities.map((f: string, i: number) => (
+                                                                                            {rt.kitchenFacilities.map((f: string, i: number) => (
                                                                                                 <span key={i} className="px-1.5 py-0.5 bg-white border border-amber-200 rounded text-[10px] font-bold text-amber-800">{f}</span>
                                                                                             ))}
                                                                                         </div>
@@ -2100,32 +2074,31 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                         </div>
                                                                     )}
 
-                                                                    {/* CHILD ACCORDIONS: 1. KAMAR TERISI & 2. KAMAR KOSONG */}
+                                                                    {/* DUA SUB-PARENT ACCORDIONS: 1. TERISI & 2. KOSONG (SELALU MUNCUL BERPASANGAN) */}
                                                                     <div className="space-y-3">
-                                                                        {/* Child Accordion 1: KAMAR TERISI */}
-                                                                        {occupiedRooms > 0 && (
-                                                                            <div className="rounded-2xl border border-amber-200 overflow-hidden bg-white shadow-2xs">
-                                                                                <button type="button"
-                                                                                    onClick={() => setExpandedStatusSections(prev => ({...prev, [occupiedKey]: !prev[occupiedKey]}))}
-                                                                                    className="w-full flex items-center justify-between p-4 bg-amber-50/80 hover:bg-amber-100/80 transition-colors text-left">
-                                                                                    <div className="flex items-center gap-2.5">
-                                                                                        <span className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-black text-sm shrink-0">
-                                                                                            🔒
-                                                                                        </span>
-                                                                                        <div>
-                                                                                            <span className="text-xs font-black text-amber-900 uppercase tracking-wide">KAMAR SEDANG DIHUNI / TERISI</span>
-                                                                                            <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-black">{occupiedUnits.length || occupiedRooms} UNIT</span>
-                                                                                        </div>
+                                                                        {/* Sub-Parent 1: KAMAR TERISI */}
+                                                                        <div className="rounded-2xl border border-amber-200 overflow-hidden bg-white shadow-2xs">
+                                                                            <button type="button"
+                                                                                onClick={() => setExpandedStatusSections(prev => ({...prev, [occupiedKey]: !isOccExpanded}))}
+                                                                                className="w-full flex items-center justify-between p-4 bg-amber-50/80 hover:bg-amber-100/80 transition-colors text-left cursor-pointer">
+                                                                                <div className="flex items-center gap-2.5">
+                                                                                    <span className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-black text-sm shrink-0">
+                                                                                        🔒
+                                                                                    </span>
+                                                                                    <div>
+                                                                                        <span className="text-xs font-black text-amber-900 uppercase tracking-wide">KAMAR SEDANG DIHUNI / TERISI</span>
+                                                                                        <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-black">{rt.occupiedUnits.length} UNIT</span>
                                                                                     </div>
-                                                                                    <div className="flex items-center gap-1 text-amber-700 text-[10px] font-black uppercase tracking-wider">
-                                                                                        <span>{expandedStatusSections[occupiedKey] ? 'TUTUP LIST' : 'BUKA LIST'}</span>
-                                                                                        {expandedStatusSections[occupiedKey] ? <ChevronUp size={15}/> : <ChevronDown size={15}/>}
-                                                                                    </div>
-                                                                                </button>
-                                                                                {expandedStatusSections[occupiedKey] && (
-                                                                                    <div className="p-4 bg-amber-50/30 border-t border-amber-100 space-y-3">
-                                                                                        {/* Kartu Detail Unit Kamar Terisi */}
-                                                                                        {occupiedUnits.map((u: any, uIdx: number) => (
+                                                                                </div>
+                                                                                <div className="flex items-center gap-1 text-amber-700 text-[10px] font-black uppercase tracking-wider">
+                                                                                    <span>{isOccExpanded ? 'TUTUP LIST' : 'BUKA LIST'}</span>
+                                                                                    {isOccExpanded ? <ChevronUp size={15}/> : <ChevronDown size={15}/>}
+                                                                                </div>
+                                                                            </button>
+                                                                            {isOccExpanded && (
+                                                                                <div className="p-4 bg-amber-50/30 border-t border-amber-100 space-y-3">
+                                                                                    {rt.occupiedUnits.length > 0 ? (
+                                                                                        rt.occupiedUnits.map((u: any, uIdx: number) => (
                                                                                             <div key={u.id || uIdx} className="bg-white border border-amber-200/90 rounded-2xl p-4 shadow-sm space-y-3 hover:border-amber-300 transition-all">
                                                                                                 {/* Top Bar: Room Name & Status */}
                                                                                                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-100/80 pb-2.5">
@@ -2145,7 +2118,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                                     </div>
                                                                                                     <div className="text-right">
                                                                                                         <span className="text-[9px] font-bold text-slate-400 block uppercase">Tarif Sewa</span>
-                                                                                                        <span className="text-xs font-black text-emerald-700">{FORMAT_CURRENCY(u.price || room.price)}<span className="text-[9px] text-slate-400 font-bold">/bln</span></span>
+                                                                                                        <span className="text-xs font-black text-emerald-700">{FORMAT_CURRENCY(u.price || rt.price)}<span className="text-[9px] text-slate-400 font-bold">/bln</span></span>
                                                                                                     </div>
                                                                                                 </div>
 
@@ -2220,36 +2193,39 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                                     </div>
                                                                                                 )}
                                                                                             </div>
-                                                                                        ))}
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        )}
-
-                                                                        {/* Child Accordion 2: KAMAR KOSONG */}
-                                                                        {availableRooms > 0 && (
-                                                                            <div className="rounded-2xl border border-emerald-200 overflow-hidden bg-white shadow-2xs">
-                                                                                <button type="button"
-                                                                                    onClick={() => setExpandedStatusSections(prev => ({...prev, [availableKey]: !prev[availableKey]}))}
-                                                                                    className="w-full flex items-center justify-between p-4 bg-emerald-50/80 hover:bg-emerald-100/80 transition-colors text-left">
-                                                                                    <div className="flex items-center gap-2.5">
-                                                                                        <span className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-sm shrink-0">
-                                                                                            ✨
-                                                                                        </span>
-                                                                                        <div>
-                                                                                            <span className="text-xs font-black text-emerald-900 uppercase tracking-wide">KAMAR KOSONG / SIAP HUNI</span>
-                                                                                            <span className="ml-2 px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 text-[10px] font-black">{vacantUnits.length || availableRooms} UNIT</span>
+                                                                                        ))
+                                                                                    ) : (
+                                                                                        <div className="p-4 bg-white rounded-xl border border-dashed border-amber-200 text-center text-xs font-bold text-amber-800">
+                                                                                            Tidak ada unit kamar yang sedang dihuni pada tipe ini.
                                                                                         </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* Sub-Parent 2: KAMAR KOSONG */}
+                                                                        <div className="rounded-2xl border border-emerald-200 overflow-hidden bg-white shadow-2xs">
+                                                                            <button type="button"
+                                                                                onClick={() => setExpandedStatusSections(prev => ({...prev, [availableKey]: !isAvailExpanded}))}
+                                                                                className="w-full flex items-center justify-between p-4 bg-emerald-50/80 hover:bg-emerald-100/80 transition-colors text-left cursor-pointer">
+                                                                                <div className="flex items-center gap-2.5">
+                                                                                    <span className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-sm shrink-0">
+                                                                                        ✨
+                                                                                    </span>
+                                                                                    <div>
+                                                                                        <span className="text-xs font-black text-emerald-900 uppercase tracking-wide">KAMAR KOSONG / SIAP HUNI</span>
+                                                                                        <span className="ml-2 px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 text-[10px] font-black">{rt.vacantUnits.length} UNIT</span>
                                                                                     </div>
-                                                                                    <div className="flex items-center gap-1 text-emerald-700 text-[10px] font-black uppercase tracking-wider">
-                                                                                        <span>{expandedStatusSections[availableKey] ? 'TUTUP LIST' : 'BUKA LIST'}</span>
-                                                                                        {expandedStatusSections[availableKey] ? <ChevronUp size={15}/> : <ChevronDown size={15}/>}
-                                                                                    </div>
-                                                                                </button>
-                                                                                {expandedStatusSections[availableKey] && (
-                                                                                    <div className="p-4 bg-emerald-50/30 border-t border-emerald-100 space-y-3">
-                                                                                        {/* Kartu Detail Unit Kamar Kosong */}
-                                                                                        {vacantUnits.map((u: any, uIdx: number) => (
+                                                                                </div>
+                                                                                <div className="flex items-center gap-1 text-emerald-700 text-[10px] font-black uppercase tracking-wider">
+                                                                                    <span>{isAvailExpanded ? 'TUTUP LIST' : 'BUKA LIST'}</span>
+                                                                                    {isAvailExpanded ? <ChevronUp size={15}/> : <ChevronDown size={15}/>}
+                                                                                </div>
+                                                                            </button>
+                                                                            {isAvailExpanded && (
+                                                                                <div className="p-4 bg-emerald-50/30 border-t border-emerald-100 space-y-3">
+                                                                                    {rt.vacantUnits.length > 0 ? (
+                                                                                        rt.vacantUnits.map((u: any, uIdx: number) => (
                                                                                             <div key={u.id || uIdx} className="bg-white border border-emerald-200/90 rounded-2xl p-4 shadow-sm space-y-3 hover:border-emerald-300 transition-all">
                                                                                                 {/* Top Bar: Room Name & Status */}
                                                                                                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100/80 pb-2.5">
@@ -2269,7 +2245,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                                     </div>
                                                                                                     <div className="text-right">
                                                                                                         <span className="text-[9px] font-bold text-slate-400 block uppercase">Tarif Sewa</span>
-                                                                                                        <span className="text-xs font-black text-emerald-700">{FORMAT_CURRENCY(u.price || room.price)}<span className="text-[9px] text-slate-400 font-bold">/bln</span></span>
+                                                                                                        <span className="text-xs font-black text-emerald-700">{FORMAT_CURRENCY(u.price || rt.price)}<span className="text-[9px] text-slate-400 font-bold">/bln</span></span>
                                                                                                     </div>
                                                                                                 </div>
 
@@ -2280,7 +2256,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                                         <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider block mb-1">
                                                                                                             📐 Ukuran Kamar
                                                                                                         </span>
-                                                                                                        <p className="font-black text-slate-900">{u.size || room.size || '3x4 meter'}</p>
+                                                                                                        <p className="font-black text-slate-900">{u.size || rt.size || '3x4 meter'}</p>
                                                                                                         <span className="text-[10px] text-slate-500 font-semibold">Ruangan Kosong</span>
                                                                                                     </div>
 
@@ -2290,12 +2266,12 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                                             🛋️ Fasilitas Terpasang
                                                                                                         </span>
                                                                                                         <div className="flex flex-wrap gap-1">
-                                                                                                            {(roomFacilities.length > 0 ? roomFacilities : ['Kosongan (Tanpa Perabot)']).map((f: string, fi: number) => (
+                                                                                                            {(u.facilities && u.facilities.length > 0 ? u.facilities : (rt.roomFacilities.length > 0 ? rt.roomFacilities : ['Kosongan (Tanpa Perabot)'])).map((f: string, fi: number) => (
                                                                                                                 <span key={fi} className="px-1.5 py-0.5 bg-white border border-emerald-200 rounded text-[9.5px] font-bold text-emerald-900">
                                                                                                                     {f}
                                                                                                                 </span>
                                                                                                             ))}
-                                                                                                            {bathroomFacilities.map((bf: string, bfi: number) => (
+                                                                                                            {(u.bathroomFacilities || rt.bathroomFacilities || []).map((bf: string, bfi: number) => (
                                                                                                                 <span key={`bf_${bfi}`} className="px-1.5 py-0.5 bg-sky-50 border border-sky-200 rounded text-[9.5px] font-bold text-sky-900">
                                                                                                                     {bf}
                                                                                                                 </span>
@@ -2314,11 +2290,15 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                                     </div>
                                                                                                 )}
                                                                                             </div>
-                                                                                        ))}
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        )}
+                                                                                        ))
+                                                                                    ) : (
+                                                                                        <div className="p-4 bg-white rounded-xl border border-dashed border-emerald-200 text-center text-xs font-bold text-emerald-800">
+                                                                                            Seluruh unit pada tipe kamar ini sedang terisi (0 kamar kosong).
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             )}
