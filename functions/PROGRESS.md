@@ -2,6 +2,19 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 107. Keterangan Kategori Fasilitas Foto pada Thumbnail Strip & Hero Gallery Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menemukan bahwa pada thumbnail strip semua foto hanya menampilkan keterangan kamar yang sama (`Kamar 3`, `Kamar 3`, `Kamar 3`), tanpa menunjukkan kategori fasilitas apa yang diwakili oleh masing-masing foto.
+  2. Pengguna meminta agar keterangan foto menampilkan kategori fasilitas yang diwakilinya (misal: *Interior Kamar*, *Kamar Mandi Dalam*, *Tempat Tidur*, *Lemari*, dll.) sesuai data hasil survey.
+- **Implementasi & Perbaikan**:
+  * **1. Label Thumbnail Berbasis Kategori Fasilitas**:
+    - Mengubah keterangan bawah pada setiap thumbnail menjadi label kategori spesifik (`p.label`, misal *Interior Kamar*, *Kamar Mandi Dalam*, *Tempat Tidur*, *Lemari*).
+    - Menambahkan tag nomor kamar (`p.roomName`) di sudut atas thumbnail saat dalam mode menampilkan seluruh kamar.
+  * **2. Elevasi Hero Preview & Metadata Fasilitas**:
+    - Menampilkan badge kategori fasilitas dan nomor kamar dengan kontras tinggi di display utama.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 106. Penyaringan Presisi Navigasi Kamar (Hanya Kamar Kosong Berfoto) & Pembersihan UI Galeri Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta deretan tombol navigasi kamar HANYA memunculkan unit kamar yang memiliki foto riil (`photos.length > 0`) DAN sedang berstatus kosong/tidak terisi (`isVacant`).

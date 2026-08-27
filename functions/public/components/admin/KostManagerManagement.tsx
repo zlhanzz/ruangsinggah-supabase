@@ -1818,7 +1818,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
 
                                                                     {/* Horizontal Thumbnail Strip */}
                                                                     {displayedRoomPhotos.length > 1 && (
-                                                                        <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+                                                                        <div className="flex gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin">
                                                                             {displayedRoomPhotos.map((p, pIdx) => {
                                                                                 const isThumbActive = pIdx === activePhotoIndex;
                                                                                 return (
@@ -1826,10 +1826,10 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                         key={pIdx}
                                                                                         type="button"
                                                                                         onClick={() => setSelectedRoomGalleryPhotoIndex(pIdx)}
-                                                                                        className={`relative w-20 h-14 rounded-xl overflow-hidden shrink-0 border-2 transition-all group ${
+                                                                                        className={`relative w-24 h-16 rounded-xl overflow-hidden shrink-0 border-2 transition-all group cursor-pointer ${
                                                                                             isThumbActive
-                                                                                                ? 'border-[#ff7a00] ring-2 ring-orange-400/30 scale-105 shadow-sm'
-                                                                                                : 'border-slate-200 opacity-60 hover:opacity-100'
+                                                                                                ? 'border-[#ff7a00] ring-2 ring-orange-400/30 scale-105 shadow-md'
+                                                                                                : 'border-slate-200 opacity-65 hover:opacity-100'
                                                                                         }`}
                                                                                     >
                                                                                         <img
@@ -1837,8 +1837,15 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                             alt={p.label}
                                                                                             className="w-full h-full object-cover"
                                                                                         />
-                                                                                        <span className="absolute bottom-0 inset-x-0 bg-slate-900/75 text-white text-[8px] font-bold px-1 truncate text-center">
-                                                                                            {p.roomName}
+                                                                                        {/* Tag Nomor Kamar (Jika Tampil Semua) */}
+                                                                                        {selectedRoomGalleryFilter === 'all' && (
+                                                                                            <span className="absolute top-1 left-1 bg-slate-900/85 text-[8px] font-black text-orange-300 px-1.5 py-0.2 rounded-md shadow-xs pointer-events-none">
+                                                                                                {p.roomName}
+                                                                                            </span>
+                                                                                        )}
+                                                                                        {/* Label Kategori Foto Fasilitas */}
+                                                                                        <span className="absolute bottom-0 inset-x-0 bg-slate-900/85 backdrop-blur-xs text-white text-[8.5px] font-bold px-1.5 py-0.5 truncate text-center block">
+                                                                                            {p.label || 'Foto Kamar'}
                                                                                         </span>
                                                                                     </button>
                                                                                 );
