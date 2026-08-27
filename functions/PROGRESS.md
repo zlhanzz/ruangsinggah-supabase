@@ -2,6 +2,43 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 126. Redesain Modern Alert Box Evaluasi & Efek Glowing / Kelap-Kelip Dinamis pada Form Onboarding KostManager (`AgentDashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mengkritik alert evaluasi sebelumnya yang kaku dan tidak menggambarkan arsitektur web modern.
+  2. Pengguna meminta form dibuat lebih dinamis dengan efek berkilau, border berdenyut/kelap-kelip (*glowing pulse animation*), dan badge spesifik pada setiap section form yang dievaluasi admin agar surveyor dapat langsung mengetahui dan memperbaiki bagian yang keliru dengan instan.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Parser Regex Pintar `parseEvaluationData`**:
+    - Menganalisis catatan evaluasi terbaru dari Admin, mengekstrak checklist item secara cerdas, memisahkan catatan personal admin, dan menghasilkan boolean flags spesifik (`facade`, `gps`, `publicFacilities`, `rules`, `landmark`, `roomSize`, `roomFacilities`, `roomPhotos`, `occupants`, `pricing`, `partner`, `hasProperty`, `hasRoom`, `hasPartner`, `hasRevision`).
+  * **2. Redesain Glassmorphic Alert Card di Dashboard Agen**:
+    - Mengganti kotak teks evaluasi lama dengan Glassmorphic Card modern (gradasi amber-to-orange lembut, border amber semi-transparan, badge pulse status, chip pills per item checklist evaluasi, kutipan catatan admin bersih, dan tombol CTA shimmering `⚡ Buka & Perbaiki Bagian yang Dievaluasi`).
+  * **3. Stepper Bar & Header Modal Onboarding Modern**:
+    - Stepper 1-2-3 interaktif dengan glowing ring berdenyut pada nomor step yang memerlukan revisi.
+    - Top banner modal onboarding dengan gradasi amber-orange, animated bounce icon, pill checklist berdenyut, dan quick-jump buttons.
+  * **4. Efek Glowing, Border Berdenyut & Floating Badge pada Seluruh Form Step 1, 2, dan 3**:
+    - **Step 1 (Data Properti)**:
+      - Profil / Fasad Properti: Glowing border (`border-2 border-amber-400 ring-4 ring-amber-400/30 animate-pulse`) + Floating Badge (`⚠️ Perlu Revisi: Profil / Info Kost`).
+      - Titik Koordinat GPS: Glowing container + Floating Badge (`⚠️ Perlu Revisi: Titik Koordinat GPS`).
+      - Fasilitas & Landmark Terdekat: Glowing container + Floating Badge (`⚠️ Perlu Revisi: Landmark / Kampus`).
+      - Fasilitas Umum: Glowing container + Floating Badge (`⚠️ Perlu Revisi: Fasilitas Umum`).
+      - Dokumentasi Area Umum Properti: Glowing container + Floating Badge (`⚠️ Perlu Revisi: Foto Area Properti`).
+      - Peraturan Kost: Glowing container + Floating Badge (`⚠️ Perlu Revisi: Peraturan Kost`).
+    - **Step 2 (Data Kamar)**:
+      - Top Alert Banner Kamar jika terdapat catatan revisi kamar.
+      - Di dalam `renderRoomEditor`:
+        - Luas / Ukuran Kamar: Glowing container & floating badge jika dievaluasi.
+        - Status Kamar (Terisi / Kosong): Glowing container & floating badge jika dievaluasi.
+        - Skema Tarif Kamar: Glowing container & floating badge jika dievaluasi.
+        - Fasilitas Kamar: Glowing container & floating badge jika dievaluasi.
+        - Dokumentasi Foto Kamar: Glowing container & floating badge jika dievaluasi.
+    - **Step 3 (Data Mitra & Kerjasama)**:
+      - Top Alert Banner Mitra jika terdapat catatan revisi kerjasama/tanda tangan.
+      - Syarat & Ketentuan Kerjasama Mitra: Glowing container + Floating Badge (`⚠️ Perlu Revisi: Kerjasama Mitra`).
+      - Tanda Tangan Digital Pemilik: Glowing container + Floating Badge (`⚠️ Perlu Revisi: Tanda Tangan Digital`).
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error dalam 34.98 detik.
+
 ### 125. Perbaikan Visibilitas Kartu Tugas Evaluasi / Revisi di Dashboard Agen (`AgentDashboard.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa saat evaluasi/revisi dikirimkan oleh Admin, kartu pendataan KostManager mendadak hilang dari tab **Aktif** di Dashboard Agen dan menampilkan *"Belum ada tugas di tab ini."*

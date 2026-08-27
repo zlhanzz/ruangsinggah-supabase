@@ -122,6 +122,125 @@ const extractCoordinates = (mapsUrl: string | null | undefined) => {
     return null;
 };
 
+export interface EvaluationData {
+    hasRevision: boolean;
+    date: string;
+    items: string[];
+    adminNote: string;
+    rawNotes: string;
+    facade: boolean;
+    gps: boolean;
+    publicFacilities: boolean;
+    rules: boolean;
+    landmark: boolean;
+    roomSize: boolean;
+    roomFacilities: boolean;
+    roomPhotos: boolean;
+    occupants: boolean;
+    pricing: boolean;
+    partner: boolean;
+    hasProperty: boolean;
+    hasRoom: boolean;
+    hasPartner: boolean;
+}
+
+export const parseEvaluationData = (notesText?: string | null): EvaluationData => {
+    const rawNotes = (notesText || '').trim();
+    const lower = rawNotes.toLowerCase();
+    
+    const hasRevision = lower.includes('[revisi') || lower.includes('evaluasi admin') || lower.includes('perlu diperbaiki') || lower.includes('revisi');
+    
+    // Find all [REVISI ...] blocks
+    const revisionBlocks = rawNotes.split(/\[REVISI\s*([^\]]*)\]/i);
+    let latestDate = '';
+    let latestContent = rawNotes;
+
+    if (revisionBlocks.length > 1) {
+        latestDate = revisionBlocks[revisionBlocks.length - 2]?.trim() || '';
+        latestContent = revisionBlocks[revisionBlocks.length - 1]?.trim() || '';
+    }
+
+    const items: string[] = [];
+    const lines = latestContent.split('\n');
+    let isExtractingItems = false;
+    const adminNoteLines: string[] = [];
+    let isExtractingAdminNote = false;
+
+    for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (line.includes('Catatan Evaluasi Admin:') || line.includes('Catatan:') || line.startsWith('📝')) {
+            isExtractingItems = false;
+            isExtractingAdminNote = true;
+            const rest = line.replace(/.*(?:Catatan Evaluasi Admin:|Catatan:|📝)\s*/i, '').trim();
+            if (rest) adminNoteLines.push(rest);
+            continue;
+        }
+
+        if (line.includes('Bagian yang Perlu Diperbaiki:') || line.startsWith('📌')) {
+            isExtractingItems = true;
+            isExtractingAdminNote = false;
+            continue;
+        }
+
+        if (isExtractingAdminNote) {
+            if (line && !line.startsWith('[REVISI') && !line.startsWith('KostManager Onboarding') && !line.startsWith('📍 Link GPS:')) {
+                adminNoteLines.push(line);
+            }
+        } else if (isExtractingItems || line.startsWith('-') || line.startsWith('•')) {
+            const cleaned = line.replace(/^[-•*]\s*/, '').replace(/^[🏢🛏️👥📋]\s*/, '').trim();
+            if (cleaned && !cleaned.includes('Data Properti Umum:') && !cleaned.includes('Kamar & Fasilitas Unit:') && !cleaned.includes('Data Penghuni & Status Sewa:') && !cleaned.includes('Mitra & Kerjasama:')) {
+                if (!items.includes(cleaned)) {
+                    items.push(cleaned);
+                }
+            }
+        }
+    }
+
+    const adminNote = adminNoteLines.join('\n').trim();
+    const n = latestContent.toLowerCase() || lower;
+
+    const facade = n.includes('foto utama') || n.includes('fasad') || n.includes('foto depan');
+    const gps = n.includes('titik koordinat') || n.includes('gps') || n.includes('maps');
+    const publicFacilities = n.includes('fasilitas umum');
+    const rules = n.includes('deskripsi & peraturan') || n.includes('peraturan kost') || n.includes('deskripsi') || n.includes('peraturan');
+    const landmark = n.includes('landmark') || n.includes('kampus') || n.includes('estimasi jarak');
+    const hasProperty = facade || gps || publicFacilities || rules || landmark || n.includes('properti umum');
+
+    const roomSize = n.includes('ukuran & dimensi') || n.includes('ukuran') || n.includes('dimensi');
+    const roomFacilities = n.includes('fasilitas utama kamar') || n.includes('fasilitas kamar mandi') || n.includes('fasilitas dapur') || n.includes('kelengkapan perabot') || n.includes('fasilitas kamar');
+    const roomPhotos = n.includes('foto dokumentasi unit') || n.includes('foto unit') || n.includes('foto kamar');
+    const occupants = n.includes('status kamar (terisi') || n.includes('identitas penghuni') || n.includes('penghuni') || n.includes('data penyewa');
+    const pricing = n.includes('tarif sewa') || n.includes('periode sewa') || n.includes('harga sewa');
+    const hasRoom = roomSize || roomFacilities || roomPhotos || occupants || pricing || n.includes('kamar & fasilitas') || n.includes('data penghuni');
+
+    const bank = n.includes('rekening bank') || n.includes('nomor rekening');
+    const partner = n.includes('kontak pemilik') || n.includes('syarat & ketentuan') || n.includes('mitra & kerjasama');
+    const signature = n.includes('tanda tangan digital') || n.includes('tanda tangan');
+    const hasPartner = bank || partner || signature || n.includes('mitra & kerjasama');
+
+    return {
+        hasRevision,
+        date: latestDate || 'Terbaru',
+        items,
+        adminNote,
+        rawNotes,
+        facade,
+        gps,
+        publicFacilities,
+        rules,
+        landmark,
+        roomSize,
+        roomFacilities,
+        roomPhotos,
+        occupants,
+        pricing,
+        partner: hasPartner,
+        hasProperty,
+        hasRoom,
+        hasPartner
+    };
+};
+
 const AgentDashboard: React.FC<AgentDashboardProps> = ({ 
     uid, 
     user,
@@ -2900,6 +3019,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const renderRoomEditor = (rt: any, idx: number) => {
         const activeRoomIdx = idx;
         const isOccupied = rt.isAvailable === false || rt.status === 'Terisi';
+        const roomEval = parseEvaluationData(isEditingKostManager?.notes);
 
         const updateRoomFacilitiesWithPhotos = (newFacilities: string[], newStatus?: string) => {
             const statusToUse = newStatus !== undefined ? newStatus : (isOccupied ? 'Terisi' : 'Kosong');
@@ -3013,7 +3133,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             )}
                         </div>
                         {/* Luas / Ukuran Kamar ([Panjang] X [Lebar] meter) */}
-                        <div className="md:col-span-2 flex flex-col gap-1.5">
+                        <div className={`md:col-span-2 flex flex-col gap-1.5 p-2 rounded-xl relative transition-all ${
+                            roomEval.hasRevision && roomEval.roomSize
+                                ? 'border-2 border-amber-400 ring-2 ring-amber-400/30 bg-amber-500/[0.04] animate-pulse'
+                                : ''
+                        }`}>
+                            {roomEval.hasRevision && roomEval.roomSize && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-700 uppercase tracking-wider">
+                                    <Sparkles size={10} /> ⚠️ Perlu Revisi Ukuran
+                                </span>
+                            )}
                             <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Luas / Ukuran Kamar</label>
                             <div className="flex items-center gap-2">
                                 {(() => {
@@ -3054,7 +3183,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             </div>
                         </div>
                         {/* Status Kamar */}
-                        <div className="md:col-span-2 flex flex-col gap-1.5 mt-2 border-t border-gray-100 pt-3">
+                        <div className={`md:col-span-2 flex flex-col gap-1.5 mt-2 border-t border-gray-100 pt-3 p-2 rounded-xl relative transition-all ${
+                            roomEval.hasRevision && roomEval.occupants
+                                ? 'border-2 border-amber-400 ring-2 ring-amber-400/30 bg-amber-500/[0.04] animate-pulse'
+                                : ''
+                        }`}>
+                            {roomEval.hasRevision && roomEval.occupants && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-700 uppercase tracking-wider">
+                                    <Sparkles size={10} /> ⚠️ Perlu Revisi Status Penghuni
+                                </span>
+                            )}
                             <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Status Kamar</label>
                             <div className="flex gap-2">
                                 <button 
@@ -3080,7 +3218,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     </div>
                 </div>
 
-                                                     <div className="border border-gray-150 rounded-xl p-4 flex flex-col gap-3.5 bg-gray-50/30">
+                                                     <div className={`rounded-xl p-4 flex flex-col gap-3.5 relative transition-all ${
+                                                         roomEval.hasRevision && roomEval.pricing
+                                                             ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_20px_rgba(245,158,11,0.2)] bg-gradient-to-br from-amber-500/[0.04] via-white to-orange-500/[0.02] animate-pulse'
+                                                             : 'border border-gray-150 bg-gray-50/30'
+                                                     }`}>
+                                                         {roomEval.hasRevision && roomEval.pricing && (
+                                                             <div className="absolute -top-3 right-4 z-10 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-[10px] uppercase tracking-wider shadow-md shadow-amber-500/30 animate-bounce">
+                                                                 <Sparkles size={12} />
+                                                                 <span>⚠️ Perlu Revisi: Tarif &amp; Harga</span>
+                                                             </div>
+                                                         )}
                                                          <div className="flex justify-between items-center border-b border-gray-100 pb-1">
                                                              <span className="text-[10px] font-bold text-[#584235] uppercase tracking-widest">Skema Tarif / Harga Kamar</span>
                                                              <button 
@@ -3486,77 +3634,87 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                  placeholder="Tambah fasilitas kustom..." 
                                                                  className="flex-grow h-[36px] px-3 border border-[#e0c0af] rounded-lg text-xs bg-white outline-none text-[#584235] font-bold"
                                                              />
-                                                             <button 
-                                                                 type="button"
-                                                                 onClick={() => {
-                                                                     if (!customRoomFacilityInput.trim()) return;
-                                                                     const current = rt.roomFacilities || [];
-                                                                     if (!current.includes(customRoomFacilityInput.trim())) {
-                                                                         updateRoomFacilitiesWithPhotos([...current, customRoomFacilityInput.trim()]);
-                                                                     }
-                                                                     setCustomRoomFacilityInput('');
-                                                                 }}
-                                                                 className="h-[36px] px-4 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center transition-colors shadow-sm"
-                                                             >
-                                                                 Tambah
-                                                             </button>
-                                                         </div>
-                                                      </div>
+                                                              <button 
+                                                                  type="button"
+                                                                  onClick={() => {
+                                                                      if (!customRoomFacilityInput.trim()) return;
+                                                                      const current = rt.roomFacilities || [];
+                                                                      if (!current.includes(customRoomFacilityInput.trim())) {
+                                                                          updateRoomFacilitiesWithPhotos([...current, customRoomFacilityInput.trim()]);
+                                                                      }
+                                                                      setCustomRoomFacilityInput('');
+                                                                  }}
+                                                                  className="h-[36px] px-4 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center transition-colors shadow-sm"
+                                                              >
+                                                                  Tambah
+                                                              </button>
+                                                          </div>
+                                                       </div>
 
-                                                          {/* Biaya Tambahan Bulanan Lainnya */}
-                                                          <div className="border border-gray-150 rounded-xl p-4 flex flex-col gap-3.5 bg-gray-50/30">
-                                                              <span className="text-[10px] font-bold text-[#584235] uppercase tracking-widest border-b border-gray-100 pb-1">Biaya Tambahan Bulanan Lainnya</span>
-                                                              
-                                                              <div className="flex flex-col gap-1.5">
-                                                                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Nominal Biaya Tambahan Bulanan (Rp/Bulan)</label>
-                                                                  <div className="relative">
-                                                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-bold">Rp</span>
-                                                                      <input 
-                                                                          type="text" 
-                                                                          value={formatThousand(rt?.otherFeeAmount || 0)}
-                                                                          onChange={e => {
-                                                                              const val = parseThousand(e.target.value);
-                                                                              const updated = [...kmListingForm.roomTypes];
-                                                                              updated[activeRoomIdx] = { ...rt, otherFeeAmount: val };
-                                                                              setKmListingForm({ ...kmListingForm, roomTypes: updated });
-                                                                          }}
-                                                                          className="w-full h-[36px] pl-8 pr-3 border border-[#e0c0af] rounded-lg text-xs bg-white text-gray-700 outline-none font-bold"
-                                                                          placeholder="0"
-                                                                      />
-                                                                  </div>
-                                                              </div>
+                                                           {/* Biaya Tambahan Bulanan Lainnya */}
+                                                           <div className="border border-gray-150 rounded-xl p-4 flex flex-col gap-3.5 bg-gray-50/30">
+                                                               <span className="text-[10px] font-bold text-[#584235] uppercase tracking-widest border-b border-gray-100 pb-1">Biaya Tambahan Bulanan Lainnya</span>
+                                                               
+                                                               <div className="flex flex-col gap-1.5">
+                                                                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Nominal Biaya Tambahan Bulanan (Rp/Bulan)</label>
+                                                                   <div className="relative">
+                                                                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-bold">Rp</span>
+                                                                       <input 
+                                                                           type="text" 
+                                                                           value={formatThousand(rt?.otherFeeAmount || 0)}
+                                                                           onChange={e => {
+                                                                               const val = parseThousand(e.target.value);
+                                                                               const updated = [...kmListingForm.roomTypes];
+                                                                               updated[activeRoomIdx] = { ...rt, otherFeeAmount: val };
+                                                                               setKmListingForm({ ...kmListingForm, roomTypes: updated });
+                                                                           }}
+                                                                           className="w-full h-[36px] pl-8 pr-3 border border-[#e0c0af] rounded-lg text-xs bg-white text-gray-700 outline-none font-bold"
+                                                                           placeholder="0"
+                                                                       />
+                                                                   </div>
+                                                               </div>
 
-                                                              <div className="flex flex-col gap-1.5 mt-1">
-                                                                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Cakupan Biaya Tambahan</label>
-                                                                  <div className="grid grid-cols-2 gap-2">
-                                                                      {['Listrik', 'Air', 'Sampah', 'Wifi', 'Keamanan/Parkir'].map(feeName => {
-                                                                          const isChecked = rt?.otherFeeCoveredItems?.includes(feeName);
-                                                                          return (
-                                                                              <label key={feeName} className="flex items-center gap-2 cursor-pointer p-2.5 bg-white border border-[#e0c0af] rounded-lg shadow-sm">
-                                                                                  <input 
-                                                                                      type="checkbox"
-                                                                                      checked={!!isChecked}
-                                                                                      onChange={() => {
-                                                                                          const current = rt?.otherFeeCoveredItems || [];
-                                                                                          const updated = current.includes(feeName)
-                                                                                              ? current.filter(item => item !== feeName)
-                                                                                              : [...current, feeName];
-                                                                                          const updatedRooms = [...kmListingForm.roomTypes];
-                                                                                          updatedRooms[activeRoomIdx] = { ...rt, otherFeeCoveredItems: updated };
-                                                                                          setKmListingForm({ ...kmListingForm, roomTypes: updatedRooms });
-                                                                                      }}
-                                                                                      className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
-                                                                                  />
-                                                                                  <span className="text-[10px] font-bold text-gray-655 uppercase tracking-wider">{feeName}</span>
-                                                                              </label>
-                                                                          );
-                                                                      })}
-                                                                  </div>
-                                                              </div>
-                                                      </div>
+                                                               <div className="flex flex-col gap-1.5 mt-1">
+                                                                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Cakupan Biaya Tambahan</label>
+                                                                   <div className="grid grid-cols-2 gap-2">
+                                                                       {['Listrik', 'Air', 'Sampah', 'Wifi', 'Keamanan/Parkir'].map(feeName => {
+                                                                           const isChecked = rt?.otherFeeCoveredItems?.includes(feeName);
+                                                                           return (
+                                                                               <label key={feeName} className="flex items-center gap-2 cursor-pointer p-2.5 bg-white border border-[#e0c0af] rounded-lg shadow-sm">
+                                                                                   <input 
+                                                                                       type="checkbox"
+                                                                                       checked={!!isChecked}
+                                                                                       onChange={() => {
+                                                                                           const current = rt?.otherFeeCoveredItems || [];
+                                                                                           const updated = current.includes(feeName)
+                                                                                               ? current.filter(item => item !== feeName)
+                                                                                               : [...current, feeName];
+                                                                                           const updatedRooms = [...kmListingForm.roomTypes];
+                                                                                           updatedRooms[activeRoomIdx] = { ...rt, otherFeeCoveredItems: updated };
+                                                                                           setKmListingForm({ ...kmListingForm, roomTypes: updatedRooms });
+                                                                                       }}
+                                                                                       className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
+                                                                                   />
+                                                                                   <span className="text-[10px] font-bold text-gray-655 uppercase tracking-wider">{feeName}</span>
+                                                                               </label>
+                                                                           );
+                                                                       })}
+                                                                   </div>
+                                                               </div>
+                                                       </div>
 
-                                                                   {/* Dokumentasi Foto Kamar */}
-                                                                    <div className="border border-gray-150 rounded-xl p-4 flex flex-col gap-3.5 bg-gray-50/30">
+                                                                    {/* Dokumentasi Foto Kamar */}
+                                                                    <div className={`rounded-xl p-4 flex flex-col gap-3.5 relative transition-all ${
+                                                                        roomEval.hasRevision && roomEval.roomPhotos
+                                                                            ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_20px_rgba(245,158,11,0.2)] bg-gradient-to-br from-amber-500/[0.04] via-white to-orange-500/[0.02] animate-pulse'
+                                                                            : 'border border-gray-150 bg-gray-50/30'
+                                                                    }`}>
+                                                                        {roomEval.hasRevision && roomEval.roomPhotos && (
+                                                                            <div className="absolute -top-3 right-4 z-10 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-[10px] uppercase tracking-wider shadow-md shadow-amber-500/30 animate-bounce">
+                                                                                <Sparkles size={12} />
+                                                                                <span>⚠️ Perlu Revisi: Foto Kamar</span>
+                                                                            </div>
+                                                                        )}
                                                                         <div className="flex justify-between items-center border-b border-gray-100 pb-1.5">
                                                                             <span className="text-[10px] font-bold text-[#584235] uppercase tracking-widest">Dokumentasi Foto Kamar</span>
                                                                         </div>
@@ -4314,26 +4472,87 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                                         {agentTab === 'active' && (
                                             <>
-                                                {req.status === 'REVISION_REQUIRED' || req.notes?.includes('[REVISI') ? (
-                                                    <div className="flex flex-col gap-2.5">
-                                                        <div className="bg-amber-50 border-2 border-amber-400 p-4 rounded-2xl flex flex-col gap-2 shadow-sm">
-                                                            <div className="flex items-center gap-2 text-amber-900 font-black text-xs uppercase tracking-wide">
-                                                                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 animate-bounce" />
-                                                                <span>⚠️ PERMINTAAN REVISI / EVALUASI ADMIN</span>
+                                                {req.status === 'REVISION_REQUIRED' || req.notes?.includes('[REVISI') ? (() => {
+                                                    const evalData = parseEvaluationData(req.notes);
+                                                    return (
+                                                        <div className="relative overflow-hidden rounded-2xl border-2 border-amber-400 bg-gradient-to-br from-amber-500/[0.08] via-orange-500/[0.04] to-amber-500/[0.08] p-4 shadow-[0_0_20px_rgba(245,158,11,0.18)] flex flex-col gap-3.5 backdrop-blur-sm transition-all">
+                                                            {/* Top Glowing Gradient Accent Bar */}
+                                                            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-400 animate-pulse" />
+                                                            
+                                                            {/* Header with Pulse Icon & Status Pill */}
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <div className="flex items-center gap-2.5">
+                                                                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0 animate-bounce">
+                                                                        <AlertTriangle size={18} />
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="text-[11px] font-black text-amber-950 uppercase tracking-wider block">
+                                                                            Evaluasi &amp; Permintaan Revisi
+                                                                        </span>
+                                                                        <span className="text-[9px] font-bold text-amber-700 uppercase tracking-widest">
+                                                                            Catatan Admin • {evalData.date}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-200/90 text-amber-900 border border-amber-300 text-[9px] font-black uppercase tracking-wider shadow-xs animate-pulse">
+                                                                    <Sparkles size={10} className="text-amber-700" />
+                                                                    Perlu Tindakan
+                                                                </span>
                                                             </div>
-                                                            <p className="text-xs text-amber-950 font-bold whitespace-pre-wrap leading-relaxed bg-white/90 p-3 rounded-xl border border-amber-200">
-                                                                {req.notes || 'Admin meminta evaluasi dan perbaikan data hasil survei lapangan. Silakan buka formulir untuk melihat rincian bagian yang perlu diperbaiki.'}
-                                                            </p>
+
+                                                            {/* List of Targeted Items as Modern Interactive Chips */}
+                                                            {evalData.items.length > 0 && (
+                                                                <div className="flex flex-col gap-1.5 pt-1 border-t border-amber-200/60">
+                                                                    <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1">
+                                                                        <span>📌</span> Bagian yang Perlu Diperbaiki:
+                                                                    </span>
+                                                                    <div className="flex flex-wrap gap-1.5">
+                                                                        {evalData.items.map((item, idx) => (
+                                                                            <span 
+                                                                                key={idx} 
+                                                                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white text-amber-950 font-extrabold text-[11px] border border-amber-200 shadow-xs"
+                                                                            >
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping inline-block shrink-0" />
+                                                                                {item}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Admin Note Quote Box */}
+                                                            {evalData.adminNote && (
+                                                                <div className="bg-white/95 rounded-xl p-3 border border-amber-200 shadow-xs flex flex-col gap-1">
+                                                                    <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider flex items-center gap-1">
+                                                                        <span>📝</span> Pesan Catatan Admin:
+                                                                    </span>
+                                                                    <p className="text-xs text-gray-800 font-semibold leading-relaxed whitespace-pre-wrap italic">
+                                                                        "{evalData.adminNote}"
+                                                                    </p>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Fallback if neither items nor admin note parsed cleanly */}
+                                                            {!evalData.items.length && !evalData.adminNote && (
+                                                                <div className="bg-white/95 rounded-xl p-3 border border-amber-200 shadow-xs">
+                                                                    <p className="text-xs text-gray-800 font-semibold leading-relaxed">
+                                                                        {req.notes || 'Admin meminta evaluasi data pendataan properti. Silakan buka formulir untuk melihat dan memperbaiki data.'}
+                                                                    </p>
+                                                                </div>
+                                                            )}
+
+                                                            {/* CTA Button with Glow & Shimmer */}
+                                                            <button 
+                                                                onClick={() => openKostManagerListing(req)} 
+                                                                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 active:scale-95 transition-all cursor-pointer group"
+                                                            >
+                                                                <Edit className="w-4 h-4 transition-transform group-hover:scale-110" />
+                                                                <span>⚡ Buka &amp; Perbaiki Bagian yang Dievaluasi</span>
+                                                                <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                                                            </button>
                                                         </div>
-                                                        <button 
-                                                            onClick={() => openKostManagerListing(req)} 
-                                                            className="w-full bg-amber-600 hover:bg-amber-700 text-white py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-black text-xs uppercase tracking-wider shadow-md active:scale-95 cursor-pointer"
-                                                        >
-                                                            <Edit className="w-4 h-4 inline shrink-0" />
-                                                            ⚠️ Buka &amp; Perbaiki Bagian yang Dievaluasi
-                                                        </button>
-                                                    </div>
-                                                ) : req.status === 'SUBMITTED' ? (
+                                                    );
+                                                })() : req.status === 'SUBMITTED' ? (
                                                     <div className="flex flex-col gap-2.5">
                                                         <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex items-start gap-2 text-xs text-emerald-950">
                                                             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -5549,28 +5768,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                 <button onClick={closeKostManagerListingWithSave} className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded-full hover:bg-gray-50 transition-colors">&times;</button>
                             </div>
 
-                            {/* Stepper Indicator with Revision Alert Badges */}
+                            {/* Stepper Indicator with Dynamic Evaluation Glowing Badges */}
                             {(() => {
-                                const notes = isEditingKostManager?.notes || '';
-                                const n = notes.toLowerCase();
-                                const facade = n.includes('foto utama') || n.includes('fasad') || n.includes('foto depan');
-                                const gps = n.includes('titik koordinat') || n.includes('gps') || n.includes('maps');
-                                const facilities = n.includes('fasilitas umum');
-                                const rules = n.includes('deskripsi & peraturan') || n.includes('peraturan kost') || n.includes('deskripsi');
-                                const landmark = n.includes('landmark') || n.includes('kampus') || n.includes('estimasi jarak');
-                                const hasProperty = facade || gps || facilities || rules || landmark || n.includes('properti umum');
-
-                                const roomSize = n.includes('ukuran & dimensi') || n.includes('ukuran') || n.includes('dimensi');
-                                const roomFacilities = n.includes('fasilitas utama kamar') || n.includes('fasilitas kamar mandi') || n.includes('fasilitas dapur');
-                                const roomPhotos = n.includes('foto dokumentasi unit') || n.includes('foto unit') || n.includes('foto kamar');
-                                const occupants = n.includes('status kamar (terisi') || n.includes('identitas penghuni') || n.includes('penghuni');
-                                const pricing = n.includes('tarif sewa') || n.includes('periode sewa') || n.includes('harga sewa');
-                                const hasRoom = roomSize || roomFacilities || roomPhotos || occupants || pricing || n.includes('kamar & fasilitas') || n.includes('data penghuni');
-
-                                const bank = n.includes('rekening bank') || n.includes('nomor rekening');
-                                const partner = n.includes('kontak pemilik') || n.includes('syarat & ketentuan') || n.includes('mitra & kerjasama');
-                                const signature = n.includes('tanda tangan digital') || n.includes('tanda tangan');
-                                const hasPartner = bank || partner || signature || n.includes('mitra & kerjasama');
+                                const currentEvalData = parseEvaluationData(isEditingKostManager?.notes);
 
                                 return (
                                     <div className="bg-white border-b border-[#e0c0af] py-3 px-6 shrink-0 flex items-center justify-between gap-1">
@@ -5581,15 +5781,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         >
                                             <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 shadow-sm transition-all relative ${
                                                 kmStep >= 1 ? 'bg-[#ff7a00] text-white' : 'bg-[#d3e4fe] text-[#584235]'
-                                            } ${hasProperty ? 'ring-4 ring-amber-400 ring-offset-1 animate-pulse' : ''}`}>
+                                            } ${currentEvalData.hasRevision && currentEvalData.hasProperty ? 'ring-4 ring-amber-400 ring-offset-1 animate-pulse' : ''}`}>
                                                 1
                                             </div>
                                             <div className={`text-[9px] text-center font-bold uppercase tracking-wider flex items-center gap-1 ${
                                                 kmStep >= 1 ? 'text-[#ff7a00]' : 'text-gray-400'
                                             }`}>
                                                 PROPERTI
-                                                {hasProperty && (
-                                                    <span className="px-1 py-0.2 text-[8px] bg-amber-500 text-white rounded font-black">⚠️ REVISI</span>
+                                                {currentEvalData.hasRevision && currentEvalData.hasProperty && (
+                                                    <span className="px-1.5 py-0.5 text-[8px] bg-amber-500 text-white rounded-md font-black shadow-xs animate-pulse">REVISI</span>
                                                 )}
                                             </div>
                                         </button>
@@ -5601,15 +5801,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         >
                                             <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 transition-all relative ${
                                                 kmStep >= 2 ? 'bg-[#ff7a00] text-white' : 'bg-[#d3e4fe] text-[#584235]'
-                                            } ${hasRoom ? 'ring-4 ring-amber-400 ring-offset-1 animate-pulse' : ''}`}>
+                                            } ${currentEvalData.hasRevision && currentEvalData.hasRoom ? 'ring-4 ring-amber-400 ring-offset-1 animate-pulse' : ''}`}>
                                                 2
                                             </div>
                                             <div className={`text-[9px] text-center font-bold uppercase tracking-wider flex items-center gap-1 ${
                                                 kmStep >= 2 ? 'text-[#ff7a00]' : 'text-gray-400'
                                             }`}>
                                                 DATA KAMAR
-                                                {hasRoom && (
-                                                    <span className="px-1 py-0.2 text-[8px] bg-amber-500 text-white rounded font-black">⚠️ REVISI</span>
+                                                {currentEvalData.hasRevision && currentEvalData.hasRoom && (
+                                                    <span className="px-1.5 py-0.5 text-[8px] bg-amber-500 text-white rounded-md font-black shadow-xs animate-pulse">REVISI</span>
                                                 )}
                                             </div>
                                         </button>
@@ -5621,15 +5821,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         >
                                             <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 transition-all relative ${
                                                 kmStep >= 3 ? 'bg-[#ff7a00] text-white' : 'bg-[#d3e4fe] text-[#584235]'
-                                            } ${hasPartner ? 'ring-4 ring-amber-400 ring-offset-1 animate-pulse' : ''}`}>
+                                            } ${currentEvalData.hasRevision && currentEvalData.hasPartner ? 'ring-4 ring-amber-400 ring-offset-1 animate-pulse' : ''}`}>
                                                 3
                                             </div>
                                             <div className={`text-[9px] text-center font-bold uppercase tracking-wider flex items-center gap-1 ${
                                                 kmStep >= 3 ? 'text-[#ff7a00]' : 'text-gray-400'
                                             }`}>
                                                 REVIEW
-                                                {hasPartner && (
-                                                    <span className="px-1 py-0.2 text-[8px] bg-amber-500 text-white rounded font-black">⚠️ REVISI</span>
+                                                {currentEvalData.hasRevision && currentEvalData.hasPartner && (
+                                                    <span className="px-1.5 py-0.5 text-[8px] bg-amber-500 text-white rounded-md font-black shadow-xs animate-pulse">REVISI</span>
                                                 )}
                                             </div>
                                         </button>
@@ -5640,85 +5840,110 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             {/* Main Scrollable Form Container */}
                             <div className="flex-grow overflow-y-auto p-6 space-y-6 hide-scrollbar">
                                 
-                                {/* Banner Catatan Evaluasi Admin / Permintaan Revisi dengan Quick-Jump */}
+                                {/* Modern Glowing Evaluation Notice Banner with Structured Chips & Quick-Jump */}
                                 {(() => {
-                                    const notes = isEditingKostManager?.notes || '';
-                                    const n = notes.toLowerCase();
-                                    const facade = n.includes('foto utama') || n.includes('fasad') || n.includes('foto depan');
-                                    const gps = n.includes('titik koordinat') || n.includes('gps') || n.includes('maps');
-                                    const facilities = n.includes('fasilitas umum');
-                                    const rules = n.includes('deskripsi & peraturan') || n.includes('peraturan kost') || n.includes('deskripsi');
-                                    const landmark = n.includes('landmark') || n.includes('kampus') || n.includes('estimasi jarak');
-                                    const hasProperty = facade || gps || facilities || rules || landmark || n.includes('properti umum');
-
-                                    const roomSize = n.includes('ukuran & dimensi') || n.includes('ukuran') || n.includes('dimensi');
-                                    const roomFacilities = n.includes('fasilitas utama kamar') || n.includes('fasilitas kamar mandi') || n.includes('fasilitas dapur');
-                                    const roomPhotos = n.includes('foto dokumentasi unit') || n.includes('foto unit') || n.includes('foto kamar');
-                                    const occupants = n.includes('status kamar (terisi') || n.includes('identitas penghuni') || n.includes('penghuni');
-                                    const pricing = n.includes('tarif sewa') || n.includes('periode sewa') || n.includes('harga sewa');
-                                    const hasRoom = roomSize || roomFacilities || roomPhotos || occupants || pricing || n.includes('kamar & fasilitas') || n.includes('data penghuni');
-
-                                    const bank = n.includes('rekening bank') || n.includes('nomor rekening');
-                                    const partner = n.includes('kontak pemilik') || n.includes('syarat & ketentuan') || n.includes('mitra & kerjasama');
-                                    const signature = n.includes('tanda tangan digital') || n.includes('tanda tangan');
-                                    const hasPartner = bank || partner || signature || n.includes('mitra & kerjasama');
-
-                                    const hasAny = n.includes('[revisi') || isEditingKostManager?.status === 'REVISION_REQUIRED' || hasProperty || hasRoom || hasPartner;
-
-                                    if (!hasAny) return null;
+                                    const currentEvalData = parseEvaluationData(isEditingKostManager?.notes);
+                                    if (!currentEvalData.hasRevision) return null;
 
                                     return (
-                                        <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-400 shadow-md flex flex-col gap-3 animate-in fade-in">
-                                            <div className="flex items-start gap-3">
-                                                <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                                                    <AlertTriangle size={20} className="animate-bounce" />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="px-2.5 py-0.5 rounded-md bg-amber-500 text-white font-black text-[10px] uppercase tracking-wider">
-                                                            ⚠️ PERMINTAAN REVISI &amp; EVALUASI ADMIN
-                                                        </span>
+                                        <div className="relative overflow-hidden rounded-2xl border-2 border-amber-400 bg-gradient-to-br from-amber-500/[0.08] via-orange-500/[0.03] to-amber-500/[0.08] p-4 shadow-[0_0_20px_rgba(245,158,11,0.15)] flex flex-col gap-3 backdrop-blur-sm animate-fadeIn">
+                                            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-400 animate-pulse" />
+                                            
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0 animate-bounce">
+                                                        <AlertTriangle size={18} />
                                                     </div>
-                                                    <p className="text-xs text-amber-950 font-bold mt-1.5 whitespace-pre-wrap leading-relaxed bg-white/90 p-3 rounded-xl border border-amber-200">
-                                                        {isEditingKostManager?.notes || 'Mohon lengkapi dan perbaiki bagian data pendataan yang belum sesuai.'}
-                                                    </p>
+                                                    <div>
+                                                        <h3 className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                                                            Permintaan Revisi / Evaluasi Admin
+                                                        </h3>
+                                                        <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest">
+                                                            Catatan Masuk • {currentEvalData.date}
+                                                        </p>
+                                                    </div>
                                                 </div>
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-200/90 text-amber-900 border border-amber-300 text-[9px] font-black uppercase tracking-wider animate-pulse">
+                                                    <Sparkles size={10} className="text-amber-700" />
+                                                    Revisi Aktif
+                                                </span>
                                             </div>
 
+                                            {/* Targeted Items Chips */}
+                                            {currentEvalData.items.length > 0 && (
+                                                <div className="flex flex-col gap-1.5 pt-1 border-t border-amber-200/50">
+                                                    <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1">
+                                                        <span>📌</span> Bagian yang Perlu Diperbaiki:
+                                                    </span>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {currentEvalData.items.map((item, idx) => (
+                                                            <span 
+                                                                key={idx} 
+                                                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white text-amber-950 font-extrabold text-[10px] border border-amber-200 shadow-xs"
+                                                            >
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping inline-block shrink-0" />
+                                                                {item}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Admin Note Quote */}
+                                            {currentEvalData.adminNote && (
+                                                <div className="bg-white/95 rounded-xl p-3 border border-amber-200 shadow-xs flex flex-col gap-1">
+                                                    <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider">
+                                                        📝 Pesan Catatan Admin:
+                                                    </span>
+                                                    <p className="text-xs text-gray-800 font-semibold leading-relaxed whitespace-pre-wrap italic">
+                                                        "{currentEvalData.adminNote}"
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {/* Fallback if no items nor note */}
+                                            {!currentEvalData.items.length && !currentEvalData.adminNote && (
+                                                <div className="bg-white/95 rounded-xl p-3 border border-amber-200 shadow-xs">
+                                                    <p className="text-xs text-gray-800 font-semibold leading-relaxed">
+                                                        {isEditingKostManager?.notes || 'Mohon lengkapi dan perbaiki data pendataan yang belum sesuai.'}
+                                                    </p>
+                                                </div>
+                                            )}
+
                                             {/* Quick Jump Buttons */}
-                                            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-amber-200">
-                                                <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider">Loncat Cepat ke Bagian Revisi:</span>
-                                                {hasProperty && (
+                                            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-amber-200/60">
+                                                <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider">Loncat Cepat ke Bagian:</span>
+                                                {currentEvalData.hasProperty && (
                                                     <button
                                                         type="button"
                                                         onClick={() => setKmStep(1)}
-                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                                                            kmStep === 1 ? 'bg-amber-600 text-white shadow-sm' : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-100'
+                                                        className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 ${
+                                                            kmStep === 1 ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md' : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-100'
                                                         }`}
                                                     >
                                                         🏢 Step 1 (Properti) {kmStep === 1 && '✓'}
                                                     </button>
                                                 )}
-                                                {hasRoom && (
+                                                {currentEvalData.hasRoom && (
                                                     <button
                                                         type="button"
                                                         onClick={() => setKmStep(2)}
-                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                                                            kmStep === 2 ? 'bg-amber-600 text-white shadow-sm' : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-100'
+                                                        className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 ${
+                                                            kmStep === 2 ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md' : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-100'
                                                         }`}
                                                     >
                                                         🛏️ Step 2 (Data Kamar) {kmStep === 2 && '✓'}
                                                     </button>
                                                 )}
-                                                {hasPartner && (
+                                                {currentEvalData.hasPartner && (
                                                     <button
                                                         type="button"
                                                         onClick={() => setKmStep(3)}
-                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                                                            kmStep === 3 ? 'bg-amber-600 text-white shadow-sm' : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-100'
+                                                        className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 ${
+                                                            kmStep === 3 ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md' : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-100'
                                                         }`}
                                                     >
-                                                        📋 Step 3 (Mitra / Rekening) {kmStep === 3 && '✓'}
+                                                        📋 Step 3 (Mitra &amp; Rekening) {kmStep === 3 && '✓'}
                                                     </button>
                                                 )}
                                             </div>
@@ -5727,110 +5952,133 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                 })()}
 
                                 {/* STEP 1: PROPERTI */}
-                                {kmStep === 1 && (
-                                    <div className="space-y-6">
-                                        <section className="bg-white border border-[#e0c0af] rounded-2xl p-5 flex flex-col gap-4 shadow-sm">
-                                            <h3 className="font-bold text-sm text-[#0b1c30] border-b border-gray-100 pb-2">Profil & Kontak Properti</h3>
-                                            
-                                            <div className="flex flex-col gap-1.5">
-                                                <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Nama Properti Kos</label>
-                                                <input 
-                                                    type="text"
-                                                    value={kmListingForm.title}
-                                                    onChange={e => setKmListingForm({ ...kmListingForm, title: e.target.value })}
-                                                    placeholder="Contoh: Kos Buana Raya"
-                                                    className="w-full h-[46px] px-3.5 border border-[#8c7263] rounded-xl bg-[#f8f9ff] focus:ring-2 focus:ring-[#ff7a00] focus:border-[#ff7a00] outline-none text-sm font-semibold"
-                                                />
-                                            </div>
+                                {kmStep === 1 && (() => {
+                                    const currentEvalData = parseEvaluationData(isEditingKostManager?.notes);
 
-                                            <div className="flex flex-col gap-1.5">
-                                                <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Tipe Kos</label>
-                                                <div className="flex bg-[#e5eeff] rounded-xl p-1 gap-1">
-                                                    {['Putra', 'Putri', 'Campur'].map(t => (
-                                                        <button
-                                                            key={t}
-                                                            type="button"
-                                                            onClick={() => setKmListingForm({ ...kmListingForm, type: t })}
-                                                            className={`flex-1 h-[36px] rounded-lg font-bold text-xs uppercase tracking-wider transition-all ${kmListingForm.type === t ? 'bg-[#ff7a00] text-white shadow-sm' : 'text-[#584235] hover:bg-[#dce9ff]'}`}
-                                                        >
-                                                            {t}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                             <div className="flex flex-col gap-1.5">
-                                                 <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Total Jumlah Kamar</label>
-                                                 <input 
-                                                     type="number"
-                                                     min="1"
-                                                     value={kmListingForm.totalRooms || ''}
-                                                     onChange={e => setKmListingForm({ ...kmListingForm, totalRooms: e.target.value === '' ? '' : (parseInt(e.target.value) || 0) })}
-                                                     placeholder="Masukkan total jumlah kamar (contoh: 10)"
-                                                     className="w-full h-[46px] px-3.5 border border-[#8c7263] rounded-xl bg-[#f8f9ff] focus:ring-2 focus:ring-[#ff7a00] focus:border-[#ff7a00] outline-none text-sm font-semibold"
-                                                 />
-                                             </div>
-                                            </div>
-
-                                            <div className="flex flex-col gap-1.5">
-                                                <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Alamat Lengkap</label>
-                                                <textarea
-                                                    value={kmListingForm.address}
-                                                    onChange={e => setKmListingForm({ ...kmListingForm, address: e.target.value })}
-                                                    placeholder="Jalan, RT/RW, Kelurahan, Kecamatan..."
-                                                    className="w-full p-3.5 border border-[#8c7263] rounded-xl bg-[#f8f9ff] focus:ring-2 focus:ring-[#ff7a00] focus:border-[#ff7a00] outline-none text-sm font-medium min-h-[80px] resize-none"
-                                                />
-                                            </div>
-
-                                            <div className="flex flex-col gap-1.5">
-                                                <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Lokasi GPS</label>
-
-                                                <div className="border border-[#e0c0af] rounded-xl overflow-hidden flex flex-col bg-[#f8f9ff] relative">
-                                                    <div ref={kmMapRef} className="w-full h-40 z-0 relative" style={{ minHeight: '160px', touchAction: 'none' }} />
-                                                    
-                                                    {/* Floating Quick Action Button on Mini Map */}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setModalTempLocation(kmListingForm.location || { lat: -5.147665, lng: 119.432731 });
-                                                            setIsMapModalOpen(true);
-                                                        }}
-                                                        className="absolute top-2 right-2 z-10 bg-white/95 backdrop-blur-sm hover:bg-white text-gray-800 text-[10px] font-black px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-md flex items-center gap-1 transition-all active:scale-95"
-                                                    >
-                                                        <Maximize2 className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                                                        Buka Peta Pop-up (Layar Penuh)
-                                                    </button>
-
-                                                    <div className="bg-slate-50 border-t border-gray-100 p-2 flex justify-between items-center">
-                                                        <p className="text-[10px] text-gray-700 font-black uppercase tracking-wider flex items-center gap-1">
-                                                            <MapPin className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" />
-                                                            Koordinat Terkunci
-                                                        </p>
-                                                        <p className="text-[9px] text-gray-500 font-mono bg-white px-2 py-0.5 rounded-full border border-gray-200 shadow-sm">
-                                                            Lat: {kmListingForm.location?.lat?.toFixed(6) || '-'}, Lng: {kmListingForm.location?.lng?.toFixed(6) || '-'}
-                                                        </p>
+                                    return (
+                                        <div className="space-y-6">
+                                            <section className={`rounded-2xl p-5 flex flex-col gap-4 shadow-sm transition-all relative ${
+                                                currentEvalData.hasRevision && currentEvalData.facade
+                                                    ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-gradient-to-br from-amber-500/[0.04] via-white to-orange-500/[0.02] animate-pulse'
+                                                    : 'border border-[#e0c0af] bg-white'
+                                            }`}>
+                                                {currentEvalData.hasRevision && currentEvalData.facade && (
+                                                    <div className="absolute -top-3 right-4 z-10 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-[10px] uppercase tracking-wider shadow-md shadow-amber-500/30 animate-bounce">
+                                                        <Sparkles size={12} />
+                                                        <span>⚠️ Perlu Revisi: Profil / Info Kost</span>
                                                     </div>
-
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            if (confirmLocationChange()) {
-                                                                if (navigator.geolocation) {
-                                                                    navigator.geolocation.getCurrentPosition((pos) => {
-                                                                        setKmListingForm({
-                                                                            ...kmListingForm,
-                                                                            location: { lat: pos.coords.latitude, lng: pos.coords.longitude }
-                                                                        });
-                                                                        alert('Koordinat properti presisi berhasil dikunci!');
-                                                                    }, err => alert('Gagal membaca GPS: ' + err.message));
-                                                                }
-                                                            }
-                                                        }}
-                                                        className="w-full h-[46px] bg-[#e5eeff] hover:bg-[#dce9ff] text-[#ff7a00] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-colors border-t border-[#e0c0af]"
-                                                    >
-                                                        <LocateFixed className="w-4 h-4 shrink-0" />
-                                                        Gunakan Lokasi Saya Saat Ini
-                                                    </button>
+                                                )}
+                                                <h3 className="font-bold text-sm text-[#0b1c30] border-b border-gray-100 pb-2">Profil & Kontak Properti</h3>
+                                                
+                                                <div className="flex flex-col gap-1.5">
+                                                    <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Nama Properti Kos</label>
+                                                    <input 
+                                                        type="text"
+                                                        value={kmListingForm.title}
+                                                        onChange={e => setKmListingForm({ ...kmListingForm, title: e.target.value })}
+                                                        placeholder="Contoh: Kos Buana Raya"
+                                                        className="w-full h-[46px] px-3.5 border border-[#8c7263] rounded-xl bg-[#f8f9ff] focus:ring-2 focus:ring-[#ff7a00] focus:border-[#ff7a00] outline-none text-sm font-semibold"
+                                                    />
                                                 </div>
-                                            </div>
+
+                                                <div className="flex flex-col gap-1.5">
+                                                    <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Tipe Kos</label>
+                                                    <div className="flex bg-[#e5eeff] rounded-xl p-1 gap-1">
+                                                        {['Putra', 'Putri', 'Campur'].map(t => (
+                                                            <button
+                                                                key={t}
+                                                                type="button"
+                                                                onClick={() => setKmListingForm({ ...kmListingForm, type: t })}
+                                                                className={`flex-1 h-[36px] rounded-lg font-bold text-xs uppercase tracking-wider transition-all ${kmListingForm.type === t ? 'bg-[#ff7a00] text-white shadow-sm' : 'text-[#584235] hover:bg-[#dce9ff]'}`}
+                                                            >
+                                                                {t}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                 <div className="flex flex-col gap-1.5">
+                                                     <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Total Jumlah Kamar</label>
+                                                     <input 
+                                                         type="number"
+                                                         min="1"
+                                                         value={kmListingForm.totalRooms || ''}
+                                                         onChange={e => setKmListingForm({ ...kmListingForm, totalRooms: e.target.value === '' ? '' : (parseInt(e.target.value) || 0) })}
+                                                         placeholder="Masukkan total jumlah kamar (contoh: 10)"
+                                                         className="w-full h-[46px] px-3.5 border border-[#8c7263] rounded-xl bg-[#f8f9ff] focus:ring-2 focus:ring-[#ff7a00] focus:border-[#ff7a00] outline-none text-sm font-semibold"
+                                                     />
+                                                 </div>
+                                                </div>
+
+                                                <div className="flex flex-col gap-1.5">
+                                                    <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Alamat Lengkap</label>
+                                                    <textarea
+                                                        value={kmListingForm.address}
+                                                        onChange={e => setKmListingForm({ ...kmListingForm, address: e.target.value })}
+                                                        placeholder="Jalan, RT/RW, Kelurahan, Kecamatan..."
+                                                        className="w-full p-3.5 border border-[#8c7263] rounded-xl bg-[#f8f9ff] focus:ring-2 focus:ring-[#ff7a00] focus:border-[#ff7a00] outline-none text-sm font-medium min-h-[80px] resize-none"
+                                                    />
+                                                </div>
+
+                                                <div className="flex flex-col gap-1.5">
+                                                    <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Lokasi GPS</label>
+
+                                                    <div className={`rounded-xl overflow-hidden flex flex-col relative transition-all ${
+                                                        currentEvalData.hasRevision && currentEvalData.gps
+                                                            ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-gradient-to-br from-amber-500/[0.04] via-white to-orange-500/[0.02] animate-pulse'
+                                                            : 'border border-[#e0c0af] bg-[#f8f9ff]'
+                                                    }`}>
+                                                        {currentEvalData.hasRevision && currentEvalData.gps && (
+                                                            <div className="absolute top-2 left-2 z-20 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-[9px] uppercase tracking-wider shadow-md shadow-amber-500/30 animate-bounce">
+                                                                <Sparkles size={11} />
+                                                                <span>⚠️ Perlu Revisi: Titik Koordinat GPS</span>
+                                                            </div>
+                                                        )}
+                                                        <div ref={kmMapRef} className="w-full h-40 z-0 relative" style={{ minHeight: '160px', touchAction: 'none' }} />
+                                                        
+                                                        {/* Floating Quick Action Button on Mini Map */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setModalTempLocation(kmListingForm.location || { lat: -5.147665, lng: 119.432731 });
+                                                                setIsMapModalOpen(true);
+                                                            }}
+                                                            className="absolute top-2 right-2 z-10 bg-white/95 backdrop-blur-sm hover:bg-white text-gray-800 text-[10px] font-black px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-md flex items-center gap-1 transition-all active:scale-95"
+                                                        >
+                                                            <Maximize2 className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                                                            Buka Peta Pop-up (Layar Penuh)
+                                                        </button>
+
+                                                        <div className="bg-slate-50 border-t border-gray-100 p-2 flex justify-between items-center">
+                                                            <p className="text-[10px] text-gray-700 font-black uppercase tracking-wider flex items-center gap-1">
+                                                                <MapPin className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" />
+                                                                Koordinat Terkunci
+                                                            </p>
+                                                            <p className="text-[9px] text-gray-500 font-mono bg-white px-2 py-0.5 rounded-full border border-gray-200 shadow-sm">
+                                                                Lat: {kmListingForm.location?.lat?.toFixed(6) || '-'}, Lng: {kmListingForm.location?.lng?.toFixed(6) || '-'}
+                                                            </p>
+                                                        </div>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (confirmLocationChange()) {
+                                                                    if (navigator.geolocation) {
+                                                                        navigator.geolocation.getCurrentPosition((pos) => {
+                                                                            setKmListingForm({
+                                                                                ...kmListingForm,
+                                                                                location: { lat: pos.coords.latitude, lng: pos.coords.longitude }
+                                                                            });
+                                                                            alert('Koordinat properti presisi berhasil dikunci!');
+                                                                        }, err => alert('Gagal membaca GPS: ' + err.message));
+                                                                    }
+                                                                }
+                                                            }}
+                                                            className="w-full h-[46px] bg-[#e5eeff] hover:bg-[#dce9ff] text-[#ff7a00] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-colors border-t border-[#e0c0af]"
+                                                        >
+                                                            <LocateFixed className="w-4 h-4 shrink-0" />
+                                                            Gunakan Lokasi Saya Saat Ini
+                                                        </button>
+                                                    </div>
+                                                </div>
 
                                             {/* Fullscreen Map Picker Pop-up Modal */}
                                             {isMapModalOpen && (
@@ -5955,8 +6203,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                 </div>
                                             )}
 
-                                            <div className="border border-[#e0c0af] rounded-xl p-4 flex flex-col gap-3 bg-[#f8f9ff]">
-                                                <h4 className="font-bold text-xs text-[#0b1c30]">Fasilitas & Landmark Terdekat</h4>
+                                            <div className={`rounded-xl p-4 flex flex-col gap-3 relative transition-all ${
+                                                currentEvalData.hasRevision && currentEvalData.landmark
+                                                    ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-gradient-to-br from-amber-500/[0.04] via-[#f8f9ff] to-orange-500/[0.02] animate-pulse'
+                                                    : 'border border-[#e0c0af] bg-[#f8f9ff]'
+                                            }`}>
+                                                {currentEvalData.hasRevision && currentEvalData.landmark && (
+                                                    <div className="absolute -top-3 right-4 z-10 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-[10px] uppercase tracking-wider shadow-md shadow-amber-500/30 animate-bounce">
+                                                        <Sparkles size={12} />
+                                                        <span>⚠️ Perlu Revisi: Landmark / Kampus</span>
+                                                    </div>
+                                                )}
+                                                <h4 className="font-bold text-xs text-[#0b1c30]">Fasilitas &amp; Landmark Terdekat</h4>
                                                 
                                                 {kmListingForm.campuses && kmListingForm.campuses.map((camp: any, cIdx: number) => (
                                                     <div key={cIdx} className="flex justify-between items-center bg-white p-2 rounded-lg border border-gray-100 text-xs font-bold text-gray-700">
@@ -6229,7 +6487,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                 </div>
                                             </div>
 
-                                            <div className="flex flex-col gap-1.5">
+                                            <div className={`flex flex-col gap-1.5 p-3 rounded-2xl relative transition-all ${
+                                                currentEvalData.hasRevision && currentEvalData.publicFacilities
+                                                    ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-gradient-to-br from-amber-500/[0.04] via-white to-orange-500/[0.02] animate-pulse'
+                                                    : ''
+                                            }`}>
+                                                {currentEvalData.hasRevision && currentEvalData.publicFacilities && (
+                                                    <div className="absolute -top-3 right-4 z-10 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-[10px] uppercase tracking-wider shadow-md shadow-amber-500/30 animate-bounce">
+                                                        <Sparkles size={12} />
+                                                        <span>⚠️ Perlu Revisi: Fasilitas Umum</span>
+                                                    </div>
+                                                )}
                                                 <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Fasilitas Umum</label>
                                                 <div className="grid grid-cols-2 gap-2">
                                                     {['WiFi', 'Dapur Bersama', 'Area Parkir', 'Ruang Tamu', 'CCTV', 'Laundry', 'WC Umum'].map(fac => {
@@ -6564,8 +6832,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                 </div>
                                             </div>
 
-                                            <div className="flex flex-col gap-2">
-                                                <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Dokumentasi Area Umum & Fasilitas Properti</label>
+                                            <div className={`flex flex-col gap-2 p-3 rounded-2xl relative transition-all ${
+                                                currentEvalData.hasRevision && (currentEvalData.facade || currentEvalData.publicFacilities)
+                                                    ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-gradient-to-br from-amber-500/[0.04] via-white to-orange-500/[0.02] animate-pulse'
+                                                    : ''
+                                            }`}>
+                                                {currentEvalData.hasRevision && (currentEvalData.facade || currentEvalData.publicFacilities) && (
+                                                    <div className="absolute -top-3 right-4 z-10 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-[10px] uppercase tracking-wider shadow-md shadow-amber-500/30 animate-bounce">
+                                                        <Sparkles size={12} />
+                                                        <span>⚠️ Perlu Revisi: Foto Area Properti</span>
+                                                    </div>
+                                                )}
+                                                <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Dokumentasi Area Umum &amp; Fasilitas Properti</label>
                                                 {(() => {
                                                     const imagesWithCats = (kmListingForm.image_urls || []).map((urlOrObj: any, idx: number) => {
                                                         const url = getImageUrlString(urlOrObj);
@@ -6706,7 +6984,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                 </div>
                                             </div>
 
-                                            <div className="border border-[#e0c0af] rounded-xl p-4 flex flex-col gap-3 bg-[#f8f9ff]">
+                                            <div className={`rounded-xl p-4 flex flex-col gap-3 relative transition-all ${
+                                                currentEvalData.hasRevision && currentEvalData.rules
+                                                    ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-gradient-to-br from-amber-500/[0.04] via-[#f8f9ff] to-orange-500/[0.02] animate-pulse'
+                                                    : 'border border-[#e0c0af] bg-[#f8f9ff]'
+                                            }`}>
+                                                {currentEvalData.hasRevision && currentEvalData.rules && (
+                                                    <div className="absolute -top-3 right-4 z-10 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-[10px] uppercase tracking-wider shadow-md shadow-amber-500/30 animate-bounce">
+                                                        <Sparkles size={12} />
+                                                        <span>⚠️ Perlu Revisi: Peraturan Kost</span>
+                                                    </div>
+                                                )}
                                                 <h4 className="font-bold text-xs text-[#0b1c30]">Peraturan Kost</h4>
                                                 <div className="flex flex-col gap-2">                                                     {kmListingForm.rules && kmListingForm.rules.map((rule: string, rIdx: number) => (
                                                          <div key={rIdx} className="flex items-center gap-2">
@@ -6762,20 +7050,45 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                             </div>
                                         </section>
                                     </div>
-                                )}
+                                )})()}
 
                                 {/* STEP 2: DATA KAMAR */}
-                                {kmStep === 2 && (
-                                     <div className="space-y-6">
-                                         {/* Room List Section */}
-                                         <div className="space-y-4">
-                                             <h2 className="text-xs font-bold text-[#0b1c30] px-1 uppercase tracking-wider">Daftar Kamar</h2>
-                                              <div className="flex justify-between items-center bg-[#fff4eb] border border-[#ffe2cc] p-3 rounded-xl">
-                                                  <span className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Progres Pendataan Kamar</span>
-                                                  <span className={`text-xs font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${(kmListingForm.roomTypes?.length || 0) === (kmListingForm.totalRooms || 0) ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                                                      {kmListingForm.roomTypes?.length || 0} / {kmListingForm.totalRooms || 0} Kamar
-                                                  </span>
-                                              </div>
+                                {kmStep === 2 && (() => {
+                                    const currentEvalData = parseEvaluationData(isEditingKostManager?.notes);
+
+                                    return (
+                                        <div className="space-y-6">
+                                            {/* Room Revision Top Banner if room evaluated */}
+                                            {currentEvalData.hasRevision && currentEvalData.hasRoom && (
+                                                <div className="relative overflow-hidden rounded-2xl border-2 border-amber-400 bg-gradient-to-br from-amber-500/[0.08] via-orange-500/[0.03] to-amber-500/[0.08] p-3.5 shadow-[0_0_20px_rgba(245,158,11,0.15)] flex items-center justify-between gap-3 animate-fadeIn">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-xs shrink-0 animate-bounce">
+                                                            <AlertTriangle size={16} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                                                                Bagian Kamar Perlu Direvisi
+                                                            </p>
+                                                            <p className="text-[10px] font-bold text-amber-700">
+                                                                Periksa ukuran, tarif, fasilitas, status terisi/kosong, atau foto unit di bawah ini.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <span className="px-2 py-0.5 rounded-full bg-amber-200/90 text-amber-900 border border-amber-300 text-[9px] font-black uppercase tracking-wider animate-pulse">
+                                                        ✨ Evaluasi Unit
+                                                    </span>
+                                                </div>
+                                            )}
+
+                                            {/* Room List Section */}
+                                            <div className="space-y-4">
+                                                <h2 className="text-xs font-bold text-[#0b1c30] px-1 uppercase tracking-wider">Daftar Kamar</h2>
+                                                <div className="flex justify-between items-center bg-[#fff4eb] border border-[#ffe2cc] p-3 rounded-xl">
+                                                    <span className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Progres Pendataan Kamar</span>
+                                                    <span className={`text-xs font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${(kmListingForm.roomTypes?.length || 0) === (kmListingForm.totalRooms || 0) ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                                                        {kmListingForm.roomTypes?.length || 0} / {kmListingForm.totalRooms || 0} Kamar
+                                                    </span>
+                                                </div>
                                              <div className="grid grid-cols-1 gap-3">
                                                  {(!kmListingForm.roomTypes || kmListingForm.roomTypes.length === 0) ? (
                                                      <div className="text-center py-6 text-gray-500 text-xs bg-white rounded-xl border border-dashed border-gray-300">
@@ -7939,13 +8252,39 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                               </div>
                                                 );
                                             })()}
-                                     </div>
-                                 )}
+                                        </div>
+                                    );
+                                })()}
 
                                  {/* STEP 3: REVIEW */}
-                                {kmStep === 3 && (
-                                    <div className="space-y-6">
-                                        {/* Data Pemilik / Mitra */}
+                                {kmStep === 3 && (() => {
+                                    const currentEvalData = parseEvaluationData(isEditingKostManager?.notes);
+
+                                    return (
+                                        <div className="space-y-6">
+                                            {/* Step 3 Revision Top Banner */}
+                                            {currentEvalData.hasRevision && currentEvalData.hasPartner && (
+                                                <div className="relative overflow-hidden rounded-2xl border-2 border-amber-400 bg-gradient-to-br from-amber-500/[0.08] via-orange-500/[0.03] to-amber-500/[0.08] p-3.5 shadow-[0_0_20px_rgba(245,158,11,0.15)] flex items-center justify-between gap-3 animate-fadeIn">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-xs shrink-0 animate-bounce">
+                                                            <AlertTriangle size={16} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                                                                Data Mitra / Tanda Tangan Perlu Direvisi
+                                                            </p>
+                                                            <p className="text-[10px] font-bold text-amber-700">
+                                                                Periksa kesepakatan kerjasama atau perbarui tanda tangan digital pemilik di bawah.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <span className="px-2 py-0.5 rounded-full bg-amber-200/90 text-amber-900 border border-amber-300 text-[9px] font-black uppercase tracking-wider animate-pulse">
+                                                        ✨ Evaluasi Mitra
+                                                    </span>
+                                                </div>
+                                            )}
+
+                                            {/* Data Pemilik / Mitra */}
                                         <section className="bg-white border border-[#e0c0af] rounded-2xl p-5 flex flex-col gap-4 shadow-sm">
                                             <h3 className="font-bold text-sm text-[#0b1c30] border-b border-gray-100 pb-2">Data Pemilik / Mitra</h3>
                                             
@@ -8359,18 +8698,19 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         </section>
 
                                         {/* Syarat & Ketentuan */}
-                                        <section className={`bg-white border rounded-2xl p-5 flex flex-col gap-4 shadow-sm transition-all ${
-                                            isEditingKostManager?.notes?.toLowerCase().includes('syarat') || isEditingKostManager?.notes?.toLowerCase().includes('mitra') || isEditingKostManager?.notes?.toLowerCase().includes('kerjasama') || isEditingKostManager?.notes?.toLowerCase().includes('rekening')
-                                            ? 'border-amber-400 ring-2 ring-amber-300 shadow-amber-50'
-                                            : 'border-[#e0c0af]'
+                                        <section className={`rounded-2xl p-5 flex flex-col gap-4 shadow-sm relative transition-all ${
+                                            currentEvalData.hasRevision && currentEvalData.partner
+                                                ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-gradient-to-br from-amber-500/[0.04] via-white to-orange-500/[0.02] animate-pulse'
+                                                : 'bg-white border border-[#e0c0af]'
                                         }`}>
+                                            {currentEvalData.hasRevision && currentEvalData.partner && (
+                                                <div className="absolute -top-3 right-4 z-10 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-[10px] uppercase tracking-wider shadow-md shadow-amber-500/30 animate-bounce">
+                                                    <Sparkles size={12} />
+                                                    <span>⚠️ Perlu Revisi: Kerjasama Mitra</span>
+                                                </div>
+                                            )}
                                             <div className="flex justify-between items-center border-b border-gray-100 pb-2">
                                                 <h3 className="font-bold text-sm text-[#0b1c30]">Syarat &amp; Ketentuan Kerjasama Mitra</h3>
-                                                {(isEditingKostManager?.notes?.toLowerCase().includes('syarat') || isEditingKostManager?.notes?.toLowerCase().includes('mitra') || isEditingKostManager?.notes?.toLowerCase().includes('kerjasama') || isEditingKostManager?.notes?.toLowerCase().includes('rekening')) && (
-                                                    <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white font-black text-[9px] uppercase tracking-wider animate-pulse">
-                                                        ⚠️ Perlu Revisi Admin
-                                                    </span>
-                                                )}
                                             </div>
                                             
                                             <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 max-h-[140px] overflow-y-auto text-[10px] text-gray-650 leading-relaxed font-semibold">
@@ -8395,22 +8735,23 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         </section>
 
                                         {/* Tanda Tangan Digital Pemilik */}
-                                        <section className={`bg-white border rounded-2xl p-5 flex flex-col gap-4 shadow-sm transition-all ${
-                                            isEditingKostManager?.notes?.toLowerCase().includes('tanda tangan') || isEditingKostManager?.notes?.toLowerCase().includes('signature')
-                                            ? 'border-amber-400 ring-2 ring-amber-300 shadow-amber-50'
-                                            : 'border-[#e0c0af]'
+                                        <section className={`rounded-2xl p-5 flex flex-col gap-4 shadow-sm relative transition-all ${
+                                            currentEvalData.hasRevision && currentEvalData.partner
+                                                ? 'border-2 border-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-gradient-to-br from-amber-500/[0.04] via-white to-orange-500/[0.02] animate-pulse'
+                                                : 'bg-white border border-[#e0c0af]'
                                         }`}>
+                                            {currentEvalData.hasRevision && currentEvalData.partner && (
+                                                <div className="absolute -top-3 right-4 z-10 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-[10px] uppercase tracking-wider shadow-md shadow-amber-500/30 animate-bounce">
+                                                    <Sparkles size={12} />
+                                                    <span>⚠️ Perlu Revisi: Tanda Tangan Digital</span>
+                                                </div>
+                                            )}
                                             <div className="flex justify-between items-center border-b border-gray-100 pb-2">
                                                 <div className="flex items-center gap-2">
                                                     <h3 className="font-bold text-sm text-[#0b1c30]">Tanda Tangan Digital Pemilik</h3>
                                                     {signatureData && (
                                                         <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
                                                             <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Tersimpan
-                                                        </span>
-                                                    )}
-                                                    {(isEditingKostManager?.notes?.toLowerCase().includes('tanda tangan') || isEditingKostManager?.notes?.toLowerCase().includes('signature')) && (
-                                                        <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white font-black text-[9px] uppercase tracking-wider animate-pulse">
-                                                            ⚠️ Perlu Revisi Admin
                                                         </span>
                                                     )}
                                                 </div>
@@ -8478,7 +8819,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                             </p>
                                         </section>
                                     </div>
-                                )}
+                                )})()}
                             </div>
 
                             {/* Fixed Bottom Navigation Buttons */}
