@@ -1987,7 +1987,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                 )}
                             </div>
                         );
-                    })}
+                    })()}
 
                     {/* =========================================== */}
                     {/* TAB: BILLING                                */}
