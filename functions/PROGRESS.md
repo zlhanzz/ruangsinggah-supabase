@@ -2,6 +2,24 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 117. Penyatuan Fasilitas dan Sub-Fasilitas dalam 1 Kotak Terpadu (1 Fasilitas = 1 Kotak) & Korelasi Reaktif Multi-Keyword di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar fasilitas utama dan sub-fasilitasnya digabungkan di dalam kotak yang sama (*1 Fasilitas & Sub-Fasilitas = 1 Kotak Terpadu*).
+  2. Pengguna meminta agar ketika kursor menyentuh/hover 1 kotak terpadu tersebut, seluruh foto dokumentasi yang berelasi dengan fasilitas utama maupun sub-fasilitas di dalamnya langsung bereaksi secara serempak.
+- **Implementasi & Peningkatan UI/UX**:
+  * **1. Engine Penyatuan Fasilitas (`buildUnifiedFacilities`)**:
+    - **Grup Kamar Mandi**: Fasilitas kamar mandi utama (misal: *Kamar Mandi Dalam*, *WC Luar*) dan sub-fasilitasnya (*Kloset Duduk*, *Shower*, *Wastafel*, dll.) disatukan ke dalam 1 kotak terpadu `[ 🚿 Kamar Mandi Dalam • Kloset Duduk 📸 BUKTI ]`.
+    - **Grup Dapur**: Fasilitas dapur utama (*Dapur Dalam*, *Dapur Luar*, *Dapur Bersama*) dan sub-fasilitasnya (*Kompor*, *Sink*, dll.) disatukan ke dalam 1 kotak terpadu `[ 🍳 Dapur Dalam • Kompor 📸 BUKTI ]`.
+    - **Fasilitas Kamar Mandiri**: Fasilitas kamar tidur lainnya (*Kasur*, *Jendela Luar*, *AC*, *Lemari Pakaian*, *Meja Belajar*, dll.) tampil sebagai kotak elegan mandiri.
+  * **2. Multi-Keyword Semantic Photo Correlation (`isFacilityMatchingPhoto`)**:
+    - Mendukung pencocokan array kata kunci (*multi-keyword matching*): ketika pengguna menyorot kotak `[ 🚿 Kamar Mandi Dalam • Kloset Duduk ]`, engine mencocokkan kata kunci *Kamar Mandi*, *Kloset*, *Toilet*, *WC*, *Shower*, dll. secara serentak.
+    - Foto dokumentasi unit yang cocok langsung membesar (`scale-108`), menyala dengan ring emerald/amber, memunculkan floating badge animasi *"🎯 Bukti Foto"*, sementara foto yang tidak berkorelasi meredup halus (`opacity-25 grayscale`).
+    - Ketika foto dokumentasi disorot oleh kursor, kotak fasilitas terpadu yang memuat komponen tersebut otomatis ter-highlight aktif.
+  * **3. Konsistensi Antara Kamar Terisi & Kamar Kosong**:
+    - Desain kotak terpadu 1-fasilitas-1-kotak diterapkan seragam pada kartu unit kamar dihuni (`occupiedUnits`) dan unit kamar kosong (`vacantUnits`).
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 116. Icon Representatif Fasilitas & Interaksi Reaktif Cerdas (Fasilitas ⇄ Foto Dokumentasi) di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar setiap fasilitas kamar ditampilkan dengan icon yang sesuai (*representatif*).
