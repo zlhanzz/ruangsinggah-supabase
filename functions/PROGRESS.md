@@ -2,6 +2,18 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 130. Perbaikan Layout Header 2-Baris pada Kartu Permohonan KostManager (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pada layout header kartu permohonan, penempatan lencana status sejajar 1 baris dengan Avatar, Nama Mitra, dan Nomor Telepon menyebabkan ruang horizontal sempit sehingga nama mitra terpotong menjadi `A..` dan nomor telepon terpotong menjadi `+6281527080...`.
+- **Implementasi & Peningkatan Sistem**:
+  * **Refaktor Header 2-Baris Terstruktur (Clean Vertical Stack)**:
+    - **Baris Atas**: Status Badge Permohonan (`● Menunggu Onboarding Admin`) di kiri + ID Permohonan (`#KM-XXXX`) di kanan.
+    - **Baris Bawah**: Avatar Mitra + Nama Lengkap Mitra (tampil utuh 100% tanpa truncate kerdil) + Badge Owner + Nomor WhatsApp aktif (lengkap 100% tanpa truncate).
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerManagement.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus 100% dengan 0 error dalam 24.54 detik (2526 modules transformed).
+
 ### 129. Redesain Modern UI/UX Kartu Permohonan & Peninjauan KostManager pada Dashboard Admin (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna mengkritik tampilan kartu peninjauan KostManager di dashboard admin yang kaku, cluttered, dan belum mencerminkan standar estetika web modern.

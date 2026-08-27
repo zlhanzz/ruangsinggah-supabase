@@ -1267,9 +1267,21 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                         }`} />
 
                                         <div className="space-y-4">
-                                            {/* 1. Header Profil Mitra & Status Badge */}
-                                            <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-slate-100">
-                                                <div className="flex items-center gap-3 min-w-0">
+                                            {/* 1. Header Profil Mitra & Status Badge (2-Row Clean Layout) */}
+                                            <div className="space-y-3 pb-3.5 border-b border-slate-100">
+                                                {/* Top Row: Status Badge & ID */}
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-2xs shrink-0 flex items-center gap-1.5 ${getStatusBadge(req.status)}`}>
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span>
+                                                        <span>{getStatusLabel(req.status)}</span>
+                                                    </span>
+                                                    <span className="text-[9px] font-mono font-bold text-slate-400">
+                                                        #{req.id.substring(0, 8).toUpperCase()}
+                                                    </span>
+                                                </div>
+
+                                                {/* Bottom Row: Mitra Profile Info */}
+                                                <div className="flex items-center gap-3">
                                                     <div 
                                                         onClick={() => {
                                                             setSelectedMitra(req.user || { name: 'Mitra', phone: req.owner_phone || '-' });
@@ -1279,7 +1291,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                     >
                                                         {(req.user?.name || req.user?.email || 'M').charAt(0)}
                                                     </div>
-                                                    <div className="min-w-0">
+                                                    <div className="min-w-0 flex-1">
                                                         <div className="flex items-center gap-1.5">
                                                             <span 
                                                                 onClick={() => {
@@ -1290,7 +1302,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                             >
                                                                 {req.user?.name || 'Mitra Pengaju'}
                                                             </span>
-                                                            <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded">
+                                                            <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded shrink-0">
                                                                 Owner
                                                             </span>
                                                         </div>
@@ -1301,7 +1313,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                 rel="noopener noreferrer"
                                                                 className="text-[11px] text-emerald-600 font-bold hover:text-emerald-700 transition-colors flex items-center gap-1 mt-0.5"
                                                             >
-                                                                <Phone size={10} className="text-emerald-500 shrink-0" />
+                                                                <Phone size={11} className="text-emerald-500 shrink-0" />
                                                                 <span>+{ownerPhoneClean}</span>
                                                             </a>
                                                         ) : (
@@ -1309,11 +1321,6 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                         )}
                                                     </div>
                                                 </div>
-
-                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-2xs shrink-0 flex items-center gap-1.5 ${getStatusBadge(req.status)}`}>
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
-                                                    <span>{getStatusLabel(req.status)}</span>
-                                                </span>
                                             </div>
 
                                             {/* 2. Identitas Properti & Chips Info */}
