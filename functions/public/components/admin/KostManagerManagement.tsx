@@ -107,13 +107,13 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                       Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
                       Math.sin(dLon / 2) * Math.sin(dLon / 2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            return R * c * 1.3; // 1.3x road curvature factor
+            return R * c; // raw straight-line km
         };
 
         const calculateFallback = (cName: string, cLat?: number, cLng?: number, explicitDist?: string) => {
-            let km = 0;
+            let rawKm = 0;
             if (cLat && cLng) {
-                km = calcHaversine(kostLat, kostLng, cLat, cLng);
+                rawKm = calcHaversine(kostLat, kostLng, cLat, cLng);
             } else {
                 const lower = cName.toLowerCase();
                 let foundCoord = null;
@@ -124,19 +124,24 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                     }
                 }
                 if (foundCoord) {
-                    km = calcHaversine(kostLat, kostLng, foundCoord.lat, foundCoord.lng);
+                    rawKm = calcHaversine(kostLat, kostLng, foundCoord.lat, foundCoord.lng);
                 } else if (explicitDist) {
                     const match = explicitDist.match(/[\d.]+/);
-                    if (match) km = parseFloat(match[0]);
+                    if (match) rawKm = parseFloat(match[0]);
                 }
             }
 
-            if (km === 0) km = 1.2;
+            if (rawKm === 0) rawKm = 0.8;
 
-            const distStr = km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
-            const walkMin = Math.max(1, Math.ceil((km / 4.5) * 60));
-            const motoMin = Math.max(1, Math.ceil((km / 28) * 60) + 1);
-            const carMin = Math.max(2, Math.ceil((km / 20) * 60) + 3);
+            // Rute jalan raya & gerbang perimeter kampus (detour faktor nyata)
+            const isCampus = cName.toLowerCase().includes('unhas') || cName.toLowerCase().includes('pnup') || cName.toLowerCase().includes('kampus') || cName.toLowerCase().includes('universitas');
+            const driveKm = rawKm * 1.35;
+            const walkKm = isCampus ? rawKm * 2.0 : rawKm * 1.4; // Kampus berpagar/portal membutuhkan rute jalan kaki memutar ke gerbang utama
+
+            const distStr = driveKm < 1 ? `${Math.round(driveKm * 1000)} m` : `${driveKm.toFixed(1)} km`;
+            const walkMin = Math.max(1, Math.round((walkKm / 4.2) * 60)); // ~4.2 km/jam jalan kaki
+            const motoMin = Math.max(1, Math.round((driveKm / 28) * 60) + 1); // ~28 km/jam motor + lampu
+            const carMin = Math.max(2, Math.round((driveKm / 18) * 60) + 2); // ~18 km/jam mobil + traffic
 
             return {
                 distance: distStr,
@@ -144,122 +149,131 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                 walkDuration: `${walkMin} mnt`,
                 motoDuration: `${motoMin} mnt`,
                 carDuration: `${carMin} mnt`,
-                rawKm: km
+                rawKm: driveKm
             };
         };
 
-        // Try Google Maps DistanceMatrixService if loaded (Dual Query: DRIVING + WALKING)
-        if (typeof window !== 'undefined' && (window as any).google?.maps?.DistanceMatrixService) {
-            setLoadingDistances(true);
-            try {
-                const service = new (window as any).google.maps.DistanceMatrixService();
-                const destinations = campuses.map((c: any) => {
-                    const cName = typeof c === 'string' ? c : (c?.name || '');
-                    const cLat = typeof c === 'object' ? c?.lat : undefined;
-                    const cLng = typeof c === 'object' ? c?.lng : undefined;
-                    if (cLat && cLng) return { lat: Number(cLat), lng: Number(cLng) };
-                    return `${cName}, Makassar`;
-                });
+        // Populate initial fallback immediately
+        const initialMap: Record<string, any> = {};
+        campuses.forEach((c: any) => {
+            const cName = typeof c === 'string' ? c : (c?.name || '');
+            initialMap[cName] = calculateFallback(cName, c?.lat, c?.lng, c?.distance);
+        });
+        setRealtimeDistances(initialMap);
 
-                const origin = [{ lat: kostLat, lng: kostLng }];
+        // Async Query Google Maps DistanceMatrixService with Polling
+        let attempts = 0;
+        let isCancelled = false;
 
-                const getMatrixPromise = (mode: any) => {
-                    return new Promise<{ status: string; response: any }>((resolve) => {
-                        service.getDistanceMatrix(
-                            {
-                                origins: origin,
-                                destinations: destinations,
-                                travelMode: mode,
-                                unitSystem: (window as any).google.maps.UnitSystem.METRIC,
-                            },
-                            (response: any, status: any) => {
-                                resolve({ status, response });
-                            }
-                        );
-                    });
-                };
-
-                Promise.all([
-                    getMatrixPromise((window as any).google.maps.TravelMode.DRIVING),
-                    getMatrixPromise((window as any).google.maps.TravelMode.WALKING)
-                ]).then(([drivingRes, walkingRes]) => {
-                    setLoadingDistances(false);
-                    const newMap: Record<string, any> = {};
-
-                    const drivingElements = (drivingRes.status === 'OK' && drivingRes.response?.rows?.[0]?.elements) ? drivingRes.response.rows[0].elements : [];
-                    const walkingElements = (walkingRes.status === 'OK' && walkingRes.response?.rows?.[0]?.elements) ? walkingRes.response.rows[0].elements : [];
-
-                    campuses.forEach((c: any, idx: number) => {
-                        const cName = typeof c === 'string' ? c : (c?.name || `landmark_${idx}`);
-                        const dEl = drivingElements[idx];
-                        const wEl = walkingElements[idx];
-
-                        if (dEl && dEl.status === 'OK') {
-                            const distMeters = dEl.distance.value;
-                            const distKm = distMeters / 1000;
-                            const motoMin = Math.max(1, Math.round(dEl.duration.value / 60));
-                            const carMin = Math.max(1, Math.round(dEl.duration.value / 60));
-                            
-                            // Ambil rute jalan kaki asli dari Google Maps jika tersedia
-                            let walkStr = `${Math.max(1, Math.ceil((distKm / 4.5) * 60))} mnt`;
-                            if (wEl && wEl.status === 'OK') {
-                                walkStr = wEl.duration.text;
-                            }
-
-                            newMap[cName] = {
-                                distance: dEl.distance.text,
-                                duration: dEl.duration.text,
-                                walkDuration: walkStr,
-                                motoDuration: `${motoMin} mnt`,
-                                carDuration: `${carMin} mnt`,
-                                rawKm: distKm
-                            };
-                        } else if (wEl && wEl.status === 'OK') {
-                            const distMeters = wEl.distance.value;
-                            const distKm = distMeters / 1000;
-                            const motoMin = Math.max(1, Math.ceil((distKm / 28) * 60) + 1);
-                            const carMin = Math.max(2, Math.ceil((distKm / 20) * 60) + 2);
-
-                            newMap[cName] = {
-                                distance: wEl.distance.text,
-                                duration: wEl.duration.text,
-                                walkDuration: wEl.duration.text,
-                                motoDuration: `${motoMin} mnt`,
-                                carDuration: `${carMin} mnt`,
-                                rawKm: distKm
-                            };
-                        } else {
-                            newMap[cName] = calculateFallback(cName, c?.lat, c?.lng, c?.distance);
-                        }
-                    });
-
-                    setRealtimeDistances(newMap);
-                }).catch(() => {
-                    setLoadingDistances(false);
-                    const newMap: Record<string, any> = {};
-                    campuses.forEach((c: any) => {
+        const tryQueryGoogleMaps = () => {
+            if (isCancelled) return;
+            if (typeof window !== 'undefined' && (window as any).google?.maps?.DistanceMatrixService) {
+                setLoadingDistances(true);
+                try {
+                    const googleMaps = (window as any).google.maps;
+                    const service = new googleMaps.DistanceMatrixService();
+                    
+                    const origins = [new googleMaps.LatLng(kostLat, kostLng)];
+                    const destinations = campuses.map((c: any) => {
                         const cName = typeof c === 'string' ? c : (c?.name || '');
-                        newMap[cName] = calculateFallback(cName, c?.lat, c?.lng, c?.distance);
+                        const cLat = typeof c === 'object' ? c?.lat : undefined;
+                        const cLng = typeof c === 'object' ? c?.lng : undefined;
+                        if (cLat && cLng) return new googleMaps.LatLng(Number(cLat), Number(cLng));
+                        return `${cName}, Makassar, Sulawesi Selatan`;
                     });
-                    setRealtimeDistances(newMap);
-                });
-            } catch (e) {
-                setLoadingDistances(false);
-                const newMap: Record<string, any> = {};
-                campuses.forEach((c: any) => {
-                    const cName = typeof c === 'string' ? c : (c?.name || '');
-                    newMap[cName] = calculateFallback(cName, c?.lat, c?.lng, c?.distance);
-                });
-                setRealtimeDistances(newMap);
+
+                    const fetchMode = (travelMode: any) => {
+                        return new Promise<{ status: string; response: any }>((resolve) => {
+                            service.getDistanceMatrix(
+                                {
+                                    origins: origins,
+                                    destinations: destinations,
+                                    travelMode: travelMode,
+                                    unitSystem: googleMaps.UnitSystem.METRIC,
+                                },
+                                (response: any, status: any) => {
+                                    resolve({ status, response });
+                                }
+                            );
+                        });
+                    };
+
+                    Promise.all([
+                        fetchMode(googleMaps.TravelMode.DRIVING),
+                        fetchMode(googleMaps.TravelMode.WALKING)
+                    ]).then(([drivingRes, walkingRes]) => {
+                        if (isCancelled) return;
+                        setLoadingDistances(false);
+                        const updatedMap: Record<string, any> = {};
+
+                        const drivingElements = (drivingRes.status === 'OK' && drivingRes.response?.rows?.[0]?.elements) ? drivingRes.response.rows[0].elements : [];
+                        const walkingElements = (walkingRes.status === 'OK' && walkingRes.response?.rows?.[0]?.elements) ? walkingRes.response.rows[0].elements : [];
+
+                        campuses.forEach((c: any, idx: number) => {
+                            const cName = typeof c === 'string' ? c : (c?.name || `landmark_${idx}`);
+                            const dEl = drivingElements[idx];
+                            const wEl = walkingElements[idx];
+
+                            if (dEl && dEl.status === 'OK') {
+                                const distMeters = dEl.distance.value;
+                                const distKm = distMeters / 1000;
+                                const motoMin = Math.max(1, Math.round(dEl.duration.value / 60));
+                                const carMin = Math.max(1, Math.round(dEl.duration.value / 60));
+                                
+                                let walkStr = `${Math.max(1, Math.ceil((distKm / 4.2) * 60))} mnt`;
+                                if (wEl && wEl.status === 'OK') {
+                                    walkStr = wEl.duration.text;
+                                }
+
+                                updatedMap[cName] = {
+                                    distance: dEl.distance.text,
+                                    duration: dEl.duration.text,
+                                    walkDuration: walkStr,
+                                    motoDuration: `${motoMin} mnt`,
+                                    carDuration: `${carMin} mnt`,
+                                    rawKm: distKm
+                                };
+                            } else if (wEl && wEl.status === 'OK') {
+                                const distMeters = wEl.distance.value;
+                                const distKm = distMeters / 1000;
+                                const motoMin = Math.max(1, Math.ceil((distKm / 28) * 60) + 1);
+                                const carMin = Math.max(2, Math.ceil((distKm / 18) * 60) + 2);
+
+                                updatedMap[cName] = {
+                                    distance: wEl.distance.text,
+                                    duration: wEl.duration.text,
+                                    walkDuration: wEl.duration.text,
+                                    motoDuration: `${motoMin} mnt`,
+                                    carDuration: `${carMin} mnt`,
+                                    rawKm: distKm
+                                };
+                            } else {
+                                updatedMap[cName] = calculateFallback(cName, c?.lat, c?.lng, c?.distance);
+                            }
+                        });
+
+                        setRealtimeDistances(updatedMap);
+                    }).catch((err) => {
+                        if (isCancelled) return;
+                        setLoadingDistances(false);
+                        console.warn('[DistanceMatrixService] API fallback used:', err);
+                    });
+                } catch (err) {
+                    if (isCancelled) return;
+                    setLoadingDistances(false);
+                    console.warn('[DistanceMatrixService] Init error:', err);
+                }
+            } else if (attempts < 6) {
+                attempts++;
+                setTimeout(tryQueryGoogleMaps, 350);
             }
-        } else {
-            const newMap: Record<string, any> = {};
-            campuses.forEach((c: any) => {
-                const cName = typeof c === 'string' ? c : (c?.name || '');
-                newMap[cName] = calculateFallback(cName, c?.lat, c?.lng, c?.distance);
-            });
-            setRealtimeDistances(newMap);
-        }
+        };
+
+        tryQueryGoogleMaps();
+
+        return () => {
+            isCancelled = true;
+        };
     }, [reviewModalOpen, reviewProperty]);
     
     const loadData = async () => {

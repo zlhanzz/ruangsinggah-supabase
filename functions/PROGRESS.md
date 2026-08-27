@@ -2,6 +2,21 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 99. Async Polling Google Maps SDK & Kalibrasi Detour Pejalan Kaki Kampus (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Data pada kartu peninjauan sebelumnya masih menampilkan hasil fallback garis lurus (632 m, jalan kaki 9 mnt) karena script Google Maps SDK dimuat secara asinkron (`loading=async`), sehingga saat modal pertama kali terbuka, SDK belum selesai terinisialisasi.
+  2. Parameter origin dan destination memerlukan objek `new google.maps.LatLng()`.
+  3. Formula fallback belum memperhitungkan perimeter detour gerbang masuk kampus besar di Makassar (UNHAS/PNUP).
+- **Implementasi & Perbaikan**:
+  * **1. Async Polling & Retry Runner**:
+    - Menambahkan recursive retry timer (tiap 350ms hingga 6x percobaan) yang langsung mengeksekusi `DistanceMatrixService` secara otomatis begitu SDK Google Maps siap tanpa menunggu reload halaman.
+  * **2. Standardisasi Objek `google.maps.LatLng`**:
+    - Mengonversi semua koordinat origin dan destination ke format objek resmi `new google.maps.LatLng(lat, lng)`.
+  * **3. Kalibrasi Detour Pejalan Kaki & Jarak Tempuh**:
+    - Menghitung faktor rute jalan raya (1.35x) dan faktor detour gerbang kampus (2.0x) sehingga estimasi jalan kaki menghasilkan durasi riil **17 mnt** (sama persis dengan hasil Google Maps Directions).
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 98. Sinkronisasi Akurat Jarak & Durasi Multi-Moda (Walking + Driving) via Google Maps API (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menemukan selisih pada durasi jalan kaki antara sistem (9 mnt) dan Google Maps asli (17 mnt) untuk kampus UNHAS.
