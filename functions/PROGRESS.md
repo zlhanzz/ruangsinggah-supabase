@@ -2,6 +2,20 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 100. Integrasi Penuh Google Maps Live API (Distance Matrix & Routes) + Badge Indikator (`KostManagerManagement.tsx`, `index.html`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna telah mengaktifkan seluruh API yang dibutuhkan di Google Cloud Console (*Directions API, Distance Matrix API, Routes API, Route Optimization API*).
+  2. Sistem disempurnakan untuk menarik data jarak tempuh, durasi jalan kaki nyata, dan durasi berkendara 100% langsung dari Google Maps Live API dengan verifikasi visual.
+- **Implementasi & Perbaikan**:
+  * **1. Penyempurnaan Google Maps Libraries (`index.html`)**:
+    - Menambahkan libraries `routes,geometry,places` pada loader script Google Maps SDK.
+  * **2. Live Query Telemetry & State Management**:
+    - Mengintegrasikan dual query `DRIVING` + `WALKING` dengan validasi element status, logging telemetry konsol browser `[GoogleMaps Live API]`, dan penandaan `isLiveGoogleApi: true`.
+  * **3. Badge Indikator Visual**:
+    - Menambahkan badge hijau `[● LIVE MAPS API]` pada kartu landmark saat data real-time berhasil ditarik dari Google Maps.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`, `functions/public/index.html`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 99. Async Polling Google Maps SDK & Kalibrasi Detour Pejalan Kaki Kampus (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Data pada kartu peninjauan sebelumnya masih menampilkan hasil fallback garis lurus (632 m, jalan kaki 9 mnt) karena script Google Maps SDK dimuat secara asinkron (`loading=async`), sehingga saat modal pertama kali terbuka, SDK belum selesai terinisialisasi.

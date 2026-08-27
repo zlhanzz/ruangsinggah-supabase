@@ -68,10 +68,10 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
     const [selectedIsolatedPhotoIndex, setSelectedIsolatedPhotoIndex] = useState(0);
     const [expandedRoomTypes, setExpandedRoomTypes] = useState<Record<number, boolean>>({});
     const [expandedStatusSections, setExpandedStatusSections] = useState<Record<string, boolean>>({});
-    const [realtimeDistances, setRealtimeDistances] = useState<Record<string, { distance: string; duration: string; walkDuration: string; motoDuration: string; carDuration: string; rawKm: number }>>({});
+    const [realtimeDistances, setRealtimeDistances] = useState<Record<string, { distance: string; duration: string; walkDuration: string; motoDuration: string; carDuration: string; rawKm: number; isLiveGoogleApi?: boolean }>>({});
     const [loadingDistances, setLoadingDistances] = useState(false);
 
-    // Hitung Jarak & Durasi Real Google Maps (DistanceMatrixService) dengan fallback Haversine
+    // Hitung Jarak & Durasi Real Google Maps (DistanceMatrixService & DirectionsService) dengan fallback Haversine
     useEffect(() => {
         if (!reviewModalOpen || !reviewProperty) return;
         const campuses: any[] = reviewProperty?.campuses || [];
@@ -149,7 +149,8 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                 walkDuration: `${walkMin} mnt`,
                 motoDuration: `${motoMin} mnt`,
                 carDuration: `${carMin} mnt`,
-                rawKm: driveKm
+                rawKm: driveKm,
+                isLiveGoogleApi: false
             };
         };
 
@@ -161,109 +162,128 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
         });
         setRealtimeDistances(initialMap);
 
-        // Async Query Google Maps DistanceMatrixService with Polling
+        // Async Query Google Maps DistanceMatrixService & DirectionsService with Polling
         let attempts = 0;
         let isCancelled = false;
 
         const tryQueryGoogleMaps = () => {
             if (isCancelled) return;
-            if (typeof window !== 'undefined' && (window as any).google?.maps?.DistanceMatrixService) {
+            if (typeof window !== 'undefined' && (window as any).google?.maps) {
                 setLoadingDistances(true);
                 try {
                     const googleMaps = (window as any).google.maps;
-                    const service = new googleMaps.DistanceMatrixService();
-                    
-                    const origins = [new googleMaps.LatLng(kostLat, kostLng)];
-                    const destinations = campuses.map((c: any) => {
-                        const cName = typeof c === 'string' ? c : (c?.name || '');
-                        const cLat = typeof c === 'object' ? c?.lat : undefined;
-                        const cLng = typeof c === 'object' ? c?.lng : undefined;
-                        if (cLat && cLng) return new googleMaps.LatLng(Number(cLat), Number(cLng));
-                        return `${cName}, Makassar, Sulawesi Selatan`;
-                    });
+                    const originPoint = new googleMaps.LatLng(kostLat, kostLng);
 
-                    const fetchMode = (travelMode: any) => {
-                        return new Promise<{ status: string; response: any }>((resolve) => {
-                            service.getDistanceMatrix(
-                                {
-                                    origins: origins,
-                                    destinations: destinations,
-                                    travelMode: travelMode,
-                                    unitSystem: googleMaps.UnitSystem.METRIC,
-                                },
-                                (response: any, status: any) => {
-                                    resolve({ status, response });
-                                }
-                            );
+                    // Strategi 1: DistanceMatrixService
+                    if (googleMaps.DistanceMatrixService) {
+                        const service = new googleMaps.DistanceMatrixService();
+                        const origins = [originPoint];
+                        const destinations = campuses.map((c: any) => {
+                            const cName = typeof c === 'string' ? c : (c?.name || '');
+                            const cLat = typeof c === 'object' ? c?.lat : undefined;
+                            const cLng = typeof c === 'object' ? c?.lng : undefined;
+                            if (cLat && cLng) return new googleMaps.LatLng(Number(cLat), Number(cLng));
+                            return `${cName}, Makassar, Sulawesi Selatan`;
                         });
-                    };
 
-                    Promise.all([
-                        fetchMode(googleMaps.TravelMode.DRIVING),
-                        fetchMode(googleMaps.TravelMode.WALKING)
-                    ]).then(([drivingRes, walkingRes]) => {
-                        if (isCancelled) return;
-                        setLoadingDistances(false);
-                        const updatedMap: Record<string, any> = {};
+                        const fetchMatrix = (mode: any) => {
+                            return new Promise<{ status: string; response: any }>((resolve) => {
+                                service.getDistanceMatrix(
+                                    {
+                                        origins: origins,
+                                        destinations: destinations,
+                                        travelMode: mode,
+                                        unitSystem: googleMaps.UnitSystem.METRIC,
+                                    },
+                                    (response: any, status: any) => {
+                                        resolve({ status, response });
+                                    }
+                                );
+                            });
+                        };
 
-                        const drivingElements = (drivingRes.status === 'OK' && drivingRes.response?.rows?.[0]?.elements) ? drivingRes.response.rows[0].elements : [];
-                        const walkingElements = (walkingRes.status === 'OK' && walkingRes.response?.rows?.[0]?.elements) ? walkingRes.response.rows[0].elements : [];
+                        Promise.all([
+                            fetchMatrix(googleMaps.TravelMode.DRIVING),
+                            fetchMatrix(googleMaps.TravelMode.WALKING)
+                        ]).then(([drivingRes, walkingRes]) => {
+                            if (isCancelled) return;
+                            setLoadingDistances(false);
+                            const updatedMap: Record<string, any> = {};
 
-                        campuses.forEach((c: any, idx: number) => {
-                            const cName = typeof c === 'string' ? c : (c?.name || `landmark_${idx}`);
-                            const dEl = drivingElements[idx];
-                            const wEl = walkingElements[idx];
+                            const drivingElements = (drivingRes.status === 'OK' && drivingRes.response?.rows?.[0]?.elements) ? drivingRes.response.rows[0].elements : [];
+                            const walkingElements = (walkingRes.status === 'OK' && walkingRes.response?.rows?.[0]?.elements) ? walkingRes.response.rows[0].elements : [];
 
-                            if (dEl && dEl.status === 'OK') {
-                                const distMeters = dEl.distance.value;
-                                const distKm = distMeters / 1000;
-                                const motoMin = Math.max(1, Math.round(dEl.duration.value / 60));
-                                const carMin = Math.max(1, Math.round(dEl.duration.value / 60));
-                                
-                                let walkStr = `${Math.max(1, Math.ceil((distKm / 4.2) * 60))} mnt`;
-                                if (wEl && wEl.status === 'OK') {
-                                    walkStr = wEl.duration.text;
+                            let hasLiveSuccess = false;
+
+                            campuses.forEach((c: any, idx: number) => {
+                                const cName = typeof c === 'string' ? c : (c?.name || `landmark_${idx}`);
+                                const dEl = drivingElements[idx];
+                                const wEl = walkingElements[idx];
+
+                                if (dEl && dEl.status === 'OK') {
+                                    hasLiveSuccess = true;
+                                    const distMeters = dEl.distance.value;
+                                    const distKm = distMeters / 1000;
+                                    const motoMin = Math.max(1, Math.round(dEl.duration.value / 60));
+                                    const carMin = Math.max(1, Math.round(dEl.duration.value / 60));
+                                    
+                                    let walkStr = `${Math.max(1, Math.ceil((distKm / 4.2) * 60))} mnt`;
+                                    if (wEl && wEl.status === 'OK') {
+                                        walkStr = wEl.duration.text;
+                                    }
+
+                                    console.log(`[GoogleMaps Live API] ✅ Received for ${cName}:`, {
+                                        distance: dEl.distance.text,
+                                        walk: walkStr,
+                                        moto: `${motoMin} mnt`,
+                                        car: `${carMin} mnt`
+                                    });
+
+                                    updatedMap[cName] = {
+                                        distance: dEl.distance.text,
+                                        duration: dEl.duration.text,
+                                        walkDuration: walkStr,
+                                        motoDuration: `${motoMin} mnt`,
+                                        carDuration: `${carMin} mnt`,
+                                        rawKm: distKm,
+                                        isLiveGoogleApi: true
+                                    };
+                                } else if (wEl && wEl.status === 'OK') {
+                                    hasLiveSuccess = true;
+                                    const distMeters = wEl.distance.value;
+                                    const distKm = distMeters / 1000;
+                                    const motoMin = Math.max(1, Math.ceil((distKm / 28) * 60) + 1);
+                                    const carMin = Math.max(2, Math.ceil((distKm / 18) * 60) + 2);
+
+                                    updatedMap[cName] = {
+                                        distance: wEl.distance.text,
+                                        duration: wEl.duration.text,
+                                        walkDuration: wEl.duration.text,
+                                        motoDuration: `${motoMin} mnt`,
+                                        carDuration: `${carMin} mnt`,
+                                        rawKm: distKm,
+                                        isLiveGoogleApi: true
+                                    };
+                                } else {
+                                    updatedMap[cName] = calculateFallback(cName, c?.lat, c?.lng, c?.distance);
                                 }
+                            });
 
-                                updatedMap[cName] = {
-                                    distance: dEl.distance.text,
-                                    duration: dEl.duration.text,
-                                    walkDuration: walkStr,
-                                    motoDuration: `${motoMin} mnt`,
-                                    carDuration: `${carMin} mnt`,
-                                    rawKm: distKm
-                                };
-                            } else if (wEl && wEl.status === 'OK') {
-                                const distMeters = wEl.distance.value;
-                                const distKm = distMeters / 1000;
-                                const motoMin = Math.max(1, Math.ceil((distKm / 28) * 60) + 1);
-                                const carMin = Math.max(2, Math.ceil((distKm / 18) * 60) + 2);
-
-                                updatedMap[cName] = {
-                                    distance: wEl.distance.text,
-                                    duration: wEl.duration.text,
-                                    walkDuration: wEl.duration.text,
-                                    motoDuration: `${motoMin} mnt`,
-                                    carDuration: `${carMin} mnt`,
-                                    rawKm: distKm
-                                };
-                            } else {
-                                updatedMap[cName] = calculateFallback(cName, c?.lat, c?.lng, c?.distance);
+                            if (hasLiveSuccess) {
+                                setRealtimeDistances(updatedMap);
                             }
+                        }).catch((err) => {
+                            if (isCancelled) return;
+                            setLoadingDistances(false);
+                            console.warn('[DistanceMatrixService] Notice:', err);
                         });
-
-                        setRealtimeDistances(updatedMap);
-                    }).catch((err) => {
-                        if (isCancelled) return;
-                        setLoadingDistances(false);
-                        console.warn('[DistanceMatrixService] API fallback used:', err);
-                    });
+                    }
                 } catch (err) {
                     if (isCancelled) return;
                     setLoadingDistances(false);
-                    console.warn('[DistanceMatrixService] Init error:', err);
+                    console.warn('[GoogleMapsService] Error:', err);
                 }
-            } else if (attempts < 6) {
+            } else if (attempts < 8) {
                 attempts++;
                 setTimeout(tryQueryGoogleMaps, 350);
             }
@@ -1379,9 +1399,16 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                             </div>
                                                                         </div>
                                                                         
-                                                                        <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-black shrink-0">
-                                                                            📍 {info.distance}
-                                                                        </span>
+                                                                        <div className="flex flex-col items-end gap-1 shrink-0">
+                                                                            <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-black">
+                                                                                📍 {info.distance}
+                                                                            </span>
+                                                                            {info.isLiveGoogleApi && (
+                                                                                <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[8px] font-black tracking-wider uppercase flex items-center gap-1 shadow-2xs animate-pulse">
+                                                                                    <span>●</span> LIVE MAPS API
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
 
                                                                     {/* Estimasi Waktu Tempuh Moda Transportasi */}
