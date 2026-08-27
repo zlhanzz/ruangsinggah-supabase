@@ -2,6 +2,18 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 98. Sinkronisasi Akurat Jarak & Durasi Multi-Moda (Walking + Driving) via Google Maps API (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menemukan selisih pada durasi jalan kaki antara sistem (9 mnt) dan Google Maps asli (17 mnt) untuk kampus UNHAS.
+  2. Selisih terjadi karena area kampus memiliki portal/tembok pembatas sehingga rute pejalan kaki harus memutar melewati gerbang resmi (detour), yang sebelumnya dihitung secara perkiraan garis lurus.
+- **Implementasi & Perbaikan**:
+  * **1. Dual Query Google Maps DistanceMatrixService**:
+    - Mengirim request `DRIVING` dan `WALKING` secara paralel menggunakan `Promise.all` langsung ke Google Maps API.
+    - Menetapkan durasi jalan kaki (`walkDuration`) 100% langsung dari response resmi mode `WALKING` Google Maps API (`wEl.duration.text`), mencakup seluruh rute memutar/gerbang pejalan kaki nyata.
+    - Menetapkan durasi kendaraan (`motoDuration` & `carDuration`) dan jarak dari mode `DRIVING` Google Maps API.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 97. Redesain Estetika Landmark Terdekat, Integrasi Rute Google Maps & Estimasi Waktu Tempuh Riil (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta tampilan Landmark Terdekat dan Peraturan Kost dievaluasi agar lebih elegan dan tidak kaku.
