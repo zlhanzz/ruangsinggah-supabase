@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 128. Penanda Status Kamar (Terisi vs Kosong) & Penyempurnaan Slot Kategori Foto pada Mode Audit Evaluasi KostManager (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta deretan tombol pemilih kamar (*Room Selector Strip*) di Step 2 Mode Audit Evaluasi diberikan penanda visual yang jelas untuk membedakan unit kamar mana yang **Terisi (Occupied)** dan kamar mana yang **Kosong (Vacant)**.
+  2. Memperbaiki masalah format slot foto kamar yang sebelumnya menampilkan broken alt text karena passing objek alih-alih string URL, serta memastikan kategori foto kamar dan foto area gedung tampil dinamis sesuai formulir agen.
+  3. Memisahkan kartu Profil Properti di Step 1 murni dari galeri foto area gedung untuk menghindari duplikasi visual.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Lencana Status Kamar pada Room Selector Strip**:
+    - Setiap tombol unit kamar kini menampilkan badge status eksplisit: `🔒 Terisi` (nuansa Amber/Gold hangat) atau `✨ Kosong` (nuansa Emerald/Hijau segar).
+    - Menghitung dan menampilkan counter ringkasan ketersediaan pada header selector: misal `Total: 5 Kamar (🔒 2 Terisi • ✨ 3 Kosong)`.
+  * **2. Slot Kategori Foto Kamar Dinamis (Step 2)**:
+    - Menghitung kategori foto yang diharapkan berdasarkan fasilitas kamar yang dicentang (`computeDynamicRoomPhotoCategories`).
+    - Menampilkan lencana kategori (`📸 Interior Kamar`, `📸 Tempat Tidur`, `📸 Jendela Luar`, `📸 Kamar Mandi`, dll.) dengan indikator centang hijau `✓` atau `[Kosong]` / dashed placeholder jika belum diunggah, serta fitur *Lightbox Click-to-Zoom*.
+  * **3. Pemurnian Kartu Profil Properti & Sentralisasi Foto Area (Step 1)**:
+    - Kartu 1 (`property_profile`) murni menampilkan teks metadata (Nama Kost, Tipe Gender, dan Total Kamar).
+    - Seluruh foto gedung/properti dipusatkan di Kartu 5 (`property_photos`) dalam slot terkategori (*Bangunan Depan, Koridor, Area Parkir, Lingkungan, Dapur Bersama, dll.*).
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerManagement.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus 100% dengan 0 error dalam 28.41 detik (2526 modules transformed).
+
 ### 127. Mode Audit & Simulasi Form Pendataan Interaktif pada Evaluasi & Permintaan Revisi Admin KostManager (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta alur evaluasi di Dashboard Admin diubah menjadi simulasi tampilan form pendataan survei riil (read-only), di mana Admin dapat mencentang dan menandai per-section yang keliru/perlu diperbaiki langsung secara visual dan kontekstual.

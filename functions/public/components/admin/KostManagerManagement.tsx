@@ -3782,36 +3782,62 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                 {auditStep === 2 && (
                                     <div className="space-y-4 animate-in fade-in duration-200">
                                         {/* Room Selector Strip */}
-                                        <div className="p-3 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">
-                                                    Pilih Unit Kamar yang Ingin Diaudit:
-                                                </span>
-                                                <span className="text-[10px] font-black text-[#ff7a00]">
-                                                    {rawRoomList.length} Kamar Terdata
-                                                </span>
-                                            </div>
+                                        <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2.5">
+                                            {(() => {
+                                                const totalOccupied = rawRoomList.filter(r => r.isAvailable === false || r.status === 'Terisi' || Boolean(r.residentName)).length;
+                                                const totalVacant = rawRoomList.length - totalOccupied;
+
+                                                return (
+                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                                                        <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                                                            <span>Pilih Unit Kamar yang Ingin Diaudit:</span>
+                                                        </span>
+                                                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider">
+                                                            <span className="text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                                                                Total: {rawRoomList.length} Kamar
+                                                            </span>
+                                                            <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                                                                🔒 {totalOccupied} Terisi
+                                                            </span>
+                                                            <span className="text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                                                ✨ {totalVacant} Kosong
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
                                             <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
                                                 {rawRoomList.map((rt: any, rIdx: number) => {
-                                                    const rName = rt.name ? (String(rt.name).toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${rIdx + 1}`;
+                                                    const rName = formatRoomName(rt.name, rIdx);
                                                     const isSelected = auditActiveRoomIdx === rIdx;
                                                     const hasFlag = Object.keys(auditedSections).some(k => k.includes(`_${rIdx}`) && auditedSections[k]);
+                                                    const isOccupied = rt.isAvailable === false || rt.status === 'Terisi' || Boolean(rt.residentName);
 
                                                     return (
                                                         <button
                                                             key={rIdx}
                                                             type="button"
                                                             onClick={() => setAuditActiveRoomIdx(rIdx)}
-                                                            className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${
+                                                            className={`px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shrink-0 transition-all cursor-pointer border ${
                                                                 isSelected
-                                                                    ? 'bg-slate-900 text-white shadow-md'
-                                                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                                                                    ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-orange-500/30'
+                                                                    : isOccupied
+                                                                        ? 'bg-amber-50/70 hover:bg-amber-100/80 text-slate-800 border-amber-200/90 shadow-2xs'
+                                                                        : 'bg-emerald-50/70 hover:bg-emerald-100/80 text-slate-800 border-emerald-200/90 shadow-2xs'
                                                             }`}
                                                         >
-                                                            <DoorClosed size={14} className={isSelected ? 'text-[#ff7a00]' : 'text-slate-400'} />
+                                                            <DoorClosed size={14} className={isSelected ? 'text-[#ff7a00]' : isOccupied ? 'text-amber-600' : 'text-emerald-600'} />
                                                             <span>{rName}</span>
+                                                            {/* Status Badge */}
+                                                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider flex items-center gap-0.5 ${
+                                                                isSelected
+                                                                    ? isOccupied ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30' : 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/30'
+                                                                    : isOccupied ? 'bg-amber-100 text-amber-800 border border-amber-300 font-bold' : 'bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold'
+                                                            }`}>
+                                                                {isOccupied ? '🔒 Terisi' : '✨ Kosong'}
+                                                            </span>
                                                             {hasFlag && (
-                                                                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                                                                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" title="Ada catatan evaluasi"></span>
                                                             )}
                                                         </button>
                                                     );
