@@ -2,6 +2,22 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 123. Perbaikan Inisialisasi Sub-Checklist Evaluasi: Kosongkan Pilihan Default Saat Kategori Dibuka (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan mengapa saat kategori evaluasi dicentang, seluruh sub-item di dalamnya langsung tercentang secara otomatis (`5/5`).
+  2. Pengguna meminta agar sub-item tidak langsung tercentang otomatis, melainkan dimulai dari keadaan kosong (`0/x`) agar Admin dapat memilih poin-poin yang benar-benar salah secara selektif dan mandiri.
+- **Implementasi & Perbaikan Logika**:
+  * **Default Kosong (`0/x`)**:
+    - Mengubah handler `toggleRevisionCategory` agar menginisialisasi `revisionSubItems[catId] = []` (array kosong) saat kategori induk pertama kali dibuka/dicentang.
+    - Kotak sub-item dimulai dalam status *unchecked* dan badge counter menampilkan `0/x`.
+  * **Opsi "Pilih Semua" Tetap Siap Digunakan**:
+    - Tombol cepat **Pilih Semua / Hapus Semua** tetap tersedia jika Admin ingin mencentang atau mengosongkan seluruh sub-item dalam satu klik.
+  * **Pembersihan State saat Modal Dibuka**:
+    - Memastikan `setRevisionSubItems({})` dieksekusi saat tombol *Minta Revisi / Evaluasi* pertama kali ditekan.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 122. Implementasi Sub-Checklist Detail Dinamis & Objektif pada Formulir Evaluasi Permintaan Revisi Survei (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar saat beberapa pilihan kategori evaluasi dicentang, antarmuka langsung membuka/menampilkan sub-checklist rincian elemen data spesifik yang terkandung di dalamnya.

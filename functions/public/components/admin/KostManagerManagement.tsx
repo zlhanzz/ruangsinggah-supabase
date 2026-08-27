@@ -159,14 +159,11 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
             });
         } else {
             setRevisionCategories(prev => [...prev, catId]);
-            // Default select all subItems when main category is checked
-            const catObj = REVISION_DETAIL_SCHEMA.find(s => s.id === catId);
-            if (catObj) {
-                setRevisionSubItems(prev => ({
-                    ...prev,
-                    [catId]: catObj.subItems.map(si => si.id)
-                }));
-            }
+            // Default to empty array so user can selectively check specific sub-items
+            setRevisionSubItems(prev => ({
+                ...prev,
+                [catId]: []
+            }));
         }
     };
 
@@ -3112,6 +3109,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                         disabled={isSubmitting}
                                         onClick={() => {
                                             setRevisionCategories([]);
+                                            setRevisionSubItems({});
                                             setRevisionNotes('');
                                             setRevisionModalOpen(true);
                                         }}
