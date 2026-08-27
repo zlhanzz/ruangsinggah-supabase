@@ -1614,25 +1614,48 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                             return keywords.some(k => {
                                                 const f = normalizeKeyword(k);
                                                 if (!f) return false;
-                                                if (p.includes(f) || f.includes(p)) return true;
 
+                                                // Exact match
+                                                if (f === p) return true;
+
+                                                // Semantic Rules (Strict 1-to-1 Mapping aligned with Agent Survey Form)
                                                 const rules: [RegExp, RegExp][] = [
+                                                    // 1. Kasur / Tempat Tidur (HANYA mencocokkan tempat tidur/kasur/springbed, BUKAN interior/kamar mandi)
+                                                    [/(kasur|tempat tidur|springbed|matras|bed)/, /(kasur|tempat tidur|springbed|matras|bed)/],
+                                                    // 2. Kamar Mandi (HANYA mencocokkan kamar mandi/toilet/wc/kloset/shower/wastafel)
+                                                    [/(kamar mandi|toilet|wc|kloset|shower|wastafel|bak mandi)/, /(kamar mandi|toilet|wc|kloset|shower|wastafel|bathroom)/],
+                                                    // 3. Dapur (HANYA mencocokkan dapur/kitchen/kompor/pantry/sink)
+                                                    [/(dapur|kitchen|kompor|pantry|sink|rak piring)/, /(dapur|kitchen|kompor|pantry|sink|masak)/],
+                                                    // 4. Jendela (HANYA mencocokkan jendela/ventilasi)
                                                     [/(jendela|ventilasi|window)/, /(jendela|ventilasi|window)/],
-                                                    [/(kasur|tempat tidur|springbed|bed|matras)/, /(kasur|tempat tidur|springbed|bed|interior|kamar)/],
-                                                    [/(kamar mandi|toilet|wc|kloset|shower|bath)/, /(kamar mandi|toilet|wc|kloset|shower|bath)/],
-                                                    [/(dapur|kitchen|kompor|pantry|masak)/, /(dapur|kitchen|kompor|pantry|masak)/],
-                                                    [/(lemari|wardrobe|pakaian|penyimpanan)/, /(lemari|wardrobe|pakaian|penyimpanan)/],
+                                                    // 5. Lemari (HANYA mencocokkan lemari/storage/wardrobe)
+                                                    [/(lemari|wardrobe|storage|penyimpanan)/, /(lemari|wardrobe|storage|penyimpanan)/],
+                                                    // 6. Meja / Kursi
                                                     [/(meja|kursi|belajar|kerja|desk)/, /(meja|kursi|belajar|kerja|desk)/],
-                                                    [/(ac|pendingin|air conditioner)/, /(ac|pendingin)/],
-                                                    [/(tv|televisi)/, /(tv|televisi)/],
-                                                    [/(balkon|balcony|teras)/, /(balkon|balcony|teras)/],
+                                                    // 7. AC
+                                                    [/(^|\s)(ac|air conditioner|pendingin)($|\s)/, /(^|\s)(ac|air conditioner|pendingin)($|\s)/],
+                                                    // 8. Kipas Angin
+                                                    [/(kipas|kipas angin|fan)/, /(kipas|kipas angin|fan)/],
+                                                    // 9. Water Heater
+                                                    [/(water heater|pemanas air)/, /(water heater|pemanas air)/],
+                                                    // 10. TV
+                                                    [/(^|\s)(tv|televisi)($|\s)/, /(^|\s)(tv|televisi)($|\s)/],
+                                                    // 11. Kulkas
                                                     [/(kulkas|lemari es)/, /(kulkas|lemari es)/],
-                                                    [/(wastafel|sink)/, /(wastafel|sink)/],
-                                                    [/(interior|ruangan|dalam kamar)/, /(interior|ruangan|kamar)/]
+                                                    // 12. Balkon
+                                                    [/(balkon|balcony|teras)/, /(balkon|balcony|teras)/]
                                                 ];
 
                                                 for (const [rF, rP] of rules) {
-                                                    if (rF.test(f) && rP.test(p)) return true;
+                                                    if (rF.test(f)) {
+                                                        return rP.test(p);
+                                                    }
+                                                }
+
+                                                // Substring fallback for specific multi-word facilities only if length >= 4 and not generic word like "kamar"
+                                                const genericWords = ['kamar', 'ruang', 'ruangan', 'dalam', 'luar', 'umum', 'bersama'];
+                                                if (!genericWords.includes(f) && !genericWords.includes(p) && f.length >= 4) {
+                                                    if (p.includes(f) || f.includes(p)) return true;
                                                 }
 
                                                 return false;

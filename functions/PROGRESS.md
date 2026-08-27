@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 120. Perbaikan Engine Korelasi Presisi 1-ke-1 Fasilitas ⇄ Foto Dokumentasi Sesuai Form Pendataan Lapangan Agen di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa saat menyentuh/hover fasilitas **Kasur**, foto dengan label **Interior Kamar** dan **Kamar Mandi** ikut bereaksi dan berstatus `Bukti Foto`, padahal tidak termasuk.
+  2. Pengguna meminta korelasi semantik disesuaikan apa adanya secara presisi 1-ke-1 dengan slot input pendataan yang ada pada form agen survei lapangan.
+- **Root Cause & Perbaikan Engine Semantik**:
+  * **Root Cause**: Regex lama pada `isFacilityMatchingPhoto` menyertakan kata `interior` dan `kamar` pada target foto kasur (`/(kasur|tempat tidur|springbed|bed|interior|kamar)/`). Akibatnya, seluruh foto yang memuat kata "interior" atau "kamar" (seperti *Interior Kamar* dan *Kamar Mandi*) terpicu aktif secara keliru.
+  * **Penyelarasan 1-ke-1 dengan Form Pendataan Lapangan (`AgentDashboard.tsx`)**:
+    - **Kasur / Tempat Tidur**: HANYA mencocokkan foto berlabel **`Tempat Tidur`**, **`Kasur`**, **`Springbed`**, **`Bed`** (Foto *Interior Kamar* & *Kamar Mandi* tidak akan ikut menyala).
+    - **Kamar Mandi Dalam / Luar / Kloset / Shower**: HANYA mencocokkan foto berlabel **`Kamar Mandi`**, **`Toilet`**, **`WC`**, **`Kloset`**, **`Shower`**, **`Wastafel`**.
+    - **Dapur Dalam / Luar / Kompor / Sink**: HANYA mencocokkan foto berlabel **`Dapur Dalam`**, **`Dapur`**, **`Kitchen`**, **`Kompor`**, **`Pantry`**, **`Sink`**.
+    - **Jendela Luar**: HANYA mencocokkan foto berlabel **`Jendela Luar`**, **`Jendela`**, **`Ventilasi`**.
+    - **Lemari Pakaian**: HANYA mencocokkan foto berlabel **`Lemari / Storage`**, **`Lemari`**, **`Wardrobe`**.
+    - **Meja Belajar / Kerja**: HANYA mencocokkan foto berlabel **`Meja Belajar`**, **`Meja`**, **`Desk`**.
+    - **AC**: HANYA mencocokkan foto berlabel **`AC`**, **`Pendingin`**.
+    - **Kipas Angin**: HANYA mencocokkan foto berlabel **`Kipas Angin`**, **`Kipas`**.
+    - **Water Heater**: HANYA mencocokkan foto berlabel **`Water Heater`**, **`Pemanas Air`**.
+    - **Interior Kamar**: Merupakan foto umum ruangan kamar dan **tidak akan terpicu secara salah** oleh perabot kasur/kamar mandi.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 119. Pembersihan Label '📸 BUKTI' pada Seluruh Kotak Fasilitas di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar tulisan/badge `📸 BUKTI` pada kotak fasilitas dihapus agar tampilan lebih bersih dan minimalis.
