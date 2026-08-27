@@ -30,7 +30,15 @@ import {
     ShieldAlert,
     DoorClosed,
     Lock,
-    Users
+    Users,
+    AppWindow,
+    Wind,
+    Wifi,
+    Tv,
+    Armchair,
+    Droplets,
+    Zap,
+    Utensils
 } from 'lucide-react';
 
 interface KostManagerManagementProps {
@@ -75,6 +83,10 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
     const [expandedStatusSections, setExpandedStatusSections] = useState<Record<string, boolean>>({});
     const [realtimeDistances, setRealtimeDistances] = useState<Record<string, { distance: string; duration: string; walkDuration: string; motoDuration: string; carDuration: string; rawKm: number; isLiveGoogleApi?: boolean }>>({});
     const [loadingDistances, setLoadingDistances] = useState(false);
+
+    // Interactive Hover between Facility & Photo Documentation
+    const [hoveredFacility, setHoveredFacility] = useState<{ unitId: string; facility: string } | null>(null);
+    const [hoveredPhoto, setHoveredPhoto] = useState<{ unitId: string; photoIdx: number; label: string } | null>(null);
 
     // Hitung Jarak & Durasi Real Google Maps (DistanceMatrixService & DirectionsService) dengan Cache-First (Write Once, Read Free)
     useEffect(() => {
@@ -1568,6 +1580,59 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                             return clean;
                                         };
 
+                                        const getFacilityIcon = (name: string, size = 11) => {
+                                            const n = (name || '').toLowerCase();
+                                            if (/(kasur|tempat tidur|bed|springbed|matras)/i.test(n)) return <Bed size={size} className="shrink-0" />;
+                                            if (/(kamar mandi|toilet|wc|shower|bath)/i.test(n)) return <Bath size={size} className="shrink-0" />;
+                                            if (/(dapur|kitchen|kompor|masak|pantry)/i.test(n)) return <CookingPot size={size} className="shrink-0" />;
+                                            if (/(jendela|window|ventilasi)/i.test(n)) return <AppWindow size={size} className="shrink-0" />;
+                                            if (/(ac|air conditioner|pendingin|kipas)/i.test(n)) return <Wind size={size} className="shrink-0" />;
+                                            if (/(wifi|internet|hotspot)/i.test(n)) return <Wifi size={size} className="shrink-0" />;
+                                            if (/(tv|televisi)/i.test(n)) return <Tv size={size} className="shrink-0" />;
+                                            if (/(lemari|wardrobe|clothes|pakaian|penyimpanan)/i.test(n)) return <DoorClosed size={size} className="shrink-0" />;
+                                            if (/(meja|kursi|desk|belajar|kerja)/i.test(n)) return <Armchair size={size} className="shrink-0" />;
+                                            if (/(listrik|token|colokan)/i.test(n)) return <Zap size={size} className="shrink-0" />;
+                                            if (/(kloset|duduk|jongkok)/i.test(n)) return <Sparkles size={size} className="shrink-0" />;
+                                            if (/(air|wastafel|pdam|sumur|sink)/i.test(n)) return <Droplets size={size} className="shrink-0" />;
+                                            if (/(balkon|teras)/i.test(n)) return <Building2 size={size} className="shrink-0" />;
+                                            return <Sparkles size={size} className="shrink-0" />;
+                                        };
+
+                                        const normalizeKeyword = (str: string) => {
+                                            return (str || '').toLowerCase()
+                                                .replace(/[^a-z0-9]/g, ' ')
+                                                .replace(/\s+/g, ' ')
+                                                .trim();
+                                        };
+
+                                        const isFacilityMatchingPhoto = (facilityName: string, photoLabel: string) => {
+                                            const f = normalizeKeyword(facilityName);
+                                            const p = normalizeKeyword(photoLabel);
+                                            if (!f || !p) return false;
+                                            if (p.includes(f) || f.includes(p)) return true;
+
+                                            const rules: [RegExp, RegExp][] = [
+                                                [/(jendela|ventilasi|window)/, /(jendela|ventilasi|window)/],
+                                                [/(kasur|tempat tidur|springbed|bed|matras)/, /(kasur|tempat tidur|springbed|bed|interior|kamar)/],
+                                                [/(kamar mandi|toilet|wc|kloset|shower|bath)/, /(kamar mandi|toilet|wc|kloset|shower|bath)/],
+                                                [/(dapur|kitchen|kompor|pantry|masak)/, /(dapur|kitchen|kompor|pantry|masak)/],
+                                                [/(lemari|wardrobe|pakaian|penyimpanan)/, /(lemari|wardrobe|pakaian|penyimpanan)/],
+                                                [/(meja|kursi|belajar|kerja|desk)/, /(meja|kursi|belajar|kerja|desk)/],
+                                                [/(ac|pendingin|air conditioner)/, /(ac|pendingin)/],
+                                                [/(tv|televisi)/, /(tv|televisi)/],
+                                                [/(balkon|balcony|teras)/, /(balkon|balcony|teras)/],
+                                                [/(kulkas|lemari es)/, /(kulkas|lemari es)/],
+                                                [/(wastafel|sink)/, /(wastafel|sink)/],
+                                                [/(interior|ruangan|dalam kamar)/, /(interior|ruangan|kamar)/]
+                                            ];
+
+                                            for (const [rF, rP] of rules) {
+                                                if (rF.test(f) && rP.test(p)) return true;
+                                            }
+
+                                            return false;
+                                        };
+
                                         // Pengelompokan Tipe Kamar Sejati (misal Tipe Standard, Tipe Deluxe) yang menaungi unit-unit kamar (Kamar 1, Kamar 2, Kamar 3)
                                         const groupIntoRoomTypes = (rawList: any[]) => {
                                             if (!Array.isArray(rawList) || rawList.length === 0) return [];
@@ -2145,68 +2210,170 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                                     </div>
 
                                                                                                     {/* Spesifikasi & Fasilitas Kamar Terpasang (Kamar Terisi) */}
-                                                                                                    <div className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-2.5 space-y-1.5 text-xs">
+                                                                                                    <div className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-3 space-y-2 text-xs">
                                                                                                         <div className="flex items-center justify-between">
-                                                                                                            <span className="text-[9px] font-black text-slate-600 uppercase tracking-wider">
-                                                                                                                🛋️ Fasilitas &amp; Spesifikasi Terpasang
-                                                                                                            </span>
-                                                                                                            <span className="px-2 py-0.5 rounded bg-slate-200/70 text-[9px] font-black text-slate-700">
+                                                                                                            <div className="flex items-center gap-1.5">
+                                                                                                                <span className="text-[9px] font-black text-slate-700 uppercase tracking-wider">
+                                                                                                                    🛋️ Fasilitas &amp; Spesifikasi Terpasang
+                                                                                                                </span>
+                                                                                                                <span className="text-[8.5px] text-slate-400 font-medium hidden sm:inline">
+                                                                                                                    (Sorot fasilitas untuk melihat foto terkait 🎯)
+                                                                                                                </span>
+                                                                                                            </div>
+                                                                                                            <span className="px-2 py-0.5 rounded bg-slate-200/80 text-[9px] font-black text-slate-700">
                                                                                                                 📐 {u.size || rt.size || '3x4 meter'}
                                                                                                             </span>
                                                                                                         </div>
-                                                                                                        <div className="flex flex-wrap gap-1 pt-0.5">
-                                                                                                            {uRoomFacilities.map((f: string, fi: number) => (
-                                                                                                                <span key={`f_${fi}`} className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[9.5px] font-bold text-slate-700">
-                                                                                                                    {f}
-                                                                                                                </span>
-                                                                                                            ))}
-                                                                                                            {uBathFacilities.map((bf: string, bfi: number) => (
-                                                                                                                <span key={`bf_${bfi}`} className="px-1.5 py-0.5 bg-sky-50 border border-sky-200 rounded text-[9.5px] font-bold text-sky-800">
-                                                                                                                    {bf}
-                                                                                                                </span>
-                                                                                                            ))}
-                                                                                                            {uKitchenFacilities.map((kf: string, kfi: number) => (
-                                                                                                                <span key={`kf_${kfi}`} className="px-1.5 py-0.5 bg-amber-50 border border-amber-200 rounded text-[9.5px] font-bold text-amber-800">
-                                                                                                                    {kf}
-                                                                                                                </span>
-                                                                                                            ))}
-                                                                                                            {uRoomFacilities.length === 0 && uBathFacilities.length === 0 && uKitchenFacilities.length === 0 && (
-                                                                                                                <span className="text-[10px] text-slate-400 italic">Fasilitas standar tipe kamar</span>
-                                                                                                            )}
+                                                                                                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                                                                                            {uRoomFacilities.map((f: string, fi: number) => {
+                                                                                                                const isThisFacilityHovered = hoveredFacility?.unitId === u.id && hoveredFacility?.facility === f;
+                                                                                                                const isMatchedByPhotoHover = hoveredPhoto?.unitId === u.id && isFacilityMatchingPhoto(f, hoveredPhoto.label);
+                                                                                                                const isHighlighted = isThisFacilityHovered || isMatchedByPhotoHover;
+                                                                                                                const hasMatchingPhoto = unitPhotos.some(p => isFacilityMatchingPhoto(f, p.label));
+
+                                                                                                                return (
+                                                                                                                    <span
+                                                                                                                        key={`f_${fi}`}
+                                                                                                                        onMouseEnter={() => setHoveredFacility({ unitId: u.id, facility: f })}
+                                                                                                                        onMouseLeave={() => setHoveredFacility(null)}
+                                                                                                                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all duration-200 cursor-pointer select-none ${
+                                                                                                                            isHighlighted
+                                                                                                                                ? 'bg-amber-600 text-white border-amber-700 shadow-md ring-2 ring-amber-400 scale-105 z-10'
+                                                                                                                                : hasMatchingPhoto
+                                                                                                                                    ? 'bg-white border-amber-300 text-amber-950 hover:border-amber-500 hover:bg-amber-50 shadow-2xs'
+                                                                                                                                    : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                                                                                                                        }`}
+                                                                                                                        title={hasMatchingPhoto ? `Fasilitas "${f}" (Sorot untuk melihat bukti foto)` : `Fasilitas "${f}"`}
+                                                                                                                    >
+                                                                                                                        {getFacilityIcon(f, 12)}
+                                                                                                                        <span>{f}</span>
+                                                                                                                        {hasMatchingPhoto && (
+                                                                                                                            <span className={`text-[8px] px-1 py-0.2 rounded font-black tracking-tighter ${isHighlighted ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'}`}>
+                                                                                                                                📸 BUKTI
+                                                                                                                            </span>
+                                                                                                                        )}
+                                                                                                                    </span>
+                                                                                                                );
+                                                                                                            })}
+                                                                                                            {uBathFacilities.map((bf: string, bfi: number) => {
+                                                                                                                const isThisFacilityHovered = hoveredFacility?.unitId === u.id && hoveredFacility?.facility === bf;
+                                                                                                                const isMatchedByPhotoHover = hoveredPhoto?.unitId === u.id && isFacilityMatchingPhoto(bf, hoveredPhoto.label);
+                                                                                                                const isHighlighted = isThisFacilityHovered || isMatchedByPhotoHover;
+                                                                                                                const hasMatchingPhoto = unitPhotos.some(p => isFacilityMatchingPhoto(bf, p.label));
+
+                                                                                                                return (
+                                                                                                                    <span
+                                                                                                                        key={`bf_${bfi}`}
+                                                                                                                        onMouseEnter={() => setHoveredFacility({ unitId: u.id, facility: bf })}
+                                                                                                                        onMouseLeave={() => setHoveredFacility(null)}
+                                                                                                                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all duration-200 cursor-pointer select-none ${
+                                                                                                                            isHighlighted
+                                                                                                                                ? 'bg-sky-600 text-white border-sky-700 shadow-md ring-2 ring-sky-400 scale-105 z-10'
+                                                                                                                                : hasMatchingPhoto
+                                                                                                                                    ? 'bg-sky-50 border-sky-300 text-sky-950 hover:border-sky-500 shadow-2xs'
+                                                                                                                                    : 'bg-sky-50 border-sky-200 text-sky-800 hover:border-sky-300'
+                                                                                                                        }`}
+                                                                                                                        title={hasMatchingPhoto ? `Fasilitas "${bf}" (Sorot untuk melihat bukti foto)` : `Fasilitas "${bf}"`}
+                                                                                                                    >
+                                                                                                                        {getFacilityIcon(bf, 12)}
+                                                                                                                        <span>{bf}</span>
+                                                                                                                        {hasMatchingPhoto && (
+                                                                                                                            <span className={`text-[8px] px-1 py-0.2 rounded font-black tracking-tighter ${isHighlighted ? 'bg-white/20 text-white' : 'bg-sky-200 text-sky-900'}`}>
+                                                                                                                                📸 BUKTI
+                                                                                                                            </span>
+                                                                                                                        )}
+                                                                                                                    </span>
+                                                                                                                );
+                                                                                                            })}
+                                                                                                            {uKitchenFacilities.map((kf: string, kfi: number) => {
+                                                                                                                const isThisFacilityHovered = hoveredFacility?.unitId === u.id && hoveredFacility?.facility === kf;
+                                                                                                                const isMatchedByPhotoHover = hoveredPhoto?.unitId === u.id && isFacilityMatchingPhoto(kf, hoveredPhoto.label);
+                                                                                                                const isHighlighted = isThisFacilityHovered || isMatchedByPhotoHover;
+                                                                                                                const hasMatchingPhoto = unitPhotos.some(p => isFacilityMatchingPhoto(kf, p.label));
+
+                                                                                                                return (
+                                                                                                                    <span
+                                                                                                                        key={`kf_${kfi}`}
+                                                                                                                        onMouseEnter={() => setHoveredFacility({ unitId: u.id, facility: kf })}
+                                                                                                                        onMouseLeave={() => setHoveredFacility(null)}
+                                                                                                                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all duration-200 cursor-pointer select-none ${
+                                                                                                                            isHighlighted
+                                                                                                                                ? 'bg-amber-600 text-white border-amber-700 shadow-md ring-2 ring-amber-400 scale-105 z-10'
+                                                                                                                                : hasMatchingPhoto
+                                                                                                                                    ? 'bg-amber-50 border-amber-300 text-amber-950 hover:border-amber-500 shadow-2xs'
+                                                                                                                                    : 'bg-amber-50 border-amber-200 text-amber-800 hover:border-amber-300'
+                                                                                                                        }`}
+                                                                                                                        title={hasMatchingPhoto ? `Fasilitas "${kf}" (Sorot untuk melihat bukti foto)` : `Fasilitas "${kf}"`}
+                                                                                                                    >
+                                                                                                                        {getFacilityIcon(kf, 12)}
+                                                                                                                        <span>{kf}</span>
+                                                                                                                        {hasMatchingPhoto && (
+                                                                                                                            <span className={`text-[8px] px-1 py-0.2 rounded font-black tracking-tighter ${isHighlighted ? 'bg-white/20 text-white' : 'bg-amber-200 text-amber-900'}`}>
+                                                                                                                                📸 BUKTI
+                                                                                                                            </span>
+                                                                                                                        )}
+                                                                                                                    </span>
+                                                                                                                );
+                                                                                                            })}
                                                                                                         </div>
                                                                                                     </div>
 
-                                                                                                    {/* Dokumentasi Foto Unit Kamar (Dinamis) */}
+                                                                                                    {/* Dokumentasi Foto Unit Kamar (Dinamis & Interaktif) */}
                                                                                                     {unitPhotos.length > 0 ? (
-                                                                                                        <div className="bg-amber-50/40 border border-amber-100 rounded-xl p-2.5 space-y-2">
+                                                                                                        <div className="bg-amber-50/40 border border-amber-100 rounded-xl p-3 space-y-2">
                                                                                                             <div className="flex items-center justify-between">
                                                                                                                 <span className="text-[9px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
                                                                                                                     <Camera size={13} className="text-amber-700" />
                                                                                                                     Foto Dokumentasi Unit ({unitPhotos.length})
                                                                                                                 </span>
-                                                                                                                <span className="text-[9px] font-bold text-slate-400">Hasil Survey</span>
+                                                                                                                <span className="text-[8.5px] font-bold text-amber-700/70">
+                                                                                                                    Sorot foto untuk mencocokkan fasilitas 🔍
+                                                                                                                </span>
                                                                                                             </div>
-                                                                                                            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                                                                                                                {unitPhotos.map((photo: any, pi: number) => (
-                                                                                                                    <a
-                                                                                                                        key={pi}
-                                                                                                                        href={photo.url}
-                                                                                                                        target="_blank"
-                                                                                                                        rel="noopener noreferrer"
-                                                                                                                        className="relative w-20 h-14 sm:w-24 sm:h-16 rounded-lg overflow-hidden shrink-0 border border-amber-200 hover:border-amber-500 transition-all group cursor-pointer shadow-2xs block"
-                                                                                                                    >
-                                                                                                                        <img
-                                                                                                                            src={photo.url}
-                                                                                                                            alt={photo.label || `Foto ${u.name}`}
-                                                                                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                                                                                                                        />
-                                                                                                                        {photo.label && (
-                                                                                                                            <div className="absolute inset-x-0 bottom-0 bg-black/60 backdrop-blur-xs py-0.5 px-1 text-[8px] text-white font-bold truncate text-center">
-                                                                                                                                {photo.label}
-                                                                                                                            </div>
-                                                                                                                        )}
-                                                                                                                    </a>
-                                                                                                                ))}
+                                                                                                            <div className="flex gap-2.5 overflow-x-auto pb-1.5 pt-1 scrollbar-thin">
+                                                                                                                {unitPhotos.map((photo: any, pi: number) => {
+                                                                                                                    const isThisPhotoHovered = hoveredPhoto?.unitId === u.id && hoveredPhoto?.photoIdx === pi;
+                                                                                                                    const isMatchedByFacilityHover = hoveredFacility?.unitId === u.id && isFacilityMatchingPhoto(hoveredFacility.facility, photo.label);
+                                                                                                                    const isAnyFacilityHoveredForThisUnit = hoveredFacility?.unitId === u.id;
+                                                                                                                    const isPhotoActive = isThisPhotoHovered || isMatchedByFacilityHover;
+                                                                                                                    const isDimmed = isAnyFacilityHoveredForThisUnit && !isMatchedByFacilityHover;
+
+                                                                                                                    return (
+                                                                                                                        <a
+                                                                                                                            key={pi}
+                                                                                                                            href={photo.url}
+                                                                                                                            target="_blank"
+                                                                                                                            rel="noopener noreferrer"
+                                                                                                                            onMouseEnter={() => setHoveredPhoto({ unitId: u.id, photoIdx: pi, label: photo.label })}
+                                                                                                                            onMouseLeave={() => setHoveredPhoto(null)}
+                                                                                                                            className={`relative w-24 h-16 sm:w-28 sm:h-20 rounded-xl overflow-hidden shrink-0 border transition-all duration-300 group cursor-pointer block ${
+                                                                                                                                isPhotoActive 
+                                                                                                                                    ? 'ring-4 ring-amber-500 scale-108 z-20 shadow-xl border-amber-500' 
+                                                                                                                                    : isDimmed 
+                                                                                                                                        ? 'opacity-25 grayscale scale-95 border-slate-200' 
+                                                                                                                                        : 'border-amber-200 hover:border-amber-500 hover:scale-102 shadow-2xs'
+                                                                                                                            }`}
+                                                                                                                        >
+                                                                                                                            <img
+                                                                                                                                src={photo.url}
+                                                                                                                                alt={photo.label || `Foto ${u.name}`}
+                                                                                                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                                                                                                            />
+                                                                                                                            {isMatchedByFacilityHover && (
+                                                                                                                                <div className="absolute top-1 right-1 bg-amber-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-md flex items-center gap-0.5 animate-bounce z-30">
+                                                                                                                                    <Sparkles size={8} /> Bukti Foto
+                                                                                                                                </div>
+                                                                                                                            )}
+                                                                                                                            {photo.label && (
+                                                                                                                                <div className={`absolute inset-x-0 bottom-0 py-0.5 px-1 text-[8.5px] font-bold truncate text-center transition-colors ${
+                                                                                                                                    isPhotoActive ? 'bg-amber-950/85 text-amber-200' : 'bg-black/65 backdrop-blur-xs text-white'
+                                                                                                                                }`}>
+                                                                                                                                    {photo.label}
+                                                                                                                                </div>
+                                                                                                                            )}
+                                                                                                                        </a>
+                                                                                                                    );
+                                                                                                                })}
                                                                                                             </div>
                                                                                                         </div>
                                                                                                     ) : (
@@ -2311,7 +2478,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                                     {/* Grid Spesifikasi Kamar & Kelengkapan */}
                                                                                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
                                                                                                         {/* 1. Dimensi Kamar */}
-                                                                                                        <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-2.5">
+                                                                                                        <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-3">
                                                                                                             <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider block mb-1">
                                                                                                                 📐 Ukuran Kamar
                                                                                                             </span>
@@ -2319,62 +2486,167 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                                                             <span className="text-[10px] text-slate-500 font-semibold">Ruangan Kosong</span>
                                                                                                         </div>
 
-                                                                                                        {/* 2. Kelengkapan Kamar */}
-                                                                                                        <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-2.5 sm:col-span-2">
-                                                                                                            <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider block mb-1">
-                                                                                                                🛋️ Fasilitas Terpasang
-                                                                                                            </span>
-                                                                                                            <div className="flex flex-wrap gap-1">
-                                                                                                                {uRoomFacilities.map((f: string, fi: number) => (
-                                                                                                                    <span key={fi} className="px-1.5 py-0.5 bg-white border border-emerald-200 rounded text-[9.5px] font-bold text-emerald-900">
-                                                                                                                        {f}
-                                                                                                                    </span>
-                                                                                                                ))}
-                                                                                                                {uBathFacilities.map((bf: string, bfi: number) => (
-                                                                                                                    <span key={`bf_${bfi}`} className="px-1.5 py-0.5 bg-sky-50 border border-sky-200 rounded text-[9.5px] font-bold text-sky-900">
-                                                                                                                        {bf}
-                                                                                                                    </span>
-                                                                                                                ))}
-                                                                                                                {uKitchenFacilities.map((kf: string, kfi: number) => (
-                                                                                                                    <span key={`kf_${kfi}`} className="px-1.5 py-0.5 bg-amber-50 border border-amber-200 rounded text-[9.5px] font-bold text-amber-900">
-                                                                                                                        {kf}
-                                                                                                                    </span>
-                                                                                                                ))}
+                                                                                                        {/* 2. Kelengkapan Kamar Ber-Icon & Interaktif */}
+                                                                                                        <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-3 sm:col-span-2 space-y-1.5">
+                                                                                                            <div className="flex items-center justify-between">
+                                                                                                                <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider">
+                                                                                                                    🛋️ Fasilitas Terpasang
+                                                                                                                </span>
+                                                                                                                <span className="text-[8.5px] text-emerald-700/80 font-medium hidden sm:inline">
+                                                                                                                    (Sorot fasilitas untuk melihat foto terkait 🎯)
+                                                                                                                </span>
+                                                                                                            </div>
+                                                                                                            <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                                                                                                {uRoomFacilities.map((f: string, fi: number) => {
+                                                                                                                    const isThisFacilityHovered = hoveredFacility?.unitId === u.id && hoveredFacility?.facility === f;
+                                                                                                                    const isMatchedByPhotoHover = hoveredPhoto?.unitId === u.id && isFacilityMatchingPhoto(f, hoveredPhoto.label);
+                                                                                                                    const isHighlighted = isThisFacilityHovered || isMatchedByPhotoHover;
+                                                                                                                    const hasMatchingPhoto = unitPhotos.some(p => isFacilityMatchingPhoto(f, p.label));
+
+                                                                                                                    return (
+                                                                                                                        <span
+                                                                                                                            key={`f_vac_${fi}`}
+                                                                                                                            onMouseEnter={() => setHoveredFacility({ unitId: u.id, facility: f })}
+                                                                                                                            onMouseLeave={() => setHoveredFacility(null)}
+                                                                                                                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all duration-200 cursor-pointer select-none ${
+                                                                                                                                isHighlighted
+                                                                                                                                    ? 'bg-emerald-600 text-white border-emerald-700 shadow-md ring-2 ring-emerald-400 scale-105 z-10'
+                                                                                                                                    : hasMatchingPhoto
+                                                                                                                                        ? 'bg-white border-emerald-300 text-emerald-950 hover:border-emerald-500 hover:bg-emerald-50 shadow-2xs'
+                                                                                                                                        : 'bg-white border-emerald-200 text-emerald-900 hover:border-emerald-300'
+                                                                                                                            }`}
+                                                                                                                            title={hasMatchingPhoto ? `Fasilitas "${f}" (Sorot untuk melihat bukti foto)` : `Fasilitas "${f}"`}
+                                                                                                                        >
+                                                                                                                            {getFacilityIcon(f, 12)}
+                                                                                                                            <span>{f}</span>
+                                                                                                                            {hasMatchingPhoto && (
+                                                                                                                                <span className={`text-[8px] px-1 py-0.2 rounded font-black tracking-tighter ${isHighlighted ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'}`}>
+                                                                                                                                    📸 BUKTI
+                                                                                                                                </span>
+                                                                                                                            )}
+                                                                                                                        </span>
+                                                                                                                    );
+                                                                                                                })}
+                                                                                                                {uBathFacilities.map((bf: string, bfi: number) => {
+                                                                                                                    const isThisFacilityHovered = hoveredFacility?.unitId === u.id && hoveredFacility?.facility === bf;
+                                                                                                                    const isMatchedByPhotoHover = hoveredPhoto?.unitId === u.id && isFacilityMatchingPhoto(bf, hoveredPhoto.label);
+                                                                                                                    const isHighlighted = isThisFacilityHovered || isMatchedByPhotoHover;
+                                                                                                                    const hasMatchingPhoto = unitPhotos.some(p => isFacilityMatchingPhoto(bf, p.label));
+
+                                                                                                                    return (
+                                                                                                                        <span
+                                                                                                                            key={`bf_vac_${bfi}`}
+                                                                                                                            onMouseEnter={() => setHoveredFacility({ unitId: u.id, facility: bf })}
+                                                                                                                            onMouseLeave={() => setHoveredFacility(null)}
+                                                                                                                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all duration-200 cursor-pointer select-none ${
+                                                                                                                                isHighlighted
+                                                                                                                                    ? 'bg-sky-600 text-white border-sky-700 shadow-md ring-2 ring-sky-400 scale-105 z-10'
+                                                                                                                                    : hasMatchingPhoto
+                                                                                                                                        ? 'bg-sky-50 border-sky-300 text-sky-950 hover:border-sky-500 shadow-2xs'
+                                                                                                                                        : 'bg-sky-50 border-sky-200 text-sky-900 hover:border-sky-300'
+                                                                                                                            }`}
+                                                                                                                            title={hasMatchingPhoto ? `Fasilitas "${bf}" (Sorot untuk melihat bukti foto)` : `Fasilitas "${bf}"`}
+                                                                                                                        >
+                                                                                                                            {getFacilityIcon(bf, 12)}
+                                                                                                                            <span>{bf}</span>
+                                                                                                                            {hasMatchingPhoto && (
+                                                                                                                                <span className={`text-[8px] px-1 py-0.2 rounded font-black tracking-tighter ${isHighlighted ? 'bg-white/20 text-white' : 'bg-sky-200 text-sky-900'}`}>
+                                                                                                                                    📸 BUKTI
+                                                                                                                                </span>
+                                                                                                                            )}
+                                                                                                                        </span>
+                                                                                                                    );
+                                                                                                                })}
+                                                                                                                {uKitchenFacilities.map((kf: string, kfi: number) => {
+                                                                                                                    const isThisFacilityHovered = hoveredFacility?.unitId === u.id && hoveredFacility?.facility === kf;
+                                                                                                                    const isMatchedByPhotoHover = hoveredPhoto?.unitId === u.id && isFacilityMatchingPhoto(kf, hoveredPhoto.label);
+                                                                                                                    const isHighlighted = isThisFacilityHovered || isMatchedByPhotoHover;
+                                                                                                                    const hasMatchingPhoto = unitPhotos.some(p => isFacilityMatchingPhoto(kf, p.label));
+
+                                                                                                                    return (
+                                                                                                                        <span
+                                                                                                                            key={`kf_vac_${kfi}`}
+                                                                                                                            onMouseEnter={() => setHoveredFacility({ unitId: u.id, facility: kf })}
+                                                                                                                            onMouseLeave={() => setHoveredFacility(null)}
+                                                                                                                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all duration-200 cursor-pointer select-none ${
+                                                                                                                                isHighlighted
+                                                                                                                                    ? 'bg-amber-600 text-white border-amber-700 shadow-md ring-2 ring-amber-400 scale-105 z-10'
+                                                                                                                                    : hasMatchingPhoto
+                                                                                                                                        ? 'bg-amber-50 border-amber-300 text-amber-950 hover:border-amber-500 shadow-2xs'
+                                                                                                                                        : 'bg-amber-50 border-amber-200 text-amber-900 hover:border-amber-300'
+                                                                                                                            }`}
+                                                                                                                            title={hasMatchingPhoto ? `Fasilitas "${kf}" (Sorot untuk melihat bukti foto)` : `Fasilitas "${kf}"`}
+                                                                                                                        >
+                                                                                                                            {getFacilityIcon(kf, 12)}
+                                                                                                                            <span>{kf}</span>
+                                                                                                                            {hasMatchingPhoto && (
+                                                                                                                                <span className={`text-[8px] px-1 py-0.2 rounded font-black tracking-tighter ${isHighlighted ? 'bg-white/20 text-white' : 'bg-amber-200 text-amber-900'}`}>
+                                                                                                                                    📸 BUKTI
+                                                                                                                                </span>
+                                                                                                                            )}
+                                                                                                                        </span>
+                                                                                                                    );
+                                                                                                                })}
                                                                                                             </div>
                                                                                                         </div>
                                                                                                     </div>
 
-                                                                                                    {/* Dokumentasi Foto Unit Kamar (Dinamis) */}
+                                                                                                    {/* Dokumentasi Foto Unit Kamar (Dinamis & Interaktif) */}
                                                                                                     {unitPhotos.length > 0 ? (
-                                                                                                        <div className="bg-emerald-50/40 border border-emerald-100 rounded-xl p-2.5 space-y-2">
+                                                                                                        <div className="bg-emerald-50/40 border border-emerald-100 rounded-xl p-3 space-y-2">
                                                                                                             <div className="flex items-center justify-between">
                                                                                                                 <span className="text-[9px] font-black text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
                                                                                                                     <Camera size={13} className="text-emerald-700" />
                                                                                                                     Foto Dokumentasi Unit ({unitPhotos.length})
                                                                                                                 </span>
-                                                                                                                <span className="text-[9px] font-bold text-slate-400">Hasil Survey</span>
+                                                                                                                <span className="text-[8.5px] font-bold text-emerald-700/80">
+                                                                                                                    Sorot foto untuk mencocokkan fasilitas 🔍
+                                                                                                                </span>
                                                                                                             </div>
-                                                                                                            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                                                                                                                {unitPhotos.map((photo: any, pi: number) => (
-                                                                                                                    <a
-                                                                                                                        key={pi}
-                                                                                                                        href={photo.url}
-                                                                                                                        target="_blank"
-                                                                                                                        rel="noopener noreferrer"
-                                                                                                                        className="relative w-20 h-14 sm:w-24 sm:h-16 rounded-lg overflow-hidden shrink-0 border border-emerald-200 hover:border-emerald-500 transition-all group cursor-pointer shadow-2xs block"
-                                                                                                                    >
-                                                                                                                        <img
-                                                                                                                            src={photo.url}
-                                                                                                                            alt={photo.label || `Foto ${u.name}`}
-                                                                                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                                                                                                                        />
-                                                                                                                        {photo.label && (
-                                                                                                                            <div className="absolute inset-x-0 bottom-0 bg-black/60 backdrop-blur-xs py-0.5 px-1 text-[8px] text-white font-bold truncate text-center">
-                                                                                                                                {photo.label}
-                                                                                                                            </div>
-                                                                                                                        )}
-                                                                                                                    </a>
-                                                                                                                ))}
+                                                                                                            <div className="flex gap-2.5 overflow-x-auto pb-1.5 pt-1 scrollbar-thin">
+                                                                                                                {unitPhotos.map((photo: any, pi: number) => {
+                                                                                                                    const isThisPhotoHovered = hoveredPhoto?.unitId === u.id && hoveredPhoto?.photoIdx === pi;
+                                                                                                                    const isMatchedByFacilityHover = hoveredFacility?.unitId === u.id && isFacilityMatchingPhoto(hoveredFacility.facility, photo.label);
+                                                                                                                    const isAnyFacilityHoveredForThisUnit = hoveredFacility?.unitId === u.id;
+                                                                                                                    const isPhotoActive = isThisPhotoHovered || isMatchedByFacilityHover;
+                                                                                                                    const isDimmed = isAnyFacilityHoveredForThisUnit && !isMatchedByFacilityHover;
+
+                                                                                                                    return (
+                                                                                                                        <a
+                                                                                                                            key={pi}
+                                                                                                                            href={photo.url}
+                                                                                                                            target="_blank"
+                                                                                                                            rel="noopener noreferrer"
+                                                                                                                            onMouseEnter={() => setHoveredPhoto({ unitId: u.id, photoIdx: pi, label: photo.label })}
+                                                                                                                            onMouseLeave={() => setHoveredPhoto(null)}
+                                                                                                                            className={`relative w-24 h-16 sm:w-28 sm:h-20 rounded-xl overflow-hidden shrink-0 border transition-all duration-300 group cursor-pointer block ${
+                                                                                                                                isPhotoActive 
+                                                                                                                                    ? 'ring-4 ring-emerald-500 scale-108 z-20 shadow-xl border-emerald-500' 
+                                                                                                                                    : isDimmed 
+                                                                                                                                        ? 'opacity-25 grayscale scale-95 border-slate-200' 
+                                                                                                                                        : 'border-emerald-200 hover:border-emerald-500 hover:scale-102 shadow-2xs'
+                                                                                                                            }`}
+                                                                                                                        >
+                                                                                                                            <img
+                                                                                                                                src={photo.url}
+                                                                                                                                alt={photo.label || `Foto ${u.name}`}
+                                                                                                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                                                                                                            />
+                                                                                                                            {isMatchedByFacilityHover && (
+                                                                                                                                <div className="absolute top-1 right-1 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-md flex items-center gap-0.5 animate-bounce z-30">
+                                                                                                                                    <Sparkles size={8} /> Bukti Foto
+                                                                                                                                </div>
+                                                                                                                            )}
+                                                                                                                            {photo.label && (
+                                                                                                                                <div className={`absolute inset-x-0 bottom-0 py-0.5 px-1 text-[8.5px] font-bold truncate text-center transition-colors ${
+                                                                                                                                    isPhotoActive ? 'bg-emerald-950/85 text-emerald-200' : 'bg-black/65 backdrop-blur-xs text-white'
+                                                                                                                                }`}>
+                                                                                                                                    {photo.label}
+                                                                                                                                </div>
+                                                                                                                            )}
+                                                                                                                        </a>
+                                                                                                                    );
+                                                                                                                })}
                                                                                                             </div>
                                                                                                         </div>
                                                                                                     ) : (

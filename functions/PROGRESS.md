@@ -2,6 +2,22 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 116. Icon Representatif Fasilitas & Interaksi Reaktif Cerdas (Fasilitas ⇄ Foto Dokumentasi) di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar setiap fasilitas kamar ditampilkan dengan icon yang sesuai (*representatif*).
+  2. Pengguna meminta agar sistem lebih interaktif & keren: jika kursor menyentuh/hover sebuah fasilitas tertentu, maka foto dokumentasi terkait langsung bereaksi, dan begitu pula sebaliknya (interaktivitas dua arah).
+- **Implementasi & Peningkatan UI/UX**:
+  * **1. Engine Icon Fasilitas (`getFacilityIcon`)**:
+    - Memetakan nama fasilitas secara cerdas ke ikon pure vector SVG `lucide-react` (*Kasur* 🛏️ `<Bed />`, *Kamar Mandi* 🚿 `<Bath />`, *Dapur* 🍳 `<CookingPot />`, *Jendela* 🪟 `<AppWindow />`, *AC* 💨 `<Wind />`, *WiFi* 📶 `<Wifi />`, *TV* 📺 `<Tv />`, *Lemari* 🚪 `<DoorClosed />`, *Meja/Kursi* 🪑 `<Armchair />`, *Listrik* ⚡ `<Zap />`, dll.).
+  * **2. Matching Engine Semantik (`isFacilityMatchingPhoto`)**:
+    - Mencocokkan kata kunci fasilitas dengan label kategori foto dokumentasi secara semantik (misal: *Kasur* ⇄ *Tempat Tidur*, *Jendela Luar* ⇄ *Jendela Luar*, *Kamar Mandi Dalam* ⇄ *Kamar Mandi / Toilet*).
+  * **3. Bi-Directional Interactive Hover Reaction**:
+    - **Hover Fasilitas**: Foto dokumentasi terkait di bawahnya langsung membesar (`scale-108`), bersinar dengan ring glow tebal, dan memunculkan floating badge animasi *"🎯 Bukti Foto"*, sementara foto lainnya meredup halus (`opacity-25 grayscale`).
+    - **Hover Foto**: Badge fasilitas terkait di atasnya otomatis ter-highlight (`active glow scale-105`).
+    - Fasilitas yang memiliki bukti foto dokumentasi dilengkapi penanda mini `📸 BUKTI`.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 115. Penambahan Fasilitas Lengkap & Dokumentasi Foto Dinamis pada Kartu Unit Kamar di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar seluruh informasi fasilitas (Ukuran, Fasilitas Kamar, Kamar Mandi, Dapur) ditampilkan lengkap pada setiap kartu unit kamar yang sedang dihuni (`occupiedUnits`).
