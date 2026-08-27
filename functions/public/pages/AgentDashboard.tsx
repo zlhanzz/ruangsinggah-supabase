@@ -3960,7 +3960,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const renderTasks = () => {
         const filteredRequests = surveyRequests.filter(req => {
             if (agentTab === 'pending') return req.status === 'PENDING_ASSIGNMENT';
-            if (agentTab === 'active') return ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED', 'SUBMITTED'].includes(req.status);
+            if (agentTab === 'active') return ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED', 'SUBMITTED', 'REVISION_REQUIRED', 'NEED_REVISION'].includes(req.status);
             if (agentTab === 'history') return ['COMPLETED', 'CANCELLED'].includes(req.status);
             return false;
         });
@@ -3986,7 +3986,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             {t.label}
                             {surveyRequests.filter(r => {
                                 if (t.id === 'pending') return r.status === 'PENDING_ASSIGNMENT';
-                                if (t.id === 'active') return ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED', 'SUBMITTED'].includes(r.status);
+                                if (t.id === 'active') return ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED', 'SUBMITTED', 'REVISION_REQUIRED', 'NEED_REVISION'].includes(r.status);
                                 if (t.id === 'history') return ['COMPLETED', 'CANCELLED'].includes(r.status);
                                 return false;
                             }).length > 0 && (
@@ -4439,6 +4439,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                   req.status === 'SUBMITTED' ? 'bg-blue-600 text-white border-blue-600' :
                                                   req.status === 'COMPLETED' ? 'bg-green-600 text-white border-green-600' : 
                                                   req.status === 'RESCHEDULED' ? 'bg-amber-505 text-white border-amber-600 shadow-amber-100' : 
+                                                  req.status === 'REVISION_REQUIRED' || req.status === 'NEED_REVISION' ? 'bg-amber-100 text-amber-950 border-2 border-amber-400 font-extrabold animate-pulse' :
                                                   'bg-red-50 text-red-700 border-red-200'}`}>
                                                 {req.status === 'AWAITING_PAYMENT' ? 'Menunggu Bayar' : 
                                                  req.status === 'PENDING_ASSIGNMENT' ? 'Menunggu Agen' : 
@@ -4448,6 +4449,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                  req.status === 'SUBMITTED' ? 'Menunggu Konfirmasi' :
                                                  req.status === 'COMPLETED' ? 'Selesai' : 
                                                  req.status === 'RESCHEDULED' ? 'Jadwal Ulang' : 
+                                                 req.status === 'REVISION_REQUIRED' || req.status === 'NEED_REVISION' ? '⚠️ Perlu Revisi / Evaluasi' :
                                                  req.status}
                                             </span>
                                         </div>

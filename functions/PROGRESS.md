@@ -2,6 +2,39 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 125. Perbaikan Visibilitas Kartu Tugas Evaluasi / Revisi di Dashboard Agen (`AgentDashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa saat evaluasi/revisi dikirimkan oleh Admin, kartu pendataan KostManager mendadak hilang dari tab **Aktif** di Dashboard Agen dan menampilkan *"Belum ada tugas di tab ini."*
+  2. Ditemukan akar masalah bahwa filter tab aktif (`agentTab === 'active'`) dan counter badge-nya di `AgentDashboard.tsx` hanya memeriksa status `['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED', 'SUBMITTED']`, sehingga request yang berstatus `REVISION_REQUIRED` atau `NEED_REVISION` tereleminasi dari seluruh tab.
+- **Implementasi & Perbaikan**:
+  * Menambahkan `REVISION_REQUIRED` dan `NEED_REVISION` ke dalam filter tab aktif (`agentTab === 'active'`) di `AgentDashboard.tsx` (Line 3963).
+  * Menambahkan `REVISION_REQUIRED` dan `NEED_REVISION` ke dalam perhitungan counter badge pada tab aktif (Line 3989).
+  * Memperbarui pemetaan status dan styling pada kartu survey biasa (non-KostManager) agar mengenali status `REVISION_REQUIRED` dan `NEED_REVISION`.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+### 124. Implementasi Alert Box & Status Revisi di Dashboard Agen, Notifikasi Email Surveyor, serta Highlighting Interaktif Form Onboarding (`AgentDashboard.tsx`, `notificationService.ts`, `adminService.ts`, `functions/src/index.ts`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan mengapa saat Admin mengirim evaluasi hasil pendataan, tidak ada pertanda/alert di dashboard agen, tidak ada email evaluasi yang masuk, kartu tugas tidak berubah, dan form pendataan belum interaktif menunjukkan bagian yang perlu diperbaiki.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Pengiriman Email Evaluasi Handal**:
+    - Memperbarui `notifySurveyRevisionRequested` di `notificationService.ts` untuk mengambil data profil email surveyor (`users.email, full_name`) dan mengirimkan email via FormSubmit gateway.
+    - Menambahkan template HTML email modern khusus status `REVISION_REQUIRED` pada Cloud Function `sendSurveyStatusEmail` di `functions/src/index.ts`.
+  * **2. Alert Box Evaluasi pada Kartu Tugas Dashboard Agen**:
+    - Menambahkan pemetaan status `REVISION_REQUIRED` dan `NEED_REVISION` dengan tema amber beranimasi pulse di `AgentDashboard.tsx`.
+    - Merender Alert Box peringatan evaluasi admin berlatar putih dengan tombol **`⚠️ Buka & Perbaiki Bagian yang Dievaluasi`**.
+  * **3. Interaktivitas & Highlighting Form Onboarding**:
+    - Menambahkan badge `⚠️ REVISI` pada Stepper Indicator (Step 1, Step 2, Step 3) yang dapat diklik untuk berpindah langsung.
+    - Menyediakan Banner Atas dan Quick-Jump Pill Buttons untuk langsung melompat ke step yang membutuhkan koreksi.
+    - Menambahkan border amber tebal dan label peringatan `⚠️ Perlu Revisi Admin` pada bagian-bagian formulir yang dievaluasi.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/notificationService.ts`
+  - `functions/public/adminService.ts`
+  - `functions/src/index.ts`
+- **Verifikasi**: Build Vite frontend dan backend TypeScript (`tsc`) lulus 100% dengan 0 error.
+
 ### 123. Perbaikan Inisialisasi Sub-Checklist Evaluasi: Kosongkan Pilihan Default Saat Kategori Dibuka (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan mengapa saat kategori evaluasi dicentang, seluruh sub-item di dalamnya langsung tercentang secara otomatis (`5/5`).
