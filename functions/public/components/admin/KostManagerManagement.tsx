@@ -1537,6 +1537,49 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                             <div className="py-16 text-center text-slate-400 font-bold uppercase text-xs">Tidak ada data tipe kamar terdata.</div>
                                         );
 
+                                        // Helper Terpadu Penghitung Statistik Kamar & Penghuni yang Akurat
+                                        const getRoomStats = (room: any) => {
+                                            const unitList = Array.isArray(room.rooms) ? room.rooms : (Array.isArray(room.unit_rooms) ? room.unit_rooms : []);
+                                            if (unitList.length > 0) {
+                                                let occCount = 0;
+                                                let availCount = 0;
+                                                let occupantCount = 0;
+                                                unitList.forEach((u: any) => {
+                                                    const isOcc = u?.status === 'Terisi' || u?.status === 'occupied' || u?.is_occupied === true || u?.isAvailable === false || Boolean(u?.occupant_name || u?.occupant_phone);
+                                                    if (isOcc) {
+                                                        occCount++;
+                                                        occupantCount++;
+                                                    } else {
+                                                        availCount++;
+                                                    }
+                                                });
+                                                return { total: unitList.length, occupied: occCount, available: availCount, occupants: occupantCount };
+                                            }
+
+                                            const isExplicitlyOccupied = room.status === 'Terisi' || room.status === 'occupied' || room.isAvailable === false || room.is_occupied === true || Boolean(room.occupant_name || room.occupantName);
+
+                                            if (room.totalRooms !== undefined || room.total_rooms !== undefined) {
+                                                const total = Number(room.totalRooms || room.total_rooms || 1);
+                                                let avail = 0;
+                                                if (room.availableRooms !== undefined || room.available_rooms !== undefined) {
+                                                    avail = Number(room.availableRooms || room.available_rooms);
+                                                } else if (isExplicitlyOccupied) {
+                                                    avail = 0;
+                                                } else {
+                                                    avail = total;
+                                                }
+                                                const occ = Math.max(0, total - avail);
+                                                const occs = isExplicitlyOccupied ? Math.max(1, occ) : occ;
+                                                return { total, occupied: occ, available: avail, occupants: occs };
+                                            }
+
+                                            if (isExplicitlyOccupied) {
+                                                return { total: 1, occupied: 1, available: 0, occupants: 1 };
+                                            } else {
+                                                return { total: 1, occupied: 0, available: 1, occupants: 0 };
+                                            }
+                                        };
+
                                         // Hitung Ringkasan Statistik Kamar & Penghuni
                                         let totalRooms = 0;
                                         let occupiedRooms = 0;
@@ -1544,19 +1587,11 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                         let totalOccupants = 0;
 
                                         roomTypes.forEach((rt: any) => {
-                                            const tr = Number(rt.totalRooms || rt.total_rooms || (rt.rooms?.length || 1));
-                                            const ar = (rt.availableRooms !== undefined)
-                                                ? Number(rt.availableRooms)
-                                                : (rt.available_rooms !== undefined ? Number(rt.available_rooms) : Math.max(0, tr - Number(rt.occupiedRooms || rt.occupied_rooms || 0)));
-                                            const occ = Math.max(0, tr - ar);
-
-                                            totalRooms += tr;
-                                            availableRooms += ar;
-                                            occupiedRooms += occ;
-
-                                            const unitRooms = rt.rooms || rt.unit_rooms || [];
-                                            const registeredOccupants = unitRooms.filter((u: any) => Boolean(u?.occupant_name || u?.occupant_phone || u?.is_occupied || u?.status === 'occupied')).length;
-                                            totalOccupants += (registeredOccupants > 0 ? registeredOccupants : occ);
+                                            const stats = getRoomStats(rt);
+                                            totalRooms += stats.total;
+                                            occupiedRooms += stats.occupied;
+                                            availableRooms += stats.available;
+                                            totalOccupants += stats.occupants;
                                         });
 
                                         const DEFAULT_ROOM_PHOTO_SLOTS = ['Interior Kamar', 'Kamar Mandi Dalam', 'Tempat Tidur', 'Lemari / Penyimpanan'];
@@ -1655,9 +1690,10 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
 
                                                 {roomTypes.map((room: any, rtIdx: number) => {
                                                     const roomPhotos = getRoomPhotos(room);
-                                                    const totalRooms = room.totalRooms || room.total_rooms || 1;
-                                                    const availableRooms = room.availableRooms || room.available_rooms || 0;
-                                                    const occupiedRooms = totalRooms - availableRooms;
+                                                    const rStats = getRoomStats(room);
+                                                    const totalRooms = rStats.total;
+                                                    const availableRooms = rStats.available;
+                                                    const occupiedRooms = rStats.occupied;
                                                     const isExpanded = expandedRoomTypes[rtIdx] !== false; // default expanded
 
                                                     const roomFacilities: string[] = room.roomFacilities || room.room_facilities || [];
@@ -1668,14 +1704,15 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                     const available: string[] = [];
                                                     (room.rooms || room.unit_rooms || []).forEach((u: any, ui: number) => {
                                                         const uName = formatRoomName(u?.name || u?.room_number || String(ui + 1), ui);
-                                                        if (u?.status === 'occupied' || u?.is_occupied) occupied.push(uName);
+                                                        const isUnitOcc = u?.status === 'Terisi' || u?.status === 'occupied' || u?.is_occupied === true || u?.isAvailable === false || Boolean(u?.occupant_name || u?.occupant_phone);
+                                                        if (isUnitOcc) occupied.push(uName);
                                                         else available.push(uName);
                                                     });
                                                     if (occupied.length === 0 && occupiedRooms > 0) {
-                                                        for (let i = 0; i < occupiedRooms; i++) occupied.push(`Kamar ${i + 1}`);
+                                                        for (let i = 0; i < occupiedRooms; i++) occupied.push(formatRoomName(room.name, rtIdx));
                                                     }
                                                     if (available.length === 0 && availableRooms > 0) {
-                                                        for (let i = 0; i < availableRooms; i++) available.push(`Kamar ${occupiedRooms + i + 1}`);
+                                                        for (let i = 0; i < availableRooms; i++) available.push(formatRoomName(room.name, rtIdx));
                                                     }
 
                                                     const occupiedKey = `rt${rtIdx}_occ`;

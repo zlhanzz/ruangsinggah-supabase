@@ -2,6 +2,22 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 103. Sinkronisasi Akurat Helper `getRoomStats` untuk Data Kamar & Penghuni Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menemukan perbedaan data antara hasil pendataan agen survey dan tampilan ringkasan Tab 2.
+  2. Kartu ringkasan atas menampilkan `Kamar Terisi: 0, Kamar Kosong: 5` karena mencari properti `availableRooms` yang tidak dibuat saat agen mendata dengan atribut status (`status: 'Terisi'`, `isAvailable: false`).
+  3. Header accordion kamar di bawah menampilkan `✨ 0 Kosong, 🔒 1 Dihuni` karena rumus fallback default yang berbeda.
+- **Implementasi & Perbaikan**:
+  * **1. Helper Terpadu `getRoomStats(room)`**:
+    - Membaca status kamar secara komprehensif dari berbagai kemungkinan format input surveyor agen:
+      - Terisi jika: `status === 'Terisi'`, `status === 'occupied'`, `isAvailable === false`, `is_occupied === true`, atau terdapat nama/kontak penyewa (`occupant_name` / `occupantName` / `occupant_phone`).
+      - Kosong jika: `status === 'Kosong'`, `status === 'available'`, atau `isAvailable === true`.
+    - Menghitung sub-unit kamar (`rooms` / `unit_rooms`) secara akurat jika tipe kamar memiliki beberapa unit.
+  * **2. Unifikasi Formula Ringkasan & Accordion**:
+    - Menggunakan helper `getRoomStats` yang sama untuk menghitung total pada **4 Kartu Ringkasan Atas** dan **Seluruh Header Accordion Kamar Bawah**, menjamin 100% konsistensi dan akurasi data.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 102. Grid Ringkasan Pendataan Kamar & Penghuni Tab 2 + Pembersihan Badge Live Maps (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta penambahan ringkasan hasil pendataan kamar pada bagian paling atas menu **Tab 2: DATA KAMAR & PENGHUNI** di modal peninjauan KostManager (Total Kamar, Kamar Terisi, Kamar Kosong, Total Penghuni).
