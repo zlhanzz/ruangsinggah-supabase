@@ -1987,12 +1987,12 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
 
                                                 {/* LIST TIPE KAMAR SEJATI (LEVEL 1 PARENT) */}
                                                 {groupedRoomTypes.map((rt: any, rtIdx: number) => {
-                                                    const isExpanded = expandedRoomTypes[rtIdx] !== false; // default expanded
+                                                    const isExpanded = Boolean(expandedRoomTypes[rtIdx]); // default minimized (false)
                                                     const occupiedKey = `rt${rtIdx}_occ`;
                                                     const availableKey = `rt${rtIdx}_avail`;
 
-                                                    const isOccExpanded = expandedStatusSections[occupiedKey] !== false; // default open or toggle
-                                                    const isAvailExpanded = expandedStatusSections[availableKey] !== false;
+                                                    const isOccExpanded = Boolean(expandedStatusSections[occupiedKey]); // default minimized (false)
+                                                    const isAvailExpanded = Boolean(expandedStatusSections[availableKey]); // default minimized (false)
 
                                                     return (
                                                         <div key={rt.id || rtIdx} className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">

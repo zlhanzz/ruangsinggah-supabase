@@ -2,6 +2,16 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 113. Konfigurasi Default State Seluruh Kartu Tab 2 Menjadi Minimize (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar seluruh kartu tipe kamar dan sub-parent unit kamar di Tab 2 berada dalam kondisi **minimize (tertutup)** secara default saat modal dibuka.
+- **Implementasi & Perbaikan**:
+  * **1. Level 1 (Tipe Kamar)**: Mengubah inisialisasi status ekspansi `isExpanded` menjadi `Boolean(expandedRoomTypes[rtIdx])` (default `false` / minimized).
+  * **2. Level 2 (Sub-Parents Terisi & Kosong)**: Mengubah status `isOccExpanded` dan `isAvailExpanded` menjadi default `false` / minimized.
+  * Memberikan tampilan awal Tab 2 yang sangat ringkas, bersih, dan memudahkan navigasi daftar tipe kamar.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 112. Pemindahan Spesifikasi & Fasilitas Kamar ke Header Minimize Tipe Kamar di Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan mengapa informasi fasilitas harus di-maximize terlebih dahulu baru muncul, padahal fasilitas merupakan bagian penting yang seharusnya langsung dapat dilihat pada tampilan minimize.
