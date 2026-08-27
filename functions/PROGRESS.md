@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 127. Mode Audit & Simulasi Form Pendataan Interaktif pada Evaluasi & Permintaan Revisi Admin KostManager (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta alur evaluasi di Dashboard Admin diubah menjadi simulasi tampilan form pendataan survei riil (read-only), di mana Admin dapat mencentang dan menandai per-section yang keliru/perlu diperbaiki langsung secara visual dan kontekstual.
+  2. Pendekatan ini menjamin hasil evaluasi jauh lebih presisi, objektif, dan terhubung 100% dengan highlight glowing dan floating badges di Dashboard Agen.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Mode Audit & Simulasi Form Pendataan (3-Step QA Inspection)**:
+    - Mengganti modal checklist abstrak lama dengan **Interactive Survey Audit Simulation Modal** berukuran lega (`max-w-4xl`, high-end glassmorphism).
+    - Stepper 1-2-3 interaktif (Data Properti, Data Kamar, Mitra & Kerjasama) dengan counter dinamis per step (`X Bagian Ditandai`).
+  * **2. Section-Level Audit Cards & Micro-Feedback Input**:
+    - Setiap blok section dilengkapi dengan toggle button: `[ ⚠️ Tandai Perlu Revisi ]`.
+    - Saat dicentang, section berubah menyala keemasan/amber (`border-2 border-amber-400 ring-4 ring-amber-400/20 bg-amber-500/[0.04]`), dan memunculkan input catatan mikro kontekstual (misal catatan khusus untuk *Ukuran Kamar 2*, *Foto Fasad*, atau *Titik GPS*).
+  * **3. Cakupan Section Audit Step 1, 2, dan 3**:
+    - **Step 1 (Data Properti)**: Profil & Foto Fasad Gedung, Titik Koordinat GPS & Link Maps, Landmark & Kampus Terdekat, Fasilitas Umum Kost, Foto Area Properti, dan Peraturan Kost.
+    - **Step 2 (Data Kamar)**: Unit selector bar per kamar dengan indikator flag (titik berdenyut), Ukuran & Dimensi Ruangan, Status Sewa & Data Penghuni, Skema Tarif Sewa, Fasilitas Kamar, dan Foto Dokumentasi Kamar.
+    - **Step 3 (Data Mitra & Kerjasama)**: Rekening Bank Mitra, Syarat & Ketentuan Kerjasama, dan Tanda Tangan Digital Pemilik.
+  * **4. Sinkronisasi Sempurna ke Parser Dashboard Agen**:
+    - Handler `handleRequestRevision` otomatis menyusun payload terstruktur (`📌 Bagian yang Perlu Diperbaiki: ...`, `📝 Catatan Evaluasi Admin: ...`, dan catatan inline mikro) yang langsung dikenali oleh regex parser cerdas `parseEvaluationData` di Dashboard Agen.
+    - Dilengkapi preview dan tombol notifikasi share langsung ke WhatsApp Surveyor (`https://wa.me/...`).
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerManagement.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error dalam 23.30 detik (2526 modules transformed).
+
 ### 126. Redesain Modern Alert Box Evaluasi & Efek Glowing / Kelap-Kelip Dinamis pada Form Onboarding KostManager (`AgentDashboard.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna mengkritik alert evaluasi sebelumnya yang kaku dan tidak menggambarkan arsitektur web modern.

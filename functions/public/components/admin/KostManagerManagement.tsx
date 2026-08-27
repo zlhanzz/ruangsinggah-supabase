@@ -40,7 +40,15 @@ import {
     Armchair,
     Droplets,
     Zap,
-    Utensils
+    Utensils,
+    User,
+    Phone,
+    CreditCard,
+    FileText,
+    CheckCircle2,
+    PenTool,
+    Home,
+    Calendar
 } from 'lucide-react';
 
 // Master Data Skema Detail Evaluasi & Permintaan Revisi Terstruktur
@@ -140,12 +148,23 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
     const [hoveredFacility, setHoveredFacility] = useState<{ unitId: string; facilityId: string; keywords: string[] } | null>(null);
     const [hoveredPhoto, setHoveredPhoto] = useState<{ unitId: string; photoIdx: number; label: string } | null>(null);
 
-    // Evaluation & Revision Modal States
+    // Evaluation & Revision Modal States (Interactive Audit Simulation)
     const [revisionModalOpen, setRevisionModalOpen] = useState(false);
     const [revisionCategories, setRevisionCategories] = useState<string[]>([]);
     const [revisionSubItems, setRevisionSubItems] = useState<Record<string, string[]>>({});
     const [revisionNotes, setRevisionNotes] = useState('');
     const [isSubmittingRevision, setIsSubmittingRevision] = useState(false);
+    const [auditStep, setAuditStep] = useState<1 | 2 | 3>(1);
+    const [auditedSections, setAuditedSections] = useState<Record<string, boolean>>({});
+    const [sectionNotes, setSectionNotes] = useState<Record<string, string>>({});
+    const [auditActiveRoomIdx, setAuditActiveRoomIdx] = useState<number>(0);
+
+    const toggleAuditSection = (sectionKey: string) => {
+        setAuditedSections(prev => ({
+            ...prev,
+            [sectionKey]: !prev[sectionKey]
+        }));
+    };
 
     // Helpers to toggle main category and its sub-items
     const toggleRevisionCategory = (catId: string) => {
@@ -644,8 +663,10 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
     const handleRequestRevision = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!reviewRequest) return;
-        if (!revisionNotes.trim() && revisionCategories.length === 0) {
-            alert('Mohon pilih setidaknya satu kategori perbaikan atau tuliskan catatan evaluasi.');
+
+        const activeAuditedKeys = Object.keys(auditedSections).filter(k => auditedSections[k]);
+        if (!revisionNotes.trim() && revisionCategories.length === 0 && activeAuditedKeys.length === 0) {
+            alert('Mohon tandai setidaknya satu bagian yang perlu diperbaiki atau tuliskan catatan evaluasi.');
             return;
         }
 
@@ -659,6 +680,70 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
             const formattedCategoriesPayload: string[] = [];
             const formattedLines: string[] = [];
 
+            // 1. Process from Interactive Audit Simulation (auditedSections)
+            if (activeAuditedKeys.length > 0) {
+                const categoryMap: Record<string, { cat: string; label: string }> = {
+                    'property_facade': { cat: 'Properti Umum', label: 'Foto Utama / Fasad Bangunan' },
+                    'property_gps': { cat: 'Properti Umum', label: 'Titik Koordinat GPS & Link Maps' },
+                    'property_landmarks': { cat: 'Properti Umum', label: 'Estimasi Jarak Landmark / Kampus' },
+                    'property_facilities': { cat: 'Properti Umum', label: 'Fasilitas Umum Kost' },
+                    'property_photos': { cat: 'Properti Umum', label: 'Foto Area Properti & Lingkungan' },
+                    'property_rules': { cat: 'Properti Umum', label: 'Deskripsi & Peraturan Kost' },
+                    'partner_bank': { cat: 'Mitra & Dokumen', label: 'Nomor Rekening Bank Mitra' },
+                    'partner_terms': { cat: 'Mitra & Dokumen', label: 'Syarat & Ketentuan Kerjasama' },
+                    'partner_signature': { cat: 'Mitra & Dokumen', label: 'Tanda Tangan Digital Mitra' }
+                };
+
+                const grouped: Record<string, string[]> = {};
+                const rawRoomList = reviewProperty?.room_types || reviewProperty?.metadata?.roomTypes || reviewRequest?.room_types || reviewRequest?.metadata?.roomTypes || [];
+
+                activeAuditedKeys.forEach(k => {
+                    let catName = 'Lainnya';
+                    let itemName = k;
+                    const note = sectionNotes[k]?.trim();
+                    const noteSuffix = note ? ` (Catatan: "${note}")` : '';
+
+                    if (categoryMap[k]) {
+                        catName = categoryMap[k].cat;
+                        itemName = `${categoryMap[k].label}${noteSuffix}`;
+                    } else if (k.startsWith('room_size_')) {
+                        const rIdx = Number(k.replace('room_size_', ''));
+                        catName = 'Kamar & Fasilitas';
+                        const rName = rawRoomList[rIdx]?.name || `Kamar ${rIdx + 1}`;
+                        itemName = `Ukuran & Dimensi ${rName}${noteSuffix}`;
+                    } else if (k.startsWith('room_facilities_')) {
+                        const rIdx = Number(k.replace('room_facilities_', ''));
+                        catName = 'Kamar & Fasilitas';
+                        const rName = rawRoomList[rIdx]?.name || `Kamar ${rIdx + 1}`;
+                        itemName = `Fasilitas ${rName}${noteSuffix}`;
+                    } else if (k.startsWith('room_photos_')) {
+                        const rIdx = Number(k.replace('room_photos_', ''));
+                        catName = 'Kamar & Fasilitas';
+                        const rName = rawRoomList[rIdx]?.name || `Kamar ${rIdx + 1}`;
+                        itemName = `Foto Dokumentasi ${rName}${noteSuffix}`;
+                    } else if (k.startsWith('room_pricing_')) {
+                        const rIdx = Number(k.replace('room_pricing_', ''));
+                        catName = 'Data Penghuni';
+                        const rName = rawRoomList[rIdx]?.name || `Kamar ${rIdx + 1}`;
+                        itemName = `Tarif Sewa ${rName}${noteSuffix}`;
+                    } else if (k.startsWith('room_status_')) {
+                        const rIdx = Number(k.replace('room_status_', ''));
+                        catName = 'Data Penghuni';
+                        const rName = rawRoomList[rIdx]?.name || `Kamar ${rIdx + 1}`;
+                        itemName = `Status Terisi vs Kosong & Penghuni ${rName}${noteSuffix}`;
+                    }
+
+                    if (!grouped[catName]) grouped[catName] = [];
+                    grouped[catName].push(itemName);
+                });
+
+                Object.keys(grouped).forEach(cat => {
+                    formattedCategoriesPayload.push(`${cat} (${grouped[cat].join(', ')})`);
+                    formattedLines.push(`• ${cat}:\n  - ${grouped[cat].join('\n  - ')}`);
+                });
+            }
+
+            // 2. Process legacy/modal categories if any
             revisionCategories.forEach(catId => {
                 const subs = revisionSubItems[catId] || [];
                 const catObj = REVISION_DETAIL_SCHEMA.find(s => s.id === catId);
@@ -3111,6 +3196,10 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                             setRevisionCategories([]);
                                             setRevisionSubItems({});
                                             setRevisionNotes('');
+                                            setAuditedSections({});
+                                            setSectionNotes({});
+                                            setAuditStep(1);
+                                            setAuditActiveRoomIdx(0);
                                             setRevisionModalOpen(true);
                                         }}
                                         className="w-full sm:w-auto px-5 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-200 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
@@ -3136,239 +3225,710 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                 </div>
             )}
 
-            {/* MODAL DIALOG EVALUASI & MINTA REVISI KE SURVEYOR */}
-            {revisionModalOpen && reviewRequest && (
-                <div className="fixed inset-0 z-[160] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-                    <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-                        {/* Header Modal */}
-                        <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100 sticky top-0 bg-white z-10">
-                            <div className="flex items-center gap-3">
-                                <div className="w-11 h-11 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200 shadow-2xs">
-                                    <AlertTriangle size={22} />
+            {/* MODAL AUDIT SIMULASI FORM PENDATAAN & MINTA REVISI KE SURVEYOR */}
+            {revisionModalOpen && reviewRequest && (() => {
+                const rawRoomList: any[] = reviewProperty?.room_types || 
+                                           reviewProperty?.metadata?.roomTypes || 
+                                           reviewRequest?.room_types || 
+                                           reviewRequest?.metadata?.roomTypes || 
+                                           reviewProperty?.metadata?.room_types || [];
+                const activeRoom = rawRoomList[auditActiveRoomIdx] || rawRoomList[0] || {};
+                const activeAuditedKeys = Object.keys(auditedSections).filter(k => auditedSections[k]);
+                
+                // Count flagged items per step
+                const step1Keys = ['property_facade', 'property_gps', 'property_landmarks', 'property_facilities', 'property_photos', 'property_rules'];
+                const step2Keys = activeAuditedKeys.filter(k => k.startsWith('room_'));
+                const step3Keys = ['partner_bank', 'partner_terms', 'partner_signature'];
+                
+                const step1Count = activeAuditedKeys.filter(k => step1Keys.includes(k)).length;
+                const step2Count = step2Keys.length;
+                const step3Count = activeAuditedKeys.filter(k => step3Keys.includes(k)).length;
+
+                const renderAuditCard = (
+                    sectionKey: string,
+                    title: string,
+                    icon: React.ReactNode,
+                    children: React.ReactNode,
+                    placeholder: string = 'Tuliskan catatan khusus untuk bagian ini...'
+                ) => {
+                    const isAudited = Boolean(auditedSections[sectionKey]);
+                    return (
+                        <div className={`p-4 rounded-2xl border transition-all ${
+                            isAudited
+                                ? 'border-2 border-amber-400 ring-4 ring-amber-400/20 bg-amber-500/[0.04] shadow-md shadow-amber-500/10'
+                                : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}>
+                            <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <span className="text-[#ff7a00] shrink-0">{icon}</span>
+                                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider truncate">{title}</h4>
                                 </div>
-                                <div>
-                                    <h3 className="text-base font-black text-slate-900 tracking-tight">Evaluasi & Permintaan Revisi</h3>
-                                    <p className="text-xs text-slate-500 font-bold">
-                                        Kost: <span className="text-slate-900 font-black">{reviewRequest.kost_name}</span> • Surveyor: <span className="text-amber-700 font-black">{reviewRequest.agent_name || 'Agen Terkait'}</span>
-                                    </p>
+                                <button
+                                    type="button"
+                                    onClick={() => toggleAuditSection(sectionKey)}
+                                    className={`px-3 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                                        isAudited
+                                            ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-xs ring-2 ring-amber-300 animate-pulse'
+                                            : 'bg-slate-100 hover:bg-amber-100 text-slate-600 hover:text-amber-900 border border-slate-200'
+                                    }`}
+                                >
+                                    {isAudited ? (
+                                        <>
+                                            <Check size={12} strokeWidth={3} />
+                                            <span>⚠️ Perlu Revisi</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="w-3 h-3 rounded-full border-2 border-slate-400"></span>
+                                            <span>Tandai Perlu Revisi</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+
+                            <div className="pt-3">
+                                {children}
+                            </div>
+
+                            {isAudited && (
+                                <div className="mt-3 pt-3 border-t border-amber-200/60 animate-in fade-in slide-in-from-top-1">
+                                    <label className="text-[10px] font-black text-amber-900 uppercase tracking-wider block mb-1">
+                                        Catatan Khusus ({title}):
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={sectionNotes[sectionKey] || ''}
+                                        onChange={e => setSectionNotes(prev => ({ ...prev, [sectionKey]: e.target.value }))}
+                                        placeholder={placeholder}
+                                        className="w-full h-[36px] px-3 rounded-xl bg-white border border-amber-300 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-amber-400 placeholder:text-slate-400"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    );
+                };
+
+                return (
+                    <div className="fixed inset-0 z-[160] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in">
+                        <div className="bg-slate-50 rounded-3xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] overflow-hidden animate-in zoom-in-95">
+                            
+                            {/* Sticky Modal Header */}
+                            <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-200/80 bg-slate-50 shrink-0">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
+                                        <AlertTriangle size={22} />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-base font-black text-slate-900 tracking-tight">
+                                                Mode Audit &amp; Simulasi Form Evaluasi
+                                            </h3>
+                                            <span className="px-2 py-0.5 rounded-full bg-amber-100 border border-amber-200 text-amber-900 font-black text-[9px] uppercase tracking-wider">
+                                                🔍 QA Inspection
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-slate-500 font-bold mt-0.5">
+                                            Kost: <span className="text-slate-900 font-black">{reviewRequest.kost_name || reviewProperty?.name}</span> • Surveyor: <span className="text-amber-700 font-black">{reviewRequest.agent_name || 'Agen Terkait'}</span>
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300/80 font-black text-[11px]">
+                                        <Sparkles size={13} className="text-amber-600 animate-bounce" />
+                                        <span>{activeAuditedKeys.length} Bagian Ditandai</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setRevisionModalOpen(false)}
+                                        className="w-9 h-9 rounded-full bg-white hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors shadow-2xs cursor-pointer"
+                                    >
+                                        ✕
+                                    </button>
                                 </div>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => setRevisionModalOpen(false)}
-                                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
-                            >
-                                ✕
-                            </button>
-                        </div>
 
-                        {/* Form Input Evaluasi */}
-                        <form onSubmit={handleRequestRevision} className="space-y-5">
-                            {/* 1. Checklist Kategori Utama */}
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-xs font-black text-slate-900 uppercase tracking-wider block">
-                                        1. Pilih Bagian Data yang Perlu Diperbaiki
-                                    </label>
-                                    <span className="text-[11px] text-slate-500 font-bold">
-                                        {revisionCategories.length} Kategori Dipilih
-                                    </span>
+                            {/* Stepper Tabs */}
+                            <div className="py-3 shrink-0">
+                                <div className="flex items-center justify-between gap-2 p-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+                                    <button
+                                        type="button"
+                                        onClick={() => setAuditStep(1)}
+                                        className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                                            auditStep === 1
+                                                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+                                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <Building2 size={15} />
+                                        <span>1. Data Properti</span>
+                                        {step1Count > 0 && (
+                                            <span className={`px-1.5 py-0.2 rounded-full font-black text-[9px] ${auditStep === 1 ? 'bg-white text-orange-600' : 'bg-amber-500 text-white'}`}>
+                                                {step1Count}
+                                            </span>
+                                        )}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAuditStep(2)}
+                                        className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                                            auditStep === 2
+                                                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+                                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <Bed size={15} />
+                                        <span>2. Data Kamar</span>
+                                        {step2Count > 0 && (
+                                            <span className={`px-1.5 py-0.2 rounded-full font-black text-[9px] ${auditStep === 2 ? 'bg-white text-orange-600' : 'bg-amber-500 text-white'}`}>
+                                                {step2Count}
+                                            </span>
+                                        )}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAuditStep(3)}
+                                        className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                                            auditStep === 3
+                                                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+                                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <ShieldCheck size={15} />
+                                        <span>3. Mitra &amp; Kerjasama</span>
+                                        {step3Count > 0 && (
+                                            <span className={`px-1.5 py-0.2 rounded-full font-black text-[9px] ${auditStep === 3 ? 'bg-white text-orange-600' : 'bg-amber-500 text-white'}`}>
+                                                {step3Count}
+                                            </span>
+                                        )}
+                                    </button>
                                 </div>
+                            </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                    {REVISION_DETAIL_SCHEMA.map(item => {
-                                        const isChecked = revisionCategories.includes(item.id);
-                                        const selectedCount = (revisionSubItems[item.id] || []).length;
-                                        const totalCount = item.subItems.length;
-
-                                        return (
-                                            <button
-                                                key={item.id}
-                                                type="button"
-                                                onClick={() => toggleRevisionCategory(item.id)}
-                                                className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
-                                                    isChecked
-                                                        ? 'bg-amber-500/10 border-amber-400 ring-2 ring-amber-300 text-amber-950 shadow-xs'
-                                                        : 'bg-slate-50/70 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
-                                                }`}
-                                            >
-                                                <span className={`w-4.5 h-4.5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
-                                                    isChecked ? 'bg-amber-600 border-amber-600 text-white' : 'border-slate-300 bg-white'
-                                                }`}>
-                                                    {isChecked && <Check size={12} strokeWidth={3} />}
-                                                </span>
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center justify-between gap-1">
-                                                        <p className="text-xs font-black leading-tight">{item.label}</p>
-                                                        {isChecked && (
-                                                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-amber-200 text-amber-900 shrink-0">
-                                                                {selectedCount}/{totalCount}
-                                                            </span>
-                                                        )}
+                            {/* Scrollable Form Simulation Body */}
+                            <div className="flex-1 overflow-y-auto pr-1 space-y-4">
+                                
+                                {/* STEP 1: DATA PROPERTI UMUM SIMULATION */}
+                                {auditStep === 1 && (
+                                    <div className="space-y-4 animate-in fade-in duration-200">
+                                        {/* 1. Profil & Fasad Gedung */}
+                                        {renderAuditCard(
+                                            'property_facade',
+                                            'Profil & Foto Fasad Gedung Kost',
+                                            <Home size={16} />,
+                                            <div className="space-y-3">
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Nama Kost</span>
+                                                        <p className="text-xs font-black text-slate-800">{reviewProperty?.name || reviewRequest?.kost_name || '-'}</p>
                                                     </div>
-                                                    <p className="text-[10px] text-slate-500 font-medium leading-tight mt-1">{item.desc}</p>
+                                                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Tipe / Gender</span>
+                                                        <p className="text-xs font-black text-[#ff7a00] uppercase">{reviewProperty?.gender || reviewProperty?.type || 'Campur'}</p>
+                                                    </div>
+                                                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Total Kamar</span>
+                                                        <p className="text-xs font-black text-slate-800">{reviewProperty?.total_rooms || reviewRequest?.total_rooms || rawRoomList.length || '-'} Unit</p>
+                                                    </div>
                                                 </div>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-
-                                {/* SUB-CHECKLIST RINCIAN ELEMEN SPESIFIK */}
-                                {revisionCategories.length > 0 && (
-                                    <div className="space-y-3 pt-3 border-t border-slate-100 animate-in fade-in duration-200">
-                                        <div className="flex items-center justify-between">
-                                            <p className="text-[11px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
-                                                <Sparkles size={14} className="text-amber-600 shrink-0" /> Rincian Elemen Spesifik yang Perlu Direvisi:
-                                            </p>
-                                            <span className="text-[10px] text-slate-400 font-bold">Pilih item detail di bawah</span>
-                                        </div>
-
-                                        {REVISION_DETAIL_SCHEMA.filter(cat => revisionCategories.includes(cat.id)).map(cat => {
-                                            const selectedSubs = revisionSubItems[cat.id] || [];
-                                            const allSelected = selectedSubs.length === cat.subItems.length;
-
-                                            return (
-                                                <div key={cat.id} className="bg-amber-50/60 border border-amber-200/90 rounded-2xl p-3.5 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150">
-                                                    <div className="flex items-center justify-between pb-2 border-b border-amber-200/70">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-xs font-black text-amber-950">{cat.label}</span>
-                                                            <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-black text-[9px]">
-                                                                {selectedSubs.length} dari {cat.subItems.length} item dipilih
-                                                            </span>
-                                                        </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => toggleAllSubItems(cat.id, !allSelected)}
-                                                            className="text-[10px] font-black text-amber-800 hover:text-amber-950 underline cursor-pointer"
-                                                        >
-                                                            {allSelected ? 'Hapus Semua' : 'Pilih Semua'}
-                                                        </button>
+                                                {/* Fasad photos */}
+                                                {reviewProperty?.image_urls && reviewProperty.image_urls.length > 0 && (
+                                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-1">
+                                                        {normalizePhotos(reviewProperty.image_urls).slice(0, 4).map((p, pIdx) => (
+                                                            <div key={pIdx} className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 relative group bg-slate-100">
+                                                                <img src={p.url} alt={p.label} className="w-full h-full object-cover" />
+                                                                <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[8px] font-bold p-1 truncate text-center">
+                                                                    {p.label || `Foto #${pIdx+1}`}
+                                                                </span>
+                                                            </div>
+                                                        ))}
                                                     </div>
+                                                )}
+                                            </div>,
+                                            'Contoh: Foto tampak depan gedung buram, mohon upload foto beresolusi jelas saat siang hari.'
+                                        )}
 
+                                        {/* 2. Titik Koordinat GPS & Lokasi */}
+                                        {renderAuditCard(
+                                            'property_gps',
+                                            'Titik Koordinat GPS & Alamat Lengkap',
+                                            <MapPin size={16} />,
+                                            <div className="space-y-2.5">
+                                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                                    <div>
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Alamat Terdata</span>
+                                                        <p className="text-xs font-bold text-slate-800 leading-relaxed">{reviewProperty?.address || reviewRequest?.address || '-'}</p>
+                                                        <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                                            Lat: {reviewProperty?.location?.lat || reviewProperty?.latitude || '-'} | Lng: {reviewProperty?.location?.lng || reviewProperty?.longitude || '-'}
+                                                        </p>
+                                                    </div>
+                                                    {(reviewProperty?.maps_link || reviewProperty?.location) && (
+                                                        <a
+                                                            href={reviewProperty?.maps_link || `https://www.google.com/maps?q=${reviewProperty?.location?.lat || reviewProperty?.latitude},${reviewProperty?.location?.lng || reviewProperty?.longitude}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shrink-0 hover:bg-blue-100"
+                                                        >
+                                                            <Navigation size={12} /> Buka Maps ↗
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </div>,
+                                            'Contoh: Titik pin peta meleset sekitar 50 meter dari gerbang utama kost.'
+                                        )}
+
+                                        {/* 3. Estimasi Jarak Landmark / Kampus */}
+                                        {renderAuditCard(
+                                            'property_landmarks',
+                                            'Landmark & Kampus Terdekat',
+                                            <Building2 size={16} />,
+                                            <div className="space-y-2">
+                                                {reviewProperty?.campuses && reviewProperty.campuses.length > 0 ? (
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                        {cat.subItems.map(sub => {
-                                                            const isSubChecked = selectedSubs.includes(sub.id);
+                                                        {reviewProperty.campuses.map((c: any, cIdx: number) => {
+                                                            const cName = typeof c === 'string' ? c : (c?.name || '-');
+                                                            const distInfo = realtimeDistances[cName] || (typeof c === 'object' ? c : null);
                                                             return (
-                                                                <button
-                                                                    key={sub.id}
-                                                                    type="button"
-                                                                    onClick={() => toggleRevisionSubItem(cat.id, sub.id)}
-                                                                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-2.5 ${
-                                                                        isSubChecked
-                                                                            ? 'bg-white border-amber-400 ring-1 ring-amber-300 text-amber-950 shadow-2xs'
-                                                                            : 'bg-white/60 border-slate-200/80 text-slate-500 hover:bg-white hover:text-slate-700'
-                                                                    }`}
-                                                                >
-                                                                    <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 mt-0.5 ${
-                                                                        isSubChecked ? 'bg-amber-600 border-amber-600 text-white' : 'border-slate-300 bg-white'
-                                                                    }`}>
-                                                                        {isSubChecked && <Check size={11} strokeWidth={3} />}
-                                                                    </span>
-                                                                    <div className="min-w-0 flex-1">
-                                                                        <p className={`text-[11px] font-black leading-tight ${isSubChecked ? 'text-slate-900' : 'text-slate-600'}`}>
-                                                                            {sub.label}
-                                                                        </p>
-                                                                        <p className="text-[9px] text-slate-400 font-medium leading-tight mt-0.5">
-                                                                            {sub.desc}
+                                                                <div key={cIdx} className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between gap-2">
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-xs font-black text-slate-800 truncate">🏫 {cName}</p>
+                                                                        <p className="text-[10px] text-slate-500 font-bold">
+                                                                            {distInfo?.distance ? `${distInfo.distance} • 🚶 ${distInfo.walkDuration || '15 mnt'} • 🏍️ ${distInfo.motoDuration || '3 mnt'}` : 'Estimasi kalkulasi otomatis'}
                                                                         </p>
                                                                     </div>
-                                                                </button>
+                                                                </div>
                                                             );
                                                         })}
                                                     </div>
+                                                ) : (
+                                                    <p className="text-xs text-slate-400 italic">Tidak ada data kampus/landmark terdaftar.</p>
+                                                )}
+                                            </div>,
+                                            'Contoh: Tambahkan kampus UNHAS dan PNUP sebagai landmark utama terdekat.'
+                                        )}
+
+                                        {/* 4. Fasilitas Umum Kost */}
+                                        {renderAuditCard(
+                                            'property_facilities',
+                                            'Fasilitas Umum Kost',
+                                            <Sparkles size={16} />,
+                                            <div className="space-y-2">
+                                                {reviewProperty?.facilities && reviewProperty.facilities.length > 0 ? (
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {reviewProperty.facilities.map((f: any, fIdx: number) => (
+                                                            <span key={fIdx} className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200/80 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                                                                <Check size={11} strokeWidth={3} className="text-emerald-600" />
+                                                                {typeof f === 'string' ? f : (f?.name || '-')}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-xs text-slate-400 italic">Belum ada fasilitas umum terdaftar.</p>
+                                                )}
+                                            </div>,
+                                            'Contoh: Fasilitas area parkir mobil dan dapur bersama belum dicentang.'
+                                        )}
+
+                                        {/* 5. Foto Area Properti & Lingkungan */}
+                                        {renderAuditCard(
+                                            'property_photos',
+                                            'Foto Area Properti & Lingkungan',
+                                            <Camera size={16} />,
+                                            <div className="space-y-2">
+                                                {reviewProperty?.image_urls && reviewProperty.image_urls.length > 0 ? (
+                                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                                        {normalizePhotos(reviewProperty.image_urls).map((p, pIdx) => (
+                                                            <div key={pIdx} className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 relative group bg-slate-100">
+                                                                <img src={p.url} alt={p.label} className="w-full h-full object-cover" />
+                                                                <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[8px] font-bold p-1 truncate text-center">
+                                                                    {p.label || `Area #${pIdx+1}`}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-xs text-slate-400 italic">Belum ada foto area umum yang diunggah.</p>
+                                                )}
+                                            </div>,
+                                            'Contoh: Foto area parkiran motor dan koridor lantai 2 mohon dilengkapi.'
+                                        )}
+
+                                        {/* 6. Peraturan Kost */}
+                                        {renderAuditCard(
+                                            'property_rules',
+                                            'Peraturan Kost & Jam Malam',
+                                            <FileText size={16} />,
+                                            <div className="space-y-2">
+                                                {reviewProperty?.rules && reviewProperty.rules.length > 0 ? (
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {reviewProperty.rules.map((r: string, rIdx: number) => (
+                                                            <span key={rIdx} className="px-2.5 py-1 bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-[10px] font-bold">
+                                                                ⛔ {r}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-xs text-slate-400 italic">Tidak ada aturan khusus terdaftar.</p>
+                                                )}
+                                            </div>,
+                                            'Contoh: Mohon cantumkan aturan jam malam tamu lawan jenis.'
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* STEP 2: DATA KAMAR & PENGHUNI SIMULATION */}
+                                {auditStep === 2 && (
+                                    <div className="space-y-4 animate-in fade-in duration-200">
+                                        {/* Room Selector Strip */}
+                                        <div className="p-3 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                                                    Pilih Unit Kamar yang Ingin Diaudit:
+                                                </span>
+                                                <span className="text-[10px] font-black text-[#ff7a00]">
+                                                    {rawRoomList.length} Kamar Terdata
+                                                </span>
+                                            </div>
+                                            <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
+                                                {rawRoomList.map((rt: any, rIdx: number) => {
+                                                    const rName = rt.name ? (String(rt.name).toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${rIdx + 1}`;
+                                                    const isSelected = auditActiveRoomIdx === rIdx;
+                                                    const hasFlag = Object.keys(auditedSections).some(k => k.includes(`_${rIdx}`) && auditedSections[k]);
+
+                                                    return (
+                                                        <button
+                                                            key={rIdx}
+                                                            type="button"
+                                                            onClick={() => setAuditActiveRoomIdx(rIdx)}
+                                                            className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${
+                                                                isSelected
+                                                                    ? 'bg-slate-900 text-white shadow-md'
+                                                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                                                            }`}
+                                                        >
+                                                            <DoorClosed size={14} className={isSelected ? 'text-[#ff7a00]' : 'text-slate-400'} />
+                                                            <span>{rName}</span>
+                                                            {hasFlag && (
+                                                                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                                                            )}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        {/* Active Room Sub-Sections */}
+                                        {rawRoomList.length > 0 ? (
+                                            <div className="space-y-4">
+                                                {/* Header Info Kamar Aktif */}
+                                                <div className="p-3 bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-white rounded-2xl border border-orange-200/80 flex items-center justify-between gap-3">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <div className="w-9 h-9 rounded-xl bg-[#ff7a00] text-white flex items-center justify-center font-black text-xs shadow-xs">
+                                                            #{auditActiveRoomIdx + 1}
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="text-xs font-black text-slate-900 uppercase">
+                                                                {activeRoom.name ? (String(activeRoom.name).toLowerCase().startsWith('kamar') ? activeRoom.name : `Kamar ${activeRoom.name}`) : `Kamar ${auditActiveRoomIdx + 1}`}
+                                                            </h4>
+                                                            <p className="text-[10px] text-slate-500 font-bold">
+                                                                {activeRoom.floor || 'Lantai 1'} • {activeRoom.type || 'Standard'} • {activeRoom.isAvailable === false || activeRoom.status === 'Terisi' ? '🔒 Sedang Terisi' : '✨ Siap Huni'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            );
-                                        })}
+
+                                                {/* 1. Ukuran & Dimensi Kamar */}
+                                                {renderAuditCard(
+                                                    `room_size_${auditActiveRoomIdx}`,
+                                                    `Ukuran & Dimensi ${activeRoom.name || `Kamar ${auditActiveRoomIdx+1}`}`,
+                                                    <Layers size={16} />,
+                                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                                        <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Luas Kamar</span>
+                                                            <p className="text-xs font-black text-slate-800">{activeRoom.size || activeRoom.dimensions || '3x4 meter'}</p>
+                                                        </div>
+                                                        <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Posisi Lantai</span>
+                                                            <p className="text-xs font-black text-slate-800">{activeRoom.floor || 'Lantai 1'}</p>
+                                                        </div>
+                                                        <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 col-span-2 sm:col-span-1">
+                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Tipe Kamar</span>
+                                                            <p className="text-xs font-black text-[#ff7a00]">{activeRoom.type || 'Standard'}</p>
+                                                        </div>
+                                                    </div>,
+                                                    `Contoh: Ukuran kamar ${activeRoom.name || auditActiveRoomIdx+1} tertulis 3x4 meter padahal riil 3x3 meter.`
+                                                )}
+
+                                                {/* 2. Status Ketersediaan & Data Penghuni */}
+                                                {renderAuditCard(
+                                                    `room_status_${auditActiveRoomIdx}`,
+                                                    `Status Sewa & Data Penghuni ${activeRoom.name || `Kamar ${auditActiveRoomIdx+1}`}`,
+                                                    <Users size={16} />,
+                                                    <div className="space-y-2">
+                                                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                                            <div>
+                                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Status Kamar</span>
+                                                                <p className="text-xs font-black text-slate-800">
+                                                                    {activeRoom.isAvailable === false || activeRoom.status === 'Terisi' ? '🔒 SEDANG DIHUNI / TERISI' : '✨ KOSONG / SIAP HUNI'}
+                                                                </p>
+                                                            </div>
+                                                            {activeRoom.residentName && (
+                                                                <div className="text-right">
+                                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Nama Penyewa</span>
+                                                                    <p className="text-xs font-bold text-slate-800">{activeRoom.residentName} ({activeRoom.residentPhone || '-'})</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>,
+                                                    `Contoh: Kamar ${activeRoom.name || auditActiveRoomIdx+1} terisi tapi nomor WhatsApp penyewa belum lengkap.`
+                                                )}
+
+                                                {/* 3. Skema Tarif Sewa */}
+                                                {renderAuditCard(
+                                                    `room_pricing_${auditActiveRoomIdx}`,
+                                                    `Skema Tarif Sewa ${activeRoom.name || `Kamar ${auditActiveRoomIdx+1}`}`,
+                                                    <CreditCard size={16} />,
+                                                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+                                                        <div>
+                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Harga Sewa Pokok</span>
+                                                            <p className="text-sm font-black text-[#ff7a00]">
+                                                                Rp {formatThousand(activeRoom.price || 0)} <span className="text-xs text-slate-500 font-normal">/ {activeRoom.paymentPeriod || 'Bulanan'}</span>
+                                                            </p>
+                                                        </div>
+                                                        {activeRoom.extraOccupantFee > 0 && (
+                                                            <div className="text-right">
+                                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Biaya Ekstra Orang</span>
+                                                                <p className="text-xs font-bold text-slate-700">+Rp {formatThousand(activeRoom.extraOccupantFee)}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>,
+                                                    `Contoh: Tarif sewa bulanan ${activeRoom.name || auditActiveRoomIdx+1} keliru ketik nominal.`
+                                                )}
+
+                                                {/* 4. Fasilitas Kamar */}
+                                                {renderAuditCard(
+                                                    `room_facilities_${auditActiveRoomIdx}`,
+                                                    `Fasilitas ${activeRoom.name || `Kamar ${auditActiveRoomIdx+1}`}`,
+                                                    <Bed size={16} />,
+                                                    <div className="space-y-2">
+                                                        {activeRoom.roomFacilities && activeRoom.roomFacilities.length > 0 ? (
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {activeRoom.roomFacilities.map((f: string, fIdx: number) => (
+                                                                    <span key={fIdx} className="px-2.5 py-1 bg-slate-100 text-slate-800 border border-slate-200 rounded-xl text-[10px] font-bold">
+                                                                        ✓ {f}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <p className="text-xs text-slate-400 italic">Tidak ada fasilitas khusus tercatat.</p>
+                                                        )}
+                                                    </div>,
+                                                    `Contoh: Fasilitas kasur dan lemari kamar ${activeRoom.name || auditActiveRoomIdx+1} belum dicentang.`
+                                                )}
+
+                                                {/* 5. Foto Dokumentasi Kamar */}
+                                                {renderAuditCard(
+                                                    `room_photos_${auditActiveRoomIdx}`,
+                                                    `Foto Dokumentasi ${activeRoom.name || `Kamar ${auditActiveRoomIdx+1}`}`,
+                                                    <Camera size={16} />,
+                                                    <div className="space-y-2">
+                                                        {getRoomPhotos(activeRoom).length > 0 ? (
+                                                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                                                {getRoomPhotos(activeRoom).map((imgUrl: string, pIdx: number) => (
+                                                                    <div key={pIdx} className="aspect-[4/3] rounded-lg overflow-hidden border border-slate-200 relative group bg-slate-100">
+                                                                        <img src={imgUrl} alt={`Foto kamar ${pIdx+1}`} className="w-full h-full object-cover" />
+                                                                        <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[8px] font-bold p-1 truncate text-center">
+                                                                            Foto #{pIdx+1}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <p className="text-xs text-slate-400 italic">Belum ada foto kamar yang diunggah untuk unit ini.</p>
+                                                        )}
+                                                    </div>,
+                                                    `Contoh: Foto interior kamar ${activeRoom.name || auditActiveRoomIdx+1} gelap dan foto kamar mandi belum ada.`
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-slate-400 italic text-center py-8">Tidak ada data kamar terdata.</p>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* STEP 3: DATA MITRA & KERJASAMA SIMULATION */}
+                                {auditStep === 3 && (
+                                    <div className="space-y-4 animate-in fade-in duration-200">
+                                        {/* 1. Rekening Bank Mitra */}
+                                        {renderAuditCard(
+                                            'partner_bank',
+                                            'Nomor Rekening Bank Pencairan Mitra',
+                                            <CreditCard size={16} />,
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Nama Bank</span>
+                                                    <p className="text-xs font-black text-slate-800">{reviewProperty?.bank_name || reviewProperty?.metadata?.bank_name || reviewRequest?.bank_name || reviewRequest?.metadata?.bankName || '-'}</p>
+                                                </div>
+                                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Nomor Rekening</span>
+                                                    <p className="text-xs font-mono font-black text-slate-800">{reviewProperty?.account_number || reviewProperty?.metadata?.account_number || reviewRequest?.account_number || reviewRequest?.metadata?.accountNumber || '-'}</p>
+                                                </div>
+                                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Atas Nama</span>
+                                                    <p className="text-xs font-black text-slate-800">{reviewProperty?.account_holder || reviewProperty?.metadata?.account_holder || reviewRequest?.account_holder || reviewRequest?.metadata?.accountHolder || reviewRequest?.user?.name || '-'}</p>
+                                                </div>
+                                            </div>,
+                                            'Contoh: Nomor rekening bank mitra salah digit atau nama pemilik rekening tidak cocok.'
+                                        )}
+
+                                        {/* 2. Syarat & Ketentuan Kerjasama */}
+                                        {renderAuditCard(
+                                            'partner_terms',
+                                            'Syarat & Ketentuan Kerjasama Auto-Pilot',
+                                            <FileText size={16} />,
+                                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-xs font-black text-slate-800">Regulasi Kerjasama Pengelolaan KostManager</p>
+                                                    <p className="text-[10px] text-slate-500">Persetujuan ketentuan bagi hasil dan manajemen penagihan sewa</p>
+                                                </div>
+                                                <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-black text-[9px] uppercase">
+                                                    ✓ Telah Disetujui
+                                                </span>
+                                            </div>,
+                                            'Contoh: Mitra menolak klausul penagihan sewa, mohon konfirmasi ulang kesepakatan kerjasama.'
+                                        )}
+
+                                        {/* 3. Tanda Tangan Digital Pemilik */}
+                                        {renderAuditCard(
+                                            'partner_signature',
+                                            'Tanda Tangan Digital Pemilik / Pengelola',
+                                            <PenTool size={16} />,
+                                            <div className="space-y-2">
+                                                {(reviewSurvey?.signature_data || reviewProperty?.metadata?.signature_data || reviewRequest?.signature_data) ? (
+                                                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col items-center justify-center">
+                                                        <img 
+                                                            src={reviewSurvey?.signature_data || reviewProperty?.metadata?.signature_data || reviewRequest?.signature_data} 
+                                                            alt="Tanda Tangan Mitra" 
+                                                            className="max-h-24 object-contain bg-white rounded-lg p-2 border border-slate-200 shadow-2xs" 
+                                                        />
+                                                        <p className="text-[9px] text-slate-500 font-bold mt-2">✓ Tanda tangan digital tersimpan sah dari formulir survei</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="p-6 bg-slate-50 rounded-xl border border-dashed border-slate-300 text-center">
+                                                        <p className="text-xs text-slate-400 font-bold">Belum ada goresan tanda tangan digital yang tercatat.</p>
+                                                    </div>
+                                                )}
+                                            </div>,
+                                            'Contoh: Goresan tanda tangan digital terpotong / belum ditandatangani oleh pemilik kost.'
+                                        )}
                                     </div>
                                 )}
                             </div>
 
-                            {/* 2. Textarea Catatan & Poin Perbaikan */}
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-black text-slate-900 uppercase tracking-wider block">
-                                    2. Catatan Evaluasi & Poin Koreksi Tambahan <span className="text-rose-500">*</span>
-                                </label>
-                                <textarea
-                                    required
-                                    rows={4}
-                                    value={revisionNotes}
-                                    onChange={e => setRevisionNotes(e.target.value)}
-                                    placeholder="Contoh: Foto dokumentasi kasur dan jendela kamar 5 mohon diupload ulang dengan pencahayaan lebih jelas. Ukuran kamar 2 mohon dicek kembali."
-                                    className="w-full p-3.5 rounded-2xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none text-xs text-slate-900 font-bold transition-all placeholder:text-slate-400 leading-relaxed resize-none"
-                                />
-                            </div>
+                            {/* Sticky Modal Footer Actions */}
+                            <form onSubmit={handleRequestRevision} className="pt-3 border-t border-slate-200/80 bg-slate-50 shrink-0 space-y-3">
+                                {/* Textarea Catatan Tambahan Penutup Admin */}
+                                <div className="space-y-1">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider">
+                                            Catatan Ringkasan Tambahan Admin (Opsional):
+                                        </label>
+                                        <span className="text-[10px] text-slate-400 font-bold">
+                                            {activeAuditedKeys.length} Bagian Ditandai
+                                        </span>
+                                    </div>
+                                    <textarea
+                                        rows={2}
+                                        value={revisionNotes}
+                                        onChange={e => setRevisionNotes(e.target.value)}
+                                        placeholder="Tuliskan catatan umum atau instruksi menyeluruh untuk surveyor lapangan..."
+                                        className="w-full p-2.5 rounded-xl bg-white border border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none text-xs text-slate-900 font-bold transition-all placeholder:text-slate-400 resize-none"
+                                    />
+                                </div>
 
-                            {/* Direct WhatsApp Share Preview */}
-                            {(() => {
-                                const assignedAgent = agents.find(a => a.id === reviewRequest?.assigned_agent_id);
-                                const agentPhone = assignedAgent?.phone || reviewRequest?.agent_phone || '';
-                                const cleanPhone = agentPhone.replace(/\D/g, '').replace(/^0/, '62');
+                                {/* Direct WhatsApp Share Preview */}
+                                {(() => {
+                                    const assignedAgent = agents.find(a => a.id === reviewRequest?.assigned_agent_id);
+                                    const agentPhone = assignedAgent?.phone || reviewRequest?.agent_phone || '';
+                                    const cleanPhone = agentPhone.replace(/\D/g, '').replace(/^0/, '62');
 
-                                // Compile list for WhatsApp
-                                const formattedLinesForWa: string[] = [];
-                                revisionCategories.forEach(catId => {
-                                    const subs = revisionSubItems[catId] || [];
-                                    const catObj = REVISION_DETAIL_SCHEMA.find(s => s.id === catId);
-                                    const catName = catObj?.label || catId;
-                                    if (subs.length > 0) {
-                                        formattedLinesForWa.push(`*${catName}:*\n  - ${subs.join('\n  - ')}`);
-                                    } else {
-                                        formattedLinesForWa.push(`*${catName}*`);
+                                    const formattedLinesForWa: string[] = [];
+                                    if (activeAuditedKeys.length > 0) {
+                                        activeAuditedKeys.forEach(k => {
+                                            const note = sectionNotes[k]?.trim();
+                                            formattedLinesForWa.push(`- ${k}${note ? ` (Catatan: ${note})` : ''}`);
+                                        });
                                     }
-                                });
 
-                                const waMessage = encodeURIComponent(
-                                    `Halo ${assignedAgent?.name || reviewRequest?.agent_name || 'Surveyor'},\n\n` +
-                                    `Terkait peninjauan hasil survei pendataan Kost *${reviewRequest?.kost_name}*:\n\n` +
-                                    (formattedLinesForWa.length > 0 ? `📌 *Bagian yang Perlu Diperbaiki:*\n${formattedLinesForWa.join('\n')}\n\n` : '') +
-                                    `📝 *Catatan Evaluasi Admin:*\n${revisionNotes || '(Mohon lengkapi perbaikan di atas)'}\n\n` +
-                                    `Silakan buka dashboard agen Anda untuk melakukan perbaikan dan kirim ulang. Terima kasih! 🙏`
-                                );
-                                const waUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${waMessage}` : null;
+                                    const waMessage = encodeURIComponent(
+                                        `Halo ${assignedAgent?.name || reviewRequest?.agent_name || 'Surveyor'},\n\n` +
+                                        `Terkait audit hasil survei pendataan Kost *${reviewRequest?.kost_name}*:\n\n` +
+                                        (formattedLinesForWa.length > 0 ? `📌 *Bagian yang Ditandai Perlu Koreksi:*
+${formattedLinesForWa.join('\n')}\n\n` : '') +
+                                        `📝 *Catatan Admin:*
+${revisionNotes || '(Mohon lengkapi perbaikan melalui formulir pendataan)'}\n\n` +
+                                        `Silakan buka Dashboard Agen Anda untuk memperbaiki bagian yang ditandai. Terima kasih! 🙏`
+                                    );
+                                    const waUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${waMessage}` : null;
 
-                                return (
-                                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between gap-3">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <span className="text-base shrink-0">💬</span>
-                                            <p className="text-[11px] text-slate-600 font-bold truncate">
-                                                Kirim salinan chat langsung ke WhatsApp Surveyor ({cleanPhone ? `+${cleanPhone}` : 'Nomor tidak tersedia'})
-                                            </p>
+                                    return (
+                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="text-sm shrink-0">💬</span>
+                                                <p className="text-[10px] text-slate-600 font-bold truncate">
+                                                    Kirim notifikasi chat langsung ke WhatsApp Surveyor ({cleanPhone ? `+${cleanPhone}` : 'Nomor tidak tersedia'})
+                                                </p>
+                                            </div>
+                                            {waUrl && (
+                                                <a
+                                                    href={waUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-wider flex items-center gap-1 shrink-0 transition-colors shadow-2xs"
+                                                >
+                                                    WhatsApp ↗
+                                                </a>
+                                            )}
                                         </div>
-                                        {waUrl && (
-                                            <a
-                                                href={waUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 shrink-0 transition-colors shadow-2xs"
-                                            >
-                                                WhatsApp ↗
-                                            </a>
+                                    );
+                                })()}
+
+                                {/* Action Buttons */}
+                                <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5">
+                                    <div className="flex items-center gap-1.5 text-xs text-slate-500 font-bold">
+                                        <span>Status Evaluasi:</span>
+                                        {activeAuditedKeys.length > 0 ? (
+                                            <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-black text-[10px] uppercase">
+                                                ⚠️ {activeAuditedKeys.length} Poin Perlu Revisi
+                                            </span>
+                                        ) : (
+                                            <span className="px-2 py-0.5 rounded-md bg-slate-200 text-slate-600 font-bold text-[10px]">
+                                                Belum ada bagian yang dicentang
+                                            </span>
                                         )}
                                     </div>
-                                );
-                            })()}
 
-                            {/* Footer Modal Actions */}
-                            <div className="flex flex-col sm:flex-row items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
-                                <button
-                                    type="button"
-                                    onClick={() => setRevisionModalOpen(false)}
-                                    className="w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider transition-colors"
-                                >
-                                    Batal
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={isSubmittingRevision}
-                                    className="w-full sm:w-auto px-6 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs uppercase tracking-wider transition-all shadow-md shadow-amber-200 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95"
-                                >
-                                    {isSubmittingRevision ? 'Mengirim...' : '⚠️ Kirim Evaluasi & Minta Revisi'}
-                                </button>
-                            </div>
-                        </form>
+                                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                                        <button
+                                            type="button"
+                                            onClick={() => setRevisionModalOpen(false)}
+                                            className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-black text-xs uppercase tracking-wider transition-colors"
+                                        >
+                                            Batal
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={isSubmittingRevision}
+                                            className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black text-xs uppercase tracking-wider transition-all shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95"
+                                        >
+                                            {isSubmittingRevision ? 'Mengirim...' : '⚠️ Kirim Hasil Audit & Minta Revisi'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* LIGHTBOX FULLSCREEN PHOTO VIEWER */}
             {lightboxPhoto && (
