@@ -2002,44 +2002,44 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                     setSelectedRoomGalleryFilter('all');
                                                                     setExpandedRoomTypes(prev => ({...prev, [rtIdx]: !isExpanded}));
                                                                 }}
-                                                                className="w-full flex items-center justify-between p-5 hover:bg-slate-50 transition-colors text-left cursor-pointer">
-                                                                <div className="flex items-center gap-3.5 min-w-0">
-                                                                    <span className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100 shadow-2xs">
+                                                                className="w-full flex flex-col md:flex-row md:items-center justify-between p-5 hover:bg-slate-50 transition-colors text-left cursor-pointer gap-4">
+                                                                <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                                                                    <span className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100 shadow-2xs mt-0.5">
                                                                         <Bed size={20}/>
                                                                     </span>
-                                                                    <div className="min-w-0">
+                                                                    <div className="min-w-0 flex-1 space-y-1.5">
                                                                         <div className="flex items-center gap-2 flex-wrap">
                                                                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tipe Kamar #{rtIdx + 1}</span>
                                                                         </div>
                                                                         <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{rt.name}</h4>
-                                                                        {/* Specs & Full Facility Chips in Header (Always visible in minimize) */}
-                                                                        <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                                                                            <span className="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200/80 text-[10px] font-black text-blue-800 flex items-center gap-1">
+                                                                        {/* Specs & Full Facility Chips in Header (All facilities dynamically wrap without getting cut off) */}
+                                                                        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                                                            <span className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200/80 text-[10px] font-black text-blue-800 flex items-center gap-1 shadow-2xs">
                                                                                 📐 {rt.size}
                                                                             </span>
                                                                             {rt.roomFacilities.map((f: string, fi: number) => (
-                                                                                <span key={`rf_${fi}`} className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200/80 text-[10px] font-bold text-slate-700">
+                                                                                <span key={`rf_${fi}`} className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200/90 text-[10px] font-bold text-slate-700 shadow-2xs">
                                                                                     {f}
                                                                                 </span>
                                                                             ))}
                                                                             {rt.bathroomFacilities.map((bf: string, bfi: number) => (
-                                                                                <span key={`rbf_${bfi}`} className="px-2 py-0.5 rounded-md bg-sky-50 border border-sky-200/80 text-[10px] font-bold text-sky-800">
+                                                                                <span key={`rbf_${bfi}`} className="px-2.5 py-1 rounded-lg bg-sky-50 border border-sky-200/90 text-[10px] font-bold text-sky-800 shadow-2xs">
                                                                                     {bf}
                                                                                 </span>
                                                                             ))}
                                                                             {rt.kitchenFacilities.map((kf: string, kfi: number) => (
-                                                                                <span key={`rkf_${kfi}`} className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200/80 text-[10px] font-bold text-amber-800">
+                                                                                <span key={`rkf_${kfi}`} className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200/90 text-[10px] font-bold text-amber-800 shadow-2xs">
                                                                                     {kf}
                                                                                 </span>
                                                                             ))}
                                                                         </div>
                                                                     </div>
                                                                 </div>
-                                                                <div className="flex items-center gap-2 shrink-0 ml-3">
+                                                                <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
                                                                     <span className="text-sm font-black text-emerald-700">{FORMAT_CURRENCY(rt.price)}<span className="text-[10px] text-slate-400 font-bold">/bln</span></span>
                                                                     <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black">✨ {rt.vacantUnits.length} Kosong</span>
                                                                     <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black">🔒 {rt.occupiedUnits.length} Dihuni</span>
-                                                                    {isExpanded ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
+                                                                    {isExpanded ? <ChevronUp size={18} className="text-slate-400"/> : <ChevronDown size={18} className="text-slate-400"/>}
                                                                 </div>
                                                             </button>
 
