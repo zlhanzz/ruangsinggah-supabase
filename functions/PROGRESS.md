@@ -2,6 +2,19 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 95. Pembaharuan Aturan Baku: Wajib Git Push ke Branch Non-Production (`bukan-productions`) Setiap Selesai Progres (`AGENTS.md`, `GEMINI.md`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta penambahan aturan baku baru pada workspace rules agar setiap progres/fitur yang berhasil diselesaikan langsung di-push ke repository GitHub pada branch non-production (`bukan-productions`), untuk mencegah kehilangan progres dan menjaga backup awan selalu mutakhir.
+  2. Agent tetap dilarang keras melakukan push langsung ke branch `main` atau deploy ke server production.
+- **Implementasi & Perbaikan**:
+  * **1. Pembaruan Dokumen Aturan Baku**:
+    - Memperbarui Section 7 pada [`AGENTS.md`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/AGENTS.md) dan [`GEMINI.md`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/GEMINI.md) menjadi *"7. Kebijakan Git Push Otomatis & Larangan Push ke Branch Main / Production"*.
+    - Mewajibkan setiap agent melakukan git commit & git push ke remote branch `bukan-productions` setiap kali Fase 2 (eksekusi & build) selesai.
+  * **2. Eksekusi Git Push**:
+    - Seluruh perubahan pekerjaan sebelumnya (termasuk fitur #92, #93, #94) telah berhasil di-stage, di-commit, dan di-push langsung ke branch `bukan-productions` pada GitHub (`https://github.com/zlhanzz/ruangsinggah-supabase.git`).
+- **File Tersentuh**: `AGENTS.md`, `GEMINI.md`, `functions/PROGRESS.md`
+- **Verifikasi**: Perintah `git push origin bukan-productions` berhasil dieksekusi dengan status `bukan-productions -> bukan-productions` (Exit code 0).
+
 ### 94. Tampilan Caption Lengkap pada Thumbnail & Slide Hero Carousel (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar setiap foto pada carousel ditampilkan caption keterangannya secara lengkap dan jelas.
