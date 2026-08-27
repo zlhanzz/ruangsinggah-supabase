@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 104. Carousel Galeri Foto Kamar (Universal & Filter Per-Kamar) pada Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta penambahan carousel foto kamar di bawah grid ringkasan 4 kartu dan di atas kartu-kartu kamar pada Tab 2 (DATA KAMAR & PENGHUNI).
+  2. Carousel harus dapat bersifat umum (menampilkan seluruh foto kamar yang terkumpul sekaligus) dan dapat bersifat khusus (menampilkan foto kamar tertentu berdasarkan tombol-tombol nomor kamar di bagian navigasi filter).
+- **Implementasi & Perbaikan**:
+  * **1. Agregasi Foto Seluruh Kamar & State Filter**:
+    - Mengumpulkan seluruh foto dari setiap kamar/tipe kamar beserta metadata kamar (`roomName`, `label`, `rtIdx`).
+    - Menyediakan state `selectedRoomGalleryFilter` (`'all'` atau index kamar `number`) dan `selectedRoomGalleryPhotoIndex` (`number`).
+  * **2. Filter Navigation Bar Interaktif**:
+    - Tombol `[ 🏢 Semua Kamar (Total N Foto) ]` untuk mode universal.
+    - Tombol-tombol pill per nomor kamar `[ 🛏️ Kamar X (N Foto) ]` untuk mode per-kamar khusus dengan visual ring highlight aktif.
+  * **3. Hero Preview Display & Thumbnail Strip**:
+    - Tampilan foto display utama berbingkai `rounded-3xl` dengan background elegan, tombol panah kiri/kanan `<ChevronLeft />` dan `<ChevronRight />`, overlay badge nomor kamar dan label foto, serta indikator urutan `1 / N Foto`.
+    - Horizontal scrollable thumbnail bar di bawah preview utama untuk berpindah foto instan.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 103. Sinkronisasi Akurat Helper `getRoomStats` untuk Data Kamar & Penghuni Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menemukan perbedaan data antara hasil pendataan agen survey dan tampilan ringkasan Tab 2.
