@@ -972,6 +972,13 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
     const totalVerification = requests.filter(r => r.status === 'PENDING_ONBOARDING' || r.status === 'SUBMITTED' || r.status === 'REVISION_REQUIRED' || r.status === 'NEED_REVISION').length;
     const totalActive = requests.filter(r => r.status === 'ACTIVE').length;
 
+    // Helper format thousands (Indonesian Rupiah style)
+    const formatThousand = (val: any) => {
+        if (!val && val !== 0) return '0';
+        const num = typeof val === 'string' ? parseFloat(val.replace(/[^\d.-]/g, '')) : Number(val);
+        return isNaN(num) ? '0' : num.toLocaleString('id-ID');
+    };
+
     // Helper for photos array
     const normalizePhotos = (imgUrls: any[]) => {
         if (!imgUrls || !Array.isArray(imgUrls)) return [];
@@ -984,6 +991,33 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                 label: img?.label || `Foto ${idx + 1}`
             };
         }).filter(item => Boolean(item.url));
+    };
+
+    // Global helper for room photos
+    const DEFAULT_GLOBAL_ROOM_SLOTS = ['Interior Kamar', 'Kamar Mandi Dalam', 'Tempat Tidur', 'Lemari / Penyimpanan'];
+    const getRoomPhotos = (room: any) => {
+        if (!room) return [];
+        const rawImages = room.images || room.image_urls || room.photos || [];
+        return rawImages.map((img: any, imgIdx: number) => {
+            if (!img) return null;
+            const url = typeof img === 'string' ? img : (img?.url || img?.original || '');
+            if (!url) return null;
+            let label = '';
+            if (room.photoCategories?.[imgIdx]) label = room.photoCategories[imgIdx];
+            else if (typeof img === 'object' && img?.label) label = img.label;
+            else if (imgIdx < DEFAULT_GLOBAL_ROOM_SLOTS.length) label = DEFAULT_GLOBAL_ROOM_SLOTS[imgIdx];
+            else label = `Foto Tambahan ${imgIdx - DEFAULT_GLOBAL_ROOM_SLOTS.length + 1}`;
+            label = label.replace(/\s*\*Wajib/i, '').replace(/\(Opsional\)/i, '').trim();
+            return { url, label };
+        }).filter(Boolean) as { url: string; label: string }[];
+    };
+
+    const formatRoomName = (name: string, idx: number) => {
+        if (!name) return `Kamar ${idx + 1}`;
+        const clean = String(name).trim();
+        if (/^\d+$/.test(clean)) return `Kamar ${clean}`;
+        if (/^kamar/i.test(clean)) return clean;
+        return clean;
     };
 
     return (
