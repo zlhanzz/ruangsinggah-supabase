@@ -134,6 +134,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     onPageChange,
     isLoading = false
 }) => {
+    const parseDimensionParts = (sizeStr?: string) => {
+        if (!sizeStr) return { length: '', width: '' };
+        const str = String(sizeStr).replace(/meter/gi, '').trim();
+        const parts = str.split(/[\times xX×]/);
+        return {
+            length: parts[0] ? parts[0].trim() : '',
+            width: parts[1] ? parts[1].trim() : ''
+        };
+    };
+
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [uploadSourceFieldId, setUploadSourceFieldId] = useState<string | null>(null);
     const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -256,17 +266,20 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     };
 
     const [isEditingKostManager, setIsEditingKostManager] = useState<SurveyRequest | null>(null);
-    const [photoCategories, setPhotoCategories] = useState<string[]>(['Bangunan Depan', 'Koridor', 'Parkiran', 'Lingkungan']);
+    const [photoCategories, setPhotoCategories] = useState<string[]>(['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan']);
     const [newPhotoCategoryName, setNewPhotoCategoryName] = useState('');
     const [googleMapsUrlInput, setGoogleMapsUrlInput] = useState('');
     const [showAddLandmarkForm, setShowAddLandmarkForm] = useState(false);
     const [activeRoomIdx, setActiveRoomIdx] = useState<number | null>(null);
+    const openedRoomSnapshotRef = useRef<string | null>(null);
     const [temporaryRoom, setTemporaryRoom] = useState<any | null>(null);
+    const [deleteRoomConfirm, setDeleteRoomConfirm] = useState<{ open: boolean; idx: number | null }>({ open: false, idx: null });
     const [customRoomFacilityInput, setCustomRoomFacilityInput] = useState('');
     const [customBathroomFacilityInput, setCustomBathroomFacilityInput] = useState('');
     const [customPublicKitchenFacilityInput, setCustomPublicKitchenFacilityInput] = useState('');
     const [customKitchenFacilityInput, setCustomKitchenFacilityInput] = useState('');
     const [customPublicBathroomFacilityInput, setCustomPublicBathroomFacilityInput] = useState('');
+    const [customPublicParkingFacilityInput, setCustomPublicParkingFacilityInput] = useState('');
     const [newRoomPhotoCategoryName, setNewRoomPhotoCategoryName] = useState('');
 
     const [landmarkLocation, setLandmarkLocation] = useState<{ lat: number; lng: number }>({ lat: -5.147665, lng: 119.432731 });
@@ -288,9 +301,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         const dynamic: string[] = [];
 
         const facMapping: { [key: string]: string } = {
-            'area parkir': 'Parkiran',
-            'parkir': 'Parkiran',
-            'parkiran': 'Parkiran',
+            'area parkir': 'Area Parkir',
+            'parkir': 'Area Parkir',
+            'parkiran': 'Area Parkir',
+            'parkir motor': 'Area Parkir',
+            'parkir mobil': 'Area Parkir',
             'dapur bersama': 'Dapur Bersama',
             'ruang tamu': 'Ruang Tamu',
             'wc umum': 'WC Umum',
@@ -656,7 +671,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         roomTypes: [],
         publicBathroomFacilities: [],
         publicKitchenFacilities: [],
-        facilities: ['WiFi', 'Parkir Motor', 'Dapur Bersama'],
+        publicParkingFacilities: ['Parkir Motor'],
+        facilities: ['WiFi', 'Area Parkir', 'Dapur Bersama'],
         location: { lat: -5.147665, lng: 119.432731 },
         rules: ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
         image_urls: [],
@@ -672,7 +688,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         if (isEditingKostManager) {
             const dynamicPublicCats = computeDynamicPublicPhotoCategories(kmListingForm.facilities || []);
             setPhotoCategories(prev => {
-                const manualExtras = prev.filter(c => !dynamicPublicCats.includes(c) && !['Bangunan Depan', 'Koridor', 'Lingkungan', 'Parkiran', 'Dapur Bersama', 'Ruang Tamu', 'WC Umum', 'CCTV', 'Laundry'].includes(c));
+                const manualExtras = prev.filter(c => !dynamicPublicCats.includes(c) && !['Bangunan Depan', 'Koridor', 'Lingkungan', 'Area Parkir', 'Parkiran', 'Dapur Bersama', 'Ruang Tamu', 'WC Umum', 'CCTV', 'Laundry'].includes(c));
                 return computeDynamicPublicPhotoCategories(kmListingForm.facilities || [], manualExtras);
             });
         }
@@ -914,7 +930,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             roomTypes: [],
             publicBathroomFacilities: [],
             publicKitchenFacilities: [],
-            facilities: ['WiFi', 'Parkir Motor'],
+            publicParkingFacilities: ['Parkir Motor'],
+            facilities: ['WiFi', 'Area Parkir'],
             location: { lat: -5.147665, lng: 119.432731 },
             rules: ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
             image_urls: [],
@@ -923,7 +940,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         setKmStep(1);
         setTemporaryRoom(null);
         setActiveRoomIdx(null);
-        setPhotoCategories(['Bangunan Depan', 'Koridor', 'Parkiran', 'Lingkungan']);
+        setPhotoCategories(['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan']);
         const cleanupParams = new URLSearchParams(searchParams);
         cleanupParams.delete('onboarding_id');
         setSearchParams(cleanupParams);
@@ -977,7 +994,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     const label = photoCategories[idx] || 'Foto Lainnya';
                     return { original: url, label: label };
                 }).filter(Boolean),
-                campuses: currentForm.campuses
+                campuses: currentForm.campuses,
+                metadata: {
+                    publicParkingFacilities: kmListingForm.publicParkingFacilities || [],
+                    publicKitchenFacilities: kmListingForm.publicKitchenFacilities || [],
+                    publicBathroomFacilities: kmListingForm.publicBathroomFacilities || [],
+                    addressNotes: kmListingForm.addressNotes || '',
+                    signature_data: signatureData || null,
+                    agreed_to_terms: agreedToTerms
+                }
             };
 
             // Find propertyId from memory or metadata
@@ -1097,11 +1122,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 kmActiveTab,
                 photoCategories,
                 isExistingPropertyMigration,
-                warningAccepted
+                warningAccepted,
+                signatureData,
+                agreedToTerms
             };
             localStorage.setItem(draftKey, JSON.stringify(draftData));
         }
-    }, [isEditingKostManager, kmListingForm, kmStep, temporaryRoom, activeRoomIdx, kmActiveTab, photoCategories]);
+    }, [isEditingKostManager, kmListingForm, kmStep, temporaryRoom, activeRoomIdx, kmActiveTab, photoCategories, signatureData, agreedToTerms]);
 
     // Auto-load onboarding from URL search params on refresh
     useEffect(() => {
@@ -1491,11 +1518,61 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             }
         }
 
+        // Extract existing signature data from multiple possible sources
+        let initialSignature = (req as any).signature_data || 
+                               (req as any).evaluation_summary?.signature_data || 
+                               dbKmProp?.signature_data || 
+                               dbKmProp?.metadata?.signature_data || 
+                               dbPropertyRecord?.metadata?.signature_data || 
+                               null;
+
+        if (!initialSignature) {
+            try {
+                const { data: kmSurv } = await supabase
+                    .from('kostmanager_surveys')
+                    .select('signature_data')
+                    .or(`kostmanager_request_id.eq.${req.id},id.eq.${req.id}`)
+                    .not('signature_data', 'is', null)
+                    .limit(1)
+                    .maybeSingle();
+                if (kmSurv?.signature_data) {
+                    initialSignature = kmSurv.signature_data;
+                } else if (req.transaction_id) {
+                    const { data: sReq } = await supabase
+                        .from('survey_requests')
+                        .select('signature_data')
+                        .eq('transaction_id', req.transaction_id)
+                        .not('signature_data', 'is', null)
+                        .limit(1)
+                        .maybeSingle();
+                    if (sReq?.signature_data) {
+                        initialSignature = sReq.signature_data;
+                    }
+                }
+            } catch (sigErr) {
+                console.warn("Could not query fallback signature in openKostManagerListing:", sigErr);
+            }
+        }
+
+        if (initialSignature) {
+            setSignatureData(initialSignature);
+            setAgreedToTerms(true);
+        } else {
+            setSignatureData(null);
+            setAgreedToTerms(false);
+        }
+
         // 2. Load draft from localStorage if exists
         const savedDraft = localStorage.getItem(draftKey);
         if (savedDraft) {
             try {
                 const parsed = JSON.parse(savedDraft);
+                if (parsed.signatureData) {
+                    setSignatureData(parsed.signatureData);
+                    setAgreedToTerms(true);
+                } else if (parsed.agreedToTerms !== undefined) {
+                    setAgreedToTerms(parsed.agreedToTerms);
+                }
                 if (parsed.kmListingForm) {
                     // Load room types from draft, fallback to database if draft has none (helps heal corrupted drafts or empty states)
                     let draftRoomTypes = parsed.kmListingForm.roomTypes || [];
@@ -1527,8 +1604,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         if (!urlStr) return;
                         let cat = (typeof img === 'object' && img.label) 
                             ? img.label 
-                            : (parsed.kmListingForm.photoCategories?.[idx] || parsed.photoCategories?.[idx] || (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Parkiran', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`));
-                        if (cat.toLowerCase() === 'area umum') cat = 'Parkiran';
+                            : (parsed.kmListingForm.photoCategories?.[idx] || parsed.photoCategories?.[idx] || (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`));
+                        if (cat.toLowerCase() === 'area umum' || cat.toLowerCase() === 'parkiran' || cat.toLowerCase() === 'parkir motor' || cat.toLowerCase() === 'parkir mobil') cat = 'Area Parkir';
                         draftImageUrls.push(urlStr);
                         draftPhotoCats.push(cat);
                     });
@@ -1551,7 +1628,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     setTemporaryRoom(parsed.temporaryRoom || null);
                     setActiveRoomIdx(parsed.activeRoomIdx !== undefined ? parsed.activeRoomIdx : null);
                     setKmActiveTab(parsed.kmActiveTab || 'info');
-                    const dynamicDraftCats = computeDynamicPublicPhotoCategories(mergedForm.facilities || ['WiFi', 'Parkir Motor'], draftPhotoCats.length > 0 ? draftPhotoCats : (parsed.photoCategories || []));
+                    const dynamicDraftCats = computeDynamicPublicPhotoCategories(mergedForm.facilities || ['WiFi', 'Area Parkir'], draftPhotoCats.length > 0 ? draftPhotoCats : (parsed.photoCategories || []));
                     setPhotoCategories(dynamicDraftCats);
                     if (parsed.isExistingPropertyMigration !== undefined) {
                         setIsExistingPropertyMigration(parsed.isExistingPropertyMigration);
@@ -1630,15 +1707,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     const urlStr = getImageUrlString(img);
                     if (!urlStr) return;
                     let label = (typeof img === 'object' && img.label) ? img.label : '';
-                    if (label.toLowerCase() === 'area umum') label = 'Parkiran';
+                    if (label.toLowerCase() === 'area umum' || label.toLowerCase() === 'parkiran' || label.toLowerCase() === 'parkir motor' || label.toLowerCase() === 'parkir mobil') label = 'Area Parkir';
                     if (!label) {
-                        label = (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Parkiran', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`);
+                        label = (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`);
                     }
                     loadedKmImageUrls.push(urlStr);
                     loadedKmPhotoCategories.push(label);
                 });
 
-                const dynamicKmCats = computeDynamicPublicPhotoCategories(dbKmProp.facilities || ['WiFi', 'Parkir Motor'], loadedKmPhotoCategories);
+                const dynamicKmCats = computeDynamicPublicPhotoCategories(dbKmProp.facilities || ['WiFi', 'Area Parkir'], loadedKmPhotoCategories);
                 setPhotoCategories(dynamicKmCats);
                 setShowAddLandmarkForm(false);
                 setActiveRoomIdx(null);
@@ -1655,14 +1732,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     totalRooms: (dbKmProp.total_rooms && dbKmProp.total_rooms > 0) ? dbKmProp.total_rooms : (initialTotalRooms || 0),
                     owner_uid: resolvedOwnerUid,
                     roomTypes: dbKmProp.room_types || [],
-                    facilities: dbKmProp.facilities || ['WiFi', 'Parkir Motor'],
+                    facilities: dbKmProp.facilities || ['WiFi', 'Area Parkir'],
                     location: dbKmProp.location || initialCoords,
                     rules: dbKmProp.rules || ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
                     image_urls: loadedKmImageUrls,
                     photoCategories: loadedKmPhotoCategories,
                     campuses: dbKmProp.campuses || [],
                     publicBathroomFacilities: dbKmProp.metadata?.publicBathroomFacilities || [],
-                    publicKitchenFacilities: dbKmProp.metadata?.publicKitchenFacilities || []
+                    publicKitchenFacilities: dbKmProp.metadata?.publicKitchenFacilities || [],
+                    publicParkingFacilities: dbKmProp.metadata?.publicParkingFacilities || ['Parkir Motor']
                 });
                 return;
             }
@@ -1682,15 +1760,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     const urlStr = getImageUrlString(img);
                     if (!urlStr) return;
                     let label = (typeof img === 'object' && img.label) ? img.label : '';
-                    if (label.toLowerCase() === 'area umum') label = 'Parkiran';
+                    if (label.toLowerCase() === 'area umum' || label.toLowerCase() === 'parkiran' || label.toLowerCase() === 'parkir motor' || label.toLowerCase() === 'parkir mobil') label = 'Area Parkir';
                     if (!label) {
-                        label = (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Parkiran', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`);
+                        label = (idx < 4 ? ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'][idx] : `Foto Lainnya ${idx - 3}`);
                     }
                     loadedPropImageUrls.push(urlStr);
                     loadedPropPhotoCategories.push(label);
                 });
 
-                const dynamicPropCats = computeDynamicPublicPhotoCategories(dbPropertyRecord.facilities || ['WiFi', 'Parkir Motor'], loadedPropPhotoCategories);
+                const dynamicPropCats = computeDynamicPublicPhotoCategories(dbPropertyRecord.facilities || ['WiFi', 'Area Parkir'], loadedPropPhotoCategories);
                 setPhotoCategories(dynamicPropCats);
                 setShowAddLandmarkForm(false);
                 setActiveRoomIdx(null);
@@ -1707,14 +1785,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     totalRooms: (dbPropertyRecord.total_rooms && dbPropertyRecord.total_rooms > 0) ? dbPropertyRecord.total_rooms : (initialTotalRooms || 0),
                     owner_uid: resolvedOwnerUid,
                     roomTypes: [],
-                    facilities: dbPropertyRecord.facilities || ['WiFi', 'Parkir Motor'],
+                    facilities: dbPropertyRecord.facilities || ['WiFi', 'Area Parkir'],
                     location: dbPropertyRecord.location || initialCoords,
                     rules: dbPropertyRecord.rules || ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
                     image_urls: loadedPropImageUrls,
                     photoCategories: loadedPropPhotoCategories,
                     campuses: dbPropertyRecord.campuses || [],
                     publicBathroomFacilities: dbPropertyRecord.metadata?.publicBathroomFacilities || [],
-                    publicKitchenFacilities: dbPropertyRecord.metadata?.publicKitchenFacilities || []
+                    publicKitchenFacilities: dbPropertyRecord.metadata?.publicKitchenFacilities || [],
+                    publicParkingFacilities: dbPropertyRecord.metadata?.publicParkingFacilities || ['Parkir Motor']
                 });
                 return;
             }
@@ -1724,7 +1803,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
         // C. Clean slate fallback if no property records found in database
         kmOriginalLocationRef.current = null;
-        setPhotoCategories(['Bangunan Depan', 'Koridor', 'Parkiran', 'Lingkungan']);
+        setPhotoCategories(['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan']);
         setShowAddLandmarkForm(false);
         setActiveRoomIdx(null);
         setTemporaryRoom(null);
@@ -1741,7 +1820,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             roomTypes: [],
             publicBathroomFacilities: [],
             publicKitchenFacilities: [],
-            facilities: ['WiFi', 'Parkir Motor', 'Dapur Bersama'],
+            publicParkingFacilities: ['Parkir Motor'],
+            facilities: ['WiFi', 'Area Parkir', 'Dapur Bersama'],
             location: initialCoords,
             rules: ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
             image_urls: [],
@@ -2037,7 +2117,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     const label = photoCategories[idx] || 'Foto Lainnya';
                     return { original: url, label: label };
                 }).filter(Boolean),
-                campuses: kmListingForm.campuses
+                campuses: kmListingForm.campuses,
+                metadata: {
+                    publicParkingFacilities: kmListingForm.publicParkingFacilities || [],
+                    publicKitchenFacilities: kmListingForm.publicKitchenFacilities || [],
+                    publicBathroomFacilities: kmListingForm.publicBathroomFacilities || [],
+                    addressNotes: kmListingForm.addressNotes || '',
+                    signature_data: signatureData || null,
+                    agreed_to_terms: agreedToTerms
+                }
             };
 
             // Find propertyId from transaction metadata if exists
@@ -2845,30 +2933,152 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
         return (
             <div className="p-4 space-y-5 cursor-default text-left border-t border-[#ffe2cc] bg-[#fffcfb]" onClick={e => e.stopPropagation()}>
-                                                         {/* Status Kamar */}
-                                                         <div>
-                                                             <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Status Kamar</h3>
-                                                             <div className="flex gap-2">
-                                                                 <button 
-                                                                     type="button"
-                                                                     onClick={() => {
-                                                                         updateRoomFacilitiesWithPhotos(rt.roomFacilities || [], 'Terisi');
-                                                                     }}
-                                                                     className={`flex-1 py-3 px-4 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all active:scale-95 text-center ${isOccupied ? 'bg-green-500 text-white border-green-500 shadow-sm' : 'border-gray-300 text-gray-600 bg-white hover:bg-gray-50'}`}
-                                                                 >
-                                                                     Terisi
-                                                                 </button>
-                                                                 <button 
-                                                                     type="button"
-                                                                     onClick={() => {
-                                                                         updateRoomFacilitiesWithPhotos(rt.roomFacilities || [], 'Kosong');
-                                                                     }}
-                                                                     className={`flex-1 py-3 px-4 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all active:scale-95 text-center ${!isOccupied ? 'bg-[#ff7a00] text-white border-[#ff7a00] shadow-sm' : 'border-gray-300 text-gray-600 bg-white hover:bg-gray-50'}`}
-                                                                 >
-                                                                     Kosong
-                                                                 </button>
-                                                             </div>
-                                                         </div>
+                {/* Detail Kamar Section (Nomor Kamar, Lantai, Tipe Kamar, Luas Kamar, Status Kamar) */}
+                <div className="border border-gray-150 rounded-xl p-4 flex flex-col gap-3.5 bg-gray-50/30">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest border-b border-gray-100 pb-1">
+                        Detail Kamar (Dapat Diedit)
+                    </span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {/* Nomor Kamar */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Nomor Kamar</label>
+                            <input 
+                                type="text"
+                                value={rt.name || ''}
+                                onChange={e => {
+                                    const updatedRoomTypes = [...kmListingForm.roomTypes];
+                                    updatedRoomTypes[idx] = { ...rt, name: e.target.value };
+                                    setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                }}
+                                className="w-full h-[40px] px-3 border border-[#e0c0af] rounded-lg text-xs bg-white font-bold outline-none text-[#584235]"
+                                placeholder="Nomor Kamar"
+                            />
+                        </div>
+                        {/* Lantai */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Lantai</label>
+                            <select 
+                                value={rt.floor || ''}
+                                onChange={e => {
+                                    const updatedRoomTypes = [...kmListingForm.roomTypes];
+                                    updatedRoomTypes[idx] = { ...rt, floor: e.target.value };
+                                    setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                }}
+                                className="w-full h-[40px] px-3 border border-[#e0c0af] rounded-lg text-xs bg-white font-bold outline-none text-[#584235]"
+                            >
+                                <option value="" disabled hidden>Pilih Lantai</option>
+                                <option value="Lantai 1">Lantai 1</option>
+                                <option value="Lantai 2">Lantai 2</option>
+                                <option value="Lantai 3">Lantai 3</option>
+                                <option value="Lantai 4">Lantai 4</option>
+                            </select>
+                        </div>
+                        {/* Tipe Kamar */}
+                        <div className="md:col-span-2 flex flex-col gap-1.5">
+                            <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Tipe Kamar</label>
+                            <select 
+                                value={['Standard', 'Premium', 'Deluxe', ''].includes(rt.type || '') ? (rt.type || '') : '__custom__'}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    const updatedRoomTypes = [...kmListingForm.roomTypes];
+                                    if (val === '__custom__') {
+                                        updatedRoomTypes[idx] = { ...rt, type: 'Kustom' };
+                                    } else {
+                                        updatedRoomTypes[idx] = { ...rt, type: val };
+                                    }
+                                    setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                }}
+                                className="w-full h-[40px] px-3 border border-[#e0c0af] rounded-lg text-xs bg-white font-bold outline-none text-[#584235]"
+                            >
+                                <option value="" disabled hidden>Pilih Tipe Kamar</option>
+                                <option value="Standard">Standard</option>
+                                <option value="Premium">Premium</option>
+                                <option value="Deluxe">Deluxe</option>
+                                <option value="__custom__">Tipe Kustom...</option>
+                            </select>
+                            {!['Standard', 'Premium', 'Deluxe', ''].includes(rt.type || '') && (
+                                <div className="mt-1.5">
+                                    <input 
+                                        type="text"
+                                        value={rt.type === 'Kustom' ? '' : rt.type}
+                                        onChange={e => {
+                                            const updatedRoomTypes = [...kmListingForm.roomTypes];
+                                            updatedRoomTypes[idx] = { ...rt, type: e.target.value };
+                                            setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                        }}
+                                        placeholder="Masukkan tipe kamar kustom..."
+                                        className="w-full h-[40px] px-3 border border-[#e0c0af] rounded-lg text-xs bg-white font-bold outline-none text-[#584235]"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                        {/* Luas / Ukuran Kamar ([Panjang] X [Lebar] meter) */}
+                        <div className="md:col-span-2 flex flex-col gap-1.5">
+                            <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Luas / Ukuran Kamar</label>
+                            <div className="flex items-center gap-2">
+                                {(() => {
+                                    const { length: len, width: wid } = parseDimensionParts(rt.size || rt.dimensions || '');
+                                    return (
+                                        <>
+                                            <input 
+                                                type="text"
+                                                value={len}
+                                                onChange={e => {
+                                                    const newLen = e.target.value;
+                                                    const formatted = newLen || wid ? `${newLen}x${wid} meter` : '';
+                                                    const updatedRoomTypes = [...kmListingForm.roomTypes];
+                                                    updatedRoomTypes[idx] = { ...rt, size: formatted, dimensions: formatted };
+                                                    setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                                }}
+                                                className="w-24 h-[40px] px-3 border border-[#e0c0af] rounded-lg text-xs bg-white font-bold outline-none text-[#584235] text-center"
+                                                placeholder=""
+                                            />
+                                            <span className="text-xs font-black text-[#584235] uppercase">X</span>
+                                            <input 
+                                                type="text"
+                                                value={wid}
+                                                onChange={e => {
+                                                    const newWid = e.target.value;
+                                                    const formatted = len || newWid ? `${len}x${newWid} meter` : '';
+                                                    const updatedRoomTypes = [...kmListingForm.roomTypes];
+                                                    updatedRoomTypes[idx] = { ...rt, size: formatted, dimensions: formatted };
+                                                    setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                                }}
+                                                className="w-24 h-[40px] px-3 border border-[#e0c0af] rounded-lg text-xs bg-white font-bold outline-none text-[#584235] text-center"
+                                                placeholder=""
+                                            />
+                                            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">meter</span>
+                                        </>
+                                    );
+                                })()}
+                            </div>
+                        </div>
+                        {/* Status Kamar */}
+                        <div className="md:col-span-2 flex flex-col gap-1.5 mt-2 border-t border-gray-100 pt-3">
+                            <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Status Kamar</label>
+                            <div className="flex gap-2">
+                                <button 
+                                    type="button"
+                                    onClick={() => {
+                                        updateRoomFacilitiesWithPhotos(rt.roomFacilities || [], 'Terisi');
+                                    }}
+                                    className={`flex-1 py-3 px-4 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all active:scale-95 text-center ${isOccupied ? 'bg-green-500 text-white border-green-500 shadow-sm' : 'border-gray-300 text-gray-600 bg-white hover:bg-gray-50'}`}
+                                >
+                                    Terisi
+                                </button>
+                                <button 
+                                    type="button"
+                                    onClick={() => {
+                                        updateRoomFacilitiesWithPhotos(rt.roomFacilities || [], 'Kosong');
+                                    }}
+                                    className={`flex-1 py-3 px-4 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all active:scale-95 text-center ${!isOccupied ? 'bg-[#ff7a00] text-white border-[#ff7a00] shadow-sm' : 'border-gray-300 text-gray-600 bg-white hover:bg-gray-50'}`}
+                                >
+                                    Kosong
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                                                      <div className="border border-gray-150 rounded-xl p-4 flex flex-col gap-3.5 bg-gray-50/30">
                                                          <div className="flex justify-between items-center border-b border-gray-100 pb-1">
@@ -3051,195 +3261,198 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                              })()}
 
                                                              {['Kasur', 'Lemari', 'Meja Belajar', 'AC', 'Kipas Angin', 'Water Heater', 'Jendela Luar', 'Kamar Mandi Dalam', 'Dapur Dalam'].map(fac => {
-                                                                 const isChecked = rt.roomFacilities?.includes(fac);
-                                                                 const isPerabot = ['Kasur', 'Lemari', 'Meja Belajar', 'AC', 'Kipas Angin', 'Water Heater'].includes(fac);
-                                                                 const isKosongan = rt.roomFacilities?.includes('Kosongan (Tanpa Perabot)');
-                                                                 const isDisabled = isPerabot && isKosongan;
-                                                                 return (
-                                                                     <label key={fac} className={`flex items-center gap-2.5 cursor-pointer transition-all ${isDisabled ? 'opacity-40 pointer-events-none' : ''}`}>
-                                                                         <input 
-                                                                             type="checkbox"
-                                                                             checked={isChecked && !isDisabled}
-                                                                             disabled={isDisabled}
-                                                                             onChange={() => {
-                                                                                 const current = rt.roomFacilities || [];
-                                                                                 const updated = current.includes(fac)
-                                                                                     ? current.filter((f: string) => f !== fac)
-                                                                                     : [...current, fac];
-                                                                                 updateRoomFacilitiesWithPhotos(updated);
-                                                                             }}
-                                                                             className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-5 h-5"
-                                                                         />
-                                                                         <span className="text-xs text-gray-700 uppercase tracking-wider font-semibold">{fac}</span>
-                                                                     </label>
-                                                                 );
-                                                             })}
+                                                              const isChecked = rt.roomFacilities?.includes(fac);
+                                                              const isPerabot = ['Kasur', 'Lemari', 'Meja Belajar', 'AC', 'Kipas Angin', 'Water Heater'].includes(fac);
+                                                              const isKosongan = rt.roomFacilities?.includes('Kosongan (Tanpa Perabot)');
+                                                              const isDisabled = isPerabot && isKosongan;
+                                                              return (
+                                                                  <React.Fragment key={fac}>
+                                                                      <label className={`flex items-center gap-2.5 cursor-pointer transition-all ${isDisabled ? 'opacity-40 pointer-events-none' : ''}`}>
+                                                                          <input 
+                                                                              type="checkbox"
+                                                                              checked={isChecked && !isDisabled}
+                                                                              disabled={isDisabled}
+                                                                              onChange={() => {
+                                                                                  const current = rt.roomFacilities || [];
+                                                                                  const updated = current.includes(fac)
+                                                                                      ? current.filter((f: string) => f !== fac)
+                                                                                      : [...current, fac];
+                                                                                  updateRoomFacilitiesWithPhotos(updated);
+                                                                              }}
+                                                                              className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-5 h-5"
+                                                                          />
+                                                                          <span className="text-xs text-gray-700 uppercase tracking-wider font-semibold">{fac}</span>
+                                                                      </label>
 
-                                                             {/* Nested bathroom facilities if Kamar Mandi Dalam is checked */}
-                                                             {rt.roomFacilities?.includes('Kamar Mandi Dalam') && (
-                                                                 <div className="col-span-2 pl-6 mt-1.5 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl">
-                                                                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-0.5">Kelengkapan Kamar Mandi Dalam:</span>
-                                                                     <div className="grid grid-cols-2 gap-2.5">
-                                                                         {['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].map(bfac => {
-                                                                             const isBChecked = rt.bathroomFacilities?.includes(bfac);
-                                                                             return (
-                                                                                 <label key={bfac} className="flex items-center gap-2 cursor-pointer">
-                                                                                     <input 
-                                                                                         type="checkbox"
-                                                                                         checked={isBChecked}
-                                                                                         onChange={() => {
-                                                                                             const current = rt.bathroomFacilities || [];
-                                                                                             const updated = current.includes(bfac)
-                                                                                                 ? current.filter((f: string) => f !== bfac)
-                                                                                                 : [...current, bfac];
-                                                                                             const updatedRoomTypes = [...kmListingForm.roomTypes];
-                                                                                             updatedRoomTypes[activeRoomIdx] = { ...rt, bathroomFacilities: updated };
-                                                                                             setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
-                                                                                         }}
-                                                                                         className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
-                                                                                     />
-                                                                                     <span className="text-xs text-gray-600 uppercase tracking-wider font-bold">{bfac}</span>
-                                                                                 </label>
-                                                                             );
-                                                                         })}
+                                                                      {/* Nested bathroom facilities if Kamar Mandi Dalam is checked */}
+                                                                      {fac === 'Kamar Mandi Dalam' && isChecked && (
+                                                                          <div className="col-span-2 pl-6 mt-1.5 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl animate-fadeIn">
+                                                                              <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-0.5">Kelengkapan Kamar Mandi Dalam:</span>
+                                                                              <div className="grid grid-cols-2 gap-2.5">
+                                                                                  {['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].map(bfac => {
+                                                                                      const isBChecked = rt.bathroomFacilities?.includes(bfac);
+                                                                                      return (
+                                                                                          <label key={bfac} className="flex items-center gap-2 cursor-pointer">
+                                                                                              <input 
+                                                                                                  type="checkbox"
+                                                                                                  checked={isBChecked}
+                                                                                                  onChange={() => {
+                                                                                                      const current = rt.bathroomFacilities || [];
+                                                                                                      const updated = current.includes(bfac)
+                                                                                                          ? current.filter((f: string) => f !== bfac)
+                                                                                                          : [...current, bfac];
+                                                                                                      const updatedRoomTypes = [...kmListingForm.roomTypes];
+                                                                                                      updatedRoomTypes[activeRoomIdx] = { ...rt, bathroomFacilities: updated };
+                                                                                                      setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                                                                                  }}
+                                                                                                  className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
+                                                                                              />
+                                                                                              <span className="text-xs text-gray-600 uppercase tracking-wider font-bold">{bfac}</span>
+                                                                                          </label>
+                                                                                      );
+                                                                                  })}
 
-                                                                         {/* Custom bathroom tags */}
-                                                                         {(() => {
-                                                                             const bCustoms = rt.bathroomFacilities?.filter((f: string) => !['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].includes(f)) || [];
-                                                                             if (bCustoms.length === 0) return null;
-                                                                             return (
-                                                                                 <div className="col-span-2 flex flex-wrap gap-1 mt-1 border-t border-orange-100 pt-2">
-                                                                                     {bCustoms.map((fac) => (
-                                                                                         <span key={fac} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-[#ff7a00] text-[9px] font-black rounded uppercase tracking-wider">
-                                                                                             {fac}
-                                                                                             <button 
-                                                                                                 type="button" 
-                                                                                                 onClick={() => {
-                                                                                                     const current = rt.bathroomFacilities || [];
-                                                                                                     const updatedRoomTypes = [...kmListingForm.roomTypes];
-                                                                                                     updatedRoomTypes[activeRoomIdx] = { ...rt, bathroomFacilities: current.filter((f) => f !== fac) };
-                                                                                                     setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
-                                                                                                 }}
-                                                                                                 className="hover:text-orange-700 text-xs font-bold leading-none p-0.5"
-                                                                                             >
-                                                                                                 &times;
-                                                                                             </button>
-                                                                                         </span>
-                                                                                     ))}
-                                                                                 </div>
-                                                                             );
-                                                                         })()}
+                                                                                  {/* Custom bathroom tags */}
+                                                                                  {(() => {
+                                                                                      const bCustoms = rt.bathroomFacilities?.filter((f: string) => !['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].includes(f)) || [];
+                                                                                      if (bCustoms.length === 0) return null;
+                                                                                      return (
+                                                                                          <div className="col-span-2 flex flex-wrap gap-1 mt-1 border-t border-orange-100 pt-2">
+                                                                                              {bCustoms.map((fac) => (
+                                                                                                  <span key={fac} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-[#ff7a00] text-[9px] font-black rounded uppercase tracking-wider">
+                                                                                                      {fac}
+                                                                                                      <button 
+                                                                                                          type="button" 
+                                                                                                          onClick={() => {
+                                                                                                              const current = rt.bathroomFacilities || [];
+                                                                                                              const updatedRoomTypes = [...kmListingForm.roomTypes];
+                                                                                                              updatedRoomTypes[activeRoomIdx] = { ...rt, bathroomFacilities: current.filter((f) => f !== fac) };
+                                                                                                              setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                                                                                          }}
+                                                                                                          className="hover:text-orange-700 text-xs font-bold leading-none p-0.5"
+                                                                                                      >
+                                                                                                          &times;
+                                                                                                      </button>
+                                                                                                  </span>
+                                                                                              ))}
+                                                                                          </div>
+                                                                                      );
+                                                                                  })()}
 
-                                                                         {/* Custom bathroom facility input adder */}
-                                                                         <div className="col-span-2 flex gap-1.5 mt-1 border-t border-orange-100 pt-2">
-                                                                             <input 
-                                                                                 type="text" 
-                                                                                 value={customBathroomFacilityInput} 
-                                                                                 onChange={e => setCustomBathroomFacilityInput(e.target.value)} 
-                                                                                 placeholder="Tambah kelengkapan WC..." 
-                                                                                 className="flex-grow h-[28px] px-2 border border-[#e0c0af] rounded text-[11px] bg-white outline-none text-[#584235] font-bold"
-                                                                             />
-                                                                             <button 
-                                                                                 type="button" 
-                                                                                 onClick={() => {
-                                                                                     if (!customBathroomFacilityInput.trim()) return;
-                                                                                     const current = rt.bathroomFacilities || [];
-                                                                                     if (!current.includes(customBathroomFacilityInput.trim())) {
-                                                                                         const updatedRoomTypes = [...kmListingForm.roomTypes];
-                                                                                         updatedRoomTypes[activeRoomIdx] = { ...rt, bathroomFacilities: [...current, customBathroomFacilityInput.trim()] };
-                                                                                         setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
-                                                                                     }
-                                                                                     setCustomBathroomFacilityInput('');
-                                                                                 }}
-                                                                                 className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm"
-                                                                             >
-                                                                                 +
-                                                                             </button>
-                                                                         </div>
-                                                                     </div>
-                                                                 </div>
-                                                             )}
-                                                              {/* Nested kitchen facilities if Dapur Dalam is checked */}
-                                                              {rt.roomFacilities?.includes('Dapur Dalam') && (
-                                                                  <div className="col-span-2 pl-6 mt-1.5 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl w-full">
-                                                                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-0.5">Kelengkapan Dapur Dalam:</span>
-                                                                      <div className="grid grid-cols-2 gap-2.5">
-                                                                          {['Kompor', 'Kulkas', 'Wastafel Cuci Piring', 'Kitchen Set', 'Dispenser'].map(kfac => {
-                                                                              const isKChecked = rt.kitchenFacilities?.includes(kfac);
-                                                                              return (
-                                                                                  <label key={kfac} className="flex items-center gap-2 cursor-pointer">
+                                                                                  {/* Custom bathroom facility input adder */}
+                                                                                  <div className="col-span-2 flex gap-1.5 mt-1 border-t border-orange-100 pt-2">
                                                                                       <input 
-                                                                                          type="checkbox"
-                                                                                          checked={!!isKChecked}
-                                                                                          onChange={() => {
-                                                                                              const current = rt.kitchenFacilities || [];
-                                                                                              const updated = current.includes(kfac)
-                                                                                                  ? current.filter((f: string) => f !== kfac)
-                                                                                                  : [...current, kfac];
-                                                                                              const updatedRoomTypes = [...kmListingForm.roomTypes];
-                                                                                              updatedRoomTypes[activeRoomIdx] = { ...rt, kitchenFacilities: updated };
-                                                                                              setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
-                                                                                          }}
-                                                                                          className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
+                                                                                          type="text" 
+                                                                                          value={customBathroomFacilityInput} 
+                                                                                          onChange={e => setCustomBathroomFacilityInput(e.target.value)} 
+                                                                                          placeholder="Tambah kelengkapan WC..." 
+                                                                                          className="flex-grow h-[28px] px-2 border border-[#e0c0af] rounded text-[11px] bg-white outline-none text-[#584235] font-bold"
                                                                                       />
-                                                                                      <span className="text-[11px] text-gray-650 font-bold uppercase">{kfac}</span>
-                                                                                  </label>
-                                                                              );
-                                                                          })}
-                                                                      </div>
-                                                                      
-                                                                      {/* Custom kitchen tags */}
-                                                                      {rt.kitchenFacilities?.filter((f: string) => !['Kompor', 'Kulkas', 'Wastafel Cuci Piring', 'Kitchen Set', 'Dispenser'].includes(f)).length > 0 && (
-                                                                          <div className="flex flex-wrap gap-1.5 mt-1 border-t border-orange-100 pt-2">
-                                                                              {rt.kitchenFacilities.filter((f: string) => !['Kompor', 'Kulkas', 'Wastafel Cuci Piring', 'Kitchen Set', 'Dispenser'].includes(f)).map((fac: string) => (
-                                                                                  <span key={fac} className="bg-orange-100 text-[#ff7a00] px-2 py-0.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1">
-                                                                                      {fac}
-                                                                                      <button
-                                                                                          type="button"
+                                                                                      <button 
+                                                                                          type="button" 
                                                                                           onClick={() => {
-                                                                                              const current = rt.kitchenFacilities || [];
-                                                                                              const updatedRoomTypes = [...kmListingForm.roomTypes];
-                                                                                              updatedRoomTypes[activeRoomIdx] = { ...rt, kitchenFacilities: current.filter((f) => f !== fac) };
-                                                                                              setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                                                                              if (!customBathroomFacilityInput.trim()) return;
+                                                                                              const current = rt.bathroomFacilities || [];
+                                                                                              if (!current.includes(customBathroomFacilityInput.trim())) {
+                                                                                                  const updatedRoomTypes = [...kmListingForm.roomTypes];
+                                                                                                  updatedRoomTypes[activeRoomIdx] = { ...rt, bathroomFacilities: [...current, customBathroomFacilityInput.trim()] };
+                                                                                                  setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                                                                              }
+                                                                                              setCustomBathroomFacilityInput('');
                                                                                           }}
-                                                                                          className="text-red-600 hover:text-red-850 font-bold text-xs"
+                                                                                          className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm"
                                                                                       >
-                                                                                          &times;
+                                                                                          +
                                                                                       </button>
-                                                                                  </span>
-                                                                              ))}
+                                                                                  </div>
+                                                                              </div>
                                                                           </div>
                                                                       )}
-                                                                      
-                                                                      {/* Custom kitchen facility input adder */}
-                                                                      <div className="flex gap-2 mt-1.5 border-t border-orange-100 pt-2">
-                                                                          <input 
-                                                                              type="text" 
-                                                                              placeholder="Tambah kelengkapan dapur..." 
-                                                                              value={customKitchenFacilityInput} 
-                                                                              onChange={e => setCustomKitchenFacilityInput(e.target.value)} 
-                                                                              className="flex-grow h-[28px] px-2 border border-[#e0c0af] rounded text-[11px] bg-white outline-none text-[#584235] font-bold"
-                                                                          />
-                                                                          <button 
-                                                                              type="button"
-                                                                              onClick={() => {
-                                                                                  if (!customKitchenFacilityInput.trim()) return;
-                                                                                  const current = rt.kitchenFacilities || [];
-                                                                                  const updatedRoomTypes = [...kmListingForm.roomTypes];
-                                                                                  updatedRoomTypes[activeRoomIdx] = { ...rt, kitchenFacilities: [...current, customKitchenFacilityInput.trim()] };
-                                                                                  setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
-                                                                                  setCustomKitchenFacilityInput('');
-                                                                              }}
-                                                                              className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm"
-                                                                          >
-                                                                              +
-                                                                          </button>
-                                                                      </div>
-                                                                  </div>
-                                                              )}
-                                                         </div>
 
-                                                         {/* Removable Custom Badges */}
+                                                                      {/* Nested kitchen facilities if Dapur Dalam is checked */}
+                                                                      {fac === 'Dapur Dalam' && isChecked && (
+                                                                          <div className="col-span-2 pl-6 mt-1.5 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl w-full animate-fadeIn">
+                                                                              <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-0.5">Kelengkapan Dapur Dalam:</span>
+                                                                              <div className="grid grid-cols-2 gap-2.5">
+                                                                                  {['Kompor', 'Kulkas', 'Wastafel Cuci Piring', 'Kitchen Set', 'Dispenser'].map(kfac => {
+                                                                                      const isKChecked = rt.kitchenFacilities?.includes(kfac);
+                                                                                      return (
+                                                                                          <label key={kfac} className="flex items-center gap-2 cursor-pointer">
+                                                                                              <input 
+                                                                                                  type="checkbox" 
+                                                                                                  checked={!!isKChecked}
+                                                                                                  onChange={() => {
+                                                                                                      const current = rt.kitchenFacilities || [];
+                                                                                                      const updated = current.includes(kfac)
+                                                                                                          ? current.filter((f: string) => f !== kfac)
+                                                                                                          : [...current, kfac];
+                                                                                                      const updatedRoomTypes = [...kmListingForm.roomTypes];
+                                                                                                      updatedRoomTypes[activeRoomIdx] = { ...rt, kitchenFacilities: updated };
+                                                                                                      setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                                                                                  }}
+                                                                                                  className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
+                                                                                              />
+                                                                                              <span className="text-[11px] text-gray-650 font-bold uppercase">{kfac}</span>
+                                                                                          </label>
+                                                                                      );
+                                                                                  })}
+                                                                              </div>
+                                                                              
+                                                                              {/* Custom kitchen tags */}
+                                                                              {rt.kitchenFacilities?.filter((f: string) => !['Kompor', 'Kulkas', 'Wastafel Cuci Piring', 'Kitchen Set', 'Dispenser'].includes(f)).length > 0 && (
+                                                                                  <div className="flex flex-wrap gap-1.5 mt-1 border-t border-orange-100 pt-2">
+                                                                                      {rt.kitchenFacilities.filter((f: string) => !['Kompor', 'Kulkas', 'Wastafel Cuci Piring', 'Kitchen Set', 'Dispenser'].includes(f)).map((fac: string) => (
+                                                                                          <span key={fac} className="bg-orange-100 text-[#ff7a00] px-2 py-0.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1">
+                                                                                              {fac}
+                                                                                              <button
+                                                                                                  type="button"
+                                                                                                  onClick={() => {
+                                                                                                      const current = rt.kitchenFacilities || [];
+                                                                                                      const updatedRoomTypes = [...kmListingForm.roomTypes];
+                                                                                                      updatedRoomTypes[activeRoomIdx] = { ...rt, kitchenFacilities: current.filter((f) => f !== fac) };
+                                                                                                      setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                                                                                  }}
+                                                                                                  className="text-red-600 hover:text-red-850 font-bold text-xs"
+                                                                                              >
+                                                                                                  &times;
+                                                                                              </button>
+                                                                                          </span>
+                                                                                      ))}
+                                                                                  </div>
+                                                                              )}
+                                                                              
+                                                                              {/* Custom kitchen facility input adder */}
+                                                                              <div className="flex gap-2 mt-1.5 border-t border-orange-100 pt-2">
+                                                                                  <input 
+                                                                                      type="text" 
+                                                                                      placeholder="Tambah kelengkapan dapur..." 
+                                                                                      value={customKitchenFacilityInput} 
+                                                                                      onChange={e => setCustomKitchenFacilityInput(e.target.value)} 
+                                                                                      className="flex-grow h-[28px] px-2 border border-[#e0c0af] rounded text-[11px] bg-white outline-none text-[#584235] font-bold"
+                                                                                  />
+                                                                                  <button 
+                                                                                      type="button" 
+                                                                                      onClick={() => {
+                                                                                          if (!customKitchenFacilityInput.trim()) return;
+                                                                                          const current = rt.kitchenFacilities || [];
+                                                                                          const updatedRoomTypes = [...kmListingForm.roomTypes];
+                                                                                          updatedRoomTypes[activeRoomIdx] = { ...rt, kitchenFacilities: [...current, customKitchenFacilityInput.trim()] };
+                                                                                          setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                                                                          setCustomKitchenFacilityInput('');
+                                                                                      }}
+                                                                                      className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm"
+                                                                                  >
+                                                                                      +
+                                                                                  </button>
+                                                                              </div>
+                                                                          </div>
+                                                                      )}
+                                                                  </React.Fragment>
+                                                              );
+                                                          })}
+                                                    </div>
+
+                                                    {/* Removable Custom Badges */}
                                                          {(() => {
                                                              const customs = rt.roomFacilities?.filter((f) => !['Kasur', 'Lemari', 'Meja Belajar', 'AC', 'Kipas Angin', 'Kamar Mandi Dalam', 'Water Heater', 'Jendela Luar', 'Dapur Dalam'].includes(f)) || [];
                                                              if (customs.length === 0) return null;
@@ -3288,6 +3501,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                  Tambah
                                                              </button>
                                                          </div>
+                                                      </div>
 
                                                           {/* Biaya Tambahan Bulanan Lainnya */}
                                                           <div className="border border-gray-150 rounded-xl p-4 flex flex-col gap-3.5 bg-gray-50/30">
@@ -3339,151 +3553,148 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                       })}
                                                                   </div>
                                                               </div>
-                                                          </div>
-                                                     </div>
+                                                      </div>
 
-                                                                  {/* Dokumentasi Foto Kamar */}
-                                                                   <div className="border border-gray-150 rounded-xl p-4 flex flex-col gap-3.5 bg-gray-50/30">
-                                                                       <div className="flex justify-between items-center border-b border-gray-100 pb-1.5">
-                                                                           <span className="text-[10px] font-bold text-[#584235] uppercase tracking-widest">Dokumentasi Foto Kamar</span>
-                                                                           <span className="text-[10px] font-semibold text-gray-400">Multi-Angle per Kategori</span>
-                                                                       </div>
-                                                                       <p className="text-[10px] text-gray-500 leading-relaxed">
-                                                                           {rt.status === 'Terisi' 
-                                                                               ? 'Unggah foto kondisi kamar saat ini (opsional, dapat mengambil beberapa foto/angle).' 
-                                                                               : 'Unggah foto kondisi kamar saat ini untuk keperluan listing/marketing (dapat mengambil beberapa foto/angle).'}
-                                                                       </p>
-                                                                       {(() => {
-                                                                           const standardKnown = ['Interior Kamar *Wajib', 'Interior Kamar (Opsional)', 'Kamar Mandi', 'Dapur Dalam', 'Tempat Tidur', 'Lemari / Storage', 'Meja Belajar', 'AC', 'Kipas Angin', 'Jendela Luar', 'Water Heater'];
-                                                                           const currentCategorized = getRoomCategorizedPhotos(rt);
-                                                                           const existingCustomKeys = Object.keys(currentCategorized).filter((c: string) => !standardKnown.includes(c));
-                                                                           const activeCats = computeDynamicRoomPhotoCategories(rt.roomFacilities || [], rt.status, existingCustomKeys);
+                                                                   {/* Dokumentasi Foto Kamar */}
+                                                                    <div className="border border-gray-150 rounded-xl p-4 flex flex-col gap-3.5 bg-gray-50/30">
+                                                                        <div className="flex justify-between items-center border-b border-gray-100 pb-1.5">
+                                                                            <span className="text-[10px] font-bold text-[#584235] uppercase tracking-widest">Dokumentasi Foto Kamar</span>
+                                                                        </div>
+                                                                        {(() => {
+                                                                            const standardKnown = ['Interior Kamar *Wajib', 'Interior Kamar (Opsional)', 'Kamar Mandi', 'Dapur Dalam', 'Tempat Tidur', 'Lemari / Storage', 'Meja Belajar', 'AC', 'Kipas Angin', 'Jendela Luar', 'Water Heater'];
+                                                                            const currentCategorized = getRoomCategorizedPhotos(rt);
+                                                                            const existingCustomKeys = Object.keys(currentCategorized).filter((c: string) => !standardKnown.includes(c));
+                                                                            const activeCats = computeDynamicRoomPhotoCategories(rt.roomFacilities || [], rt.status, existingCustomKeys);
 
-                                                                           return (
-                                                                               <div className="space-y-3">
-                                                                                   {activeCats.map((rawLabel: string) => {
-                                                                                       const label = (rawLabel === 'Interior Kamar *Wajib' && rt.status === 'Terisi') ? 'Interior Kamar (Opsional)' : rawLabel;
-                                                                                       const catPhotos = currentCategorized[rawLabel] 
-                                                                                           || (rawLabel.includes('Interior') ? (currentCategorized['Interior Kamar *Wajib'] || currentCategorized['Interior Kamar (Opsional)'] || []) : []) 
-                                                                                           || [];
+                                                                            const getPhotoCaption = (cLabel: string, pIdx: number) => {
+                                                                                const clean = cLabel.replace(/(\*Wajib|\(Opsional\))/gi, '').trim();
+                                                                                return `${clean} ${pIdx + 1}`;
+                                                                            };
 
-                                                                                       return (
-                                                                                           <div key={rawLabel} className="bg-white border border-[#e0c0af]/60 rounded-xl p-3 shadow-xs space-y-2.5">
-                                                                                               <div className="flex justify-between items-center">
-                                                                                                   <div className="flex items-center gap-1.5">
-                                                                                                       {rawLabel.includes('Interior') ? <Home className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
-                                                                                                         rawLabel.includes('Mandi') ? <Bath className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
-                                                                                                         rawLabel.includes('Tidur') ? <Bed className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
-                                                                                                         rawLabel.includes('AC') ? <Fan className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
-                                                                                                         <Camera className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" />}
-                                                                                                       <span className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">{label}</span>
-                                                                                                   </div>
-                                                                                                   <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${catPhotos.length > 0 ? 'bg-orange-100 text-[#ff7a00]' : 'bg-gray-100 text-gray-500'}`}>
-                                                                                                       {catPhotos.length} Foto / Angle
-                                                                                                   </span>
-                                                                                               </div>
+                                                                            return (
+                                                                                <div className="space-y-3">
+                                                                                    {activeCats.map((rawLabel: string) => {
+                                                                                        const label = (rawLabel === 'Interior Kamar *Wajib' && rt.status === 'Terisi') ? 'Interior Kamar (Opsional)' : rawLabel;
+                                                                                        const catPhotos = currentCategorized[rawLabel] 
+                                                                                            || (rawLabel.includes('Interior') ? (currentCategorized['Interior Kamar *Wajib'] || currentCategorized['Interior Kamar (Opsional)'] || []) : []) 
+                                                                                            || [];
 
-                                                                                               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                                                                                   {catPhotos.map((url, pIdx) => (
-                                                                                                       <div key={`${url}_${pIdx}`} className="aspect-video w-full rounded-lg overflow-hidden border border-gray-200 relative group bg-gray-50">
-                                                                                                           <img src={url} alt={`${label} Angle ${pIdx + 1}`} className="w-full h-full object-cover" />
-                                                                                                           <button
-                                                                                                               type="button"
-                                                                                                               onClick={() => {
-                                                                                                                   const updatedCategorized = { ...currentCategorized };
-                                                                                                                   const targetKey = Object.keys(updatedCategorized).find(k => k === rawLabel || (rawLabel.includes('Interior') && k.includes('Interior'))) || rawLabel;
-                                                                                                                   const list = [...(updatedCategorized[targetKey] || [])];
-                                                                                                                   list.splice(pIdx, 1);
-                                                                                                                   if (list.length > 0) {
-                                                                                                                       updatedCategorized[targetKey] = list;
-                                                                                                                   } else {
-                                                                                                                       delete updatedCategorized[targetKey];
-                                                                                                                   }
-                                                                                                                   const { images, photoCategories } = exportCategorizedPhotos(updatedCategorized);
-                                                                                                                   const updatedRoomTypes = [...kmListingForm.roomTypes];
-                                                                                                                   updatedRoomTypes[activeRoomIdx] = { 
-                                                                                                                       ...rt, 
-                                                                                                                       categorized_photos: updatedCategorized,
-                                                                                                                       categorizedPhotos: updatedCategorized,
-                                                                                                                       images,
-                                                                                                                       photoCategories
-                                                                                                                   };
-                                                                                                                   setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
-                                                                                                               }}
-                                                                                                               className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition-all active:scale-90"
-                                                                                                               title="Hapus foto angle ini"
-                                                                                                           >
-                                                                                                               &times;
-                                                                                                           </button>
-                                                                                                           <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-0.5 px-1 text-[8px] text-white text-center uppercase font-bold tracking-wider truncate">
-                                                                                                               Angle {pIdx + 1}
-                                                                                                           </div>
-                                                                                                       </div>
-                                                                                                   ))}
+                                                                                        return (
+                                                                                            <div key={rawLabel} className="bg-white border border-[#e0c0af]/60 rounded-xl p-3 shadow-xs space-y-2.5">
+                                                                                                <div className="flex justify-between items-center">
+                                                                                                    <div className="flex items-center gap-1.5">
+                                                                                                        {rawLabel.includes('Interior') ? <Home className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                                          rawLabel.includes('Mandi') ? <Bath className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                                          rawLabel.includes('Tidur') ? <Bed className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                                          rawLabel.includes('AC') ? <Fan className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                                          <Camera className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" />}
+                                                                                                        <span className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">{label}</span>
+                                                                                                    </div>
+                                                                                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${catPhotos.length > 0 ? 'bg-orange-100 text-[#ff7a00]' : 'bg-gray-100 text-gray-500'}`}>
+                                                                                                        {catPhotos.length} Foto
+                                                                                                    </span>
+                                                                                                </div>
 
-                                                                                                   <div 
-                                                                                                       onClick={async () => {
-                                                                                                           const input = document.createElement('input');
-                                                                                                           input.type = 'file';
-                                                                                                           input.accept = 'image/*';
-                                                                                                           input.multiple = true;
-                                                                                                           input.onchange = async (e: any) => {
-                                                                                                               const files = e.target?.files;
-                                                                                                               if (files && files.length > 0) {
-                                                                                                                   const uploadKey = `room_${activeRoomIdx}_${rawLabel}`;
-                                                                                                                   setUploadingRooms(prev => ({ ...prev, [uploadKey]: true }));
-                                                                                                                   try {
-                                                                                                                       const newUrls = [];
-                                                                                                                       for (let f = 0; f < files.length; f++) {
-                                                                                                                           const folder = `kostmanager/rooms/${Date.now()}_${f}`;
-                                                                                                                           const publicUrl = await uploadFileAndGetURL(files[f], folder);
-                                                                                                                           newUrls.push(publicUrl);
-                                                                                                                       }
-                                                                                                                       const updatedCategorized = { ...currentCategorized };
-                                                                                                                       const targetKey = rawLabel.includes('Interior') ? (rt.status === 'Terisi' ? 'Interior Kamar (Opsional)' : 'Interior Kamar *Wajib') : rawLabel;
-                                                                                                                       const list = [...(updatedCategorized[targetKey] || [])];
-                                                                                                                       newUrls.forEach(u => list.push(u));
-                                                                                                                       updatedCategorized[targetKey] = list;
-                                                                                                                       const { images, photoCategories } = exportCategorizedPhotos(updatedCategorized);
-                                                                                                                       const updatedRoomTypes = [...kmListingForm.roomTypes];
-                                                                                                                       updatedRoomTypes[activeRoomIdx] = { 
-                                                                                                                           ...rt, 
-                                                                                                                           categorized_photos: updatedCategorized,
-                                                                                                                           categorizedPhotos: updatedCategorized,
-                                                                                                                           images,
-                                                                                                                           photoCategories
-                                                                                                                       };
-                                                                                                                       setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
-                                                                                                                   } catch (err) {
-                                                                                                                       alert('Gagal unggah foto: ' + (err as Error).message);
-                                                                                                                   } finally {
-                                                                                                                       setUploadingRooms(prev => ({ ...prev, [uploadKey]: false }));
-                                                                                                                   }
-                                                                                                               }
-                                                                                                           };
-                                                                                                           input.click();
-                                                                                                       }}
-                                                                                                       className={`aspect-video bg-white border-2 border-dashed border-[#ff7a00] rounded-lg flex flex-col items-center justify-center p-2 cursor-pointer hover:bg-orange-50/50 transition-all text-[#584235] ${catPhotos.length === 0 ? 'col-span-2 sm:col-span-3 py-4' : ''}`}
-                                                                                                   >
-                                                                                                       {uploadingRooms[`room_${activeRoomIdx}_${rawLabel}`] ? (
-                                                                                                           <span className="text-[10px] font-bold animate-pulse text-gray-500">Uploading...</span>
-                                                                                                       ) : (
-                                                                                                           <>
-                                                                                                               <ImagePlus className="w-5 h-5 text-[#ff7a00] shrink-0" />
-                                                                                                               <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5 text-center">
-                                                                                                                   {catPhotos.length === 0 ? `+ Unggah Foto ${label}` : '+ Tambah Angle'}
-                                                                                                               </span>
-                                                                                                           </>
-                                                                                                       )}
-                                                                                                   </div>
-                                                                                               </div>
-                                                                                           </div>
-                                                                                       );
-                                                                                   })}
-                                                                               </div>
-                                                                           );
-                                                                       })()}
-                                                                       
+                                                                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                                                                    {catPhotos.map((url, pIdx) => (
+                                                                                                        <div key={`${url}_${pIdx}`} className="aspect-video w-full rounded-lg overflow-hidden border border-gray-200 relative group bg-gray-50">
+                                                                                                            <img src={url} alt={getPhotoCaption(label, pIdx)} className="w-full h-full object-cover" />
+                                                                                                            <button
+                                                                                                                type="button"
+                                                                                                                onClick={() => {
+                                                                                                                    const updatedCategorized = { ...currentCategorized };
+                                                                                                                    const targetKey = Object.keys(updatedCategorized).find(k => k === rawLabel || (rawLabel.includes('Interior') && k.includes('Interior'))) || rawLabel;
+                                                                                                                    const list = [...(updatedCategorized[targetKey] || [])];
+                                                                                                                    list.splice(pIdx, 1);
+                                                                                                                    if (list.length > 0) {
+                                                                                                                        updatedCategorized[targetKey] = list;
+                                                                                                                    } else {
+                                                                                                                        delete updatedCategorized[targetKey];
+                                                                                                                    }
+                                                                                                                    const { images, photoCategories } = exportCategorizedPhotos(updatedCategorized);
+                                                                                                                    const updatedRoomTypes = [...kmListingForm.roomTypes];
+                                                                                                                    updatedRoomTypes[activeRoomIdx] = { 
+                                                                                                                        ...rt, 
+                                                                                                                        categorized_photos: updatedCategorized,
+                                                                                                                        categorizedPhotos: updatedCategorized,
+                                                                                                                        images,
+                                                                                                                        photoCategories
+                                                                                                                    };
+                                                                                                                    setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                                                                                                }}
+                                                                                                                className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition-all active:scale-90"
+                                                                                                                title="Hapus foto ini"
+                                                                                                            >
+                                                                                                                &times;
+                                                                                                            </button>
+                                                                                                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-0.5 px-1 text-[8px] text-white text-center uppercase font-bold tracking-wider truncate">
+                                                                                                                {getPhotoCaption(label, pIdx)}
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    ))}
+
+                                                                                                    <div 
+                                                                                                        onClick={async () => {
+                                                                                                            const input = document.createElement('input');
+                                                                                                            input.type = 'file';
+                                                                                                            input.accept = 'image/*';
+                                                                                                            input.multiple = true;
+                                                                                                            input.onchange = async (e: any) => {
+                                                                                                                const files = e.target?.files;
+                                                                                                                if (files && files.length > 0) {
+                                                                                                                    const uploadKey = `room_${activeRoomIdx}_${rawLabel}`;
+                                                                                                                    setUploadingRooms(prev => ({ ...prev, [uploadKey]: true }));
+                                                                                                                    try {
+                                                                                                                        const newUrls = [];
+                                                                                                                        for (let f = 0; f < files.length; f++) {
+                                                                                                                            const folder = `kostmanager/rooms/${Date.now()}_${f}`;
+                                                                                                                            const publicUrl = await uploadFileAndGetURL(files[f], folder);
+                                                                                                                            newUrls.push(publicUrl);
+                                                                                                                        }
+                                                                                                                        const updatedCategorized = { ...currentCategorized };
+                                                                                                                        const targetKey = rawLabel.includes('Interior') ? (rt.status === 'Terisi' ? 'Interior Kamar (Opsional)' : 'Interior Kamar *Wajib') : rawLabel;
+                                                                                                                        const list = [...(updatedCategorized[targetKey] || [])];
+                                                                                                                        newUrls.forEach(u => list.push(u));
+                                                                                                                        updatedCategorized[targetKey] = list;
+                                                                                                                        const { images, photoCategories } = exportCategorizedPhotos(updatedCategorized);
+                                                                                                                        const updatedRoomTypes = [...kmListingForm.roomTypes];
+                                                                                                                        updatedRoomTypes[activeRoomIdx] = { 
+                                                                                                                            ...rt, 
+                                                                                                                            categorized_photos: updatedCategorized,
+                                                                                                                            categorizedPhotos: updatedCategorized,
+                                                                                                                            images,
+                                                                                                                            photoCategories
+                                                                                                                        };
+                                                                                                                        setKmListingForm({ ...kmListingForm, roomTypes: updatedRoomTypes });
+                                                                                                                    } catch (err) {
+                                                                                                                        alert('Gagal unggah foto: ' + (err as Error).message);
+                                                                                                                    } finally {
+                                                                                                                        setUploadingRooms(prev => ({ ...prev, [uploadKey]: false }));
+                                                                                                                    }
+                                                                                                                }
+                                                                                                            };
+                                                                                                            input.click();
+                                                                                                        }}
+                                                                                                        className={`aspect-video bg-white border-2 border-dashed border-[#ff7a00] rounded-lg flex flex-col items-center justify-center p-2 cursor-pointer hover:bg-orange-50/50 transition-all text-[#584235] ${catPhotos.length === 0 ? 'col-span-2 sm:col-span-3 py-4' : ''}`}
+                                                                                                    >
+                                                                                                        {uploadingRooms[`room_${activeRoomIdx}_${rawLabel}`] ? (
+                                                                                                            <span className="text-[10px] font-bold animate-pulse text-gray-500">Uploading...</span>
+                                                                                                        ) : (
+                                                                                                            <>
+                                                                                                                <ImagePlus className="w-5 h-5 text-[#ff7a00] shrink-0" />
+                                                                                                                <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5 text-center">
+                                                                                                                    {catPhotos.length === 0 ? `+ Unggah Foto ${label.replace(/(\*Wajib|\(Opsional\))/gi, '').trim()}` : '+ Tambah Foto'}
+                                                                                                                </span>
+                                                                                                            </>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        );
+                                                                                    })}
+                                                                                </div>
+                                                                            );
+                                                                        })()}
                                                                        {/* Input Kategori Tambahan Kamar */}
                                                                        <div className="flex gap-2 mt-2">
                                                                            <input 
@@ -3689,29 +3900,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                               </>
                                                           )}
                                                           
-                                                         {/* Simpan Perubahan Button */}
+                                                         {/* Selesai & Simpan Kamar Button */}
                                                          <button 
                                                              type="button"
                                                              onClick={() => {
                                                                  setActiveRoomIdx(null);
                                                                  alert('Perubahan kamar berhasil disimpan!');
                                                              }}
-                                                             className="w-full h-[40px] bg-[#eff4ff] hover:bg-[#dce9ff] text-[#264191] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center transition-colors border border-[#d3e4fe] shadow-sm"
+                                                             className="w-full h-[40px] bg-[#eff4ff] hover:bg-[#dce9ff] text-[#264191] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center transition-colors border border-[#d3e4fe] shadow-sm mt-2"
                                                          >
-                                                             Selesai & Tutup Editor
+                                                             Selesai & Simpan Kamar
                                                          </button>
-                
-                {/* Selesai & Tutup Editor Button */}
-                <button 
-                    type="button"
-                    onClick={() => {
-                        setActiveRoomIdx(null);
-                        alert('Perubahan kamar berhasil disimpan!');
-                    }}
-                    className="w-full h-[40px] bg-[#eff4ff] hover:bg-[#dce9ff] text-[#264191] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center transition-colors border border-[#d3e4fe] shadow-sm mt-4"
-                >
-                    Selesai & Simpan Kamar
-                </button>
             </div>
         );
     };
@@ -5851,203 +6050,290 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                                             <div className="flex flex-col gap-1.5">
                                                 <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Fasilitas Umum</label>
-                                                <div className="grid grid-cols-2 gap-2">                                                     {['WiFi', 'Dapur Bersama', 'Area Parkir', 'Ruang Tamu', 'CCTV', 'Laundry', 'WC Umum'].map(fac => {
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {['WiFi', 'Dapur Bersama', 'Area Parkir', 'Ruang Tamu', 'CCTV', 'Laundry', 'WC Umum'].map(fac => {
                                                           const isChecked = checkHasFacility(kmListingForm.facilities, fac);
                                                           return (
-                                                              <label key={fac} className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${isChecked ? 'border-[#ff7a00] bg-orange-50/50 text-[#584235] font-bold' : 'border-[#e0c0af] bg-[#f8f9ff] text-gray-600'}`}>
-                                                                  <input 
-                                                                      type="checkbox"
-                                                                      checked={isChecked}
-                                                                      onChange={() => {
-                                                                          const current = kmListingForm.facilities || [];
-                                                                          const hasIt = checkHasFacility(current, fac);
-                                                                          let updated;
-                                                                          if (hasIt) {
-                                                                              const normalizedTarget = fac.toLowerCase().trim();
-                                                                              const synonyms: Record<string, string[]> = {
-                                                                                  'wifi': ['wifi', 'wi-fi', 'internet'],
-                                                                                  'dapur bersama': ['dapur', 'dapur bersama', 'dapur umum'],
-                                                                                  'area parkir': ['parkir', 'parkiran', 'tempat parkir', 'area parkir', 'parkir motor', 'parkir mobil'],
-                                                                                  'ruang tamu': ['ruang tamu', 'ruang santai'],
-                                                                                  'cctv': ['cctv', 'kamera keamanan'],
-                                                                                  'laundry': ['laundry', 'mesin cuci', 'cuci']
-                                                                              };
-                                                                              const targetSyns = synonyms[normalizedTarget] || [normalizedTarget];
-                                                                              updated = current.filter((f: string) => {
-                                                                                  const nf = (f || '').toLowerCase().trim();
-                                                                                  return !targetSyns.some(syn => nf.includes(syn) || syn.includes(nf));
-                                                                              });
-                                                                          } else {
-                                                                              updated = [...current, fac];
-                                                                          }
-                                                                          setKmListingForm({ ...kmListingForm, facilities: updated });
-                                                                      }}
-                                                                      className="rounded text-[#ff7a00] focus:ring-[#ff7a00] border-gray-300 w-4 h-4"
-                                                                  />
-                                                                  <span className="text-xs uppercase tracking-wider">{fac}</span>
-                                                              </label>
+                                                              <React.Fragment key={fac}>
+                                                                  <label className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${isChecked ? 'border-[#ff7a00] bg-orange-50/50 text-[#584235] font-bold shadow-xs' : 'border-[#e0c0af] bg-[#f8f9ff] text-gray-600'}`}>
+                                                                      <input 
+                                                                          type="checkbox"
+                                                                          checked={isChecked}
+                                                                          onChange={() => {
+                                                                              const current = kmListingForm.facilities || [];
+                                                                              const hasIt = checkHasFacility(current, fac);
+                                                                              let updated;
+                                                                              if (hasIt) {
+                                                                                  const normalizedTarget = fac.toLowerCase().trim();
+                                                                                  const synonyms: Record<string, string[]> = {
+                                                                                      'wifi': ['wifi', 'wi-fi', 'internet'],
+                                                                                      'dapur bersama': ['dapur', 'dapur bersama', 'dapur umum'],
+                                                                                      'area parkir': ['parkir', 'parkiran', 'tempat parkir', 'area parkir', 'parkir motor', 'parkir mobil', 'parkir sepeda'],
+                                                                                      'ruang tamu': ['ruang tamu', 'ruang santai'],
+                                                                                      'cctv': ['cctv', 'kamera keamanan'],
+                                                                                      'laundry': ['laundry', 'mesin cuci', 'cuci']
+                                                                                  };
+                                                                                  const targetSyns = synonyms[normalizedTarget] || [normalizedTarget];
+                                                                                  updated = current.filter((f: string) => {
+                                                                                      const nf = (f || '').toLowerCase().trim();
+                                                                                      return !targetSyns.some(syn => nf.includes(syn) || syn.includes(nf));
+                                                                                  });
+                                                                              } else {
+                                                                                  updated = [...current, fac];
+                                                                              }
+                                                                              
+                                                                              let additionalFormUpdates: any = {};
+                                                                              if (fac === 'Area Parkir' && !hasIt && (!kmListingForm.publicParkingFacilities || kmListingForm.publicParkingFacilities.length === 0)) {
+                                                                                  additionalFormUpdates.publicParkingFacilities = ['Parkir Motor'];
+                                                                              }
+
+                                                                              setKmListingForm({ ...kmListingForm, facilities: updated, ...additionalFormUpdates });
+                                                                          }}
+                                                                          className="rounded text-[#ff7a00] focus:ring-[#ff7a00] border-gray-300 w-4 h-4"
+                                                                      />
+                                                                      <span className="text-xs uppercase tracking-wider">{fac}</span>
+                                                                  </label>
+
+                                                                  {/* Sub-input Dapur Bersama - Inline Contextual */}
+                                                                  {fac === 'Dapur Bersama' && isChecked && (
+                                                                      <div className="col-span-2 pl-6 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl animate-fadeIn">
+                                                                          <span className="text-[10px] font-black text-[#584235] uppercase tracking-wider mb-0.5">Kelengkapan Dapur Bersama:</span>
+                                                                          <div className="grid grid-cols-2 gap-2.5">
+                                                                              {['Kompor', 'Kulkas', 'Dispenser', 'Wastafel Cuci Piring', 'Peralatan Masak', 'Meja Makan'].map(kfac => {
+                                                                                  const isKChecked = kmListingForm.publicKitchenFacilities?.includes(kfac);
+                                                                                  return (
+                                                                                      <label key={kfac} className="flex items-center gap-2 cursor-pointer">
+                                                                                          <input 
+                                                                                              type="checkbox"
+                                                                                              checked={!!isKChecked}
+                                                                                              onChange={() => {
+                                                                                                  const current = kmListingForm.publicKitchenFacilities || [];
+                                                                                                   const updated = current.includes(kfac)
+                                                                                                      ? current.filter((f: string) => f !== kfac)
+                                                                                                      : [...current, kfac];
+                                                                                                  setKmListingForm({ ...kmListingForm, publicKitchenFacilities: updated });
+                                                                                              }}
+                                                                                              className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
+                                                                                          />
+                                                                                          <span className="text-xs text-[#584235] uppercase tracking-wider font-bold">{kfac}</span>
+                                                                                      </label>
+                                                                                  );
+                                                                              })}
+
+                                                                              {/* Custom kitchen tags */}
+                                                                              {(() => {
+                                                                                  const kCustoms = kmListingForm.publicKitchenFacilities?.filter((f: string) => !['Kompor', 'Kulkas', 'Dispenser', 'Wastafel Cuci Piring', 'Peralatan Masak', 'Meja Makan'].includes(f)) || [];
+                                                                                  if (kCustoms.length === 0) return null;
+                                                                                  return (
+                                                                                      <div className="col-span-2 flex flex-wrap gap-1 mt-1 border-t border-orange-100 pt-2">
+                                                                                          {kCustoms.map((fac: string) => (
+                                                                                              <span key={fac} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-[#ff7a00] text-[9px] font-black rounded uppercase tracking-wider">
+                                                                                                  {fac}
+                                                                                                  <button 
+                                                                                                      type="button" 
+                                                                                                      onClick={() => {
+                                                                                                          const current = kmListingForm.publicKitchenFacilities || [];
+                                                                                                          setKmListingForm({ ...kmListingForm, publicKitchenFacilities: current.filter((f) => f !== fac) });
+                                                                                                      }}
+                                                                                                      className="hover:text-orange-700 text-xs font-bold leading-none p-0.5"
+                                                                                                  >
+                                                                                                      &times;
+                                                                                                  </button>
+                                                                                              </span>
+                                                                                          ))}
+                                                                                      </div>
+                                                                                  );
+                                                                              })()}
+
+                                                                              {/* Custom kitchen facility input adder */}
+                                                                              <div className="col-span-2 flex gap-1.5 mt-1 border-t border-orange-100 pt-2">
+                                                                                  <input 
+                                                                                      type="text" 
+                                                                                      value={customPublicKitchenFacilityInput} 
+                                                                                      onChange={e => setCustomPublicKitchenFacilityInput(e.target.value)} 
+                                                                                      placeholder="Tambah kelengkapan dapur..." 
+                                                                                      className="flex-grow h-[28px] px-2 border border-[#e0c0af] rounded text-[11px] bg-white outline-none text-[#584235] font-bold"
+                                                                                  />
+                                                                                  <button 
+                                                                                      type="button"
+                                                                                      onClick={() => {
+                                                                                          if (!customPublicKitchenFacilityInput.trim()) return;
+                                                                                          const current = kmListingForm.publicKitchenFacilities || [];
+                                                                                          if (!current.includes(customPublicKitchenFacilityInput.trim())) {
+                                                                                              setKmListingForm({ ...kmListingForm, publicKitchenFacilities: [...current, customPublicKitchenFacilityInput.trim()] });
+                                                                                          }
+                                                                                          setCustomPublicKitchenFacilityInput('');
+                                                                                      }}
+                                                                                      className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm"
+                                                                                  >
+                                                                                      +
+                                                                                  </button>
+                                                                              </div>
+                                                                          </div>
+                                                                      </div>
+                                                                  )}
+
+                                                                  {/* Sub-input Area Parkir - Inline Contextual */}
+                                                                  {fac === 'Area Parkir' && isChecked && (
+                                                                      <div className="col-span-2 pl-6 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl animate-fadeIn">
+                                                                          <span className="text-[10px] font-black text-[#584235] uppercase tracking-wider mb-0.5">Kelengkapan Area Parkir:</span>
+                                                                          <div className="grid grid-cols-2 gap-2.5">
+                                                                              {['Parkir Motor', 'Parkir Mobil', 'Parkir Sepeda'].map(pfac => {
+                                                                                  const isPChecked = kmListingForm.publicParkingFacilities?.includes(pfac);
+                                                                                  return (
+                                                                                      <label key={pfac} className="flex items-center gap-2 cursor-pointer">
+                                                                                          <input 
+                                                                                              type="checkbox"
+                                                                                              checked={!!isPChecked}
+                                                                                              onChange={() => {
+                                                                                                  const current = kmListingForm.publicParkingFacilities || [];
+                                                                                                  const updated = current.includes(pfac)
+                                                                                                      ? current.filter((f: string) => f !== pfac)
+                                                                                                      : [...current, pfac];
+                                                                                                  setKmListingForm({ ...kmListingForm, publicParkingFacilities: updated });
+                                                                                              }}
+                                                                                              className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
+                                                                                          />
+                                                                                          <span className="text-xs text-[#584235] uppercase tracking-wider font-bold">{pfac}</span>
+                                                                                      </label>
+                                                                                  );
+                                                                              })}
+
+                                                                              {/* Custom parking tags */}
+                                                                              {(() => {
+                                                                                  const pCustoms = kmListingForm.publicParkingFacilities?.filter((f: string) => !['Parkir Motor', 'Parkir Mobil', 'Parkir Sepeda'].includes(f)) || [];
+                                                                                  if (pCustoms.length === 0) return null;
+                                                                                  return (
+                                                                                      <div className="col-span-2 flex flex-wrap gap-1 mt-1 border-t border-orange-100 pt-2">
+                                                                                          {pCustoms.map((fac: string) => (
+                                                                                              <span key={fac} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-[#ff7a00] text-[9px] font-black rounded uppercase tracking-wider">
+                                                                                                  {fac}
+                                                                                                  <button 
+                                                                                                      type="button" 
+                                                                                                      onClick={() => {
+                                                                                                          const current = kmListingForm.publicParkingFacilities || [];
+                                                                                                          setKmListingForm({ ...kmListingForm, publicParkingFacilities: current.filter((f) => f !== fac) });
+                                                                                                      }}
+                                                                                                      className="hover:text-orange-700 text-xs font-bold leading-none p-0.5"
+                                                                                                  >
+                                                                                                      &times;
+                                                                                                  </button>
+                                                                                              </span>
+                                                                                          ))}
+                                                                                      </div>
+                                                                                  );
+                                                                              })()}
+
+                                                                              {/* Custom parking facility input adder */}
+                                                                              <div className="col-span-2 flex gap-1.5 mt-1 border-t border-orange-100 pt-2">
+                                                                                  <input 
+                                                                                      type="text" 
+                                                                                      value={customPublicParkingFacilityInput} 
+                                                                                      onChange={e => setCustomPublicParkingFacilityInput(e.target.value)} 
+                                                                                      placeholder="Tambah kelengkapan parkir..." 
+                                                                                      className="flex-grow h-[28px] px-2 border border-[#e0c0af] rounded text-[11px] bg-white outline-none text-[#584235] font-bold"
+                                                                                  />
+                                                                                  <button 
+                                                                                      type="button"
+                                                                                      onClick={() => {
+                                                                                          if (!customPublicParkingFacilityInput.trim()) return;
+                                                                                          const current = kmListingForm.publicParkingFacilities || [];
+                                                                                          if (!current.includes(customPublicParkingFacilityInput.trim())) {
+                                                                                              setKmListingForm({ ...kmListingForm, publicParkingFacilities: [...current, customPublicParkingFacilityInput.trim()] });
+                                                                                          }
+                                                                                          setCustomPublicParkingFacilityInput('');
+                                                                                      }}
+                                                                                      className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm"
+                                                                                  >
+                                                                                      +
+                                                                                  </button>
+                                                                              </div>
+                                                                          </div>
+                                                                      </div>
+                                                                  )}
+
+                                                                  {/* Sub-input WC Umum - Inline Contextual */}
+                                                                  {fac === 'WC Umum' && isChecked && (
+                                                                      <div className="col-span-2 pl-6 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl animate-fadeIn">
+                                                                          <span className="text-[10px] font-black text-[#584235] uppercase tracking-wider mb-0.5">Kelengkapan WC Umum:</span>
+                                                                          <div className="grid grid-cols-2 gap-2.5">
+                                                                              {['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].map(bfac => {
+                                                                                  const isBChecked = kmListingForm.publicBathroomFacilities?.includes(bfac);
+                                                                                  return (
+                                                                                      <label key={bfac} className="flex items-center gap-2 cursor-pointer">
+                                                                                          <input 
+                                                                                              type="checkbox"
+                                                                                              checked={!!isBChecked}
+                                                                                              onChange={() => {
+                                                                                                  const current = kmListingForm.publicBathroomFacilities || [];
+                                                                                                  const updated = current.includes(bfac)
+                                                                                                      ? current.filter((f: string) => f !== bfac)
+                                                                                                      : [...current, bfac];
+                                                                                                  setKmListingForm({ ...kmListingForm, publicBathroomFacilities: updated });
+                                                                                              }}
+                                                                                              className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
+                                                                                          />
+                                                                                          <span className="text-xs text-[#584235] uppercase tracking-wider font-bold">{bfac}</span>
+                                                                                      </label>
+                                                                                  );
+                                                                              })}
+
+                                                                              {/* Custom bathroom tags */}
+                                                                              {(() => {
+                                                                                  const bCustoms = kmListingForm.publicBathroomFacilities?.filter((f: string) => !['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].includes(f)) || [];
+                                                                                  if (bCustoms.length === 0) return null;
+                                                                                  return (
+                                                                                      <div className="col-span-2 flex flex-wrap gap-1 mt-1 border-t border-orange-100 pt-2">
+                                                                                          {bCustoms.map((fac: string) => (
+                                                                                              <span key={fac} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-[#ff7a00] text-[9px] font-black rounded uppercase tracking-wider">
+                                                                                                  {fac}
+                                                                                                  <button 
+                                                                                                      type="button" 
+                                                                                                      onClick={() => {
+                                                                                                          const current = kmListingForm.publicBathroomFacilities || [];
+                                                                                                          setKmListingForm({ ...kmListingForm, publicBathroomFacilities: current.filter((f) => f !== fac) });
+                                                                                                      }}
+                                                                                                      className="hover:text-orange-700 text-xs font-bold leading-none p-0.5"
+                                                                                                  >
+                                                                                                      &times;
+                                                                                                  </button>
+                                                                                              </span>
+                                                                                          ))}
+                                                                                      </div>
+                                                                                  );
+                                                                              })()}
+
+                                                                              {/* Custom bathroom facility input adder */}
+                                                                              <div className="col-span-2 flex gap-1.5 mt-1 border-t border-orange-100 pt-2">
+                                                                                  <input 
+                                                                                      type="text" 
+                                                                                      value={customPublicBathroomFacilityInput} 
+                                                                                      onChange={e => setCustomPublicBathroomFacilityInput(e.target.value)} 
+                                                                                      placeholder="Tambah kelengkapan WC..." 
+                                                                                      className="flex-grow h-[28px] px-2 border border-[#e0c0af] rounded text-[11px] bg-white outline-none text-[#584235] font-bold"
+                                                                                  />
+                                                                                  <button 
+                                                                                      type="button"
+                                                                                      onClick={() => {
+                                                                                          if (!customPublicBathroomFacilityInput.trim()) return;
+                                                                                          const current = kmListingForm.publicBathroomFacilities || [];
+                                                                                          if (!current.includes(customPublicBathroomFacilityInput.trim())) {
+                                                                                              setKmListingForm({ ...kmListingForm, publicBathroomFacilities: [...current, customPublicBathroomFacilityInput.trim()] });
+                                                                                          }
+                                                                                          setCustomPublicBathroomFacilityInput('');
+                                                                                      }}
+                                                                                      className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm"
+                                                                                  >
+                                                                                      +
+                                                                                  </button>
+                                                                              </div>
+                                                                          </div>
+                                                                      </div>
+                                                                  )}
+                                                              </React.Fragment>
                                                           );
                                                       })}
                                                 </div>
-
-
-                                                {/* Sub-input Dapur Bersama */}
-                                                {checkHasFacility(kmListingForm.facilities, 'Dapur Bersama') && (
-                                                    <div className="mt-2.5 pl-6 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl">
-                                                        <span className="text-[10px] font-black text-[#584235] uppercase tracking-wider mb-0.5">Kelengkapan Dapur Bersama:</span>
-                                                        <div className="grid grid-cols-2 gap-2.5">
-                                                            {['Kompor', 'Kulkas', 'Dispenser', 'Wastafel Cuci Piring', 'Peralatan Masak', 'Meja Makan'].map(kfac => {
-                                                                const isKChecked = kmListingForm.publicKitchenFacilities?.includes(kfac);
-                                                                return (
-                                                                    <label key={kfac} className="flex items-center gap-2 cursor-pointer">
-                                                                        <input 
-                                                                            type="checkbox"
-                                                                            checked={!!isKChecked}
-                                                                            onChange={() => {
-                                                                                const current = kmListingForm.publicKitchenFacilities || [];
-                                                                                const updated = current.includes(kfac)
-                                                                                    ? current.filter((f: string) => f !== kfac)
-                                                                                    : [...current, kfac];
-                                                                                setKmListingForm({ ...kmListingForm, publicKitchenFacilities: updated });
-                                                                            }}
-                                                                            className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
-                                                                        />
-                                                                        <span className="text-xs text-[#584235] uppercase tracking-wider font-bold">{kfac}</span>
-                                                                    </label>
-                                                                );
-                                                            })}
-
-                                                            {/* Custom kitchen tags */}
-                                                            {(() => {
-                                                                const kCustoms = kmListingForm.publicKitchenFacilities?.filter((f: string) => !['Kompor', 'Kulkas', 'Dispenser', 'Wastafel Cuci Piring', 'Peralatan Masak', 'Meja Makan'].includes(f)) || [];
-                                                                if (kCustoms.length === 0) return null;
-                                                                return (
-                                                                    <div className="col-span-2 flex flex-wrap gap-1 mt-1 border-t border-orange-100 pt-2">
-                                                                        {kCustoms.map((fac: string) => (
-                                                                            <span key={fac} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-[#ff7a00] text-[9px] font-black rounded uppercase tracking-wider">
-                                                                                {fac}
-                                                                                <button 
-                                                                                    type="button" 
-                                                                                    onClick={() => {
-                                                                                        const current = kmListingForm.publicKitchenFacilities || [];
-                                                                                        setKmListingForm({ ...kmListingForm, publicKitchenFacilities: current.filter((f) => f !== fac) });
-                                                                                    }}
-                                                                                    className="hover:text-orange-700 text-xs font-bold leading-none p-0.5"
-                                                                                >
-                                                                                    &times;
-                                                                                </button>
-                                                                            </span>
-                                                                        ))}
-                                                                    </div>
-                                                                );
-                                                            })()}
-
-                                                            {/* Custom kitchen facility input adder */}
-                                                            <div className="col-span-2 flex gap-1.5 mt-1 border-t border-orange-100 pt-2">
-                                                                <input 
-                                                                    type="text" 
-                                                                    value={customPublicKitchenFacilityInput} 
-                                                                    onChange={e => setCustomPublicKitchenFacilityInput(e.target.value)} 
-                                                                    placeholder="Tambah kelengkapan dapur..." 
-                                                                    className="flex-grow h-[28px] px-2 border border-[#e0c0af] rounded text-[11px] bg-white outline-none text-[#584235] font-bold"
-                                                                />
-                                                                <button 
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        if (!customPublicKitchenFacilityInput.trim()) return;
-                                                                        const current = kmListingForm.publicKitchenFacilities || [];
-                                                                        if (!current.includes(customPublicKitchenFacilityInput.trim())) {
-                                                                            setKmListingForm({ ...kmListingForm, publicKitchenFacilities: [...current, customPublicKitchenFacilityInput.trim()] });
-                                                                        }
-                                                                        setCustomPublicKitchenFacilityInput('');
-                                                                    }}
-                                                                    className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm"
-                                                                >
-                                                                    +
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Sub-input WC Umum */}
-                                                {checkHasFacility(kmListingForm.facilities, 'WC Umum') && (
-                                                    <div className="mt-2.5 pl-6 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl">
-                                                        <span className="text-[10px] font-black text-[#584235] uppercase tracking-wider mb-0.5">Kelengkapan WC Umum:</span>
-                                                        <div className="grid grid-cols-2 gap-2.5">
-                                                            {['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].map(bfac => {
-                                                                const isBChecked = kmListingForm.publicBathroomFacilities?.includes(bfac);
-                                                                return (
-                                                                    <label key={bfac} className="flex items-center gap-2 cursor-pointer">
-                                                                        <input 
-                                                                            type="checkbox"
-                                                                            checked={!!isBChecked}
-                                                                            onChange={() => {
-                                                                                const current = kmListingForm.publicBathroomFacilities || [];
-                                                                                const updated = current.includes(bfac)
-                                                                                    ? current.filter((f: string) => f !== bfac)
-                                                                                    : [...current, bfac];
-                                                                                setKmListingForm({ ...kmListingForm, publicBathroomFacilities: updated });
-                                                                            }}
-                                                                            className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
-                                                                        />
-                                                                        <span className="text-xs text-[#584235] uppercase tracking-wider font-bold">{bfac}</span>
-                                                                    </label>
-                                                                );
-                                                            })}
-
-                                                            {/* Custom bathroom tags */}
-                                                            {(() => {
-                                                                const bCustoms = kmListingForm.publicBathroomFacilities?.filter((f: string) => !['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].includes(f)) || [];
-                                                                if (bCustoms.length === 0) return null;
-                                                                return (
-                                                                    <div className="col-span-2 flex flex-wrap gap-1 mt-1 border-t border-orange-100 pt-2">
-                                                                        {bCustoms.map((fac: string) => (
-                                                                            <span key={fac} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-[#ff7a00] text-[9px] font-black rounded uppercase tracking-wider">
-                                                                                {fac}
-                                                                                <button 
-                                                                                    type="button" 
-                                                                                    onClick={() => {
-                                                                                        const current = kmListingForm.publicBathroomFacilities || [];
-                                                                                        setKmListingForm({ ...kmListingForm, publicBathroomFacilities: current.filter((f) => f !== fac) });
-                                                                                    }}
-                                                                                    className="hover:text-orange-700 text-xs font-bold leading-none p-0.5"
-                                                                                >
-                                                                                    &times;
-                                                                                </button>
-                                                                            </span>
-                                                                        ))}
-                                                                    </div>
-                                                                );
-                                                            })()}
-
-                                                            {/* Custom bathroom facility input adder */}
-                                                            <div className="col-span-2 flex gap-1.5 mt-1 border-t border-orange-100 pt-2">
-                                                                <input 
-                                                                    type="text" 
-                                                                    value={customPublicBathroomFacilityInput} 
-                                                                    onChange={e => setCustomPublicBathroomFacilityInput(e.target.value)} 
-                                                                    placeholder="Tambah kelengkapan WC..." 
-                                                                    className="flex-grow h-[28px] px-2 border border-[#e0c0af] rounded text-[11px] bg-white outline-none text-[#584235] font-bold"
-                                                                />
-                                                                <button 
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        if (!customPublicBathroomFacilityInput.trim()) return;
-                                                                        const current = kmListingForm.publicBathroomFacilities || [];
-                                                                        if (!current.includes(customPublicBathroomFacilityInput.trim())) {
-                                                                            setKmListingForm({ ...kmListingForm, publicBathroomFacilities: [...current, customPublicBathroomFacilityInput.trim()] });
-                                                                        }
-                                                                        setCustomPublicBathroomFacilityInput('');
-                                                                    }}
-                                                                    className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm"
-                                                                >
-                                                                    +
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
 
                                                 {/* Custom Facilities Badges */}
                                                 {kmListingForm.facilities && kmListingForm.facilities.filter((f: string) => !['wifi', 'dapur bersama', 'area parkir', 'ruang tamu', 'cctv', 'laundry', 'wc umum'].includes(f.toLowerCase().trim())).length > 0 && (
@@ -6105,7 +6391,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                         let rawCat = (typeof urlOrObj === 'object' && urlOrObj.label)
                                                             ? urlOrObj.label
                                                             : (kmListingForm.photoCategories?.[idx] || photoCategories[idx] || 'Foto Properti');
-                                                        if (rawCat.toLowerCase() === 'area umum') rawCat = 'Parkiran';
+                                                        if (rawCat.toLowerCase() === 'area umum' || rawCat.toLowerCase() === 'parkiran' || rawCat.toLowerCase() === 'parkir motor' || rawCat.toLowerCase() === 'parkir mobil') rawCat = 'Area Parkir';
                                                         return { url, idx, rawCat };
                                                     }).filter(item => !!item.url);
 
@@ -6125,14 +6411,14 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                 <span className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">{label}</span>
                                                                             </div>
                                                                             <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${catPhotos.length > 0 ? 'bg-orange-100 text-[#ff7a00]' : 'bg-gray-100 text-gray-500'}`}>
-                                                                                {catPhotos.length} Foto / Angle
+                                                                                {catPhotos.length} Foto
                                                                             </span>
                                                                         </div>
 
                                                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                                             {catPhotos.map((p, pIdx) => (
                                                                                 <div key={p.idx} className="aspect-video w-full rounded-lg overflow-hidden border border-gray-200 relative group bg-gray-50">
-                                                                                    <img src={getImageUrlString(p.url)} alt={`${label} Angle ${pIdx + 1}`} className="w-full h-full object-cover" />
+                                                                                    <img src={getImageUrlString(p.url)} alt={`${label} ${pIdx + 1}`} className="w-full h-full object-cover" />
                                                                                     <button
                                                                                         type="button"
                                                                                         onClick={() => {
@@ -6152,7 +6438,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                         &times;
                                                                                     </button>
                                                                                     <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-0.5 px-1 text-[8px] text-white text-center uppercase font-bold tracking-wider truncate">
-                                                                                        Angle {pIdx + 1}
+                                                                                        {label} {pIdx + 1}
                                                                                     </div>
                                                                                 </div>
                                                                             ))}
@@ -6203,7 +6489,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                     <>
                                                                                         <ImagePlus className="w-5 h-5 text-[#ff7a00] shrink-0" />
                                                                                         <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5 text-center">
-                                                                                            {catPhotos.length === 0 ? `+ Unggah Foto ${label}` : '+ Tambah Angle'}
+                                                                                            {catPhotos.length === 0 ? `+ Unggah Foto ${label}` : '+ Tambah Foto'}
                                                                                         </span>
                                                                                     </>
                                                                                 )}
@@ -6356,13 +6642,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                                   type="button"
                                                                                   onClick={(e) => {
                                                                                       e.stopPropagation();
-                                                                                      const updated = kmListingForm.roomTypes.filter((_: any, rIdx: number) => rIdx !== idx);
-                                                                                      setKmListingForm({ ...kmListingForm, roomTypes: updated });
-                                                                                      if (activeRoomIdx === idx) {
-                                                                                          setActiveRoomIdx(null);
-                                                                                      } else if (activeRoomIdx !== null && activeRoomIdx > idx) {
-                                                                                          setActiveRoomIdx(activeRoomIdx - 1);
-                                                                                      }
+                                                                                      setDeleteRoomConfirm({ open: true, idx });
                                                                                   }}
                                                                                   className="text-red-500 hover:text-red-700 p-1.5 rounded-lg mr-1"
                                                                               >
@@ -6393,6 +6673,63 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                      })
                                                  )}
                                              </div>
+
+                                             {/* Modal Konfirmasi Hapus Kamar */}
+                                             {deleteRoomConfirm.open && (
+                                                 <div
+                                                     className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+                                                     style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+                                                     onClick={() => setDeleteRoomConfirm({ open: false, idx: null })}
+                                                 >
+                                                     <div
+                                                         className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6 flex flex-col items-center gap-4"
+                                                         onClick={(e) => e.stopPropagation()}
+                                                     >
+                                                         <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center border-2 border-red-100">
+                                                             <Trash2 className="w-6 h-6 text-red-500" />
+                                                         </div>
+                                                         <div className="text-center">
+                                                             <h3 className="text-sm font-black text-gray-900 mb-1">Hapus Kamar Ini?</h3>
+                                                             <p className="text-xs text-gray-500 leading-relaxed">
+                                                                 Kamar{' '}
+                                                                 <span className="font-bold text-gray-700">
+                                                                     {deleteRoomConfirm.idx !== null && kmListingForm.roomTypes?.[deleteRoomConfirm.idx]?.name
+                                                                         ? `"${kmListingForm.roomTypes[deleteRoomConfirm.idx].name}"`
+                                                                         : `#${(deleteRoomConfirm.idx ?? 0) + 1}`}
+                                                                 </span>{' '}
+                                                                 akan dihapus dari daftar. Tindakan ini tidak dapat dibatalkan.
+                                                             </p>
+                                                         </div>
+                                                         <div className="flex gap-3 w-full mt-1">
+                                                             <button
+                                                                 type="button"
+                                                                 onClick={() => setDeleteRoomConfirm({ open: false, idx: null })}
+                                                                 className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-xs font-bold hover:bg-gray-50 transition-colors"
+                                                             >
+                                                                 Batal
+                                                             </button>
+                                                             <button
+                                                                 type="button"
+                                                                 onClick={() => {
+                                                                     const idxToDelete = deleteRoomConfirm.idx;
+                                                                     if (idxToDelete === null) return;
+                                                                     const updated = kmListingForm.roomTypes.filter((_: any, rIdx: number) => rIdx !== idxToDelete);
+                                                                     setKmListingForm({ ...kmListingForm, roomTypes: updated });
+                                                                     if (activeRoomIdx === idxToDelete) {
+                                                                         setActiveRoomIdx(null);
+                                                                     } else if (activeRoomIdx !== null && activeRoomIdx > idxToDelete) {
+                                                                         setActiveRoomIdx(activeRoomIdx - 1);
+                                                                     }
+                                                                     setDeleteRoomConfirm({ open: false, idx: null });
+                                                                 }}
+                                                                 className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-bold transition-colors"
+                                                             >
+                                                                 Ya, Hapus
+                                                             </button>
+                                                         </div>
+                                                     </div>
+                                                 </div>
+                                             )}
                                              
                                              {/* Add New Room Button */}
                                              {(kmListingForm.roomTypes?.length || 0) < (kmListingForm.totalRooms || 0) ? (
@@ -6546,6 +6883,44 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                               </div>
                                                               
                                                               {/* Status Kamar (Last Input) */}
+                                                              {/* Luas / Ukuran Kamar ([Panjang] X [Lebar] meter) */}
+                                                              <div className="md:col-span-2 flex flex-col gap-1.5">
+                                                                  <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Luas / Ukuran Kamar</label>
+                                                                  <div className="flex items-center gap-2">
+                                                                      {(() => {
+                                                                          const { length: len, width: wid } = parseDimensionParts(temporaryRoom.size || temporaryRoom.dimensions || '');
+                                                                          return (
+                                                                              <>
+                                                                                  <input 
+                                                                                      type="text"
+                                                                                      value={len}
+                                                                                      onChange={e => {
+                                                                                          const newLen = e.target.value;
+                                                                                          const formatted = newLen || wid ? `${newLen}x${wid} meter` : '';
+                                                                                          setTemporaryRoom({ ...temporaryRoom, size: formatted, dimensions: formatted });
+                                                                                      }}
+                                                                                      className="w-24 h-[40px] px-3 border border-[#e0c0af] rounded-lg text-xs bg-white font-bold outline-none text-[#584235] text-center"
+                                                                                      placeholder=""
+                                                                                  />
+                                                                                  <span className="text-xs font-black text-[#584235] uppercase">X</span>
+                                                                                  <input 
+                                                                                      type="text"
+                                                                                      value={wid}
+                                                                                      onChange={e => {
+                                                                                          const newWid = e.target.value;
+                                                                                          const formatted = len || newWid ? `${len}x${newWid} meter` : '';
+                                                                                          setTemporaryRoom({ ...temporaryRoom, size: formatted, dimensions: formatted });
+                                                                                      }}
+                                                                                      className="w-24 h-[40px] px-3 border border-[#e0c0af] rounded-lg text-xs bg-white font-bold outline-none text-[#584235] text-center"
+                                                                                      placeholder=""
+                                                                                  />
+                                                                                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">meter</span>
+                                                                              </>
+                                                                          );
+                                                                      })()}
+                                                                  </div>
+                                                              </div>
+
                                                               <div className="md:col-span-2 flex flex-col gap-1.5 mt-2 border-t border-gray-100 pt-3">
                                                                   <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Status Kamar</label>
                                                                   <div className="flex gap-2">
@@ -6782,177 +7157,170 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                   const isKosongan = temporaryRoom.roomFacilities?.includes('Kosongan (Tanpa Perabot)');
                                                                   const isDisabled = isPerabot && isKosongan;
                                                                   return (
-                                                                      <label key={fac} className={`flex items-center gap-2.5 cursor-pointer transition-all ${isDisabled ? 'opacity-40 pointer-events-none' : ''}`}>
-                                                                          <input 
-                                                                              type="checkbox"
-                                                                              checked={isChecked && !isDisabled}
-                                                                              disabled={isDisabled}
-                                                                              onChange={() => {
-                                                                                  const current = temporaryRoom.roomFacilities || [];
-                                                                                  const updated = current.includes(fac)
-                                                                                      ? current.filter((f: string) => f !== fac)
-                                                                                      : [...current, fac];
-                                                                                  updateTemporaryRoomFacilitiesWithPhotos(updated);
-                                                                              }}
-                                                                              className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-5 h-5"
-                                                                          />
-                                                                          <span className="text-xs text-gray-700 uppercase tracking-wider font-semibold">{fac}</span>
-                                                                      </label>
+                                                                      <React.Fragment key={fac}>
+                                                                          <label className={`flex items-center gap-2.5 cursor-pointer transition-all ${isDisabled ? 'opacity-40 pointer-events-none' : ''}`}>
+                                                                              <input 
+                                                                                  type="checkbox"
+                                                                                  checked={isChecked && !isDisabled}
+                                                                                  disabled={isDisabled}
+                                                                                  onChange={() => {
+                                                                                      const current = temporaryRoom.roomFacilities || [];
+                                                                                      const updated = current.includes(fac)
+                                                                                          ? current.filter((f: string) => f !== fac)
+                                                                                          : [...current, fac];
+                                                                                      updateTemporaryRoomFacilitiesWithPhotos(updated);
+                                                                                  }}
+                                                                                  className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-5 h-5"
+                                                                              />
+                                                                              <span className="text-xs text-gray-700 uppercase tracking-wider font-semibold">{fac}</span>
+                                                                          </label>
+
+                                                                          {fac === 'Kamar Mandi Dalam' && isChecked && (
+                                                                              <div className="col-span-2 pl-6 mt-1.5 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl animate-fadeIn">
+                                                                                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-0.5">Kelengkapan Kamar Mandi Dalam:</span>
+                                                                                  <div className="grid grid-cols-2 gap-2.5">
+                                                                                      {['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].map(bfac => {
+                                                                                          const isBChecked = temporaryRoom.bathroomFacilities?.includes(bfac);
+                                                                                          return (
+                                                                                              <label key={bfac} className="flex items-center gap-2 cursor-pointer">
+                                                                                                  <input 
+                                                                                                      type="checkbox"
+                                                                                                      checked={isBChecked}
+                                                                                                      onChange={() => {
+                                                                                                          const current = temporaryRoom.bathroomFacilities || [];
+                                                                                                          const updated = current.includes(bfac)
+                                                                                                              ? current.filter((f: string) => f !== bfac)
+                                                                                                              : [...current, bfac];
+                                                                                                          setTemporaryRoom({ ...temporaryRoom, bathroomFacilities: updated });
+                                                                                                      }}
+                                                                                                      className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
+                                                                                                  />
+                                                                                                  <span className="text-xs text-gray-600 uppercase tracking-wider font-bold">{bfac}</span>
+                                                                                              </label>
+                                                                                          );
+                                                                                      })}
+                                                                                      {(() => {
+                                                                                          const bCustoms = temporaryRoom.bathroomFacilities?.filter((f: string) => !['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].includes(f)) || [];
+                                                                                          if (bCustoms.length === 0) return null;
+                                                                                          return (
+                                                                                              <div className="col-span-2 flex flex-wrap gap-1 mt-1 border-t border-orange-100 pt-2">
+                                                                                                  {bCustoms.map((fac: string) => (
+                                                                                                      <span key={fac} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-[#ff7a00] text-[9px] font-black rounded uppercase tracking-wider">
+                                                                                                          {fac}
+                                                                                                          <button 
+                                                                                                              type="button" 
+                                                                                                              onClick={() => {
+                                                                                                                  const current = temporaryRoom.bathroomFacilities || [];
+                                                                                                                  setTemporaryRoom({ ...temporaryRoom, bathroomFacilities: current.filter((f: string) => f !== fac) });
+                                                                                                              }}
+                                                                                                              className="hover:text-orange-700 text-xs font-bold leading-none p-0.5"
+                                                                                                          >
+                                                                                                              &times;
+                                                                                                          </button>
+                                                                                                      </span>
+                                                                                                  ))}
+                                                                                              </div>
+                                                                                          );
+                                                                                      })()}
+                                                                                      <div className="col-span-2 flex gap-1.5 mt-1 border-t border-orange-100 pt-2">
+                                                                                          <input 
+                                                                                              type="text" 
+                                                                                              value={customBathroomFacilityInput} 
+                                                                                              onChange={e => setCustomBathroomFacilityInput(e.target.value)} 
+                                                                                              placeholder="Tambah kelengkapan WC..." 
+                                                                                              className="flex-grow h-[28px] px-2 border border-[#e0c0af] rounded text-[11px] bg-white outline-none text-[#584235] font-bold"
+                                                                                          />
+                                                                                          <button 
+                                                                                              type="button"
+                                                                                              onClick={() => {
+                                                                                                  if (!customBathroomFacilityInput.trim()) return;
+                                                                                                  const current = temporaryRoom.bathroomFacilities || [];
+                                                                                                  if (!current.includes(customBathroomFacilityInput.trim())) {
+                                                                                                      setTemporaryRoom({ ...temporaryRoom, bathroomFacilities: [...current, customBathroomFacilityInput.trim()] });
+                                                                                                  }
+                                                                                                  setCustomBathroomFacilityInput('');
+                                                                                              }}
+                                                                                              className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm"
+                                                                                          >
+                                                                                              +
+                                                                                          </button>
+                                                                                      </div>
+                                                                                  </div>
+                                                                              </div>
+                                                                          )}
+
+                                                                          {fac === 'Dapur Dalam' && isChecked && (
+                                                                              <div className="col-span-2 pl-6 mt-1.5 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl w-full animate-fadeIn">
+                                                                                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-0.5">Kelengkapan Dapur Dalam:</span>
+                                                                                  <div className="grid grid-cols-2 gap-2.5">
+                                                                                      {['Kompor', 'Kulkas', 'Wastafel Cuci Piring', 'Kitchen Set', 'Dispenser'].map(kfac => {
+                                                                                          const isKChecked = temporaryRoom.kitchenFacilities?.includes(kfac);
+                                                                                          return (
+                                                                                              <label key={kfac} className="flex items-center gap-2 cursor-pointer">
+                                                                                                  <input 
+                                                                                                      type="checkbox"
+                                                                                                      checked={!!isKChecked}
+                                                                                                      onChange={() => {
+                                                                                                          const current = temporaryRoom.kitchenFacilities || [];
+                                                                                                          const updated = current.includes(kfac)
+                                                                                                              ? current.filter((f: string) => f !== kfac)
+                                                                                                              : [...current, kfac];
+                                                                                                          setTemporaryRoom({ ...temporaryRoom, kitchenFacilities: updated });
+                                                                                                      }}
+                                                                                                      className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
+                                                                                                  />
+                                                                                                  <span className="text-[11px] text-gray-650 font-bold uppercase">{kfac}</span>
+                                                                                              </label>
+                                                                                          );
+                                                                                      })}
+                                                                                  </div>
+                                                                                  {temporaryRoom.kitchenFacilities?.filter((f: string) => !['Kompor', 'Kulkas', 'Wastafel Cuci Piring', 'Kitchen Set', 'Dispenser'].includes(f)).length > 0 && (
+                                                                                      <div className="flex flex-wrap gap-1.5 mt-1 border-t border-orange-100 pt-2">
+                                                                                          {temporaryRoom.kitchenFacilities.filter((f: string) => !['Kompor', 'Kulkas', 'Wastafel Cuci Piring', 'Kitchen Set', 'Dispenser'].includes(f)).map((fac: string) => (
+                                                                                              <span key={fac} className="bg-orange-100 text-[#ff7a00] px-2 py-0.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1">
+                                                                                                  {fac}
+                                                                                                  <button
+                                                                                                      type="button"
+                                                                                                      onClick={() => {
+                                                                                                          const current = temporaryRoom.kitchenFacilities || [];
+                                                                                                          setTemporaryRoom({ ...temporaryRoom, kitchenFacilities: current.filter((f: string) => f !== fac) });
+                                                                                                      }}
+                                                                                                      className="text-red-600 hover:text-red-850 font-bold text-xs"
+                                                                                                  >
+                                                                                                      &times;
+                                                                                                  </button>
+                                                                                              </span>
+                                                                                          ))}
+                                                                                      </div>
+                                                                                  )}
+                                                                                  <div className="flex gap-2 mt-1.5 border-t border-orange-100 pt-2">
+                                                                                      <input 
+                                                                                          type="text" 
+                                                                                          placeholder="Tambah kelengkapan dapur..." 
+                                                                                          value={customKitchenFacilityInput} 
+                                                                                          onChange={e => setCustomKitchenFacilityInput(e.target.value)} 
+                                                                                          className="flex-grow h-[28px] px-2 border border-[#e0c0af] rounded text-[11px] bg-white outline-none text-[#584235] font-bold"
+                                                                                      />
+                                                                                      <button 
+                                                                                          type="button" 
+                                                                                          onClick={() => {
+                                                                                              if (!customKitchenFacilityInput.trim()) return;
+                                                                                              const current = temporaryRoom.kitchenFacilities || [];
+                                                                                              if (!current.includes(customKitchenFacilityInput.trim())) {
+                                                                                                  setTemporaryRoom({ ...temporaryRoom, kitchenFacilities: [...current, customKitchenFacilityInput.trim()] });
+                                                                                              }
+                                                                                              setCustomKitchenFacilityInput('');
+                                                                                          }}
+                                                                                          className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm"
+                                                                                      >
+                                                                                          +
+                                                                                      </button>
+                                                                                  </div>
+                                                                              </div>
+                                                                          )}
+                                                                      </React.Fragment>
                                                                   );
                                                               })}
-
-                                                              {/* Nested bathroom facilities if Kamar Mandi Dalam is checked */}
-                                                              {temporaryRoom.roomFacilities?.includes('Kamar Mandi Dalam') && (
-                                                                  <div className="col-span-2 pl-6 mt-1.5 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl">
-                                                                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-0.5">Kelengkapan Kamar Mandi Dalam:</span>
-                                                                      <div className="grid grid-cols-2 gap-2.5">
-                                                                          {['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].map(bfac => {
-                                                                              const isBChecked = temporaryRoom.bathroomFacilities?.includes(bfac);
-                                                                              return (
-                                                                                  <label key={bfac} className="flex items-center gap-2 cursor-pointer">
-                                                                                      <input 
-                                                                                          type="checkbox"
-                                                                                          checked={isBChecked}
-                                                                                          onChange={() => {
-                                                                                              const current = temporaryRoom.bathroomFacilities || [];
-                                                                                              const updated = current.includes(bfac)
-                                                                                                  ? current.filter((f: string) => f !== bfac)
-                                                                                                  : [...current, bfac];
-                                                                                              setTemporaryRoom({ ...temporaryRoom, bathroomFacilities: updated });
-                                                                                          }}
-                                                                                          className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
-                                                                                      />
-                                                                                      <span className="text-xs text-gray-600 uppercase tracking-wider font-bold">{bfac}</span>
-                                                                                  </label>
-                                                                              );
-                                                                          })}
-
-                                                                          {/* Custom bathroom tags */}
-                                                                          {(() => {
-                                                                              const bCustoms = temporaryRoom.bathroomFacilities?.filter((f: string) => !['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].includes(f)) || [];
-                                                                              if (bCustoms.length === 0) return null;
-                                                                              return (
-                                                                                  <div className="col-span-2 flex flex-wrap gap-1 mt-1 border-t border-orange-100 pt-2">
-                                                                                      {bCustoms.map((fac: string) => (
-                                                                                          <span key={fac} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-[#ff7a00] text-[9px] font-black rounded uppercase tracking-wider">
-                                                                                              {fac}
-                                                                                              <button 
-                                                                                                  type="button" 
-                                                                                                  onClick={() => {
-                                                                                                      const current = temporaryRoom.bathroomFacilities || [];
-                                                                                                      setTemporaryRoom({ ...temporaryRoom, bathroomFacilities: current.filter((f: string) => f !== fac) });
-                                                                                                  }}
-                                                                                                  className="hover:text-orange-700 text-xs font-bold leading-none p-0.5"
-                                                                                              >
-                                                                                                  &times;
-                                                                                              </button>
-                                                                                          </span>
-                                                                                      ))}
-                                                                                  </div>
-                                                                              );
-                                                                          })()}
-
-                                                                          {/* Custom bathroom facility input adder */}
-                                                                          <div className="col-span-2 flex gap-1.5 mt-1 border-t border-orange-100 pt-2">
-                                                                              <input 
-                                                                                  type="text" 
-                                                                                  value={customBathroomFacilityInput} 
-                                                                                  onChange={e => setCustomBathroomFacilityInput(e.target.value)} 
-                                                                                  placeholder="Tambah kelengkapan WC..." 
-                                                                                  className="flex-grow h-[28px] px-2 border border-[#e0c0af] rounded text-[11px] bg-white outline-none text-[#584235] font-bold"
-                                                                              />
-                                                                              <button 
-                                                                                  type="button"
-                                                                                  onClick={() => {
-                                                                                      if (!customBathroomFacilityInput.trim()) return;
-                                                                                      const current = temporaryRoom.bathroomFacilities || [];
-                                                                                      if (!current.includes(customBathroomFacilityInput.trim())) {
-                                                                                          setTemporaryRoom({ ...temporaryRoom, bathroomFacilities: [...current, customBathroomFacilityInput.trim()] });
-                                                                                      }
-                                                                                      setCustomBathroomFacilityInput('');
-                                                                                  }}
-                                                                                  className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm"
-                                                                              >
-                                                                                  +
-                                                                              </button>
-                                                                          </div>
-                                                                      </div>
-                                                                  </div>
-                                                              )}
-                                                               {/* Nested kitchen facilities if Dapur Dalam is checked */}
-                                                               {temporaryRoom.roomFacilities?.includes('Dapur Dalam') && (
-                                                                   <div className="col-span-2 pl-6 mt-1.5 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl w-full">
-                                                                       <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-0.5">Kelengkapan Dapur Dalam:</span>
-                                                                       <div className="grid grid-cols-2 gap-2.5">
-                                                                           {['Kompor', 'Kulkas', 'Wastafel Cuci Piring', 'Kitchen Set', 'Dispenser'].map(kfac => {
-                                                                               const isKChecked = temporaryRoom.kitchenFacilities?.includes(kfac);
-                                                                               return (
-                                                                                   <label key={kfac} className="flex items-center gap-2 cursor-pointer">
-                                                                                       <input 
-                                                                                           type="checkbox"
-                                                                                           checked={!!isKChecked}
-                                                                                           onChange={() => {
-                                                                                               const current = temporaryRoom.kitchenFacilities || [];
-                                                                                               const updated = current.includes(kfac)
-                                                                                                   ? current.filter((f: string) => f !== kfac)
-                                                                                                   : [...current, kfac];
-                                                                                               setTemporaryRoom({ ...temporaryRoom, kitchenFacilities: updated });
-                                                                                           }}
-                                                                                           className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5"
-                                                                                       />
-                                                                                       <span className="text-[11px] text-gray-650 font-bold uppercase">{kfac}</span>
-                                                                                   </label>
-                                                                               );
-                                                                           })}
-                                                                       </div>
-                                                                       
-                                                                       {/* Custom kitchen tags */}
-                                                                       {temporaryRoom.kitchenFacilities?.filter((f: string) => !['Kompor', 'Kulkas', 'Wastafel Cuci Piring', 'Kitchen Set', 'Dispenser'].includes(f)).length > 0 && (
-                                                                           <div className="flex flex-wrap gap-1.5 mt-1 border-t border-orange-100 pt-2">
-                                                                               {temporaryRoom.kitchenFacilities.filter((f: string) => !['Kompor', 'Kulkas', 'Wastafel Cuci Piring', 'Kitchen Set', 'Dispenser'].includes(f)).map((fac: string) => (
-                                                                                   <span key={fac} className="bg-orange-100 text-[#ff7a00] px-2 py-0.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1">
-                                                                                       {fac}
-                                                                                       <button
-                                                                                           type="button"
-                                                                                           onClick={() => {
-                                                                                               const current = temporaryRoom.kitchenFacilities || [];
-                                                                                               setTemporaryRoom({ ...temporaryRoom, kitchenFacilities: current.filter((f: string) => f !== fac) });
-                                                                                           }}
-                                                                                           className="text-red-600 hover:text-red-850 font-bold text-xs"
-                                                                                       >
-                                                                                           &times;
-                                                                                       </button>
-                                                                                   </span>
-                                                                               ))}
-                                                                           </div>
-                                                                       )}
-                                                                       
-                                                                       {/* Custom kitchen facility input adder */}
-                                                                       <div className="flex gap-2 mt-1.5 border-t border-orange-100 pt-2">
-                                                                           <input 
-                                                                               type="text" 
-                                                                               placeholder="Tambah kelengkapan dapur..." 
-                                                                               value={customKitchenFacilityInput} 
-                                                                               onChange={e => setCustomKitchenFacilityInput(e.target.value)} 
-                                                                               className="flex-grow h-[28px] px-2 border border-[#e0c0af] rounded text-[11px] bg-white outline-none text-[#584235] font-bold"
-                                                                           />
-                                                                           <button 
-                                                                               type="button"
-                                                                               onClick={() => {
-                                                                                   if (!customKitchenFacilityInput.trim()) return;
-                                                                                   const current = temporaryRoom.kitchenFacilities || [];
-                                                                                   if (!current.includes(customKitchenFacilityInput.trim())) {
-                                                                                       setTemporaryRoom({ ...temporaryRoom, kitchenFacilities: [...current, customKitchenFacilityInput.trim()] });
-                                                                                   }
-                                                                                   setCustomKitchenFacilityInput('');
-                                                                               }}
-                                                                               className="h-[28px] px-3 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-[10px] uppercase rounded flex items-center justify-center transition-colors shadow-sm"
-                                                                           >
-                                                                               +
-                                                                           </button>
-                                                                       </div>
-                                                                   </div>
-                                                               )}
                                                           </div>
 
                                                           {/* Removable Custom Badges */}
@@ -7051,143 +7419,142 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                            </div>
                                                       </div>
 
-                                                               {/* Dokumentasi Foto Kamar */}
-                                                               <div className="border border-gray-150 rounded-xl p-4 flex flex-col gap-3.5 bg-gray-50/30">
-                                                                   <div className="flex justify-between items-center border-b border-gray-100 pb-1.5">
-                                                                       <span className="text-[10px] font-bold text-[#584235] uppercase tracking-widest">Dokumentasi Foto Kamar</span>
-                                                                       <span className="text-[10px] font-semibold text-gray-400">Multi-Angle per Kategori</span>
-                                                                   </div>
-                                                                   <p className="text-[10px] text-gray-500 leading-relaxed">
-                                                                       {temporaryRoom.status === 'Terisi' 
-                                                                           ? 'Unggah foto kondisi kamar saat ini (opsional, dapat mengambil beberapa foto/angle).' 
-                                                                           : 'Unggah foto kondisi kamar saat ini untuk keperluan listing/marketing (dapat mengambil beberapa foto/angle).'}
-                                                                   </p>
-                                                                   {(() => {
-                                                                       const standardKnown = ['Interior Kamar *Wajib', 'Interior Kamar (Opsional)', 'Kamar Mandi', 'Dapur Dalam', 'Tempat Tidur', 'Lemari / Storage', 'Meja Belajar', 'AC', 'Kipas Angin', 'Jendela Luar', 'Water Heater'];
-                                                                       const currentCategorized = getRoomCategorizedPhotos(temporaryRoom);
-                                                                       const existingCustomKeys = Object.keys(currentCategorized).filter((c: string) => !standardKnown.includes(c));
-                                                                       const dynamicCats = computeDynamicRoomPhotoCategories(temporaryRoom.roomFacilities || [], temporaryRoom.status || 'Kosong', existingCustomKeys);
+                                                                {/* Dokumentasi Foto Kamar */}
+                                                                <div className="border border-gray-150 rounded-xl p-4 flex flex-col gap-3.5 bg-gray-50/30">
+                                                                    <div className="flex justify-between items-center border-b border-gray-100 pb-1.5">
+                                                                        <span className="text-[10px] font-bold text-[#584235] uppercase tracking-widest">Dokumentasi Foto Kamar</span>
+                                                                    </div>
+                                                                    {(() => {
+                                                                        const standardKnown = ['Interior Kamar *Wajib', 'Interior Kamar (Opsional)', 'Kamar Mandi', 'Dapur Dalam', 'Tempat Tidur', 'Lemari / Storage', 'Meja Belajar', 'AC', 'Kipas Angin', 'Jendela Luar', 'Water Heater'];
+                                                                        const currentCategorized = getRoomCategorizedPhotos(temporaryRoom);
+                                                                        const existingCustomKeys = Object.keys(currentCategorized).filter((c: string) => !standardKnown.includes(c));
+                                                                        const dynamicCats = computeDynamicRoomPhotoCategories(temporaryRoom.roomFacilities || [], temporaryRoom.status || 'Kosong', existingCustomKeys);
 
-                                                                       return (
-                                                                           <div className="space-y-3">
-                                                                               {dynamicCats.map((rawLabel: string) => {
-                                                                                   const label = (rawLabel === 'Interior Kamar *Wajib' && temporaryRoom.status === 'Terisi') ? 'Interior Kamar (Opsional)' : rawLabel;
-                                                                                   const catPhotos = currentCategorized[rawLabel] 
-                                                                                       || (rawLabel.includes('Interior') ? (currentCategorized['Interior Kamar *Wajib'] || currentCategorized['Interior Kamar (Opsional)'] || []) : []) 
-                                                                                       || [];
+                                                                        const getPhotoCaption = (cLabel: string, pIdx: number) => {
+                                                                            const clean = cLabel.replace(/(\*Wajib|\(Opsional\))/gi, '').trim();
+                                                                            return clean.toLowerCase().includes('interior') ? `Interior ${pIdx + 1}` : `${clean} ${pIdx + 1}`;
+                                                                        };
 
-                                                                                   return (
-                                                                                       <div key={rawLabel} className="bg-white border border-[#e0c0af]/60 rounded-xl p-3 shadow-xs space-y-2.5">
-                                                                                           <div className="flex justify-between items-center">
-                                                                                               <div className="flex items-center gap-1.5">
-                                                                                                   {rawLabel.includes('Interior') ? <Home className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
-                                                                                                         rawLabel.includes('Mandi') ? <Bath className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
-                                                                                                         rawLabel.includes('Tidur') ? <Bed className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
-                                                                                                         rawLabel.includes('AC') ? <Fan className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
-                                                                                                         <Camera className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" />}
-                                                                                                   <span className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">{label}</span>
-                                                                                               </div>
-                                                                                               <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${catPhotos.length > 0 ? 'bg-orange-100 text-[#ff7a00]' : 'bg-gray-100 text-gray-500'}`}>
-                                                                                                   {catPhotos.length} Foto / Angle
-                                                                                               </span>
-                                                                                           </div>
+                                                                        return (
+                                                                            <div className="space-y-3">
+                                                                                {dynamicCats.map((rawLabel: string) => {
+                                                                                    const label = (rawLabel === 'Interior Kamar *Wajib' && temporaryRoom.status === 'Terisi') ? 'Interior Kamar (Opsional)' : rawLabel;
+                                                                                    const catPhotos = currentCategorized[rawLabel] 
+                                                                                        || (rawLabel.includes('Interior') ? (currentCategorized['Interior Kamar *Wajib'] || currentCategorized['Interior Kamar (Opsional)'] || []) : []) 
+                                                                                        || [];
 
-                                                                                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                                                                               {catPhotos.map((url, pIdx) => (
-                                                                                                   <div key={`${url}_${pIdx}`} className="aspect-video w-full rounded-lg overflow-hidden border border-gray-200 relative group bg-gray-50">
-                                                                                                       <img src={url} alt={`${label} Angle ${pIdx + 1}`} className="w-full h-full object-cover" />
-                                                                                                       <button
-                                                                                                           type="button"
-                                                                                                           onClick={() => {
-                                                                                                               const updatedCategorized = { ...currentCategorized };
-                                                                                                               const targetKey = Object.keys(updatedCategorized).find(k => k === rawLabel || (rawLabel.includes('Interior') && k.includes('Interior'))) || rawLabel;
-                                                                                                               const list = [...(updatedCategorized[targetKey] || [])];
-                                                                                                               list.splice(pIdx, 1);
-                                                                                                               if (list.length > 0) {
-                                                                                                                   updatedCategorized[targetKey] = list;
-                                                                                                               } else {
-                                                                                                                   delete updatedCategorized[targetKey];
-                                                                                                               }
-                                                                                                               const { images, photoCategories } = exportCategorizedPhotos(updatedCategorized);
-                                                                                                               setTemporaryRoom({ 
-                                                                                                                   ...temporaryRoom, 
-                                                                                                                   categorized_photos: updatedCategorized,
-                                                                                                                   categorizedPhotos: updatedCategorized,
-                                                                                                                   images,
-                                                                                                                   photoCategories
-                                                                                                               });
-                                                                                                           }}
-                                                                                                           className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition-all active:scale-90"
-                                                                                                           title="Hapus foto angle ini"
-                                                                                                       >
-                                                                                                           &times;
-                                                                                                       </button>
-                                                                                                       <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-0.5 px-1 text-[8px] text-white text-center uppercase font-bold tracking-wider truncate">
-                                                                                                           Angle {pIdx + 1}
-                                                                                                       </div>
-                                                                                                   </div>
-                                                                                               ))}
+                                                                                    return (
+                                                                                        <div key={rawLabel} className="bg-white border border-[#e0c0af]/60 rounded-xl p-3 shadow-xs space-y-2.5">
+                                                                                            <div className="flex justify-between items-center">
+                                                                                                <div className="flex items-center gap-1.5">
+                                                                                                    {rawLabel.includes('Interior') ? <Home className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                                          rawLabel.includes('Mandi') ? <Bath className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                                          rawLabel.includes('Tidur') ? <Bed className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                                          rawLabel.includes('AC') ? <Fan className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                                          <Camera className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" />}
+                                                                                                    <span className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">{label}</span>
+                                                                                                </div>
+                                                                                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${catPhotos.length > 0 ? 'bg-orange-100 text-[#ff7a00]' : 'bg-gray-100 text-gray-500'}`}>
+                                                                                                    {catPhotos.length} Foto
+                                                                                                </span>
+                                                                                            </div>
 
-                                                                                               <div 
-                                                                                                   onClick={async () => {
-                                                                                                       const input = document.createElement('input');
-                                                                                                       input.type = 'file';
-                                                                                                       input.accept = 'image/*';
-                                                                                                       input.multiple = true;
-                                                                                                       input.onchange = async (e: any) => {
-                                                                                                           const files = e.target?.files;
-                                                                                                           if (files && files.length > 0) {
-                                                                                                               const uploadKey = `temp_${rawLabel}`;
-                                                                                                               setUploadingRooms(prev => ({ ...prev, [uploadKey]: true }));
-                                                                                                               try {
-                                                                                                                   const newUrls = [];
-                                                                                                                   for (let f = 0; f < files.length; f++) {
-                                                                                                                       const folder = `kostmanager/rooms/${Date.now()}_${f}`;
-                                                                                                                       const publicUrl = await uploadFileAndGetURL(files[f], folder);
-                                                                                                                       newUrls.push(publicUrl);
-                                                                                                                   }
-                                                                                                                   const updatedCategorized = { ...currentCategorized };
-                                                                                                                   const targetKey = rawLabel.includes('Interior') ? (temporaryRoom.status === 'Terisi' ? 'Interior Kamar (Opsional)' : 'Interior Kamar *Wajib') : rawLabel;
-                                                                                                                   const list = [...(updatedCategorized[targetKey] || [])];
-                                                                                                                   newUrls.forEach(u => list.push(u));
-                                                                                                                   updatedCategorized[targetKey] = list;
-                                                                                                                   const { images, photoCategories } = exportCategorizedPhotos(updatedCategorized);
-                                                                                                                   setTemporaryRoom({ 
-                                                                                                                       ...temporaryRoom, 
-                                                                                                                       categorized_photos: updatedCategorized,
-                                                                                                                       categorizedPhotos: updatedCategorized,
-                                                                                                                       images,
-                                                                                                                       photoCategories
-                                                                                                                   });
-                                                                                                               } catch (err) {
-                                                                                                                   alert('Gagal unggah foto: ' + (err as Error).message);
-                                                                                                               } finally {
-                                                                                                                   setUploadingRooms(prev => ({ ...prev, [uploadKey]: false }));
-                                                                                                               }
-                                                                                                           }
-                                                                                                       };
-                                                                                                       input.click();
-                                                                                                   }}
-                                                                                                   className={`aspect-video bg-white border-2 border-dashed border-[#ff7a00] rounded-lg flex flex-col items-center justify-center p-2 cursor-pointer hover:bg-orange-50/50 transition-all text-[#584235] ${catPhotos.length === 0 ? 'col-span-2 sm:col-span-3 py-4' : ''}`}
-                                                                                               >
-                                                                                                   {uploadingRooms[`temp_${rawLabel}`] ? (
-                                                                                                       <span className="text-[10px] font-bold animate-pulse text-gray-500">Uploading...</span>
-                                                                                                   ) : (
-                                                                                                       <>
-                                                                                                           <ImagePlus className="w-5 h-5 text-[#ff7a00] shrink-0" />
-                                                                                                           <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5 text-center">
-                                                                                                               {catPhotos.length === 0 ? `+ Unggah Foto ${label}` : '+ Tambah Angle'}
-                                                                                                           </span>
-                                                                                                       </>
-                                                                                                   )}
-                                                                                               </div>
-                                                                                           </div>
-                                                                                       </div>
-                                                                                   );
-                                                                               })}
-                                                                           </div>
-                                                                       );
-                                                                   })()}
+                                                                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                                                                {catPhotos.map((url, pIdx) => (
+                                                                                                    <div key={`${url}_${pIdx}`} className="aspect-video w-full rounded-lg overflow-hidden border border-gray-200 relative group bg-gray-50">
+                                                                                                        <img src={url} alt={getPhotoCaption(label, pIdx)} className="w-full h-full object-cover" />
+                                                                                                        <button
+                                                                                                            type="button"
+                                                                                                            onClick={() => {
+                                                                                                                const updatedCategorized = { ...currentCategorized };
+                                                                                                                const targetKey = Object.keys(updatedCategorized).find(k => k === rawLabel || (rawLabel.includes('Interior') && k.includes('Interior'))) || rawLabel;
+                                                                                                                const list = [...(updatedCategorized[targetKey] || [])];
+                                                                                                                list.splice(pIdx, 1);
+                                                                                                                if (list.length > 0) {
+                                                                                                                    updatedCategorized[targetKey] = list;
+                                                                                                                } else {
+                                                                                                                    delete updatedCategorized[targetKey];
+                                                                                                                }
+                                                                                                                const { images, photoCategories } = exportCategorizedPhotos(updatedCategorized);
+                                                                                                                setTemporaryRoom({ 
+                                                                                                                    ...temporaryRoom, 
+                                                                                                                    categorized_photos: updatedCategorized,
+                                                                                                                    categorizedPhotos: updatedCategorized,
+                                                                                                                    images,
+                                                                                                                    photoCategories
+                                                                                                                });
+                                                                                                            }}
+                                                                                                            className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition-all active:scale-90"
+                                                                                                            title="Hapus foto ini"
+                                                                                                        >
+                                                                                                            &times;
+                                                                                                        </button>
+                                                                                                        <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-0.5 px-1 text-[8px] text-white text-center uppercase font-bold tracking-wider truncate">
+                                                                                                            {getPhotoCaption(label, pIdx)}
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                ))}
+
+                                                                                                <div 
+                                                                                                    onClick={async () => {
+                                                                                                        const input = document.createElement('input');
+                                                                                                        input.type = 'file';
+                                                                                                        input.accept = 'image/*';
+                                                                                                        input.multiple = true;
+                                                                                                        input.onchange = async (e: any) => {
+                                                                                                            const files = e.target?.files;
+                                                                                                            if (files && files.length > 0) {
+                                                                                                                const uploadKey = `temp_${rawLabel}`;
+                                                                                                                setUploadingRooms(prev => ({ ...prev, [uploadKey]: true }));
+                                                                                                                try {
+                                                                                                                    const newUrls = [];
+                                                                                                                    for (let f = 0; f < files.length; f++) {
+                                                                                                                        const folder = `kostmanager/rooms/${Date.now()}_${f}`;
+                                                                                                                        const publicUrl = await uploadFileAndGetURL(files[f], folder);
+                                                                                                                        newUrls.push(publicUrl);
+                                                                                                                    }
+                                                                                                                    const updatedCategorized = { ...currentCategorized };
+                                                                                                                    const targetKey = rawLabel.includes('Interior') ? (temporaryRoom.status === 'Terisi' ? 'Interior Kamar (Opsional)' : 'Interior Kamar *Wajib') : rawLabel;
+                                                                                                                    const list = [...(updatedCategorized[targetKey] || [])];
+                                                                                                                    newUrls.forEach(u => list.push(u));
+                                                                                                                    updatedCategorized[targetKey] = list;
+                                                                                                                    const { images, photoCategories } = exportCategorizedPhotos(updatedCategorized);
+                                                                                                                    setTemporaryRoom({ 
+                                                                                                                        ...temporaryRoom, 
+                                                                                                                        categorized_photos: updatedCategorized,
+                                                                                                                        categorizedPhotos: updatedCategorized,
+                                                                                                                        images,
+                                                                                                                        photoCategories
+                                                                                                                    });
+                                                                                                                } catch (err) {
+                                                                                                                    alert('Gagal unggah foto: ' + (err as Error).message);
+                                                                                                                } finally {
+                                                                                                                    setUploadingRooms(prev => ({ ...prev, [uploadKey]: false }));
+                                                                                                                }
+                                                                                                            }
+                                                                                                        };
+                                                                                                        input.click();
+                                                                                                    }}
+                                                                                                    className={`aspect-video bg-white border-2 border-dashed border-[#ff7a00] rounded-lg flex flex-col items-center justify-center p-2 cursor-pointer hover:bg-orange-50/50 transition-all text-[#584235] ${catPhotos.length === 0 ? 'col-span-2 sm:col-span-3 py-4' : ''}`}
+                                                                                                >
+                                                                                                    {uploadingRooms[`temp_${rawLabel}`] ? (
+                                                                                                        <span className="text-[10px] font-bold animate-pulse text-gray-500">Uploading...</span>
+                                                                                                    ) : (
+                                                                                                        <>
+                                                                                                            <ImagePlus className="w-5 h-5 text-[#ff7a00] shrink-0" />
+                                                                                                            <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5 text-center">
+                                                                                                                {catPhotos.length === 0 ? `+ Unggah Foto ${label.replace(/(\*Wajib|\(Opsional\))/gi, '').trim()}` : '+ Tambah Foto'}
+                                                                                                            </span>
+                                                                                                        </>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        );
+                                                                    })()}
                                                                    
                                                                    {/* Input Kategori Tambahan Kamar */}
                                                                    <div className="flex gap-2 mt-2">
@@ -7678,18 +8045,27 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                                                                         {/* Section 2: Info Penghuni jika Terisi */}
                                                                         {isTerisi && (
-                                                                            <div className="grid grid-cols-3 gap-2.5 pb-2.5 border-b border-gray-100/60 bg-[#fffbfa] p-2.5 rounded-lg border border-orange-100">
-                                                                                <div className="flex flex-col gap-0.5">
-                                                                                    <span className="text-[9px] font-bold text-[#ff7a00] uppercase tracking-wider">Penghuni</span>
-                                                                                    <span className="font-extrabold text-gray-800">{rt.residentName || '-'}</span>
+                                                                            <div className="flex flex-col gap-2 pb-2.5 border-b border-gray-100/60 bg-[#fffbfa] p-2.5 rounded-xl border border-orange-100/80 shadow-2xs">
+                                                                                <div className="flex items-center justify-between gap-2">
+                                                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                                                        <User className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" />
+                                                                                        <div className="flex flex-col min-w-0">
+                                                                                            <span className="text-[8px] font-bold text-[#ff7a00] uppercase tracking-wider leading-none">Penghuni</span>
+                                                                                            <span className="font-extrabold text-gray-800 text-xs truncate">{rt.residentName || '-'}</span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="shrink-0 flex items-center gap-1 bg-orange-100/70 border border-orange-200/60 px-2 py-0.5 rounded-full">
+                                                                                        <span className="text-[8px] font-bold text-orange-600 uppercase tracking-wider">Sewa:</span>
+                                                                                        <span className="text-[9px] font-extrabold text-[#ff7a00] uppercase">{rt.paymentPeriod || 'Bulanan'}</span>
+                                                                                    </div>
                                                                                 </div>
-                                                                                <div className="flex flex-col gap-0.5">
-                                                                                    <span className="text-[9px] font-bold text-[#ff7a00] uppercase tracking-wider">Nomor WA</span>
-                                                                                    <span className="font-bold text-gray-800">{rt.residentPhone || '-'}</span>
-                                                                                </div>
-                                                                                <div className="flex flex-col gap-0.5">
-                                                                                    <span className="text-[9px] font-bold text-[#ff7a00] uppercase tracking-wider">Sewa</span>
-                                                                                    <span className="font-bold text-gray-800 uppercase text-[10px]">{rt.paymentPeriod || 'Bulanan'}</span>
+
+                                                                                <div className="flex items-center gap-1.5 pt-1.5 border-t border-orange-100/60">
+                                                                                    <Phone className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" />
+                                                                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                                                        <span className="text-[8px] font-bold text-[#ff7a00] uppercase tracking-wider shrink-0">Nomor WA:</span>
+                                                                                        <span className="font-bold text-gray-800 text-xs tracking-tight truncate select-all">{rt.residentPhone || '-'}</span>
+                                                                                    </div>
                                                                                 </div>
                                                                             </div>
                                                                         )}
@@ -7829,38 +8205,74 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         {/* Tanda Tangan Digital Pemilik */}
                                         <section className="bg-white border border-[#e0c0af] rounded-2xl p-5 flex flex-col gap-4 shadow-sm">
                                             <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                                                <h3 className="font-bold text-sm text-[#0b1c30]">Tanda Tangan Digital Pemilik</h3>
-                                                <button 
-                                                    type="button" 
-                                                    onClick={clearSignature}
-                                                    className="text-xs text-red-500 font-bold hover:underline"
-                                                >
-                                                    Reset
-                                                </button>
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="font-bold text-sm text-[#0b1c30]">Tanda Tangan Digital Pemilik</h3>
+                                                    {signatureData && (
+                                                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
+                                                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Tersimpan
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    {signatureData ? (
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => {
+                                                                setSignatureData(null);
+                                                                if (canvasRef.current) {
+                                                                    const ctx = canvasRef.current.getContext('2d');
+                                                                    ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+                                                                }
+                                                            }}
+                                                            className="text-xs text-[#ff7a00] font-bold hover:underline"
+                                                        >
+                                                            ✏️ Tanda Tangan Ulang
+                                                        </button>
+                                                    ) : (
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={clearSignature}
+                                                            className="text-xs text-red-500 font-bold hover:underline"
+                                                        >
+                                                            Reset
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                             
-                                            <div className="relative border-2 border-dashed border-[#e0c0af] rounded-xl bg-gray-50/50 aspect-[5/2] w-full overflow-hidden flex flex-col items-center justify-center">
-                                                <canvas 
-                                                    ref={canvasRef}
-                                                    width={500}
-                                                    height={200}
-                                                    className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
-                                                    onMouseDown={startDrawing}
-                                                    onMouseMove={draw}
-                                                    onMouseUp={stopDrawing}
-                                                    onMouseLeave={stopDrawing}
-                                                    onTouchStart={startDrawing}
-                                                    onTouchMove={draw}
-                                                    onTouchEnd={stopDrawing}
-                                                />
-                                                {!signatureData && (
+                                            {signatureData ? (
+                                                <div className="flex flex-col items-center justify-center p-4 bg-emerald-50/40 rounded-xl border border-emerald-200/80 space-y-2">
+                                                    <img 
+                                                        src={signatureData} 
+                                                        alt="Tanda Tangan Digital Tersimpan" 
+                                                        className="max-h-28 object-contain bg-white rounded-lg p-2 border border-gray-200 shadow-2xs" 
+                                                    />
+                                                    <p className="text-[10px] text-emerald-800 font-bold text-center">
+                                                        ✓ Tanda tangan digital pemilik kos telah tersimpan sah dari survei sebelumnya. Tidak perlu tanda tangan ulang.
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="relative border-2 border-dashed border-[#e0c0af] rounded-xl bg-gray-50/50 aspect-[5/2] w-full overflow-hidden flex flex-col items-center justify-center">
+                                                    <canvas 
+                                                        ref={canvasRef}
+                                                        width={500}
+                                                        height={200}
+                                                        className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+                                                        onMouseDown={startDrawing}
+                                                        onMouseMove={draw}
+                                                        onMouseUp={stopDrawing}
+                                                        onMouseLeave={stopDrawing}
+                                                        onTouchStart={startDrawing}
+                                                        onTouchMove={draw}
+                                                        onTouchEnd={stopDrawing}
+                                                    />
                                                     <div className="pointer-events-none flex flex-col items-center gap-1.5 text-gray-400">
                                                         <Edit3 className="w-6 h-6 shrink-0" />
                                                         <span className="text-[9px] font-bold uppercase tracking-wider">Tanda tangan di area ini</span>
                                                     </div>
-                                                )}
-                                            </div>
-                                            <p className="text-[10px] text-gray-505 text-center leading-relaxed font-semibold">
+                                                </div>
+                                            )}
+                                            <p className="text-[10px] text-gray-500 text-center leading-relaxed font-semibold">
                                                 Sebagai persetujuan akhir penambahan properti Kos pada layanan KostManager.
                                             </p>
                                         </section>

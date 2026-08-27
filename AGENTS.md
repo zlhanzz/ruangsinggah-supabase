@@ -89,5 +89,10 @@ Untuk menjaga performa front-end super responsif, menghemat kuota pembacaan (*re
 
 ---
 
-## 7. Larangan Deploy & Git Push Mandiri
-- **JANGAN PERNAH** melakukan deploy ke production atau push ke GitHub/Git repository secara mandiri. Biarkan User yang melakukannya sendiri secara manual.
+## 7. Kebijakan Git Push Otomatis & Larangan Push ke Branch Main / Production
+1. **Wajib Git Push ke Branch Non-Production (`bukan_production` / `bukan-productions`)**:
+   - Setiap kali sebuah progres atau fitur berhasil diselesaikan, diverifikasi, dan lulus uji build (Fase 2 selesai), Agent **WAJIB melakukan commit dan push langsung ke GitHub pada branch non-production (`bukan-productions` / `bukan_production`)**.
+   - Hal ini bertujuan agar seluruh riwayat pekerjaan selalu tersimpan aman di cloud repository GitHub, mencegah risiko *loss of progress*, dan memudahkan rollback jika diperlukan.
+2. **DILARANG KERAS Push Langsung ke Branch `main` / Production**:
+   - Agent **DILARANG KERAS** melakukan push langsung ke branch `main` atau melakukan deployment ke server production.
+   - Penggabungan (*merge*) ke branch `main` dan deploy ke production tetap menjadi hak eksklusif yang dilakukan secara manual oleh User.

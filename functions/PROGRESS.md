@@ -2,6 +2,644 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 94. Tampilan Caption Lengkap pada Thumbnail & Slide Hero Carousel (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar setiap foto pada carousel ditampilkan caption keterangannya secara lengkap dan jelas.
+  2. Sebelumnya thumbnail di bawah carousel hanya berupa gambar kecil tanpa teks nama kategori foto.
+- **Implementasi & Perbaikan**:
+  * **1. Thumbnail Strip dengan Caption Lengkap**:
+    - Memperbarui layout thumbnail menjadi kartu preview interaktif yang menampilkan gambar preview beresolusi baik, nomor urut foto (`#1`, `#2`, dll.), dan **teks caption nama kategori foto secara utuh** (*Bangunan Depan*, *Area Parkir*, *Koridor*, *Lingkungan*, *WC Umum*, *Dapur Bersama*, dll.) di bawah setiap gambar.
+    - Highlight teks dan border `emerald-300` / `emerald-400` saat thumbnail aktif terpilih.
+  * **2. Caption Bar Bawah pada Slide Utama**:
+    - Menambahkan caption bar bergradasi gelap di bagian bawah slide utama dengan nama kategori foto berukuran tebal dan kontras tinggi (`Kategori Foto Dokumentasi #N` dan judul kategori foto).
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+### 93. Sinkronisasi Interaktif 2-Arah Fasilitas Umum ➔ Hero Carousel & Smart Sub-Input Detection (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta kartu fasilitas umum terhubung secara interaktif dua arah dengan Hero Carousel Foto Properti (mengeklik kartu fasilitas langsung meluncurkan slide carousel ke foto fasilitas tersebut).
+  2. Pengguna meminta sistem mendeteksi secara cerdas jika memang sub-input belum diisi (khusus fasilitas yang wajib sub-input seperti Area Parkir) dengan badge peringatan elegan, namun jika terisi, menampilkan sub-fasilitas dengan desain interaktif dan keren.
+- **Implementasi & Perbaikan**:
+  * **1. Two-Way Hero Carousel Synchronization**:
+    - Memasang helper pencari index foto `getFacilityPhotoIndex` berbasis multi-keyword (*parkir*, *wc/toilet*, *dapur*, *wifi*, *ruang tamu*, *cctv*, *laundry*).
+    - Event klik pada kartu fasilitas secara instan meluncurkan slide Hero Carousel ke foto dokumentasi terkait (`setSelectedHeroPhotoIndex(photoIndex)`).
+    - **Active Glow & Indicator**: Jika slide carousel sedang menampilkan foto fasilitas tersebut, kartu fasilitas otomatis menyala aktif (`ring-4 ring-emerald-500/10 border-2 border-emerald-500 bg-emerald-50/90` dan badge berkedip `[📸 FOTO AKTIF]`).
+    - Menambahkan subtitle interaktif `📸 Lihat Foto di Slider` / `📸 Sedang Ditampilkan di Slider`.
+  * **2. Smart Sub-Input Detection**:
+    - Mengevaluasi sub-input secara spesifik hanya pada fasilitas yang memiliki skema sub-input (misal: *Area Parkir* yang membaca `publicParkingFacilities`: Motor, Mobil, Sepeda).
+    - **Jika terisi**: Menampilkan sub-chips interaktif lengkap dengan icon kendaraan (🏍️, 🚗, 🚲).
+    - **Jika belum terisi (khusus fasilitas wajib)**: Menampilkan badge peringatan halus `[⚠️ RINCIAN KOSONG]` dan teks keterangan *"Jenis fasilitas parkir belum dispesifikasikan oleh surveyor saat pendataan."*.
+    - **Fasilitas tanpa sub-input (*WiFi*, *WC Umum*, *Dapur*, *CCTV*, *Laundry*, *Ruang Tamu*)**: Tampil bersih dan aktif dengan badge hijau `[✓ AKTIF]`.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+### 92. Penyederhanaan Tampilan Fasilitas Umum Kost & Pembersihan Peringatan Evaluasi Data (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menyampaikan bahwa tidak semua fasilitas umum memiliki sub-input/rincian karena formulir pendataan tidak mewajibkannya.
+  2. Evaluasi kelengkapan data yang memunculkan kotak merah `[SUB-DATA KOSONG]` dan teks peringatan tidak diperlukan dan mengganggu kenyamanan visual.
+- **Implementasi & Perbaikan**:
+  * **1. Pembersihan Status Peringatan Merah**:
+    - Menghapus badge `[SUB-DATA KOSONG]`, latar merah `bg-red-50`, border merah `border-red-200`, dan teks evaluasi kelengkapan data.
+  * **2. Penyeragaman Kartu Fasilitas Aktif Bersih**:
+    - Seluruh fasilitas umum dirender dengan kartu bersih `bg-slate-50 border-slate-200/80` yang dilengkapi icon vektor `lucide-react`, judul fasilitas, dan badge hijau `[✓ AKTIF]`.
+    - Jika fasilitas memiliki sub-data rincian (`hasSubData`), chip rincian tetap ditampilkan rapi di bagian bawah kartu.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+### 91. Pemulihan Total UI/UX Peninjauan KostManager dari Git Commit Stabil (`6494107`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Seluruh UI/UX Modal Peninjauan Hasil Pendataan KostManager di Dashboard Admin ter-reset total akibat serangkaian perombakan tidak disengaja oleh agent selama sesi ini.
+  2. Pengguna meminta pemulihan ke kondisi Fitur #83 (titik terbaik sebelum kekacauan).
+- **Implementasi & Perbaikan**:
+  * **Restorasi dari Git**: Menjalankan `git checkout 6494107 -- "functions/public/components/admin/KostManagerManagement.tsx"` untuk mengembalikan file tepat ke kondisi commit terakhir yang stabil, yang mencakup seluruh fitur dari #70 s/d #83:
+    - Hero Carousel Foto Properti (Tab 1) dengan thumbnail strip & label kategori.
+    - Kartu Fasilitas Umum Kategoris: Card Aktif `[✓ AKTIF]` & Card Alert `[! SUB-DATA KOSONG]`.
+    - Hero Carousel Foto Kamar (Tab 2) dengan card overlay mengambang (Tarif, Ukuran, Badge Fasilitas).
+    - 3 Kotak Fasilitas Kamar Menyamping (Fasilitas Utama / Kamar Mandi WC / Dapur Dalam).
+    - Grid Dokumentasi Foto Kamar dengan bar overlay label di bawah gambar.
+    - Nested Accordion Tipe Kamar: Card Kuning Terisi `🔒 KAMAR SEDANG DIHUNI / TERISI` & Card Hijau Kosong `✨ KAMAR KOSONG / SIAP HUNI` + tombol `BUKA LIST ▾`.
+    - Smart Room Name Formatter `"Kamar X"`.
+    - Strip Baris Atas: `MITRA PEMILIK: [nama] [WhatsApp]` | `SURVEYOR LAPANGAN: [nama]` | `[↗ BERKAS GDRIVE]`.
+    - 3 Tab Utama: `🏢 1. DATA PROPERTI UMUM [N FOTO]` | `🛏️ 2. DATA KAMAR & PENGHUNI [N TIPE]` | `🛡️ 3. DATA MITRA & KERJASAMA`.
+  * **Penambahan Impor `lucide-react`**: Menambahkan statement impor komponen ikon SVG (`FolderOpen`, `Building2`, `Bed`, `ShieldCheck`, `Camera`, `ChevronLeft`, `ChevronRight`, `Bath`, `CookingPot`, `ChevronUp`, `ChevronDown`, `ParkingCircle`, `Sparkles`, `AlertCircle`, `Check`, `ZoomIn`, `Layers`) agar tidak ada `ReferenceError` di browser.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus ✓ dengan `2526 modules transformed` dalam `30.64s`.
+
+### 90. Pemasangan Impor Ikon Vector `lucide-react` (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Terjadi runtime error `Uncaught ReferenceError: FolderOpen is not defined` di browser saat membuka modal peninjauan.
+- **Implementasi & Perbaikan**:
+  * Menambahkan statement impor `lucide-react` secara native di bagian atas [`KostManagerManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerManagement.tsx) (`FolderOpen`, `Building2`, `Bed`, `ShieldCheck`, `Camera`, `ChevronLeft`, `ChevronRight`, `Bath`, `CookingPot`, `ChevronUp`, `ChevronDown`, `ParkingCircle`, `Sparkles`, `AlertCircle`, `Check`, `ZoomIn`, `Layers`).
+  * Menjamin 100% ter-bundle di dalam JavaScript lokal tanpa FOUT atau delay koneksi eksternal.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 89. Pemulihan Utuh 100% Antarmuka Modal Peninjauan Berdasarkan 4 Screenshot Asli (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna memberikan 4 bukti screenshot asli antarmuka peninjauan KostManager yang pernah dibangun dan meminta pemulihan 100% presisi sesuai screenshot tersebut.
+- **Implementasi & Perbaikan**:
+  * **1. Strip Baris Atas & 3 Tab Utama (Screenshot 3 & 4)**:
+    - Baris Atas: `MITRA PEMILIK: [nama] [WhatsApp]` | `SURVEYOR LAPANGAN: [nama]` | `[↗ BERKAS GDRIVE]`.
+    - Tab Utama: `🏢 1. DATA PROPERTI UMUM [N FOTO]` | `🛏️ 2. DATA KAMAR & PENGHUNI [N TIPE]` | `🛡️ 3. DATA MITRA & KERJASAMA`.
+  * **2. Tab 1: Data Properti Umum (Screenshot 4)**:
+    - Main Carousel Foto Properti & Thumbnail Strip (`Bangunan Depan`, `Koridor`, `Lingkungan`, `Area Parkir`, `WC Umum`, `Foto Lainnya`).
+    - Kartu Fasilitas Umum `AREA PARKIR [✓ AKTIF]` & Kartu Merah Alert `WC UMUM [! SUB-DATA KOSONG]` (*"Induk fasilitas terdaftar, namun rincian spesifik tidak diisi oleh agen survey saat pendataan."*).
+  * **3. Tab 2: Data Kamar & Penghuni (Screenshot 1, 2, & 3)**:
+    - **Hero Carousel Foto Kamar (Screenshot 3)**: Slider foto kamar dengan card overlay mengambang di kiri bawah (`Nomor Kamar`, `Ukuran & Lantai`, `TARIF Rp X/bln`, badge fasilitas) & thumbnail strip penomoran kamar.
+    - **KELENGKAPAN & FASILITAS KAMAR (Screenshot 1)**: 3 Kotak Kategori Fasilitas Kamar Menyamping:
+      - 🛏️ **FASILITAS UTAMA** (Slate Card): `Jendela Luar`, `Kamar Mandi Dalam`, `Dapur Dalam`, `Kasur`.
+      - 🚿 **KAMAR MANDI / WC** (Ice Blue Card): `Kloset Duduk`.
+      - 🍳 **DAPUR DALAM** (Warm Amber/Kuning Card): `Kompor`, `Kulkas`, `Wastafel Cuci Piring`, `Kitchen Set`, `Dispenser`.
+    - **DOKUMENTASI FOTO KAMAR (N) (Screenshot 1)**: Grid thumbnail foto kamar dengan bar overlay gelap di bagian bawah (`JENDELA LUAR`, `INTERIOR KAMAR "WAJIB"`, `KAMAR MANDI`, `DAPUR DALAM`, `TEMPAT TIDUR`).
+    - **NESTED ACCORDION TIPE KAMAR (Screenshot 2)**: Header Tipe Kamar + Card Kuning/Amber `🔒 KAMAR SEDANG DIHUNI / TERISI [2 UNIT]` (`BUKA LIST v`) & Card Hijau `✨ KAMAR KOSONG / SIAP HUNI [3 UNIT]` (`BUKA LIST v`).
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 88. Pemulihan Penuh Fasilitas Terpadu & Galeri Carousel Interaktif Dua Arah (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta pemulihan fitur terbaik di mana kartu fasilitas dan galeri carousel foto pada Tab 1 (Data Properti Umum) dan Tab 2 (Data Kamar & Penghuni) saling terhubung secara interaktif dan dinamis.
+- **Implementasi & Perbaikan**:
+  * **1. Tab 1: Fasilitas Umum Terpadu Tersinkronisasi Dua Arah (`Klik Fasilitas ➔ Jump Foto Carousel`)**:
+    - Memasang listener klik pada kartu fasilitas publik (*Area Parkir*, *Dapur*, *WC Umum*, *WiFi*, dll.). Mengeklik kartu fasilitas secara otomatis **meluncurkan (*scroll & jump*)** carousel foto utama properti ke gambar fasilitas terkait.
+    - Saat carousel berpindah, kartu fasilitas yang sesuai secara otomatis menyala (*Active Glow* `ring-2 ring-emerald-500 bg-emerald-50/90` & badge *"FOTO AKTIF"*).
+  * **2. Tab 2: Galeri Carousel Terisolasi Per Unit Kamar & Synced Room Facilities**:
+    - Menyediakan barisan **Tombol Selektor Unit Kamar Kosong** (`🚪 Kamar 3`, `🚪 Kamar 4`, `🚪 Kamar 5`) yang mengisolasi galeri foto per unit kamar.
+    - Kartu fasilitas kamar (*Kasur*, *AC*, *Kloset Duduk*, *Dapur Dalam*) tersinkronisasi interaktif dengan carousel foto kamar.
+  * **3. Pemasangan Ikon Vector & State Management**:
+    - Diimpor secara native dari package `lucide-react` (`FolderOpen`, `ParkingCircle`, `Sparkles`, `AlertCircle`, `Check`, `ZoomIn`, `Layers`, `Building2`, `Bed`, `ShieldCheck`, `Camera`, `ChevronLeft`, `ChevronRight`, `Bath`, `CookingPot`, `ChevronUp`, `ChevronDown`).
+    - Menyediakan state variable `currentPropertyPhotoIndex` untuk mengontrol posisi slide carousel secara real-time.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 87. Pemulihan Utuh Unifikasi Modal Peninjauan 3-Tab Modern (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Terjadi pembatalan sementara (*revert*) yang membuat antarmuka Modal Peninjauan KostManager sempat kembali ke versi 4-tab legacy.
+  2. Pengguna meminta agar seluruh kemajuan dan progres fitur yang pernah dicapai (Unifikasi 3-Tab Modern: Data Properti Umum, Data Kamar & Penghuni, Data Mitra & Kerjasama) dipulihkan 100% secara utuh.
+- **Implementasi & Perbaikan**:
+  * **1. Pemulihan Modal 3-Tab Modern**:
+    - **Tab 1: 1. DATA PROPERTI UMUM** (Ikon `<Building2 />` - Badge `N FOTO`): Menampilkan Hero Carousel Galeri Foto Utama Properti (Simulasi Tampilan Pengguna Publik) di paling atas, deskripsi kost, titik koordinat GPS & preview embed interactive Google Maps, landmark kampus terdekat, kelompok fasilitas umum, dan peraturan kost.
+    - **Tab 2: 2. DATA KAMAR & PENGHUNI** (Ikon `<Bed />` - Badge `N TIPE`): Menampilkan peninjauan kamar terstruktur berbasis Nested Accordion (Grup Tipe Kamar ➔ Sub-Accordion Kosong/Siap Huni & Terisi ➔ Kartu Detail Kamar Individual lengkap dengan foto kamar, harga sewa, ketersediaan unit, ukuran kamar, serta 3 kategori fasilitas kamar).
+    - **Tab 3: 3. DATA MITRA & KERJASAMA** (Ikon `<ShieldCheck />` - Badge `TERVERIFIKASI` / `LENGKAP`): Menampilkan profil pemilik/mitra, kontak WhatsApp, email, rekening bank pencairan mitra, status legalitas surat kerjasama auto-pilot, serta tombol akses berkas Google Drive.
+  * **2. Pengintegrasian Ikon Vector SVG & State Variables**:
+    - Impor lengkap dari package `lucide-react` (`FolderOpen`, `Building2`, `Bed`, `ShieldCheck`, `Camera`, `ChevronLeft`, `ChevronRight`, `Bath`, `CookingPot`, `ChevronUp`, `ChevronDown`).
+    - Pendeklarasian `selectedHeroPhotoIndex`, `selectedRoomTypeIndex`, `selectedIsolatedPhotoIndex`, `selectedRoomNumber`, `expandedRoomTypes`, dan `expandedStatusSections`.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 86. Perbaikan Runtime ReferenceErrors & Impor Ikon Vector Lucide-React (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Terjadi console runtime error `Uncaught ReferenceError: FolderOpen is not defined` saat membuka modal peninjauan admin.
+  2. Terjadi console runtime error `Uncaught ReferenceError: setSelectedHeroPhotoIndex is not defined` saat fungsi `openReviewModal` mengeksekusi reset indeks carousel foto.
+- **Implementasi & Perbaikan**:
+  * **1. Impor Vektor SVG Lucide-React**:
+    - Mengimpor seluruh komponen ikon vektor SVG murni dari `lucide-react` (`FolderOpen`, `Building2`, `Bed`, `ShieldCheck`, `Camera`, `ChevronLeft`, `ChevronRight`, `Bath`, `CookingPot`, `ChevronUp`, `ChevronDown`).
+    - Menjamin **0ms delay**, **0 network request CDN**, dan 100% bebas dari FOUT/kedipan teks ligature.
+  * **2. Pendeklarasian Carousel State Variables**:
+    - Menginisialisasi 4 state variables penahan indeks carousel foto dan unit kamar terpilih:
+      - `selectedHeroPhotoIndex`
+      - `selectedRoomTypeIndex`
+      - `selectedIsolatedPhotoIndex`
+      - `selectedRoomNumber`
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 85. Restrukturisasi Unifikasi Modal Peninjauan 3-Tab Modern (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mempertanyakan tampilan peninjauan hasil pendataan di Dashboard Admin kembali ke versi lama yang tidak memiliki struktur 3-Tab modern (Data Properti Umum, Data Kamar & Penghuni, Data Mitra & Kerjasama).
+  2. Pengguna meminta seluruh pencapaian pengembangan web sebelumnya (seperti Hero Carousel foto utama properti, galeri terisolasi per kamar, nested accordion, dan otorisasi pemasaran) dipulihkan ke versi terjauh yang pernah dicapai.
+- **Implementasi & Perbaikan**:
+  * **1. Restrukturisasi Unifikasi Modal Peninjauan 3-Tab Modern**:
+    - **Tab 1: 1. DATA PROPERTI UMUM** (Ikon `<Building2 />` - Badge `N FOTO`): Menampilkan Hero Carousel Galeri Foto Utama Properti (Simulasi Tampilan Pengguna Publik) lengkap dengan badge kategori foto, penunjuk angka `1 / N FOTO`, tombol navigasi panah kiri/kanan `<ChevronLeft />` / `<ChevronRight />`, thumbnail navigation strip, deskripsi kost, titik koordinat GPS & preview embed Google Maps, landmark kampus terdekat, fasilitas umum, dan peraturan kost.
+    - **Tab 2: 2. DATA KAMAR & PENGHUNI** (Ikon `<Bed />` - Badge `N TIPE`): Menampilkan peninjauan kamar terstruktur berbasis Nested Accordion (Grup Tipe Kamar ➔ Sub-Accordion Kosong/Siap Huni & Terisi ➔ Kartu Detail Kamar Individual lengkap dengan foto kamar, harga sewa, ketersediaan unit, ukuran kamar, serta 3 kategori fasilitas kamar).
+    - **Tab 3: 3. DATA MITRA & KERJASAMA** (Ikon `<ShieldCheck />` - Badge `TERVERIFIKASI` / `LENGKAP`): Menampilkan profil pemilik/mitra, kontak WhatsApp, email, rekening bank pencairan mitra, status legalitas surat kerjasama auto-pilot, serta tombol akses berkas Google Drive.
+  * **2. Perbaikan Sintaks Tree Closure & Kelulusan Kompilasi**:
+    - Merapikan struktur pembuka/penutup JSX container dan meletakkan penutup modal pada posisi presisi di dalam lingkup komponen.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 84. Redesain Visual Fasilitas Kamar Berbasis Kategori Grouping Modern (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Fasilitas utama, sub-fasilitas WC, dan sub-fasilitas dapur ditampilkan bercampur aduk dalam 1 deret flex-wrap horizontal tanpa pemisah hierarki visual.
+  2. Terdapat awalan teks debug mentah yang kaku seperti `"WC: Kloset Duduk"`, `"Dapur: Kompor"`, `"Dapur: Kulkas"`.
+- **Implementasi & Perbaikan**:
+  * **1. Categorized Grouping Card Grid (3 Kelompok Kategori)**:
+    - **🛌 Group 1: Fasilitas Utama Kamar** (Ikon `<Bed />` - Tema Slate): Menampilkan `Kasur`, `Jendela Luar`, `AC`, dll.
+    - **🚿 Group 2: Kamar Mandi Dalam / WC** (Ikon `<Bath />` - Tema Ice Blue): Menampilkan item WC bersih tanpa awalan `"WC: "` (misal: `Kloset Duduk`, `Shower`, `Water Heater`).
+    - **🍳 Group 3: Dapur Dalam Kamar** (Ikon `<CookingPot />` - Tema Warm Amber): Menampilkan item Dapur bersih tanpa awalan `"Dapur: "` (misal: `Kompor`, `Kulkas`, `Wastafel Cuci Piring`, `Kitchen Set`, `Dispenser`).
+  * **2. Automatic Cleansing & Parsing**:
+    - Memasang parser regex (`/^wc:\s*/i` dan `/^dapur:\s*/i`) untuk secara otomatis mengabstraksi dan membersihkan teks prefix mentah.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 83. Penghapusan Informasi Lantai dari Header Tipe Kamar & Pembersihan Format Kartu Kamar (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mempertanyakan adanya label `Lantai` pada ringkasan **Tipe Kamar** (misal `• Lantai Lantai 2`), padahal sebuah tipe kamar bisa tersebar di berbagai lantai yang berbeda.
+  2. Terdapat bug kata ganda `"Lantai Lantai 2"` pada pembentukan string sebelumnya.
+- **Implementasi & Perbaikan**:
+  * **1. Penghapusan Lantai dari Header Tipe Kamar**:
+    - Menghapus rendering informasi lantai dari header ringkasan Tipe Kamar pada Accordion Tingkat 1.
+    - Header Tipe Kamar kini hanya fokus menampilkan `Ukuran Rata-rata: 3x4 meter`.
+  * **2. Penyempurnaan & Sanitasi Format Lantai di Kartu Kamar Individual**:
+    - Informasi lantai tetap dipertahankan secara presisi pada setiap **kartu detail kamar individual** (Accordion Tingkat 3).
+    - Memasangkan regex sanitasi (`/^lantai\b/i`) untuk mencegah pembentukan kata ganda, sehingga tampil rapi sebagai **`Lantai 1`** atau **`Lantai 2`**.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 82. Redesain Kontras Visual & Pemisah Batas Kartu Data Kamar (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan kartu data kamar di atas dan di bawahnya sangat sulit dibedakan batasnya karena warna background yang cenderung sama (`bg-white` pada container transparan).
+  2. Kotak statistik internal (`Total Unit`, `Unit Kosong`, dll.) sering membingungkan atau dikira sebagai kartu kamar baru.
+- **Implementasi & Perbaikan**:
+  * **1. Garis Aksen Tebal (Left Border Accent Bar)**:
+    - Kamar Kosong: Aksen garis tebal hijau **`border-l-[6px] border-l-emerald-500`**.
+    - Kamar Terisi: Aksen garis tebal oranye/amber **`border-l-[6px] border-l-amber-500`**.
+  * **2. Border Outer 2px & Floating Shadow**:
+    - Kartu kamar diberi **`border-2 border-slate-300`** dengan bayangan **`shadow-md shadow-slate-300/40 hover:shadow-xl`** sehingga kartu tampil "mengambang" secara jelas di atas background.
+  * **3. Kontras Background Kontainer Sub-Accordion**:
+    - Background container Sub-Accordion Kamar Kosong dipertegas menjadi **`bg-emerald-50/40 border-2 border-emerald-200/90`**.
+    - Background container Sub-Accordion Kamar Terisi dipertegas menjadi **`bg-amber-50/40 border-2 border-amber-200/90`**.
+  * **4. Pemisahan Visual Kotak Statistik Internal**:
+    - Kotak internal (`Total Unit`, `Unit Kosong`, dll.) diberi warna khas (`bg-emerald-100/70 border-emerald-300` / `bg-amber-100/70 border-amber-300`) sehingga berbeda tegas dari bodi utama kartu.
+  * **5. Peningkatan Spacing Kartu**:
+    - Jarak antar kartu dinaikkan menjadi `gap-6` (`space-y-6`).
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 81. Smart Formatter Awalan Kata "Kamar " pada Seluruh Penampilan Hasil Pendataan (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Surveyor saat menginput data pendataan kamar terkadang hanya mengisi angka nomor kamar mentah (misal `"4"`, `"3"`, `"5"`).
+  2. Saat ditampilkan di peninjauan admin, angka mentah tersebut muncul tanpa konteks kata (misal tombol selektor carousel: `🛏️ 4  2 FOTO`), sehingga membingungkan.
+- **Implementasi & Perbaikan**:
+  * **1. Helper Smart Formatter (`formatRoomDisplayName`)**:
+    - Membuat helper yang secara otomatis mendeteksi dan mengecek nama kamar.
+    - Jika terinput angka mentah `"4"` ➔ Otomatis tampil **`Kamar 4`**.
+    - Jika terinput `"Kamar 4"` ➔ Tetap tampil **`Kamar 4`** (tanpa penggandaan kata ganda).
+  * **2. Penerapan di Seluruh Elemen UI Tab 2**:
+    - Tombol selektor unit kamar kosong di bawah carousel: **`🛏️ Kamar 3`**, **`🛏️ Kamar 4`**, **`🛏️ Kamar 5`**.
+    - Badge overlay header slider galeri foto: **`Kamar 4`**.
+    - Judul kartu detail kamar pada list accordion terisi dan kosong: **`Kamar 4`**.
+    - Label modal lightbox foto kamar: **`Kamar 4`**.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 80. Redesain Tab 2 Data Kamar & Penghuni Menjadi System Nested Accordion Hirarkis (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta baris `FILTER TIPE KAMAR:` (button filter horizontal) dihapus karena membingungkan.
+  2. Pengguna meminta peninjauan kamar dikelompokkan secara bertingkat (Nested Accordion): Kategori Tipe Kamar ➔ 2 Sub-Accordion Minimize (`Terisi` vs `Kosong`) ➔ Kartu Detail Kamar.
+- **Implementasi & Perbaikan**:
+  * **1. Penghapusan Filter Button Block**:
+    - Menghapus blok markup `NAVIGASI FILTER JENIS TIPE KAMAR` (`FILTER TIPE KAMAR:`).
+  * **2. Implementasi Accordion Tingkat 1 (Kategori Tipe Kamar)**:
+    - Kamar dikelompokkan langsung per Tipe (misal: `Tipe Standard`, `Tipe Deluxe`).
+    - Dilengkapi tombol toggle Minimize/Maximize (`ChevronUp` / `ChevronDown`), badge jumlah unit, ukuran rata-rata, dan ringkasan kamar kosong vs dihuni.
+  * **3. Implementasi Accordion Tingkat 2 (Sub-Accordion Status: Terisi vs Kosong)**:
+    - Di dalam setiap Tipe Kamar, terdapat 2 Sub-Accordion:
+      - **🟢 Sub-Accordion KAMAR SEDANG DIHUNI / TERISI** (Default: Minimize / terlipat dengan badge unit).
+      - **🟠 Sub-Accordion KAMAR KOSONG / SIAP HUNI** (Default: Minimize / terlipat dengan badge unit).
+  * **4. Implementasi Accordion Tingkat 3 (Kartu Detail Kamar)**:
+    - Hanya saat Sub-Accordion (Terisi atau Kosong) di-maximize, seluruh kartu detail kamar yang sesuai kategori tersebut baru ditampilkan secara utuh.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Perbaikan Ikon**: Mengimpor `ChevronUp` dan `ChevronDown` secara eksplisit serta membersihkan duplikasi pengimporan `ChevronRight` dari `lucide-react`.
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 79. Perbaikan Logika Parser Dimensi Kamar (Split-Based Parsing) & Konfirmasi Arsitektur Database (`AgentDashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan angka tidak bisa diketik pada kotak input Luas Kamar (karena regex lama mereset input saat kotak kedua masih kosong).
+  2. Pengguna mempertanyakan kesiapan arsitektur database untuk menampung input ukuran kamar tersebut.
+- **Implementasi & Perbaikan**:
+  * **1. Perbaikan Logika Auto-Parser (`parseDimensionParts`)**:
+    - Mengganti regex ketat dengan metode pemisahan karakter berbasis `str.split(/[\times xX×]/)`.
+    - Mengizinkan pengisian parsial (misal: mengetik `3` di kotak Panjang menyimpan `"3x meter"`, dan parser secara presisi menguraikan `length: "3"` dan `width: ""`). Angka `3` bertahan di layar dan pengguna dapat mengetik `4` di kotak Lebar dengan mulus.
+  * **2. Konfirmasi Arsitektur Database**:
+    - Memastikan bahwa Supabase DB pada tabel `properties` (kolom JSONB `room_types`) dan `kostmanager_requests` sudah 100% siap dan secara native membaca field `r.size` / `r.dimensions` ini sejak awal.
+- **File Tersentuh**: `functions/public/pages/AgentDashboard.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 78. Pembersihan Placeholder Tulisan Bayangan (3 dan 4) pada Input Dimensi Luas Kamar (`AgentDashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pada kotak input dimensi Luas Kamar, terdapat placeholder tulisan bayangan `3` pada kotak Panjang dan `4` pada kotak Lebar yang membingungkan agen survey.
+  2. Pengguna meminta tulisan bayangan tersebut dihapus agar kotak input bersih total saat belum diisi.
+- **Implementasi & Perbaikan**:
+  - Menghapus atribut `placeholder="3"` dan `placeholder="4"` dari kotak input dimensi pada form **Kamar Baru (`temporaryRoom`)** dan **Edit Kamar Tersimpan (`renderRoomEditor`)**.
+- **File Tersentuh**: `functions/public/pages/AgentDashboard.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 77. Redesain Input Luas Kamar Menjadi Format Model Dimensi `[Panjang] X [Lebar] meter` (`AgentDashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta format input Luas/Ukuran Kamar diubah agar lebih praktis dan rapi, tanpa tombol pilih cepat atau single text input.
+  2. Format yang diinginkan: Dua kotak input dimensi terpisah dengan akhiran satuan meter: `[ Panjang ] X [ Lebar ] meter` (contoh: `[ 3 ] X [ 4 ] meter`).
+  3. Terjadi `Uncaught ReferenceError: parseDimensionParts is not defined` karena lingkup deklarasi helper sebelumnya berada di luar fungsi komponen.
+- **Implementasi & Perbaikan**:
+  * **1. Lingkup Helper Auto-Parser Dimensi (`parseDimensionParts`)**:
+    - Memindahkan fungsi helper `parseDimensionParts` tepat ke dalam lingkup body komponen `AgentDashboard` sehingga dapat diakses tanpa error oleh `renderRoomEditor` maupun form `temporaryRoom`.
+  * **2. Komponen UI Input Dimensi Terstruktur**:
+    - Mengganti single text input dan tombol pilih cepat dengan komponen input berpasangan `[ Panjang Input (w-24) ]  X  [ Lebar Input (w-24) ]  meter`.
+    - Diterapkan pada form **Tambah Kamar Baru (`temporaryRoom`)** dan form **Edit Kamar Tersimpan (`renderRoomEditor`)**.
+    - Otomatis merangkai nilai menjadi format standar `"3x4 meter"` yang tersimpan ke database.
+- **File Tersentuh**: `functions/public/pages/AgentDashboard.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 76. Pemulihan Editor Detail Kamar Tersimpan & Penambahan Field Luas / Ukuran Kamar (`AgentDashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Ketika kartu pendataan kamar sudah disimpan dan di-expand kembali (edit mode), section input `DETAIL KAMAR` (Nomor Kamar, Lantai, Tipe Kamar) sebelumnya tidak muncul sehingga tidak bisa diedit oleh agen survey.
+  2. Belum tersedia field input untuk **Luas / Ukuran Kamar** (misal: `3x4 meter`) pada form pendataan kamar baru maupun kamar tersimpan.
+- **Implementasi & Perbaikan**:
+  * **1. Pemulihan Box Editor Detail Kamar Tersimpan (`renderRoomEditor`)**:
+    - Menambahkan kembali box editor `DETAIL KAMAR (Dapat Diedit)` di paling atas accordion kamar yang tersimpan:
+      - **Nomor Kamar** (`rt.name`): Input text yang langsung memperbarui nama kamar tersimpan.
+      - **Lantai** (`rt.floor`): Select dropdown (`Lantai 1`, `Lantai 2`, `Lantai 3`, `Lantai 4`, dll.).
+      - **Tipe Kamar** (`rt.type`): Select dropdown (`Standard`, `Premium`, `Deluxe`, `Tipe Kustom...`).
+      - **Luas / Ukuran Kamar** (`rt.size` / `rt.dimensions`): Input text + tombol quick preset.
+      - **Status Kamar** (`rt.status`): Tombol `TERISI` vs `KOSONG` (yang tersinkronisasi otomatis dengan foto kamar).
+  * **2. Penambahan Field Luas / Ukuran Kamar (`size` / `dimensions`)**:
+    - Ditambahkan pada form **Tambah Kamar Baru (`temporaryRoom`)** dan **Edit Kamar Tersimpan (`renderRoomEditor`)**.
+    - Menyediakan input text kustom (placeholder: `contoh: 3x4 meter`) dan tombol **Quick Presets** (`3x3m`, `3x4m`, `4x4m`, `3x5m`) untuk pengisian kilat di lapangan.
+- **File Tersentuh**: `functions/public/pages/AgentDashboard.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 75. Pembersihan Teks Pembantu pada Header Carousel Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pada header carousel kamar kosong Tab 2, terdapat teks penjelasan *"Foto di carousel terisolasi per kamar yang dipilih"*.
+  2. Pengguna meminta agar teks tersebut dihapus agar antarmuka peninjauan admin lebih bersih, rapi, dan minimalis.
+- **Implementasi & Perbaikan**:
+  - Menghapus tag teks penjelasan dari header sub-section carousel Tab 2.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 74. Pemulihan Penuh Tab 1 Data Properti Umum & Carousel Terisolasi Per Unit Kamar Kosong pada Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Konten pada Tab 1 (Data Properti Umum) sebelumnya terpotong saat penyesuaian layout sehingga tampil kosong ketika tab dibuka.
+  2. Pada carousel kamar kosong Tab 2, pengguna meminta agar foto antar kamar tidak bercampur aduk: disediakan barisan tombol selektor kamar (`Kamar 3`, `Kamar 4`, `Kamar 5`), dan ketika salah satu kamar diklik, carousel dan thumbnail di bawahnya hanya menampilkan foto-foto milik kamar tersebut secara eksklusif.
+- **Implementasi & Perbaikan**:
+  * **Pemulihan Utuh Tab 1 (Data Properti Umum)**:
+    - `1.1 Hero Carousel Galeri Foto Properti` (Simulasi Tampilan Pengguna Publik dengan 1 Frame Slider + Thumbnail Strip).
+    - `1.2 Fasilitas Umum & Kelengkapan` (Kartu Terpadu Tersinkronisasi Dua Arah: Klik Fasilitas ➔ Jump ke Foto Terkait & Active Glow + Peringatan Merah Audit Surveyor).
+    - `1.3 Header Identitas Properti & Tarif Mulai`.
+    - `1.4 Lokasi, Patokan Jalan, Titik Koordinat GPS & Peta Embed Google Maps`.
+    - `1.5 Kampus & Landmark Terdekat` (dengan tombol uji rute navigasi).
+    - `1.6 Peraturan & Tata Tertib Kost`.
+  * **Pemisahan Galeri Carousel Per Unit Kamar pada Tab 2**:
+    - Menambahkan barisan **Tombol Selektor Unit Kamar Kosong** (`🚪 Kamar 3 (4 Foto)`, `🚪 Kamar 4 (1 Foto)`, `🚪 Kamar 5 (2 Foto)`).
+    - Carousel dan thumbnail strip di bawahnya **HANYA** menampilkan foto-foto dari unit kamar yang sedang dipilih secara terisolasi tanpa mencampur foto kamar lain.
+    - Menampilkan informasi spesifik kamar terpilih (Nama, Tipe, Ukuran, Lantai, Tarif, dan Fasilitas).
+    - Di bawah carousel tetap tersaji **Navigasi Filter Tipe Kamar** dan **Peninjauan Kamar Terstruktur Berjenjang** (*Grup Tipe Kamar ➔ Sub-Kategori Kosong vs Dihuni ➔ Kartu Detail Kamar*).
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 73. Carousel Kamar Siap Huni, Navigasi Filter Tipe Kamar & Pengelompokan Berjenjang pada Tab 2 Data Kamar & Penghuni (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pada peninjauan admin Tab 2 (Data Kamar & Penghuni), data kamar sebelumnya ditampilkan dalam satu daftar linear panjang tanpa pengelompokan yang jelas antara tipe kamar dan status hunian.
+  2. Pengguna meminta:
+     - Menambahkan **Carousel Kamar Siap Huni / Kosong** di bawah ringkasan okupansi untuk menyorot unit-unit kamar yang siap dipasarkan.
+     - Menambahkan **Navigasi Filter Jenis Tipe Kamar** (*Semua Tipe, Standard, VIP, dll.*) di bawah carousel.
+     - Mengelompokkan peninjauan kamar secara berjenjang (*Nested Categorization*): Dikelompokkan per **Tipe Kamar** (misal: *Standard*, *Premium*), di dalamnya dikelompokkan lagi berdasarkan **Status Okupansi** (*Kosong / Siap Huni* vs *Sedang Dihuni*), dan di dalamnya menampilkan kartu data detail kamar masing-masing.
+- **Implementasi & Perbaikan**:
+  * **2.1 Banner Ringkasan Okupansi Kamar**: Tipe Kamar, Total Seluruh Unit, Kosong / Siap Huni, Sedang Dihuni.
+  * **2.2 Hero Carousel Kamar Siap Huni / Kosong**:
+    - Menampilkan unit kamar yang berstatus kosong dengan rasio aspect-[16/9] tajam.
+    - Dilengkapi badge hijau `✨ Siap Huni / Kosong`, badge tipe kamar, overlay informasi melayang di kiri bawah (Nama kamar, ukuran, lantai, tarif, dan fasilitas ringkas), counter slide, tombol panah kiri `<` / `>` melayang, dan strip thumbnail kamar kosong.
+  * **2.3 Navigasi Filter Jenis Tipe Kamar**:
+    - Tombol filter pill: `Semua Tipe (${total})`, `Standard (${count})`, `VIP (${count})`, dll.
+  * **2.4 Peninjauan Detail Kamar Terstruktur Berjenjang**:
+    - **Header Grup Tipe Kamar**: Card elegan berisi nama tipe, ukuran rata-rata, lantai, total unit, dan ringkasan unit kosong vs terisi.
+    - **Sub-Kategori 1: Kamar Kosong / Siap Huni (🟢)**: Grid kartu detail kamar kosong siap pasarkan.
+    - **Sub-Kategori 2: Kamar Sedang Dihuni (🔒)**: Grid kartu detail kamar terisi lengkap dengan box rincian penghuni aktif (Penghuni utama, telepon WhatsApp, jenis langganan, tanggal pembayaran terakhir, tagihan berikutnya, dan anggota tambahan).
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 72. Sinkronisasi Interaktif Dua Arah antara Kartu Fasilitas Umum & Carousel Foto Properti di Modal Peninjauan Admin (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pada form pendataan agen survey, pemilihan fasilitas umum menentukan kategori foto yang diambil di lapangan (foto Area Parkir, WC Umum, Dapur Bersama, dll.).
+  2. Pengguna meminta agar kartu fasilitas pada modal peninjauan admin terhubung secara interaktif dengan carousel foto di atasnya: ketika salah satu fasilitas diklik, carousel langsung menampilkan foto terkait, dan ketika carousel digeser, kartu fasilitas yang bersesuaian otomatis menyala/ter-highlight.
+- **Implementasi & Perbaikan**:
+  * **Bi-Directional Interactive Synchronization**:
+    - **Klik Kartu Fasilitas ➔ Jump ke Foto Carousel**:
+      - Ketika admin mengklik salah satu kartu fasilitas (misal: *WC UMUM*, *AREA PARKIR*, *DAPUR BERSAMA*, dll.), sistem otomatis mencocokkan kata kunci kategori foto dan melompatkan carousel ke slide foto tersebut (`setCurrentPropertyPhotoIndex(matchedIndex)`), serta melakukan auto-scroll halus ke carousel.
+    - **Geser Carousel ➔ Active Highlight pada Kartu Fasilitas**:
+      - Saat foto di carousel digeser (melalui tombol panah atau thumbnail), kartu fasilitas yang bersesuaian otomatis mendapatkan active state menyala (`ring-2 ring-[#ff7a00] bg-orange-50/50 scale-[1.01] shadow-md`), icon oranye, dan badge animasi `📷 Foto Aktif (#N)`.
+    - **Indikator Keterikatan Foto**:
+      - Setiap kartu fasilitas menampilkan badge status ketersediaan foto (`📷 Lihat Foto #N` jika ada, atau `Tanpa Foto` jika surveyor tidak mendata foto spesifik fasilitas tersebut).
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 71. Reorganisasi Hierarki Tab 1 Modal Peninjauan Admin: Penempatan Fasilitas Umum di Bawah Carousel & di Atas Identitas Properti (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pada modal peninjauan onboarding di dashboard admin (Tab 1: Data Properti Umum), section *Fasilitas Umum & Kelengkapan* sebelumnya berada di bawah section kampus/landmark.
+  2. Pengguna meminta agar section Fasilitas Umum dinaikkan posisinya menjadi tepat di bawah Carousel Foto dan di atas Identitas Properti agar alur pembacaan data fasilitas utama kost langsung terlihat setelah melihat foto.
+- **Implementasi & Perbaikan**:
+  * **Alur Hierarki Tab 1 yang Runtut & Padu**:
+    - `1.1 Hero Carousel Galeri Foto Properti` (Slider interaktif 1 frame besar).
+    - `1.2 Fasilitas Umum & Kelengkapan` (Modern Integrated Cards dengan Audit Warning Merah jika kelalaian surveyor).
+    - `1.3 Identitas Properti & Ringkasan Tarif Mulai` (Judul kos, tipe kos, total kamar, tarif mulai).
+    - `1.4 Lokasi, Patokan Jalan, Titik Koordinat GPS & Peta Google Maps`.
+    - `1.5 Kampus & Landmark Terdekat` (dengan tombol uji rute navigasi).
+    - `1.6 Peraturan & Tata Tertib Kost`.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 70. Desain Carousel Galeri Foto Properti di Modal Peninjauan Admin Sesuai UI/UX Pengguna Publik (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Tampilan galeri foto properti sebelumnya menggunakan *mosaic grid* 2 kolom yang membuat proporsi foto terbagi dan terasa sempit di dalam modal admin.
+  2. Pengguna meminta agar galeri foto diubah menjadi tampilan **Carousel / Slider Penuh** yang proporsional, persis seperti UI/UX saat pengguna publik membuka kos di `KostDetail.tsx`.
+- **Implementasi & Perbaikan**:
+  * **Full-Frame Interactive Carousel Slider**:
+    - Merombak total komponen teratas Tab 1 menjadi Carousel interaktif penuh 1 frame besar dengan rasio aspek proporsional (`aspect-[16/9]` / `max-h-[380px]`), sudut rounded modern, dan background gelap berkelas.
+    - Dilengkapi tombol panah navigasi kiri `<` (`ChevronLeft`) dan kanan `>` (`ChevronRight`) dengan efek glassmorphism yang melayang di sisi frame.
+    - Dilengkapi badge kategori foto aktif di sudut kiri atas (*⭐ Bangunan Depan, 🏢 Koridor, 🅿️ Area Parkir, 🌳 Lingkungan*) dan counter foto di sudut kanan bawah (*X / N FOTO*).
+    - Tombol perbesar Lightbox resolusi penuh di tengah saat kursor di-hover.
+  * **Interactive Thumbnail Strip**:
+    - Deretan thumbnail di bawah carousel dengan active ring indicator oranye (`ring-2 ring-[#ff7a00]`) yang dapat diklik untuk melompat slide foto secara instan.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 69. Simulasi Tampilan User: Penempatan Hero Galeri Foto Properti di Bagian Teratas Tab Peninjauan Admin (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pada modal peninjauan onboarding properti kost di dashboard admin (Tab 1: Data Properti Umum), galeri foto properti sebelumnya berada di urutan terbawah setelah peraturan kos.
+  2. Admin harus scroll jauh ke bawah untuk mengecek kualitas foto properti dan tidak mendapatkan gambaran visual langsung (*realistic simulation*) bagaimana kos tersebut akan tampil di mata pengguna/pencari kos di halaman publik (`KostDetail.tsx`).
+- **Implementasi & Perbaikan**:
+  * **Interactive Hero Showcase Mosaic (Top Section Tab 1)**:
+    - Menempatkan **Galeri Foto Properti di posisi paling teratas Tab 1** mengadopsi tata letak modern ala Airbnb / Traveloka / RuangSinggah publik.
+    - **Foto Utama Besar (Left Showcase)**: Menampilkan foto utama (Bangunan Depan) dalam rasio proporsional yang tajam dengan label badge elegan dan aksi zoom Lightbox.
+    - **Grid Sub-Foto (Right Mosaic 2x2)**: Menampilkan foto area umum pendukung (Koridor, Area Parkir, Lingkungan, dll.).
+    - **Overlay `+N Foto Lainnya` & Quick Thumbnail Strip**: Jika foto berjumlah lebih dari 4 atau 5, item terakhir menampilkan overlay jumlah foto ekstra dan bar thumbnail lengkap di bawahnya untuk akses cepat ke seluruh galeri.
+  * **Struktur Urutan Tab 1 yang Teratur & Natural**:
+    - `1.1 Galeri Foto Properti (Simulasi Tampilan User)`
+    - `1.2 Identitas Properti & Ringkasan Tarif`
+    - `1.3 Lokasi, Patokan Jalan, Titik Koordinat GPS & Peta Google Maps`
+    - `1.4 Kampus & Landmark Terdekat (Uji Rute Navigasi)`
+    - `1.5 Fasilitas Umum & Sub-Kelengkapan (Modern Cards dengan Audit Warning Merah)`
+    - `1.6 Peraturan & Tata Tertib Kost`
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 68. Penghapusan Sub-Fasilitas Fiktif & Penandaan Peringatan Evaluasi Kelalaian Surveyor di Modal Peninjauan Admin (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pada peninjauan fasilitas umum di dashboard admin, sebelumnya terdapat *smart fallback* yang otomatis mengasumsikan dan memunculkan tag sub-kelengkapan (seperti `Kloset Duduk / Jongkok` atau `Shower / Bak Air` pada WC Umum, dan `Kompor / Wastafel` pada Dapur Bersama) meskipun agen survey tidak mengisinya di lapangan.
+  2. User meminta agar data fiktif tersebut dihapus total. Jika sub-input tidak diisi oleh surveyor, cukup tampilkan fasilitas induknya saja dan tandai dengan peringatan warna merah sebagai bahan evaluasi admin terhadap kelalaian surveyor lapangan.
+- **Implementasi & Perbaikan**:
+  * **Pembersihan Fallback Fiktif (*Pure Real Data*)**:
+    - Menghapus seluruh asumsi default/fallback pada `parkingSubs`, `kitchenSubs`, dan `bathroomSubs`. Sub-kelengkapan kini hanya diambil murni dari metadata hasil survei lapangan.
+  * **Indikator Warning Evaluasi Warna Merah (*Audit Alert Box & Badge*)**:
+    - Jika fasilitas yang membutuhkan rincian (*Area Parkir*, *WC Umum*, *Dapur Bersama*) didaftarkan oleh surveyor namun sub-kelengkapannya tidak diisi:
+      - Badge status berubah menjadi merah: **`⚠️ Sub-Data Kosong`** (`bg-rose-100 text-rose-700 border-rose-300`).
+      - Di bagian bawah kartu ditampilkan kotak peringatan merah lembut: *"Kelengkapan belum diinput (Induk fasilitas terdaftar, namun rincian spesifik tidak diisi oleh agen survey saat pendataan)"*.
+      - Border kartu berubah menjadi beraksen merah (`border-2 border-rose-300 bg-rose-50/30`) agar admin dapat langsung mengenali ketidaklengkapan data survei.
+    - Fasilitas umum standar (WiFi, CCTV, Laundry, dsb.) atau fasilitas yang sub-kelengkapannya terisi lengkap tetap menampilkan status hijau normal (`✓ Aktif`).
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 67. Retensi Otomatis Tanda Tangan Digital & Persetujuan Syarat pada Mode Edit/Pembaruan Pendataan Surveyor (`AgentDashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Ketika surveyor membuka kembali form pendataan onboarding untuk mengedit atau memperbarui data properti (seperti revisi harga, fasilitas, koordinat GPS, foto kamar, dll.), tanda tangan digital dan persetujuan syarat yang sudah sah ditandatangani oleh pemilik kost sebelumnya ter-reset menjadi kosong.
+  2. Tombol submit `🔄 Perbarui & Kirim Ulang ke Admin` menjadi terkunci (*disabled*) dan memaksa surveyor meminta tanda tangan dan centang ulang kepada pemilik kos.
+- **Implementasi & Perbaikan**:
+  * **Pemuatan Otomatis Tanda Tangan Digital Tersimpan (`openKostManagerListing`)**:
+    - Sistem secara otomatis mengambil dan memuat tanda tangan digital tersimpan dari database (`req.signature_data`, `survey_requests`, `kostmanager_surveys`, `properties.metadata.signature_data`, atau draf lokal `localStorage`).
+    - Jika tanda tangan tersimpan ditemukan, state `signatureData` langsung diisi dan `agreedToTerms` otomatis diset ke `true`.
+  * **UI Step 3 Adaptif & Cerdas**:
+    - Checkbox Syarat & Ketentuan otomatis tercentang secara default.
+    - Pada section Tanda Tangan Digital Pemilik, jika tanda tangan sudah ada:
+      - Menampilkan badge status hijau `✓ Tersimpan` (`CheckCircle2`).
+      - Menampilkan preview gambar tanda tangan digital pemilik yang sah.
+      - Menampilkan callout konfirmasi bahwa tanda tangan tersimpan dari survei sebelumnya dan tidak wajib ditandatangani ulang.
+      - Menyediakan tombol aksi `"✏️ Tanda Tangan Ulang"` jika agen memang ingin mengubah atau memperbarui tanda tangan tersebut.
+    - Tombol **`🔄 Perbarui & Kirim Ulang ke Admin`** langsung aktif (*enabled*) dan siap dikirim tanpa hambatan.
+  * **Sinkronisasi Metadata & Draf**:
+    - Memasukkan `signatureData` dan `agreedToTerms` ke dalam draf autosave `localStorage` dan payload `properties.metadata`.
+- **File Tersentuh**: `functions/public/pages/AgentDashboard.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 66. Redesain Total UI/UX Fasilitas Umum & Kelengkapan Menjadi Modern Integrated Facility Cards di Modal Peninjauan Admin (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Tampilan fasilitas umum sebelumnya terfragmentasi: chips fasilitas diletakkan di atas lalu di bawahnya muncul kotak-kotak terpisah dengan warna mencolok yang tidak seragam (oranye vs biru), menimbulkan kesan murahan, kaku, dan membuang ruang layout (*visual clutter*).
+- **Implementasi & Perbaikan**:
+  * **Unified Modern Facility Cards (Grid Responsif 2-3 Kolom)**:
+    - Merombak total section menjadi grid kartu fasilitas terpadu yang modern, elegan, dan harmonis.
+    - Setiap kartu fasilitas dilengkapi:
+      - Icon vector pure SVG `lucide-react` tematik (Parkir, Dapur, WC, WiFi, CCTV, Laundry, dsb.) dengan kontainer bergradasi lembut.
+      - Nama fasilitas berhuruf tebal dan subtitle kategori fungsional (*Area Kendaraan, Fasilitas Masak, Sanitasi Publik, Koneksi Internet, Keamanan 24 Jam*).
+      - Badge status hijau emerald lembut `Aktif / Tersedia`.
+  * **Sub-Kelengkapan Melekat Menyatu di Dalam Kartu (Integrated Sub-Tags)**:
+    - Untuk fasilitas yang memiliki rincian (misal: *Parkir Motor / Mobil / Kanopi* pada Area Parkir, atau *Kloset Duduk / Shower* pada WC Umum), sub-kelengkapan langsung dirender di bagian bawah kartu fasilitas terkait sebagai tag pill putih berbayang halus yang rapi, tanpa kotak terpisah yang membingungkan.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 65. Evaluasi & Perombakan Total Modal Peninjauan Onboarding Admin: Pembersihan Data Fiktif, Navigasi Rute Kampus, Hierarki Sub-Fasilitas, & Data Penuh Penghuni/Billing Kamar Terisi (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Adanya elemen data fiktif pada peninjauan properti umum (seperti teks deskripsi panjang dan "spesifikasi operasional listrik/air") yang tidak pernah diinput oleh surveyor pada form pendataan.
+  2. Daftar kampus & fasilitas terdekat sebelumnya hanya berupa teks statis tanpa tombol aksi untuk menguji/melihat rute jalan navigasi dari titik koordinat GPS kost ke kampus tujuan.
+  3. Sub-kelengkapan fasilitas umum (Area Parkir Motor/Mobil/Sepeda, Dapur Bersama, WC Umum) tidak tersinkronisasi ke database dan tidak tampil secara jelas.
+  4. Pada tipe kamar yang berstatus "Terisi", peninjauan admin sama sekali tidak menampilkan data lengkap penghuni (nama, nomor WhatsApp, jenis langganan sewa, tanggal bayar terakhir, tanggal jatuh tempo tagihan berikutnya, dan anggota penghuni tambahan) yang telah didata oleh surveyor.
+  5. UI/UX sebelumnya kaku dan membutuhkan perombakan visual modern card-based yang lega, elegan, dan informatif.
+- **Implementasi & Perbaikan**:
+  * **Sinkronisasi Metadata & Pembersihan Data Non-Input (`AgentDashboard.tsx` & `KostManagerManagement.tsx`)**:
+    - Menyertakan objek `metadata` (`publicParkingFacilities`, `publicKitchenFacilities`, `publicBathroomFacilities`, `addressNotes`) saat agen menyimpan draft/final listing properti ke tabel `properties` dan `mitra_kostmanager`.
+    - Menghapus blok deskripsi dummy dan spesifikasi operasional fiktif pada peninjauan admin, digantikan dengan **Ringkasan Identitas Properti** riil.
+  * **Aksi Interaktif Uji Rute & Jarak Kampus Google Maps**:
+    - Setiap item kampus/landmark terdekat dilengkapi tombol aksi **`🧭 Rute`** yang membuka Google Maps Directions langsung dari titik koordinat kost (`origin=${lat},${lng}`) ke kampus tujuan (`destination=${campusName}`).
+  * **Hierarki Sub-Kelengkapan Fasilitas Umum Terpadu**:
+    - Menampilkan fasilitas umum utama bersama sub-kelengkapan detailnya secara hierarkis (Area Parkir ➔ rincian Motor/Mobil/Sepeda/Kanopi; Dapur Bersama ➔ Kompor/Kulkas/Dispenser/Wastafel; WC Umum ➔ Kloset/Shower/Wastafel).
+  * **Tampilan Penuh Data Penghuni & Penagihan Sewa pada Kamar Terisi**:
+    - Pada kartu kamar berstatus `🔒 Sedang Dihuni`, kini dirender **Box Informasi Penghuni Aktif & Penagihan Sewa**:
+      - 👤 Nama Lengkap Penghuni Utama.
+      - 📱 Nomor WhatsApp dengan tombol direct chat `wa.me/`.
+      - 💳 Jenis Langganan Sewa (Bulanan, 3 Bulan, 6 Bulan, 1 Tahun, dsb.).
+      - 🗓️ Tanggal Pembayaran Terakhir (`startDate`).
+      - ⏰ Tanggal Jatuh Tempo Tagihan Berikutnya (`endDate`).
+      - 👥 Total Jumlah Penghuni Saat Ini (`currentOccupants`).
+      - 👥 Daftar Anggota Penghuni Tambahan (Nama & WhatsApp tiap anggota).
+  * **UI/UX Modern Card-Based**:
+    - Desain premium berskala luas, rounded-3xl, typography font-black uppercase, status badge kontras, dan integrasi penuh icon vector pure SVG `lucide-react`.
+- **File Tersentuh**: 
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` sukses 100% dengan 0 error (exit code 0).
+
+
+### 64. Restorasi & Perombakan Modal Peninjauan Admin Menjadi 3 Kategori Komprehensif di KostManagerManagement (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Peninjauan onboarding properti di Dashboard Admin sebelumnya terbagi ke dalam 4 tab terfragmentasi (`Info & Lokasi`, `Galeri Foto`, `Tipe Kamar`, `Legalitas`), membuat admin harus berpindah-pindah tab untuk meninjau data properti dan fotonya.
+  2. Kerapian visual dan kelengkapan data pendataan agen surveyor lapangan membutuhkan ruang (*dedicated space*) yang tertata jelas, terstruktur, dan tidak berdesakan.
+- **Implementasi & Perbaikan**:
+  * **Penyederhanaan Menjadi 3 Kategori Utama**:
+    1. **🏢 1. DATA PROPERTI UMUM** (`reviewActiveTab === 'property'`):
+       - Profil & Deskripsi Kost (nama, gender kost, profil lengkap).
+       - Lokasi & Akses GPS (alamat lengkap, catatan petunjuk patokan/arah, koordinat lat/lng, peta Google Maps interaktif, daftar kampus/landmark terdekat).
+       - Fasilitas Umum & Sub-Kelengkapan (chips fasilitas umum, sub-detail Area Parkir, Dapur Bersama, dan WC Umum).
+       - Spesifikasi Operasional (Listrik token/termasuk, Air PDAM/sumur, Jam malam/akses 24 jam) & Peraturan Kost.
+       - Galeri Foto Area Umum Properti Berkategori (dengan filter pills kategori & zoom lightbox).
+    2. **🛏️ 2. DATA KAMAR & PENGHUNI** (`reviewActiveTab === 'rooms'`):
+       - Banner ringkasan unit (Total varian tipe kamar, Total unit properti, Total kamar kosong siap huni, Total kamar terisi/dihuni).
+       - Kartu detail per-tipe kamar yang lega: Status 🔒 *Sedang Dihuni* vs ✨ *Kosong/Siap Huni*, unit ketersediaan, kapasitas maks penghuni, biaya tambahan orang/bulan, skema tarif lengkap (Bulanan, 3 Bulan, 6 Bulan, Tahunan, Mingguan, Harian).
+       - Kelengkapan fasilitas kamar, kamar mandi, dan dapur dalam.
+       - Dokumentasi foto kamar dengan zoom lightbox & callout privasi kamar terisi.
+    3. **🤝 3. DATA MITRA & KERJASAMA** (`reviewActiveTab === 'partnership'`):
+       - Profil Pemilik/Mitra (Avatar inisial, nama, tombol direct WhatsApp, email akun, rekening pencairan hasil sewa).
+       - Metadata surveyor lapangan (nama agen, waktu survei, status kelayakan data, tombol Google Drive berkas mentah).
+       - Dokumen Perjanjian Pengelolaan Auto-Pilot & checklist klausul legalitas kemitraan.
+       - Bukti Tanda Tangan Digital Mitra (`signature_data`) dengan status *Digital Signature Verified*.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 63. Diferensiasi Visual & Penjelasan Status Kamar Terisi vs Kosong pada Peninjauan Admin di KostManagerManagement (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pada modal peninjauan onboarding properti di Dashboard Admin (`KostManagerManagement.tsx`), kartu tipe kamar tidak membedakan secara jelas status kamar yang terisi/dihuni dan kamar yang kosong/siap huni.
+  2. Data `availableRooms` sebelumnya menggunakan operator `|| 1`, sehingga jika `availableRooms === 0` (kamar penuh/terisi), angka ketersediaan kamar kosong keliru ditampilkan menjadi `1`.
+  3. Ketika kamar berstatus terisi dan belum memiliki foto, sistem hanya menampilkan pesan generik `"Foto spesifik tipe kamar ini belum diunggah."`, sehingga admin bisa salah mengira bahwa agen/surveyor lalai, padahal kamar tersebut memang sedang ditempati penghuni aktif dan surveyor tidak memiliki izin akses privasi ke dalam kamar.
+- **Implementasi & Perbaikan**:
+  * **Normalisasi Status Okupansi Kamar**:
+    - Mendeteksi `isOccupied` secara komprehensif (`room.status === 'Terisi'`, `room.isOccupied === true`, `room.isAvailable === false`, atau `availableRooms === 0`).
+    - Memperbaiki kalkulasi `totalRooms` dan `availableRooms` tanpa fallback destruktif `|| 1`.
+  * **Diferensiasi Visual Kartu & Badge Status**:
+    - **Kamar Terisi (Sedang Dihuni)**: Menampilkan badge amber berikon `<Lock />` `Sedang Dihuni`, border amber lembut (`bg-amber-50/20 border-amber-200/80`), dan box ketersediaan bernilai `0 (Penuh)`.
+    - **Kamar Kosong (Siap Huni)**: Menampilkan badge emerald berikon `<Sparkles />` `Kosong / Siap Huni`, dan box ketersediaan bernilai unit kosong riil.
+  * **Pesan Kontekstual Dokumentasi Foto**:
+    - **Kamar Terisi Tanpa Foto**: Menampilkan box callout informatif:
+      `🔒 Kamar Sedang Dihuni (Akses Foto Terbatas) — Kamar ini terdata sedang terisi penuh oleh penghuni aktif. Surveyor lapangan tidak memiliki izin akses privasi untuk memotret ke dalam ruangan kamar.`
+    - **Kamar Kosong Tanpa Foto**: Menampilkan pesan standar bahwa foto belum diunggah oleh surveyor.
+    - **Kamar Terisi Dengan Foto**: Menampilkan badge `Foto Kamar Terisi` di header galeri.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
+
+### 62. Dynamic Inline Layout & Fluid Natural Shifting Sub-Inputs pada Checklist Fasilitas di AgentDashboard (Agustus 2026)
+- **Permintaan & Masalah**: Layout checklist fasilitas dan sub-input kelengkapan sebelumnya terkesan kaku karena sub-input muncul terpisah di bawah seluruh grid utama (out-of-context). Pengguna menginginkan sub-input kelengkapan muncul langsung secara inline tepat di bawah opsi fasilitas yang dicentang dan secara dinamis serta natural menggeser opsi fasilitas lainnya ke urutan berikutnya ke bawah.
+- **Implementasi & Perbaikan**:
+  * **Step 1 (Fasilitas Umum)**:
+    - Membungkus setiap fasilitas umum dalam `<React.Fragment key={fac}>`.
+    - Merender sub-input kelengkapan (`Dapur Bersama`, `Area Parkir`, `WC Umum`) secara **inline contextual** dengan class `col-span-2 pl-6 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl animate-fadeIn` tepat di bawah kartu checkbox induknya.
+    - Menghapus blok sub-input terpisah yang berada di luar grid utama.
+    - Ketika user mencentang salah satu dari ketiga fasilitas tersebut, box sub-input langsung muncul membentang 2 kolom dan otomatis menggeser fasilitas setelahnya ke baris baru secara dinamis.
+  * **Step 2 (Fasilitas Kamar - Form Tambah Kamar Baru `temporaryRoom`)**:
+    - Mengintegrasikan sub-input `Kamar Mandi Dalam` (Kloset Duduk/Jongkok, Shower, Wastafel, custom tags) dan `Dapur Dalam` (Kompor, Kulkas, Wastafel, Kitchen Set, Dispenser, custom tags) secara inline di dalam mapping loop fasilitas kamar.
+    - Menggunakan animasi transisi `animate-fadeIn` dan spanning 2-kolom (`col-span-2`).
+  * **Step 2 (Fasilitas Kamar - Kamar Terdaftar `renderRoomEditor`)**:
+    - Menerapkan pola dynamic inline yang sama persis pada accordion editor kamar terdaftar untuk menjaga keseragaman UX menyeluruh.
+- **File Tersentuh**: `functions/public/pages/AgentDashboard.tsx`
+- **Verifikasi**: Build TypeScript `tsc` & Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions` dan `functions/public/` sukses 100% dengan 0 error (exit code 0).
+
+
+### 61. Standarisasi Kategori Foto "Area Parkir" & Penambahan Sub-Input Kelengkapan Parkir di AgentDashboard (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pada checklist fasilitas umum "Area Parkir", kategori foto yang ter-generate sebelumnya langsung spesifik bernama "Parkir Motor" atau "Parkiran" karena default data lama dan alias mapping yang belum terstandarisasi.
+  2. Pengguna menginginkan sub-input kelengkapan pada opsi "Area Parkir" untuk memilih jenis parkir yang tersedia (Parkir Motor, Parkir Mobil, Parkir Sepeda, serta fasilitas kustom).
+- **Implementasi & Perbaikan**:
+  * **Standarisasi Kategori Foto "Area Parkir"**:
+    - Memperbarui `computeDynamicPublicPhotoCategories` agar seluruh alias (`area parkir`, `parkir`, `parkiran`, `parkir motor`, `parkir mobil`) dipetakan secara konsisten ke nama kategori **`"Area Parkir"`**.
+    - Memperbarui initial state `facilities` dan default fallback menjadi `['WiFi', 'Area Parkir', 'Dapur Bersama']` dan `photoCategories` default menjadi `['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan']`.
+    - Menjamin backward-compatibility untuk foto dan draft lama yang tersimpan dengan label `parkiran` / `parkir motor` agar otomatis terbaca sebagai `Area Parkir`.
+  * **Sub-Input Kelengkapan Area Parkir di Step 1**:
+    - Menambahkan state `customPublicParkingFacilityInput: string` dan field `publicParkingFacilities: string[]` pada `kmListingForm`.
+    - Menambahkan komponen box sub-input **Kelengkapan Area Parkir** di bawah grid fasilitas umum ketika **Area Parkir** dicentang, dengan opsi checkbox:
+      - ☑️ **Parkir Motor**
+      - ☑️ **Parkir Mobil**
+      - ☑️ **Parkir Sepeda**
+      - ➕ Input adder & custom tags untuk menambahkan kelengkapan kustom (misal: *Kanopi*, *Parkir Luas*, *Basement*).
+  * **Persistensi Data**:
+    - Menyimpan `publicParkingFacilities` ke localStorage draf dan `metadata` database Supabase saat draf properti disimpan.
+- **File Tersentuh**: `functions/public/pages/AgentDashboard.tsx`
+- **Verifikasi**: Build `cmd /c "npm run build"` lulus 100% — 0 TypeScript compilation error (exit code 0).
+
+### 60. Penyederhanaan UI/UX Dokumentasi Foto (Eliminasi Istilah "Angle" & Caption Berdasarkan Kategori) di AgentDashboard (Agustus 2026)
+- **Permintaan & Masalah**: Pengguna merasa terminologi "Angle" (seperti `Multi-Angle per Kategori`, `Foto / Angle`, `Tambah Angle`, `Angle 1, Angle 2`) kaku dan tidak natural. Serta paragraf deskripsi panjang yang tidak diperlukan membuat tampilan padat.
+- **Implementasi & Perbaikan**:
+  * **Eliminasi Istilah "Angle"**:
+    - Menghapus subtitle `Multi-Angle per Kategori` pada header dokumentasi foto kamar.
+    - Mengubah badge jumlah foto dari `X Foto / Angle` menjadi `X Foto`.
+    - Mengubah label tombol tambah dari `+ Tambah Angle` menjadi `+ Tambah Foto`.
+    - Mengubah tooltip tombol hapus foto menjadi `Hapus foto ini`.
+  * **Pembersihan Teks Penjelasan (Deskripsi Ringkas & Bersih)**:
+    - Menghapus paragraf penjelasan panjang `Unggah foto kondisi kamar saat ini untuk keperluan listing/marketing...` di seluruh form kamar agar tampilan lebih compact dan elegan.
+  * **Caption Foto Dinamis Berdasarkan Nama Kategori**:
+    - Mengubah caption overlay thumbnail foto dari `Angle 1`, `Angle 2`, dst. menjadi format kategori + nomor urut (contoh: `Interior 1`, `Interior 2`, `Jendela Luar 1`, `Kamar Mandi 1`, dst.).
+  * **Cakupan Penerapan**:
+    - Form Tambah Kamar Baru (`temporaryRoom`).
+    - Accordion Kamar Terdaftar (`renderRoomEditor`).
+    - Dokumentasi Foto Area Umum (Step 1).
+- **File Tersentuh**: `functions/public/pages/AgentDashboard.tsx`
+- **Verifikasi**: Build `cmd /c "npm run build"` lulus 100% — 0 TypeScript compilation error (exit code 0).
+
+### 59. Pop-Up Konfirmasi Hapus Kamar — WizardFlow Step 2 AgentDashboard (Agustus 2026)
+- **Masalah**: Tombol hapus (ikon Trash2) pada card kamar di WizardFlow Step 2 langsung menghapus data kamar tanpa konfirmasi, berisiko menghapus data secara tidak sengaja.
+- **Implementasi & Perbaikan**:
+  * Tambah state `deleteRoomConfirm: { open: boolean; idx: number | null }` di `AgentDashboard.tsx`.
+  * Modifikasi `onClick` tombol Trash2: dari langsung filter+delete menjadi hanya membuka state modal (`setDeleteRoomConfirm({ open: true, idx })`).
+  * Tambah komponen modal konfirmasi (`position: fixed`, z-index 9999) yang menampilkan:
+    - Ikon Trash2 dalam lingkaran merah
+    - Nama kamar yang akan dihapus (atau nomor urut jika nama kosong)
+    - Tombol **Batal** → tutup modal tanpa aksi
+    - Tombol **Ya, Hapus** → eksekusi hapus + update `activeRoomIdx` + tutup modal
+  * Klik backdrop (area luar modal) juga menutup modal (Batal).
+  * Logika hapus (`filter roomTypes`, adjust `activeRoomIdx`) dipindah ke dalam handler tombol Ya, Hapus.
+- **File Tersentuh**: `functions/public/pages/AgentDashboard.tsx`
+- **Verifikasi**: Build `tsc` lulus 100% — 0 TypeScript error (exit code 0).
+
 ### 58. Eliminasi FOUT (Flash of Unstyled Text) Ikon & Migrasi ke Bundled Pure Vector SVG (Lucide React) di AgentDashboard (Agustus 2026)
 - **Masalah**: Tampilan kartu tugas sempat memunculkan teks mentah seperti `calendar_today`, `schedule`, `bolt`, `phone`, `location_on` sesaat setelah skeleton loader selesai (FOUT/Flash of Unstyled Text) karena browser menunggu unduhan file font dari CDN Google Fonts (`fonts.googleapis.com`).
 - **Implementasi & Perbaikan**:

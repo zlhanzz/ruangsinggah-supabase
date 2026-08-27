@@ -7,6 +7,25 @@ import {
     getSurveyAgents,
     generateManualDriveFolder
 } from '../../adminService';
+import { 
+    FolderOpen, 
+    Building2, 
+    Bed, 
+    ShieldCheck, 
+    Camera, 
+    ChevronLeft, 
+    ChevronRight, 
+    Bath, 
+    CookingPot, 
+    ChevronUp, 
+    ChevronDown,
+    ParkingCircle,
+    Sparkles,
+    AlertCircle,
+    Check,
+    ZoomIn,
+    Layers
+} from 'lucide-react';
 
 interface KostManagerManagementProps {
     isAdmin: boolean;
@@ -38,9 +57,14 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
     const [reviewProperty, setReviewProperty] = useState<any | null>(null);
     const [reviewSurvey, setReviewSurvey] = useState<any | null>(null);
     const [loadingReview, setLoadingReview] = useState(false);
-    const [reviewActiveTab, setReviewActiveTab] = useState<'info' | 'photos' | 'rooms' | 'legal'>('info');
+    const [reviewActiveTab, setReviewActiveTab] = useState<'info' | 'rooms' | 'legal'>('info');
     const [photoCategoryFilter, setPhotoCategoryFilter] = useState<string>('ALL');
     const [lightboxPhoto, setLightboxPhoto] = useState<{ url: string; label?: string } | null>(null);
+    // Carousel & Accordion States (3-tab modal)
+    const [selectedHeroPhotoIndex, setSelectedHeroPhotoIndex] = useState(0);
+    const [selectedIsolatedPhotoIndex, setSelectedIsolatedPhotoIndex] = useState(0);
+    const [expandedRoomTypes, setExpandedRoomTypes] = useState<Record<number, boolean>>({});
+    const [expandedStatusSections, setExpandedStatusSections] = useState<Record<string, boolean>>({});
     
     const loadData = async () => {
         setLoading(true);
@@ -89,6 +113,10 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
         setLoadingReview(true);
         setReviewActiveTab('info');
         setPhotoCategoryFilter('ALL');
+        setSelectedHeroPhotoIndex(0);
+        setSelectedIsolatedPhotoIndex(0);
+        setExpandedRoomTypes({});
+        setExpandedStatusSections({});
         try {
             let propData: any = null;
             // 1. Fetch from properties by property_id
@@ -698,34 +726,34 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                         rel="noopener noreferrer"
                                         className="px-3 py-1.5 rounded-xl bg-blue-600 text-white font-black text-[10px] uppercase tracking-wider hover:bg-blue-700 transition-colors flex items-center gap-1.5 shadow-sm"
                                     >
-                                        <span className="material-symbols-outlined text-sm">cloud_download</span>
+                                        <FolderOpen size={14} />
                                         Folder GDrive
                                     </a>
                                 )}
                             </div>
                         </div>
 
-                        {/* Interactive Navigation Tabs */}
-                        <div className="flex border-b border-gray-100 bg-white px-6 gap-2 overflow-x-auto shrink-0">
+                        {/* 3-Tab Navigation */}
+                        <div className="flex border-b border-gray-100 bg-white px-4 gap-1 overflow-x-auto shrink-0">
                             {[
-                                { key: 'info', label: '🏢 Info & Lokasi GPS', badge: null },
-                                { key: 'photos', label: '📸 Galeri Foto Berkategori', badge: normalizePhotos(reviewProperty?.image_urls).length },
-                                { key: 'rooms', label: '🛏️ Tipe Kamar & Fasilitas', badge: (reviewProperty?.room_types || []).length },
-                                { key: 'legal', label: '✍️ Legalitas & Tanda Tangan', badge: reviewSurvey?.signature_data ? '✓' : null }
+                                { key: 'info', icon: <Building2 size={14}/>, label: '1. DATA PROPERTI UMUM', badge: normalizePhotos(reviewProperty?.image_urls).length || null },
+                                { key: 'rooms', icon: <Bed size={14}/>, label: '2. DATA KAMAR & PENGHUNI', badge: (reviewProperty?.room_types || []).length || null },
+                                { key: 'legal', icon: <ShieldCheck size={14}/>, label: '3. DATA MITRA & KERJASAMA', badge: reviewSurvey?.signature_data ? '✓' : null }
                             ].map(t => (
                                 <button
                                     key={t.key}
                                     type="button"
                                     onClick={() => setReviewActiveTab(t.key as any)}
-                                    className={`py-3.5 px-4 text-xs font-black uppercase tracking-wider border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+                                    className={`py-3.5 px-3 text-[11px] font-black uppercase tracking-wider border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                                         reviewActiveTab === t.key
                                             ? 'border-emerald-600 text-emerald-700 bg-emerald-50/40'
                                             : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
                                 >
+                                    {t.icon}
                                     <span>{t.label}</span>
-                                    {t.badge !== null && (
-                                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${
+                                    {t.badge !== null && t.badge !== 0 && (
+                                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${
                                             reviewActiveTab === t.key ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-700'
                                         }`}>
                                             {t.badge}
@@ -744,9 +772,286 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                 </div>
                             ) : (
                                 <>
-                                    {/* ================= TAB 1: INFO & LOKASI ================= */}
+                                    {/* ================= TAB 1: DATA PROPERTI UMUM ================= */}
                                     {reviewActiveTab === 'info' && (
                                         <div className="space-y-6 animate-in fade-in duration-300">
+
+                                            {/* HERO CAROUSEL FOTO PROPERTI */}
+                                            {(() => {
+                                                const allPhotos = normalizePhotos(reviewProperty?.image_urls);
+                                                if (allPhotos.length === 0) return null;
+                                                const idx = Math.min(selectedHeroPhotoIndex, allPhotos.length - 1);
+                                                const photo = allPhotos[idx];
+                                                return (
+                                                    <div className="rounded-3xl overflow-hidden border border-slate-200 shadow-md bg-slate-950">
+                                                        {/* Main Slide */}
+                                                        <div className="relative" style={{aspectRatio:'16/7'}}>
+                                                            <img src={photo.url} alt={photo.label} className="w-full h-full object-cover opacity-95" />
+                                                            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/40 pointer-events-none" />
+                                                            
+                                                            {/* Top Badges */}
+                                                            <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+                                                                <span className="px-3 py-1 rounded-xl bg-black/60 text-white text-[10px] font-black uppercase tracking-wider backdrop-blur-md border border-white/10 shadow-sm">
+                                                                    📸 {photo.label}
+                                                                </span>
+                                                                <div className="flex items-center gap-2 pointer-events-auto">
+                                                                    <span className="px-3 py-1 rounded-xl bg-black/60 text-white text-[10px] font-black backdrop-blur-md border border-white/10 shadow-sm">
+                                                                        {idx + 1} / {allPhotos.length} FOTO
+                                                                    </span>
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={() => setLightboxPhoto(photo)} 
+                                                                        className="p-2 rounded-xl bg-black/60 text-white hover:bg-black/80 transition-colors backdrop-blur-md border border-white/10 shadow-sm"
+                                                                        title="Perbesar Foto"
+                                                                    >
+                                                                        <ZoomIn size={14}/>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Bottom Caption Bar on Main Slide */}
+                                                            <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between pointer-events-none">
+                                                                <div className="bg-black/60 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/15 shadow-lg max-w-[80%]">
+                                                                    <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest block">
+                                                                        Kategori Foto Dokumentasi #{idx + 1}
+                                                                    </span>
+                                                                    <h4 className="text-base sm:text-lg font-black text-white uppercase tracking-tight drop-shadow-sm">
+                                                                        {photo.label}
+                                                                    </h4>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Prev / Next Navigation */}
+                                                            {allPhotos.length > 1 && (
+                                                                <>
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={() => setSelectedHeroPhotoIndex(Math.max(0, idx - 1))} 
+                                                                        disabled={idx === 0}
+                                                                        className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-2xl bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-all disabled:opacity-20 backdrop-blur-md border border-white/10 shadow-md active:scale-95"
+                                                                    >
+                                                                        <ChevronLeft size={18}/>
+                                                                    </button>
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={() => setSelectedHeroPhotoIndex(Math.min(allPhotos.length - 1, idx + 1))} 
+                                                                        disabled={idx === allPhotos.length - 1}
+                                                                        className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-2xl bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-all disabled:opacity-20 backdrop-blur-md border border-white/10 shadow-md active:scale-95"
+                                                                    >
+                                                                        <ChevronRight size={18}/>
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Thumbnail Strip with Complete Captions */}
+                                                        <div className="p-3 bg-slate-900 border-t border-white/10">
+                                                            <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-thin">
+                                                                {allPhotos.map((p, i) => (
+                                                                    <button 
+                                                                        key={i} 
+                                                                        type="button"
+                                                                        onClick={() => setSelectedHeroPhotoIndex(i)}
+                                                                        className={`shrink-0 flex flex-col items-center gap-1.5 p-1.5 rounded-2xl border transition-all text-left group ${
+                                                                            i === idx 
+                                                                                ? 'bg-white/15 border-emerald-400 shadow-md ring-2 ring-emerald-400/30 scale-[1.02]' 
+                                                                                : 'bg-white/5 border-white/10 opacity-70 hover:opacity-100 hover:bg-white/10 hover:border-white/20'
+                                                                        }`}
+                                                                    >
+                                                                        <div className="w-20 sm:w-24 h-14 rounded-xl overflow-hidden relative shadow-inner bg-black/40">
+                                                                            <img src={p.url} alt={p.label} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                                                                            <span className="absolute bottom-1 right-1 px-1.5 py-0.2 bg-black/75 text-[8px] font-mono text-white rounded font-bold backdrop-blur-xs">
+                                                                                #{i + 1}
+                                                                            </span>
+                                                                        </div>
+                                                                        <span className={`text-[10px] font-black uppercase tracking-wider max-w-[80px] sm:max-w-[96px] text-center leading-tight line-clamp-2 px-0.5 ${
+                                                                            i === idx ? 'text-emerald-300' : 'text-slate-300'
+                                                                        }`}>
+                                                                            {p.label}
+                                                                        </span>
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
+
+                                            {/* KARTU FASILITAS UMUM DENGAN TWO-WAY CAROUSEL SYNC & SMART SUB-INPUT */}
+                                            {reviewProperty?.facilities && reviewProperty.facilities.length > 0 && (() => {
+                                                const allPhotos = normalizePhotos(reviewProperty?.image_urls);
+
+                                                const FACILITY_ICONS: Record<string,any> = {
+                                                    'parkir': ParkingCircle, 'wc': Bath, 'toilet': Bath, 'dapur': CookingPot,
+                                                    'wifi': Sparkles, 'cctv': ShieldCheck, 'tamu': Building2, 'default': Sparkles
+                                                };
+                                                const getFacilityIcon = (name: string) => {
+                                                    const lower = name.toLowerCase();
+                                                    for (const [k, Icon] of Object.entries(FACILITY_ICONS)) {
+                                                        if (lower.includes(k)) return Icon;
+                                                    }
+                                                    return FACILITY_ICONS.default;
+                                                };
+
+                                                const getFacilityPhotoIndex = (name: string) => {
+                                                    const lower = name.toLowerCase();
+                                                    let targetKeywords: string[] = [lower];
+                                                    if (lower.includes('parkir')) targetKeywords = ['parkir', 'parkiran', 'tempat parkir', 'area parkir'];
+                                                    else if (lower.includes('wc') || lower.includes('toilet')) targetKeywords = ['wc', 'toilet', 'kamar mandi', 'wc umum'];
+                                                    else if (lower.includes('dapur')) targetKeywords = ['dapur', 'dapur bersama', 'kitchen'];
+                                                    else if (lower.includes('wifi')) targetKeywords = ['wifi', 'internet'];
+                                                    else if (lower.includes('tamu')) targetKeywords = ['tamu', 'ruang tamu', 'lobby', 'santai'];
+                                                    else if (lower.includes('cctv')) targetKeywords = ['cctv', 'keamanan'];
+                                                    else if (lower.includes('laundry')) targetKeywords = ['laundry', 'mesin cuci', 'jemuran'];
+
+                                                    return allPhotos.findIndex(p => {
+                                                        const pLabel = p.label.toLowerCase();
+                                                        return targetKeywords.some(kw => pLabel.includes(kw) || kw.includes(pLabel));
+                                                    });
+                                                };
+
+                                                const getItemVehicleIcon = (item: string) => {
+                                                    const lower = item.toLowerCase();
+                                                    if (lower.includes('motor')) return '🏍️';
+                                                    if (lower.includes('mobil')) return '🚗';
+                                                    if (lower.includes('sepeda')) return '🚲';
+                                                    return '✨';
+                                                };
+
+                                                return (
+                                                    <div className="space-y-2.5">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                                                                Fasilitas Umum Kost
+                                                            </span>
+                                                            <span className="text-[10px] font-bold text-slate-500">
+                                                                💡 Klik fasilitas untuk melihat foto dokumentasi
+                                                            </span>
+                                                        </div>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                            {reviewProperty.facilities.map((fac: any, fi: number) => {
+                                                                const facName = typeof fac === 'string' ? fac : (fac?.name || '-');
+                                                                let facItems: string[] = typeof fac === 'object' ? (fac?.items || fac?.details || []) : [];
+                                                                
+                                                                // Check if this facility is Area Parkir and retrieve from publicParkingFacilities if needed
+                                                                const isParking = facName.toLowerCase().includes('parkir');
+                                                                if (isParking && facItems.length === 0) {
+                                                                    const propParking = reviewProperty?.publicParkingFacilities || 
+                                                                                        reviewProperty?.metadata?.publicParkingFacilities || 
+                                                                                        reviewRequest?.publicParkingFacilities || 
+                                                                                        reviewRequest?.metadata?.publicParkingFacilities || [];
+                                                                    if (Array.isArray(propParking) && propParking.length > 0) {
+                                                                        facItems = propParking;
+                                                                    }
+                                                                }
+
+                                                                const hasSubData = facItems.length > 0;
+                                                                const expectsSubInput = isParking;
+                                                                const isMissingSubInput = expectsSubInput && !hasSubData;
+                                                                
+                                                                const photoIndex = getFacilityPhotoIndex(facName);
+                                                                const hasPhoto = photoIndex !== -1;
+                                                                const isPhotoActive = hasPhoto && selectedHeroPhotoIndex === photoIndex;
+
+                                                                const Icon = getFacilityIcon(facName);
+
+                                                                return (
+                                                                    <div 
+                                                                        key={fi} 
+                                                                        onClick={() => {
+                                                                            if (hasPhoto) {
+                                                                                setSelectedHeroPhotoIndex(photoIndex);
+                                                                            }
+                                                                        }}
+                                                                        className={`rounded-2xl p-4 space-y-2.5 transition-all duration-200 text-left ${
+                                                                            hasPhoto ? 'cursor-pointer hover:shadow-md hover:scale-[1.01]' : ''
+                                                                        } ${
+                                                                            isPhotoActive 
+                                                                                ? 'bg-emerald-50/90 border-2 border-emerald-500 shadow-md ring-4 ring-emerald-500/10' 
+                                                                                : isMissingSubInput
+                                                                                    ? 'bg-amber-50/60 border border-amber-200/90'
+                                                                                    : 'bg-slate-50 border border-slate-200/80 hover:border-slate-300'
+                                                                        }`}
+                                                                    >
+                                                                        <div className="flex items-center justify-between gap-2">
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                                                                                    isPhotoActive 
+                                                                                        ? 'bg-emerald-600 text-white shadow-sm' 
+                                                                                        : isMissingSubInput
+                                                                                            ? 'bg-amber-100 text-amber-800'
+                                                                                            : 'bg-emerald-100 text-emerald-700'
+                                                                                }`}>
+                                                                                    <Icon size={18}/>
+                                                                                </span>
+                                                                                <div className="min-w-0">
+                                                                                    <span className={`text-xs font-black uppercase tracking-wide truncate block ${
+                                                                                        isPhotoActive ? 'text-emerald-950' : 'text-slate-900'
+                                                                                    }`}>
+                                                                                        {facName}
+                                                                                    </span>
+                                                                                    {hasPhoto && (
+                                                                                        <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1 mt-0.5">
+                                                                                            <Camera size={10} className="text-slate-400"/>
+                                                                                            <span className="hover:underline">{isPhotoActive ? 'Sedang Ditampilkan di Slider' : 'Lihat Foto di Slider'}</span>
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+
+                                                                            {/* Badge Status */}
+                                                                            <div className="shrink-0 flex items-center gap-1.5">
+                                                                                {isPhotoActive ? (
+                                                                                    <span className="px-2.5 py-1 rounded-full bg-emerald-600 text-white text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-xs animate-pulse">
+                                                                                        <Camera size={10}/> FOTO AKTIF
+                                                                                    </span>
+                                                                                ) : isMissingSubInput ? (
+                                                                                    <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-black uppercase flex items-center gap-1">
+                                                                                        ⚠️ RINCIAN KOSONG
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black uppercase flex items-center gap-1">
+                                                                                        <Check size={10}/> AKTIF
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Sub-Data Rincian (Jika Ada) */}
+                                                                        {hasSubData && (
+                                                                            <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-200/60">
+                                                                                {facItems.map((item: string, ii: number) => (
+                                                                                    <span 
+                                                                                        key={ii} 
+                                                                                        className={`px-2.5 py-1 rounded-xl text-[10px] font-bold flex items-center gap-1 transition-all ${
+                                                                                            isPhotoActive
+                                                                                                ? 'bg-white border border-emerald-200 text-emerald-900 shadow-2xs'
+                                                                                                : 'bg-white border border-slate-200 text-slate-800 shadow-2xs hover:border-slate-300'
+                                                                                        }`}
+                                                                                    >
+                                                                                        <span>{getItemVehicleIcon(item)}</span>
+                                                                                        <span>{item}</span>
+                                                                                    </span>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+
+                                                                        {/* Peringatan Sub-Input Kosong Khusus Fasilitas yang Wajib */}
+                                                                        {isMissingSubInput && (
+                                                                            <div className="pt-1.5 border-t border-amber-200/60">
+                                                                                <p className="text-[10px] font-medium text-amber-800 italic">
+                                                                                    Jenis fasilitas parkir belum dispesifikasikan oleh surveyor saat pendataan.
+                                                                                </p>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
+
                                             {/* Deskripsi Properti */}
                                             <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-2">
                                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Deskripsi &amp; Profil Kost</span>
@@ -770,23 +1075,18 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                             </div>
                                                             <div className="bg-white px-3 py-1.5 rounded-xl border border-slate-200">
                                                                 <span className="text-[9px] font-black text-slate-400 uppercase block">Latitude</span>
-                                                                <span className="font-mono font-bold text-slate-800">
-                                                                    {reviewProperty?.location?.lat || reviewProperty?.latitude || '-'}
-                                                                </span>
+                                                                <span className="font-mono font-bold text-slate-800">{reviewProperty?.location?.lat || reviewProperty?.latitude || '-'}</span>
                                                             </div>
                                                             <div className="bg-white px-3 py-1.5 rounded-xl border border-slate-200">
                                                                 <span className="text-[9px] font-black text-slate-400 uppercase block">Longitude</span>
-                                                                <span className="font-mono font-bold text-slate-800">
-                                                                    {reviewProperty?.location?.lng || reviewProperty?.longitude || '-'}
-                                                                </span>
+                                                                <span className="font-mono font-bold text-slate-800">{reviewProperty?.location?.lng || reviewProperty?.longitude || '-'}</span>
                                                             </div>
                                                         </div>
                                                     </div>
-
-                                                    {/* Landmark Kampus / Titik Terdekat */}
-                                                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-3">
-                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Kampus / Tempat Terdekat</span>
-                                                        {reviewProperty?.campuses && reviewProperty.campuses.length > 0 ? (
+                                                    {/* Kampus Terdekat */}
+                                                    {reviewProperty?.campuses && reviewProperty.campuses.length > 0 && (
+                                                        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-3">
+                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Kampus / Tempat Terdekat</span>
                                                             <div className="flex flex-wrap gap-2">
                                                                 {reviewProperty.campuses.map((c: any, i: number) => {
                                                                     const cName = typeof c === 'string' ? c : (c?.name || '-');
@@ -794,18 +1094,14 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                                     return (
                                                                         <span key={i} className="px-3 py-1.5 rounded-xl bg-orange-100/80 text-orange-900 border border-orange-200 font-black text-xs flex items-center gap-1.5 shadow-2xs">
                                                                             <span>🏫 {cName}</span>
-                                                                            {cDist && <span className="text-[10px] bg-white px-1.5 py-0.2 rounded font-bold text-orange-700">{cDist}</span>}
+                                                                            {cDist && <span className="text-[10px] bg-white px-1.5 rounded font-bold text-orange-700">{cDist}</span>}
                                                                         </span>
                                                                     );
                                                                 })}
                                                             </div>
-                                                        ) : (
-                                                            <p className="text-xs text-slate-400 font-medium">Tidak ada data kampus terdekat terlampir.</p>
-                                                        )}
-                                                    </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-
-                                                {/* Peta Mini Preview */}
                                                 <div className="space-y-2">
                                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Preview Google Maps</span>
                                                     {(() => {
@@ -813,268 +1109,314 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                         const lng = reviewProperty?.location?.lng || reviewProperty?.longitude || 119.432731;
                                                         return (
                                                             <div className="h-64 rounded-2xl overflow-hidden border border-slate-200 relative shadow-inner">
-                                                                <iframe
-                                                                    title="review-map"
-                                                                    width="100%"
-                                                                    height="100%"
-                                                                    frameBorder="0"
+                                                                <iframe title="review-map" width="100%" height="100%" frameBorder="0"
                                                                     src={`https://maps.google.com/maps?q=${lat},${lng}&z=16&output=embed`}
-                                                                    className="absolute inset-0"
-                                                                />
+                                                                    className="absolute inset-0" />
                                                             </div>
                                                         );
                                                     })()}
                                                 </div>
                                             </div>
 
-                                            {/* Fasilitas & Peraturan Kost */}
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                                                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-3">
-                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Fasilitas Umum Kost</span>
-                                                    {reviewProperty?.facilities && reviewProperty.facilities.length > 0 ? (
-                                                        <div className="flex flex-wrap gap-1.5">
-                                                            {reviewProperty.facilities.map((f: string, i: number) => (
-                                                                <span key={i} className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-700 shadow-2xs">
-                                                                    ✨ {f}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <p className="text-xs text-slate-400">Tidak ada fasilitas umum terdata.</p>
-                                                    )}
-                                                </div>
-
+                                            {/* Fasilitas & Peraturan */}
+                                            {reviewProperty?.rules && reviewProperty.rules.length > 0 && (
                                                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-3">
                                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Peraturan &amp; Ketentuan Kost</span>
-                                                    {reviewProperty?.rules && reviewProperty.rules.length > 0 ? (
-                                                        <div className="flex flex-wrap gap-1.5">
-                                                            {reviewProperty.rules.map((r: string, i: number) => (
-                                                                <span key={i} className="px-2.5 py-1 rounded-lg bg-red-50 border border-red-100 text-xs font-bold text-red-700 shadow-2xs">
-                                                                    ⛔ {r}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <p className="text-xs text-slate-400">Tidak ada peraturan khusus terdata.</p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* ================= TAB 2: GALERI FOTO BERKATEGORI ================= */}
-                                    {reviewActiveTab === 'photos' && (
-                                        <div className="space-y-6 animate-in fade-in duration-300">
-                                            {(() => {
-                                                const allPhotos = normalizePhotos(reviewProperty?.image_urls);
-                                                const categories = Array.from(new Set(allPhotos.map(p => p.label)));
-                                                const filteredPhotos = photoCategoryFilter === 'ALL' 
-                                                    ? allPhotos 
-                                                    : allPhotos.filter(p => p.label === photoCategoryFilter);
-
-                                                return (
-                                                    <>
-                                                        {/* Category Filter Pills */}
-                                                        <div className="flex flex-wrap gap-2 pb-2 border-b border-gray-100">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setPhotoCategoryFilter('ALL')}
-                                                                className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-                                                                    photoCategoryFilter === 'ALL'
-                                                                        ? 'bg-gray-900 text-white shadow-sm'
-                                                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                                                }`}
-                                                            >
-                                                                Semua Kategori ({allPhotos.length})
-                                                            </button>
-                                                            {categories.map((cat, idx) => {
-                                                                const count = allPhotos.filter(p => p.label === cat).length;
-                                                                return (
-                                                                    <button
-                                                                        key={idx}
-                                                                        type="button"
-                                                                        onClick={() => setPhotoCategoryFilter(cat)}
-                                                                        className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-                                                                            photoCategoryFilter === cat
-                                                                                ? 'bg-emerald-600 text-white shadow-sm'
-                                                                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                                                        }`}
-                                                                    >
-                                                                        {cat} ({count})
-                                                                    </button>
-                                                                );
-                                                            })}
-                                                        </div>
-
-                                                        {/* Photos Grid */}
-                                                        {filteredPhotos.length === 0 ? (
-                                                            <div className="py-16 text-center text-slate-400 font-bold uppercase text-xs">
-                                                                Tidak ada foto dalam kategori ini.
-                                                            </div>
-                                                        ) : (
-                                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                                                                {filteredPhotos.map((photo, i) => (
-                                                                    <div 
-                                                                        key={i}
-                                                                        onClick={() => setLightboxPhoto(photo)}
-                                                                        className="group relative aspect-4/3 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 cursor-pointer shadow-xs hover:shadow-md transition-all hover:scale-[1.02]"
-                                                                    >
-                                                                        <img 
-                                                                            src={photo.url} 
-                                                                            alt={photo.label} 
-                                                                            className="w-full h-full object-cover" 
-                                                                        />
-                                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity flex items-end p-2.5">
-                                                                            <span className="text-[10px] font-black text-white uppercase tracking-wider drop-shadow-sm">
-                                                                                {photo.label}
-                                                                            </span>
-                                                                        </div>
-                                                                        <span className="absolute top-2 right-2 p-1 rounded-full bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                            <span className="material-symbols-outlined text-sm">zoom_in</span>
-                                                                        </span>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </>
-                                                );
-                                            })()}
-                                        </div>
-                                    )}
-
-                                    {/* ================= TAB 3: TIPE KAMAR & FASILITAS ================= */}
-                                    {reviewActiveTab === 'rooms' && (
-                                        <div className="space-y-4 animate-in fade-in duration-300">
-                                            {reviewProperty?.room_types && reviewProperty.room_types.length > 0 ? (
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    {reviewProperty.room_types.map((room: any, i: number) => {
-                                                        const DEFAULT_ROOM_PHOTO_SLOTS = [
-                                                            'Interior Kamar',
-                                                            'Kamar Mandi Dalam',
-                                                            'Tempat Tidur',
-                                                            'Lemari / Penyimpanan'
-                                                        ];
-
-                                                        const rawImages = room.images || room.image_urls || room.photos || [];
-                                                        const roomPhotos: { url: string; label: string }[] = [];
-
-                                                        rawImages.forEach((img: any, imgIdx: number) => {
-                                                            if (!img) return;
-                                                            const url = typeof img === 'string' ? img : (img?.url || img?.original || '');
-                                                            if (!url) return;
-
-                                                            let label = '';
-                                                            if (room.photoCategories && room.photoCategories[imgIdx]) {
-                                                                label = room.photoCategories[imgIdx];
-                                                            } else if (typeof img === 'object' && img?.label) {
-                                                                label = img.label;
-                                                            } else if (imgIdx < DEFAULT_ROOM_PHOTO_SLOTS.length) {
-                                                                label = DEFAULT_ROOM_PHOTO_SLOTS[imgIdx];
-                                                            } else {
-                                                                label = `Foto Tambahan ${imgIdx - DEFAULT_ROOM_PHOTO_SLOTS.length + 1}`;
-                                                            }
-
-                                                            label = label.replace(/\s*\*Wajib/i, '').replace(/\(Opsional\)/i, '').trim();
-                                                            roomPhotos.push({ url, label });
-                                                        });
-
-                                                        return (
-                                                            <div key={i} className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-2xs hover:shadow-xs transition-shadow">
-                                                                <div className="flex justify-between items-start">
-                                                                    <div>
-                                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Tipe Kamar #{i + 1}</span>
-                                                                        <h4 className="text-base font-black text-slate-900 uppercase tracking-tight">{room.name}</h4>
-                                                                        <p className="text-xs text-slate-500 font-bold">Ukuran: {room.size || '3x4 meter'}</p>
-                                                                    </div>
-                                                                    <div className="text-right">
-                                                                        <span className="text-sm font-black text-emerald-700">{FORMAT_CURRENCY(room.price)}</span>
-                                                                        <span className="text-[10px] text-slate-400 block font-bold">/ bulan</span>
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Ketersediaan Kamar */}
-                                                                <div className="bg-white p-3 rounded-xl border border-slate-100 flex justify-between items-center text-xs font-bold">
-                                                                    <span className="text-slate-600">Total Kamar: <strong className="text-slate-900">{room.totalRooms || 1}</strong></span>
-                                                                    <span className="text-emerald-700">Kamar Kosong: <strong>{room.availableRooms || 1}</strong></span>
-                                                                </div>
-
-                                                                {/* Fasilitas Kamar */}
-                                                                {room.roomFacilities && room.roomFacilities.length > 0 && (
-                                                                    <div>
-                                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Fasilitas Kamar</span>
-                                                                        <div className="flex flex-wrap gap-1">
-                                                                            {room.roomFacilities.map((f: string, idx: number) => (
-                                                                                <span key={idx} className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[10px] font-bold text-slate-700">
-                                                                                    🛏️ {f}
-                                                                                </span>
-                                                                            ))}
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-
-                                                                {/* Fasilitas Kamar Mandi */}
-                                                                {room.bathroomFacilities && room.bathroomFacilities.length > 0 && (
-                                                                    <div>
-                                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Fasilitas Kamar Mandi</span>
-                                                                        <div className="flex flex-wrap gap-1">
-                                                                            {room.bathroomFacilities.map((f: string, idx: number) => (
-                                                                                <span key={idx} className="px-2 py-0.5 bg-blue-50 border border-blue-100 rounded text-[10px] font-bold text-blue-800">
-                                                                                    🚿 {f}
-                                                                                </span>
-                                                                            ))}
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-
-                                                                {/* Dokumentasi Foto Kamar */}
-                                                                <div className="pt-1 border-t border-slate-200/60">
-                                                                    <div className="flex justify-between items-center mb-2">
-                                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
-                                                                            📸 Dokumentasi Foto Kamar ({roomPhotos.length})
-                                                                        </span>
-                                                                    </div>
-                                                                    {roomPhotos.length > 0 ? (
-                                                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                                                            {roomPhotos.map((photo: any, pIdx: number) => (
-                                                                                <div 
-                                                                                    key={pIdx}
-                                                                                    onClick={() => setLightboxPhoto(photo)}
-                                                                                    className="group relative aspect-4/3 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 cursor-pointer hover:shadow-md transition-all hover:scale-[1.02]"
-                                                                                >
-                                                                                    <img src={photo.url} alt={photo.label} className="w-full h-full object-cover" />
-                                                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent flex items-end p-2 opacity-90 group-hover:opacity-100 transition-opacity">
-                                                                                        <span className="text-[8px] font-black text-white uppercase tracking-wider drop-shadow-sm truncate">
-                                                                                            {photo.label}
-                                                                                        </span>
-                                                                                    </div>
-                                                                                    <span className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                                        <span className="material-symbols-outlined text-xs">zoom_in</span>
-                                                                                    </span>
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
-                                                                    ) : (
-                                                                        <div className="bg-white p-3 rounded-xl border border-dashed border-slate-200 text-center text-slate-400 text-[10px] font-bold">
-                                                                            Foto spesifik tipe kamar ini belum diunggah.
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            ) : (
-                                                <div className="py-16 text-center text-slate-400 font-bold uppercase text-xs">
-                                                    Tidak ada data tipe kamar terdata.
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {reviewProperty.rules.map((r: string, i: number) => (
+                                                            <span key={i} className="px-2.5 py-1 rounded-lg bg-red-50 border border-red-100 text-xs font-bold text-red-700">⛔ {r}</span>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
                                     )}
 
-                                    {/* ================= TAB 4: LEGALITAS & TANDA TANGAN ================= */}
+                                    {/* ================= TAB 2: DATA KAMAR & PENGHUNI ================= */}
+                                    {reviewActiveTab === 'rooms' && (() => {
+                                        const roomTypes = reviewProperty?.room_types || [];
+                                        if (roomTypes.length === 0) return (
+                                            <div className="py-16 text-center text-slate-400 font-bold uppercase text-xs">Tidak ada data tipe kamar terdata.</div>
+                                        );
+
+                                        const DEFAULT_ROOM_PHOTO_SLOTS = ['Interior Kamar', 'Kamar Mandi Dalam', 'Tempat Tidur', 'Lemari / Penyimpanan'];
+
+                                        const getRoomPhotos = (room: any) => {
+                                            const rawImages = room.images || room.image_urls || room.photos || [];
+                                            return rawImages.map((img: any, imgIdx: number) => {
+                                                if (!img) return null;
+                                                const url = typeof img === 'string' ? img : (img?.url || img?.original || '');
+                                                if (!url) return null;
+                                                let label = '';
+                                                if (room.photoCategories?.[imgIdx]) label = room.photoCategories[imgIdx];
+                                                else if (typeof img === 'object' && img?.label) label = img.label;
+                                                else if (imgIdx < DEFAULT_ROOM_PHOTO_SLOTS.length) label = DEFAULT_ROOM_PHOTO_SLOTS[imgIdx];
+                                                else label = `Foto Tambahan ${imgIdx - DEFAULT_ROOM_PHOTO_SLOTS.length + 1}`;
+                                                label = label.replace(/\s*\*Wajib/i, '').replace(/\(Opsional\)/i, '').trim();
+                                                return { url, label };
+                                            }).filter(Boolean) as {url:string;label:string}[];
+                                        };
+
+                                        const formatRoomName = (name: string, idx: number) => {
+                                            if (!name) return `Kamar ${idx + 1}`;
+                                            if (/^\d+$/.test(name.trim())) return `Kamar ${name.trim()}`;
+                                            if (/^kamar/i.test(name.trim())) return name.trim();
+                                            return name.trim();
+                                        };
+
+                                        return (
+                                            <div className="space-y-6 animate-in fade-in duration-300">
+                                                {roomTypes.map((room: any, rtIdx: number) => {
+                                                    const roomPhotos = getRoomPhotos(room);
+                                                    const totalRooms = room.totalRooms || room.total_rooms || 1;
+                                                    const availableRooms = room.availableRooms || room.available_rooms || 0;
+                                                    const occupiedRooms = totalRooms - availableRooms;
+                                                    const isExpanded = expandedRoomTypes[rtIdx] !== false; // default expanded
+
+                                                    const roomFacilities: string[] = room.roomFacilities || room.room_facilities || [];
+                                                    const bathroomFacilities: string[] = room.bathroomFacilities || room.bathroom_facilities || [];
+                                                    const kitchenFacilities: string[] = room.kitchenFacilities || room.kitchen_facilities || [];
+
+                                                    const occupied: string[] = [];
+                                                    const available: string[] = [];
+                                                    (room.rooms || room.unit_rooms || []).forEach((u: any, ui: number) => {
+                                                        const uName = formatRoomName(u?.name || u?.room_number || String(ui + 1), ui);
+                                                        if (u?.status === 'occupied' || u?.is_occupied) occupied.push(uName);
+                                                        else available.push(uName);
+                                                    });
+                                                    if (occupied.length === 0 && occupiedRooms > 0) {
+                                                        for (let i = 0; i < occupiedRooms; i++) occupied.push(`Kamar ${i + 1}`);
+                                                    }
+                                                    if (available.length === 0 && availableRooms > 0) {
+                                                        for (let i = 0; i < availableRooms; i++) available.push(`Kamar ${occupiedRooms + i + 1}`);
+                                                    }
+
+                                                    const occupiedKey = `rt${rtIdx}_occ`;
+                                                    const availableKey = `rt${rtIdx}_avail`;
+
+                                                    return (
+                                                        <div key={rtIdx} className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+                                                            {/* ACCORDION HEADER TIPE KAMAR */}
+                                                            <button type="button"
+                                                                onClick={() => setExpandedRoomTypes(prev => ({...prev, [rtIdx]: !isExpanded}))}
+                                                                className="w-full flex items-center justify-between p-5 hover:bg-slate-50 transition-colors text-left">
+                                                                <div className="flex items-center gap-3 min-w-0">
+                                                                    <span className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                                                                        <Bed size={18}/>
+                                                                    </span>
+                                                                    <div className="min-w-0">
+                                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tipe Kamar #{rtIdx + 1}</span>
+                                                                        </div>
+                                                                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{room.name || `Tipe ${rtIdx + 1}`}</h4>
+                                                                        <p className="text-xs text-slate-500 font-bold">Ukuran Rata-rata: {room.size || '3x4 meter'}</p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 shrink-0 ml-3">
+                                                                    <span className="text-sm font-black text-emerald-700">{FORMAT_CURRENCY(room.price)}<span className="text-[10px] text-slate-400 font-bold">/bln</span></span>
+                                                                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black">✨ {availableRooms} Kosong</span>
+                                                                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black">🔒 {occupiedRooms} Dihuni</span>
+                                                                    {isExpanded ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
+                                                                </div>
+                                                            </button>
+
+                                                            {isExpanded && (
+                                                                <div className="border-t border-slate-100 p-5 space-y-5">
+
+                                                                    {/* HERO CAROUSEL FOTO KAMAR */}
+                                                                    {roomPhotos.length > 0 && (() => {
+                                                                        const pIdx = Math.min(selectedIsolatedPhotoIndex, roomPhotos.length - 1);
+                                                                        const p = roomPhotos[pIdx];
+                                                                        return (
+                                                                            <div className="rounded-2xl overflow-hidden border border-slate-200 bg-black shadow-sm">
+                                                                                <div className="relative" style={{aspectRatio:'16/9'}}>
+                                                                                    <img src={p.url} alt={p.label} className="w-full h-full object-cover opacity-90"/>
+                                                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"/>
+                                                                                    {/* Card Overlay Mengambang */}
+                                                                                    <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm rounded-xl p-3 text-white space-y-1 min-w-[180px]">
+                                                                                        <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Nomor Kamar</p>
+                                                                                        <p className="text-base font-black">{formatRoomName(room.name, rtIdx)}</p>
+                                                                                        <p className="text-[10px] font-bold text-slate-300">{room.size || '3x4 meter'}</p>
+                                                                                        <p className="text-sm font-black text-emerald-400">TARIF {FORMAT_CURRENCY(room.price)}/bln</p>
+                                                                                        {roomFacilities.slice(0, 3).map((f: string, i: number) => (
+                                                                                            <span key={i} className="inline-block px-1.5 py-0.5 rounded bg-white/20 text-[9px] font-black mr-1">{f}</span>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                    {/* Counter */}
+                                                                                    <span className="absolute top-3 right-12 px-2 py-0.5 rounded bg-black/60 text-white text-[10px] font-black">
+                                                                                        {pIdx + 1} / {roomPhotos.length}
+                                                                                    </span>
+                                                                                    <button onClick={() => setLightboxPhoto(p)} className="absolute top-3 right-3 p-1 rounded-lg bg-black/50 text-white hover:bg-black/70">
+                                                                                        <ZoomIn size={12}/>
+                                                                                    </button>
+                                                                                    {roomPhotos.length > 1 && (
+                                                                                        <>
+                                                                                            <button onClick={() => setSelectedIsolatedPhotoIndex(Math.max(0, pIdx - 1))} disabled={pIdx === 0}
+                                                                                                className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center disabled:opacity-30">
+                                                                                                <ChevronLeft size={14}/>
+                                                                                            </button>
+                                                                                            <button onClick={() => setSelectedIsolatedPhotoIndex(Math.min(roomPhotos.length - 1, pIdx + 1))} disabled={pIdx === roomPhotos.length - 1}
+                                                                                                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center disabled:opacity-30">
+                                                                                                <ChevronRight size={14}/>
+                                                                                            </button>
+                                                                                        </>
+                                                                                    )}
+                                                                                </div>
+                                                                                {/* Thumbnail strip */}
+                                                                                <div className="flex gap-1 p-1.5 bg-slate-900 overflow-x-auto">
+                                                                                    {roomPhotos.map((ph: any, pi: number) => (
+                                                                                        <button key={pi} onClick={() => setSelectedIsolatedPhotoIndex(pi)}
+                                                                                            className={`shrink-0 w-12 h-8 rounded overflow-hidden border-2 transition-all ${
+                                                                                                pi === pIdx ? 'border-emerald-400 opacity-100' : 'border-transparent opacity-40 hover:opacity-70'
+                                                                                            }`}>
+                                                                                            <img src={ph.url} alt={ph.label} className="w-full h-full object-cover"/>
+                                                                                        </button>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })()}
+
+                                                                    {/* KELENGKAPAN & FASILITAS KAMAR — 3 Kotak Menyamping */}
+                                                                    {(roomFacilities.length > 0 || bathroomFacilities.length > 0 || kitchenFacilities.length > 0) && (
+                                                                        <div>
+                                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Kelengkapan &amp; Fasilitas Kamar</span>
+                                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                                                {roomFacilities.length > 0 && (
+                                                                                    <div className="bg-slate-100 border border-slate-200 rounded-2xl p-3 space-y-2">
+                                                                                        <div className="flex items-center gap-1.5">
+                                                                                            <Bed size={13} className="text-slate-600"/>
+                                                                                            <span className="text-[9px] font-black text-slate-600 uppercase tracking-wider">Fasilitas Utama</span>
+                                                                                        </div>
+                                                                                        <div className="flex flex-wrap gap-1">
+                                                                                            {roomFacilities.map((f: string, i: number) => (
+                                                                                                <span key={i} className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[10px] font-bold text-slate-700">{f}</span>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
+                                                                                {bathroomFacilities.length > 0 && (
+                                                                                    <div className="bg-sky-50 border border-sky-200 rounded-2xl p-3 space-y-2">
+                                                                                        <div className="flex items-center gap-1.5">
+                                                                                            <Bath size={13} className="text-sky-600"/>
+                                                                                            <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider">Kamar Mandi / WC</span>
+                                                                                        </div>
+                                                                                        <div className="flex flex-wrap gap-1">
+                                                                                            {bathroomFacilities.map((f: string, i: number) => (
+                                                                                                <span key={i} className="px-1.5 py-0.5 bg-white border border-sky-200 rounded text-[10px] font-bold text-sky-800">{f}</span>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
+                                                                                {kitchenFacilities.length > 0 && (
+                                                                                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 space-y-2">
+                                                                                        <div className="flex items-center gap-1.5">
+                                                                                            <CookingPot size={13} className="text-amber-600"/>
+                                                                                            <span className="text-[9px] font-black text-amber-700 uppercase tracking-wider">Dapur Dalam</span>
+                                                                                        </div>
+                                                                                        <div className="flex flex-wrap gap-1">
+                                                                                            {kitchenFacilities.map((f: string, i: number) => (
+                                                                                                <span key={i} className="px-1.5 py-0.5 bg-white border border-amber-200 rounded text-[10px] font-bold text-amber-800">{f}</span>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* DOKUMENTASI FOTO KAMAR GRID */}
+                                                                    {roomPhotos.length > 0 && (
+                                                                        <div>
+                                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                                                                                <Camera size={12} className="inline mr-1"/> Dokumentasi Foto Kamar ({roomPhotos.length})
+                                                                            </span>
+                                                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                                                                                {roomPhotos.map((photo: any, pIdx2: number) => (
+                                                                                    <div key={pIdx2} onClick={() => setLightboxPhoto(photo)}
+                                                                                        className="group relative rounded-xl overflow-hidden border border-slate-200 bg-slate-100 cursor-pointer hover:shadow-md transition-all hover:scale-[1.02]" style={{aspectRatio:'4/3'}}>
+                                                                                        <img src={photo.url} alt={photo.label} className="w-full h-full object-cover"/>
+                                                                                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 flex items-end">
+                                                                                            <span className="text-[9px] font-black text-white uppercase tracking-wider truncate">{photo.label}</span>
+                                                                                        </div>
+                                                                                        <span className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                                            <ZoomIn size={10}/>
+                                                                                        </span>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* NESTED ACCORDION: KAMAR TERISI & KOSONG */}
+                                                                    <div className="space-y-2">
+                                                                        {/* Card Amber: KAMAR TERISI */}
+                                                                        {occupiedRooms > 0 && (
+                                                                            <div className="rounded-2xl border border-amber-200 overflow-hidden">
+                                                                                <button type="button"
+                                                                                    onClick={() => setExpandedStatusSections(prev => ({...prev, [occupiedKey]: !prev[occupiedKey]}))}
+                                                                                    className="w-full flex items-center justify-between p-4 bg-amber-50 hover:bg-amber-100 transition-colors">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <span className="text-lg">🔒</span>
+                                                                                        <div className="text-left">
+                                                                                            <span className="text-xs font-black text-amber-900 uppercase tracking-wide">KAMAR SEDANG DIHUNI / TERISI</span>
+                                                                                            <span className="ml-2 px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[9px] font-black">{occupiedRooms} UNIT</span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="flex items-center gap-1 text-amber-700 text-[10px] font-black">
+                                                                                        <span>BUKA LIST</span>
+                                                                                        {expandedStatusSections[occupiedKey] ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                                                                                    </div>
+                                                                                </button>
+                                                                                {expandedStatusSections[occupiedKey] && (
+                                                                                    <div className="p-3 bg-amber-50/50 border-t border-amber-100 flex flex-wrap gap-2">
+                                                                                        {occupied.map((name, ni) => (
+                                                                                            <span key={ni} className="px-3 py-1.5 bg-amber-100 border border-amber-200 rounded-xl text-xs font-black text-amber-900">🔒 {name}</span>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                        {/* Card Hijau: KAMAR KOSONG */}
+                                                                        {availableRooms > 0 && (
+                                                                            <div className="rounded-2xl border border-emerald-200 overflow-hidden">
+                                                                                <button type="button"
+                                                                                    onClick={() => setExpandedStatusSections(prev => ({...prev, [availableKey]: !prev[availableKey]}))}
+                                                                                    className="w-full flex items-center justify-between p-4 bg-emerald-50 hover:bg-emerald-100 transition-colors">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <span className="text-lg">✨</span>
+                                                                                        <div className="text-left">
+                                                                                            <span className="text-xs font-black text-emerald-900 uppercase tracking-wide">KAMAR KOSONG / SIAP HUNI</span>
+                                                                                            <span className="ml-2 px-1.5 py-0.5 rounded-full bg-emerald-200 text-emerald-900 text-[9px] font-black">{availableRooms} UNIT</span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="flex items-center gap-1 text-emerald-700 text-[10px] font-black">
+                                                                                        <span>BUKA LIST</span>
+                                                                                        {expandedStatusSections[availableKey] ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                                                                                    </div>
+                                                                                </button>
+                                                                                {expandedStatusSections[availableKey] && (
+                                                                                    <div className="p-3 bg-emerald-50/50 border-t border-emerald-100 flex flex-wrap gap-2">
+                                                                                        {available.map((name, ni) => (
+                                                                                            <span key={ni} className="px-3 py-1.5 bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-black text-emerald-900">✨ {name}</span>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* ================= TAB 3: DATA MITRA & KERJASAMA ================= */}
                                     {reviewActiveTab === 'legal' && (
                                         <div className="space-y-6 animate-in fade-in duration-300">
-                                            {/* Salinan Lengkap Syarat & Ketentuan Penggunaan KostManager */}
                                             <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-4 shadow-2xs">
                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
                                                     <div>
@@ -1084,107 +1426,64 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                         </h4>
                                                     </div>
                                                     <span className="self-start sm:self-auto px-3 py-1 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-2xs">
-                                                        <span className="material-symbols-outlined text-sm text-emerald-700">verified</span>
-                                                        Disetujui Mitra Secara Digital
+                                                        <Check size={12} className="text-emerald-700"/> Disetujui Mitra Secara Digital
                                                     </span>
                                                 </div>
-
-                                                {/* Text Klausul Perjanjian */}
                                                 <div className="bg-white p-5 rounded-2xl border border-slate-200 text-xs text-slate-700 space-y-3.5 leading-relaxed max-h-72 overflow-y-auto font-medium shadow-inner">
-                                                    <p className="font-bold text-slate-900 text-xs pb-1 border-b border-slate-100">
-                                                        Perjanjian Pengelolaan Properti Kos &amp; Layanan Manajemen KostManager RuangSinggah:
-                                                    </p>
-                                                    
+                                                    <p className="font-bold text-slate-900 text-xs pb-1 border-b border-slate-100">Perjanjian Pengelolaan Properti Kos &amp; Layanan Manajemen KostManager RuangSinggah:</p>
                                                     <div className="space-y-1">
                                                         <p className="font-bold text-slate-900 text-xs">1. Mekanisme &amp; Otorisasi Pengelolaan Auto-Pilot</p>
-                                                        <p className="text-[11px] text-slate-600">
-                                                            Mitra Pemilik Kos memberikan hak dan wewenang eksklusif kepada platform RuangSinggah untuk mengelola pencatatan reservasi, publikasi listing properti, penerimaan calon penghuni, serta penagihan otomatis biaya sewa bulanan kamar sesuai data yang diverifikasi.
-                                                        </p>
+                                                        <p className="text-[11px] text-slate-600">Mitra Pemilik Kos memberikan hak dan wewenang eksklusif kepada platform RuangSinggah untuk mengelola pencatatan reservasi, publikasi listing properti, penerimaan calon penghuni, serta penagihan otomatis biaya sewa bulanan kamar sesuai data yang diverifikasi.</p>
                                                     </div>
-
                                                     <div className="space-y-1">
                                                         <p className="font-bold text-slate-900 text-xs">2. Akurasi &amp; Validitas Data Lapangan</p>
-                                                        <p className="text-[11px] text-slate-600">
-                                                            Mitra bertanggung jawab penuh atas kebenaran seluruh informasi properti, tarif sewa kamar, spesifikasi fasilitas, serta ketersediaan unit kamar yang didata bersama agen surveyor lapangan RuangSinggah.
-                                                        </p>
+                                                        <p className="text-[11px] text-slate-600">Mitra bertanggung jawab penuh atas kebenaran seluruh informasi properti, tarif sewa kamar, spesifikasi fasilitas, serta ketersediaan unit kamar yang didata bersama agen surveyor lapangan RuangSinggah.</p>
                                                     </div>
-
                                                     <div className="space-y-1">
                                                         <p className="font-bold text-slate-900 text-xs">3. Penyaluran Hasil Sewa &amp; Transparansi Keuangan</p>
-                                                        <p className="text-[11px] text-slate-600">
-                                                            Seluruh transaksi pembayaran sewa penghuni diproses melalui rekening penampung resmi platform dan disalurkan secara transparan dan berkala ke rekening terdaftar Mitra dengan laporan keuangan real-time pada portal KostManager.
-                                                        </p>
+                                                        <p className="text-[11px] text-slate-600">Seluruh transaksi pembayaran sewa penghuni diproses melalui rekening penampung resmi platform dan disalurkan secara transparan dan berkala ke rekening terdaftar Mitra dengan laporan keuangan real-time pada portal KostManager.</p>
                                                     </div>
-
                                                     <div className="space-y-1">
                                                         <p className="font-bold text-slate-900 text-xs">4. Legalitas Kepemilikan &amp; Hak Pengelolaan</p>
-                                                        <p className="text-[11px] text-slate-600">
-                                                            Mitra menyatakan dan menjamin bahwa properti yang didaftarkan berstatus sah secara hukum, tidak dalam sengketa, dan memiliki izin operasional pemondokan / rumah kos sesuai perundang-undangan yang berlaku.
-                                                        </p>
+                                                        <p className="text-[11px] text-slate-600">Mitra menyatakan dan menjamin bahwa properti yang didaftarkan berstatus sah secara hukum, tidak dalam sengketa, dan memiliki izin operasional pemondokan / rumah kos sesuai perundang-undangan yang berlaku.</p>
                                                     </div>
                                                 </div>
-
-                                                {/* Klausul Persetujuan Box */}
                                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                                                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200 flex items-center gap-3">
-                                                        <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-xs shrink-0">✓</span>
-                                                        <span className="text-[11px] font-bold text-slate-800 leading-tight">Persetujuan Program Auto-Pilot</span>
-                                                    </div>
-                                                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200 flex items-center gap-3">
-                                                        <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-xs shrink-0">✓</span>
-                                                        <span className="text-[11px] font-bold text-slate-800 leading-tight">Kebenaran Hak Kelola Properti</span>
-                                                    </div>
-                                                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200 flex items-center gap-3">
-                                                        <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-xs shrink-0">✓</span>
-                                                        <span className="text-[11px] font-bold text-slate-800 leading-tight">Otorisasi Pemasaran RuangSinggah</span>
-                                                    </div>
+                                                    {['Persetujuan Program Auto-Pilot', 'Kebenaran Hak Kelola Properti', 'Otorisasi Pemasaran RuangSinggah'].map((item, i) => (
+                                                        <div key={i} className="bg-white p-3.5 rounded-2xl border border-slate-200 flex items-center gap-3">
+                                                            <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-xs shrink-0"><Check size={12}/></span>
+                                                            <span className="text-[11px] font-bold text-slate-800 leading-tight">{item}</span>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
 
-                                            {/* Tanda Tangan Digital & Verifikasi Surveyor */}
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                {/* Canvas Tanda Tangan Mitra */}
                                                 <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-3.5 shadow-2xs">
                                                     <div className="flex justify-between items-center">
-                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-                                                            Tanda Tangan Digital Pemilik / Mitra
-                                                        </span>
-                                                        <span className="text-[10px] font-bold text-slate-500">
-                                                            Mitra: <strong className="text-slate-900">{reviewRequest.user?.name || reviewRequest.owner_name || 'Mitra Kost'}</strong>
-                                                        </span>
+                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Tanda Tangan Digital Pemilik / Mitra</span>
+                                                        <span className="text-[10px] font-bold text-slate-500">Mitra: <strong className="text-slate-900">{reviewRequest.user?.name || reviewRequest.owner_name || 'Mitra Kost'}</strong></span>
                                                     </div>
-
                                                     {reviewSurvey?.signature_data ? (
-                                                        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-inner flex flex-col items-center justify-center min-h-[170px] relative group">
-                                                            <img 
-                                                                src={reviewSurvey.signature_data} 
-                                                                alt="Tanda Tangan Digital Pemilik" 
-                                                                className="max-h-36 max-w-full object-contain"
-                                                            />
-                                                            <div className="absolute bottom-2 right-3 text-[9px] font-mono text-slate-400">
-                                                                Digital Signature Verified
-                                                            </div>
+                                                        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-inner flex flex-col items-center justify-center min-h-[170px]">
+                                                            <img src={reviewSurvey.signature_data} alt="Tanda Tangan Digital Pemilik" className="max-h-36 max-w-full object-contain"/>
+                                                            <div className="mt-2 text-[9px] font-mono text-slate-400">Digital Signature Verified</div>
                                                         </div>
                                                     ) : (
                                                         <div className="bg-white p-8 rounded-2xl border border-dashed border-slate-300 text-center text-slate-400 text-xs font-bold flex flex-col items-center justify-center min-h-[170px] gap-2">
-                                                            <span className="material-symbols-outlined text-3xl text-slate-300">draw</span>
+                                                            <Layers size={32} className="text-slate-300"/>
                                                             <span>Tanda tangan digital belum terlampir saat pendataan.</span>
                                                         </div>
                                                     )}
-
                                                     <div className="flex items-center gap-2 text-[10px] text-emerald-900 font-bold bg-emerald-50 p-3 rounded-xl border border-emerald-200">
-                                                        <span className="material-symbols-outlined text-base text-emerald-600">verified</span>
+                                                        <Check size={14} className="text-emerald-600 shrink-0"/>
                                                         <span>Terverifikasi dan disahkan secara digital pada saat pendataan lapangan</span>
                                                     </div>
                                                 </div>
 
-                                                {/* Informasi Pengesahan & Surveyor */}
                                                 <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-4 shadow-2xs flex flex-col justify-between">
                                                     <div className="space-y-3">
-                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-                                                            Metadata Pengesahan &amp; Surveyor
-                                                        </span>
-                                                        
+                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Metadata Pengesahan &amp; Surveyor</span>
                                                         <div className="space-y-2.5 text-xs font-bold text-slate-700">
                                                             <div className="p-3 bg-white rounded-xl border border-slate-200 flex justify-between items-center">
                                                                 <span className="text-[10px] font-black text-slate-400 uppercase">Petugas Survey Lapangan</span>
@@ -1196,22 +1495,15 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                                             </div>
                                                             <div className="p-3 bg-white rounded-xl border border-slate-200 flex justify-between items-center">
                                                                 <span className="text-[10px] font-black text-slate-400 uppercase">Status Kelayakan Data</span>
-                                                                <span className="text-emerald-700 font-black flex items-center gap-1">
-                                                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                                                    LENGKAP &amp; SIAP ONBOARDING
-                                                                </span>
+                                                                <span className="text-emerald-700 font-black flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> LENGKAP &amp; SIAP ONBOARDING</span>
                                                             </div>
                                                         </div>
                                                     </div>
-
                                                     {(reviewSurvey?.result_drive_link || reviewRequest.result_drive_link) && (
-                                                        <a
-                                                            href={reviewSurvey?.result_drive_link || reviewRequest.result_drive_link}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2 shadow-sm"
-                                                        >
-                                                            <span className="material-symbols-outlined text-base">folder_open</span>
+                                                        <a href={reviewSurvey?.result_drive_link || reviewRequest.result_drive_link}
+                                                            target="_blank" rel="noopener noreferrer"
+                                                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2 shadow-sm">
+                                                            <FolderOpen size={16}/>
                                                             Buka Dokumen &amp; Berkas di Google Drive
                                                         </a>
                                                     )}
@@ -1245,8 +1537,7 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                     }}
                                     className="px-4 py-3 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-black text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 w-full sm:w-auto justify-center"
                                 >
-                                    <span className="material-symbols-outlined text-sm">edit</span>
-                                    Edit Penugasan / Link
+                                    ✏️ Edit Penugasan / Link
                                 </button>
                             </div>
 
@@ -1257,13 +1548,11 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                                     onClick={() => handleApproveAndActivate(reviewRequest, reviewProperty)}
                                     className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
                                 >
-                                    <span className="material-symbols-outlined text-base">rocket_launch</span>
-                                    {isSubmitting ? 'Mengaktifkan...' : 'Setujui & Aktifkan Layanan Auto-Pilot (LIVE)'}
+                                    🚀 {isSubmitting ? 'Mengaktifkan...' : 'Setujui & Aktifkan Layanan Auto-Pilot (LIVE)'}
                                 </button>
                             ) : (
                                 <div className="px-4 py-2 bg-green-100 border border-green-200 text-green-900 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-                                    <span className="material-symbols-outlined text-sm">check_circle</span>
-                                    Layanan Sedang Aktif di Platform
+                                    <Check size={14}/> Layanan Sedang Aktif di Platform
                                 </div>
                             )}
                         </div>
