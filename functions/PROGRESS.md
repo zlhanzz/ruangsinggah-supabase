@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 105. Penempatan Navigasi Kamar di Bawah Carousel & Logika Toggle Isolasi Foto Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta posisi tombol navigasi nomor kamar dipindahkan ke bawah carousel foto.
+  2. Tombol fisik "Semua Kamar" dihapus; secara default carousel langsung menampilkan seluruh foto kamar.
+  3. Mengklik tombol nomor kamar akan mengisolasi foto milik kamar tersebut, dan mengklik ulang tombol yang sedang aktif akan otomatis membatalkan isolasi (toggle) untuk kembali menampilkan seluruh kamar.
+  4. Mengklik kartu kamar di accordion bawah atau tombol reset akan mengembalikan galeri ke mode seluruh kamar.
+- **Implementasi & Perbaikan**:
+  * **1. Pemindahan Navigasi ke Bawah Carousel**:
+    - Mereorganisasi layout JSX: Header ➔ Hero Photo Preview ➔ Horizontal Thumbnail Strip ➔ **Filter Navigasi Nomor Kamar (Bawah)**.
+  * **2. Penghapusan Tombol "Semua Kamar" & Penerapan Toggle**:
+    - Menghapus tombol fisik "Semua Kamar".
+    - Menerapkan logic toggle: `onClick={(e) => { if (isSelected) setSelectedRoomGalleryFilter('all'); else setSelectedRoomGalleryFilter(idx); }}`.
+  * **3. Auto-Reset saat Interaksi Luar**:
+    - Mengintegrasikan reset `setSelectedRoomGalleryFilter('all')` saat accordion kamar dibuka/diklik, serta menyediakan tombol mini `↺ Tampilkan Seluruh Kamar`.
+- **File Tersentuh**: `functions/public/components/admin/KostManagerManagement.tsx`
+- **Verifikasi**: Build Vite frontend `vite build` (`cmd /c "npm run build"`) di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 104. Carousel Galeri Foto Kamar (Universal & Filter Per-Kamar) pada Tab 2 (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta penambahan carousel foto kamar di bawah grid ringkasan 4 kartu dan di atas kartu-kartu kamar pada Tab 2 (DATA KAMAR & PENGHUNI).
