@@ -2,6 +2,24 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 160. Penambahan Bilah Tombol Navigasi Foto Kamar Kosong & Isolasi Carousel pada Halaman Detail Kost (`KostDetail.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar tampilan user pada listing kost memiliki tombol navigasi di bawah carousel untuk kamar yang kosong, sehingga foto terkait kamar tersebut dapat ditampilkan secara jelas dan terisolasi di carousel.
+- **Implementasi**:
+  * **1. Bilah Tombol Navigasi Kamar Kosong**:
+    - Tombol `[ 🏠 Semua Foto ]`: Menampilkan seluruh foto umum/fasilitas properti.
+    - Tombol unit kamar kosong: `[ 🛏️ Kamar X • Tersedia (N Foto) ]` untuk setiap unit yang berstatus kosong/tersedia.
+  * **2. Isolasi Foto Carousel (`displayedImages`)**:
+    - Saat tombol kamar kosong diklik, carousel dan thumbnail strip langsung terisolasi untuk hanya menampilkan foto-foto dari unit kamar tersebut.
+    - Indikator counter diperbarui secara dinamis (`1 / N FOTO • KAMAR X`).
+  * **3. Sinkronisasi 2-Arah**:
+    - Memilih tombol navigasi kamar di bawah carousel otomatis menyinkronkan pemilihan tipe kamar pada panel booking di sebelah kanan (`selectedVariantIdx`), dan sebaliknya.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 35.10s, 0 error).
+
 ### 159. Perubahan Penamaan Menu & Judul "Tagihan Bulanan" Menjadi "Riwayat Pembayaran Sewa" pada Portal KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar menu "Tagihan Bulanan" di Portal KostManager diganti menjadi "Riwayat Pembayaran Sewa".

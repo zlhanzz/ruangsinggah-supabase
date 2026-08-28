@@ -10,6 +10,7 @@ import { incrementPropertyView } from '../userService';
 import { getOrCreateChatSession, SYSTEM_ADMIN_ID } from '../chatService';
 import { createBookingRequest } from '../userService';
 import { supabase } from '../supabase';
+import { Bed, Home, Camera, Sparkles, CheckCircle2 } from 'lucide-react';
 
 interface KostDetailProps {
   kost: Kost;
@@ -193,19 +194,79 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     }
   }, [selectedVariantIdx, physicalRooms, selectedRoom.name, kost.isManaged]);
 
-  // Ambil semua foto dari unit kamar yang berstatus kosong/tidak dihuni untuk ditampilkan di pemasaran
-  const vacantRoomImages = (kost.roomTypes || []).flatMap((rt: any) => 
-    (rt.rooms || [])
-      .filter((r: any) => r.status === 'kosong')
-      .flatMap((r: any) => r.images || [])
-  );
+  // --- EMPTY ROOMS PHOTO ISOLATION & GALLERY STATE ---
+  const [activePhotoFilter, setActivePhotoFilter] = useState<'all' | string>('all');
 
-  const imageUrls = [
-    ...(kost.imageUrls || []),
-    ...vacantRoomImages
-  ];
-  const nextPhoto = () => setCurrentPhoto((prev) => (prev + 1) % (imageUrls.length || 1));
-  const prevPhoto = () => setCurrentPhoto((prev) => (prev - 1 + (imageUrls.length || 1)) % (imageUrls.length || 1));
+  // Extract all property-level photos
+  const propertyPhotos: string[] = (kost.imageUrls || []).map((img: any) => {
+    if (typeof img === 'string') return img;
+    return img?.url || img?.original || img?.thumbnail || '';
+  }).filter(Boolean);
+
+  // Normalize all individual room units and extract their photos
+  const normalizedRooms = (kost.roomTypes || []).flatMap((rt: any, rtIdx: number) => {
+    if (Array.isArray(rt.rooms) && rt.rooms.length > 0) {
+      return rt.rooms.map((r: any, rSubIdx: number) => {
+        const isAvail = r.status?.toLowerCase() === 'kosong' || r.status?.toLowerCase() === 'available' || r.isAvailable !== false;
+        const roomPhotos: string[] = (r.images || r.image_urls || []).map((img: any) => typeof img === 'string' ? img : (img?.url || img?.original || '')).filter(Boolean);
+        const rName = r.name || r.roomNumber ? (String(r.name || r.roomNumber).trim().toLowerCase().startsWith('kamar') ? (r.name || r.roomNumber) : `Kamar ${r.name || r.roomNumber}`) : `Kamar ${rSubIdx + 1}`;
+        return {
+          id: r.id || `room_${rtIdx}_${rSubIdx}`,
+          name: rName,
+          rawName: r.name || r.roomNumber,
+          variantIdx: rtIdx,
+          isAvailable: isAvail,
+          status: r.status || (isAvail ? 'Kosong' : 'Terisi'),
+          price: Number(r.price) || Number(rt.price) || Number(kost.price) || 0,
+          size: r.size || rt.size || '3x3',
+          images: roomPhotos
+        };
+      });
+    }
+
+    const isAvail = rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh';
+    const roomPhotos: string[] = (rt.images || rt.image_urls || []).map((img: any) => typeof img === 'string' ? img : (img?.url || img?.original || '')).filter(Boolean);
+    const rName = rt.name ? (String(rt.name).trim().toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${rtIdx + 1}`;
+    return [{
+      id: rt.id || `room_${rtIdx}`,
+      name: rName,
+      rawName: rt.name,
+      variantIdx: rtIdx,
+      isAvailable: isAvail,
+      status: rt.status || (isAvail ? 'Kosong' : 'Terisi'),
+      price: Number(rt.price) || Number(kost.price) || 0,
+      size: rt.size || '3x3',
+      images: roomPhotos
+    }];
+  });
+
+  // Filter only empty/available rooms
+  const emptyRooms = normalizedRooms.filter(r => r.isAvailable);
+
+  // Active room if a specific room filter is selected
+  const activeFilteredRoom = activePhotoFilter !== 'all' 
+    ? normalizedRooms.find(r => r.id === activePhotoFilter || r.name === activePhotoFilter || r.rawName === activePhotoFilter)
+    : null;
+
+  // Compute displayed images based on active filter
+  const displayedImages: string[] = (() => {
+    if (activeFilteredRoom) {
+      if (activeFilteredRoom.images && activeFilteredRoom.images.length > 0) {
+        return activeFilteredRoom.images;
+      }
+      // If room has no specific photos, fallback to property photos
+      return propertyPhotos.length > 0 ? propertyPhotos : ['https://ruangsinggah.id/logo.png'];
+    }
+
+    // Default 'all': Property photos + all empty rooms photos combined
+    const allVacantPhotos = emptyRooms.flatMap(r => r.images);
+    const combined = [...propertyPhotos, ...allVacantPhotos];
+    const uniqueCombined = Array.from(new Set(combined.filter(Boolean)));
+    return uniqueCombined.length > 0 ? uniqueCombined : (propertyPhotos.length > 0 ? propertyPhotos : ['https://ruangsinggah.id/logo.png']);
+  })();
+
+  const nextPhoto = () => setCurrentPhoto((prev) => (prev + 1) % (displayedImages.length || 1));
+  const prevPhoto = () => setCurrentPhoto((prev) => (prev - 1 + (displayedImages.length || 1)) % (displayedImages.length || 1));
 
   const handleBookingClick = () => {
     if (kost.isManaged && !selectedPhysicalRoom) {
@@ -438,35 +499,155 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
           <div className="lg:col-span-2 space-y-8 lg:space-y-12">
-            {/* Gallery Section */}
+            {/* Gallery Section with Isolated Room Photos */}
             <div>
-              <div className="relative group aspect-square lg:aspect-video rounded-3xl lg:rounded-[3rem] overflow-hidden shadow-2xl bg-gray-100 border border-gray-100 mb-4">
+              <div className="relative group aspect-square lg:aspect-video rounded-3xl lg:rounded-[3rem] overflow-hidden shadow-2xl bg-gray-900 border border-gray-100 mb-4">
                 <div className="absolute inset-0 flex transition-transform duration-700 ease-out" style={{ transform: `translateX(-${currentPhoto * 100}%)` }}>
-                  {imageUrls.map((img, idx) => (
-                    <img key={idx} src={img} className="w-full h-full object-cover shrink-0" alt={`Slide ${idx}`} />
+                  {displayedImages.map((img, idx) => (
+                    <img key={idx} src={img} className="w-full h-full object-cover shrink-0" alt={`Slide ${idx + 1}`} />
                   ))}
                 </div>
-                <div className="absolute inset-0 flex items-center justify-between p-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={prevPhoto} className="p-3 bg-white/20 backdrop-blur-md text-white rounded-full hover:bg-white hover:text-orange-500 transition-all border border-white/20">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
-                  </button>
-                  <button onClick={nextPhoto} className="p-3 bg-white/20 backdrop-blur-md text-white rounded-full hover:bg-white hover:text-orange-500 transition-all border border-white/20">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
-                  </button>
+
+                {/* Left/Right Navigation Controls */}
+                {displayedImages.length > 1 && (
+                  <div className="absolute inset-0 flex items-center justify-between p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={prevPhoto} className="p-3 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-white hover:text-orange-500 transition-all border border-white/20 cursor-pointer">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                    <button onClick={nextPhoto} className="p-3 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-white hover:text-orange-500 transition-all border border-white/20 cursor-pointer">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
+                    </button>
+                  </div>
+                )}
+
+                {/* Active Photo Info & Counter Badge */}
+                <div className="absolute bottom-6 right-6 bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/15 flex items-center gap-2">
+                  <Camera size={12} className="text-orange-400" />
+                  <span>{currentPhoto + 1} / {displayedImages.length} FOTO</span>
+                  {activeFilteredRoom ? (
+                    <>
+                      <span className="text-white/40">•</span>
+                      <span className="text-orange-400 font-bold">{activeFilteredRoom.name}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-white/40">•</span>
+                      <span className="text-emerald-400 font-bold">PROPERTI</span>
+                    </>
+                  )}
                 </div>
-                <div className="absolute bottom-6 right-6 bg-black/40 backdrop-blur-md text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">
-                  {currentPhoto + 1} / {imageUrls.length} FOTO
-                </div>
+
+                {/* Active Mode Tag Top Left */}
+                {activeFilteredRoom && (
+                  <div className="absolute top-6 left-6 bg-orange-500/90 backdrop-blur-md text-white px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-lg flex items-center gap-1.5">
+                    <Bed size={12} />
+                    <span>Galeri Foto {activeFilteredRoom.name}</span>
+                  </div>
+                )}
               </div>
 
+              {/* Bilah Tombol Navigasi Isolasi Foto Kamar Kosong */}
+              {emptyRooms.length > 0 && (
+                <div className="mb-4 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
+                  <div className="flex items-center justify-between gap-2 mb-2 px-1">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                      <Camera size={13} className="text-orange-500" />
+                      Pilih Foto Unit Kamar Kosong ({emptyRooms.length} Kamar Tersedia):
+                    </span>
+                    {activePhotoFilter !== 'all' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActivePhotoFilter('all');
+                          setCurrentPhoto(0);
+                        }}
+                        className="text-[10px] font-black text-orange-600 hover:text-orange-700 uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1"
+                      >
+                        Lihat Semua Foto ↺
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+                    {/* Tombol 1: Semua Foto */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActivePhotoFilter('all');
+                        setCurrentPhoto(0);
+                      }}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
+                        activePhotoFilter === 'all'
+                          ? 'bg-slate-900 text-white shadow-md ring-2 ring-slate-900 ring-offset-1'
+                          : 'bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-100'
+                      }`}
+                    >
+                      <Home size={13} />
+                      <span>Semua Foto</span>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-mono ${
+                        activePhotoFilter === 'all' ? 'bg-slate-800 text-slate-200' : 'bg-slate-200 text-slate-600'
+                      }`}>
+                        {propertyPhotos.length || displayedImages.length}
+                      </span>
+                    </button>
+
+                    {/* Tombol Per Kamar Kosong */}
+                    {emptyRooms.map((room) => {
+                      const isSelected = activePhotoFilter === room.id || activePhotoFilter === room.name || activePhotoFilter === room.rawName;
+                      const photoCount = room.images.length;
+
+                      return (
+                        <button
+                          key={room.id}
+                          type="button"
+                          onClick={() => {
+                            setActivePhotoFilter(room.id);
+                            setCurrentPhoto(0);
+                            setSelectedVariantIdx(room.variantIdx);
+                            if (kost.isManaged && physicalRooms.length > 0) {
+                              const matchedPhys = physicalRooms.find(pr => pr.room_number === room.rawName || pr.room_number === room.name);
+                              if (matchedPhys) setSelectedPhysicalRoom(matchedPhys);
+                            }
+                          }}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
+                            isSelected
+                              ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20 ring-2 ring-orange-500 ring-offset-1'
+                              : 'bg-white text-slate-700 border border-slate-200 hover:border-orange-300 hover:bg-orange-50/30'
+                          }`}
+                        >
+                          <Bed size={13} className={isSelected ? 'text-white' : 'text-orange-500'} />
+                          <span>{room.name}</span>
+                          <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${
+                            isSelected ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          }`}>
+                            Tersedia
+                          </span>
+                          {photoCount > 0 ? (
+                            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md ${
+                              isSelected ? 'bg-orange-600 text-orange-100' : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {photoCount} Foto
+                            </span>
+                          ) : (
+                            <span className={`text-[8px] font-bold ${isSelected ? 'text-orange-200' : 'text-slate-400'}`}>
+                              Foto Properti
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Thumbnails Strip */}
-              {imageUrls.length > 1 && (
+              {displayedImages.length > 1 && (
                 <div className="flex gap-3 overflow-x-auto pb-2 px-1 scrollbar-hide">
-                  {imageUrls.map((img, idx) => (
+                  {displayedImages.map((img, idx) => (
                     <button
                       key={idx}
                       onClick={() => setCurrentPhoto(idx)}
-                      className={`relative w-20 h-20 lg:w-24 lg:h-24 shrink-0 rounded-2xl overflow-hidden transition-all duration-300 ${currentPhoto === idx
+                      className={`relative w-20 h-20 lg:w-24 lg:h-24 shrink-0 rounded-2xl overflow-hidden transition-all duration-300 cursor-pointer ${currentPhoto === idx
                         ? 'ring-2 ring-orange-500 ring-offset-2 opacity-100 scale-95'
                         : 'opacity-50 hover:opacity-100 hover:scale-105'
                         }`}
@@ -762,7 +943,14 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                         return (
                           <div
                             key={idx}
-                            onClick={() => setSelectedVariantIdx(idx)}
+                            onClick={() => {
+                              setSelectedVariantIdx(idx);
+                              const matchedRoom = normalizedRooms.find(r => r.variantIdx === idx);
+                              if (matchedRoom && matchedRoom.isAvailable) {
+                                setActivePhotoFilter(matchedRoom.id);
+                                setCurrentPhoto(0);
+                              }
+                            }}
                             className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative ${selectedVariantIdx === idx ? 'border-orange-500 bg-orange-50/50' : 'border-gray-100 hover:border-gray-200'}`}
                           >
                             <div className="flex justify-between items-start mb-1">
