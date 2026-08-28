@@ -1,61 +1,78 @@
-# Rencana Implementasi: Transformasi Kartu Evaluasi Menjadi Kartu Kompak 'Riwayat Revisi' Pasca Pengiriman Ulang
+# Rencana Implementasi: Menampilkan Data Wilayah (Provinsi, Kota/Kabupaten, Kecamatan) pada Menu Peninjauan (Step 3 Review)
 
-Dokumen ini merinci rencana perubahan tampilan kartu evaluasi pada daftar tugas surveyor (`AgentDashboard.tsx`) ketika surveyor telah mengirimkan ulang data hasil revisi ke admin.
+Dokumen ini merinci rencana penambahan tampilan data wilayah (Provinsi, Kota/Kabupaten, dan Kecamatan) pada menu peninjauan (*Step 3: Review*) formulir pendataan survei di `AgentDashboard.tsx`.
 
 ---
 
 ## 1. Analisis Masalah & Kebutuhan
 
 ### A. Kondisi Saat Ini
-Pada baris ~4527 di `AgentDashboard.tsx`, terdapat kondisi:
-`{req.status === 'REVISION_REQUIRED' || req.notes?.includes('[REVISI') ? ...}`
-Meskipun surveyor telah mengirimkan ulang data dan status pengajuan telah berubah menjadi `SUBMITTED`, karena kolom `notes` masih memuat teks `"[REVISI ..."`, sistem tetap merender kartu evaluasi besar berwarna oranye menyala dengan badge *"✨ PERLU TINDAKAN"* dan tombol mencolok *"⚡ BUKA & PERBAIKI BAGIAN YANG DIEVALUASI"*. Hal ini menimbulkan kesan bahwa revisi belum terkirim dan masih harus diperbaiki.
+Pada Menu Peninjauan (*Step 3: Review*), tampilan yang ada meliputi:
+1. Data Pemilik / Mitra (Nama, No. WA, Email)
+2. Simulasi Tampilan Aplikasi (*Preview Mobile App*)
+3. Data Kamar (Statistik, Daftar Kamar, Penghuni, Fasilitas)
+4. Syarat & Ketentuan serta Tanda Tangan Digital Pemilik
 
-### B. Kebutuhan Pengguna
-1. **Pemisahan Mode Aktif vs Riwayat**:
-   - Jika status **`REVISION_REQUIRED` / `NEED_REVISION`**: Tampilkan kartu oranye aktif ber-prioritas tinggi untuk memberi tahu surveyor bagian yang wajib diperbaiki.
-   - Jika status **`SUBMITTED` / `PENDING_ONBOARDING` / `APPROVED`** dan memiliki riwayat revisi: Buat kartunya menjadi **kompak / kecil**, ditandai sebagai **"Riwayat Revisi"** lengkap dengan **tanggal dan waktu pengiriman revisi** (`req.updated_at` / `evalData.date`).
-2. **Tombol Tindakan yang Selaras**:
-   - Menampilkan tombol aksi tenang berwarna hijau emerald (*"✏️ Edit & Perbarui Data Listing"*) yang menandakan data sudah berada di tangan admin dan surveyor dapat memperbarui jika dibutuhkan.
+Namun, pada menu peninjauan tersebut:
+- Bagian lokasi hanya menampilkan teks string alamat lengkap mentah (`kmListingForm.address`).
+- Data **Provinsi** (`kmListingForm.province`), **Kota / Kabupaten** (`kmListingForm.city`), dan **Kecamatan / Area** (`kmListingForm.area`) belum ditampilkan secara terstruktur, baik pada ringkasan informasi administratif maupun di dalam simulasi kartu preview mobile.
+
+### B. Tujuan & Peningkatan
+Menampilkan data wilayah administratif yang lengkap dan terstruktur pada Step 3 (Review):
+1. **Ringkasan Wilayah Administratif**: Menambahkan seksi ringkasan data properti & lokasi yang memuat kartu Provinsi, Kota/Kabupaten, Kecamatan/Area, dan Alamat Lengkap + Titik Koordinat GPS.
+2. **Badges Wilayah pada Simulasi Preview Mobile**: Menyajikan chips wilayah (Kecamatan, Kota/Kabupaten, Provinsi) tepat di bawah baris alamat pada simulasi layar handphone calon penyewa.
 
 ---
 
-## 2. Rencana Desain & Dampak Perubahan
+## 2. Rencana Desain & Tata Letak
 
-### Desain Kartu Kompak Riwayat Revisi:
+### A. Komponen Ringkasan Informasi Properti & Wilayah (Step 3):
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ 🕒 RIWAYAT REVISI TERKIRIM                [✓ Terkirim]     │
-│ Terakhir diperbarui: 28 Agu 2026, 17:31 WITA               │
-│                                                             │
-│ 📌 Poin yang telah diperbaiki:                              │
-│ • Foto Utama / Fasad Bangunan  • Fasilitas Umum Kost        │
-│ 📝 Catatan Admin: "..."                                     │
+│ 📍 Informasi Properti & Lokasi Administratif        [✏️ Edit] │
+├─────────────────┬───────────────────┬───────────────────────┤
+│ 🏛️ PROVINSI     │ 🏙️ KOTA / KAB.    │ 📍 KECAMATAN / AREA   │
+│ Sulawesi Selatan│ Makassar          │ Tamalanrea            │
+├─────────────────┴───────────────────┴───────────────────────┤
+│ 🏠 ALAMAT LENGKAP                                           │
+│ Jl. Perintis Kemerdekaan KM 10, Makassar                    │
+│ 📍 Titik GPS: -5.13324, 119.48912                           │
 └─────────────────────────────────────────────────────────────┘
-[ ✏️ Edit & Perbarui Data Listing ]
 ```
+
+### B. Badges Wilayah pada Simulasi Mobile Preview:
+```
+┌─────────────────────────────────────────┐
+│ 📍 Jl. Perintis Kemerdekaan KM 10...   │
+│ [Kec. Tamalanrea] [Kota Makassar] [Prov. Sul-Sel] │
+└─────────────────────────────────────────┘
+```
+
+---
+
+## 3. Dampak Perubahan
 
 ### File yang Tersentuh:
 - [functions/public/pages/AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx):
-  - Memperbaiki pengkondisian kartu di baris ~4525:
-    - Hanya render kartu oranye besar jika `req.status === 'REVISION_REQUIRED' || req.status === 'NEED_REVISION'`.
-    - Ketika `req.status === 'SUBMITTED'`, render kartu kompak *"Riwayat Revisi"* dengan timestamp tanggal dan jam WIB/WITA.
+  - Menambahkan icon `Building2` dari `lucide-react`.
+  - Menambahkan section ringkasan *"Informasi Properti & Lokasi Administratif"* pada Step 3.
+  - Menambahkan baris badge wilayah pada bagian alamat di simulasi Mobile App Preview Step 3.
 - [functions/PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md):
-  - Catat riwayat pengerjaan Entry #140.
+  - Pencatatan riwayat progres Entry #141.
 
 ---
 
-## 3. Langkah Eksekusi (Fase 2 Setelah ACC)
+## 4. Langkah Eksekusi (Fase 2 Setelah ACC)
 
-1. Modifikasi blok render kartu aksi di `AgentDashboard.tsx`.
-2. Format tanggal & waktu revisi menggunakan `Intl.DateTimeFormat` / `toLocaleDateString` dengan format Indonesia lengkap (contoh: *"28 Agu 2026, 17:31 WITA"*).
-3. Jalankan `npm run build` di `functions/public/` untuk memastikan 0 error kompilasi.
-4. Perbarui `functions/PROGRESS.md` dan `WALKTHROUGH.md`.
-5. Lakukan git commit dan push ke branch `bukan-productions`.
+1. Perbarui `AgentDashboard.tsx` dengan menambahkan seksi ringkasan informasi wilayah administratif dan chip lokasi pada mobile preview.
+2. Jalankan `npm run build` di `functions/public/` untuk memastikan lulus kompilasi dengan 0 error.
+3. Catat riwayat pekerjaan ke `functions/PROGRESS.md` dan `WALKTHROUGH.md`.
+4. Lakukan git commit dan push ke branch `bukan-productions`.
 
 ---
 
-## 4. Rencana Verifikasi
+## 5. Rencana Verifikasi
 
-- [ ] **Simulasi Status REVISION_REQUIRED**: Kartu tampil besar, oranye menyala, dengan badge *"Perlu Tindakan"*.
-- [ ] **Simulasi Status SUBMITTED**: Kartu otomatis mengecil menjadi *"Riwayat Revisi"*, menampilkan tanggal dan jam pengiriman secara elegan, dan tombol menjadi *"✏️ Edit & Perbarui Data Listing"*.
+- [ ] Buka formulir survei KostManager dan navigasikan ke **Step 3 (Peninjauan)**.
+- [ ] Periksa seksi informasi properti: pastikan **Provinsi**, **Kota/Kabupaten**, dan **Kecamatan/Area** tampil akurat sesuai data yang diisi pada Step 1.
+- [ ] Periksa simulasi Mobile App Preview: pastikan badge wilayah muncul rapi di bawah alamat.

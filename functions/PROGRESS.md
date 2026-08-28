@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 141. Penyajian Data Wilayah Administratif (Provinsi, Kota/Kabupaten, Kecamatan) pada Menu Peninjauan Step 3 (`AgentDashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pada menu peninjauan (Step 3: Review / Onboarding Kost), ringkasan lokasi sebelumnya hanya menampilkan string teks alamat mentah (`address`) tanpa menyajikan hierarki wilayah administratif seperti Provinsi, Kota/Kabupaten, dan Kecamatan/Area.
+  2. Pengguna meminta agar data terkait Kabupaten/Kota, Provinsi, dan Kecamatan ditampilkan secara terstruktur pada menu peninjauan.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Penambahan Seksi Ringkasan Wilayah Administratif**:
+    - Menambahkan kartu terpadu *"Data Properti & Lokasi Administratif"* pada Step 3 tepat di atas Simulasi Mobile Preview.
+    - Menampilkan kartu data spesifik:
+      - **🏛️ Provinsi**: `kmListingForm.province` (dengan fallback default *"Sulawesi Selatan"*).
+      - **🏙️ Kota / Kabupaten**: `kmListingForm.city` (dengan fallback default *"Makassar"*).
+      - **📍 Kecamatan / Area**: `kmListingForm.area` (misal: *"Tamalanrea"*).
+      - **🏠 Alamat Lengkap & Koordinat GPS**: Menampilkan teks alamat dan nilai latitude/longitude dari pin peta.
+      - **Tombol Pintas `[✏️ Edit Wilayah]`**: Memungkinkan surveyor langsung melompat kembali ke Step 1 jika ingin mengubah wilayah.
+  * **2. Integrasi Badges Wilayah pada Simulasi Preview Mobile**:
+    - Menambahkan badge pill wilayah (`Kec. {area}`, `{city}`, `{province}`) tepat di bawah teks alamat di dalam frame simulasi handphone.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus 100% dengan 0 error dalam 23.71 detik (2526 modules transformed).
+
+
+
 ### 140. Transformasi Kartu Evaluasi Menjadi Baris Kompak Riwayat Revisi Pasca Pengiriman Ulang (`AgentDashboard.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pada daftar tugas surveyor, ketika data hasil revisi telah dikirim ulang ke admin (`status: SUBMITTED`), kartu evaluasi besar berwarna oranye menyala dengan badge *"PERLU TINDAKAN"* masih muncul karena teks catatan memuat kata `[REVISI]`.
