@@ -47,7 +47,8 @@ import {
     Lock,
     AppWindow,
     Plus,
-    Trash2
+    Trash2,
+    Navigation
 } from 'lucide-react';
 import { KostManagerPackage } from '../../types';
 import { 
