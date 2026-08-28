@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { supabase } from '../../supabase';
+import { FORMAT_CURRENCY } from '../../constants';
 import { 
     Users, 
     Calendar, 
