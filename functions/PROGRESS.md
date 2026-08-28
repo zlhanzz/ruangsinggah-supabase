@@ -2,6 +2,49 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 144. Transformasi Modal Editor Properti Terkelola Portal KostManager Menjadi Representasi 1:1 Langsung dari Modal Peninjauan Hasil Survei Admin (Editable Direct Representation) (`KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar tampilan editor properti terkelola portal KostManager dibuat menjadi representasi langsung (1 banding 1) dari tampilan peninjauan hasil survei yang ada di dashboard admin (`KostManagerManagement.tsx`), dengan seluruh elemennya dapat diedit secara interaktif (*interactive editable*), karena sebelumnya tampilannya masih sangat jauh berbeda (header kaku, tab kerdil di pojok, tidak ada KPI cards, tidak ada accordion tipe kamar, tidak ada galeri foto kamar hasil pendataan, dll.).
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Header Terpadu & Top Info Strip 1:1**:
+    - Menyelaraskan status badge `[● AKTIF TERKELOLA (AUTO-PILOT)]`, gender pill selector (`[Campur / Putra / Putri]`), ID badge properti, judul kost uppercase besar dengan inline-editing, serta alamat lengkap.
+    - Top Info Strip lengkap dengan avatar mitra pemilik, nama pemilik, nomor WhatsApp (dengan tombol direct WhatsApp), dropdown pencarian mitra pemilik (`filteredOwners`), mode operasional KostManager Auto-Pilot Studio, dan tombol cepat `[Lihat Web ↗]`.
+    - Navigasi 3-tab horizontal lebar dengan icon dan badge counter dinamis:
+      - `[🏢 1. DATA PROPERTI UMUM]` (Badge total foto gedung)
+      - `[🛏️ 2. DATA KAMAR & PENGHUNI]` (Badge total unit kamar)
+      - `[🛡️ 3. DATA MITRA & KERJASAMA]` (Badge '✓')
+  * **2. Tab 1 (Data Properti Umum - 1:1 Editable)**:
+    - **Hero Carousel Foto Utama (16/7 Dark Slate-950)**: Frame foto gelap rasio 16/7 dengan overlay gradien, badge label foto aktif (dengan dropdown ubah label preset), counter foto, tombol Zoom Lightbox, tombol Hapus Foto, tombol `+ Tambah Foto`, caption bar bawah, tombol Prev/Next chevron, serta thumbnail strip bawah lengkap dengan nomor foto `#1, #2` dan label kategori.
+    - **Fasilitas Umum dengan Two-Way Carousel Sync**: Grid 2-kolom kartu fasilitas persis modal peninjauan admin. Mengklik kartu fasilitas langsung menggeser hero slider ke foto fasilitas terkait (*Two-Way Sync*), badge status `AKTIF` / `+ AKTIFKAN`, serta sub-item rincian parkir (`🏍️ Motor`, `🚗 Mobil`, `🚲 Sepeda`) yang dapat di-toggle.
+    - **Alamat, Titik Koordinat & Google Maps**: 5 kotak data administratif terstruktur (Provinsi, Kabupaten/Kota, Kecamatan/Area, Latitude, Longitude) berdampingan dengan peta Google Maps (`LocationPicker`) interaktif dan link `Buka Google Maps ↗`.
+    - **Kampus & Landmark Terdekat**: Kartu rute 2-kolom dengan estimasi jarak, waktu tempuh (jalan, motor, mobil), link rute Google Maps, serta kontrol tambah/hapus kampus.
+    - **Peraturan & Ketentuan Kost**: Kartu rose dengan ikon larangan `⛔` serta kontrol tambah/hapus peraturan.
+  * **3. Tab 2 (Data Kamar & Penghuni - 1:1 Editable)**:
+    - **4 Top KPI Glance Cards**: Menghitung dan menyajikan secara instan Total Kamar (Biru), Kamar Terisi (Amber), Kamar Kosong (Emerald), dan Total Penghuni (Indigo).
+    - **Galeri Foto Kamar Hasil Pendataan**: Carousel foto kamar interaktif dengan floating card detail kamar di kiri bawah (Nomor Kamar, Ukuran, Tarif Sewa, Fasilitas), counter foto, thumbnail strip, serta filter per-unit kamar.
+    - **Accordion Tipe Kamar (Level 1 Parent)**: Menampilkan nama tipe kamar, ukuran `📐 PxL`, chips fasilitas kamar & kamar mandi lengkap, tarif sewa bulanan, counter `✨ X Kosong` dan `🔒 Y Dihuni`, tombol tambah unit kamar, tombol ubah spek tipe kamar, serta tombol hapus tipe kamar.
+    - **Dua Sub-Parent Accordions Berpasangan (Level 2)**:
+      - **`🔒 KAMAR SEDANG DIHUNI / TERISI`** (Tema Amber): Daftar unit kamar terisi.
+      - **`✨ KAMAR KOSONG / SIAP HUNI`** (Tema Emerald): Daftar unit kamar kosong siap huni.
+    - **Detail Unit Kamar Interaktif**:
+      - Switch 1-klik status kamar (`🔒 Dihuni` <-> `✨ Kosong`) yang langsung memindahkan unit antar sub-parent.
+      - Grid data penghuni 3 kolom: 👤 Nama Penghuni & jumlah penghuni, 📱 Kontak WhatsApp (dengan tombol `Hubungi via WA ↗`), 📅 Periode Tagihan & Tanggal Jatuh Tempo.
+      - Spesifikasi & Fasilitas Kamar Terpasang dengan efek *photo-hover matching highlighting*.
+      - Dokumentasi Foto Kamar per kategori (Interior, Kasur, Kamar Mandi, Jendela) dengan tombol `+ Foto` WebP uploader, Zoom Lightbox, dan Hapus Foto.
+      - Catatan kondisi kamar editable dan tombol Hapus Unit Kamar.
+  * **4. Tab 3 (Data Mitra, Kerjasama & Finansial - 1:1)**:
+    - Salinan Dokumen Perjanjian Kemitraan Auto-Pilot dengan 4 pasal legalitas dan badge `✓ Disetujui Mitra Secara Digital`.
+    - Data rekening penampungan bank pemilik (Owner Payout).
+    - Omnichannel WhatsApp Booking Router.
+    - Simulasi Finansial 3 Kartu: Potensi Omset Penuh, Realisasi Sewa Berjalan, dan Estimasi Payout Pemilik (setelah potongan fee 10%).
+  * **5. Sticky Action Footer & Alur Simpan Terintegrasi**:
+    - Tombol navigasi `Batal`, `← Sebelumnya`, `Lanjut →`, dan `💾 Simpan Perubahan Properti`.
+    - Menyimpan seluruh perubahan (termasuk foto, tipe kamar, unit, penghuni, fasilitas, kampus, peraturan, dan koordinat) ke Supabase secara aman via `updatePropertyWithMedia` atau `addPropertyWithMedia`.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm.cmd run build`) di `functions/public/` lulus 100% dengan 0 error dalam 28.71 detik (2526 modules transformed).
+
 ### 143. Normalisasi Foto & Pencegahan Duplikasi Foto Kamar serta Fallback Thumbnail Properti (`KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pada halaman Kost Manager Portal (`KostManagerPortal.tsx`), ketika membuka modal kelola/edit properti, beberapa foto kamar muncul berulang-ulang (duplikasi foto kamar).
