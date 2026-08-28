@@ -1026,6 +1026,22 @@ export const generateTenantWhatsAppReminder = (t: TenantRecord) => {
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
 };
 
+export const generateTenantWhatsAppInvoice = (t: TenantRecord, propTitle?: string, propPrice?: number) => {
+    const phone = (t.user?.phone || t.metadata?.phone || '').replace(/[^0-9]/g, '');
+    if (!phone) return '#';
+
+    const tenantName = t.user?.name || 'Kak';
+    const kostTitle = t.property?.title || propTitle || 'Kost';
+    const roomName = t.room_type || t.metadata?.roomNumber || 'Kamar';
+    const rentAmount = FORMAT_CURRENCY(Number(t.metadata?.basePrice) || Number(t.metadata?.price) || Number(propPrice) || 0);
+    const dueDate = t.end_date || '-';
+    const periodText = t.start_date && t.end_date ? `${t.start_date} s/d ${t.end_date}` : '1 Bulan';
+
+    const msg = `🧾 *SURAT TAGIHAN SEWA - ${kostTitle.toUpperCase()}*\n━━━━━━━━━━━━━━━━━━━━\nYth. Kak *${tenantName}*,\n\nBerikut rincian tagihan sewa kamar Anda di *${kostTitle}*:\n\n🏠 *Gedung:* ${kostTitle}\n🚪 *Unit Kamar:* ${roomName}\n📅 *Periode Sewa:* ${periodText}\n⏰ *Jatuh Tempo:* *${dueDate}*\n💰 *Total Tagihan:* *${rentAmount}*\n\nMohon melakukan pembayaran sebelum tanggal jatuh tempo. Jika sudah melakukan transfer, silakan kirimkan foto/bukti pembayaran ke nomor ini.\n\nTerima kasih atas kerja samanya! 🙏✨\n— _Manajemen RuangSinggah KostManager_`;
+
+    return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+};
+
 const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMenu, onMenuChange, onBack }) => {
     // --- TABS STATE & ROUTING ---
     const activeTab = (() => {
@@ -2602,14 +2618,25 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                         </div>
 
                                                                         {cleanPhone && (
-                                                                            <div className="flex justify-end pt-1">
+                                                                            <div className="flex items-center justify-end gap-2 pt-1">
                                                                                 <a
-                                                                                    href={waUrl}
+                                                                                    href={`https://wa.me/${cleanPhone}`}
                                                                                     target="_blank"
                                                                                     rel="noopener noreferrer"
-                                                                                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-wider shadow-2xs transition-all flex items-center gap-1.5"
+                                                                                    className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1.5"
+                                                                                    title="Chat langsung dengan penyewa di WhatsApp"
                                                                                 >
-                                                                                    <MessageSquare size={12} /> Hubungi / Tagih via WhatsApp
+                                                                                    <MessageSquare size={12} className="text-emerald-600" /> Hubungi WA
+                                                                                </a>
+
+                                                                                <a
+                                                                                    href={generateTenantWhatsAppInvoice(t, p.title, p.price)}
+                                                                                    target="_blank"
+                                                                                    rel="noopener noreferrer"
+                                                                                    className="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-black text-[10px] uppercase tracking-wider shadow-2xs transition-all flex items-center gap-1.5 active:scale-95"
+                                                                                    title="Kirim Surat Tagihan Resmi via WhatsApp"
+                                                                                >
+                                                                                    <FileText size={12} /> Kirim Tagihan
                                                                                 </a>
                                                                             </div>
                                                                         )}

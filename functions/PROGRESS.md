@@ -2,6 +2,21 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 157. Penambahan Tombol "Kirim Tagihan" & Generator Invoice WhatsApp di Modal Direktori Penghuni Properti (`KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta penambahan tombol khusus **Kirim Tagihan** pada modal Daftar Penghuni Properti (*Tenants Directory*) yang sebelumnya hanya memiliki satu tombol umum.
+- **Implementasi**:
+  * **1. Generator Pesan Invoice WhatsApp (`generateTenantWhatsAppInvoice`)**:
+    - Membuat generator pesan invoice resmi terstruktur yang otomatis memuat: nama properti, unit kamar yang dihuni, periode sewa, tanggal jatuh tempo, dan rincian nominal sewa bulanan beserta instruksi transfer.
+  * **2. Pemisahan Tombol Aksi di Kartu Penghuni**:
+    - Tombol `[ 💬 Hubungi WA ]`: Obrolan langsung dengan penyewa di WhatsApp.
+    - Tombol `[ 🧾 Kirim Tagihan ]`: Mengirimkan surat tagihan/invoice resmi via WhatsApp secara instan dengan 1-klik.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 59.09s, 0 error).
+
 ### 156. Pembersihan Blok Modal Legacy `selectedPropForRoomDetail` di `KostManagerPortal.tsx` (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Terjadi runtime error `Uncaught ReferenceError: selectedPropForRoomDetail is not defined at KostManagerPortal (KostManagerPortal.tsx:3748:14)` saat memuat Portal KostManager.
