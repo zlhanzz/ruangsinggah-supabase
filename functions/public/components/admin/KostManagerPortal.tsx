@@ -35,7 +35,8 @@ import {
     Layers,
     ShieldCheck,
     ArrowUpRight,
-    TrendingUp
+    TrendingUp,
+    MapPin
 } from 'lucide-react';
 import { KostManagerPackage } from '../../types';
 import { 
