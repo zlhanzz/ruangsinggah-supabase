@@ -5667,6 +5667,9 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                                                 const isWcPublic = facName.toLowerCase().includes('wc') || facName.toLowerCase().includes('toilet') || facName.toLowerCase().includes('kamar mandi bersama');
                                                 const wcPublicItems: string[] = newPropForm.publicWcFacilities || [];
 
+                                                const isBathroom = facName.toLowerCase().includes('wc') || facName.toLowerCase().includes('kamar mandi') || facName.toLowerCase().includes('toilet');
+                                                const bathroomItems: string[] = newPropForm.publicBathroomFacilities || [];
+
                                                 const isFacilityActive = activeFacilities.includes(facName);
                                                 const photoIndex = getFacilityPhotoIndex(facName);
                                                 const hasPhoto = photoIndex !== -1;
