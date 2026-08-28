@@ -2,6 +2,35 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 145. Sinkronisasi Presisi 1-ke-1 Data Survei Lapangan Properti Terkelola: Integrasi `groupIntoRoomTypesGlobal`, Kompresi WebP Client-Side, dan Floating Room Detail Card di Portal KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mendapati bahwa saat membuka menu edit properti terkelola (seperti Kost Madani) di portal KostManager, data kamar masih belum merefleksikan hasil peninjauan survei di dashboard admin (`KostManagerManagement.tsx`): kamar terpecah menjadi tipe-tipe terpisah dengan kamar dummy `RM-101`, data penghuni riil (`zul`, `081527080656`, dll.) tidak muncul, dan 12 foto dokumentasi kamar tidak masuk ke carousel galeri kamar.
+  2. Pengguna meminta representasi data harus persis 1 banding 1 dengan modal peninjauan hasil survei admin, namun versi dapat diedit secara langsung (*interactive editable*).
+- **Akar Masalah (Root Cause)**:
+  - Pada database Supabase, properti hasil survei menyimpan kamar dalam bentuk *flat array* per unit kamar (`Kamar 1` s.d. `Kamar 5`).
+  - Modal review admin menggunakan algoritma cerdas `groupIntoRoomTypes` untuk mengelompokkan unit-unit ini ke dalam Tipe Kamar sejati (`Tipe Standard`) dan mengekstrak foto berlabel kamar.
+  - Sebaliknya, fungsi `handleEditProperty` di `KostManagerPortal.tsx` sebelumnya memperlakukan setiap item flat sebagai tipe kamar terpisah dan mencari properti `.rooms`. Karena tidak ada, ia memicu fallback unit dummy `RM-101`, menghapus nama penghuni riil `zul`, dan membuang label foto kamar.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Engine Grouping Kamar 1:1 Global (`groupIntoRoomTypesGlobal`)**:
+    - Menerapkan algoritma pengelompokan unit kamar flat menjadi Tipe Kamar sejati di `handleEditProperty`.
+    - Unit dikelompokkan berdasarkan kesamaan `typeName`, `size`, dan `price` (seperti Kost Madani menjadi `Tipe Standard` dengan 2 unit terisi dan 3 unit kosong).
+    - Mempertahankan dan mengintegrasikan seluruh data penghuni riil (`zul`, kontak WA `081527080656`, periode `Bulanan`, dan tanggal jatuh tempo `2026-09-28`).
+    - Menghubungkan seluruh 12 foto dokumentasi kamar asli lengkap dengan label kategorinya (`Interior Kamar`, `Kamar Mandi Dalam`, `Tempat Tidur`, `Lemari / Penyimpanan`, `Jendela Luar`).
+  * **2. Normalisasi Foto Bangunan & Two-Way Sync Berlabel (`normalizePhotosWithLabels`)**:
+    - Foto bangunan dipertahankan dalam format `{ url, label }` sehingga kartu fasilitas umum (`Area Parkir`, `Dapur Bersama`, dll.) langsung terhubung dua arah (*Two-Way Carousel Sync*) dengan foto yang relevan di hero frame.
+    - Menjaga data `publicParkingFacilities` (`Motor`, `Mobil`, `Sepeda`) dengan sub-chips interaktif.
+  * **3. Floating Room Detail Card & Thumbnail Strip Galeri Kamar 1:1**:
+    - Floating card di sudut kiri bawah hero frame foto kamar kini menampilkan nomor kamar, ukuran kamar, tarif sewa bulanan, dan chips fasilitas terpasang (persis Screenshot 2 & 3).
+    - Thumbnail strip di bawah frame foto menampilkan tag nomor kamar (`Kamar 3`, `Kamar 4`) di pojok kiri atas dan label kategori foto di bagian bawah dengan border aktif orange `#ff7a00`.
+  * **4. Layout Kamar Kosong 1:1 (Dimensi Kamar & Fasilitas Interaktif)**:
+    - Menyelaraskan layout kartu kamar kosong (`vacantUnits`) menjadi grid 3 kolom interaktif (1 kolom ukuran kamar + 2 kolom fasilitas terpasang ber-ikon dengan efek hover matching) persis tampilan review survei admin.
+  * **5. Kompresi Gambar Client-Side ke Format WebP (Standard Baku Rule #5)**:
+    - Mengintegrasikan fungsi pembantu `compressImageToWebP` yang mengonversi foto kamar dan foto gedung secara otomatis ke format `.webp` berkualitas tinggi (0.82) di sisi front-end sebelum dikirim ke Supabase Storage.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+
 ### 144. Transformasi Modal Editor Properti Terkelola Portal KostManager Menjadi Representasi 1:1 Langsung dari Modal Peninjauan Hasil Survei Admin (Editable Direct Representation) (`KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar tampilan editor properti terkelola portal KostManager dibuat menjadi representasi langsung (1 banding 1) dari tampilan peninjauan hasil survei yang ada di dashboard admin (`KostManagerManagement.tsx`), dengan seluruh elemennya dapat diedit secara interaktif (*interactive editable*), karena sebelumnya tampilannya masih sangat jauh berbeda (header kaku, tab kerdil di pojok, tidak ada KPI cards, tidak ada accordion tipe kamar, tidak ada galeri foto kamar hasil pendataan, dll.).

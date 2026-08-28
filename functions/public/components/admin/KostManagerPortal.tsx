@@ -120,6 +120,238 @@ const normalizePhotosWithLabels = (imgUrls: any[]): { url: string; label: string
     }).filter(item => Boolean(item.url));
 };
 
+// Client-Side WebP Compression Helper (Standard Baku Workspace Rule #5)
+const compressImageToWebP = async (file: File, quality = 0.82, maxDimension = 1920): Promise<File> => {
+    return new Promise((resolve) => {
+        if (!file.type.startsWith('image/')) return resolve(file);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                let { width, height } = img;
+                if (width > maxDimension || height > maxDimension) {
+                    if (width > height) {
+                        height = Math.round((height * maxDimension) / width);
+                        width = maxDimension;
+                    } else {
+                        width = Math.round((width * maxDimension) / height);
+                        height = maxDimension;
+                    }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return resolve(file);
+                ctx.drawImage(img, 0, 0, width, height);
+                canvas.toBlob((blob) => {
+                    if (!blob) return resolve(file);
+                    const newFileName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
+                    const webpFile = new File([blob], newFileName, { type: "image/webp" });
+                    resolve(webpFile);
+                }, "image/webp", quality);
+            };
+            img.onerror = () => resolve(file);
+            img.src = e.target?.result as string;
+        };
+        reader.onerror = () => resolve(file);
+        reader.readAsDataURL(file);
+    });
+};
+
+const DEFAULT_GLOBAL_ROOM_PHOTO_SLOTS = ['Interior Kamar', 'Kamar Mandi Dalam', 'Tempat Tidur', 'Lemari / Penyimpanan'];
+
+const getRoomPhotosGlobal = (room: any): { url: string; label: string }[] => {
+    if (!room) return [];
+    const result: { url: string; label: string }[] = [];
+
+    // 1. Dari categorizedPhotos
+    if (room.categorizedPhotos && typeof room.categorizedPhotos === 'object') {
+        const catMap: Record<string, string> = {
+            interior: 'Interior Kamar',
+            kasur: 'Tempat Tidur',
+            wc: 'Kamar Mandi',
+            jendela: 'Jendela Luar'
+        };
+        Object.keys(room.categorizedPhotos).forEach(k => {
+            const list = room.categorizedPhotos[k];
+            if (Array.isArray(list)) {
+                list.forEach(item => {
+                    const url = typeof item === 'string' ? item : (item?.url || item?.original || '');
+                    if (url && !result.some(p => p.url === url)) {
+                        result.push({ url, label: catMap[k] || k });
+                    }
+                });
+            }
+        });
+    }
+
+    // 2. Dari raw images, image_urls, photos
+    const rawImages = room.images || room.image_urls || room.photos || [];
+    if (Array.isArray(rawImages)) {
+        rawImages.forEach((img: any, imgIdx: number) => {
+            const url = typeof img === 'string' ? img : (img?.url || img?.original || '');
+            if (url && !result.some(p => p.url === url)) {
+                let label = '';
+                if (room.photoCategories?.[imgIdx]) label = room.photoCategories[imgIdx];
+                else if (typeof img === 'object' && img?.label) label = img.label;
+                else if (imgIdx < DEFAULT_GLOBAL_ROOM_PHOTO_SLOTS.length) label = DEFAULT_GLOBAL_ROOM_PHOTO_SLOTS[imgIdx];
+                else label = `Foto #${imgIdx + 1}`;
+                label = label.replace(/\s*\*Wajib/i, '').replace(/\(Opsional\)/i, '').trim();
+                result.push({ url, label });
+            }
+        });
+    }
+
+    return result;
+};
+
+const formatRoomNameGlobal = (name: string, idx: number): string => {
+    if (!name) return `Kamar ${idx + 1}`;
+    const clean = String(name).trim();
+    if (/^\d+$/.test(clean)) return `Kamar ${clean}`;
+    if (/^kamar/i.test(clean)) return clean;
+    return clean;
+};
+
+const groupIntoRoomTypesGlobal = (rawList: any[], propertyTenants: any[] = []): any[] => {
+    if (!Array.isArray(rawList) || rawList.length === 0) return [];
+
+    const hasExplicitSubUnits = rawList.some(rt => (Array.isArray(rt.rooms) && rt.rooms.length > 0) || (Array.isArray(rt.unit_rooms) && rt.unit_rooms.length > 0));
+
+    if (hasExplicitSubUnits) {
+        return rawList.map((rt, idx) => {
+            const rawUnits = (Array.isArray(rt.rooms) && rt.rooms.length > 0) ? rt.rooms : (Array.isArray(rt.unit_rooms) ? rt.unit_rooms : [rt]);
+            const rooms = rawUnits.map((u: any, uIdx: number) => {
+                const unitName = formatRoomNameGlobal(u?.name || u?.roomNumber || u?.room_number || String(uIdx + 1), uIdx);
+                const matchedTenant = propertyTenants.find(t => 
+                    t.metadata?.roomNumber === unitName || 
+                    t.metadata?.roomNumber === u?.roomNumber || 
+                    t.metadata?.roomNumber === u?.name
+                );
+
+                const tenantName = u?.tenantName || u?.residentName || u?.occupant_name || u?.occupantName || rt.residentName || rt.occupant_name || matchedTenant?.user?.name || '';
+                const tenantPhone = u?.tenantPhone || u?.residentPhone || u?.occupant_phone || u?.occupantPhone || rt.residentPhone || rt.occupant_phone || matchedTenant?.user?.phone || '';
+                const billingPeriod = u?.billingPeriod || u?.paymentPeriod || u?.rentPeriod || rt.paymentPeriod || rt.rentPeriod || matchedTenant?.metadata?.billingPeriod || 'bulanan';
+                const dueDate = u?.dueDate || u?.endDate || u?.rentEndDate || rt.endDate || rt.rentEndDate || matchedTenant?.end_date || '';
+                const startDate = u?.startDate || u?.rentStartDate || rt.startDate || rt.rentStartDate || matchedTenant?.start_date || '';
+
+                const isUnitOcc = u?.status === 'Terisi' || u?.status === 'terisi' || u?.status === 'occupied' || u?.is_occupied === true || u?.isAvailable === false || Boolean(tenantName || tenantPhone);
+                const photos = getRoomPhotosGlobal(u).length > 0 ? getRoomPhotosGlobal(u) : getRoomPhotosGlobal(rt);
+
+                return {
+                    id: u?.id || `unit_${idx}_${uIdx}`,
+                    roomNumber: unitName,
+                    status: isUnitOcc ? ('terisi' as const) : ('kosong' as const),
+                    tenantName,
+                    tenantPhone,
+                    billingPeriod,
+                    dueDate,
+                    startDate,
+                    currentOccupants: Number(u?.currentOccupants || rt.currentOccupants || 1),
+                    size: u?.size || rt.size || '3x4 meter',
+                    price: Number(u?.price || rt.price || 0),
+                    facilities: u?.facilities || u?.roomFacilities || rt.roomFacilities || rt.room_facilities || [],
+                    bathroomFacilities: u?.bathroomFacilities || rt.bathroomFacilities || rt.bathroom_facilities || [],
+                    kitchenFacilities: u?.kitchenFacilities || rt.kitchenFacilities || rt.kitchen_facilities || [],
+                    images: photos,
+                    categorizedPhotos: u?.categorizedPhotos || {},
+                    notes: u?.notes || rt.notes || rt.surveyorNotes || ''
+                };
+            });
+
+            let typeTitle = rt.typeName || rt.type || '';
+            if (!typeTitle || /^\d+$/.test(String(rt.name).trim()) || /^kamar\s*\d+/i.test(String(rt.name).trim())) {
+                typeTitle = rawList.length > 1 ? `Tipe Kamar #${idx + 1}` : 'Tipe Standard';
+            } else {
+                typeTitle = /^tipe/i.test(String(rt.name).trim()) ? rt.name.trim() : `Tipe ${rt.name.trim()}`;
+            }
+
+            return {
+                id: rt.id || `rt_${idx}`,
+                name: typeTitle,
+                size: rt.size || '3x4 meter',
+                price: Number(rt.price || 0),
+                maxOccupants: rt.maxOccupants || 1,
+                roomFacilities: rt.roomFacilities || rt.room_facilities || [],
+                bathroomFacilities: rt.bathroomFacilities || rt.bathroom_facilities || [],
+                kitchenFacilities: rt.kitchenFacilities || rt.kitchen_facilities || [],
+                rooms
+            };
+        });
+    }
+
+    // Surveyor / Flat units grouping:
+    const typeGroups: { [key: string]: any } = {};
+
+    rawList.forEach((roomItem: any, idx: number) => {
+        let typeName = roomItem.typeName || roomItem.type || '';
+        const rawName = String(roomItem.name || roomItem.roomNumber || '').trim();
+        if (!typeName) {
+            if (rawName && !/^\d+$/.test(rawName) && !/^kamar\s*\d+/i.test(rawName)) {
+                typeName = rawName;
+            } else {
+                typeName = 'Standard';
+            }
+        }
+        const groupKey = `${typeName}_${roomItem.size || '3x4'}_${roomItem.price || 0}`;
+
+        if (!typeGroups[groupKey]) {
+            typeGroups[groupKey] = {
+                id: `rt_group_${idx}`,
+                name: /^tipe/i.test(typeName) ? typeName : `Tipe ${typeName}`,
+                size: roomItem.size || '3x4 meter',
+                price: Number(roomItem.price || 0),
+                maxOccupants: roomItem.maxOccupants || 1,
+                roomFacilities: roomItem.roomFacilities || roomItem.room_facilities || [],
+                bathroomFacilities: roomItem.bathroomFacilities || roomItem.bathroom_facilities || [],
+                kitchenFacilities: roomItem.kitchenFacilities || roomItem.kitchen_facilities || [],
+                rooms: []
+            };
+        }
+
+        const unitName = formatRoomNameGlobal(roomItem.name || roomItem.roomNumber || String(idx + 1), idx);
+        const matchedTenant = propertyTenants.find(t => 
+            t.metadata?.roomNumber === unitName || 
+            t.metadata?.roomNumber === roomItem.roomNumber || 
+            t.metadata?.roomNumber === roomItem.name
+        );
+
+        const tenantName = roomItem.tenantName || roomItem.residentName || roomItem.occupant_name || roomItem.occupantName || matchedTenant?.user?.name || '';
+        const tenantPhone = roomItem.tenantPhone || roomItem.residentPhone || roomItem.occupant_phone || roomItem.occupantPhone || matchedTenant?.user?.phone || '';
+        const billingPeriod = roomItem.billingPeriod || roomItem.paymentPeriod || roomItem.rentPeriod || matchedTenant?.metadata?.billingPeriod || 'bulanan';
+        const dueDate = roomItem.dueDate || roomItem.endDate || roomItem.rentEndDate || matchedTenant?.end_date || '';
+        const startDate = roomItem.startDate || roomItem.rentStartDate || matchedTenant?.start_date || '';
+
+        const isUnitOcc = roomItem.status === 'Terisi' || roomItem.status === 'terisi' || roomItem.status === 'occupied' || roomItem.is_occupied === true || roomItem.isAvailable === false || Boolean(tenantName || tenantPhone);
+        const photos = getRoomPhotosGlobal(roomItem);
+
+        const normalizedUnit = {
+            id: roomItem.id || `unit_${idx}`,
+            roomNumber: unitName,
+            status: isUnitOcc ? ('terisi' as const) : ('kosong' as const),
+            tenantName,
+            tenantPhone,
+            billingPeriod,
+            dueDate,
+            startDate,
+            currentOccupants: Number(roomItem.currentOccupants || 1),
+            size: roomItem.size || typeGroups[groupKey].size,
+            price: Number(roomItem.price || typeGroups[groupKey].price),
+            facilities: roomItem.facilities || roomItem.roomFacilities || roomItem.room_facilities || typeGroups[groupKey].roomFacilities,
+            bathroomFacilities: roomItem.bathroomFacilities || roomItem.bathroom_facilities || typeGroups[groupKey].bathroomFacilities,
+            kitchenFacilities: roomItem.kitchenFacilities || roomItem.kitchen_facilities || typeGroups[groupKey].kitchenFacilities,
+            images: photos,
+            categorizedPhotos: roomItem.categorizedPhotos || {},
+            notes: roomItem.notes || roomItem.surveyorNotes || ''
+        };
+
+        typeGroups[groupKey].rooms.push(normalizedUnit);
+    });
+
+    return Object.values(typeGroups);
+};
+
 // Google Maps LocationPicker Component
 const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (lat: number, lng: number, address: string, city?: string, area?: string) => void }> = ({ lat, lng, onLocationChange }) => {
     const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -277,6 +509,10 @@ interface ManagedProperty {
     omnichannel_contact_phone?: string;
     omnichannel_contact_type?: string;
     rules?: string[];
+    metadata?: any;
+    province?: string;
+    publicParkingFacilities?: string[];
+    public_parking_facilities?: string[];
 }
 
 interface TenantRecord {
@@ -1140,118 +1376,64 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
         // Filter penyewa aktif di properti ini
         const propResidents = tenants.filter(t => t.kost_id === p.id && t.status === 'ACTIVE');
 
-        // Rekonstruksi roomTypes
-        const reconstructedRoomTypes = p.room_types.map(rt => {
-            const typeResidents = propResidents.filter(t => t.room_type?.toLowerCase() === rt.name?.toLowerCase());
-            
-            // Periksa apakah sudah ada list kamar tersimpan di database tipe kamar
-            const dbRooms = Array.isArray(rt.rooms) ? rt.rooms : [];
+        // Rekonstruksi roomTypes dengan grouping cerdas 1:1 identik dengan review hasil pendataan survei
+        const rawRoomList = Array.isArray(p.room_types) && p.room_types.length > 0
+            ? p.room_types
+            : ((p as any).metadata?.roomTypes || (p as any).metadata?.room_types || []);
 
-            const allRooms = dbRooms.map((r: any, idx: number) => {
-                if (r.status === 'terisi') {
-                    const tenant = typeResidents.find(t => t.metadata?.roomNumber === r.roomNumber) || typeResidents[idx];
-                    return {
-                        roomNumber: r.roomNumber || `RM-${101 + idx}`,
-                        status: 'terisi' as const,
-                        tenantName: tenant?.user?.name || '',
-                        tenantPhone: tenant?.user?.phone || '',
-                        billingPeriod: tenant?.metadata?.billingPeriod || 'bulanan',
-                        dueDate: tenant?.end_date || '',
-                        images: normalizePhotoList(r.images || []),
-                        categorizedPhotos: {
-                            interior: normalizePhotoList(r.categorizedPhotos?.interior || r.images || []),
-                            kasur: normalizePhotoList(r.categorizedPhotos?.kasur || []),
-                            wc: normalizePhotoList(r.categorizedPhotos?.wc || []),
-                            jendela: normalizePhotoList(r.categorizedPhotos?.jendela || [])
-                        }
-                    };
-                } else {
-                    return {
-                        roomNumber: r.roomNumber || `RM-${101 + idx}`,
-                        status: 'kosong' as const,
-                        tenantName: '',
-                        tenantPhone: '',
-                        billingPeriod: 'bulanan',
-                        dueDate: '',
-                        images: normalizePhotoList(r.images || []),
-                        categorizedPhotos: {
-                            interior: normalizePhotoList(r.categorizedPhotos?.interior || r.images || []),
-                            kasur: normalizePhotoList(r.categorizedPhotos?.kasur || []),
-                            wc: normalizePhotoList(r.categorizedPhotos?.wc || []),
-                            jendela: normalizePhotoList(r.categorizedPhotos?.jendela || [])
-                        }
-                    };
-                }
-            });
+        const reconstructedRoomTypes = groupIntoRoomTypesGlobal(rawRoomList, propResidents);
 
-            // Fallback jika properti lama belum memiliki array rooms
-            if (allRooms.length === 0) {
-                const occupiedRooms = typeResidents.map((t, idx) => ({
-                    roomNumber: t.metadata?.roomNumber || `RM-${101 + idx}`,
-                    status: 'terisi' as const,
-                    tenantName: t.user?.name || '',
-                    tenantPhone: t.user?.phone || '',
-                    billingPeriod: t.metadata?.billingPeriod || 'bulanan',
-                    dueDate: t.end_date || '',
-                    images: [] as string[]
-                }));
-
-                const emptyRoomsCount = rt.availableRoomCount || 0;
-                const emptyRooms = Array.from({ length: emptyRoomsCount }).map((_, idx) => ({
-                    roomNumber: `RM-${101 + occupiedRooms.length + idx}`,
-                    status: 'kosong' as const,
-                    tenantName: '',
-                    tenantPhone: '',
-                    billingPeriod: 'bulanan',
-                    dueDate: '',
-                    images: [] as string[]
-                }));
-
-                allRooms.push(...occupiedRooms, ...emptyRooms);
-            }
-
-            if (allRooms.length === 0) {
-                allRooms.push({
+        // Fallback jika belum memiliki data tipe kamar sama sekali
+        if (reconstructedRoomTypes.length === 0) {
+            reconstructedRoomTypes.push({
+                name: 'Tipe Standard',
+                price: Number(p.price) || 850000,
+                size: '3x4 meter',
+                maxOccupants: 1,
+                roomFacilities: ['Kasur', 'Lemari Pakaian'],
+                bathroomFacilities: ['Kamar Mandi Dalam'],
+                kitchenFacilities: [],
+                rooms: [{
                     roomNumber: '101',
                     status: 'kosong',
                     tenantName: '',
                     tenantPhone: '',
                     billingPeriod: 'bulanan',
                     dueDate: '',
-                    images: [] as string[]
-                });
-            }
+                    startDate: '',
+                    currentOccupants: 1,
+                    images: [],
+                    notes: ''
+                }]
+            });
+        }
 
-            return {
-                name: rt.name,
-                price: rt.price,
-                size: rt.size || '3x4m',
-                maxOccupants: rt.maxOccupants || 1,
-                roomFacilities: rt.roomFacilities || [],
-                bathroomFacilities: rt.bathroomFacilities || [],
-                rooms: allRooms
-            };
-        });
+        const propAddress = p.address || '';
+        const propProvince = p.province || (p as any).metadata?.province || detectProvinceFromAddress(propAddress) || 'Sulawesi Selatan';
+        const propCity = p.city || (p as any).metadata?.city || 'Makassar';
+        const propArea = p.area || (p as any).metadata?.area || '';
+        const propParking = p.publicParkingFacilities || p.public_parking_facilities || (p as any).metadata?.publicParkingFacilities || (p as any).metadata?.public_parking_facilities || ['Motor'];
 
         setNewPropForm({
             title: p.title || '',
             description: p.description || '',
-            address: p.address || '',
-            city: p.city || '',
-            area: p.area || '',
-            province: (p as any).province || p.metadata?.province || '',
+            address: propAddress,
+            city: propCity,
+            area: propArea,
+            province: propProvince,
             type: p.type || 'Campur',
             price: p.price || 0,
             owner_uid: p.owner_uid || '',
-            location: p.location || { lat: -6.2088, lng: 106.8456 },
-            facilities: p.facilities || [],
-            imageUrls: normalizePhotoList(p.image_urls || []),
+            location: p.location || { lat: -5.147665, lng: 119.432731 },
+            facilities: p.facilities && p.facilities.length > 0 ? p.facilities : ['WiFi Cepat', 'Area Parkir', 'Dapur Bersama'],
+            imageUrls: normalizePhotosWithLabels(p.image_urls || []),
             videoUrls: p.video_urls || [],
             instagramUrl: p.instagram_url || '',
             tiktokUrl: p.tiktok_url || '',
             rules: p.rules || [],
             campuses: p.campuses || [],
             publicFacilities: p.public_facilities || [],
+            publicParkingFacilities: propParking,
             additionalFeePrice: p.additional_fee_price || 0,
             additionalFeeName: p.additional_fee_name || '',
             additionalFeeStartsFrom: p.additional_fee_starts_from || 'month_1',
@@ -3693,7 +3875,16 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
         setUploadingRooms(prev => ({ ...prev, [uploadKey]: true }));
         try {
             const folder = `kostmanager/rooms/${Date.now()}`;
-            const publicUrl = await uploadFileAndGetURL(file, folder);
+            const webpFile = await compressImageToWebP(file);
+            const publicUrl = await uploadFileAndGetURL(webpFile, folder);
+            const catMap: Record<string, string> = {
+                interior: 'Interior Kamar',
+                kasur: 'Tempat Tidur',
+                wc: 'Kamar Mandi Dalam',
+                jendela: 'Jendela Luar'
+            };
+            const photoLabel = catMap[categoryKey] || categoryKey;
+
             setNewPropForm((prev: any) => {
                 const updatedRoomTypes = (prev.roomTypes || currentRoomTypes).map((rtItem: any, rti: number) => {
                     if (rti !== rtIdx) return rtItem;
@@ -3702,8 +3893,8 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                         const currentImages = Array.isArray(rmItem.images) ? [...rmItem.images] : [];
                         const currentCatPhotos = { ...(rmItem.categorizedPhotos || {}) };
                         const catList = Array.isArray(currentCatPhotos[categoryKey]) ? [...currentCatPhotos[categoryKey]] : [];
-                        if (!currentImages.includes(publicUrl)) currentImages.push(publicUrl);
-                        if (!catList.includes(publicUrl)) catList.push(publicUrl);
+                        currentImages.push({ url: publicUrl, label: photoLabel });
+                        catList.push(publicUrl);
                         currentCatPhotos[categoryKey] = catList;
                         return { ...rmItem, images: currentImages, categorizedPhotos: currentCatPhotos };
                     });
@@ -3725,11 +3916,17 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                 if (rti !== rtIdx) return rtItem;
                 const updatedRooms = (rtItem.rooms || []).map((rmItem: any, rmi: number) => {
                     if (rmi !== rmIdx) return rmItem;
-                    const currentImages = (rmItem.images || []).filter((u: string) => u !== photoUrl);
+                    const currentImages = (rmItem.images || []).filter((u: any) => {
+                        const uUrl = typeof u === 'string' ? u : (u?.url || u?.original || '');
+                        return uUrl !== photoUrl;
+                    });
                     const currentCatPhotos = { ...(rmItem.categorizedPhotos || {}) };
                     Object.keys(currentCatPhotos).forEach(k => {
                         if (Array.isArray(currentCatPhotos[k])) {
-                            currentCatPhotos[k] = currentCatPhotos[k].filter((u: string) => u !== photoUrl);
+                            currentCatPhotos[k] = currentCatPhotos[k].filter((u: any) => {
+                                const uUrl = typeof u === 'string' ? u : (u?.url || u?.original || '');
+                                return uUrl !== photoUrl;
+                            });
                         }
                     });
                     return { ...rmItem, images: currentImages, categorizedPhotos: currentCatPhotos };
@@ -3741,9 +3938,11 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
     };
 
     // Hero Building Photo Upload & Delete
-    const handleImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
-            setNewImageFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+            const rawFiles = Array.from(e.target.files);
+            const compressedList = await Promise.all(rawFiles.map(f => compressImageToWebP(f)));
+            setNewImageFiles(prev => [...prev, ...compressedList]);
         }
     };
 
@@ -4791,6 +4990,13 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                                                     {currentActiveRoomPhoto.u?.price ? (
                                                         <p className="text-sm font-black text-emerald-400">TARIF {FORMAT_CURRENCY(currentActiveRoomPhoto.u.price)}/bln</p>
                                                     ) : null}
+                                                    {((currentActiveRoomPhoto.u?.facilities && currentActiveRoomPhoto.u.facilities.length > 0) ? currentActiveRoomPhoto.u.facilities : (currentActiveRoomPhoto.u?.roomFacilities || [])).length > 0 && (
+                                                        <div className="flex flex-wrap gap-1 pt-1 max-w-[260px]">
+                                                            {((currentActiveRoomPhoto.u?.facilities && currentActiveRoomPhoto.u.facilities.length > 0) ? currentActiveRoomPhoto.u.facilities : (currentActiveRoomPhoto.u?.roomFacilities || [])).slice(0, 3).map((f: string, i: number) => (
+                                                                <span key={i} className="inline-block px-1.5 py-0.5 rounded-md bg-white/20 text-[9px] font-black text-white">{f}</span>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 {/* Photo Counter */}
@@ -5362,35 +5568,60 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                                                                                     </button>
                                                                                 </div>
 
-                                                                                {/* Spesifikasi & Fasilitas Kamar Terpasang */}
-                                                                                <div className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-3 space-y-2 text-xs">
-                                                                                    <div className="flex items-center justify-between">
-                                                                                        <span className="text-[9px] font-black text-slate-700 uppercase tracking-wider">
-                                                                                            🛋️ Fasilitas &amp; Spesifikasi Terpasang
+                                                                                {/* Grid Spesifikasi Kamar & Kelengkapan (1:1 Identik Review Survei) */}
+                                                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                                                                                    {/* 1. Dimensi Kamar */}
+                                                                                    <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-3">
+                                                                                        <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider block mb-1">
+                                                                                            📐 Ukuran Kamar
                                                                                         </span>
-                                                                                        <span className="px-2 py-0.5 rounded bg-slate-200/80 text-[9px] font-black text-slate-700">
-                                                                                            📐 {u.size || rt.size || '3x4 meter'}
-                                                                                        </span>
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            value={u.size || rt.size || '3x4 meter'}
+                                                                                            onChange={e => updateUnit(rtIdx, origIdx, { size: e.target.value })}
+                                                                                            className="font-black text-slate-900 bg-white border border-emerald-200 rounded px-2 py-0.5 text-xs w-full outline-none"
+                                                                                        />
+                                                                                        <span className="text-[10px] text-slate-500 font-semibold block mt-1">Ruangan Kosong</span>
                                                                                     </div>
-                                                                                    <div className="flex flex-wrap gap-1.5 pt-0.5">
-                                                                                        {unifiedFacilities.map((uf) => {
-                                                                                            const hasMatchingPhoto = unitPhotos.some(p => isFacilityMatchingPhoto(uf.allKeywords, p.label));
-                                                                                            return (
-                                                                                                <div
-                                                                                                    key={uf.id}
-                                                                                                    className={`inline-flex flex-col justify-center px-3 py-1.5 rounded-xl border transition-all duration-200 cursor-pointer select-none gap-1 ${
-                                                                                                        hasMatchingPhoto
-                                                                                                            ? 'bg-white border-emerald-300 text-emerald-950 hover:border-emerald-500 hover:bg-emerald-50 shadow-2xs'
-                                                                                                            : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
-                                                                                                    }`}
-                                                                                                >
-                                                                                                    <div className="flex items-center gap-1.5">
-                                                                                                        {getRoomFacilityIcon(uf.mainName, 12)}
-                                                                                                        <span className="font-black text-[10px]">{uf.mainName}</span>
+
+                                                                                    {/* 2. Kelengkapan Kamar Ber-Icon & Interaktif */}
+                                                                                    <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-3 sm:col-span-2 space-y-1.5">
+                                                                                        <div className="flex items-center justify-between">
+                                                                                            <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider">
+                                                                                                🛋️ Fasilitas Terpasang
+                                                                                            </span>
+                                                                                            <span className="text-[8.5px] text-emerald-700/80 font-medium hidden sm:inline">
+                                                                                                (Sorot fasilitas untuk melihat foto terkait 🎯)
+                                                                                            </span>
+                                                                                        </div>
+                                                                                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                                                                            {unifiedFacilities.map((uf) => {
+                                                                                                const isThisFacilityHovered = hoveredFacility?.unitId === String(origIdx) && hoveredFacility?.facilityId === uf.id;
+                                                                                                const isMatchedByPhotoHover = hoveredPhoto?.unitId === String(origIdx) && isFacilityMatchingPhoto(uf.allKeywords, hoveredPhoto.label);
+                                                                                                const isHighlighted = isThisFacilityHovered || isMatchedByPhotoHover;
+                                                                                                const hasMatchingPhoto = unitPhotos.some(p => isFacilityMatchingPhoto(uf.allKeywords, p.label));
+
+                                                                                                return (
+                                                                                                    <div
+                                                                                                        key={uf.id}
+                                                                                                        onMouseEnter={() => setHoveredFacility({ unitId: String(origIdx), facilityId: uf.id, keywords: uf.allKeywords })}
+                                                                                                        onMouseLeave={() => setHoveredFacility(null)}
+                                                                                                        className={`inline-flex flex-col justify-center px-3 py-1.5 rounded-xl border transition-all duration-200 cursor-pointer select-none gap-1 ${
+                                                                                                            isHighlighted
+                                                                                                                ? 'bg-emerald-600 text-white border-emerald-700 shadow-md ring-2 ring-emerald-400 scale-105 z-10'
+                                                                                                                : hasMatchingPhoto
+                                                                                                                    ? 'bg-white border-emerald-300 text-emerald-950 hover:border-emerald-500 hover:bg-emerald-50 shadow-2xs'
+                                                                                                                    : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                                                                                                        }`}
+                                                                                                    >
+                                                                                                        <div className="flex items-center gap-1.5">
+                                                                                                            {getRoomFacilityIcon(uf.mainName, 12)}
+                                                                                                            <span className="font-black text-[10px]">{uf.mainName}</span>
+                                                                                                        </div>
                                                                                                     </div>
-                                                                                                </div>
-                                                                                            );
-                                                                                        })}
+                                                                                                );
+                                                                                            })}
+                                                                                        </div>
                                                                                     </div>
                                                                                 </div>
 
