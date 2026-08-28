@@ -5661,6 +5661,12 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                                                 const parkingItems = newPropForm.publicParkingFacilities || ['Motor', 'Mobil'];
                                                 const hasSubData = isParking && parkingItems.length > 0;
 
+                                                const isKitchen = facName.toLowerCase().includes('dapur');
+                                                const kitchenItems: string[] = newPropForm.publicKitchenFacilities || [];
+
+                                                const isWcPublic = facName.toLowerCase().includes('wc') || facName.toLowerCase().includes('toilet') || facName.toLowerCase().includes('kamar mandi bersama');
+                                                const wcPublicItems: string[] = newPropForm.publicWcFacilities || [];
+
                                                 const isFacilityActive = activeFacilities.includes(facName);
                                                 const photoIndex = getFacilityPhotoIndex(facName);
                                                 const hasPhoto = photoIndex !== -1;
