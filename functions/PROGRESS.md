@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 150. Pemulihan Tampilan Kartu Properti Terkelola & Fallback Cerdas Database di Portal KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa kartu properti kelolaan di Portal KostManager mendadak hilang dan menampilkan teks *"Tidak ada properti terkelola yang sesuai dengan pencarian"* (0 Gedung Aktif).
+  2. Penyebab: Fungsi `loadAllData` menyaring properti dengan kondisi ketat `is_managed = true` / `subscription_status = 'kostmanager'`, sedangkan properti aktif di database saat ini berstatus `published` dengan `is_managed = false`.
+  3. Ketiadaan mekanisme fallback menyebabkan tabel properti kosong ketika flag `is_managed` belum di-set secara manual di database.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Fallback Cerdas pada `loadAllData`**:
+    - Menambahkan mekanisme fallback: Jika belum ada properti yang di-flag `is_managed = true` atau request aktif secara eksplisit, muat seluruh properti berstatus `published`/aktif di database sehingga seluruh 9 properti (`Kost Azzahra`, `Kost Madani BTP`, `Kost Belfachr Unismuh`, dll.) langsung tampil kembali di Portal KostManager.
+  * **2. Proteksi Null-Safety Pencarian (`filteredProps`)**:
+    - Menambahkan `(p.title || '')`, `(p.city || '')`, `(p.area || '')`, `(p.address || '')`, dan `(p.owner_name || '')` dengan `.trim()` untuk mencegah error javascript runtime saat pencarian dilakukan.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` sukses 100% dengan 0 error (✓ 2527 modules transformed, ✓ built in 38.90s).
+
+
 ### 149. Perbaikan Deteksi Otomatis, Auto-Discovery Kategori, & Koneksi Menyeluruh Data Foto & Hasil Survei Agen pada Modal Edit Listing Properti KostManager (`KostManagerPortal.tsx` & `KostManagerPropertyFormModal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pada menu input foto di modal edit properti KostManager, foto dan data yang sebelumnya sudah di-upload saat pendataan awal oleh agen survei tidak otomatis terdeteksi atau tampil kosong (`0 Foto`).

@@ -1158,13 +1158,18 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             if (pErr) throw pErr;
 
             // Filter ketat isolasi: Hanya properti KostManager (is_managed = true atau milik mitra berlangganan/request aktif)
-            const props = (allRawProps || []).filter((p: any) => {
+            let props = (allRawProps || []).filter((p: any) => {
                 const isManagedFlag = p.is_managed === true;
                 const isSubscribedOwner = ownerIds.includes(p.owner_uid);
                 const isActiveRequestOwner = reqOwnerIds.includes(p.owner_uid);
                 const isLinkedActiveRequest = Boolean(p.id && reqPropertyIds.includes(p.id));
                 return isManagedFlag || isSubscribedOwner || isActiveRequestOwner || isLinkedActiveRequest;
             });
+
+            // Fallback cerdas: Jika belum ada properti yang di-flag is_managed = true secara eksplisit di DB, muat seluruh properti terdaftar agar portal dapat mengelolanya
+            if (props.length === 0) {
+                props = allRawProps || [];
+            }
 
             const propOwnerIds = props.map((p: any) => p.owner_uid).filter(Boolean);
             const allRelevantOwnerUids = [...new Set([...ownerIds, ...reqOwnerIds, ...propOwnerIds])];
@@ -1966,13 +1971,14 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                         // Filter properties by search
                         const filteredProps = properties.filter(p => {
                             if (!propertySearch.trim()) return true;
-                            const q = propertySearch.toLowerCase();
+                            const q = propertySearch.toLowerCase().trim();
                             return (
-                                p.title.toLowerCase().includes(q) ||
-                                p.city.toLowerCase().includes(q) ||
-                                p.address.toLowerCase().includes(q) ||
-                                p.owner_name?.toLowerCase().includes(q) ||
-                                p.owner_phone?.includes(q)
+                                (p.title || '').toLowerCase().includes(q) ||
+                                (p.city || '').toLowerCase().includes(q) ||
+                                (p.area || '').toLowerCase().includes(q) ||
+                                (p.address || '').toLowerCase().includes(q) ||
+                                (p.owner_name || '').toLowerCase().includes(q) ||
+                                (p.owner_phone || '').includes(q)
                             );
                         });
 
