@@ -2,6 +2,43 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 146. Integrasi 1:1 Mekanisme Input Form Survei Agen ke Modal Edit Properti Portal KostManager – `renderSurveyStyleRoomUnit` (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar mekanisme input/sistem pengeditan unit kamar di modal Edit Properti KostManager Portal mengadopsi 1:1 sistem input dari form pendataan surveyor agen (`AgentDashboard.tsx`), bukan hanya visual yang mirip.
+  2. Sebelumnya, modal edit properti hanya menampilkan field input sederhana (nama kamar, tarif, status), tanpa dimensi P×L meter terpisah, tanpa tabel multi-periode tarif sewa, tanpa toggle fasilitas survei (furnished/kosongan, kamar mandi dalam, dapur dalam), dan tanpa upload foto per-kategori dengan WebP client-side compression.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Helper Functions Survei**:
+    - `parseDimensionParts`: memisahkan dimensi kamar menjadi panjang dan lebar dalam meter (misal `3x4` → P=3, L=4).
+    - `formatThousand` / `parseThousand`: format tampilan nominal ribuan (misal `1500000` → `1.500.000`).
+    - `computeDynamicRoomPhotoCategories`: menghitung kategori foto dinamis berdasarkan fasilitas aktif kamar (kamar mandi dalam → category 'kamar_mandi', dapur dalam → category 'dapur', dll.).
+    - `getRoomCategorizedPhotos` / `exportCategorizedPhotos`: normalisasi dan konversi data foto berkategori antara format internal dan Supabase.
+  * **2. State & Mutators Survei Baru**:
+    - State: `customRoomFacilityInputs`, `customBathroomFacilityInputs`, `customKitchenFacilityInputs`, `newRoomPhotoCategoryInputs`.
+    - Mutators: `handleUploadRoomPhotoCategorized` (kompresi WebP + upload per-kategori), `handleDeleteRoomPhotoFromCategory`, `toggleUnitRoomFacility`, `toggleUnitBathroomFacility`, `toggleUnitKitchenFacility`, `updateUnitPricingItem`, `addUnitPricingItem`, `deleteUnitPricingItem`, `toggleUnitOtherFeeCoveredItem`.
+  * **3. Renderer Terpadu `renderSurveyStyleRoomUnit`**:
+    - Fungsi helper yang merender satu unit kamar secara lengkap 1:1 dengan form survei agen:
+      - **Status toggle kontras**: `[ 🔒 Terisi ]` vs `[ ✨ Kosong ]` dengan transisi warna Amber↔Emerald.
+      - **Dimensi kamar P × L meter**: dua input angka terpisah (Panjang & Lebar).
+      - **Dropdown Lantai & Tipe Kamar**: field terstruktur sesuai form survei.
+      - **Tabel multi-periode tarif sewa**: harga Bulanan / 3 Bulan / 6 Bulan / Tahunan, format ribuan, Maks. Penghuni, Biaya Tambahan per Orang.
+      - **Biaya bulanan lain + checklist cakupan**: Listrik, Air, Sampah, Wifi, Parkir.
+      - **Toggle Kosongan vs Furnished** + grid checklist fasilitas standar.
+      - **Sub-checklist Kamar Mandi Dalam**: Kloset Duduk/Jongkok, Shower, Wastafel.
+      - **Sub-checklist Dapur Dalam**: Kompor, Kulkas, Sink, Kitchen Set.
+      - **Custom facility adder**: input tag fasilitas kustom per unit.
+      - **Dokumentasi foto per-kategori dinamis**: kategori foto dihitung otomatis dari fasilitas aktif, upload WebP client-side + custom category adder.
+      - **Data penghuni lengkap** (untuk unit terisi): Nama, KTP, WhatsApp + link direct WA, periode sewa, tanggal jatuh tempo, jumlah penghuni.
+  * **4. Integrasi ke Tab 2**:
+    - Blok `occupiedUnits.map` dan `vacantUnits.map` di Tab 2 sepenuhnya diganti dengan `renderSurveyStyleRoomUnit(rt, rtIdx, u, u.originalIdx, true/false)`.
+    - Menghapus ~300 baris kode lama (render manual inline) dan menggantinya dengan 2 baris pemanggilan helper.
+  * **5. Penyempurnaan Payload `handleSave`**:
+    - Seluruh field survei (`floor`, `type`, `size`, `pricing`, `maxOccupants`, `extraOccupantFee`, `otherFeeAmount`, `otherFeeCoveredItems`, `facilities`, `roomFacilities`, `bathroomFacilities`, `kitchenFacilities`, `photoCategories`, `categorizedPhotos`) tersimpan ke Supabase/Firebase.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus dengan 0 TypeScript/Vite error (✓ 2526 modules transformed, ✓ built in 22.96s).
+
 ### 145. Sinkronisasi Presisi 1-ke-1 Data Survei Lapangan Properti Terkelola: Integrasi `groupIntoRoomTypesGlobal`, Kompresi WebP Client-Side, dan Floating Room Detail Card di Portal KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna mendapati bahwa saat membuka menu edit properti terkelola (seperti Kost Madani) di portal KostManager, data kamar masih belum merefleksikan hasil peninjauan survei di dashboard admin (`KostManagerManagement.tsx`): kamar terpecah menjadi tipe-tipe terpisah dengan kamar dummy `RM-101`, data penghuni riil (`zul`, `081527080656`, dll.) tidak muncul, dan 12 foto dokumentasi kamar tidak masuk ke carousel galeri kamar.

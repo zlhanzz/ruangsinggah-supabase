@@ -1,143 +1,106 @@
-# Rencana Implementasi: Representasi Langsung 1:1 Modal Editor Properti Terkelola Portal KostManager dari Modal Peninjauan Hasil Pendataan Admin (Editable Direct Representation)
+# IMPLEMENTATION PLAN: Penerapan Mekanisme Input Form Pendataan Agen Survei pada Editor Properti Portal KostManager
 
-Dokumen ini disusun untuk merespon instruksi pengguna yang menyertakan 5 screenshot referensi dari modal **Peninjauan Hasil Pendataan** di dashboard admin (`KostManagerManagement.tsx`). 
+## 📌 Analisis Masalah & Kebutuhan
 
-Tujuan utama adalah membuat modal **Editor Properti Terkelola** di **Portal KostManager** (`KostManagerPortal.tsx`) menjadi **representasi langsung 1 banding 1** dari modal peninjauan tersebut, namun **seluruh datanya dapat diedit secara langsung (*interactive editable*)**.
+### 1. Konteks & Permintaan Pengguna
+Pengguna menyampaikan permintaan lanjutan:
+> *"meskipun secara tampilan memakai tampilan yang mirip dengan peninjauan hasi pendataan, tapi bisa nggak sistem input atau sistem mekanisme inputnya saat pengeditan sama dengan form pendataan dari agen survey"*
 
----
+Secara visual, antarmuka modal editor properti di Portal KostManager (`KostManagerPortal.tsx`) saat ini sudah mengadopsi tata letak yang menyerupai modal peninjauan hasil survei (Hero Slider, KPI Glance Cards, Accordion Tipe Kamar, Card Kamar Terisi Amber, Card Kamar Kosong Emerald, dsb). 
 
-## 1. Analisis Masalah & Perbandingan dengan Screenshot Pengguna
-
-Berdasarkan 5 screenshot yang diberikan oleh pengguna:
-1. **Screenshot 1 (Tab 1: Data Properti Umum)**:
-   - **Header & Top Info Strip**:
-     - Status badge `[AKTIF (AUTO-PILOT)]` (hijau), pill gender `[CAMPUR]` (oranye), pill ID `[ID: #3701F42F]`.
-     - Nama properti besar `KOST MADANI` dengan alamat di bawahnya `📍 VF9J+7GM, Jl. Politeknik, Tamalanrea Indah...`.
-     - Baris info pemilik & surveyor: Avatar bulat oranye `[ a ] PEMILIK / MITRA KOST: abdullah` dengan tombol hijau `[WhatsApp]`, dan di kanan `SURVEYOR LAPANGAN: zhull` dengan tombol biru `[📁 FOLDER GDRIVE]`.
-     - Tab strip: `[🏢 1. DATA PROPERTI UMUM  6]`, `[🛏️ 2. DATA KAMAR & PENGHUNI  5]`, `[🛡️ 3. DATA MITRA & KERJASAMA  ✓]`.
-   - **Body Tab 1**:
-     - Bagian Fasilitas Umum Kost: Kartu hijau `[ (P) ] AREA PARKIR` `📷 Sedang Ditampilkan di Slider` `[ 📷 FOTO AKTIF ]` dengan chip `🏍️ Parkir Motor`, dan kartu `[ 🚿 ] WC UMUM` `📷 Lihat Foto di Slider` `[ ✓ AKTIF ]`.
-     - 2 Kolom Alamat & Peta:
-       - Kiri: Card `[ 📍 ALAMAT & TITIK KOORDINAT ]` berisi teks alamat lengkap dan 5 kotak data administratif (`PROVINSI`, `KABUPATEN / KOTA`, `KECAMATAN / AREA`, `LATITUDE`, `LONGITUDE`).
-       - Kanan: Card `PREVIEW GOOGLE MAPS` dengan link `[ 📍 BUKA GOOGLE MAPS ↗ ]` dan display peta Google Maps dengan pin merah.
-
-2. **Screenshot 2 & 3 (Tab 2: Data Kamar & Penghuni - Galeri Foto Kamar)**:
-   - Di bagian atas Tab 2, terdapat **Galeri Foto Kamar Hasil Pendataan**:
-     - Hero carousel frame gelap (aspect-ratio lebar) dengan badge kategori di kiri atas (`[ 📷 INTERIOR KAMAR ]`), counter di kanan atas (`1 / 12`), floating card di kiri bawah (`NOMOR KAMAR: Kamar 3`, `2x2 meter`, `TARIF Rp 400.000/bln`, chips fasilitas `[Kosongan (Tanpa Perabot)]`, `[Jendela Luar]`), serta tombol panah navigasi kiri/kanan.
-     - Di bawah carousel: Strip thumbnail horizontal dengan badge nomor kamar di atas (`Kamar 3`, `Kamar 4`) dan label kategori di bawah (`Interior Kamar`, `Kamar Mandi Dalam`, `Tempat Tidur`, `Lemari / Penyimpanan`, `Jendela Luar`). Thumbnail yang aktif memiliki border oranye.
-
-3. **Screenshot 3 & 4 (Tab 2: Level 1 Accordion Tipe Kamar)**:
-   - Accordion Header Tipe Kamar:
-     - Ikon tempat tidur biru di dalam kotak `bg-blue-50 text-blue-600`.
-     - Label kecil: `TIPE KAMAR #1`.
-     - Nama tipe: `TIPE STANDARD`.
-     - Chips spesifikasi: `[ 📐 2x2 meter ]`, `[ Kosongan (Tanpa Perabot) ]`, `[ Jendela Luar ]`.
-     - Sisi kanan: `Rp 400.000/bln`, pill hijau `[ ✨ 3 Kosong ]`, pill oranye `[ 🔒 2 Dihuni ]`, dan icon chevron panah expand/collapse.
-   - Body saat dibuka:
-     - Dua Sub-Parent Accordions berpasangan:
-       1. `[ 🔒 ] KAMAR SEDANG DIHUNI / TERISI  2 UNIT       BUKA LIST v` (Amber card, border-amber-200, bg-amber-50/80).
-       2. `[ ✨ ] KAMAR KOSONG / SIAP HUNI  3 UNIT           BUKA LIST v` (Emerald card, border-emerald-200, bg-emerald-50/80).
-
-4. **Screenshot 5 (Tab 2: Unit Kamar Terisi & Data Penghuni)**:
-   - Saat sub-accordion `KAMAR SEDANG DIHUNI / TERISI` dibuka:
-     - Kartu unit kamar bergaris tepi amber (`border-amber-200`).
-     - Header unit: Ikon gembok amber `[ 🔒 ]`, teks `UNIT KAMAR`, badge `[ 🔒 Dihuni ]`, judul unit `Kamar 1`, dan sisi kanan `TARIF SEWA Rp 400.000/bln`.
-     - **Grid Data Penghuni 3 Kolom**:
-       - Kolom 1: `👤 NAMA PENGHUNI` (header teks amber), isi: `zul`, `1 Orang Penghuni`.
-       - Kolom 2: `📱 KONTAK WHATSAPP` (header teks amber), isi: `081527080656`, link `Hubungi via WA ↗`.
-       - Kolom 3: `📅 PERIODE & TAGIHAN` (header teks amber), isi: `Langganan: Bulanan`, `Bayar Terakhir: 2026-08-28`, `Tagihan Berikutnya: 2026-09-28`.
-     - **Spesifikasi & Fasilitas Kamar Terpasang**: Chip fasilitas interaktif dengan teks `(Sorot fasilitas untuk melihat foto terkait ✨)` dan chip dimensi `📐 2x2 meter`.
-     - **Dokumentasi Foto Unit**: Thumbnail foto unit kamar berlabel atau box placeholder jika belum diunggah.
-
-### Penyebab Kesenjangan Pada Implementasi Sebelumnya:
-1. **Algoritma Parsing Data Kamar (`handleEditProperty`)**:
-   - Di `KostManagerManagement.tsx`, data properti yang didata surveyor disimpan dalam bentuk array unit kamar individual (`Kamar 1` s.d. `Kamar 5`), lalu dikelompokkan secara cerdas menggunakan algoritma `groupIntoRoomTypes`.
-   - Di `KostManagerPortal.tsx`, pemanggilan edit sebelumnya mencoba membaca `rt.rooms` yang belum ada (karena datanya flat), sehingga gagal merekonstruksi 1 Tipe Standard berisi 5 unit, melainkan memecahnya menjadi dummy `RM-101` tanpa data penghuni `zul` dan tanpa 12 foto dokumentasi kamar.
-2. **Normalisasi Foto Berlabel**:
-   - Foto properti dan foto kamar di `KostManagerPortal.tsx` diubah menjadi array string mentah (hanya URL), sehingga label kategori seperti `Interior Kamar`, `Kamar Mandi Dalam`, `Area Parkir`, dsb. hilang dari carousel dan thumbnail strip.
-3. **Struktur Tampilan Visual**:
-   - Penataan grid, class Tailwind, badge, floating card, sub-accordion amber/emerald, dan 3 kolom data penghuni harus disalin langsung 1:1 dari JSX `KostManagerManagement.tsx`, lalu disematkan kontrol input langsung (*editable form inputs*) di setiap field datanya.
+Namun, **mekanisme input saat pengeditan** masih menggunakan input sederhana/terbatas, belum memiliki kecanggihan dan struktur kendali yang ada pada **Form Pendataan Agen Survei Lapangan** (`AgentDashboard.tsx`), seperti:
+1. **Input Dimensi Kamar Presisi**: Masih berupa string bebas, belum berupa kotak input terpisah `[Panjang] X [Lebar] meter`.
+2. **Kendali Fasilitas Kamar & Sub-Fasilitas Context-Aware**:
+   - Belum ada toggle cepat mode **`[ Kosongan (Tanpa Perabot) ]`** vs **`[ Furnished (Isian) ]`** yang otomatis mematikan/menonaktifkan checklist perabot.
+   - Belum ada sub-checklist kontekstual otomatis saat fasilitas tertentu dicentang (misal: saat `Kamar Mandi Dalam` dicentang, otomatis muncul sub-item `Kloset Duduk`, `Kloset Jongkok`, `Shower`, `Wastafel` + custom adder; saat `Dapur Dalam` dicentang, otomatis muncul `Kompor`, `Kulkas`, `Wastafel Cuci Piring`, dsb).
+   - Belum ada input custom facility adder dengan tag badge yang bisa dihapus.
+3. **Skema Tarif / Harga Kamar Multi-Periode Dinamis**:
+   - Belum mendukung daftar skema harga multi-periode (`Bulanan`, `3 Bulan`, `6 Bulan`, `Tahunan`) dengan separator ribuan otomatis (`formatThousand`), input Maksimal Penghuni, dan Biaya Tambahan Orang.
+4. **Biaya Tambahan Bulanan Lainnya**:
+   - Belum ada input nominal biaya tambahan bulanan (Rp/Bulan) serta checklist cakupannya (`Listrik`, `Air`, `Sampah`, `Wifi`, `Keamanan/Parkir`).
+5. **Dokumentasi Foto Kamar per Kategori Dinamis (`computeDynamicRoomPhotoCategories`)**:
+   - Pada form survei agen, slot upload foto kamar dibuat spesifik per-kategori fasilitas yang dicentang (`Interior Kamar`, `Kamar Mandi`, `Tempat Tidur`, `Lemari / Storage`, `Meja Belajar`, `AC`, `Jendela Luar`, dsb). Hal ini menjamin setiap fasilitas memiliki bukti foto yang sesuai dan terorganisir.
+6. **Fasilitas Umum Context-Aware di Tab 1**:
+   - Checkbox fasilitas umum dengan sub-kelengkapan dinamis untuk `Dapur Bersama`, `Area Parkir` (Motor, Mobil, Sepeda), dan `WC Umum`.
 
 ---
 
-## 2. Dampak Perubahan (Files Touched)
-
-1. [functions/public/components/admin/KostManagerPortal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx):
-   - **Menyalin & Mengadopsi Helper Parsing 1:1**:
-     - `groupIntoRoomTypes`: Mengelompokkan kamar flat surveyor ke dalam Tipe Kamar Sejati dengan sub-grup `occupiedUnits` dan `vacantUnits`.
-     - `getRoomPhotos`: Mengekstrak foto unit beserta label kategori (`{ url, label }`).
-     - `normalizePhotos`: Mengekstrak foto bangunan beserta label kategori (`{ url, label }`).
-     - `buildUnifiedFacilities` & `isFacilityMatchingPhoto`: Menjamin fasilitas kamar dan pencocokan sorot foto bekerja persis seperti modal review admin.
-   - **Pembaruan `handleEditProperty`**:
-     - Membaca `p.room_types` dan menerapkan `groupIntoRoomTypes` sehingga Kost Madani (dan properti lainnya) langsung memuat 1 Tipe Kamar berisi unit-unit aslinya (`Kamar 1` dihuni oleh `zul`, nomor telepon, tanggal bayar, fasilitas, dan seluruh 12 foto kamar) tanpa kehilangan data.
-   - **Transformasi Visual Modal `ManagedPropertyAddModal` (Representasi Langsung 1:1 + Editable)**:
-     - **Header**: Status badge, pill gender (bisa diklik ubah), ID badge, judul besar (inline edit nama properti), alamat singkat, tombol tutup bulat.
-     - **Top Info Strip**: Pemilik kost (avatar bulat oranye, nama, tombol direct WA, dropdown ganti mitra), surveyor lapangan, dan tombol link folder.
-     - **3-Tab Navigation**: `1. DATA PROPERTI UMUM` (badge jumlah foto gedung), `2. DATA KAMAR & PENGHUNI` (badge jumlah kamar), `3. DATA MITRA & KERJASAMA`.
-     - **Tab 1 Body (1:1 Editable)**:
-       - Hero carousel foto gedung 16/7 gelap dengan tombol tambah/hapus foto WebP, dropdown ganti label kategori, zoom lightbox, dan thumbnail strip bawah.
-       - Fasilitas Umum Kost: Kartu hijau dengan status aktif/slider, rincian parkir (Motor, Mobil, Sepeda yang dapat di-toggle), dan two-way sync ke slider foto.
-       - 2 Kolom: Kiri = Alamat & Titik Koordinat (5 kotak data wilayah: Provinsi, Kota, Area, Lat, Long + textarea alamat), Kanan = Preview Google Maps interaktif + tombol link Google Maps.
-       - Kartu Kampus & Landmark terdekat (jarak, waktu jalan/motor/mobil, tombol tambah/hapus kampus).
-       - Kartu Peraturan Kost (tombol tambah/hapus peraturan).
-     - **Tab 2 Body (1:1 Editable)**:
-       - 4 Top KPI Cards (Total Kamar, Kamar Terisi, Kamar Kosong, Total Penghuni) dengan styling persis baris 2572-2636 `KostManagerManagement.tsx`.
-       - **Galeri Foto Kamar Hasil Pendataan**: Carousel hero foto kamar dengan floating card info nomor kamar, ukuran, tarif, chips fasilitas, navigasi kiri/kanan, dan strip thumbnail horizontal berlabel kamar & kategori persis Screenshot 2 & 3.
-       - **Accordion Level 1 Tipe Kamar**: Header persis Screenshot 3 & 4 (Ikon kasur biru, label Tipe Kamar #1, nama tipe [editable], chips ukuran & fasilitas, tarif bulanan [editable], counter kosong/terisi, tombol tambah kamar, tombol hapus tipe).
-       - **Dua Sub-Parent Accordions Berpasangan**:
-         - `[ 🔒 ] KAMAR SEDANG DIHUNI / TERISI` (Amber) persis Screenshot 4.
-         - `[ ✨ ] KAMAR KOSONG / SIAP HUNI` (Emerald) persis Screenshot 4.
-       - **Kartu Unit Kamar Interaktif (Editable)** persis Screenshot 5:
-         - Switch status 1-klik (`🔒 Dihuni` <-> `✨ Kosong`) yang secara instan memindahkan unit antar sub-parent.
-         - Grid 3 Kolom Data Penghuni:
-           - 👤 Nama Penghuni & jumlah orang (input teks editable).
-           - 📱 Kontak WhatsApp (input nomor telp editable + direct link WA).
-           - 📅 Periode & Tagihan (dropdown langganan bulanan/tahunan, tanggal bayar terakhir, tanggal jatuh tempo).
-         - Spesifikasi & Fasilitas Kamar Terpasang (chips fasilitas interaktif dengan efek photo hover sync).
-         - Dokumentasi Foto Unit: Menampilkan foto-foto kamar per unit dengan tombol tambah foto WebP, ganti label, dan hapus foto.
-         - Catatan kondisi kamar & tombol hapus kamar.
-       - Tombol `+ Tambah Kamar ke Tipe Ini` dan `+ Tambah Tipe Kamar Baru`.
-     - **Tab 3 Body**: S&K kemitraan Auto-Pilot, data rekening penampung bank pemilik, omnichannel router, dan simulasi omset 3 kartu.
-     - **Footer**: Tombol `Tutup`, `← Sebelumnya`, `Lanjut →`, dan `💾 Simpan Perubahan Properti`.
-   - **Logika Penyimpanan (`handleSave`)**:
-     - Mengemas kembali seluruh perubahan tipe kamar dan unit-unitnya ke dalam format array yang disimpan ke Supabase tabel `properties` dan memperbarui status penghuni.
+## 🎯 Tujuan Pengembangan
+Mengintegrasikan seluruh sistem kendali dan mekanisme input dari Form Pendataan Agen Survei (`AgentDashboard.tsx`) ke dalam Modal Editor Properti di Portal KostManager (`KostManagerPortal.tsx`), dengan tetap mempertahankan estetika tampilan peninjauan survei (layout bersih, preview elegan, dan responsive).
 
 ---
 
-## 3. Langkah-Langkah Eksekusi Bertahap
-
-1. **Sinkronisasi Helper Parsing & Grouping**:
-   - Memastikan helper `groupIntoRoomTypes`, `getRoomPhotos`, `normalizePhotos`, dan `buildUnifiedFacilities` diimplementasikan dengan presisi tinggi di `KostManagerPortal.tsx`.
-2. **Perbaikan `handleEditProperty`**:
-   - Memastikan saat tombol edit properti (misal: Kost Madani) diklik, data `room_types` diparsing melalui `groupIntoRoomTypes` sehingga Kost Madani membuka dengan 1 Tipe Standard, 5 unit kamar (2 terisi oleh penghuni `zul`, 3 kosong), dan 12 foto dokumentasi kamar yang lengkap.
-3. **Penyelarasan Tampilan Tab 1**:
-   - Menyalin struktur visual card fasilitas umum, kartu alamat 5-kotak, dan preview Google Maps agar 100% identik dengan Screenshot 1.
-4. **Penyelarasan Tampilan Tab 2**:
-   - Menyalin struktur galeri foto kamar dengan floating card dan strip thumbnail berlabel persis Screenshot 2 & 3.
-   - Menyalin Level 1 Accordion dan dua Sub-Parent Accordions (Terisi [Amber] dan Kosong [Emerald]) persis Screenshot 4.
-   - Menyalin Unit Card 3-kolom data penghuni, spesifikasi fasilitas ber-icon, dan dokumentasi foto persis Screenshot 5, dengan menjadikan setiap teks menjadi input editable yang nyaman digunakan.
-5. **Uji Kompilasi & Build**:
-   - Menjalankan `npm.cmd run build` pada folder `functions/public/` untuk memastikan 0 error kompilasi JSX/TypeScript.
-6. **Dokumentasi & Anti-Amnesia**:
-   - Mencatat progres ke `functions/PROGRESS.md` dan menerbitkan `WALKTHROUGH.md`.
-7. **Git Commit & Push**:
-   - Melakukan commit dan push ke branch `bukan-productions` sesuai aturan workspace.
+## 📂 Dampak Perubahan (File yang Disentuh)
+1. `functions/public/components/admin/KostManagerPortal.tsx`:
+   - Penambahan fungsi pembantu parser dan formater: `parseDimensionParts`, `formatThousand`, `parseThousand`, `computeDynamicRoomPhotoCategories`, `getRoomCategorizedPhotos`, `exportCategorizedPhotos`.
+   - Penyempurnaan mekanisme input Tab 1: Fasilitas Umum kontekstual dengan sub-kelengkapan parkir, dapur, dan WC umum.
+   - Penyempurnaan mekanisme input Tab 2: Detail Kamar & Tipe Kamar dengan input dimensi terpisah `[P] X [L] meter`, dropdown Lantai & Tipe Kamar, toggle Kosongan vs Furnished, sub-kelengkapan Kamar Mandi Dalam & Dapur Dalam, skema tarif multi-periode, biaya tambahan, serta slot upload foto kamar per kategori berlabel dinamis.
+2. `functions/PROGRESS.md`: Pencatatan histori progres (FASE 2).
+3. `WALKTHROUGH.md`: Panduan pengujian user dan laporan hasil verifikasi (FASE 2).
 
 ---
 
-## 4. Rencana Verifikasi
+## 🛠️ Langkah-Langkah Eksekusi (Incremental Execution)
 
-1. **Uji Build Frontend**:
-   - Memverifikasi kompilasi Vite frontend melalui perintah terminal:
-     `npm.cmd run build` di direktori `functions/public/`.
-   - Wajib menghasilkan `0 errors` dan transformasi modul sukses.
-2. **Uji Fungsionalitas & Visual UI**:
-   - Membuka halaman KostManager Portal dan mengklik tombol edit pada **Kost Madani**.
-   - Memverifikasi visual Tab 1: Menyamakan persis dengan Screenshot 1 (Header, fasilitas umum two-way sync, 5 kotak alamat, preview maps).
-   - Memverifikasi visual Tab 2: Menyamakan persis dengan Screenshot 2, 3, 4, dan 5:
-     - Hero carousel galeri foto kamar dengan 12 foto, floating card info kamar, dan thumbnail bar berlabel unit kamar (`Kamar 3`, `Kamar 4`, dsb.).
-     - Accordion `TIPE STANDARD` dengan 3 Kosong dan 2 Dihuni.
-     - Sub-parent `KAMAR SEDANG DIHUNI / TERISI (2 UNIT)` berwarna amber.
-     - Sub-parent `KAMAR KOSONG / SIAP HUNI (3 UNIT)` berwarna emerald.
-     - Data penghuni `zul`, nomor WA, tanggal bayar, fasilitas, dan foto dokumentasi pada unit kamar terisi.
-   - Memverifikasi kemampuan edit: Mengubah nomor kamar, nama penghuni, kontak WA, status unit kamar, dan menyimpan perubahan.
+### Langkah 1: Helper Functions & Engine Kategori Foto Dinamis
+- Menambahkan fungsi pembantu dari `AgentDashboard.tsx` ke dalam `KostManagerPortal.tsx`:
+  - `parseDimensionParts(dimStr)`: Memisahkan string ukuran (misal `"3x4 meter"`) menjadi `{ length: '3', width: '4' }`.
+  - `formatThousand(val)` dan `parseThousand(str)`: Memformat angka ke format rupiah ribuan (misal `1.500.000`) saat diketik.
+  - `computeDynamicRoomPhotoCategories(facilities, status, customKeys)`: Menghitung kategori foto kamar yang wajib/relevan berdasarkan fasilitas yang dicentang.
+  - `getRoomCategorizedPhotos(room)` dan `exportCategorizedPhotos(categorized)`: Menjaga konsistensi data foto berlabel dalam struktur `categorizedPhotos` dan `images`.
+
+### Langkah 2: Mekanisme Input Tab 1 (Fasilitas Umum Kontekstual)
+- Mengganti checklist fasilitas umum dengan mekanisme context-aware dari survei:
+  - Checkbox fasilitas umum (`WiFi`, `Dapur Bersama`, `Area Parkir`, `Ruang Tamu`, `CCTV`, `Laundry`, `WC Umum`).
+  - Ketika `Area Parkir` aktif -> menampilkan sub-kelengkapan: `Parkir Motor`, `Parkir Mobil`, `Parkir Sepeda` + custom parking adder.
+  - Ketika `Dapur Bersama` aktif -> menampilkan sub-kelengkapan: `Kompor`, `Kulkas`, `Dispenser`, `Wastafel Cuci Piring`, `Peralatan Masak`, `Meja Makan` + custom kitchen adder.
+  - Ketika `WC Umum` aktif -> menampilkan sub-kelengkapan: `Kloset Duduk`, `Kloset Jongkok`, `Shower`, `Wastafel` + custom bathroom adder.
+
+### Langkah 3: Mekanisme Input Tab 2 (Detail Kamar & Fasilitas Kamar Kontekstual)
+- Pada kartu pengeditan kamar (baik Kamar Terisi maupun Kamar Kosong):
+  - **Dimensi Kamar**: Input terpisah `[Panjang]` X `[Lebar]` `meter` yang otomatis memperbarui properti `size` dan `dimensions`.
+  - **Pilihan Lantai & Tipe**: Dropdown `Lantai` (`Lantai 1`, `Lantai 2`, dst.) dan `Tipe Kamar` (`Standard`, `Premium`, `Deluxe`, `Kustom`).
+  - **Status Kamar**: Tombol toggle `[ Terisi ]` vs `[ Kosong ]` dengan warna kontras hijau/oranye.
+  - **Skema Harga Dinamis**:
+    - Tombol `+ Tambah Skema Harga`.
+    - Pilihan periode (`Bulanan`, `3 Bulan`, `6 Bulan`, `Tahunan`, `Mingguan`, `Harian`) + Input harga Rp dengan format ribuan.
+    - Input `Maks. Penghuni per Kamar` & `Biaya Tambahan Orang (Rp/Bulan)`.
+  - **Fasilitas Kamar & Sub-Fasilitas**:
+    - Tombol toggle: **`[ Kosongan (Tanpa Perabot) ]`** vs **`[ Furnished (Isian) ]`**.
+    - Checkbox fasilitas standar: `Kasur`, `Lemari`, `Meja Belajar`, `AC`, `Kipas Angin`, `Water Heater`, `Jendela Luar`, `Kamar Mandi Dalam`, `Dapur Dalam`.
+    - Sub-kelengkapan `Kamar Mandi Dalam`: `Kloset Duduk`, `Kloset Jongkok`, `Shower`, `Wastafel` + custom adder.
+    - Sub-kelengkapan `Dapur Dalam`: `Kompor`, `Kulkas`, `Wastafel Cuci Piring`, `Kitchen Set`, `Dispenser` + custom adder.
+    - Custom facility adder input dengan chip tag yang bisa dihapus.
+  - **Biaya Tambahan Bulanan Lainnya**:
+    - Nominal (Rp/Bulan) + Checklist cakupan: `Listrik`, `Air`, `Sampah`, `Wifi`, `Keamanan/Parkir`.
+  - **Dokumentasi Foto Kamar per Kategori Dinamis**:
+    - Menghadirkan slot upload foto terpisah untuk setiap kategori fasilitas aktif (`Interior Kamar`, `Kamar Mandi`, `Tempat Tidur`, `Lemari / Storage`, `Meja Belajar`, `AC`, `Jendela Luar`, dsb).
+    - Tombol upload per-kategori dengan kompresi WebP client-side otomatis.
+    - Tombol tambah kategori foto kamar kustom.
+  - **Data Penghuni Terisi**:
+    - Nama Penghuni, Nomor HP/WhatsApp (dengan tombol chat WA), Jenis Langganan / Periode, Tanggal Mulai Sewa, dan Tanggal Jatuh Tempo.
+
+### Langkah 4: Validasi & Kompilasi
+- Menjalankan `npm.cmd run build` di `functions/public/` untuk memastikan tidak ada error TypeScript maupun bundling.
+- Memverifikasi penyimpanan data payload kamar ke Supabase agar tetap kompatibel 100% dengan skema data yang ada.
+
+---
+
+## 🧪 Rencana Verifikasi & Pengujian
+1. **Kompilasi TypeScript**: Memastikan `npm.cmd run build` lulus dengan exit code 0.
+2. **Verifikasi Visual & Interaksi di Browser**:
+   - Buka modal edit Kost Madani di Portal KostManager.
+   - Periksa Tab 1: Coba centang/uncentang *Area Parkir* atau *Dapur Bersama* dan pastikan sub-kelengkapan muncul kontekstual.
+   - Periksa Tab 2:
+     - Ubah ukuran kamar menggunakan input `[Panjang]` X `[Lebar]` meter.
+     - Klik toggle `[ Kosongan (Tanpa Perabot) ]` -> periksa checklist perabot dinonaktifkan secara otomatis.
+     - Centang `Kamar Mandi Dalam` -> periksa sub-checklist Kloset, Shower, Wastafel muncul dan dapat dicentang.
+     - Tambah skema harga (misal Tahunan) dan cek format rupiah ribuan.
+     - Periksa slot foto kamar: pastikan muncul slot upload per-kategori (`Tempat Tidur`, `Kamar Mandi`, dsb).
+     - Coba unggah foto dan pastikan terkompresi otomatis ke WebP.
+     - Simpan properti dan pastikan data tersimpan sempurna tanpa error.
+
+---
+
+> [!IMPORTANT]
+> **Protokol Siklus Kerja 2-Fase**: Saat ini Agent berada pada **FASE 1 (Perencanaan & Pengajuan)**. Agent **berhenti di sini** dan menunggu persetujuan (*Proceed / ACC*) dari Pengguna sebelum melakukan modifikasi kode pada FASE 2.

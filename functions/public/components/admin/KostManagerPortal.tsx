@@ -58,7 +58,13 @@ import {
     Droplets,
     Edit3,
     FolderOpen,
-    Upload
+    Upload,
+    AlertCircle,
+    Fan,
+    ImagePlus,
+    Maximize2,
+    LocateFixed,
+    RefreshCw
 } from 'lucide-react';
 import { KostManagerPackage } from '../../types';
 import { 
@@ -157,6 +163,130 @@ const compressImageToWebP = async (file: File, quality = 0.82, maxDimension = 19
         reader.onerror = () => resolve(file);
         reader.readAsDataURL(file);
     });
+};
+
+// Helper: Parse Dimension Parts ([Panjang] X [Lebar] meter)
+const parseDimensionParts = (dimStr: string) => {
+    if (!dimStr) return { length: '', width: '' };
+    const cleaned = String(dimStr).replace(/\s*meter\s*/gi, '').trim();
+    const parts = cleaned.split(/x|\*/i);
+    if (parts.length >= 2) {
+        return { length: parts[0].trim(), width: parts[1].trim() };
+    }
+    return { length: cleaned, width: '' };
+};
+
+// Helper: Format & Parse Ribuan Rupiah
+const formatThousand = (val: any) => {
+    if (val === undefined || val === null || val === '') return '';
+    const num = Number(String(val).replace(/[^0-9]/g, ''));
+    if (isNaN(num)) return '';
+    return num.toLocaleString('id-ID');
+};
+
+const parseThousand = (val: string) => {
+    if (!val) return '';
+    const clean = String(val).replace(/[^0-9]/g, '');
+    return clean ? Number(clean) : '';
+};
+
+// Helper: Dynamic Room Photo Categories computation based on active room facilities
+const computeDynamicRoomPhotoCategories = (roomFacilities: string[] = [], status: string = 'kosong', manualExtras: string[] = []): string[] => {
+    const isOcc = status === 'terisi' || status === 'Terisi';
+    const baseLabel = isOcc ? 'Interior Kamar (Opsional)' : 'Interior Kamar *Wajib';
+    const categories: string[] = [baseLabel];
+
+    const facilityPhotoMapping: { [key: string]: string } = {
+        'kamar mandi dalam': 'Kamar Mandi',
+        'dapur dalam': 'Dapur Dalam',
+        'kasur': 'Tempat Tidur',
+        'lemari': 'Lemari / Storage',
+        'lemari pakaian': 'Lemari / Storage',
+        'meja belajar': 'Meja Belajar',
+        'ac': 'AC',
+        'kipas angin': 'Kipas Angin',
+        'jendela luar': 'Jendela Luar',
+        'water heater': 'Water Heater'
+    };
+
+    (roomFacilities || []).forEach(fac => {
+        const lower = (fac || '').toLowerCase().trim();
+        if (lower === 'kosongan (tanpa perabot)') return;
+
+        const mapped = facilityPhotoMapping[lower];
+        if (mapped) {
+            if (!categories.includes(mapped)) {
+                categories.push(mapped);
+            }
+        } else if (lower) {
+            const clean = fac.trim();
+            if (!categories.includes(clean)) {
+                categories.push(clean);
+            }
+        }
+    });
+
+    (manualExtras || []).forEach(c => {
+        const clean = c.trim();
+        if (clean && !categories.includes(clean)) {
+            categories.push(clean);
+        }
+    });
+
+    return categories;
+};
+
+// Helper: Get Structured Categorized Photos from Unit
+const getRoomCategorizedPhotos = (item: any): Record<string, string[]> => {
+    if (!item) return {};
+    const cleanUrls = (urls: any[]) => (urls || []).map((u: any) => normalizePhotoUrl(u)).filter(Boolean);
+
+    if (item.categorizedPhotos && typeof item.categorizedPhotos === 'object' && !Array.isArray(item.categorizedPhotos)) {
+        const raw = JSON.parse(JSON.stringify(item.categorizedPhotos));
+        const cleaned: Record<string, string[]> = {};
+        Object.entries(raw).forEach(([k, urls]) => {
+            if (Array.isArray(urls)) cleaned[k] = cleanUrls(urls);
+        });
+        return cleaned;
+    }
+    if (item.categorized_photos && typeof item.categorized_photos === 'object' && !Array.isArray(item.categorized_photos)) {
+        const raw = JSON.parse(JSON.stringify(item.categorized_photos));
+        const cleaned: Record<string, string[]> = {};
+        Object.entries(raw).forEach(([k, urls]) => {
+            if (Array.isArray(urls)) cleaned[k] = cleanUrls(urls);
+        });
+        return cleaned;
+    }
+
+    const result: Record<string, string[]> = {};
+    const images = Array.isArray(item.images) ? item.images : (Array.isArray(item.image_urls) ? item.image_urls : []);
+    images.forEach((urlItem: any, idx: number) => {
+        const urlStr = normalizePhotoUrl(urlItem);
+        if (!urlStr) return;
+        const cat = (typeof urlItem === 'object' && urlItem.label) 
+            ? urlItem.label 
+            : (idx === 0 ? 'Interior Kamar *Wajib' : 'Foto Kamar');
+        if (!result[cat]) result[cat] = [];
+        result[cat].push(urlStr);
+    });
+    return result;
+};
+
+// Helper: Export Categorized Photos into Flat Arrays
+const exportCategorizedPhotos = (categorized: Record<string, string[]>) => {
+    const images: { url: string; label: string }[] = [];
+    const photoCategories: string[] = [];
+    Object.entries(categorized || {}).forEach(([cat, urls]) => {
+        if (Array.isArray(urls)) {
+            urls.forEach(url => {
+                if (url) {
+                    images.push({ url, label: cat });
+                    photoCategories.push(cat);
+                }
+            });
+        }
+    });
+    return { images, photoCategories };
 };
 
 const DEFAULT_GLOBAL_ROOM_PHOTO_SLOTS = ['Interior Kamar', 'Kamar Mandi Dalam', 'Tempat Tidur', 'Lemari / Penyimpanan'];
@@ -3407,6 +3537,15 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
     const [tempCampusDist, setTempCampusDist] = useState('');
     const [uploadingRooms, setUploadingRooms] = useState<Record<string, boolean>>({});
 
+    // Custom inputs for survey-style mechanisms
+    const [customRoomFacilityInputs, setCustomRoomFacilityInputs] = useState<Record<string, string>>({});
+    const [customBathroomFacilityInputs, setCustomBathroomFacilityInputs] = useState<Record<string, string>>({});
+    const [customKitchenFacilityInputs, setCustomKitchenFacilityInputs] = useState<Record<string, string>>({});
+    const [customPublicKitchenInput, setCustomPublicKitchenInput] = useState<string>('');
+    const [customPublicParkingInput, setCustomPublicParkingInput] = useState<string>('');
+    const [customPublicBathroomInput, setCustomPublicBathroomInput] = useState<string>('');
+    const [newRoomPhotoCategoryInputs, setNewRoomPhotoCategoryInputs] = useState<Record<string, string>>({});
+
     // Local files state
     const [newImageFiles, setNewImageFiles] = useState<File[]>([]);
     const [newVideoFiles, setNewVideoFiles] = useState<File[]>([]);
@@ -3937,6 +4076,177 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
         });
     };
 
+    // Mutator: Upload Photo to Category with WebP compression
+    const handleUploadRoomPhotoCategorized = async (rtIdx: number, rmIdx: number, rawCategoryLabel: string, files: FileList | null) => {
+        if (!files || files.length === 0) return;
+        const cleanLabel = rawCategoryLabel.replace(/(\*Wajib|\(Opsional\))/gi, '').trim();
+        const uploadKey = `${rtIdx}-${rmIdx}-${cleanLabel}`;
+        setUploadingRooms(prev => ({ ...prev, [uploadKey]: true }));
+        try {
+            const targetRoom = currentRoomTypes[rtIdx]?.rooms?.[rmIdx];
+            const currentCategorized = getRoomCategorizedPhotos(targetRoom);
+            const targetKey = rawCategoryLabel;
+            const existingList = Array.isArray(currentCategorized[targetKey]) ? [...currentCategorized[targetKey]] : [];
+
+            for (let i = 0; i < files.length; i++) {
+                const folder = `kostmanager/rooms/${Date.now()}_${i}`;
+                const webpFile = await compressImageToWebP(files[i]);
+                const publicUrl = await uploadFileAndGetURL(webpFile, folder);
+                existingList.push(publicUrl);
+            }
+            currentCategorized[targetKey] = existingList;
+            const { images, photoCategories } = exportCategorizedPhotos(currentCategorized);
+
+            updateUnit(rtIdx, rmIdx, {
+                images,
+                photoCategories,
+                categorizedPhotos: currentCategorized,
+                categorized_photos: currentCategorized
+            });
+        } catch (err: any) {
+            alert('Gagal mengunggah foto kamar: ' + err.message);
+        } finally {
+            setUploadingRooms(prev => ({ ...prev, [uploadKey]: false }));
+        }
+    };
+
+    // Mutator: Delete Photo from Category
+    const handleDeleteRoomPhotoFromCategory = (rtIdx: number, rmIdx: number, catLabel: string, photoUrl: string) => {
+        const targetRoom = currentRoomTypes[rtIdx]?.rooms?.[rmIdx];
+        const currentCategorized = getRoomCategorizedPhotos(targetRoom);
+        const targetKey = Object.keys(currentCategorized).find(k => 
+            k === catLabel || k.replace(/(\*Wajib|\(Opsional\))/gi, '').trim().toLowerCase() === catLabel.replace(/(\*Wajib|\(Opsional\))/gi, '').trim().toLowerCase()
+        ) || catLabel;
+
+        const list = (currentCategorized[targetKey] || []).filter(u => u !== photoUrl);
+        if (list.length > 0) {
+            currentCategorized[targetKey] = list;
+        } else {
+            delete currentCategorized[targetKey];
+        }
+        const { images, photoCategories } = exportCategorizedPhotos(currentCategorized);
+        updateUnit(rtIdx, rmIdx, {
+            images,
+            photoCategories,
+            categorizedPhotos: currentCategorized,
+            categorized_photos: currentCategorized
+        });
+    };
+
+    // Mutator: Toggle Unit Facility
+    const toggleUnitRoomFacility = (rtIdx: number, rmIdx: number, facName: string) => {
+        const targetRoom = currentRoomTypes[rtIdx]?.rooms?.[rmIdx];
+        const current = Array.isArray(targetRoom?.facilities) 
+            ? targetRoom.facilities 
+            : (Array.isArray(targetRoom?.roomFacilities) ? targetRoom.roomFacilities : (currentRoomTypes[rtIdx]?.roomFacilities || []));
+        
+        let updated: string[];
+        if (current.includes(facName)) {
+            updated = current.filter((f: string) => f !== facName);
+        } else {
+            updated = [...current, facName];
+        }
+        updateUnit(rtIdx, rmIdx, { facilities: updated, roomFacilities: updated });
+    };
+
+    // Mutator: Toggle Unit Bathroom Facility
+    const toggleUnitBathroomFacility = (rtIdx: number, rmIdx: number, bfacName: string) => {
+        const targetRoom = currentRoomTypes[rtIdx]?.rooms?.[rmIdx];
+        const current = Array.isArray(targetRoom?.bathroomFacilities) 
+            ? targetRoom.bathroomFacilities 
+            : (currentRoomTypes[rtIdx]?.bathroomFacilities || []);
+        
+        let updated: string[];
+        if (current.includes(bfacName)) {
+            updated = current.filter((f: string) => f !== bfacName);
+        } else {
+            updated = [...current, bfacName];
+        }
+        updateUnit(rtIdx, rmIdx, { bathroomFacilities: updated });
+    };
+
+    // Mutator: Toggle Unit Kitchen Facility
+    const toggleUnitKitchenFacility = (rtIdx: number, rmIdx: number, kfacName: string) => {
+        const targetRoom = currentRoomTypes[rtIdx]?.rooms?.[rmIdx];
+        const current = Array.isArray(targetRoom?.kitchenFacilities) 
+            ? targetRoom.kitchenFacilities 
+            : (currentRoomTypes[rtIdx]?.kitchenFacilities || []);
+        
+        let updated: string[];
+        if (current.includes(kfacName)) {
+            updated = current.filter((f: string) => f !== kfacName);
+        } else {
+            updated = [...current, kfacName];
+        }
+        updateUnit(rtIdx, rmIdx, { kitchenFacilities: updated });
+    };
+
+    // Mutator: Pricing Schemes
+    const updateUnitPricingItem = (rtIdx: number, rmIdx: number, priceIdx: number, field: 'period' | 'price', val: any) => {
+        const targetRoom = currentRoomTypes[rtIdx]?.rooms?.[rmIdx];
+        const currentPricing = Array.isArray(targetRoom?.pricing) && targetRoom.pricing.length > 0
+            ? [...targetRoom.pricing]
+            : [{ period: 'bulanan', price: Number(targetRoom?.price || currentRoomTypes[rtIdx]?.price || 0) }];
+        
+        if (priceIdx < currentPricing.length) {
+            currentPricing[priceIdx] = {
+                ...currentPricing[priceIdx],
+                [field]: field === 'price' ? Number(val) : val
+            };
+            const monthly = currentPricing.find(p => p.period === 'bulanan')?.price;
+            updateUnit(rtIdx, rmIdx, {
+                pricing: currentPricing,
+                ...(monthly ? { price: Number(monthly) } : {})
+            });
+        }
+    };
+
+    const addUnitPricingItem = (rtIdx: number, rmIdx: number) => {
+        const targetRoom = currentRoomTypes[rtIdx]?.rooms?.[rmIdx];
+        const currentPricing = Array.isArray(targetRoom?.pricing) && targetRoom.pricing.length > 0
+            ? [...targetRoom.pricing]
+            : [{ period: 'bulanan', price: Number(targetRoom?.price || currentRoomTypes[rtIdx]?.price || 0) }];
+        
+        const existingPeriods = currentPricing.map(p => p.period);
+        const candidatePeriods = ['bulanan', '3bulan', '6bulan', 'tahunan', 'mingguan', 'harian'];
+        const nextPeriod = candidatePeriods.find(p => !existingPeriods.includes(p)) || '3bulan';
+        
+        const updated = [...currentPricing, { period: nextPeriod, price: Number(targetRoom?.price || currentRoomTypes[rtIdx]?.price || 0) }];
+        updateUnit(rtIdx, rmIdx, { pricing: updated });
+    };
+
+    const deleteUnitPricingItem = (rtIdx: number, rmIdx: number, priceIdx: number) => {
+        const targetRoom = currentRoomTypes[rtIdx]?.rooms?.[rmIdx];
+        const currentPricing = Array.isArray(targetRoom?.pricing) ? [...targetRoom.pricing] : [];
+        if (currentPricing.length <= 1) {
+            alert('Minimal kamar harus memiliki 1 skema harga');
+            return;
+        }
+        const updated = currentPricing.filter((_, i) => i !== priceIdx);
+        updateUnit(rtIdx, rmIdx, { pricing: updated });
+    };
+
+    // Mutator: Toggle Other Fee Covered Items
+    const toggleUnitOtherFeeCoveredItem = (rtIdx: number, rmIdx: number, item: string) => {
+        const targetRoom = currentRoomTypes[rtIdx]?.rooms?.[rmIdx];
+        const current = Array.isArray(targetRoom?.otherFeeCoveredItems) ? targetRoom.otherFeeCoveredItems : [];
+        const updated = current.includes(item) ? current.filter((i: string) => i !== item) : [...current, item];
+        updateUnit(rtIdx, rmIdx, { otherFeeCoveredItems: updated });
+    };
+
+    // Mutator: Public Sub Facilities (Tab 1)
+    const togglePublicKitchenFacility = (kfac: string) => {
+        const current = newPropForm.publicKitchenFacilities || ['Kompor', 'Kulkas', 'Wastafel Cuci Piring'];
+        const updated = current.includes(kfac) ? current.filter((f: string) => f !== kfac) : [...current, kfac];
+        setNewPropForm((prev: any) => ({ ...prev, publicKitchenFacilities: updated }));
+    };
+
+    const togglePublicBathroomFacility = (bfac: string) => {
+        const current = newPropForm.publicBathroomFacilities || ['Kloset Duduk', 'Shower'];
+        const updated = current.includes(bfac) ? current.filter((f: string) => f !== bfac) : [...current, bfac];
+        setNewPropForm((prev: any) => ({ ...prev, publicBathroomFacilities: updated }));
+    };
+
     // Hero Building Photo Upload & Delete
     const handleImageFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
@@ -4027,6 +4337,847 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
         setNewPropForm({ ...newPropForm, campuses: updated });
     };
 
+    // Renderer Unit Kamar Terkelola dengan Mekanisme Input Form Survei Lapangan 1:1
+    const renderSurveyStyleRoomUnit = (rt: any, rtIdx: number, u: any, origIdx: number, isOccupied: boolean) => {
+        const uName = formatRoomName(u.roomNumber || u.name, origIdx);
+        const unitKey = `rt${rtIdx}_rm${origIdx}`;
+        const uFacilities = Array.isArray(u.facilities) 
+            ? u.facilities 
+            : (Array.isArray(u.roomFacilities) ? u.roomFacilities : (rt.roomFacilities || []));
+        const uBathroomFacilities = Array.isArray(u.bathroomFacilities) 
+            ? u.bathroomFacilities 
+            : (rt.bathroomFacilities || []);
+        const uKitchenFacilities = Array.isArray(u.kitchenFacilities) 
+            ? u.kitchenFacilities 
+            : (rt.kitchenFacilities || []);
+        
+        const isFurnished = !uFacilities.includes('Kosongan (Tanpa Perabot)');
+        const dim = parseDimensionParts(u.size || rt.size || '3x4 meter');
+        
+        // Categorized photos
+        const uCategorizedPhotos = getRoomCategorizedPhotos(u);
+        const existingCustomCats = Object.keys(uCategorizedPhotos).filter(k => 
+            !['interior kamar *wajib', 'interior kamar (opsional)', 'kamar mandi', 'dapur dalam', 'tempat tidur', 'lemari / storage', 'meja belajar', 'ac', 'kipas angin', 'jendela luar', 'water heater'].includes(k.toLowerCase().trim())
+        );
+        const dynamicCats = computeDynamicRoomPhotoCategories(uFacilities, isOccupied ? 'terisi' : 'kosong', existingCustomCats);
+        const unitPhotos = getRoomPhotos(u);
+
+        // Pricing schemes
+        const pricingList = Array.isArray(u.pricing) && u.pricing.length > 0
+            ? u.pricing
+            : [{ period: 'bulanan', price: Number(u.price || rt.price || 0) }];
+
+        const unifiedFacilities = buildUnifiedFacilities(
+            uFacilities,
+            uBathroomFacilities,
+            uKitchenFacilities
+        );
+
+        const cardBorder = isOccupied 
+            ? 'border-amber-200/90 hover:border-amber-300' 
+            : 'border-emerald-200/90 hover:border-emerald-300';
+
+        const customRoomInput = customRoomFacilityInputs[unitKey] || '';
+        const customBathInput = customBathroomFacilityInputs[unitKey] || '';
+        const customKitchenInput = customKitchenFacilityInputs[unitKey] || '';
+        const customCatInput = newRoomPhotoCategoryInputs[unitKey] || '';
+
+        return (
+            <div key={origIdx} className={`bg-white border ${cardBorder} rounded-2xl p-4 shadow-sm space-y-4 transition-all text-left`}>
+                {/* 1. TOP BAR: NOMOR KAMAR, STATUS TOGGLE, LANTAI, TIPE & TARIF */}
+                <div className={`flex flex-wrap items-center justify-between gap-3 border-b ${isOccupied ? 'border-amber-100' : 'border-emerald-100'} pb-3`}>
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm ${
+                            isOccupied ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                            {isOccupied ? <Lock size={16} /> : <Sparkles size={16} />}
+                        </span>
+                        <div>
+                            <span className={`text-[9px] font-black uppercase tracking-widest block ${
+                                isOccupied ? 'text-amber-800' : 'text-emerald-800'
+                            }`}>
+                                Unit Kamar #{origIdx + 1}
+                            </span>
+                            <input
+                                type="text"
+                                value={u.roomNumber || u.name || ''}
+                                onChange={e => updateUnit(rtIdx, origIdx, { roomNumber: e.target.value })}
+                                placeholder="Nomor/Nama Kamar..."
+                                className="text-sm font-black text-slate-900 leading-tight bg-slate-50 hover:bg-slate-100 focus:bg-white border border-slate-200/80 rounded-lg px-2 py-0.5 outline-none font-mono"
+                            />
+                        </div>
+
+                        {/* Status Switcher Toggle (1:1 Form Survei) */}
+                        <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200/80">
+                            <button
+                                type="button"
+                                onClick={() => updateUnit(rtIdx, origIdx, { status: 'terisi' })}
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer ${
+                                    isOccupied
+                                        ? 'bg-amber-600 text-white shadow-2xs'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                <Lock size={11} />
+                                <span>Terisi</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => updateUnit(rtIdx, origIdx, { status: 'kosong' })}
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer ${
+                                    !isOccupied
+                                        ? 'bg-emerald-600 text-white shadow-2xs'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                <Sparkles size={11} />
+                                <span>Kosong</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 shrink-0">
+                        {/* Dropdown Lantai */}
+                        <div className="flex items-center gap-1">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase">Lantai:</span>
+                            <select
+                                value={u.floor || 'Lantai 1'}
+                                onChange={e => updateUnit(rtIdx, origIdx, { floor: e.target.value })}
+                                className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 outline-none cursor-pointer"
+                            >
+                                {['Lantai 1', 'Lantai 2', 'Lantai 3', 'Lantai 4', 'Lantai 5'].map(fl => (
+                                    <option key={fl} value={fl}>{fl}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Dropdown Tipe Kamar */}
+                        <div className="flex items-center gap-1">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase">Tipe:</span>
+                            <select
+                                value={u.type || rt.name || 'Standard'}
+                                onChange={e => updateUnit(rtIdx, origIdx, { type: e.target.value })}
+                                className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 outline-none cursor-pointer"
+                            >
+                                {['Standard', 'Premium', 'Deluxe', 'VIP', 'Kustom', rt.name].filter((v, i, a) => a.indexOf(v) === i).map(tp => (
+                                    <option key={tp} value={tp}>{tp}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="text-right pl-1">
+                            <span className="text-[9px] font-bold text-slate-400 block uppercase">Tarif Bulanan</span>
+                            <span className="text-xs font-black text-emerald-700">{FORMAT_CURRENCY(u.price || rt.price)}<span className="text-[9px] text-slate-400 font-bold">/bln</span></span>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => handleDeleteUnit(rtIdx, origIdx, uName)}
+                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
+                            title="Hapus Kamar Ini"
+                        >
+                            <Trash2 size={15} />
+                        </button>
+                    </div>
+                </div>
+
+                {/* 2. SECTION 👤 INFORMASI PENGHUNI (JIKA STATUS TERISI) */}
+                {isOccupied && (
+                    <div className="bg-amber-50/70 border border-amber-200/90 rounded-xl p-3.5 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black text-amber-900 uppercase tracking-widest flex items-center gap-1.5">
+                                👤 Data Penghuni &amp; Tagihan Aktif
+                            </span>
+                            <span className="text-[9px] font-bold text-amber-700">
+                                🔒 Terdaftar Menghuni Unit {u.roomNumber || uName}
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 text-xs">
+                            {/* Nama Penghuni */}
+                            <div className="space-y-1">
+                                <span className="text-[9px] font-black text-slate-600 uppercase block">Nama Lengkap</span>
+                                <input
+                                    type="text"
+                                    value={u.tenantName || u.residentName || ''}
+                                    onChange={e => updateUnit(rtIdx, origIdx, { tenantName: e.target.value, residentName: e.target.value })}
+                                    placeholder="Nama penyewa..."
+                                    className="font-black text-slate-900 text-xs w-full bg-white border border-amber-200 rounded-lg px-2.5 py-1.5 outline-none"
+                                />
+                            </div>
+
+                            {/* Jumlah Penghuni */}
+                            <div className="space-y-1">
+                                <span className="text-[9px] font-black text-slate-600 uppercase block">Jumlah Orang</span>
+                                <div className="flex items-center gap-1.5">
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={5}
+                                        value={u.currentOccupants || 1}
+                                        onChange={e => updateUnit(rtIdx, origIdx, { currentOccupants: Number(e.target.value) })}
+                                        className="w-14 bg-white border border-amber-200 rounded-lg px-2 py-1.5 text-center font-bold text-slate-900 text-xs outline-none"
+                                    />
+                                    <span className="text-[10px] font-bold text-slate-500">Orang</span>
+                                </div>
+                            </div>
+
+                            {/* Kontak WhatsApp */}
+                            <div className="space-y-1">
+                                <span className="text-[9px] font-black text-slate-600 uppercase block">Nomor WhatsApp</span>
+                                <input
+                                    type="text"
+                                    value={u.tenantPhone || u.residentPhone || ''}
+                                    onChange={e => updateUnit(rtIdx, origIdx, { tenantPhone: e.target.value, residentPhone: e.target.value })}
+                                    placeholder="08123456789"
+                                    className="font-black text-slate-900 text-xs w-full bg-white border border-amber-200 rounded-lg px-2.5 py-1.5 outline-none font-mono"
+                                />
+                                {(u.tenantPhone || u.residentPhone) && (
+                                    <a
+                                        href={`https://wa.me/${String(u.tenantPhone || u.residentPhone).replace(/\D/g, '')}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 hover:underline pt-0.5"
+                                    >
+                                        Hubungi via WA ↗
+                                    </a>
+                                )}
+                            </div>
+
+                            {/* Periode & Jatuh Tempo */}
+                            <div className="space-y-1">
+                                <span className="text-[9px] font-black text-slate-600 uppercase block">Langganan &amp; Jatuh Tempo</span>
+                                <select
+                                    value={u.billingPeriod || u.paymentPeriod || 'bulanan'}
+                                    onChange={e => updateUnit(rtIdx, origIdx, { billingPeriod: e.target.value, paymentPeriod: e.target.value })}
+                                    className="w-full bg-white border border-amber-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 outline-none capitalize mb-1"
+                                >
+                                    <option value="bulanan">Bulanan</option>
+                                    <option value="triwulan">3 Bulan (Triwulan)</option>
+                                    <option value="semester">6 Bulan (Semester)</option>
+                                    <option value="tahunan">Tahunan</option>
+                                </select>
+                                <input
+                                    type="date"
+                                    value={u.dueDate || u.endDate || ''}
+                                    onChange={e => updateUnit(rtIdx, origIdx, { dueDate: e.target.value, endDate: e.target.value })}
+                                    className="bg-white border border-amber-200 rounded-lg px-2 py-0.5 font-bold text-amber-900 outline-none text-[10px] w-full"
+                                    title="Tanggal Jatuh Tempo"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 3. SECTION 📐 DIMENSI & KAPASITAS KAMAR (1:1 FORM SURVEI) */}
+                <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-3.5 space-y-2.5">
+                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">
+                        📐 Dimensi &amp; Kapasitas Unit
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Dimensi P x L meter */}
+                        <div className="bg-white border border-slate-200 rounded-xl p-2.5 space-y-1">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase block">Ukuran / Luas Kamar</span>
+                            <div className="flex items-center gap-1.5">
+                                <input
+                                    type="text"
+                                    value={dim.length}
+                                    onChange={e => {
+                                        const newLen = e.target.value;
+                                        const newWid = dim.width || '3';
+                                        updateUnit(rtIdx, origIdx, { size: `${newLen}x${newWid} meter` });
+                                    }}
+                                    placeholder="3"
+                                    className="w-14 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-center font-black text-xs outline-none"
+                                />
+                                <span className="font-black text-slate-400 text-xs">X</span>
+                                <input
+                                    type="text"
+                                    value={dim.width}
+                                    onChange={e => {
+                                        const newWid = e.target.value;
+                                        const newLen = dim.length || '3';
+                                        updateUnit(rtIdx, origIdx, { size: `${newLen}x${newWid} meter` });
+                                    }}
+                                    placeholder="4"
+                                    className="w-14 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-center font-black text-xs outline-none"
+                                />
+                                <span className="text-[10px] font-bold text-slate-500">meter</span>
+                            </div>
+                        </div>
+
+                        {/* Maks. Penghuni */}
+                        <div className="bg-white border border-slate-200 rounded-xl p-2.5 space-y-1">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase block">Maks. Penghuni per Kamar</span>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="number"
+                                    min={1}
+                                    max={10}
+                                    value={u.maxOccupants || rt.maxOccupants || 1}
+                                    onChange={e => updateUnit(rtIdx, origIdx, { maxOccupants: Number(e.target.value) })}
+                                    className="w-16 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-center font-black text-xs outline-none"
+                                />
+                                <span className="text-[10px] font-bold text-slate-500">Orang</span>
+                            </div>
+                        </div>
+
+                        {/* Biaya Tambahan Orang */}
+                        <div className="bg-white border border-slate-200 rounded-xl p-2.5 space-y-1">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase block">Biaya Tambahan Orang (Rp/Bln)</span>
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold text-slate-400">Rp</span>
+                                <input
+                                    type="text"
+                                    value={formatThousand(u.extraOccupantFee || 0)}
+                                    onChange={e => updateUnit(rtIdx, origIdx, { extraOccupantFee: parseThousand(e.target.value) })}
+                                    placeholder="0"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 font-black text-xs outline-none"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 4. SECTION 💰 SKEMA TARIF & BIAYA TAMBAHAN (1:1 FORM SURVEI) */}
+                <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-3.5 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">
+                            💰 Skema Harga Multi-Periode ({pricingList.length})
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => addUnitPricingItem(rtIdx, origIdx)}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all shadow-2xs"
+                        >
+                            <Plus size={11} />
+                            <span>+ Tambah Skema Harga</span>
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                        {pricingList.map((pr: any, pi: number) => (
+                            <div key={pi} className="bg-white border border-slate-200 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-2xs">
+                                <div className="flex-1 space-y-1">
+                                    <select
+                                        value={pr.period || 'bulanan'}
+                                        onChange={e => updateUnitPricingItem(rtIdx, origIdx, pi, 'period', e.target.value)}
+                                        className="bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-bold text-slate-800 outline-none capitalize w-full"
+                                    >
+                                        <option value="bulanan">Bulanan</option>
+                                        <option value="3bulan">3 Bulan</option>
+                                        <option value="6bulan">6 Bulan</option>
+                                        <option value="tahunan">Tahunan</option>
+                                        <option value="mingguan">Mingguan</option>
+                                        <option value="harian">Harian</option>
+                                    </select>
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-[10px] font-bold text-slate-400">Rp</span>
+                                        <input
+                                            type="text"
+                                            value={formatThousand(pr.price)}
+                                            onChange={e => updateUnitPricingItem(rtIdx, origIdx, pi, 'price', parseThousand(e.target.value))}
+                                            placeholder="0"
+                                            className="w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-xs font-black text-emerald-800 outline-none"
+                                        />
+                                    </div>
+                                </div>
+                                {pricingList.length > 1 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => deleteUnitPricingItem(rtIdx, origIdx, pi)}
+                                        className="p-1 text-rose-500 hover:bg-rose-50 rounded cursor-pointer"
+                                        title="Hapus Skema"
+                                    >
+                                        <Trash2 size={12} />
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Biaya Tambahan Bulanan & Checklist Cakupan */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2 pt-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-[9px] font-black text-slate-600 uppercase">
+                                Biaya Tambahan Bulanan Lainnya (Di luar sewa)
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold text-slate-400">Rp</span>
+                                <input
+                                    type="text"
+                                    value={formatThousand(u.otherFeeAmount || 0)}
+                                    onChange={e => updateUnit(rtIdx, origIdx, { otherFeeAmount: parseThousand(e.target.value) })}
+                                    placeholder="0"
+                                    className="w-28 bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-xs font-black text-slate-900 outline-none"
+                                />
+                                <span className="text-[9px] text-slate-400 font-bold">/bulan</span>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                            <span className="text-[9px] font-bold text-slate-400 self-center mr-1">Cakupan Biaya:</span>
+                            {['Listrik', 'Air', 'Sampah', 'Wifi', 'Keamanan / Parkir'].map(item => {
+                                const isChecked = (u.otherFeeCoveredItems || []).includes(item);
+                                return (
+                                    <button
+                                        key={item}
+                                        type="button"
+                                        onClick={() => toggleUnitOtherFeeCoveredItem(rtIdx, origIdx, item)}
+                                        className={`px-2.5 py-1 rounded-lg text-[9px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                                            isChecked
+                                                ? 'bg-emerald-600 text-white shadow-2xs'
+                                                : 'bg-slate-50 border border-slate-200 text-slate-600 hover:border-slate-300'
+                                        }`}
+                                    >
+                                        <span>{item}</span>
+                                        {isChecked && <Check size={10} />}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+
+                {/* 5. SECTION 🛋️ KELENGKAPAN FASILITAS KAMAR CONTEXT-AWARE (1:1 FORM SURVEI) */}
+                <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-3.5 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">
+                            🛋️ Fasilitas &amp; Perlengkapan Kamar
+                        </span>
+
+                        {/* Mode Kosongan vs Furnished Toggle Buttons */}
+                        <div className="flex items-center gap-1 bg-white p-0.5 rounded-xl border border-slate-200 shadow-2xs">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const furnitureList = ['Kasur', 'Lemari', 'Lemari Pakaian', 'Meja Belajar', 'AC', 'Kipas Angin', 'Water Heater'];
+                                    const cleaned = uFacilities.filter((f: string) => !furnitureList.includes(f) && f !== 'Kosongan (Tanpa Perabot)');
+                                    cleaned.push('Kosongan (Tanpa Perabot)');
+                                    updateUnit(rtIdx, origIdx, { facilities: cleaned, roomFacilities: cleaned });
+                                }}
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer ${
+                                    !isFurnished
+                                        ? 'bg-amber-600 text-white shadow-2xs'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                <span>📦 Kosongan (Tanpa Perabot)</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const cleaned = uFacilities.filter((f: string) => f !== 'Kosongan (Tanpa Perabot)');
+                                    if (!cleaned.includes('Kasur')) cleaned.push('Kasur');
+                                    if (!cleaned.includes('Lemari')) cleaned.push('Lemari');
+                                    updateUnit(rtIdx, origIdx, { facilities: cleaned, roomFacilities: cleaned });
+                                }}
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer ${
+                                    isFurnished
+                                        ? 'bg-emerald-600 text-white shadow-2xs'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                <span>🛋️ Furnished (Isian)</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Checklist Fasilitas Standar */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 pt-1">
+                        {[
+                            { name: 'Kasur', isFurniture: true },
+                            { name: 'Lemari', isFurniture: true },
+                            { name: 'Meja Belajar', isFurniture: true },
+                            { name: 'AC', isFurniture: true },
+                            { name: 'Kipas Angin', isFurniture: true },
+                            { name: 'Water Heater', isFurniture: true },
+                            { name: 'Jendela Luar', isFurniture: false },
+                            { name: 'Kamar Mandi Dalam', isFurniture: false },
+                            { name: 'Dapur Dalam', isFurniture: false }
+                        ].map(fac => {
+                            const isChecked = uFacilities.some((f: string) => f.toLowerCase() === fac.name.toLowerCase());
+                            const isDisabled = !isFurnished && fac.isFurniture;
+
+                            return (
+                                <button
+                                    key={fac.name}
+                                    type="button"
+                                    disabled={isDisabled}
+                                    onClick={() => toggleUnitRoomFacility(rtIdx, origIdx, fac.name)}
+                                    className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                                        isDisabled
+                                            ? 'opacity-35 bg-slate-100 border-slate-200 cursor-not-allowed'
+                                            : isChecked
+                                                ? 'bg-emerald-50 border-emerald-500 text-emerald-950 font-black shadow-2xs ring-2 ring-emerald-500/10'
+                                                : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 font-bold'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <span className="text-sm">{getRoomFacilityIcon(fac.name, 14)}</span>
+                                        <span className="text-[10px] uppercase tracking-wide truncate">{fac.name}</span>
+                                    </div>
+                                    {isChecked && <Check size={12} className="text-emerald-600 shrink-0" />}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* Sub-Checklist Kamar Mandi Dalam (Context-Aware) */}
+                    {uFacilities.some((f: string) => f.toLowerCase() === 'kamar mandi dalam') && (
+                        <div className="bg-sky-50/70 border border-sky-200 rounded-xl p-3 space-y-2">
+                            <span className="text-[9px] font-black text-sky-900 uppercase tracking-wider flex items-center gap-1.5">
+                                🚿 Sub-Kelengkapan Kamar Mandi Dalam
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                                {['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].map(bfac => {
+                                    const isBChecked = uBathroomFacilities.includes(bfac);
+                                    return (
+                                        <button
+                                            key={bfac}
+                                            type="button"
+                                            onClick={() => toggleUnitBathroomFacility(rtIdx, origIdx, bfac)}
+                                            className={`px-2.5 py-1 rounded-xl text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                                                isBChecked
+                                                    ? 'bg-sky-600 text-white shadow-2xs'
+                                                    : 'bg-white border border-sky-200 text-sky-800 hover:border-sky-300'
+                                            }`}
+                                        >
+                                            <span>{bfac}</span>
+                                            {isBChecked && <Check size={10} />}
+                                        </button>
+                                    );
+                                })}
+                                {uBathroomFacilities.filter((bf: string) => !['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].includes(bf)).map((customB: string, cbi: number) => (
+                                    <span key={cbi} className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-sky-100 text-sky-900 border border-sky-300 flex items-center gap-1">
+                                        <span>✨ {customB}</span>
+                                        <button type="button" onClick={() => toggleUnitBathroomFacility(rtIdx, origIdx, customB)} className="hover:text-rose-600 cursor-pointer">×</button>
+                                    </span>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-1.5 pt-1">
+                                <input
+                                    type="text"
+                                    value={customBathInput}
+                                    onChange={e => setCustomBathroomFacilityInputs(prev => ({ ...prev, [unitKey]: e.target.value }))}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && customBathInput.trim()) {
+                                            e.preventDefault();
+                                            toggleUnitBathroomFacility(rtIdx, origIdx, customBathInput.trim());
+                                            setCustomBathroomFacilityInputs(prev => ({ ...prev, [unitKey]: '' }));
+                                        }
+                                    }}
+                                    placeholder="+ Tambah fasilitas WC..."
+                                    className="text-[10px] font-bold bg-white border border-sky-200 rounded-lg px-2.5 py-1 flex-1 outline-none"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (customBathInput.trim()) {
+                                            toggleUnitBathroomFacility(rtIdx, origIdx, customBathInput.trim());
+                                            setCustomBathroomFacilityInputs(prev => ({ ...prev, [unitKey]: '' }));
+                                        }
+                                    }}
+                                    className="px-2.5 py-1 bg-sky-600 text-white rounded-lg text-[9px] font-black uppercase cursor-pointer"
+                                >
+                                    + Tambah
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Sub-Checklist Dapur Dalam (Context-Aware) */}
+                    {uFacilities.some((f: string) => f.toLowerCase() === 'dapur dalam') && (
+                        <div className="bg-orange-50/70 border border-orange-200 rounded-xl p-3 space-y-2">
+                            <span className="text-[9px] font-black text-orange-900 uppercase tracking-wider flex items-center gap-1.5">
+                                🍳 Sub-Kelengkapan Dapur Dalam
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                                {['Kompor', 'Kulkas', 'Wastafel Cuci Piring', 'Kitchen Set', 'Dispenser'].map(kfac => {
+                                    const isKChecked = uKitchenFacilities.includes(kfac);
+                                    return (
+                                        <button
+                                            key={kfac}
+                                            type="button"
+                                            onClick={() => toggleUnitKitchenFacility(rtIdx, origIdx, kfac)}
+                                            className={`px-2.5 py-1 rounded-xl text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                                                isKChecked
+                                                    ? 'bg-orange-600 text-white shadow-2xs'
+                                                    : 'bg-white border border-orange-200 text-orange-800 hover:border-orange-300'
+                                            }`}
+                                        >
+                                            <span>{kfac}</span>
+                                            {isKChecked && <Check size={10} />}
+                                        </button>
+                                    );
+                                })}
+                                {uKitchenFacilities.filter((kf: string) => !['Kompor', 'Kulkas', 'Wastafel Cuci Piring', 'Kitchen Set', 'Dispenser'].includes(kf)).map((customK: string, cki: number) => (
+                                    <span key={cki} className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-orange-100 text-orange-900 border border-orange-300 flex items-center gap-1">
+                                        <span>✨ {customK}</span>
+                                        <button type="button" onClick={() => toggleUnitKitchenFacility(rtIdx, origIdx, customK)} className="hover:text-rose-600 cursor-pointer">×</button>
+                                    </span>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-1.5 pt-1">
+                                <input
+                                    type="text"
+                                    value={customKitchenInput}
+                                    onChange={e => setCustomKitchenFacilityInputs(prev => ({ ...prev, [unitKey]: e.target.value }))}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && customKitchenInput.trim()) {
+                                            e.preventDefault();
+                                            toggleUnitKitchenFacility(rtIdx, origIdx, customKitchenInput.trim());
+                                            setCustomKitchenFacilityInputs(prev => ({ ...prev, [unitKey]: '' }));
+                                        }
+                                    }}
+                                    placeholder="+ Tambah fasilitas Dapur..."
+                                    className="text-[10px] font-bold bg-white border border-orange-200 rounded-lg px-2.5 py-1 flex-1 outline-none"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (customKitchenInput.trim()) {
+                                            toggleUnitKitchenFacility(rtIdx, origIdx, customKitchenInput.trim());
+                                            setCustomKitchenFacilityInputs(prev => ({ ...prev, [unitKey]: '' }));
+                                        }
+                                    }}
+                                    className="px-2.5 py-1 bg-orange-600 text-white rounded-lg text-[9px] font-black uppercase cursor-pointer"
+                                >
+                                    + Tambah
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Custom Facility Adder */}
+                    <div className="space-y-1.5 pt-1">
+                        <div className="flex flex-wrap gap-1.5">
+                            {uFacilities.filter((f: string) => ![
+                                'Kasur', 'Lemari', 'Meja Belajar', 'AC', 'Kipas Angin', 'Water Heater', 
+                                'Jendela Luar', 'Kamar Mandi Dalam', 'Dapur Dalam', 'Kosongan (Tanpa Perabot)'
+                            ].includes(f)).map((cf: string, cfi: number) => (
+                                <span key={cfi} className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-1">
+                                    <span>✨ {cf}</span>
+                                    <button type="button" onClick={() => toggleUnitRoomFacility(rtIdx, origIdx, cf)} className="hover:text-rose-600 cursor-pointer">×</button>
+                                </span>
+                            ))}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <input
+                                type="text"
+                                value={customRoomInput}
+                                onChange={e => setCustomRoomFacilityInputs(prev => ({ ...prev, [unitKey]: e.target.value }))}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter' && customRoomInput.trim()) {
+                                        e.preventDefault();
+                                        toggleUnitRoomFacility(rtIdx, origIdx, customRoomInput.trim());
+                                        setCustomRoomFacilityInputs(prev => ({ ...prev, [unitKey]: '' }));
+                                    }
+                                }}
+                                placeholder="+ Tambah fasilitas kamar baru..."
+                                className="text-[10px] font-bold bg-white border border-slate-200 rounded-lg px-2.5 py-1 flex-1 outline-none"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (customRoomInput.trim()) {
+                                        toggleUnitRoomFacility(rtIdx, origIdx, customRoomInput.trim());
+                                        setCustomRoomFacilityInputs(prev => ({ ...prev, [unitKey]: '' }));
+                                    }
+                                }}
+                                className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-[9px] font-black uppercase cursor-pointer"
+                            >
+                                + Tambah
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 6. SECTION 📸 DOKUMENTASI FOTO KAMAR PER KATEGORI DINAMIS (1:1 FORM SURVEI) */}
+                <div className="bg-emerald-50/40 border border-emerald-200/80 rounded-xl p-3.5 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-emerald-900 uppercase tracking-widest flex items-center gap-1.5">
+                            <Camera size={14} className="text-emerald-700" />
+                            Dokumentasi Foto Unit per Kategori ({unitPhotos.length} Total Foto)
+                        </span>
+                        <span className="text-[9px] font-bold text-emerald-700">
+                            💡 Kompresi WebP Otomatis Front-End
+                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {dynamicCats.map(cat => {
+                            const cleanCat = cat.replace(/(\*Wajib|\(Opsional\))/gi, '').trim();
+                            const photosInCat = (uCategorizedPhotos[cat] || uCategorizedPhotos[cleanCat] || []).map((u: any) => normalizePhotoUrl(u)).filter(Boolean);
+                            const isUploadingThisCat = uploadingRooms[`${rtIdx}-${origIdx}-${cleanCat}`];
+
+                            return (
+                                <div key={cat} className="bg-white border border-emerald-200/90 rounded-xl p-3 space-y-2 shadow-2xs">
+                                    <div className="flex items-center justify-between gap-1">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <span className="text-xs">{getRoomFacilityIcon(cleanCat, 13)}</span>
+                                            <span className="text-[10px] font-black uppercase text-slate-900 tracking-wide truncate">
+                                                {cat}
+                                            </span>
+                                        </div>
+                                        <span className="px-2 py-0.2 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-black">
+                                            {photosInCat.length} FOTO
+                                        </span>
+                                    </div>
+
+                                    {/* Photos Grid in Category */}
+                                    {photosInCat.length > 0 ? (
+                                        <div className="grid grid-cols-3 gap-1.5">
+                                            {photosInCat.map((pUrl: string, pi: number) => (
+                                                <div key={pi} className="relative aspect-4/3 rounded-lg overflow-hidden border border-slate-200 group bg-black shadow-2xs">
+                                                    <img src={pUrl} alt={cat} className="w-full h-full object-cover" />
+                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 z-20">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setLightboxPhoto({ url: pUrl, label: cat })}
+                                                            className="p-1 bg-white/90 text-slate-900 rounded cursor-pointer hover:bg-white"
+                                                            title="Zoom"
+                                                        >
+                                                            <ZoomIn size={12} />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDeleteRoomPhotoFromCategory(rtIdx, origIdx, cat, pUrl)}
+                                                            className="p-1 bg-rose-600 text-white rounded cursor-pointer hover:bg-rose-700"
+                                                            title="Hapus Foto"
+                                                        >
+                                                            <Trash2 size={12} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="py-2 text-center text-[9px] text-slate-400 italic bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                                            Belum ada foto untuk {cleanCat}
+                                        </div>
+                                    )}
+
+                                    {/* Upload Button */}
+                                    <label className="w-full py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-dashed border-emerald-300 text-emerald-800 text-[9.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition-all">
+                                        {isUploadingThisCat ? <RotateCw size={11} className="animate-spin" /> : <Upload size={11} />}
+                                        <span>{isUploadingThisCat ? 'Mengompresi WebP...' : `+ Unggah Foto ${cleanCat}`}</span>
+                                        <input
+                                            type="file"
+                                            multiple
+                                            accept="image/*"
+                                            disabled={isUploadingThisCat}
+                                            onChange={e => handleUploadRoomPhotoCategorized(rtIdx, origIdx, cat, e.target.files)}
+                                            className="hidden"
+                                        />
+                                    </label>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Add Custom Room Photo Category */}
+                    <div className="flex items-center gap-1.5 pt-1 border-t border-emerald-200/60">
+                        <input
+                            type="text"
+                            value={customCatInput}
+                            onChange={e => setNewRoomPhotoCategoryInputs(prev => ({ ...prev, [unitKey]: e.target.value }))}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter' && customCatInput.trim()) {
+                                    e.preventDefault();
+                                    const newCat = customCatInput.trim();
+                                    const currentCatPhotos = getRoomCategorizedPhotos(u);
+                                    if (!currentCatPhotos[newCat]) {
+                                        currentCatPhotos[newCat] = [];
+                                        const { images, photoCategories } = exportCategorizedPhotos(currentCatPhotos);
+                                        updateUnit(rtIdx, origIdx, {
+                                            images,
+                                            photoCategories,
+                                            categorizedPhotos: currentCatPhotos,
+                                            categorized_photos: currentCatPhotos
+                                        });
+                                    }
+                                    setNewRoomPhotoCategoryInputs(prev => ({ ...prev, [unitKey]: '' }));
+                                }
+                            }}
+                            placeholder="+ Tambah kategori foto kamar baru..."
+                            className="text-[10px] font-bold bg-white border border-emerald-200 rounded-lg px-2.5 py-1.5 flex-1 outline-none"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (customCatInput.trim()) {
+                                    const newCat = customCatInput.trim();
+                                    const currentCatPhotos = getRoomCategorizedPhotos(u);
+                                    if (!currentCatPhotos[newCat]) {
+                                        currentCatPhotos[newCat] = [];
+                                        const { images, photoCategories } = exportCategorizedPhotos(currentCatPhotos);
+                                        updateUnit(rtIdx, origIdx, {
+                                            images,
+                                            photoCategories,
+                                            categorizedPhotos: currentCatPhotos,
+                                            categorized_photos: currentCatPhotos
+                                        });
+                                    }
+                                    setNewRoomPhotoCategoryInputs(prev => ({ ...prev, [unitKey]: '' }));
+                                }
+                            }}
+                            className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-[9.5px] font-black uppercase cursor-pointer"
+                        >
+                            + Tambah Kategori
+                        </button>
+                    </div>
+                </div>
+
+                {/* 7. PREVIEW CHIPS FASILITAS DENGAN HOVER SYNC */}
+                <div className="bg-slate-50/80 border border-slate-200/80 rounded-xl p-3 space-y-1.5">
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block">
+                        🎯 Preview Fasilitas &amp; Sorot Foto (Hover Sync)
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                        {unifiedFacilities.map((uf) => {
+                            const isThisFacilityHovered = hoveredFacility?.unitId === String(origIdx) && hoveredFacility?.facilityId === uf.id;
+                            const isMatchedByPhotoHover = hoveredPhoto?.unitId === String(origIdx) && isFacilityMatchingPhoto(uf.allKeywords, hoveredPhoto.label);
+                            const isHighlighted = isThisFacilityHovered || isMatchedByPhotoHover;
+                            const hasMatchingPhoto = unitPhotos.some(p => isFacilityMatchingPhoto(uf.allKeywords, p.label));
+
+                            return (
+                                <div
+                                    key={uf.id}
+                                    onMouseEnter={() => setHoveredFacility({ unitId: String(origIdx), facilityId: uf.id, keywords: uf.allKeywords })}
+                                    onMouseLeave={() => setHoveredFacility(null)}
+                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition-all duration-200 cursor-pointer select-none text-[10px] font-black ${
+                                        isHighlighted
+                                            ? 'bg-emerald-600 text-white border-emerald-700 shadow-md ring-2 ring-emerald-400 scale-105 z-10'
+                                            : hasMatchingPhoto
+                                                ? 'bg-white border-emerald-300 text-emerald-950 hover:border-emerald-500 hover:bg-emerald-50 shadow-2xs'
+                                                : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                                    }`}
+                                >
+                                    {getRoomFacilityIcon(uf.mainName, 12)}
+                                    <span>{uf.mainName}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* 8. CATATAN KONDISI KAMAR */}
+                <div className="space-y-1">
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block">
+                        📝 Catatan Kondisi Kamar
+                    </span>
+                    <input
+                        type="text"
+                        value={u.notes || ''}
+                        onChange={e => updateUnit(rtIdx, origIdx, { notes: e.target.value })}
+                        placeholder="Catatan kondisi kamar..."
+                        className="w-full text-xs text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 outline-none"
+                    />
+                </div>
+            </div>
+        );
+    };
+
     const handleAddRule = () => {
         if (!tempRuleInput.trim()) return;
         setNewPropForm({ ...newPropForm, rules: [...(newPropForm.rules || []), tempRuleInput.trim()] });
@@ -4058,13 +5209,26 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                 size: rt.size || '3x4 meter',
                 isAvailable: (rt.rooms || []).some((r: any) => r.status === 'kosong'),
                 availableRoomCount: (rt.rooms || []).filter((r: any) => r.status === 'kosong').length,
-                maxOccupants: rt.maxOccupants || 1,
+                maxOccupants: Number(rt.maxOccupants || 1),
                 roomFacilities: rt.roomFacilities || [],
                 bathroomFacilities: rt.bathroomFacilities || [],
                 kitchenFacilities: rt.kitchenFacilities || [],
                 rooms: (rt.rooms || []).map((r: any) => ({
                     roomNumber: r.roomNumber,
                     status: r.status,
+                    floor: r.floor || 'Lantai 1',
+                    type: r.type || rt.name || 'Standard',
+                    size: r.size || rt.size || '3x4 meter',
+                    price: Number(r.price || rt.price || 0),
+                    pricing: Array.isArray(r.pricing) && r.pricing.length > 0 ? r.pricing : [{ period: 'bulanan', price: Number(r.price || rt.price || 0) }],
+                    maxOccupants: Number(r.maxOccupants || rt.maxOccupants || 1),
+                    extraOccupantFee: Number(r.extraOccupantFee || 0),
+                    otherFeeAmount: Number(r.otherFeeAmount || 0),
+                    otherFeeCoveredItems: r.otherFeeCoveredItems || [],
+                    facilities: r.facilities || r.roomFacilities || rt.roomFacilities || [],
+                    roomFacilities: r.roomFacilities || r.facilities || rt.roomFacilities || [],
+                    bathroomFacilities: r.bathroomFacilities || rt.bathroomFacilities || [],
+                    kitchenFacilities: r.kitchenFacilities || rt.kitchenFacilities || [],
                     tenantName: r.tenantName || '',
                     tenantPhone: r.tenantPhone || '',
                     billingPeriod: r.billingPeriod || 'bulanan',
@@ -4072,7 +5236,9 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                     startDate: r.startDate || '',
                     currentOccupants: Number(r.currentOccupants || 1),
                     images: r.images || [],
+                    photoCategories: r.photoCategories || [],
                     categorizedPhotos: r.categorizedPhotos || {},
+                    categorized_photos: r.categorizedPhotos || {},
                     notes: r.notes || ''
                 }))
             }));
@@ -4092,6 +5258,8 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                 location: newPropForm.location || { lat: -5.147665, lng: 119.432731 },
                 facilities: newPropForm.facilities && newPropForm.facilities.length > 0 ? newPropForm.facilities : ['WiFi Cepat', 'Dapur Bersama', 'Area Parkir'],
                 publicParkingFacilities: newPropForm.publicParkingFacilities || ['Motor', 'Mobil'],
+                publicKitchenFacilities: newPropForm.publicKitchenFacilities || [],
+                publicBathroomFacilities: newPropForm.publicBathroomFacilities || [],
                 imageUrls: newPropForm.imageUrls || [],
                 videoUrls: newPropForm.videoUrls || [],
                 rules: newPropForm.rules || [],
@@ -4562,26 +5730,184 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
 
                                                         {/* Sub-Data Rincian Parkir */}
                                                         {isParking && isFacilityActive && (
-                                                            <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-200/60" onClick={e => e.stopPropagation()}>
-                                                                {['Motor', 'Mobil', 'Sepeda'].map(veh => {
-                                                                    const isVehChecked = parkingItems.includes(veh);
-                                                                    return (
-                                                                        <button
-                                                                            key={veh}
-                                                                            type="button"
-                                                                            onClick={() => toggleParkingVehicle(veh)}
-                                                                            className={`px-2.5 py-1 rounded-xl text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                                                                                isVehChecked
-                                                                                    ? 'bg-emerald-600 text-white shadow-2xs'
-                                                                                    : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
-                                                                            }`}
-                                                                        >
-                                                                            <span>{getItemVehicleIcon(veh)}</span>
-                                                                            <span>{veh}</span>
-                                                                            {isVehChecked && <Check size={10}/>}
-                                                                        </button>
-                                                                    );
-                                                                })}
+                                                            <div className="space-y-2 pt-2 border-t border-slate-200/60" onClick={e => e.stopPropagation()}>
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {['Motor', 'Mobil', 'Sepeda'].map(veh => {
+                                                                        const isVehChecked = parkingItems.includes(veh);
+                                                                        return (
+                                                                            <button
+                                                                                key={veh}
+                                                                                type="button"
+                                                                                onClick={() => toggleParkingVehicle(veh)}
+                                                                                className={`px-2.5 py-1 rounded-xl text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                                                                                    isVehChecked
+                                                                                        ? 'bg-emerald-600 text-white shadow-2xs'
+                                                                                        : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                                                                                }`}
+                                                                            >
+                                                                                <span>{getItemVehicleIcon(veh)}</span>
+                                                                                <span>{veh}</span>
+                                                                                {isVehChecked && <Check size={10}/>}
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                    {parkingItems.filter((i: string) => !['Motor', 'Mobil', 'Sepeda'].includes(i)).map((customP: string, cpi: number) => (
+                                                                        <span key={cpi} className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                                                                            <span>✨ {customP}</span>
+                                                                            <button type="button" onClick={() => toggleParkingVehicle(customP)} className="hover:text-rose-600 cursor-pointer">×</button>
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={customPublicParkingInput}
+                                                                        onChange={e => setCustomPublicParkingInput(e.target.value)}
+                                                                        onKeyDown={e => {
+                                                                            if (e.key === 'Enter' && customPublicParkingInput.trim()) {
+                                                                                e.preventDefault();
+                                                                                toggleParkingVehicle(customPublicParkingInput.trim());
+                                                                                setCustomPublicParkingInput('');
+                                                                            }
+                                                                        }}
+                                                                        placeholder="+ Tambah fasilitas parkir..."
+                                                                        className="text-[10px] font-bold bg-white border border-slate-200 rounded-lg px-2 py-1 flex-1 outline-none"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            if (customPublicParkingInput.trim()) {
+                                                                                toggleParkingVehicle(customPublicParkingInput.trim());
+                                                                                setCustomPublicParkingInput('');
+                                                                            }
+                                                                        }}
+                                                                        className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-[9px] font-black uppercase cursor-pointer"
+                                                                    >
+                                                                        + Tambah
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Sub-Data Rincian Dapur Bersama */}
+                                                        {isKitchen && isFacilityActive && (
+                                                            <div className="space-y-2 pt-2 border-t border-slate-200/60" onClick={e => e.stopPropagation()}>
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {['Kompor', 'Kulkas', 'Dispenser', 'Wastafel Cuci Piring', 'Peralatan Masak', 'Meja Makan'].map(kfac => {
+                                                                        const isKfacChecked = kitchenItems.includes(kfac);
+                                                                        return (
+                                                                            <button
+                                                                                key={kfac}
+                                                                                type="button"
+                                                                                onClick={() => togglePublicKitchenFacility(kfac)}
+                                                                                className={`px-2.5 py-1 rounded-xl text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                                                                                    isKfacChecked
+                                                                                        ? 'bg-emerald-600 text-white shadow-2xs'
+                                                                                        : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                                                                                }`}
+                                                                            >
+                                                                                <span>🍳</span>
+                                                                                <span>{kfac}</span>
+                                                                                {isKfacChecked && <Check size={10}/>}
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                    {kitchenItems.filter((i: string) => !['Kompor', 'Kulkas', 'Dispenser', 'Wastafel Cuci Piring', 'Peralatan Masak', 'Meja Makan'].includes(i)).map((customK: string, cki: number) => (
+                                                                        <span key={cki} className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                                                                            <span>✨ {customK}</span>
+                                                                            <button type="button" onClick={() => togglePublicKitchenFacility(customK)} className="hover:text-rose-600 cursor-pointer">×</button>
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={customPublicKitchenInput}
+                                                                        onChange={e => setCustomPublicKitchenInput(e.target.value)}
+                                                                        onKeyDown={e => {
+                                                                            if (e.key === 'Enter' && customPublicKitchenInput.trim()) {
+                                                                                e.preventDefault();
+                                                                                togglePublicKitchenFacility(customPublicKitchenInput.trim());
+                                                                                setCustomPublicKitchenInput('');
+                                                                            }
+                                                                        }}
+                                                                        placeholder="+ Tambah kelengkapan dapur..."
+                                                                        className="text-[10px] font-bold bg-white border border-slate-200 rounded-lg px-2 py-1 flex-1 outline-none"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            if (customPublicKitchenInput.trim()) {
+                                                                                togglePublicKitchenFacility(customPublicKitchenInput.trim());
+                                                                                setCustomPublicKitchenInput('');
+                                                                            }
+                                                                        }}
+                                                                        className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-[9px] font-black uppercase cursor-pointer"
+                                                                    >
+                                                                        + Tambah
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Sub-Data Rincian WC Umum */}
+                                                        {isBathroom && isFacilityActive && (
+                                                            <div className="space-y-2 pt-2 border-t border-slate-200/60" onClick={e => e.stopPropagation()}>
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].map(bfac => {
+                                                                        const isBfacChecked = bathroomItems.includes(bfac);
+                                                                        return (
+                                                                            <button
+                                                                                key={bfac}
+                                                                                type="button"
+                                                                                onClick={() => togglePublicBathroomFacility(bfac)}
+                                                                                className={`px-2.5 py-1 rounded-xl text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                                                                                    isBfacChecked
+                                                                                        ? 'bg-emerald-600 text-white shadow-2xs'
+                                                                                        : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                                                                                }`}
+                                                                            >
+                                                                                <span>🚿</span>
+                                                                                <span>{bfac}</span>
+                                                                                {isBfacChecked && <Check size={10}/>}
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                    {bathroomItems.filter((i: string) => !['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].includes(i)).map((customB: string, cbi: number) => (
+                                                                        <span key={cbi} className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                                                                            <span>✨ {customB}</span>
+                                                                            <button type="button" onClick={() => togglePublicBathroomFacility(customB)} className="hover:text-rose-600 cursor-pointer">×</button>
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={customPublicBathroomInput}
+                                                                        onChange={e => setCustomPublicBathroomInput(e.target.value)}
+                                                                        onKeyDown={e => {
+                                                                            if (e.key === 'Enter' && customPublicBathroomInput.trim()) {
+                                                                                e.preventDefault();
+                                                                                togglePublicBathroomFacility(customPublicBathroomInput.trim());
+                                                                                setCustomPublicBathroomInput('');
+                                                                            }
+                                                                        }}
+                                                                        placeholder="+ Tambah kelengkapan WC..."
+                                                                        className="text-[10px] font-bold bg-white border border-slate-200 rounded-lg px-2 py-1 flex-1 outline-none"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            if (customPublicBathroomInput.trim()) {
+                                                                                togglePublicBathroomFacility(customPublicBathroomInput.trim());
+                                                                                setCustomPublicBathroomInput('');
+                                                                            }
+                                                                        }}
+                                                                        className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-[9px] font-black uppercase cursor-pointer"
+                                                                    >
+                                                                        + Tambah
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         )}
                                                     </div>
@@ -5216,255 +6542,7 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                                                         {isOccExpanded && (
                                                             <div className="p-4 bg-amber-50/30 border-t border-amber-100 space-y-4">
                                                                 {occupiedUnits.length > 0 ? (
-                                                                    occupiedUnits.map((u: any) => {
-                                                                        const origIdx = u.originalIdx;
-                                                                        const unitPhotos = getRoomPhotos(u);
-                                                                        const uName = formatRoomName(u.roomNumber || u.name, origIdx);
-                                                                        const unifiedFacilities = buildUnifiedFacilities(
-                                                                            u.facilities || rt.roomFacilities || [],
-                                                                            u.bathroomFacilities || rt.bathroomFacilities || [],
-                                                                            u.kitchenFacilities || rt.kitchenFacilities || []
-                                                                        );
-
-                                                                        return (
-                                                                            <div key={origIdx} className="bg-white border border-amber-200/90 rounded-2xl p-4 shadow-sm space-y-3.5 hover:border-amber-300 transition-all">
-                                                                                {/* Top Bar: Room Name & Status Switch */}
-                                                                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-100/80 pb-2.5">
-                                                                                    <div className="flex items-center gap-2.5">
-                                                                                        <span className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-black text-sm">
-                                                                                            <Lock size={15} />
-                                                                                        </span>
-                                                                                        <div>
-                                                                                            <div className="flex items-center gap-1.5">
-                                                                                                <span className="text-[9px] font-black text-amber-800 uppercase tracking-widest">UNIT KAMAR</span>
-                                                                                                <button
-                                                                                                    type="button"
-                                                                                                    onClick={() => toggleUnitStatus(rtIdx, origIdx, 'terisi')}
-                                                                                                    className="px-2 py-0.2 rounded-full bg-amber-100 border border-amber-300 text-amber-900 text-[9px] font-black uppercase hover:bg-emerald-100 hover:text-emerald-900 hover:border-emerald-300 transition-colors cursor-pointer"
-                                                                                                    title="Klik untuk ubah menjadi Kosong"
-                                                                                                >
-                                                                                                    🔒 Dihuni (Klik untuk Kosongkan)
-                                                                                                </button>
-                                                                                            </div>
-                                                                                            <input
-                                                                                                type="text"
-                                                                                                value={u.roomNumber || u.name || ''}
-                                                                                                onChange={e => updateUnit(rtIdx, origIdx, { roomNumber: e.target.value })}
-                                                                                                className="text-sm font-black text-slate-900 leading-tight bg-slate-50 hover:bg-slate-100 focus:bg-white rounded px-1.5 py-0.5 outline-none"
-                                                                                            />
-                                                                                        </div>
-                                                                                    </div>
-
-                                                                                    <div className="flex items-center gap-3">
-                                                                                        <div className="text-right">
-                                                                                            <span className="text-[9px] font-bold text-slate-400 block uppercase">Tarif Sewa</span>
-                                                                                            <span className="text-xs font-black text-emerald-700">{FORMAT_CURRENCY(u.price || rt.price)}<span className="text-[9px] text-slate-400 font-bold">/bln</span></span>
-                                                                                        </div>
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            onClick={() => handleDeleteUnit(rtIdx, origIdx, uName)}
-                                                                                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg cursor-pointer"
-                                                                                            title="Hapus Kamar Ini"
-                                                                                        >
-                                                                                            <Trash2 size={14} />
-                                                                                        </button>
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                {/* Grid Data Penghuni & Detail Sewa (Editable) */}
-                                                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 text-xs">
-                                                                                    {/* 1. Nama Penghuni */}
-                                                                                    <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2.5 space-y-1">
-                                                                                        <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider block">
-                                                                                            👤 Nama Penghuni
-                                                                                        </span>
-                                                                                        <input
-                                                                                            type="text"
-                                                                                            value={u.tenantName || u.residentName || ''}
-                                                                                            onChange={e => updateUnit(rtIdx, origIdx, { tenantName: e.target.value, residentName: e.target.value })}
-                                                                                            placeholder="Nama penyewa..."
-                                                                                            className="font-black text-slate-900 text-xs w-full bg-white border border-amber-200 rounded-lg px-2 py-1 outline-none"
-                                                                                        />
-                                                                                        <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                                                                                            <span>Penghuni:</span>
-                                                                                            <input
-                                                                                                type="number"
-                                                                                                min={1}
-                                                                                                max={5}
-                                                                                                value={u.currentOccupants || 1}
-                                                                                                onChange={e => updateUnit(rtIdx, origIdx, { currentOccupants: Number(e.target.value) })}
-                                                                                                className="w-10 bg-white border border-slate-200 rounded px-1 text-center font-bold text-slate-800"
-                                                                                            />
-                                                                                            <span>Orang</span>
-                                                                                        </div>
-                                                                                    </div>
-
-                                                                                    {/* 2. Kontak WhatsApp */}
-                                                                                    <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2.5 space-y-1">
-                                                                                        <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider block">
-                                                                                            📱 Kontak WhatsApp
-                                                                                        </span>
-                                                                                        <input
-                                                                                            type="text"
-                                                                                            value={u.tenantPhone || u.residentPhone || ''}
-                                                                                            onChange={e => updateUnit(rtIdx, origIdx, { tenantPhone: e.target.value, residentPhone: e.target.value })}
-                                                                                            placeholder="08123456789"
-                                                                                            className="font-black text-slate-900 text-xs w-full bg-white border border-amber-200 rounded-lg px-2 py-1 outline-none font-mono"
-                                                                                        />
-                                                                                        {(u.tenantPhone || u.residentPhone) && (
-                                                                                            <a 
-                                                                                                href={`https://wa.me/${String(u.tenantPhone || u.residentPhone).replace(/\D/g, '')}`} 
-                                                                                                target="_blank" 
-                                                                                                rel="noreferrer" 
-                                                                                                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 hover:underline"
-                                                                                            >
-                                                                                                Hubungi via WA ↗
-                                                                                            </a>
-                                                                                        )}
-                                                                                    </div>
-
-                                                                                    {/* 3. Periode & Tagihan */}
-                                                                                    <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2.5 sm:col-span-2 md:col-span-1 space-y-1">
-                                                                                        <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider block">
-                                                                                            📅 Periode &amp; Tagihan
-                                                                                        </span>
-                                                                                        <select
-                                                                                            value={u.billingPeriod || u.paymentPeriod || 'bulanan'}
-                                                                                            onChange={e => updateUnit(rtIdx, origIdx, { billingPeriod: e.target.value, paymentPeriod: e.target.value })}
-                                                                                            className="w-full bg-white border border-amber-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 outline-none capitalize"
-                                                                                        >
-                                                                                            <option value="bulanan">Bulanan</option>
-                                                                                            <option value="triwulan">3 Bulan (Triwulan)</option>
-                                                                                            <option value="semester">6 Bulan (Semester)</option>
-                                                                                            <option value="tahunan">Tahunan</option>
-                                                                                        </select>
-                                                                                        <div className="flex items-center justify-between text-[10px] pt-1">
-                                                                                            <span className="text-slate-500">Jatuh Tempo:</span>
-                                                                                            <input
-                                                                                                type="date"
-                                                                                                value={u.dueDate || u.endDate || ''}
-                                                                                                onChange={e => updateUnit(rtIdx, origIdx, { dueDate: e.target.value, endDate: e.target.value })}
-                                                                                                className="bg-white border border-slate-200 rounded px-1.5 py-0.5 font-bold text-amber-800 outline-none text-[10px]"
-                                                                                            />
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                {/* Spesifikasi & Fasilitas Kamar Terpasang */}
-                                                                                <div className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-3 space-y-2 text-xs">
-                                                                                    <div className="flex items-center justify-between">
-                                                                                        <span className="text-[9px] font-black text-slate-700 uppercase tracking-wider">
-                                                                                            🛋️ Fasilitas &amp; Spesifikasi Terpasang
-                                                                                        </span>
-                                                                                        <span className="px-2 py-0.5 rounded bg-slate-200/80 text-[9px] font-black text-slate-700">
-                                                                                            📐 {u.size || rt.size || '3x4 meter'}
-                                                                                        </span>
-                                                                                    </div>
-                                                                                    <div className="flex flex-wrap gap-1.5 pt-0.5">
-                                                                                        {unifiedFacilities.map((uf) => {
-                                                                                            const isThisFacilityHovered = hoveredFacility?.unitId === String(origIdx) && hoveredFacility?.facilityId === uf.id;
-                                                                                            const isMatchedByPhotoHover = hoveredPhoto?.unitId === String(origIdx) && isFacilityMatchingPhoto(uf.allKeywords, hoveredPhoto.label);
-                                                                                            const isHighlighted = isThisFacilityHovered || isMatchedByPhotoHover;
-                                                                                            const hasMatchingPhoto = unitPhotos.some(p => isFacilityMatchingPhoto(uf.allKeywords, p.label));
-
-                                                                                            return (
-                                                                                                <div
-                                                                                                    key={uf.id}
-                                                                                                    onMouseEnter={() => setHoveredFacility({ unitId: String(origIdx), facilityId: uf.id, keywords: uf.allKeywords })}
-                                                                                                    onMouseLeave={() => setHoveredFacility(null)}
-                                                                                                    className={`inline-flex flex-col justify-center px-3 py-1.5 rounded-xl border transition-all duration-200 cursor-pointer select-none gap-1 ${
-                                                                                                        isHighlighted
-                                                                                                            ? 'bg-amber-600 text-white border-amber-700 shadow-md ring-2 ring-amber-400 scale-105 z-10'
-                                                                                                            : hasMatchingPhoto
-                                                                                                                ? 'bg-white border-amber-300 text-amber-950 hover:border-amber-500 hover:bg-amber-50 shadow-2xs'
-                                                                                                                : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
-                                                                                                    }`}
-                                                                                                >
-                                                                                                    <div className="flex items-center gap-1.5">
-                                                                                                        {getRoomFacilityIcon(uf.mainName, 12)}
-                                                                                                        <span className="font-black text-[10px]">{uf.mainName}</span>
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                            );
-                                                                                        })}
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                {/* Dokumentasi Foto Unit Kamar */}
-                                                                                <div className="bg-emerald-50/40 border border-emerald-100 rounded-xl p-3 space-y-2">
-                                                                                    <div className="flex items-center justify-between">
-                                                                                        <span className="text-[9px] font-black text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
-                                                                                            <Camera size={13} className="text-emerald-700" />
-                                                                                            Foto Dokumentasi Unit ({unitPhotos.length})
-                                                                                        </span>
-                                                                                        <div className="flex items-center gap-1.5">
-                                                                                            {['interior', 'kasur', 'wc', 'jendela'].map(ck => (
-                                                                                                <label key={ck} className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[8px] font-black uppercase cursor-pointer transition-all">
-                                                                                                    + {ck}
-                                                                                                    <input
-                                                                                                        type="file"
-                                                                                                        accept="image/*"
-                                                                                                        onChange={e => handleUploadRoomPhoto(rtIdx, origIdx, ck, e)}
-                                                                                                        className="hidden"
-                                                                                                    />
-                                                                                                </label>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    {unitPhotos.length > 0 ? (
-                                                                                        <div className="flex gap-2.5 overflow-x-auto pb-1.5 pt-1 scrollbar-thin">
-                                                                                            {unitPhotos.map((photo: any, pi: number) => {
-                                                                                                return (
-                                                                                                    <div key={pi} className="relative w-24 h-16 sm:w-28 sm:h-20 rounded-xl overflow-hidden shrink-0 border border-emerald-200 group bg-black shadow-2xs">
-                                                                                                        <img src={photo.url} alt={photo.label} className="w-full h-full object-cover" />
-                                                                                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 z-20">
-                                                                                                            <button
-                                                                                                                type="button"
-                                                                                                                onClick={() => setLightboxPhoto(photo)}
-                                                                                                                className="p-1 bg-white/80 hover:bg-white text-slate-900 rounded-lg cursor-pointer"
-                                                                                                                title="Zoom"
-                                                                                                            >
-                                                                                                                <ZoomIn size={12} />
-                                                                                                            </button>
-                                                                                                            <button
-                                                                                                                type="button"
-                                                                                                                onClick={() => handleDeleteRoomPhoto(rtIdx, origIdx, photo.url)}
-                                                                                                                className="p-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg cursor-pointer"
-                                                                                                                title="Hapus Foto"
-                                                                                                            >
-                                                                                                                <Trash2 size={12} />
-                                                                                                            </button>
-                                                                                                        </div>
-                                                                                                        <div className="absolute inset-x-0 bottom-0 py-0.5 px-1 text-[8px] font-bold truncate text-center bg-black/70 text-white">
-                                                                                                            {photo.label}
-                                                                                                        </div>
-                                                                                                    </div>
-                                                                                                );
-                                                                                            })}
-                                                                                        </div>
-                                                                                    ) : (
-                                                                                        <div className="py-2 text-center text-[10px] text-slate-400 italic">
-                                                                                            Belum ada foto unit terunggah. Gunakan tombol di atas untuk menambah foto.
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-
-                                                                                {/* Catatan Kondisi Kamar */}
-                                                                                <div className="space-y-1">
-                                                                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block">
-                                                                                        📝 Catatan Kondisi Kamar
-                                                                                    </span>
-                                                                                    <input
-                                                                                        type="text"
-                                                                                        value={u.notes || ''}
-                                                                                        onChange={e => updateUnit(rtIdx, origIdx, { notes: e.target.value })}
-                                                                                        placeholder="Catatan kondisi kamar..."
-                                                                                        className="w-full text-xs text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 outline-none"
-                                                                                    />
-                                                                                </div>
-                                                                            </div>
-                                                                        );
-                                                                    })
+                                                                    occupiedUnits.map((u: any) => renderSurveyStyleRoomUnit(rt, rtIdx, u, u.originalIdx, true))
                                                                 ) : (
                                                                     <div className="p-4 bg-white rounded-xl border border-dashed border-amber-200 text-center text-xs font-bold text-amber-800">
                                                                         Tidak ada kamar terisi pada tipe ini.
@@ -5499,205 +6577,7 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                                                         {isAvailExpanded && (
                                                             <div className="p-4 bg-emerald-50/30 border-t border-emerald-100 space-y-4">
                                                                 {vacantUnits.length > 0 ? (
-                                                                    vacantUnits.map((u: any) => {
-                                                                        const origIdx = u.originalIdx;
-                                                                        const unitPhotos = getRoomPhotos(u);
-                                                                        const uName = formatRoomName(u.roomNumber || u.name, origIdx);
-                                                                        const unifiedFacilities = buildUnifiedFacilities(
-                                                                            u.facilities || rt.roomFacilities || [],
-                                                                            u.bathroomFacilities || rt.bathroomFacilities || [],
-                                                                            u.kitchenFacilities || rt.kitchenFacilities || []
-                                                                        );
-
-                                                                        return (
-                                                                            <div key={origIdx} className="bg-white border border-emerald-200/90 rounded-2xl p-4 shadow-sm space-y-3.5 hover:border-emerald-300 transition-all">
-                                                                                {/* Top Bar: Room Name & Status Switch */}
-                                                                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100/80 pb-2.5">
-                                                                                    <div className="flex items-center gap-2.5">
-                                                                                        <span className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-sm">
-                                                                                            <Sparkles size={15} />
-                                                                                        </span>
-                                                                                        <div>
-                                                                                            <div className="flex items-center gap-1.5">
-                                                                                                <span className="text-[9px] font-black text-emerald-800 uppercase tracking-widest">UNIT KAMAR</span>
-                                                                                                <button
-                                                                                                    type="button"
-                                                                                                    onClick={() => toggleUnitStatus(rtIdx, origIdx, 'kosong')}
-                                                                                                    className="px-2 py-0.2 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-900 text-[9px] font-black uppercase hover:bg-amber-100 hover:text-amber-900 hover:border-amber-300 transition-colors cursor-pointer"
-                                                                                                    title="Klik untuk pasang penghuni (Terisi)"
-                                                                                                >
-                                                                                                    ✨ Kosong (Klik untuk Pasang Penghuni)
-                                                                                                </button>
-                                                                                            </div>
-                                                                                            <input
-                                                                                                type="text"
-                                                                                                value={u.roomNumber || u.name || ''}
-                                                                                                onChange={e => updateUnit(rtIdx, origIdx, { roomNumber: e.target.value })}
-                                                                                                className="text-sm font-black text-slate-900 leading-tight bg-slate-50 hover:bg-slate-100 focus:bg-white rounded px-1.5 py-0.5 outline-none"
-                                                                                            />
-                                                                                        </div>
-                                                                                    </div>
-
-                                                                                    <div className="flex items-center gap-3">
-                                                                                        <div className="text-right">
-                                                                                            <span className="text-[9px] font-bold text-slate-400 block uppercase">Tarif Sewa</span>
-                                                                                            <span className="text-xs font-black text-emerald-700">{FORMAT_CURRENCY(u.price || rt.price)}<span className="text-[9px] text-slate-400 font-bold">/bln</span></span>
-                                                                                        </div>
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            onClick={() => handleDeleteUnit(rtIdx, origIdx, uName)}
-                                                                                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg cursor-pointer"
-                                                                                            title="Hapus Kamar Ini"
-                                                                                        >
-                                                                                            <Trash2 size={14} />
-                                                                                        </button>
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                {/* Status Banner Kosong */}
-                                                                                <div className="p-3 bg-emerald-50 rounded-xl border border-dashed border-emerald-200 flex items-center justify-between text-xs">
-                                                                                    <span className="font-bold text-emerald-800">
-                                                                                        ✨ Unit kamar ini siap dihuni dan dipasarkan ke calon penyewa
-                                                                                    </span>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={() => toggleUnitStatus(rtIdx, origIdx, 'kosong')}
-                                                                                        className="text-[10px] font-black text-orange-600 uppercase hover:underline cursor-pointer"
-                                                                                    >
-                                                                                        + Masukkan Data Penghuni
-                                                                                    </button>
-                                                                                </div>
-
-                                                                                {/* Grid Spesifikasi Kamar & Kelengkapan (1:1 Identik Review Survei) */}
-                                                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-                                                                                    {/* 1. Dimensi Kamar */}
-                                                                                    <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-3">
-                                                                                        <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider block mb-1">
-                                                                                            📐 Ukuran Kamar
-                                                                                        </span>
-                                                                                        <input
-                                                                                            type="text"
-                                                                                            value={u.size || rt.size || '3x4 meter'}
-                                                                                            onChange={e => updateUnit(rtIdx, origIdx, { size: e.target.value })}
-                                                                                            className="font-black text-slate-900 bg-white border border-emerald-200 rounded px-2 py-0.5 text-xs w-full outline-none"
-                                                                                        />
-                                                                                        <span className="text-[10px] text-slate-500 font-semibold block mt-1">Ruangan Kosong</span>
-                                                                                    </div>
-
-                                                                                    {/* 2. Kelengkapan Kamar Ber-Icon & Interaktif */}
-                                                                                    <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-3 sm:col-span-2 space-y-1.5">
-                                                                                        <div className="flex items-center justify-between">
-                                                                                            <span className="text-[9px] font-black text-emerald-800 uppercase tracking-wider">
-                                                                                                🛋️ Fasilitas Terpasang
-                                                                                            </span>
-                                                                                            <span className="text-[8.5px] text-emerald-700/80 font-medium hidden sm:inline">
-                                                                                                (Sorot fasilitas untuk melihat foto terkait 🎯)
-                                                                                            </span>
-                                                                                        </div>
-                                                                                        <div className="flex flex-wrap gap-1.5 pt-0.5">
-                                                                                            {unifiedFacilities.map((uf) => {
-                                                                                                const isThisFacilityHovered = hoveredFacility?.unitId === String(origIdx) && hoveredFacility?.facilityId === uf.id;
-                                                                                                const isMatchedByPhotoHover = hoveredPhoto?.unitId === String(origIdx) && isFacilityMatchingPhoto(uf.allKeywords, hoveredPhoto.label);
-                                                                                                const isHighlighted = isThisFacilityHovered || isMatchedByPhotoHover;
-                                                                                                const hasMatchingPhoto = unitPhotos.some(p => isFacilityMatchingPhoto(uf.allKeywords, p.label));
-
-                                                                                                return (
-                                                                                                    <div
-                                                                                                        key={uf.id}
-                                                                                                        onMouseEnter={() => setHoveredFacility({ unitId: String(origIdx), facilityId: uf.id, keywords: uf.allKeywords })}
-                                                                                                        onMouseLeave={() => setHoveredFacility(null)}
-                                                                                                        className={`inline-flex flex-col justify-center px-3 py-1.5 rounded-xl border transition-all duration-200 cursor-pointer select-none gap-1 ${
-                                                                                                            isHighlighted
-                                                                                                                ? 'bg-emerald-600 text-white border-emerald-700 shadow-md ring-2 ring-emerald-400 scale-105 z-10'
-                                                                                                                : hasMatchingPhoto
-                                                                                                                    ? 'bg-white border-emerald-300 text-emerald-950 hover:border-emerald-500 hover:bg-emerald-50 shadow-2xs'
-                                                                                                                    : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
-                                                                                                        }`}
-                                                                                                    >
-                                                                                                        <div className="flex items-center gap-1.5">
-                                                                                                            {getRoomFacilityIcon(uf.mainName, 12)}
-                                                                                                            <span className="font-black text-[10px]">{uf.mainName}</span>
-                                                                                                        </div>
-                                                                                                    </div>
-                                                                                                );
-                                                                                            })}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                {/* Dokumentasi Foto Unit Kamar */}
-                                                                                <div className="bg-emerald-50/40 border border-emerald-100 rounded-xl p-3 space-y-2">
-                                                                                    <div className="flex items-center justify-between">
-                                                                                        <span className="text-[9px] font-black text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
-                                                                                            <Camera size={13} className="text-emerald-700" />
-                                                                                            Foto Dokumentasi Unit ({unitPhotos.length})
-                                                                                        </span>
-                                                                                        <div className="flex items-center gap-1.5">
-                                                                                            {['interior', 'kasur', 'wc', 'jendela'].map(ck => (
-                                                                                                <label key={ck} className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[8px] font-black uppercase cursor-pointer transition-all">
-                                                                                                    + {ck}
-                                                                                                    <input
-                                                                                                        type="file"
-                                                                                                        accept="image/*"
-                                                                                                        onChange={e => handleUploadRoomPhoto(rtIdx, origIdx, ck, e)}
-                                                                                                        className="hidden"
-                                                                                                    />
-                                                                                                </label>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    {unitPhotos.length > 0 ? (
-                                                                                        <div className="flex gap-2.5 overflow-x-auto pb-1.5 pt-1 scrollbar-thin">
-                                                                                            {unitPhotos.map((photo: any, pi: number) => (
-                                                                                                <div key={pi} className="relative w-24 h-16 sm:w-28 sm:h-20 rounded-xl overflow-hidden shrink-0 border border-emerald-200 group bg-black shadow-2xs">
-                                                                                                    <img src={photo.url} alt={photo.label} className="w-full h-full object-cover" />
-                                                                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 z-20">
-                                                                                                        <button
-                                                                                                            type="button"
-                                                                                                            onClick={() => setLightboxPhoto(photo)}
-                                                                                                            className="p-1 bg-white/80 hover:bg-white text-slate-900 rounded-lg cursor-pointer"
-                                                                                                            title="Zoom"
-                                                                                                        >
-                                                                                                            <ZoomIn size={12} />
-                                                                                                        </button>
-                                                                                                        <button
-                                                                                                            type="button"
-                                                                                                            onClick={() => handleDeleteRoomPhoto(rtIdx, origIdx, photo.url)}
-                                                                                                            className="p-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg cursor-pointer"
-                                                                                                            title="Hapus Foto"
-                                                                                                        >
-                                                                                                            <Trash2 size={12} />
-                                                                                                        </button>
-                                                                                                    </div>
-                                                                                                    <div className="absolute inset-x-0 bottom-0 py-0.5 px-1 text-[8px] font-bold truncate text-center bg-black/70 text-white">
-                                                                                                        {photo.label}
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    ) : (
-                                                                                        <div className="py-2 text-center text-[10px] text-slate-400 italic">
-                                                                                            Belum ada foto unit terunggah. Gunakan tombol di atas untuk menambah foto.
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-
-                                                                                {/* Catatan Kondisi Kamar */}
-                                                                                <div className="space-y-1">
-                                                                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block">
-                                                                                        📝 Catatan Kondisi Kamar
-                                                                                    </span>
-                                                                                    <input
-                                                                                        type="text"
-                                                                                        value={u.notes || ''}
-                                                                                        onChange={e => updateUnit(rtIdx, origIdx, { notes: e.target.value })}
-                                                                                        placeholder="Catatan kondisi kamar..."
-                                                                                        className="w-full text-xs text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 outline-none"
-                                                                                    />
-                                                                                </div>
-                                                                            </div>
-                                                                        );
-                                                                    })
+                                                                    vacantUnits.map((u: any) => renderSurveyStyleRoomUnit(rt, rtIdx, u, u.originalIdx, false))
                                                                 ) : (
                                                                     <div className="p-4 bg-white rounded-xl border border-dashed border-emerald-200 text-center text-xs font-bold text-emerald-800">
                                                                         Seluruh unit pada tipe kamar ini sedang terisi (0 kamar kosong).
