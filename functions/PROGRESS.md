@@ -2,6 +2,34 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 153. Perbaikan Parsing, Normalisasi Kategori Dinamis, Thumbnail Preview & Rendering Foto Kamar di Portal KostManager (`KostManagerPropertyFormModal.tsx` & `KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa foto-foto yang telah terdata pada data kamar tidak tampil dengan baik saat melakukan pengeditan properti pada portal KostManager.
+  2. Hasil investigasi menemukan bahwa data foto kamar di database Supabase (misal properti *kost madani* Kamar 4 memiliki 6 foto dan Kamar 5 memiliki 2 foto) sebenarnya lengkap dan valid.
+  3. Namun, di modal edit properti:
+     - Logika penentuan kategori (`computeDynamicRoomPhotoCategories`) sebelumnya mengabaikan kategori standar yang tidak tercentang di checklist fasilitas, sehingga slot foto *Jendela Luar, Tempat Tidur, Kamar Mandi, Dapur Dalam* terbuang dari `activeCats` dan seluruh fotonya menjadi tersembunyi (*invisible*).
+     - Nama kategori tidak memiliki normalisasi alias (misal: *Kasur* vs *Tempat Tidur*, *Kamar Mandi Dalam* vs *Kamar Mandi*, *Lemari Pakaian* vs *Lemari / Storage*), sehingga query foto pada label alternatif gagal memuat foto.
+     - Header kartu kamar di Step 2 (Data Kamar) belum memiliki thumbnail foto mini dan badge jumlah foto terdata.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Normalisasi Alias Kategori Fleksibel & Ekstraksi Foto Cerdas (`KostManagerPropertyFormModal.tsx`)**:
+    - Dibuat helper `normalizeRoomCategoryName` yang memetakan variasi penamaan fasilitas (*Kasur/Tempat Tidur*, *Kamar Mandi/WC/Kamar Mandi Dalam*, *Dapur/Dapur Dalam*, *Lemari/Lemari Pakaian/Storage*, *Jendela/Jendela Luar*, *AC*, *Kipas Angin*, *Water Heater*) secara konsisten.
+    - Fungsi `getRoomCategorizedPhotos` kini memindai `categorized_photos`, `categorizedPhotos`, dan array `images` / `image_urls` / `photos` untuk mengekstrak seluruh URL foto tanpa ada yang hilang.
+  * **2. Jaminan Render Seluruh Kategori Berfoto (`computeDynamicRoomPhotoCategories`)**:
+    - Seluruh kategori yang memiliki foto tersimpan di database **WAJIB dimasukkan ke dalam daftar render `activeCats`**, terlepas dari apakah fasilitas tersebut dicentang di checklist atau tidak.
+  * **3. Indikator Foto & Thumbnail Preview pada Header Kartu Kamar (Step 2)**:
+    - Setiap kartu unit kamar di daftar Step 2 kini menampilkan thumbnail pratinjau foto pertama berukuran 12x12 dengan overlay badge total foto (`{totalPhotos} 📷`), serta badge status kelengkapan foto (`📷 X Foto` / `Belum Ada Foto`).
+  * **4. Pratinjau Lightbox Zoom & Kompresi WebP**:
+    - Setiap foto kamar dapat diklik untuk membuka pratinjau gambar resolusi tinggi melalui Lightbox modal.
+    - Pengunggahan foto baru otomatis dikompresi ke format WebP client-side sebelum disimpan ke Supabase Storage.
+  * **5. Sinkronisasi Foto Kamar Global di `KostManagerPortal.tsx`**:
+    - `getRoomPhotosGlobal` diperbarui untuk membaca `categorized_photos` dan `categorizedPhotos` serta menormalisasi kunci label secara utuh.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 32.22s, 0 error).
+
 ### 152. Penyelarasan Sistem Input Peraturan Kost 1:1 antara Portal KostManager dan Form Pendataan Agen (`KostManagerPropertyFormModal.tsx` & `AgentDashboard.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa sistem input Peraturan Kost pada portal KostManager berbeda tampilan, fungsi, dan fleksibilitasnya dibandingkan form pendataan survei agen.

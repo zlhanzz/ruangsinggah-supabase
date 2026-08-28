@@ -220,6 +220,41 @@ const computeDynamicPublicPhotoCategories = (facilities: string[] = [], manualEx
     return [...base, ...dynamic];
 };
 
+const normalizeRoomCategoryName = (k: string, isOcc: boolean = false): string => {
+    const lower = (k || '').toLowerCase().trim().replace(/(\*wajib|\(opsional\))/gi, '').trim();
+    if (lower.includes('interior')) {
+        return isOcc ? 'Interior Kamar (Opsional)' : 'Interior Kamar *Wajib';
+    }
+    if (lower === 'kasur' || lower === 'tempat tidur' || lower.includes('bed')) {
+        return 'Tempat Tidur';
+    }
+    if (lower === 'kamar mandi' || lower === 'kamar mandi dalam' || lower === 'wc' || lower === 'toilet') {
+        return 'Kamar Mandi';
+    }
+    if (lower === 'dapur' || lower === 'dapur dalam' || lower.includes('kitchen')) {
+        return 'Dapur Dalam';
+    }
+    if (lower === 'lemari' || lower === 'lemari pakaian' || lower.includes('storage') || lower.includes('lemari')) {
+        return 'Lemari / Storage';
+    }
+    if (lower === 'jendela' || lower === 'jendela luar') {
+        return 'Jendela Luar';
+    }
+    if (lower === 'meja belajar' || lower === 'meja') {
+        return 'Meja Belajar';
+    }
+    if (lower === 'ac') {
+        return 'AC';
+    }
+    if (lower === 'kipas angin' || lower === 'kipas') {
+        return 'Kipas Angin';
+    }
+    if (lower === 'water heater' || lower === 'pemanas air') {
+        return 'Water Heater';
+    }
+    return k.replace(/(\*Wajib|\(Opsional\))/gi, '').trim();
+};
+
 const computeDynamicRoomPhotoCategories = (roomFacilities: string[] = [], status: string = 'Kosong', manualExtras: string[] = []): string[] => {
     const isOcc = status === 'terisi' || status === 'Terisi';
     const baseLabel = isOcc ? 'Interior Kamar (Opsional)' : 'Interior Kamar *Wajib';
@@ -227,14 +262,18 @@ const computeDynamicRoomPhotoCategories = (roomFacilities: string[] = [], status
 
     const facilityPhotoMapping: { [key: string]: string } = {
         'kamar mandi dalam': 'Kamar Mandi',
+        'kamar mandi': 'Kamar Mandi',
         'dapur dalam': 'Dapur Dalam',
+        'dapur': 'Dapur Dalam',
         'kasur': 'Tempat Tidur',
+        'tempat tidur': 'Tempat Tidur',
         'lemari': 'Lemari / Storage',
         'lemari pakaian': 'Lemari / Storage',
         'meja belajar': 'Meja Belajar',
         'ac': 'AC',
         'kipas angin': 'Kipas Angin',
         'jendela luar': 'Jendela Luar',
+        'jendela': 'Jendela Luar',
         'water heater': 'Water Heater'
     };
 
@@ -256,7 +295,7 @@ const computeDynamicRoomPhotoCategories = (roomFacilities: string[] = [], status
     });
 
     (manualExtras || []).forEach(c => {
-        const clean = c.trim();
+        const clean = normalizeRoomCategoryName(c, isOcc);
         if (clean && !categories.includes(clean)) {
             categories.push(clean);
         }
@@ -267,36 +306,43 @@ const computeDynamicRoomPhotoCategories = (roomFacilities: string[] = [], status
 
 const getRoomCategorizedPhotos = (item: any): Record<string, string[]> => {
     if (!item) return {};
+    const isOcc = item.status === 'terisi' || item.status === 'Terisi';
     const cleanUrls = (urls: any[]) => (urls || []).map((u: any) => getImageUrlString(u)).filter(Boolean);
-
-    if (item.categorized_photos && typeof item.categorized_photos === 'object' && !Array.isArray(item.categorized_photos)) {
-        const raw = JSON.parse(JSON.stringify(item.categorized_photos));
-        const cleaned: Record<string, string[]> = {};
-        Object.entries(raw).forEach(([k, urls]) => {
-            if (Array.isArray(urls)) cleaned[k] = cleanUrls(urls);
-        });
-        return cleaned;
-    }
-    if (item.categorizedPhotos && typeof item.categorizedPhotos === 'object' && !Array.isArray(item.categorizedPhotos)) {
-        const raw = JSON.parse(JSON.stringify(item.categorizedPhotos));
-        const cleaned: Record<string, string[]> = {};
-        Object.entries(raw).forEach(([k, urls]) => {
-            if (Array.isArray(urls)) cleaned[k] = cleanUrls(urls);
-        });
-        return cleaned;
-    }
     const result: Record<string, string[]> = {};
-    const images = Array.isArray(item.images) ? item.images : (Array.isArray(item.image_urls) ? item.image_urls : []);
+
+    const addPhoto = (cat: string, url: string) => {
+        if (!url) return;
+        const normalizedCat = normalizeRoomCategoryName(cat, isOcc);
+        if (!result[normalizedCat]) result[normalizedCat] = [];
+        if (!result[normalizedCat].includes(url)) {
+            result[normalizedCat].push(url);
+        }
+    };
+
+    // 1. Dari categorized_photos / categorizedPhotos
+    const catSources = [item.categorized_photos, item.categorizedPhotos].filter(Boolean);
+    catSources.forEach(source => {
+        if (source && typeof source === 'object' && !Array.isArray(source)) {
+            Object.entries(source).forEach(([k, urls]) => {
+                if (Array.isArray(urls)) {
+                    cleanUrls(urls).forEach(u => addPhoto(k, u));
+                }
+            });
+        }
+    });
+
+    // 2. Dari images / image_urls / photos jika ada yang belum masuk
+    const images = Array.isArray(item.images) ? item.images : (Array.isArray(item.image_urls) ? item.image_urls : (Array.isArray(item.photos) ? item.photos : []));
     const categories = Array.isArray(item.photoCategories) ? item.photoCategories : [];
     images.forEach((urlItem: any, idx: number) => {
         const urlStr = getImageUrlString(urlItem);
         if (!urlStr) return;
-        const cat = (typeof urlItem === 'object' && urlItem.label) 
+        let cat = (typeof urlItem === 'object' && urlItem.label) 
             ? urlItem.label 
-            : (categories[idx] || (idx === 0 ? 'Interior Kamar *Wajib' : 'Foto Kamar'));
-        if (!result[cat]) result[cat] = [];
-        result[cat].push(urlStr);
+            : (categories[idx] || (idx === 0 ? (isOcc ? 'Interior Kamar (Opsional)' : 'Interior Kamar *Wajib') : 'Foto Kamar'));
+        addPhoto(cat, urlStr);
     });
+
     return result;
 };
 
@@ -2368,28 +2414,53 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                         const isExpanded = activeRoomIdx === rIdx;
                                         const isOcc = rm.status === 'Terisi' || rm.status === 'terisi';
 
+                                        const rmCategorized = getRoomCategorizedPhotos(rm);
+                                        const allPhotos = Object.values(rmCategorized).flat().filter(Boolean);
+                                        const firstPhotoUrl = allPhotos[0] || (Array.isArray(rm.images) ? getImageUrlString(rm.images[0]) : '');
+                                        const totalPhotos = allPhotos.length || (Array.isArray(rm.images) ? rm.images.length : 0);
+
                                         return (
-                                            <div key={rIdx} className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden transition-all">
+                                            <div key={rIdx} className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden transition-all shadow-xs">
                                                 {/* Header Accordion */}
                                                 <div 
                                                     onClick={() => setActiveRoomIdx(isExpanded ? null : rIdx)}
-                                                    className="p-4 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-100/80 transition-colors"
+                                                    className="p-3.5 sm:p-4 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-100/80 transition-colors"
                                                 >
-                                                    <div className="flex items-center gap-3">
-                                                        <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider ${
-                                                            isOcc ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                                                        }`}>
-                                                            {isOcc ? '🔒 Terisi' : '✨ Kosong'}
-                                                        </span>
-                                                        <div>
-                                                            <h4 className="font-black text-sm text-slate-900">{rm.name || `Kamar #${rIdx + 1}`}</h4>
-                                                            <p className="text-[10px] text-slate-500 font-bold">
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        {firstPhotoUrl ? (
+                                                            <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-200 shrink-0 border border-slate-200 shadow-2xs relative group">
+                                                                <img src={firstPhotoUrl} alt={rm.name} className="w-full h-full object-cover" />
+                                                                <span className="absolute bottom-0 inset-x-0 bg-black/60 text-[8px] font-black text-white text-center py-0.5">
+                                                                    {totalPhotos} 📷
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="w-12 h-12 rounded-xl bg-orange-100/70 border border-orange-200/60 flex flex-col items-center justify-center text-orange-600 shrink-0">
+                                                                <Bed size={18} />
+                                                                <span className="text-[7px] font-black uppercase mt-0.5">0 Foto</span>
+                                                            </div>
+                                                        )}
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <h4 className="font-black text-sm text-slate-900 truncate">{rm.name || `Kamar #${rIdx + 1}`}</h4>
+                                                                <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${
+                                                                    isOcc ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                                                                }`}>
+                                                                    {isOcc ? '🔒 Terisi' : '✨ Kosong'}
+                                                                </span>
+                                                                <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold ${
+                                                                    totalPhotos > 0 ? 'bg-orange-50 text-orange-700 border border-orange-200/80' : 'bg-slate-100 text-slate-500'
+                                                                }`}>
+                                                                    {totalPhotos > 0 ? `📷 ${totalPhotos} Foto` : 'Belum Ada Foto'}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-[10px] text-slate-500 font-bold mt-0.5 truncate">
                                                                 {rm.floor || 'Lantai 1'} • {rm.type || 'Standard'} • {FORMAT_CURRENCY(rm.price || 0)}/bln
                                                             </p>
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 shrink-0">
                                                         <button
                                                             type="button"
                                                             onClick={e => {
@@ -2548,13 +2619,18 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                                                     <Camera size={13} className="text-orange-500" />
                                                                     <span>Dokumentasi Foto Kamar</span>
                                                                 </span>
+                                                                <span className="text-[9px] font-bold text-slate-400">
+                                                                    {totalPhotos} Total Foto Unit
+                                                                </span>
                                                             </div>
 
                                                             {(() => {
-                                                                const standardKnown = ['Interior Kamar *Wajib', 'Interior Kamar (Opsional)', 'Kamar Mandi', 'Dapur Dalam', 'Tempat Tidur', 'Lemari / Storage', 'Meja Belajar', 'AC', 'Kipas Angin', 'Jendela Luar', 'Water Heater'];
                                                                 const currentCategorized = getRoomCategorizedPhotos(rm);
-                                                                const existingCustomKeys = Object.keys(currentCategorized).filter((c: string) => !standardKnown.includes(c));
-                                                                const activeCats = computeDynamicRoomPhotoCategories(rm.roomFacilities || [], rm.status, existingCustomKeys);
+                                                                const activeCats = computeDynamicRoomPhotoCategories(
+                                                                    rm.roomFacilities || [], 
+                                                                    rm.status, 
+                                                                    Object.keys(currentCategorized)
+                                                                );
 
                                                                 const getPhotoCaption = (cLabel: string, pIdx: number) => {
                                                                     const clean = cLabel.replace(/(\*Wajib|\(Opsional\))/gi, '').trim();
@@ -2566,6 +2642,7 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                                                         {activeCats.map((rawLabel: string) => {
                                                                             const label = (rawLabel === 'Interior Kamar *Wajib' && isOcc) ? 'Interior Kamar (Opsional)' : rawLabel;
                                                                             const catPhotos = currentCategorized[rawLabel] 
+                                                                                || currentCategorized[normalizeRoomCategoryName(rawLabel, isOcc)]
                                                                                 || (rawLabel.includes('Interior') ? (currentCategorized['Interior Kamar *Wajib'] || currentCategorized['Interior Kamar (Opsional)'] || []) : []) 
                                                                                 || [];
 
@@ -2588,12 +2665,21 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                                                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                                                         {catPhotos.map((url, pIdx) => (
                                                                                             <div key={`${url}_${pIdx}`} className="aspect-video w-full rounded-lg overflow-hidden border border-gray-200 relative group bg-gray-50 shadow-2xs">
-                                                                                                <img src={url} alt={getPhotoCaption(label, pIdx)} className="w-full h-full object-cover" />
+                                                                                                <img 
+                                                                                                    src={url} 
+                                                                                                    alt={getPhotoCaption(label, pIdx)} 
+                                                                                                    onClick={() => setLightboxPhoto({ url, label: getPhotoCaption(label, pIdx) })}
+                                                                                                    className="w-full h-full object-cover cursor-pointer hover:opacity-95 transition-opacity" 
+                                                                                                />
                                                                                                 <button
                                                                                                     type="button"
-                                                                                                    onClick={() => {
+                                                                                                    onClick={(e) => {
+                                                                                                        e.stopPropagation();
                                                                                                         const updatedCategorized = { ...currentCategorized };
-                                                                                                        const targetKey = Object.keys(updatedCategorized).find(k => k === rawLabel || (rawLabel.includes('Interior') && k.includes('Interior'))) || rawLabel;
+                                                                                                        const targetKey = Object.keys(updatedCategorized).find(k => 
+                                                                                                            k === rawLabel || 
+                                                                                                            normalizeRoomCategoryName(k, isOcc) === normalizeRoomCategoryName(rawLabel, isOcc)
+                                                                                                        ) || rawLabel;
                                                                                                         const list = [...(updatedCategorized[targetKey] || [])];
                                                                                                         list.splice(pIdx, 1);
                                                                                                         if (list.length > 0) {
@@ -2643,7 +2729,7 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                                                                                                 newUrls.push(publicUrl);
                                                                                                             }
                                                                                                             const updatedCategorized = { ...currentCategorized };
-                                                                                                            const targetKey = rawLabel.includes('Interior') ? (isOcc ? 'Interior Kamar (Opsional)' : 'Interior Kamar *Wajib') : rawLabel;
+                                                                                                            const targetKey = normalizeRoomCategoryName(rawLabel, isOcc);
                                                                                                             const list = [...(updatedCategorized[targetKey] || [])];
                                                                                                             newUrls.forEach(u => list.push(u));
                                                                                                             updatedCategorized[targetKey] = list;

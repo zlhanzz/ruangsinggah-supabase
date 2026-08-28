@@ -347,26 +347,45 @@ const getRoomPhotosGlobal = (room: any): { url: string; label: string }[] => {
     if (!room) return [];
     const result: { url: string; label: string }[] = [];
 
-    // 1. Dari categorizedPhotos
-    if (room.categorizedPhotos && typeof room.categorizedPhotos === 'object') {
-        const catMap: Record<string, string> = {
-            interior: 'Interior Kamar',
-            kasur: 'Tempat Tidur',
-            wc: 'Kamar Mandi',
-            jendela: 'Jendela Luar'
-        };
-        Object.keys(room.categorizedPhotos).forEach(k => {
-            const list = room.categorizedPhotos[k];
-            if (Array.isArray(list)) {
-                list.forEach(item => {
-                    const url = typeof item === 'string' ? item : (item?.url || item?.original || '');
-                    if (url && !result.some(p => p.url === url)) {
-                        result.push({ url, label: catMap[k] || k });
-                    }
-                });
-            }
-        });
-    }
+    const catMap: Record<string, string> = {
+        interior: 'Interior Kamar',
+        kasur: 'Tempat Tidur',
+        'tempat tidur': 'Tempat Tidur',
+        wc: 'Kamar Mandi',
+        'kamar mandi': 'Kamar Mandi',
+        'kamar mandi dalam': 'Kamar Mandi',
+        'dapur dalam': 'Dapur Dalam',
+        dapur: 'Dapur Dalam',
+        jendela: 'Jendela Luar',
+        'jendela luar': 'Jendela Luar',
+        lemari: 'Lemari / Storage',
+        'lemari pakaian': 'Lemari / Storage',
+        ac: 'AC',
+        'kipas angin': 'Kipas Angin',
+        'water heater': 'Water Heater'
+    };
+
+    const normalizeCatKey = (k: string) => {
+        const lower = (k || '').toLowerCase().trim().replace(/(\*wajib|\(opsional\))/gi, '').trim();
+        return catMap[lower] || k.replace(/(\*Wajib|\(Opsional\))/gi, '').trim();
+    };
+
+    // 1. Dari categorized_photos / categorizedPhotos
+    const catSources = [room.categorized_photos, room.categorizedPhotos].filter(Boolean);
+    catSources.forEach(source => {
+        if (source && typeof source === 'object' && !Array.isArray(source)) {
+            Object.entries(source).forEach(([k, list]: [string, any]) => {
+                if (Array.isArray(list)) {
+                    list.forEach(item => {
+                        const url = typeof item === 'string' ? item : (item?.url || item?.original || '');
+                        if (url && !result.some(p => p.url === url)) {
+                            result.push({ url, label: normalizeCatKey(k) });
+                        }
+                    });
+                }
+            });
+        }
+    });
 
     // 2. Dari raw images, image_urls, photos
     const rawImages = room.images || room.image_urls || room.photos || [];
@@ -379,8 +398,7 @@ const getRoomPhotosGlobal = (room: any): { url: string; label: string }[] => {
                 else if (typeof img === 'object' && img?.label) label = img.label;
                 else if (imgIdx < DEFAULT_GLOBAL_ROOM_PHOTO_SLOTS.length) label = DEFAULT_GLOBAL_ROOM_PHOTO_SLOTS[imgIdx];
                 else label = `Foto #${imgIdx + 1}`;
-                label = label.replace(/\s*\*Wajib/i, '').replace(/\(Opsional\)/i, '').trim();
-                result.push({ url, label });
+                result.push({ url, label: normalizeCatKey(label) });
             }
         });
     }
