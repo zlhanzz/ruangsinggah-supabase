@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 147. Penerapan Skala 1:1 UI/UX Flow Form Pendataan Survei Lapangan Agen ke Modal Edit Listing Portal KostManager dengan Direct Live Update (`KostManagerPropertyFormModal.tsx` & `KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna merasa bahwa layout modal peninjauan admin (review style) kurang cocok dan membingungkan jika dipakai untuk mengedit listing properti terkelola di portal KostManager.
+  2. Pengguna meminta penerapan 100% UI/UX tampilan, flow, dan sistem form pendataan kostmanager yang ada di form survei agen (`AgentDashboard.tsx`) dalam skala 1:1.
+  3. Perbedaan mendasar: jika di dashboard agen form tersebut dikirim sebagai draft survei ke dashboard admin untuk ditinjau, pada portal KostManager data yang diubah/disimpan akan **langsung berubah secara live (Direct Live Update)** ke database Supabase `properties`, `mitra_kostmanager`, dan `resident_status`.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Pembuatan Komponen Terdedikasi `KostManagerPropertyFormModal.tsx` (1:1 Flow Survei)**:
+    - **Header**: Top app bar dengan tombol kembali (`ArrowLeft`), badge KostManager, judul dinamis (*Edit Listing Properti Terkelola* / *Form Pendataan Properti Terkelola*), dan tombol Close (`X`).
+    - **Stepper (3 Step)**:
+      - **Step 1 (PROPERTI)**: Profil properti (Nama, Tipe Putra/Putri/Campur, Total Kamar, Alamat lengkap real), 3 Kotak Input Kategori Wilayah Terstruktur (🏛️ Provinsi, 🏙️ Kota/Kabupaten, 📍 Kecamatan/Area), Lokasi GPS & Mini Map interaktif dengan fitur "Gunakan Lokasi Saya Saat Ini", Pop-up Modal Peta Layar Penuh (Fullscreen Google Maps Picker + Search & Drag marker), Fasilitas & Landmark Terdekat (+ Tambah Landmark via Search & Konversi Link GMaps), Fasilitas Umum & Rincian Lengkap (Area Parkir + sub-kendaraan, Dapur Bersama + sub-kelengkapan, WC Umum + sub-kelengkapan), Dokumentasi Foto Fasilitas & Area Umum WebP client-side, dan Peraturan Kost.
+      - **Step 2 (DATA KAMAR)**: Progress target kamar (`roomTypes.length` / `totalRooms`), List unit kamar accordion (Badge Terisi/Kosong, Nomor Kamar, Lantai, Tipe, Tarif, Tombol Delete & Expand), Form draft tambah kamar baru `temporaryRoom`, Dimensi P×L meter, Multi-periode tarif sewa, Toggle Kosongan vs Furnished, Sub-kelengkapan KM Dalam & Dapur Dalam, Foto kamar dinamis WebP berdasarkan fasilitas aktif, serta form data penghuni lengkap (Nama, No WA, Tanggal Masuk, Jatuh Tempo, Jumlah Penghuni).
+      - **Step 3 (REVIEW & DIRECT LIVE UPDATE)**: Ringkasan info properti, Preview Handphone Mobile Simulator Calon Penyewa interaktif, Data Mitra Pemilik & Rekening Penyaluran Hasil Sewa (Owner Payout), Perjanjian Kemitraan Auto-Pilot & TTD Digital (Canvas signature), dan Tombol Direct Live Save ke Supabase.
+  * **2. Direct Live Update Action ke Supabase**:
+    - Langsung melakukan update/insert ke tabel `properties` dengan status `published` dan `is_managed = true`.
+    - Sinkronisasi instan ke tabel `mitra_kostmanager`.
+    - Sinkronisasi status sewa kamar yang terisi ke tabel `resident_status` untuk penghuni aktif.
+    - Notifikasi sukses langsung dan otomatis memanggil `onSuccess()` untuk me-refresh data tabel.
+  * **3. Modularity & Clean Architecture**:
+    - Memisahkan komponen form survei ke file `KostManagerPropertyFormModal.tsx` dan mendelegasikan `ManagedPropertyAddModal` di `KostManagerPortal.tsx` secara bersih dan modular.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx` (File Baru)
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% dengan 0 TypeScript/Vite error (✓ 2527 modules transformed, ✓ built in 39.33s).
+
+
 ### 146. Integrasi 1:1 Mekanisme Input Form Survei Agen ke Modal Edit Properti Portal KostManager – `renderSurveyStyleRoomUnit` (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar mekanisme input/sistem pengeditan unit kamar di modal Edit Properti KostManager Portal mengadopsi 1:1 sistem input dari form pendataan surveyor agen (`AgentDashboard.tsx`), bukan hanya visual yang mirip.
