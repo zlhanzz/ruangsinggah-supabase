@@ -1006,19 +1006,19 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     if (status === 'OK' && results && results.length > 0) {
                         const addr = results[0].formatted_address;
                         const components = results[0].address_components || [];
-                        let city = '', area = '';
+                        let city = '', area = '', province = '';
                         for (const comp of components) {
                             const types = comp.types || [];
+                            if (types.includes('administrative_area_level_1') && !province) province = comp.long_name;
                             if (types.includes('administrative_area_level_2') && !city) city = comp.long_name;
-                            if (types.includes('administrative_area_level_3') && !city) city = comp.long_name;
-                            if (types.includes('sublocality_level_1') && !area) area = comp.long_name;
-                            if (types.includes('sublocality') && !area) area = comp.long_name;
-                            if (types.includes('locality') && !city) city = comp.long_name;
+                            if ((types.includes('administrative_area_level_3') || types.includes('sublocality_level_1') || types.includes('sublocality')) && !area) area = comp.long_name;
+                            if (types.includes('locality') && !area && comp.long_name !== city) area = comp.long_name;
                         }
                         setKmListingForm(prev => {
                             const updates: any = { address: addr };
-                            if (city) updates.city = city.replace('Kota ', '').replace('Kabupaten ', '');
-                            if (area) updates.area = area.replace('Kecamatan ', '');
+                            if (city) updates.city = city.replace(/^(Kota|Kabupaten|Kab\.)\s+/i, '').trim();
+                            if (area) updates.area = area.replace(/^(Kecamatan|Kec\.)\s+/i, '').trim();
+                            if (province) updates.province = province.replace(/^(Provinsi|Prov\.)\s+/i, '').trim();
                             return { ...prev, ...updates };
                         });
                     }
@@ -6016,6 +6016,28 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                         placeholder="Jalan, RT/RW, Kelurahan, Kecamatan..."
                                                         className="w-full p-3.5 border border-[#8c7263] rounded-xl bg-[#f8f9ff] focus:ring-2 focus:ring-[#ff7a00] focus:border-[#ff7a00] outline-none text-sm font-medium min-h-[80px] resize-none"
                                                     />
+                                                    {(kmListingForm.province || kmListingForm.city || kmListingForm.area) && (
+                                                        <div className="flex flex-wrap items-center gap-1.5 p-2.5 bg-orange-50/70 border border-orange-200/80 rounded-xl text-[10px] font-bold text-slate-700">
+                                                            <span className="text-[#ff7a00] font-black uppercase text-[9px] flex items-center gap-1 mr-1">
+                                                                <Sparkles size={11} /> Wilayah Terdeteksi:
+                                                            </span>
+                                                            {kmListingForm.province && (
+                                                                <span className="bg-white px-2 py-0.5 rounded-md border border-orange-200 text-slate-800">
+                                                                    🏛️ {kmListingForm.province}
+                                                                </span>
+                                                            )}
+                                                            {kmListingForm.city && (
+                                                                <span className="bg-white px-2 py-0.5 rounded-md border border-orange-200 text-slate-800">
+                                                                    🏙️ {kmListingForm.city}
+                                                                </span>
+                                                            )}
+                                                            {kmListingForm.area && (
+                                                                <span className="bg-white px-2 py-0.5 rounded-md border border-orange-200 text-slate-800">
+                                                                    📍 Kec. {kmListingForm.area}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 <div className="flex flex-col gap-1.5">

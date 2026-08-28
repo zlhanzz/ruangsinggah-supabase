@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 136. Smart Auto-Detection & Split Wilayah Administrasi (Provinsi, Kota, Kecamatan) + Alamat Lengkap Real Bangunan (`KostManagerPortal.tsx` & `AgentDashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar sistem secara otomatis dan cerdas membagi wilayah administrasi menjadi **Provinsi**, **Kota/Kabupaten**, dan **Kecamatan/Area** langsung dari Google Maps Geocoding API saat meletakkan/mencari titik pin pada peta.
+  2. Mencegah anomali lama di mana nama kecamatan (`locality` / `administrative_area_level_3`) secara keliru masuk ke kolom Kota/Kabupaten.
+  3. Memastikan ruang input **Alamat Lengkap Real Bangunan** (nama jalan, nomor rumah, RT/RW, kelurahan, patokan) tetap terjaga penuh dan detail agar tampil akurat kepada calon penyewa.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Smart Geocoding Hierarchy Parser di `LocationPicker` (`KostManagerPortal.tsx`)**:
+    - **🏛️ Provinsi**: Diekstrak dari `administrative_area_level_1` (contoh: *"Sulawesi Selatan"*).
+    - **🏙️ Kota / Kabupaten**: Diekstrak dari `administrative_area_level_2` dengan pembersihan otomatis prefiks kata *"Kota "* / *"Kabupaten "* (contoh: *"Kota Makassar"* $\rightarrow$ **`Makassar`**).
+    - **📍 Kecamatan / Area**: Diekstrak dari `administrative_area_level_3` / `sublocality_level_1` / `sublocality` dengan pembersihan kata *"Kecamatan "* / *"Kec. "* (contoh: *"Kecamatan Tamalanrea"* $\rightarrow$ **`Tamalanrea`**).
+    - **Alamat Lengkap Detail**: Mengisi field teks textarea `address` lengkap dan dapat diedit manual.
+  * **2. Tata Letak Form Wilayah Terstruktur di Tab 1 Editor Properti**:
+    - Header info dengan badge visual: *✨ Smart Geocoding: Wilayah & Alamat Terdeteksi Otomatis* dan titik koordinat GPS.
+    - 3 kolom input terstruktur: **Provinsi**, **Kota / Kabupaten**, dan **Kecamatan / Area** yang otomatis terisi saat pin digeser di peta.
+    - Textarea **Alamat Lengkap Real Bangunan** untuk rincian jalan, nomor rumah, dan patokan.
+  * **3. Real-Time Smart Region Detection di Form Pendataan Survei (`AgentDashboard.tsx`)**:
+    - Pembaruan parser geocoding modal peta dan mini map untuk membagi `province`, `city`, dan `area` secara presisi.
+    - Menampilkan baris chip badge wilayah terdeteksi (*🏛️ Provinsi*, *🏙️ Kota/Kab*, *📍 Kecamatan*) di bawah textarea alamat.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus 100% dengan 0 error dalam 27.52 detik (2526 modules transformed).
+
 ### 135. Penyelarasan Layout & Skema Input Modal Edit Properti Sesuai Standar Peninjauan Survei KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menginstruksikan untuk menyelaraskan tampilan tema layout dan skema input modal pengeditan properti pada tingkatan KostManager dengan standar tampilan peninjauan hasil survei (Review Modal) yang ada di Dashboard Admin (`KostManagerManagement.tsx`).
