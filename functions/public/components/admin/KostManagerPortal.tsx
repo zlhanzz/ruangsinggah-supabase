@@ -21,7 +21,21 @@ import {
     CreditCard, 
     X,
     Building2,
-    ShieldAlert
+    ShieldAlert,
+    ExternalLink,
+    Grid,
+    Radio,
+    Megaphone,
+    Share2,
+    Key,
+    Wifi,
+    Zap,
+    Building,
+    Check,
+    Layers,
+    ShieldCheck,
+    ArrowUpRight,
+    TrendingUp
 } from 'lucide-react';
 import { KostManagerPackage } from '../../types';
 import { 
@@ -490,6 +504,12 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     const [isCheckingOut, setIsCheckingOut] = useState<boolean>(false);
 
     const [selectedTenantForDetail, setSelectedTenantForDetail] = useState<TenantRecord | null>(null);
+
+    // Property Command Center Modals (Room Matrix & Broadcast)
+    const [selectedPropForRoomMatrix, setSelectedPropForRoomMatrix] = useState<ManagedProperty | null>(null);
+    const [selectedPropForBroadcast, setSelectedPropForBroadcast] = useState<ManagedProperty | null>(null);
+    const [broadcastCategory, setBroadcastCategory] = useState<'LISTRIK_AIR' | 'KEBERSIHAN' | 'TAGIHAN' | 'TATA_TERTIB' | 'KUSTOM'>('LISTRIK_AIR');
+    const [broadcastCustomText, setBroadcastCustomText] = useState<string>('');
 
 
 
@@ -1327,21 +1347,120 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     )}
 
                     {/* =========================================== */}
-                    {/* TAB: PROPERTIES                             */}
+                    {/* TAB: PROPERTIES (PROPERTY COMMAND CENTER)   */}
                     {/* =========================================== */}
-                    {activeTab === 'properties' && (
-                        <div className="bg-white border border-gray-100 rounded-3xl shadow-sm overflow-hidden">
-                            {/* Search Header */}
-                            <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Properti Dalam Pengelolaan</h3>
-                                <div className="flex w-full sm:w-auto items-center gap-3">
-                                    <input
-                                        type="text"
-                                        placeholder="🔍 Cari nama properti, kota, atau pemilik..."
-                                        value={propertySearch}
-                                        onChange={e => setPropertySearch(e.target.value)}
-                                        className="border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400 w-full sm:max-w-xs"
-                                    />
+                    {activeTab === 'properties' && (() => {
+                        // Portfolio Global Metrics
+                        const totalPropsCount = properties.length;
+                        const totalRoomsAll = properties.reduce((sum, p) => sum + (Array.isArray(p.room_types) ? p.room_types.length : 0), 0);
+                        const totalOccupiedAll = properties.reduce((sum, p) => sum + (p.occupant_count || 0), 0);
+                        const totalVacantAll = properties.reduce((sum, p) => sum + (p.empty_rooms || 0), 0);
+                        const globalOccupancy = totalRoomsAll > 0 ? Math.round((totalOccupiedAll / totalRoomsAll) * 100) : 0;
+                        
+                        const totalPotentialOmsetAll = properties.reduce((sum, p) => {
+                            const roomsPotential = Array.isArray(p.room_types) && p.room_types.length > 0
+                                ? p.room_types.reduce((rSum: number, rt: any) => rSum + (Number(rt.price) || Number(p.price) || 0), 0)
+                                : (Number(p.price) * (p.empty_rooms + p.occupant_count || 1));
+                            return sum + roomsPotential;
+                        }, 0);
+
+                        const totalRealizedOmsetAll = tenants.filter(t => t.status === 'ACTIVE').reduce((sum, t) => {
+                            const bPrice = Number(t.metadata?.basePrice) || Number(t.metadata?.price) || Number(t.metadata?.monthlyPrice) || 0;
+                            const extra = Number(t.metadata?.extraPersonFee) || 0;
+                            return sum + bPrice + extra;
+                        }, 0);
+
+                        // Filter properties by search
+                        const filteredProps = properties.filter(p => {
+                            if (!propertySearch.trim()) return true;
+                            const q = propertySearch.toLowerCase();
+                            return (
+                                p.title.toLowerCase().includes(q) ||
+                                p.city.toLowerCase().includes(q) ||
+                                p.address.toLowerCase().includes(q) ||
+                                p.owner_name?.toLowerCase().includes(q) ||
+                                p.owner_phone?.includes(q)
+                            );
+                        });
+
+                        return (
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                {/* 1. TOP KPI GLANCE BAR (PORTFOLIO WIDE) */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    {/* Card 1: Total Properti Terkelola */}
+                                    <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-soft flex items-center justify-between">
+                                        <div>
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Properti Terkelola</span>
+                                            <div className="flex items-baseline gap-2 mt-1">
+                                                <span className="text-2xl font-black text-slate-900">{totalPropsCount}</span>
+                                                <span className="text-xs text-slate-500 font-bold">Gedung Aktif</span>
+                                            </div>
+                                        </div>
+                                        <div className="w-12 h-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center shadow-2xs">
+                                            <Building2 size={22} />
+                                        </div>
+                                    </div>
+
+                                    {/* Card 2: Kapasitas Kamar Global */}
+                                    <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-soft flex items-center justify-between">
+                                        <div>
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Kapasitas Kamar</span>
+                                            <div className="flex items-baseline gap-2 mt-1">
+                                                <span className="text-2xl font-black text-slate-900">{totalRoomsAll}</span>
+                                                <span className="text-xs text-slate-500 font-bold">Unit ({totalOccupiedAll} Terisi • {totalVacantAll} Kosong)</span>
+                                            </div>
+                                        </div>
+                                        <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center shadow-2xs">
+                                            <Bed size={22} />
+                                        </div>
+                                    </div>
+
+                                    {/* Card 3: Rata-Rata Okupansi Global */}
+                                    <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-soft flex items-center justify-between">
+                                        <div>
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Tingkat Okupansi</span>
+                                            <div className="flex items-baseline gap-2 mt-1">
+                                                <span className={`text-2xl font-black ${
+                                                    globalOccupancy >= 80 ? 'text-emerald-600' : globalOccupancy >= 50 ? 'text-amber-600' : 'text-rose-600'
+                                                }`}>
+                                                    {globalOccupancy}%
+                                                </span>
+                                                <span className="text-xs text-slate-500 font-bold">Rata-Rata Portofolio</span>
+                                            </div>
+                                        </div>
+                                        <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center shadow-2xs">
+                                            <TrendingUp size={22} />
+                                        </div>
+                                    </div>
+
+                                    {/* Card 4: Valuasi Omset Terkelola */}
+                                    <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-soft flex items-center justify-between">
+                                        <div>
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Omset Realisasi / Potensi</span>
+                                            <div className="mt-1">
+                                                <span className="text-lg font-black text-slate-900 block">{FORMAT_CURRENCY(totalRealizedOmsetAll)}</span>
+                                                <span className="text-[10px] font-bold text-slate-400">Potensi: {FORMAT_CURRENCY(totalPotentialOmsetAll)}</span>
+                                            </div>
+                                        </div>
+                                        <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-2xs">
+                                            <DollarSign size={22} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 2. ACTIONS & SEARCH HEADER */}
+                                <div className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-soft flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
+                                    <div className="relative w-full sm:max-w-md">
+                                        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Cari nama kost, kota, alamat, atau nama mitra pemilik..."
+                                            value={propertySearch}
+                                            onChange={e => setPropertySearch(e.target.value)}
+                                            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+                                        />
+                                    </div>
+
                                     <button
                                         onClick={() => {
                                             setEditingPropertyId(null);
@@ -1372,80 +1491,474 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                             });
                                             setIsAddPropOpen(true);
                                         }}
-                                        className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 shrink-0"
+                                        className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider shadow-sm transition-all active:scale-95 shrink-0 flex items-center justify-center gap-2 cursor-pointer"
                                     >
-                                        ➕ Tambah Properti
+                                        <span>➕ Daftarkan Properti Baru</span>
                                     </button>
                                 </div>
-                            </div>
 
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-xs text-left">
-                                    <thead>
-                                        <tr className="bg-gray-50 border-b border-gray-100">
-                                            <th className="px-6 py-4 font-black text-gray-500 uppercase tracking-wider">Nama Kost</th>
-                                            <th className="px-6 py-4 font-black text-gray-500 uppercase tracking-wider">Tipe / Lokasi</th>
-                                            <th className="px-6 py-4 font-black text-gray-500 uppercase tracking-wider">Pemilik (Mitra)</th>
-                                            <th className="px-6 py-4 font-black text-gray-500 uppercase tracking-wider text-center">Kamar Terisi</th>
-                                            <th className="px-6 py-4 font-black text-gray-500 uppercase tracking-wider text-center">Kamar Kosong</th>
-                                            <th className="px-6 py-4 font-black text-gray-500 uppercase tracking-wider">Status Listing</th>
-                                            <th className="px-6 py-4 font-black text-gray-500 uppercase tracking-wider text-right">Aksi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {properties
-                                            .filter(p => !propertySearch || 
-                                                p.title.toLowerCase().includes(propertySearch.toLowerCase()) ||
-                                                p.city.toLowerCase().includes(propertySearch.toLowerCase()) ||
-                                                p.owner_name?.toLowerCase().includes(propertySearch.toLowerCase())
-                                            )
-                                            .map(p => (
-                                                <tr key={p.id} className="hover:bg-gray-50/50">
-                                                    <td className="px-6 py-4 font-bold text-gray-900">{p.title}</td>
-                                                    <td className="px-6 py-4">
-                                                        <span className={`text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-wider ${
-                                                            p.type === 'Campur' ? 'bg-purple-50 text-purple-600 border border-purple-100' :
-                                                            p.type === 'Putri' ? 'bg-pink-50 text-pink-600 border border-pink-100' :
-                                                            'bg-blue-50 text-blue-600 border border-blue-100'
-                                                        }`}>
-                                                            {p.type}
-                                                        </span>
-                                                        <p className="text-gray-400 mt-1 font-semibold">{p.city}, {p.address}</p>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <p className="font-bold text-gray-800">{p.owner_name}</p>
-                                                        <p className="text-gray-400 mt-0.5 font-semibold">📱 {p.owner_phone}</p>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center font-bold text-green-600 text-sm">{p.occupant_count}</td>
-                                                    <td className="px-6 py-4 text-center font-bold text-amber-500 text-sm">{p.empty_rooms}</td>
-                                                    <td className="px-6 py-4">
-                                                        <span className={`text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider ${
-                                                            p.status === 'published' ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-gray-100 text-gray-500'
-                                                        }`}>
-                                                            {p.status}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right space-x-2">
-                                                        <button
-                                                            onClick={() => handleEditProperty(p)}
-                                                            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
-                                                        >
-                                                            ✏️ Edit
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setSelectedPropForRoomDetail(p)}
-                                                            className="bg-orange-50 hover:bg-orange-100 text-orange-600 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
-                                                        >
-                                                            🚪 Detail Kamar
-                                                        </button>
-                                                    </td>
+                                {/* 3. TABLE OF MANAGED PROPERTIES (ENTERPRISE GRADE) */}
+                                <div className="bg-white border border-slate-200/90 rounded-3xl shadow-soft overflow-hidden">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-xs text-left">
+                                            <thead>
+                                                <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-black uppercase tracking-wider text-[10px]">
+                                                    <th className="px-6 py-4">Properti & Visual</th>
+                                                    <th className="px-6 py-4">Pemilik (Mitra)</th>
+                                                    <th className="px-6 py-4">Tingkat Okupansi</th>
+                                                    <th className="px-6 py-4">Performa Omset</th>
+                                                    <th className="px-6 py-4">Status Auto-Pilot</th>
+                                                    <th className="px-6 py-4 text-right">Aksi Operasional</th>
                                                 </tr>
-                                            ))}
-                                    </tbody>
-                                </table>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 font-medium">
+                                                {filteredProps.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-bold uppercase tracking-wider text-xs">
+                                                            Tidak ada properti terkelola yang sesuai dengan pencarian.
+                                                        </td>
+                                                    </tr>
+                                                ) : (
+                                                    filteredProps.map(p => {
+                                                        const cleanOwnerPhone = (p.owner_phone || '').replace(/[^0-9]/g, '');
+                                                        const roomList = Array.isArray(p.room_types) ? p.room_types : [];
+                                                        const totalRooms = roomList.length > 0 ? roomList.length : (p.empty_rooms + p.occupant_count || 1);
+                                                        const occupiedRooms = p.occupant_count || 0;
+                                                        const vacantRooms = p.empty_rooms ?? Math.max(0, totalRooms - occupiedRooms);
+                                                        const occPercent = totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0;
+
+                                                        // Revenue calculations
+                                                        const potentialOmset = roomList.length > 0
+                                                            ? roomList.reduce((sum: number, rt: any) => sum + (Number(rt.price) || Number(p.price) || 0), 0)
+                                                            : (Number(p.price) * totalRooms);
+
+                                                        const propertyActiveTenants = tenants.filter(t => t.kost_id === p.id && t.status === 'ACTIVE');
+                                                        const realizedOmset = propertyActiveTenants.reduce((sum, t) => {
+                                                            const bPrice = Number(t.metadata?.basePrice) || Number(t.metadata?.price) || Number(t.metadata?.monthlyPrice) || 0;
+                                                            const extra = Number(t.metadata?.extraPersonFee) || 0;
+                                                            return sum + bPrice + extra;
+                                                        }, 0);
+
+                                                        const primaryImage = (p.image_urls && p.image_urls.length > 0) ? p.image_urls[0] : '';
+
+                                                        return (
+                                                            <tr key={p.id} className="hover:bg-slate-50/60 transition-colors group">
+                                                                {/* 1. Properti & Visual */}
+                                                                <td className="px-6 py-4">
+                                                                    <div className="flex items-center gap-3.5">
+                                                                        <div className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200/80 overflow-hidden shrink-0 flex items-center justify-center shadow-2xs relative group/img">
+                                                                            {primaryImage ? (
+                                                                                <img
+                                                                                    src={primaryImage}
+                                                                                    alt={p.title}
+                                                                                    className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-300"
+                                                                                />
+                                                                            ) : (
+                                                                                <Building2 size={24} className="text-slate-400" />
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="min-w-0">
+                                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                                <h4 className="font-black text-slate-900 text-sm tracking-tight">{p.title}</h4>
+                                                                                <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                                                                                    p.type === 'Campur' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                                                                    p.type === 'Putri' ? 'bg-pink-50 text-pink-700 border-pink-200' :
+                                                                                    'bg-blue-50 text-blue-700 border-blue-200'
+                                                                                }`}>
+                                                                                    {p.type}
+                                                                                </span>
+                                                                            </div>
+                                                                            <p className="text-[11px] text-slate-400 font-bold mt-0.5 truncate max-w-xs">
+                                                                                📍 {p.city ? `${p.city}, ` : ''}{p.address || 'Alamat belum diatur'}
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+
+                                                                {/* 2. Pemilik (Mitra) */}
+                                                                <td className="px-6 py-4">
+                                                                    <p className="font-black text-slate-900 text-xs">{p.owner_name || 'Mitra RuangSinggah'}</p>
+                                                                    {cleanOwnerPhone ? (
+                                                                        <a
+                                                                            href={`https://wa.me/${cleanOwnerPhone}`}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="text-[11px] text-emerald-600 font-bold hover:text-emerald-700 flex items-center gap-1 mt-0.5"
+                                                                        >
+                                                                            <Phone size={10} className="text-emerald-500 shrink-0" />
+                                                                            <span>+{cleanOwnerPhone}</span>
+                                                                        </a>
+                                                                    ) : (
+                                                                        <span className="text-[10px] text-slate-400">-</span>
+                                                                    )}
+                                                                </td>
+
+                                                                {/* 3. Tingkat Okupansi (Progress Bar) */}
+                                                                <td className="px-6 py-4">
+                                                                    <div className="space-y-1.5 w-36">
+                                                                        <div className="flex justify-between items-center text-[10px] font-bold">
+                                                                            <span className="text-slate-700 font-black">{occPercent}% Terisi</span>
+                                                                            <span className="text-slate-400 font-mono">{occupiedRooms}/{totalRooms}</span>
+                                                                        </div>
+                                                                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/60 p-0.2">
+                                                                            <div
+                                                                                className={`h-full rounded-full transition-all duration-500 ${
+                                                                                    occPercent >= 80 ? 'bg-emerald-500' :
+                                                                                    occPercent >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+                                                                                }`}
+                                                                                style={{ width: `${Math.max(5, occPercent)}%` }}
+                                                                            />
+                                                                        </div>
+                                                                        <p className="text-[9px] font-black uppercase tracking-wider text-slate-500">
+                                                                            {vacantRooms > 0 ? (
+                                                                                <span className="text-emerald-600 font-bold">🟢 {vacantRooms} Kamar Siap Huni</span>
+                                                                            ) : (
+                                                                                <span className="text-purple-600 font-bold">✨ Full Terisi</span>
+                                                                            )}
+                                                                        </p>
+                                                                    </div>
+                                                                </td>
+
+                                                                {/* 4. Performa Omset */}
+                                                                <td className="px-6 py-4">
+                                                                    <span className="font-black text-slate-900 text-xs block">
+                                                                        {FORMAT_CURRENCY(realizedOmset)}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-slate-400 font-bold block">
+                                                                        Potensi: {FORMAT_CURRENCY(potentialOmset)}
+                                                                    </span>
+                                                                </td>
+
+                                                                {/* 5. Status Auto-Pilot */}
+                                                                <td className="px-6 py-4">
+                                                                    <span className="text-[9px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs inline-flex items-center gap-1.5">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                                        <span>Aktif Terkelola</span>
+                                                                    </span>
+                                                                </td>
+
+                                                                {/* 6. Aksi Operasional */}
+                                                                <td className="px-6 py-4 text-right">
+                                                                    <div className="flex items-center justify-end gap-1.5">
+                                                                        {/* Tombol 1: Buka Web Publik Listing */}
+                                                                        <a
+                                                                            href={`/kost/${p.id}`}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer shadow-2xs"
+                                                                            title="Buka Halaman Listing Publik"
+                                                                        >
+                                                                            <ExternalLink size={13} />
+                                                                        </a>
+
+                                                                        {/* Tombol 2: Peta Denah Kamar (Room Matrix) */}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setSelectedPropForRoomMatrix(p)}
+                                                                            className="p-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 transition-all cursor-pointer shadow-2xs"
+                                                                            title="Lihat Denah Kamar Visual"
+                                                                        >
+                                                                            <Grid size={13} />
+                                                                        </button>
+
+                                                                        {/* Tombol 3: Broadcast WhatsApp Pengumuman Gedung */}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setSelectedPropForBroadcast(p);
+                                                                                setBroadcastCategory('LISTRIK_AIR');
+                                                                                setBroadcastCustomText('');
+                                                                            }}
+                                                                            className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 transition-all cursor-pointer shadow-2xs"
+                                                                            title="Broadcast WhatsApp ke Seluruh Penghuni"
+                                                                        >
+                                                                            <Megaphone size={13} />
+                                                                        </button>
+
+                                                                        {/* Tombol 4: Detail Kamar Full */}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setSelectedPropForRoomDetail(p)}
+                                                                            className="px-2.5 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#ff7a00] border border-orange-200/80 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
+                                                                            title="Detail Data Kamar"
+                                                                        >
+                                                                            🚪 Kamar
+                                                                        </button>
+
+                                                                        {/* Tombol 5: Edit Data Properti */}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleEditProperty(p)}
+                                                                            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer shadow-2xs"
+                                                                            title="Edit Data & Tarif Properti"
+                                                                        >
+                                                                            <FileText size={13} />
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* ========================================================= */}
+                                {/* MODAL: PETA DENAH KAMAR (ROOM MATRIX VISUALIZER)          */}
+                                {/* ========================================================= */}
+                                {selectedPropForRoomMatrix && (() => {
+                                    const p = selectedPropForRoomMatrix;
+                                    const rooms = Array.isArray(p.room_types) ? p.room_types : [];
+                                    const propTenants = tenants.filter(t => t.kost_id === p.id && t.status === 'ACTIVE');
+
+                                    return (
+                                        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-in fade-in">
+                                            <div className="bg-white rounded-[2rem] shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col border border-slate-100 animate-in zoom-in-95 max-h-[85vh]" onClick={e => e.stopPropagation()}>
+                                                {/* Header Modal */}
+                                                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/70 shrink-0">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center">
+                                                            <Grid size={18} />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">Peta Unit Kamar (Room Matrix)</h3>
+                                                            <p className="text-[10px] text-slate-500 font-bold">{p.title} • {rooms.length} Total Kamar</p>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setSelectedPropForRoomMatrix(null)}
+                                                        className="p-2 hover:bg-slate-200/70 rounded-full text-slate-400 transition-colors"
+                                                    >
+                                                        <X size={16} />
+                                                    </button>
+                                                </div>
+
+                                                {/* Grid Content */}
+                                                <div className="p-6 overflow-y-auto space-y-4">
+                                                    <div className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100 text-xs">
+                                                        <div className="flex items-center gap-4">
+                                                            <span className="flex items-center gap-1.5 font-bold text-slate-700">
+                                                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                                                <span>Terisi ({p.occupant_count})</span>
+                                                            </span>
+                                                            <span className="flex items-center gap-1.5 font-bold text-slate-700">
+                                                                <span className="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
+                                                                <span>Kosong ({p.empty_rooms})</span>
+                                                            </span>
+                                                        </div>
+                                                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                                            Denah Lantai
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                        {rooms.map((rt: any, rIdx: number) => {
+                                                            const roomName = rt.name ? (String(rt.name).trim().toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${rIdx + 1}`;
+                                                            const isOccupied = rt.isAvailable === false || rt.status === 'Terisi' || Boolean(rt.residentName);
+                                                            const tenant = propTenants.find(t => t.room_type?.toLowerCase() === roomName.toLowerCase()) || (isOccupied ? {
+                                                                user: { name: rt.residentName || 'Penyewa', phone: rt.residentPhone || '-' },
+                                                                start_date: rt.startDate || '-',
+                                                                end_date: rt.endDate || '-'
+                                                            } : null);
+
+                                                            return (
+                                                                <div
+                                                                    key={rIdx}
+                                                                    className={`p-4 rounded-2xl border transition-all ${
+                                                                        isOccupied
+                                                                            ? 'bg-emerald-50/40 border-emerald-200/80 shadow-2xs'
+                                                                            : 'bg-white border-slate-200/80 hover:border-slate-300'
+                                                                    }`}
+                                                                >
+                                                                    <div className="flex items-start justify-between gap-2">
+                                                                        <div>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span className="font-black text-slate-900 text-sm">{roomName}</span>
+                                                                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                                                                    isOccupied ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                                                                                }`}>
+                                                                                    {isOccupied ? 'Terisi' : 'Kosong'}
+                                                                                </span>
+                                                                            </div>
+                                                                            <p className="text-[10px] text-slate-400 font-bold mt-0.5">{rt.dimensions || 'Ukuran Standar'} • {rt.floor || 'Lantai 1'}</p>
+                                                                        </div>
+                                                                        <span className="font-black text-orange-600 text-xs font-mono">
+                                                                            {FORMAT_CURRENCY(Number(rt.price) || Number(p.price) || 0)}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    {isOccupied && tenant ? (
+                                                                        <div className="mt-3 pt-2.5 border-t border-emerald-200/60 text-xs space-y-1">
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-slate-500 font-bold text-[10px]">Penghuni:</span>
+                                                                                <span className="font-black text-slate-900 text-xs">{tenant.user?.name}</span>
+                                                                            </div>
+                                                                            <div className="flex items-center justify-between text-[10px]">
+                                                                                <span className="text-slate-400 font-bold">Masa Sewa:</span>
+                                                                                <span className="text-slate-700 font-bold font-mono">{tenant.start_date} s/d {tenant.end_date}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="mt-3 pt-2.5 border-t border-slate-100 text-center">
+                                                                            <span className="text-[10px] text-emerald-600 font-bold flex items-center justify-center gap-1">
+                                                                                <CheckCircle2 size={11} /> Unit Siap Disewakan
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                {/* Footer Modal */}
+                                                <div className="p-4 border-t border-slate-100 bg-slate-50/70 flex justify-end shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedPropForRoomMatrix(null)}
+                                                        className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+                                                    >
+                                                        Tutup Denah
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* ========================================================= */}
+                                {/* MODAL: BROADCAST WHATSAPP PENGUMUMAN GEDUNG               */}
+                                {/* ========================================================= */}
+                                {selectedPropForBroadcast && (() => {
+                                    const p = selectedPropForBroadcast;
+                                    const propTenants = tenants.filter(t => t.kost_id === p.id && t.status === 'ACTIVE');
+
+                                    // Templates
+                                    let templateText = '';
+                                    if (broadcastCategory === 'LISTRIK_AIR') {
+                                        templateText = `Halo Penghuni ${p.title} 👋,\n\nKami dari Manajemen KostManager ingin menginformasikan bahwa akan ada pemeliharaan sistem air/listrik pada: [Isi Waktu/Tanggal].\n\nMohon kesediaannya untuk menampung air secukupnya. Terima kasih atas pengertiannya! 🙏`;
+                                    } else if (broadcastCategory === 'KEBERSIHAN') {
+                                        templateText = `Halo Penghuni ${p.title} 👋,\n\nJadwal kebersihan area publik dan kuras toren akan dilakukan pada hari [Isi Hari/Tanggal].\n\nMohon untuk tidak meletakkan barang pribadi di lorong umum. Terima kasih atas kerjasamanya! ✨`;
+                                    } else if (broadcastCategory === 'TAGIHAN') {
+                                        templateText = `Halo Penghuni ${p.title} 👋,\n\nPengingat pembayaran tagihan sewa bulanan telah diterbitkan. Mohon untuk melakukan konfirmasi transfer atau pembayaran melalui portal. Terima kasih banyak! 🧾`;
+                                    } else if (broadcastCategory === 'TATA_TERTIB') {
+                                        templateText = `Halo Penghuni ${p.title} 👋,\n\nHimbauan keamanan & ketertiban bersama: Mohon selalu mengunci pintu gerbang dan menjaga ketenangan setelah pukul 22.00 WITA. Terima kasih! 🔒`;
+                                    } else {
+                                        templateText = broadcastCustomText || `Halo Penghuni ${p.title} 👋,\n\n[Tulis pesan pengumuman Anda di sini...]`;
+                                    }
+
+                                    return (
+                                        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-in fade-in">
+                                            <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden flex flex-col border border-slate-100 animate-in zoom-in-95 max-h-[85vh]" onClick={e => e.stopPropagation()}>
+                                                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-emerald-50/70 shrink-0">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                                                            <Megaphone size={18} />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-base font-black text-emerald-950 uppercase tracking-tight">Broadcast Pengumuman Gedung</h3>
+                                                            <p className="text-[10px] text-emerald-700 font-bold">{p.title} • {propTenants.length} Penghuni Aktif</p>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setSelectedPropForBroadcast(null)}
+                                                        className="p-2 hover:bg-slate-200/70 rounded-full text-slate-400 transition-colors"
+                                                    >
+                                                        <X size={16} />
+                                                    </button>
+                                                </div>
+
+                                                <div className="p-6 overflow-y-auto space-y-4">
+                                                    <div>
+                                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Pilih Kategori Pengumuman</label>
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            {[
+                                                                { key: 'LISTRIK_AIR', label: '⚡ Listrik & Air' },
+                                                                { key: 'KEBERSIHAN', label: '🧹 Jadwal Kebersihan' },
+                                                                { key: 'TAGIHAN', label: '🧾 Tagihan Serentak' },
+                                                                { key: 'TATA_TERTIB', label: '🔒 Tata Tertib' },
+                                                                { key: 'KUSTOM', label: '✏️ Pesan Bebas' }
+                                                            ].map(cat => (
+                                                                <button
+                                                                    key={cat.key}
+                                                                    type="button"
+                                                                    onClick={() => setBroadcastCategory(cat.key as any)}
+                                                                    className={`px-3 py-2 rounded-xl text-xs font-bold border text-left transition-all cursor-pointer ${
+                                                                        broadcastCategory === cat.key
+                                                                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs font-black'
+                                                                            : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                                                                    }`}
+                                                                >
+                                                                    {cat.label}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    {broadcastCategory === 'KUSTOM' && (
+                                                        <div>
+                                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Tulis Pesan Pengumuman</label>
+                                                            <textarea
+                                                                rows={3}
+                                                                value={broadcastCustomText}
+                                                                onChange={e => setBroadcastCustomText(e.target.value)}
+                                                                placeholder="Tulis pengumuman Anda di sini..."
+                                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500/20"
+                                                            />
+                                                        </div>
+                                                    )}
+
+                                                    {/* Daftar Penerima WhatsApp */}
+                                                    <div>
+                                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-2">Kirim ke Penghuni ({propTenants.length} Nomor)</label>
+                                                        <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                                                            {propTenants.length === 0 ? (
+                                                                <p className="text-xs text-slate-400 font-bold text-center py-4 bg-slate-50 rounded-xl">Belum ada penghuni aktif terdata di properti ini.</p>
+                                                            ) : (
+                                                                propTenants.map((t, tIdx) => {
+                                                                    const cleanPhone = (t.user?.phone || t.metadata?.phone || '').replace(/[^0-9]/g, '');
+                                                                    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(templateText.replace(/\\n/g, '\n'))}`;
+
+                                                                    return (
+                                                                        <div key={tIdx} className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs">
+                                                                            <div>
+                                                                                <p className="font-bold text-slate-900">{t.user?.name} <span className="text-slate-400 font-normal">({t.room_type})</span></p>
+                                                                                <p className="text-[10px] text-emerald-600 font-mono">+{cleanPhone}</p>
+                                                                            </div>
+                                                                            <a
+                                                                                href={waUrl}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-wider shadow-2xs transition-all flex items-center gap-1"
+                                                                            >
+                                                                                <MessageSquare size={10} /> Kirim WA
+                                                                            </a>
+                                                                        </div>
+                                                                    );
+                                                                })
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="p-4 border-t border-slate-100 bg-slate-50/70 flex justify-end shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedPropForBroadcast(null)}
+                                                        className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+                                                    >
+                                                        Selesai
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
-                        </div>
-                    )}
+                        );
+                    })()}
 
                     {/* =========================================== */}
                     {/* TAB: TENANTS (AUTO-PILOT LIFECYCLE ENGINE) */}

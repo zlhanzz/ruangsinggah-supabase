@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 133. Transformasi Tab Properti Terkelola Menjadi Enterprise Property Command Center (`KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta tinjauan komprehensif dan *devil's advocate* apakah tab Properti Terkelola sudah memadai untuk pengelolaan Auto-Pilot.
+  2. Tab properti sebelumnya hanya berupa tabel CRUD teks minimal tanpa konteks visual bangunan, tanpa progress bar okupansi, tanpa indikator kesehatan finansial (omset riil vs potensi), dan tanpa denah unit kamar cepat / aksi operasional massal.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Top KPI Portfolio Glance Bar**:
+    - 4 Kartu Metrik Portofolio: **Properti Terkelola** (jumlah gedung aktif), **Kapasitas Kamar** (total unit, terisi, dan kosong), **Tingkat Okupansi Rata-Rata Portofolio**, dan **Omset Realisasi vs Potensi Bulanan**.
+  * **2. Redesain Baris Tabel Properti (High-Density Property Cards)**:
+    - **Visual Aset**: Thumbnail foto utama bangunan (`image_urls[0]`), judul kost, badge tipe gender (`Campur / Putra / Putri`), dan alamat kota/area.
+    - **Kontak Pemilik**: Nama pemilik (mitra) dengan tautan WhatsApp aktif (`+62...`).
+    - **Visual Occupancy Progress Bar**: Indikator persentase keterisian (`[████░░░░] 40%`) dengan gradasi warna pintar (Emerald >=80%, Amber 50-79%, Rose <50%) dan status kamar siap huni.
+    - **Snapshot Finansial**: Perbandingan Realisasi Sewa Terkumpul Bulan Ini vs Potensi Omset Maksimal.
+  * **3. Modal Denah Unit Kamar Visual (*Room Matrix Visualizer*)**:
+    - Modal interaktif yang menampilkan denah susunan kamar per lantai (`Kamar 1..N`), nama penghuni aktif, masa sewa, tarif bulanan, dimensi, dan status ketersediaan siap sewa dalam 1 klik.
+  * **4. Modal Broadcast WhatsApp Pengumuman Gedung**:
+    - Generator pengumuman operasional massal dengan template terstruktur (`⚡ Listrik & Air`, `🧹 Jadwal Kebersihan`, `🧾 Tagihan Serentak`, `🔒 Tata Tertib`, `✏️ Pesan Bebas`) yang langsung terhubung ke seluruh nomor WhatsApp penghuni pada properti tersebut.
+  * **5. Tombol Pintas Listing Publik (`Lihat Web ↗`)**:
+    - Akses langsung ke halaman publik properti (`/kost/:id`) untuk memantau tampilan kost di mata calon penyewa.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus 100% dengan 0 error dalam 33.93 detik (2526 modules transformed).
+
 ### 132. Transformasi Auto-Pilot Tenant Lifecycle Engine pada Portal Operasional KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta tinjauan kritis (*devil's advocate*) dan brainstorming untuk meningkatkan tampilan tab Penghuni KostManager agar tidak sekadar menjadi buku kontak statis, melainkan memiliki manajemen siklus hidup sewa (*tenant lifecycle*), pengkategorian status sewa berjalan, tenggat sewa, dsb.
