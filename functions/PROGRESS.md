@@ -2,6 +2,19 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 161. Pemindahan Posisi Bilah Navigasi Foto Kamar Kosong ke Bawah Preview Thumbnail Carousel (`KostDetail.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar bilah tombol navigasi kamar terhadap foto dipindahkan ke bagian bawah dari preview foto (thumbnail strip) carouselnya.
+- **Implementasi**:
+  * **1. Penataan Ulang Layout Gallery**:
+    - Menempatkan deretan preview thumbnail (`Thumbnails Strip`) tepat di bawah frame carousel utama.
+    - Menempatkan bilah tombol pilihan kamar kosong (`[ 🏠 Semua Foto ]` dan `[ 🛏️ Kamar X • Tersedia ]`) di bawah deretan preview thumbnail.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 33.43s, 0 error).
+
 ### 160. Penambahan Bilah Tombol Navigasi Foto Kamar Kosong & Isolasi Carousel pada Halaman Detail Kost (`KostDetail.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar tampilan user pada listing kost memiliki tombol navigasi di bawah carousel untuk kamar yang kosong, sehingga foto terkait kamar tersebut dapat ditampilkan secara jelas dan terisolasi di carousel.

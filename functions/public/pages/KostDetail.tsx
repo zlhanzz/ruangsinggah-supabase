@@ -546,9 +546,27 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                 )}
               </div>
 
+              {/* Thumbnails Strip (Preview Foto Carousel) */}
+              {displayedImages.length > 1 && (
+                <div className="flex gap-3 overflow-x-auto pb-2 px-1 scrollbar-hide mb-4">
+                  {displayedImages.map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentPhoto(idx)}
+                      className={`relative w-20 h-20 lg:w-24 lg:h-24 shrink-0 rounded-2xl overflow-hidden transition-all duration-300 cursor-pointer ${currentPhoto === idx
+                        ? 'ring-2 ring-orange-500 ring-offset-2 opacity-100 scale-95'
+                        : 'opacity-50 hover:opacity-100 hover:scale-105'
+                        }`}
+                    >
+                      <img src={img} className="w-full h-full object-cover" alt={`Thumbnail ${idx + 1}`} />
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Bilah Tombol Navigasi Isolasi Foto Kamar Kosong */}
               {emptyRooms.length > 0 && (
-                <div className="mb-4 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
                   <div className="flex items-center justify-between gap-2 mb-2 px-1">
                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                       <Camera size={13} className="text-orange-500" />
@@ -637,24 +655,6 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                       );
                     })}
                   </div>
-                </div>
-              )}
-
-              {/* Thumbnails Strip */}
-              {displayedImages.length > 1 && (
-                <div className="flex gap-3 overflow-x-auto pb-2 px-1 scrollbar-hide">
-                  {displayedImages.map((img, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setCurrentPhoto(idx)}
-                      className={`relative w-20 h-20 lg:w-24 lg:h-24 shrink-0 rounded-2xl overflow-hidden transition-all duration-300 cursor-pointer ${currentPhoto === idx
-                        ? 'ring-2 ring-orange-500 ring-offset-2 opacity-100 scale-95'
-                        : 'opacity-50 hover:opacity-100 hover:scale-105'
-                        }`}
-                    >
-                      <img src={img} className="w-full h-full object-cover" alt={`Thumbnail ${idx + 1}`} />
-                    </button>
-                  ))}
                 </div>
               )}
             </div>
