@@ -1115,7 +1115,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     const [propertySearch, setPropertySearch] = useState('');
     const [tenantSearch, setTenantSearch] = useState('');
     const [invoiceSearch, setInvoiceSearch] = useState('');
-    const [selectedPropForRoomDetail, setSelectedPropForRoomDetail] = useState<ManagedProperty | null>(null);
+    const [selectedPropForTenants, setSelectedPropForTenants] = useState<ManagedProperty | null>(null);
     const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
 
     // Lifecycle Filter Tab State
@@ -2321,13 +2321,25 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => setSelectedPropForRoomMatrix(p)}
-                                                                            className="p-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 transition-all cursor-pointer shadow-2xs"
-                                                                            title="Lihat Denah Kamar Visual"
+                                                                            className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
+                                                                            title="Lihat Denah Kamar & Status Ketersediaan"
                                                                         >
-                                                                            <Grid size={13} />
+                                                                            <Bed size={13} />
+                                                                            <span>Kamar</span>
                                                                         </button>
 
-                                                                        {/* Tombol 3: Broadcast WhatsApp Pengumuman Gedung */}
+                                                                        {/* Tombol 3: Direktori Penghuni Properti Ini */}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setSelectedPropForTenants(p)}
+                                                                            className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
+                                                                            title="Lihat Seluruh Daftar Penghuni Properti Ini"
+                                                                        >
+                                                                            <Users size={13} />
+                                                                            <span>Penghuni ({p.occupant_count || 0})</span>
+                                                                        </button>
+
+                                                                        {/* Tombol 4: Broadcast WhatsApp Pengumuman Gedung */}
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => {
@@ -2339,16 +2351,6 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                             title="Broadcast WhatsApp ke Seluruh Penghuni"
                                                                         >
                                                                             <Megaphone size={13} />
-                                                                        </button>
-
-                                                                        {/* Tombol 4: Detail Kamar Full */}
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setSelectedPropForRoomDetail(p)}
-                                                                            className="px-2.5 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#ff7a00] border border-orange-200/80 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
-                                                                            title="Detail Data Kamar"
-                                                                        >
-                                                                            🚪 Kamar
                                                                         </button>
 
                                                                         {/* Tombol 5: Edit Data Properti */}
@@ -2487,6 +2489,145 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                         className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
                                                     >
                                                         Tutup Denah
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* ========================================================= */}
+                                {/* MODAL: DAFTAR PENGHUNI PROPERTI (TENANTS DIRECTORY)        */}
+                                {/* ========================================================= */}
+                                {selectedPropForTenants && (() => {
+                                    const p = selectedPropForTenants;
+                                    const propTenants = tenants.filter(t => t.kost_id === p.id && t.status === 'ACTIVE');
+                                    const rooms = Array.isArray(p.room_types) ? p.room_types : [];
+                                    const totalMonthlyRevenue = propTenants.reduce((sum, t) => {
+                                        const basePrice = Number(t.metadata?.basePrice) || Number(t.metadata?.price) || Number(p.price) || 0;
+                                        return sum + basePrice;
+                                    }, 0);
+
+                                    return (
+                                        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-in fade-in">
+                                            <div className="bg-white rounded-[2rem] shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col border border-slate-100 animate-in zoom-in-95 max-h-[85vh]" onClick={e => e.stopPropagation()}>
+                                                {/* Header Modal */}
+                                                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-indigo-50/70 shrink-0">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                                                            <Users size={18} />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-base font-black text-indigo-950 uppercase tracking-tight">Daftar Penghuni Properti</h3>
+                                                            <p className="text-[10px] text-indigo-700 font-bold">{p.title} • {propTenants.length} Penghuni Aktif</p>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setSelectedPropForTenants(null)}
+                                                        className="p-2 hover:bg-slate-200/70 rounded-full text-slate-400 transition-colors cursor-pointer"
+                                                    >
+                                                        <X size={16} />
+                                                    </button>
+                                                </div>
+
+                                                {/* Content Modal */}
+                                                <div className="p-6 overflow-y-auto space-y-4">
+                                                    {/* Ringkasan Okupansi */}
+                                                    <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-100 text-center">
+                                                        <div>
+                                                            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Total Penghuni</span>
+                                                            <span className="text-base font-black text-indigo-950">{propTenants.length} Orang</span>
+                                                        </div>
+                                                        <div className="border-x border-slate-200">
+                                                            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Total Kamar</span>
+                                                            <span className="text-base font-black text-slate-900">{rooms.length || p.total_rooms || 1} Unit</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Est. Omset Bulanan</span>
+                                                            <span className="text-base font-black text-emerald-600">{FORMAT_CURRENCY(totalMonthlyRevenue)}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Daftar Kartu Penyewa */}
+                                                    <div className="space-y-3">
+                                                        {propTenants.length === 0 ? (
+                                                            <div className="text-center py-10 px-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200 space-y-2">
+                                                                <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-400 flex items-center justify-center mx-auto">
+                                                                    <Users size={24} />
+                                                                </div>
+                                                                <h4 className="font-black text-slate-700 text-sm">Belum Ada Penghuni Aktif</h4>
+                                                                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                                                                    Saat calon penyewa menyewa kamar melalui portal atau didata oleh agen, data penghuni akan otomatis tampil di sini.
+                                                                </p>
+                                                            </div>
+                                                        ) : (
+                                                            propTenants.map((t, tIdx) => {
+                                                                const life = calculateTenantLifecycle(t.start_date, t.end_date, t.status);
+                                                                const rentAmount = Number(t.metadata?.basePrice) || Number(t.metadata?.price) || Number(p.price) || 0;
+                                                                const waUrl = generateTenantWhatsAppReminder(t);
+                                                                const cleanPhone = (t.user?.phone || t.metadata?.phone || '').replace(/[^0-9]/g, '');
+
+                                                                return (
+                                                                    <div key={t.id || tIdx} className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-indigo-200 shadow-2xs transition-all space-y-3">
+                                                                        <div className="flex items-start justify-between gap-3">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-sm uppercase">
+                                                                                    {(t.user?.name || 'P')[0]}
+                                                                                </div>
+                                                                                <div>
+                                                                                    <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
+                                                                                        {t.user?.name || 'Penyewa'}
+                                                                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-orange-100 text-orange-800">
+                                                                                            {t.room_type || t.metadata?.roomNumber || 'Kamar'}
+                                                                                        </span>
+                                                                                    </h4>
+                                                                                    <p className="text-xs text-slate-500 font-mono mt-0.5">+{cleanPhone || '-'}</p>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-xl border ${life.badgeClass}`}>
+                                                                                {life.label}
+                                                                            </span>
+                                                                        </div>
+
+                                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
+                                                                            <div className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-xl">
+                                                                                <span className="text-slate-500 font-bold text-[10px]">Masa Sewa:</span>
+                                                                                <span className="font-mono font-bold text-slate-800">{t.start_date || '-'} s/d {t.end_date || '-'}</span>
+                                                                            </div>
+                                                                            <div className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-xl">
+                                                                                <span className="text-slate-500 font-bold text-[10px]">Tarif Bulanan:</span>
+                                                                                <span className="font-mono font-black text-emerald-700">{FORMAT_CURRENCY(rentAmount)}</span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {cleanPhone && (
+                                                                            <div className="flex justify-end pt-1">
+                                                                                <a
+                                                                                    href={waUrl}
+                                                                                    target="_blank"
+                                                                                    rel="noopener noreferrer"
+                                                                                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-wider shadow-2xs transition-all flex items-center gap-1.5"
+                                                                                >
+                                                                                    <MessageSquare size={12} /> Hubungi / Tagih via WhatsApp
+                                                                                </a>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Footer Modal */}
+                                                <div className="p-4 border-t border-slate-100 bg-slate-50/70 flex justify-end shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedPropForTenants(null)}
+                                                        className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+                                                    >
+                                                        Tutup
                                                     </button>
                                                 </div>
                                             </div>

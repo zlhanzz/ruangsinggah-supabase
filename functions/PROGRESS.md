@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 155. Transformasi Tombol Aksi Redundant Menjadi Modal Direktori Penghuni Properti (`👥 Penghuni`) di Portal KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mempertanyakan redundansi antara tombol *Grid (Denah Kamar)* dan *🚪 Kamar*, karena keduanya menampilkan informasi unit kamar yang serupa.
+  2. Pengguna mengusulkan agar salah satunya diganti menjadi tombol **Penghuni** untuk menampilkan seluruh daftar penyewa yang tinggal di properti tersebut.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Standardisasi Tombol Aksi Tabel Properti**:
+    - Tombol `[ 🚪 Kamar ]` difokuskan untuk membuka **Peta Denah Kamar & Status Ketersediaan (Room Matrix Visualizer)**.
+    - Tombol redundant diganti menjadi tombol `[ 👥 Penghuni (X) ]` dengan badge jumlah penghuni aktif (`p.occupant_count`).
+  * **2. Modal Direktori Penghuni Properti (`selectedPropForTenants`)**:
+    - Menampilkan ringkasan okupansi (Total Penghuni Aktif, Total Unit Kamar, Estimasi Omset Bulanan Properti).
+    - Daftar kartu setiap penyewa aktif di properti tersebut:
+      - Avatar inisial, nama lengkap penyewa, nomor WhatsApp.
+      - Unit kamar yang ditempati (*badge orange*).
+      - Masa sewa (tanggal mulai s/d tanggal jatuh tempo) dengan badge status lifecycle sewa (*Sewa Berjalan*, *Jatuh Tempo*, *Terlambat*).
+      - Tarif sewa bulanan.
+      - Tombol aksi cepat: **Hubungi / Tagih via WhatsApp** yang membuka link WhatsApp dengan teks template tagihan otomatis.
+    - State kosong informatif jika belum ada penghuni aktif terdaftar.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 42.75s, 0 error).
+
 ### 154. Perbaikan Import Komponen Ikon `Users` di `KostManagerPropertyFormModal.tsx` (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Terjadi runtime error `Uncaught ReferenceError: Users is not defined at KostManagerPropertyFormModal.tsx:2970:38` saat mengakses modal edit properti di Portal KostManager.
