@@ -2,6 +2,32 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 149. Perbaikan Deteksi Otomatis, Auto-Discovery Kategori, & Koneksi Menyeluruh Data Foto & Hasil Survei Agen pada Modal Edit Listing Properti KostManager (`KostManagerPortal.tsx` & `KostManagerPropertyFormModal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pada menu input foto di modal edit properti KostManager, foto dan data yang sebelumnya sudah di-upload saat pendataan awal oleh agen survei tidak otomatis terdeteksi atau tampil kosong (`0 Foto`).
+  2. Terjadi ketidakcocokan label (*label mismatch*): `KostManagerPortal.tsx` sebelumnya menghasilkan label default `'Fasad Bangunan Depan'` dan `'Koridor & Akses Masuk'`, sedangkan `KostManagerPropertyFormModal.tsx` mencari `'Bangunan Depan'` dan `'Koridor'`.
+  3. Objek label foto sebelumnya terpotong menjadi string mentah oleh `normalizePhotoList` saat memuat properti di `loadAllData`.
+  4. Belum ada sinkronisasi reaktif (`useEffect`) dari `newPropForm` saat membuka properti yang berbeda, serta belum ada auto-discovery kategori unik foto lama.
+  5. Pada Step 2 (Data Kamar), detail kamar tersimpan di dalam accordion belum memiliki checklist fasilitas kamar dan galeri dokumentasi foto kamar berkategori yang lengkap.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Normalisasi Presisi & Toleran Label Foto Area Umum (`normalizePhotosWithLabels`)**:
+    - Memetakan berbagai varian label survei (`fasad`, `gedung`, `depan` ➔ `Bangunan Depan`; `koridor`, `lorong`, `akses` ➔ `Koridor`; `parkir`, `parkiran`, `garasi` ➔ `Area Parkir`; `dapur` ➔ `Dapur Bersama`; `wc`, `toilet`, `kamar mandi luar` ➔ `WC Umum`; `lingkungan`, `taman` ➔ `Lingkungan`; `ruang tamu` ➔ `Ruang Tamu`; `cctv` ➔ `CCTV`; `laundry`, `jemuran` ➔ `Laundry`).
+    - Mempertahankan struktur objek `{ original, url, label }` pada `mappedProperties` di `KostManagerPortal.tsx`.
+  * **2. Sinkronisasi Reaktif & Auto-Discovery Kategori Foto**:
+    - Menambahkan `useEffect` reaktif di `KostManagerPropertyFormModal.tsx` saat `newPropForm` atau `editingPropertyId` berubah.
+    - Mengintegrasikan fungsi *Auto-Discovery* yang membaca seluruh label foto lama yang tersimpan di database dan otomatis mendaftarkannya ke dalam `photoCategories` sehingga seluruh foto properti langsung muncul pada kartunya masing-masing.
+  * **3. Fasilitas Kamar & Galeri Dokumentasi Foto Kamar Berkategori di Step 2**:
+    - Menambahkan `exportCategorizedPhotos` helper.
+    - Menghadirkan checklist fasilitas kamar pada accordion kamar tersimpan.
+    - Menghadirkan galeri **Dokumentasi Foto Kamar Berkategori** lengkap (`Interior Kamar`, `Kamar Mandi`, `Tempat Tidur`, `Lemari / Storage`, `Meja Belajar`, `AC`, dll.) dengan upload WebP otomatis, thumbnail berlabel, dan tombol hapus `×`.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` sukses 100% dengan 0 error (✓ 2527 modules transformed, ✓ built in 29.10s).
+
+
 ### 148. Penyelarasan Presisi 1:1 Menu Fasilitas Umum & Dokumentasi Area Umum pada Modal Edit Listing Properti KostManager (`KostManagerPropertyFormModal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menemukan bahwa pada menu **Fasilitas Umum** dan **Dokumentasi Area Umum & Fasilitas Properti** di modal edit listing KostManager, sistem input, tampilan visual, serta korelasinya dengan kategori foto berbeda dari form survei lapangan di `AgentDashboard.tsx`.

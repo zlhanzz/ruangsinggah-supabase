@@ -300,6 +300,20 @@ const getRoomCategorizedPhotos = (item: any): Record<string, string[]> => {
     return result;
 };
 
+const exportCategorizedPhotos = (categorized: Record<string, string[]>): { images: string[]; photoCategories: string[] } => {
+    const images: string[] = [];
+    const photoCategories: string[] = [];
+    Object.entries(categorized || {}).forEach(([cat, urls]) => {
+        (urls || []).forEach(u => {
+            if (u) {
+                images.push(u);
+                photoCategories.push(cat);
+            }
+        });
+    });
+    return { images, photoCategories };
+};
+
 export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModalProps> = ({
     onClose,
     onSuccess,
@@ -399,12 +413,91 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
     // Selected Owner info
     const selectedOwner = ownersList.find(o => o.id === kmListingForm.owner_uid) || ownersList[0];
 
-    // Dynamic Public Photo Categories sync
+    // Synchronize when newPropForm or editingPropertyId changes
     useEffect(() => {
-        const dynamicPublicCats = computeDynamicPublicPhotoCategories(kmListingForm.facilities || []);
+        if (!newPropForm) return;
+        const addr = newPropForm.address || '';
+        const prov = newPropForm.province || detectProvinceFromAddress(addr) || 'Sulawesi Selatan';
+        const initialRooms = Array.isArray(newPropForm.roomTypes) ? newPropForm.roomTypes : [];
+        const rawImgs = Array.isArray(newPropForm.imageUrls) ? newPropForm.imageUrls : (Array.isArray(newPropForm.image_urls) ? newPropForm.image_urls : []);
+        
+        // Normalize loaded photos with intelligent labels matching KostManager survey
+        const defaultSlots = ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'];
+        const normalizedImgs = rawImgs.map((img: any, idx: number) => {
+            const url = getImageUrlString(img);
+            if (!url) return null;
+            let rawLabel = (typeof img === 'object' && img.label) ? img.label : '';
+            const lower = rawLabel.toLowerCase().trim();
+            let label = rawLabel;
+            if (lower.includes('fasad') || lower.includes('depan') || lower.includes('gedung') || lower.includes('tampak depan')) {
+                label = 'Bangunan Depan';
+            } else if (lower.includes('koridor') || lower.includes('lorong') || lower.includes('akses') || lower.includes('pintu masuk')) {
+                label = 'Koridor';
+            } else if (lower.includes('parkir') || lower.includes('parkiran') || lower.includes('garasi')) {
+                label = 'Area Parkir';
+            } else if (lower.includes('dapur')) {
+                label = 'Dapur Bersama';
+            } else if (lower.includes('wc umum') || lower.includes('toilet') || lower.includes('kamar mandi luar') || lower.includes('wc luar') || lower === 'wc') {
+                label = 'WC Umum';
+            } else if (lower.includes('lingkungan') || lower.includes('taman') || lower.includes('sekitar')) {
+                label = 'Lingkungan';
+            } else if (lower.includes('ruang tamu') || lower.includes('ruang santai')) {
+                label = 'Ruang Tamu';
+            } else if (lower.includes('cctv')) {
+                label = 'CCTV';
+            } else if (lower.includes('laundry') || lower.includes('jemuran') || lower.includes('cuci')) {
+                label = 'Laundry';
+            }
+            if (!label) {
+                label = idx < defaultSlots.length ? defaultSlots[idx] : `Foto Area Lainnya ${idx - defaultSlots.length + 1}`;
+            }
+            return { original: url, url, label };
+        }).filter((item): item is { original: string; url: string; label: string } => item !== null && Boolean(item.url));
+
+        const loadedFacilities = Array.isArray(newPropForm.facilities) && newPropForm.facilities.length > 0 
+            ? newPropForm.facilities 
+            : ['WiFi', 'Area Parkir', 'Dapur Bersama'];
+
+        // Auto-discover extra categories from existing photos
+        const extraCatsFromPhotos = normalizedImgs.map((img: any) => img.label).filter(Boolean);
+
+        setKmListingForm({
+            title: newPropForm.title || '',
+            description: newPropForm.description || '',
+            address: addr,
+            city: newPropForm.city || 'Makassar',
+            area: newPropForm.area || '',
+            province: prov,
+            type: newPropForm.type || 'Campur',
+            totalRooms: newPropForm.totalRooms || initialRooms.length || 1,
+            price: newPropForm.price || 0,
+            owner_uid: newPropForm.owner_uid || (ownersList[0]?.id || ''),
+            roomTypes: initialRooms,
+            publicBathroomFacilities: Array.isArray(newPropForm.publicBathroomFacilities) ? newPropForm.publicBathroomFacilities : [],
+            publicKitchenFacilities: Array.isArray(newPropForm.publicKitchenFacilities) ? newPropForm.publicKitchenFacilities : [],
+            publicParkingFacilities: Array.isArray(newPropForm.publicParkingFacilities) ? newPropForm.publicParkingFacilities : ['Parkir Motor'],
+            facilities: loadedFacilities,
+            location: newPropForm.location || { lat: -5.147665, lng: 119.432731 },
+            rules: Array.isArray(newPropForm.rules) && newPropForm.rules.length > 0 ? newPropForm.rules : ['Tidak boleh membawa hewan peliharaan', 'Tamu dilarang menginap'],
+            image_urls: normalizedImgs,
+            photoCategories: normalizedImgs.map((img: any) => img.label),
+            campuses: Array.isArray(newPropForm.campuses) ? newPropForm.campuses : [],
+            omnichannelContactName: newPropForm.omnichannelContactName || '',
+            omnichannelContactPhone: newPropForm.omnichannelContactPhone || ''
+        });
+
+        // Compute dynamic public photo categories including any extra categories from photos
+        const dynamicPublicCats = computeDynamicPublicPhotoCategories(loadedFacilities, extraCatsFromPhotos);
+        setPhotoCategories(dynamicPublicCats);
+    }, [editingPropertyId, newPropForm]);
+
+    // Dynamic Public Photo Categories sync when facilities change
+    useEffect(() => {
+        const currentPhotoLabels = (kmListingForm.image_urls || []).map((img: any) => (typeof img === 'object' ? img.label : '')).filter(Boolean);
+        const dynamicPublicCats = computeDynamicPublicPhotoCategories(kmListingForm.facilities || [], currentPhotoLabels);
         setPhotoCategories(prev => {
             const manualExtras = prev.filter(c => !dynamicPublicCats.includes(c) && !['Bangunan Depan', 'Koridor', 'Lingkungan', 'Area Parkir', 'Parkiran', 'Dapur Bersama', 'Ruang Tamu', 'WC Umum', 'CCTV', 'Laundry'].includes(c));
-            return computeDynamicPublicPhotoCategories(kmListingForm.facilities || [], manualExtras);
+            return computeDynamicPublicPhotoCategories(kmListingForm.facilities || [], [...currentPhotoLabels, ...manualExtras]);
         });
     }, [kmListingForm.facilities]);
 
@@ -1960,8 +2053,29 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                         const url = getImageUrlString(urlOrObj);
                                         let rawCat = (typeof urlOrObj === 'object' && urlOrObj.label)
                                             ? urlOrObj.label
-                                            : (kmListingForm.photoCategories?.[idx] || photoCategories[idx] || 'Foto Properti');
-                                        if (rawCat.toLowerCase() === 'area umum' || rawCat.toLowerCase() === 'parkiran' || rawCat.toLowerCase() === 'parkir motor' || rawCat.toLowerCase() === 'parkir mobil') rawCat = 'Area Parkir';
+                                            : (kmListingForm.photoCategories?.[idx] || (idx < photoCategories.length ? photoCategories[idx] : `Foto Area Lainnya ${idx + 1}`));
+                                        
+                                        const lower = (rawCat || '').toLowerCase().trim();
+                                        if (lower.includes('fasad') || lower.includes('depan') || lower.includes('gedung') || lower.includes('tampak depan')) {
+                                            rawCat = 'Bangunan Depan';
+                                        } else if (lower.includes('koridor') || lower.includes('lorong') || lower.includes('akses') || lower.includes('pintu masuk')) {
+                                            rawCat = 'Koridor';
+                                        } else if (lower.includes('area umum') || lower.includes('parkiran') || lower.includes('parkir motor') || lower.includes('parkir mobil') || lower.includes('parkir') || lower.includes('garasi')) {
+                                            rawCat = 'Area Parkir';
+                                        } else if (lower.includes('dapur')) {
+                                            rawCat = 'Dapur Bersama';
+                                        } else if (lower.includes('wc') || lower.includes('toilet') || lower.includes('kamar mandi luar')) {
+                                            rawCat = 'WC Umum';
+                                        } else if (lower.includes('lingkungan') || lower.includes('taman') || lower.includes('sekitar')) {
+                                            rawCat = 'Lingkungan';
+                                        } else if (lower.includes('ruang tamu') || lower.includes('ruang santai')) {
+                                            rawCat = 'Ruang Tamu';
+                                        } else if (lower.includes('cctv')) {
+                                            rawCat = 'CCTV';
+                                        } else if (lower.includes('laundry') || lower.includes('jemuran') || lower.includes('cuci')) {
+                                            rawCat = 'Laundry';
+                                        }
+
                                         return { url, idx, rawCat };
                                     }).filter((item: any) => !!item.url);
 
@@ -2314,6 +2428,173 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                                                                 </div>
                                                             </div>
                                                         )}
+
+                                                        {/* Fasilitas Kamar Checklist */}
+                                                        <div className="space-y-2 pt-2 border-t border-slate-100">
+                                                            <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">Fasilitas Kamar:</label>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {['Kasur', 'Lemari Pakaian', 'Meja Belajar', 'AC', 'Kipas Angin', 'Kamar Mandi Dalam', 'Dapur Dalam', 'Jendela Luar', 'Water Heater'].map(fac => {
+                                                                    const isChecked = (rm.roomFacilities || []).includes(fac);
+                                                                    return (
+                                                                        <button
+                                                                            key={fac}
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                const cur = rm.roomFacilities || [];
+                                                                                const next = isChecked ? cur.filter((f: string) => f !== fac) : [...cur, fac];
+                                                                                handleUpdateExistingRoom(rIdx, { roomFacilities: next });
+                                                                            }}
+                                                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                                                                isChecked ? 'bg-orange-500 text-white shadow-2xs' : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'
+                                                                            }`}
+                                                                        >
+                                                                            {fac}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Dokumentasi Foto Kamar Berkategori */}
+                                                        <div className="space-y-3 pt-2 border-t border-slate-100">
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-[10px] font-black text-[#584235] uppercase tracking-widest flex items-center gap-1.5">
+                                                                    <Camera size={13} className="text-orange-500" />
+                                                                    <span>Dokumentasi Foto Kamar</span>
+                                                                </span>
+                                                            </div>
+
+                                                            {(() => {
+                                                                const standardKnown = ['Interior Kamar *Wajib', 'Interior Kamar (Opsional)', 'Kamar Mandi', 'Dapur Dalam', 'Tempat Tidur', 'Lemari / Storage', 'Meja Belajar', 'AC', 'Kipas Angin', 'Jendela Luar', 'Water Heater'];
+                                                                const currentCategorized = getRoomCategorizedPhotos(rm);
+                                                                const existingCustomKeys = Object.keys(currentCategorized).filter((c: string) => !standardKnown.includes(c));
+                                                                const activeCats = computeDynamicRoomPhotoCategories(rm.roomFacilities || [], rm.status, existingCustomKeys);
+
+                                                                const getPhotoCaption = (cLabel: string, pIdx: number) => {
+                                                                    const clean = cLabel.replace(/(\*Wajib|\(Opsional\))/gi, '').trim();
+                                                                    return `${clean} ${pIdx + 1}`;
+                                                                };
+
+                                                                return (
+                                                                    <div className="space-y-3">
+                                                                        {activeCats.map((rawLabel: string) => {
+                                                                            const label = (rawLabel === 'Interior Kamar *Wajib' && isOcc) ? 'Interior Kamar (Opsional)' : rawLabel;
+                                                                            const catPhotos = currentCategorized[rawLabel] 
+                                                                                || (rawLabel.includes('Interior') ? (currentCategorized['Interior Kamar *Wajib'] || currentCategorized['Interior Kamar (Opsional)'] || []) : []) 
+                                                                                || [];
+
+                                                                            return (
+                                                                                <div key={rawLabel} className="bg-slate-50/80 border border-[#e0c0af]/60 rounded-xl p-3 shadow-xs space-y-2.5">
+                                                                                    <div className="flex justify-between items-center">
+                                                                                        <div className="flex items-center gap-1.5">
+                                                                                            {rawLabel.includes('Interior') ? <Home className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                              rawLabel.includes('Mandi') ? <Bath className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                              rawLabel.includes('Tidur') ? <Bed className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                              rawLabel.includes('AC') ? <Wind className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" /> :
+                                                                                              <Camera className="w-3.5 h-3.5 text-[#ff7a00] shrink-0" />}
+                                                                                            <span className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">{label}</span>
+                                                                                        </div>
+                                                                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${catPhotos.length > 0 ? 'bg-orange-100 text-[#ff7a00]' : 'bg-gray-100 text-gray-500'}`}>
+                                                                                            {catPhotos.length} Foto
+                                                                                        </span>
+                                                                                    </div>
+
+                                                                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                                                        {catPhotos.map((url, pIdx) => (
+                                                                                            <div key={`${url}_${pIdx}`} className="aspect-video w-full rounded-lg overflow-hidden border border-gray-200 relative group bg-gray-50 shadow-2xs">
+                                                                                                <img src={url} alt={getPhotoCaption(label, pIdx)} className="w-full h-full object-cover" />
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={() => {
+                                                                                                        const updatedCategorized = { ...currentCategorized };
+                                                                                                        const targetKey = Object.keys(updatedCategorized).find(k => k === rawLabel || (rawLabel.includes('Interior') && k.includes('Interior'))) || rawLabel;
+                                                                                                        const list = [...(updatedCategorized[targetKey] || [])];
+                                                                                                        list.splice(pIdx, 1);
+                                                                                                        if (list.length > 0) {
+                                                                                                            updatedCategorized[targetKey] = list;
+                                                                                                        } else {
+                                                                                                            delete updatedCategorized[targetKey];
+                                                                                                        }
+                                                                                                        const { images, photoCategories } = exportCategorizedPhotos(updatedCategorized);
+                                                                                                        handleUpdateExistingRoom(rIdx, {
+                                                                                                            categorized_photos: updatedCategorized,
+                                                                                                            categorizedPhotos: updatedCategorized,
+                                                                                                            images,
+                                                                                                            photoCategories
+                                                                                                        });
+                                                                                                    }}
+                                                                                                    className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition-all active:scale-90 cursor-pointer"
+                                                                                                    title="Hapus foto ini"
+                                                                                                >
+                                                                                                    &times;
+                                                                                                </button>
+                                                                                                <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-0.5 px-1 text-[8px] text-white text-center uppercase font-bold tracking-wider truncate">
+                                                                                                    {getPhotoCaption(label, pIdx)}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        ))}
+
+                                                                                        <label className={`aspect-video bg-white border-2 border-dashed border-[#ff7a00] rounded-xl flex flex-col items-center justify-center p-2 cursor-pointer hover:bg-orange-50/50 transition-all text-[#584235] ${
+                                                                                            catPhotos.length === 0 ? 'col-span-2 sm:col-span-3 py-4' : ''
+                                                                                        }`}>
+                                                                                            <input 
+                                                                                                type="file"
+                                                                                                accept="image/*"
+                                                                                                multiple
+                                                                                                className="hidden"
+                                                                                                disabled={uploadingRooms[`room_${rIdx}_${rawLabel}`]}
+                                                                                                onChange={async (e) => {
+                                                                                                    const files = e.target.files;
+                                                                                                    if (files && files.length > 0) {
+                                                                                                        const uploadKey = `room_${rIdx}_${rawLabel}`;
+                                                                                                        setUploadingRooms(prev => ({ ...prev, [uploadKey]: true }));
+                                                                                                        try {
+                                                                                                            const newUrls = [];
+                                                                                                            for (let f = 0; f < files.length; f++) {
+                                                                                                                const webpFile = await compressImageToWebP(files[f]);
+                                                                                                                const folder = `kostmanager/rooms/${Date.now()}_${f}`;
+                                                                                                                const publicUrl = await uploadFileAndGetURL(webpFile, folder);
+                                                                                                                newUrls.push(publicUrl);
+                                                                                                            }
+                                                                                                            const updatedCategorized = { ...currentCategorized };
+                                                                                                            const targetKey = rawLabel.includes('Interior') ? (isOcc ? 'Interior Kamar (Opsional)' : 'Interior Kamar *Wajib') : rawLabel;
+                                                                                                            const list = [...(updatedCategorized[targetKey] || [])];
+                                                                                                            newUrls.forEach(u => list.push(u));
+                                                                                                            updatedCategorized[targetKey] = list;
+                                                                                                            const { images, photoCategories } = exportCategorizedPhotos(updatedCategorized);
+                                                                                                            handleUpdateExistingRoom(rIdx, {
+                                                                                                                categorized_photos: updatedCategorized,
+                                                                                                                categorizedPhotos: updatedCategorized,
+                                                                                                                images,
+                                                                                                                photoCategories
+                                                                                                            });
+                                                                                                        } catch (err: any) {
+                                                                                                            alert('Gagal unggah foto kamar: ' + err.message);
+                                                                                                        } finally {
+                                                                                                            setUploadingRooms(prev => ({ ...prev, [uploadKey]: false }));
+                                                                                                        }
+                                                                                                    }
+                                                                                                }}
+                                                                                            />
+                                                                                            {uploadingRooms[`room_${rIdx}_${rawLabel}`] ? (
+                                                                                                <span className="text-[10px] font-bold animate-pulse text-gray-500">Mengunggah...</span>
+                                                                                            ) : (
+                                                                                                <>
+                                                                                                    <ImagePlus className="w-5 h-5 text-[#ff7a00] shrink-0" />
+                                                                                                    <span className="text-[9px] font-black uppercase tracking-wider mt-0.5 text-center">
+                                                                                                        {catPhotos.length === 0 ? `+ Unggah Foto ${label}` : '+ Tambah Foto'}
+                                                                                                    </span>
+                                                                                                </>
+                                                                                            )}
+                                                                                        </label>
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>

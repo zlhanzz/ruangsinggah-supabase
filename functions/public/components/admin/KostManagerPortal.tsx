@@ -118,19 +118,64 @@ const detectProvinceFromAddress = (addr: string): string => {
     return 'Sulawesi Selatan';
 };
 
-const normalizePhotosWithLabels = (imgUrls: any[]): { url: string; label: string }[] => {
+const normalizePhotosWithLabels = (imgUrls: any[]): { original: string; url: string; label: string }[] => {
     if (!imgUrls || !Array.isArray(imgUrls)) return [];
+    
+    // Default base category slots matching KostManager survey form
+    const defaultSlots = ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'];
+
     return imgUrls.map((img: any, idx: number) => {
+        let rawUrl = '';
+        let rawLabel = '';
+
         if (typeof img === 'string') {
-            const defaultLabel = idx === 0 ? 'Fasad Bangunan Depan' : idx === 1 ? 'Area Parkir' : idx === 2 ? 'Koridor & Akses Masuk' : idx === 3 ? 'Dapur Bersama' : `Foto #${idx + 1}`;
-            return { url: img, label: defaultLabel };
+            rawUrl = img;
+        } else if (typeof img === 'object' && img !== null) {
+            rawUrl = img.original || img.url || img.photo_url || img.file_url || img.src || '';
+            rawLabel = img.label || '';
         }
-        const defaultLabel = idx === 0 ? 'Fasad Bangunan Depan' : idx === 1 ? 'Area Parkir' : idx === 2 ? 'Koridor & Akses Masuk' : idx === 3 ? 'Dapur Bersama' : `Foto #${idx + 1}`;
+
+        if (!rawUrl) return null;
+
+        let normalizedLabel = rawLabel.trim();
+        const lowerLabel = normalizedLabel.toLowerCase();
+
+        // Intelligent category resolver matching survey form
+        if (lowerLabel.includes('fasad') || lowerLabel.includes('depan') || lowerLabel.includes('gedung') || lowerLabel.includes('tampak depan')) {
+            normalizedLabel = 'Bangunan Depan';
+        } else if (lowerLabel.includes('koridor') || lowerLabel.includes('lorong') || lowerLabel.includes('akses') || lowerLabel.includes('pintu masuk')) {
+            normalizedLabel = 'Koridor';
+        } else if (lowerLabel.includes('parkir') || lowerLabel.includes('parkiran') || lowerLabel.includes('garasi')) {
+            normalizedLabel = 'Area Parkir';
+        } else if (lowerLabel.includes('dapur')) {
+            normalizedLabel = 'Dapur Bersama';
+        } else if (lowerLabel.includes('wc umum') || lowerLabel.includes('toilet') || lowerLabel.includes('kamar mandi luar') || lowerLabel.includes('wc luar')) {
+            normalizedLabel = 'WC Umum';
+        } else if (lowerLabel.includes('lingkungan') || lowerLabel.includes('taman') || lowerLabel.includes('sekitar')) {
+            normalizedLabel = 'Lingkungan';
+        } else if (lowerLabel.includes('ruang tamu') || lowerLabel.includes('ruang santai')) {
+            normalizedLabel = 'Ruang Tamu';
+        } else if (lowerLabel.includes('cctv')) {
+            normalizedLabel = 'CCTV';
+        } else if (lowerLabel.includes('laundry') || lowerLabel.includes('jemuran') || lowerLabel.includes('cuci')) {
+            normalizedLabel = 'Laundry';
+        }
+
+        // If still no label, assign fallback slot
+        if (!normalizedLabel) {
+            if (idx < defaultSlots.length) {
+                normalizedLabel = defaultSlots[idx];
+            } else {
+                normalizedLabel = `Foto Area Lainnya ${idx - defaultSlots.length + 1}`;
+            }
+        }
+
         return {
-            url: img?.original || img?.url || img?.photo_url || '',
-            label: img?.label || defaultLabel
+            original: rawUrl,
+            url: rawUrl,
+            label: normalizedLabel
         };
-    }).filter(item => Boolean(item.url));
+    }).filter((item): item is { original: string; url: string; label: string } => item !== null && Boolean(item.url));
 };
 
 // Client-Side WebP Compression Helper (Standard Baku Workspace Rule #5)
@@ -1237,7 +1282,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     additional_fee_starts_from: p.additional_fee_starts_from,
                     campuses: p.campuses || [],
                     public_facilities: p.public_facilities || [],
-                    image_urls: normalizePhotoList(p.image_urls || (p as any).imageUrls || (p as any).images || (p as any).metadata?.imageUrls || (p as any).metadata?.photos || []),
+                    image_urls: normalizePhotosWithLabels(p.image_urls || (p as any).imageUrls || (p as any).images || (p as any).metadata?.imageUrls || (p as any).metadata?.photos || []),
                     video_urls: p.video_urls || [],
                     instagram_url: p.instagram_url || '',
                     tiktok_url: p.tiktok_url || '',
