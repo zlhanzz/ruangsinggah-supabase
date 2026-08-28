@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 143. Normalisasi Foto & Pencegahan Duplikasi Foto Kamar serta Fallback Thumbnail Properti (`KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pada halaman Kost Manager Portal (`KostManagerPortal.tsx`), ketika membuka modal kelola/edit properti, beberapa foto kamar muncul berulang-ulang (duplikasi foto kamar).
+  2. Thumbnail properti pada tabel "Properti & Visual" berisiko rusak jika properti lama menyimpan string URL foto dengan format serialized JSON string atau array objek.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Helper Normalisasi URL Foto (`normalizePhotoUrl`)**:
+    - Mengekstrak URL foto bersih dari berbagai macam format (string murni, array objek `{url: string}`, atau string JSON bersarang).
+  * **2. Helper Pengelompokan Foto Kamar Bersih & Unik (`getNormalizedRoomPhotos`)**:
+    - Mengumpulkan seluruh foto dari setiap unit kamar (`room.photos`, `room.photo_urls`, `room.images`) dan menyaring URL unik (`new Set()`) sehingga tidak ada lagi foto kamar yang muncul ganda atau berulang.
+  * **3. Perbaikan Sinkronisasi Foto Form Modal & Fallback Error**:
+    - Menjamin state `formData.image_urls` saat membuka properti terisi dengan foto unik yang telah dinormalisasi.
+    - Menambahkan `onError` fallback pada thumbnail tabel properti agar otomatis menampilkan ikon `<Building2 />` jika URL gambar tidak valid atau gagal dimuat.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus 100% dengan 0 error dalam 31.31 detik (2526 modules transformed).
+
 ### 142. Penyajian Data Wilayah Administratif (Provinsi, Kabupaten/Kota, Kecamatan) pada Modal Peninjauan Admin (`KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pada Modal Peninjauan Admin (*Tab 1: DATA PROPERTI UMUM -> ALAMAT & TITIK KOORDINAT*), kotak data di bawah teks alamat sebelumnya hanya menampilkan `Kota / Wilayah`, `Latitude`, dan `Longitude`.

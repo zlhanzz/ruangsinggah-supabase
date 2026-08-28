@@ -700,7 +700,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     additional_fee_starts_from: p.additional_fee_starts_from,
                     campuses: p.campuses || [],
                     public_facilities: p.public_facilities || [],
-                    image_urls: p.image_urls || [],
+                    image_urls: normalizePhotoList(p.image_urls || (p as any).imageUrls || (p as any).images || (p as any).metadata?.imageUrls || (p as any).metadata?.photos || []),
                     video_urls: p.video_urls || [],
                     instagram_url: p.instagram_url || '',
                     tiktok_url: p.tiktok_url || '',
@@ -1594,7 +1594,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                             return sum + bPrice + extra;
                                                         }, 0);
 
-                                                        const primaryImage = (p.image_urls && p.image_urls.length > 0) ? p.image_urls[0] : '';
+                                                        const primaryImage = normalizePhotoUrl((p.image_urls && p.image_urls.length > 0) ? p.image_urls[0] : ((p as any).thumbnail || (p as any).image_url || ''));
 
                                                         return (
                                                             <tr key={p.id} className="hover:bg-slate-50/60 transition-colors group">
@@ -1606,11 +1606,19 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                                 <img
                                                                                     src={primaryImage}
                                                                                     alt={p.title}
+                                                                                    onError={(e) => {
+                                                                                        const target = e.currentTarget;
+                                                                                        target.style.display = 'none';
+                                                                                        if (target.nextElementSibling) {
+                                                                                            (target.nextElementSibling as HTMLElement).style.display = 'flex';
+                                                                                        }
+                                                                                    }}
                                                                                     className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-300"
                                                                                 />
-                                                                            ) : (
-                                                                                <Building2 size={24} className="text-slate-400" />
-                                                                            )}
+                                                                            ) : null}
+                                                                            <div className={`w-full h-full flex items-center justify-center bg-slate-100 text-slate-400 ${primaryImage ? 'hidden' : ''}`}>
+                                                                                <Building2 size={24} />
+                                                                            </div>
                                                                         </div>
                                                                         <div className="min-w-0">
                                                                             <div className="flex items-center gap-1.5 flex-wrap">
