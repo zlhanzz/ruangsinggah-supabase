@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 142. Penyajian Data Wilayah Administratif (Provinsi, Kabupaten/Kota, Kecamatan) pada Modal Peninjauan Admin (`KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pada Modal Peninjauan Admin (*Tab 1: DATA PROPERTI UMUM -> ALAMAT & TITIK KOORDINAT*), kotak data di bawah teks alamat sebelumnya hanya menampilkan `Kota / Wilayah`, `Latitude`, dan `Longitude`.
+  2. Data Provinsi dan Kecamatan/Area belum tampil terstruktur sebagai kotak data tersendiri bagi admin saat memeriksa berkas pengajuan KostManager.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Helper Auto-Detection Provinsi (`detectProvinceFromAddress`)**:
+    - Memastikan provinsi selalu terdeteksi dan tidak bernilai kosong bahkan untuk entri data properti lama.
+  * **2. Pembaruan Kotak Rincian Lokasi Administratif pada Tab 1 (Data Properti Umum)**:
+    - Menampilkan 5 kotak data terstruktur yang lengkap:
+      - **🏛️ Provinsi**: `reviewProperty?.province` (default: *"Sulawesi Selatan"*)
+      - **🏙️ Kabupaten / Kota**: `reviewProperty?.city` (misal: *"Makassar"*)
+      - **📍 Kecamatan / Area**: `reviewProperty?.area` (misal: *"Tamalanrea"*)
+      - **🌐 Latitude**: Titik lintang GPS
+      - **🌐 Longitude**: Titik bujur GPS
+  * **3. Pembaruan Kartu Evaluasi Audit GPS (`property_gps`)**:
+    - Menampilkan chips badge wilayah administratif (Provinsi, Kota, Kecamatan) pada kartu simulasi evaluasi admin.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerManagement.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus 100% dengan 0 error dalam 22.76 detik (2526 modules transformed).
+
+
+
 ### 141. Penyajian Data Wilayah Administratif (Provinsi, Kota/Kabupaten, Kecamatan) pada Menu Peninjauan Step 3 (`AgentDashboard.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pada menu peninjauan (Step 3: Review / Onboarding Kost), ringkasan lokasi sebelumnya hanya menampilkan string teks alamat mentah (`address`) tanpa menyajikan hierarki wilayah administratif seperti Provinsi, Kota/Kabupaten, dan Kecamatan/Area.
