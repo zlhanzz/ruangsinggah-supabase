@@ -64,6 +64,19 @@ import {
     deleteKostManagerPackage
 } from '../../adminService';
 
+
+// Helper: Normalisasi URL Foto (Handle string, object { url, label }, dsb.)
+const normalizePhotoUrl = (photo: any): string => {
+    if (!photo) return '';
+    if (typeof photo === 'string') return photo;
+    return photo.url || photo.original || photo.original_url || photo.photo_url || photo.file_url || photo.src || '';
+};
+
+const normalizePhotoList = (photos: any[]): string[] => {
+    if (!Array.isArray(photos)) return [];
+    return photos.map(normalizePhotoUrl).filter(Boolean);
+};
+
 // Google Maps LocationPicker Component
 const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (lat: number, lng: number, address: string, city?: string, area?: string) => void }> = ({ lat, lng, onLocationChange }) => {
     const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -1085,7 +1098,13 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                         tenantPhone: tenant?.user?.phone || '',
                         billingPeriod: tenant?.metadata?.billingPeriod || 'bulanan',
                         dueDate: tenant?.end_date || '',
-                        images: r.images || []
+                        images: normalizePhotoList(r.images || []),
+                        categorizedPhotos: {
+                            interior: normalizePhotoList(r.categorizedPhotos?.interior || r.images || []),
+                            kasur: normalizePhotoList(r.categorizedPhotos?.kasur || []),
+                            wc: normalizePhotoList(r.categorizedPhotos?.wc || []),
+                            jendela: normalizePhotoList(r.categorizedPhotos?.jendela || [])
+                        }
                     };
                 } else {
                     return {
@@ -1095,7 +1114,13 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                         tenantPhone: '',
                         billingPeriod: 'bulanan',
                         dueDate: '',
-                        images: r.images || []
+                        images: normalizePhotoList(r.images || []),
+                        categorizedPhotos: {
+                            interior: normalizePhotoList(r.categorizedPhotos?.interior || r.images || []),
+                            kasur: normalizePhotoList(r.categorizedPhotos?.kasur || []),
+                            wc: normalizePhotoList(r.categorizedPhotos?.wc || []),
+                            jendela: normalizePhotoList(r.categorizedPhotos?.jendela || [])
+                        }
                     };
                 }
             });
@@ -1160,7 +1185,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             owner_uid: p.owner_uid || '',
             location: p.location || { lat: -6.2088, lng: 106.8456 },
             facilities: p.facilities || [],
-            imageUrls: p.image_urls || [],
+            imageUrls: normalizePhotoList(p.image_urls || []),
             videoUrls: p.video_urls || [],
             instagramUrl: p.instagram_url || '',
             tiktokUrl: p.tiktok_url || '',
@@ -3458,7 +3483,10 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
         }
     ];
 
-    const allHeroImages = [...(newPropForm.imageUrls || []), ...newImageFiles.map(f => URL.createObjectURL(f))];
+    const allHeroImages = [
+        ...normalizePhotoList(newPropForm.imageUrls || []), 
+        ...newImageFiles.map(f => URL.createObjectURL(f))
+    ];
     const totalOccupiedUnits = flatRooms.filter(r => r.status === 'terisi').length;
     const totalVacantUnits = flatRooms.length - totalOccupiedUnits;
 
