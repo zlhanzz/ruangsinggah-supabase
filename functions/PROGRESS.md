@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 148. Penyelarasan Presisi 1:1 Menu Fasilitas Umum & Dokumentasi Area Umum pada Modal Edit Listing Properti KostManager (`KostManagerPropertyFormModal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menemukan bahwa pada menu **Fasilitas Umum** dan **Dokumentasi Area Umum & Fasilitas Properti** di modal edit listing KostManager, sistem input, tampilan visual, serta korelasinya dengan kategori foto berbeda dari form survei lapangan di `AgentDashboard.tsx`.
+  2. Pada menu **FASILITAS UMUM**:
+     - Checkbox menggunakan grid 2 kolom dengan border `#e0c0af` dan saat aktif berubah menjadi border oranye `#ff7a00` berlatar `bg-orange-50/50` dengan teks tebal.
+     - Dapur Bersama, Area Parkir, dan WC Umum memiliki **sub-box kontekstual inline** (`col-span-2 pl-6 border-l-2 border-[#ff7a00] bg-orange-50/30 p-3 rounded-xl`) dengan checklist kelengkapan terperinci, daftar chip tag kustom, serta input penambah kelengkapan (`+`).
+     - Terdapat input penambah fasilitas kustom (`Tambah fasilitas kustom...` + tombol `+ Tambah`) dan chip badge dengan tombol hapus `×`.
+  3. Pada menu **DOKUMENTASI AREA UMUM & FASILITAS PROPERTI**:
+     - Kategori kartu foto bersinkronisasi secara dinamis (menggunakan `computeDynamicPublicPhotoCategories` dan `checkHasFacility`) dengan fasilitas umum yang dicentang di atasnya.
+     - Format kartu berkategori dengan ikon, nama kategori huruf kapital, badge `{n} Foto`, grid foto thumbnail dengan strip label hitam bawah (`{label} {pIdx + 1}`), tombol merah bulat `×` untuk hapus foto di pojok kanan atas, serta slot kartu putus-putus oranye `+ TAMBAH FOTO` / `+ UNGGAH FOTO {LABEL}` yang mendukung kompresi WebP client-side otomatis.
+     - Terdapat input penambah kategori foto baru kustom manual (`+ Kategori Area`).
+  4. Footer navigasi tombol di bagian bawah diselaraskan menjadi tombol oranye pill (`KELUAR` vs `LANJUT KE STEP 2` / `SIMPAN PROPERTI`).
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Helper `checkHasFacility` & Sinonim Cerdas**:
+    - Mendukung pencocokan toleran sinonim (`wifi` / `wi-fi`, `dapur bersama` / `dapur umum`, `area parkir` / `parkir motor` / `parkiran`, dll.).
+  * **2. Rendering 1:1 Fasilitas Umum & Inline Contextual Sub-Accordion**:
+    - Merender checklist fasilitas umum dan box inline kelengkapan `Dapur Bersama`, `Area Parkir`, dan `WC Umum` lengkap dengan custom tag manager.
+  * **3. Rendering 1:1 Dokumentasi Foto Area Umum & WebP Compression**:
+    - Merender kartu foto berkategori lengkap dengan thumbnail strip bawah, tombol hapus merah, dan slot dashed box oranye untuk upload WebP.
+  * **4. Penyelarasan Footer Navigation**:
+    - Tombol footer kiri `KELUAR` (border oranye `#ff7a00`) dan tombol footer kanan `LANJUT KE STEP {n}` / `SIMPAN PROPERTI KELOLAAN` (bg oranye `#ff7a00` dengan shadow lembut).
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` sukses 100% dengan 0 error (✓ 2527 modules transformed, ✓ built in 21.66s).
+
 ### 147. Penerapan Skala 1:1 UI/UX Flow Form Pendataan Survei Lapangan Agen ke Modal Edit Listing Portal KostManager dengan Direct Live Update (`KostManagerPropertyFormModal.tsx` & `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna merasa bahwa layout modal peninjauan admin (review style) kurang cocok dan membingungkan jika dipakai untuk mengedit listing properti terkelola di portal KostManager.

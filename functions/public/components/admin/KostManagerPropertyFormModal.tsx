@@ -141,9 +141,32 @@ const parseGoogleMapsUrl = (url: string) => {
     return null;
 };
 
+// Check Has Facility Helper (with synonyms)
+const checkHasFacility = (facilityList: string[], target: string) => {
+    if (!facilityList || !Array.isArray(facilityList)) return false;
+    const normalizedTarget = target.toLowerCase().trim();
+    
+    const synonyms: Record<string, string[]> = {
+        'wifi': ['wifi', 'wi-fi', 'internet'],
+        'dapur bersama': ['dapur', 'dapur bersama', 'dapur umum'],
+        'area parkir': ['parkir', 'parkiran', 'tempat parkir', 'area parkir', 'parkir motor', 'parkir mobil', 'parkir sepeda'],
+        'ruang tamu': ['ruang tamu', 'ruang santai'],
+        'cctv': ['cctv', 'kamera keamanan'],
+        'laundry': ['laundry', 'mesin cuci', 'cuci'],
+        'wc umum': ['wc umum', 'toilet umum', 'kamar mandi luar', 'wc luar']
+    };
+
+    const targetSyns = synonyms[normalizedTarget] || [normalizedTarget];
+    
+    return facilityList.some(f => {
+        const nf = (f || '').toLowerCase().trim();
+        return targetSyns.some(syn => nf.includes(syn) || syn.includes(nf));
+    });
+};
+
 // Photo category computator
 const computeDynamicPublicPhotoCategories = (facilities: string[] = [], manualExtras: string[] = []): string[] => {
-    const base = ['Bangunan Depan', 'Koridor', 'Lingkungan'];
+    const base = ['Bangunan Depan', 'Koridor'];
     const dynamic: string[] = [];
 
     const facMapping: { [key: string]: string } = {
@@ -161,16 +184,29 @@ const computeDynamicPublicPhotoCategories = (facilities: string[] = [], manualEx
 
     (facilities || []).forEach(f => {
         const lower = (f || '').toLowerCase().trim();
-        const mapped = facMapping[lower];
+        let mapped = '';
+        for (const [k, v] of Object.entries(facMapping)) {
+            if (lower.includes(k) || k.includes(lower)) {
+                mapped = v;
+                break;
+            }
+        }
         if (mapped) {
             if (!dynamic.includes(mapped) && !base.includes(mapped)) {
                 dynamic.push(mapped);
             }
         } else if (lower && lower !== 'wifi') {
             const cleanName = f.trim();
-            if (!dynamic.includes(cleanName) && !base.includes(cleanName)) {
+            if (!dynamic.includes(cleanName) && !base.includes(cleanName) && cleanName !== 'Lingkungan') {
                 dynamic.push(cleanName);
             }
+        }
+    });
+
+    const defaultTrailing = ['Lingkungan'];
+    defaultTrailing.forEach(dt => {
+        if (!dynamic.includes(dt) && !base.includes(dt)) {
+            dynamic.push(dt);
         }
     });
 
@@ -310,6 +346,7 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
     // Public Photo Categories
     const [photoCategories, setPhotoCategories] = useState<string[]>(['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan']);
     const [newPhotoCategoryName, setNewPhotoCategoryName] = useState('');
+    const [newFacilityName, setNewFacilityName] = useState('');
     const [uploadingPublicAreas, setUploadingPublicAreas] = useState<Record<string, boolean>>({});
 
     // Step 2 Room Management States
@@ -1573,202 +1610,491 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                             </section>
 
                             {/* FASILITAS UMUM PROPERTI */}
-                            <section className="bg-white rounded-2xl p-5 border border-[#e0c0af] shadow-xs space-y-4">
-                                <h4 className="font-bold text-xs text-[#0b1c30] uppercase tracking-wider flex items-center gap-2">
-                                    <Sparkles size={14} className="text-orange-500" />
-                                    <span>Fasilitas Umum &amp; Rincian Lengkap</span>
-                                </h4>
-
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            <div className="flex flex-col gap-1.5 p-4 bg-white rounded-2xl border border-[#e0c0af] shadow-xs relative transition-all">
+                                <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">FASILITAS UMUM</label>
+                                <div className="grid grid-cols-2 gap-2">
                                     {['WiFi', 'Dapur Bersama', 'Area Parkir', 'Ruang Tamu', 'CCTV', 'Laundry', 'WC Umum'].map(fac => {
-                                        const isChecked = (kmListingForm.facilities || []).includes(fac);
+                                        const isChecked = checkHasFacility(kmListingForm.facilities, fac);
                                         return (
-                                            <button
-                                                key={fac}
-                                                type="button"
-                                                onClick={() => {
-                                                    const cur = kmListingForm.facilities || [];
-                                                    const next = isChecked ? cur.filter((f: string) => f !== fac) : [...cur, fac];
-                                                    setKmListingForm({ ...kmListingForm, facilities: next });
-                                                }}
-                                                className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
+                                            <React.Fragment key={fac}>
+                                                <label className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${
                                                     isChecked 
-                                                        ? 'bg-orange-50 border-orange-300 text-orange-700 shadow-2xs' 
-                                                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                                                }`}
-                                            >
-                                                <span>{fac}</span>
-                                                {isChecked && <Check size={14} className="text-orange-600" />}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
+                                                        ? 'border-[#ff7a00] bg-orange-50/50 text-[#584235] font-bold shadow-xs' 
+                                                        : 'border-[#e0c0af] bg-[#f8f9ff] text-gray-600'
+                                                }`}>
+                                                    <input 
+                                                        type="checkbox"
+                                                        checked={isChecked}
+                                                        onChange={() => {
+                                                            const current = kmListingForm.facilities || [];
+                                                            const hasIt = checkHasFacility(current, fac);
+                                                            let updated;
+                                                            if (hasIt) {
+                                                                const normalizedTarget = fac.toLowerCase().trim();
+                                                                const synonyms: Record<string, string[]> = {
+                                                                    'wifi': ['wifi', 'wi-fi', 'internet'],
+                                                                    'dapur bersama': ['dapur', 'dapur bersama', 'dapur umum'],
+                                                                    'area parkir': ['parkir', 'parkiran', 'tempat parkir', 'area parkir', 'parkir motor', 'parkir mobil', 'parkir sepeda'],
+                                                                    'ruang tamu': ['ruang tamu', 'ruang santai'],
+                                                                    'cctv': ['cctv', 'kamera keamanan'],
+                                                                    'laundry': ['laundry', 'mesin cuci', 'cuci'],
+                                                                    'wc umum': ['wc umum', 'toilet umum', 'kamar mandi luar', 'wc luar']
+                                                                };
+                                                                const targetSyns = synonyms[normalizedTarget] || [normalizedTarget];
+                                                                updated = current.filter((f: string) => {
+                                                                    const nf = (f || '').toLowerCase().trim();
+                                                                    return !targetSyns.some(syn => nf.includes(syn) || syn.includes(nf));
+                                                                });
+                                                            } else {
+                                                                updated = [...current, fac];
+                                                            }
+                                                            
+                                                            let additionalFormUpdates: any = {};
+                                                            if (fac === 'Area Parkir' && !hasIt && (!kmListingForm.publicParkingFacilities || kmListingForm.publicParkingFacilities.length === 0)) {
+                                                                additionalFormUpdates.publicParkingFacilities = ['Parkir Motor'];
+                                                            }
 
-                                {/* Sub-Data Area Parkir */}
-                                {(kmListingForm.facilities || []).includes('Area Parkir') && (
-                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                                        <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">
-                                            🛵 Kendaraan yang Bisa Diparkir:
-                                        </span>
-                                        <div className="flex flex-wrap gap-2">
-                                            {['Parkir Motor', 'Parkir Mobil', 'Parkir Sepeda'].map(veh => {
-                                                const isVChecked = (kmListingForm.publicParkingFacilities || []).includes(veh);
-                                                return (
-                                                    <button
-                                                        key={veh}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const cur = kmListingForm.publicParkingFacilities || [];
-                                                            const next = isVChecked ? cur.filter((v: string) => v !== veh) : [...cur, veh];
-                                                            setKmListingForm({ ...kmListingForm, publicParkingFacilities: next });
+                                                            setKmListingForm({ ...kmListingForm, facilities: updated, ...additionalFormUpdates });
                                                         }}
-                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                                            isVChecked 
-                                                                ? 'bg-emerald-600 text-white shadow-2xs' 
-                                                                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-                                                        }`}
-                                                    >
-                                                        {veh}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
+                                                        className="rounded text-[#ff7a00] focus:ring-[#ff7a00] border-gray-300 w-4 h-4 cursor-pointer"
+                                                    />
+                                                    <span className="text-xs uppercase tracking-wider">{fac}</span>
+                                                </label>
 
-                                {/* Sub-Data Dapur Bersama */}
-                                {(kmListingForm.facilities || []).includes('Dapur Bersama') && (
-                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                                        <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">
-                                            🍳 Kelengkapan Dapur Bersama:
-                                        </span>
-                                        <div className="flex flex-wrap gap-2">
-                                            {['Kompor', 'Kulkas', 'Dispenser', 'Wastafel Cuci Piring', 'Peralatan Masak', 'Meja Makan'].map(kit => {
-                                                const isKChecked = (kmListingForm.publicKitchenFacilities || []).includes(kit);
-                                                return (
-                                                    <button
-                                                        key={kit}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const cur = kmListingForm.publicKitchenFacilities || [];
-                                                            const next = isKChecked ? cur.filter((k: string) => k !== kit) : [...cur, kit];
-                                                            setKmListingForm({ ...kmListingForm, publicKitchenFacilities: next });
-                                                        }}
-                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                                            isKChecked 
-                                                                ? 'bg-emerald-600 text-white shadow-2xs' 
-                                                                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-                                                        }`}
-                                                    >
-                                                        {kit}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
+                                                {/* Sub-input Dapur Bersama - Inline Contextual */}
+                                                {fac === 'Dapur Bersama' && isChecked && (
+                                                    <div className="col-span-2 pl-6 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl animate-fadeIn">
+                                                        <span className="text-[10px] font-black text-[#584235] uppercase tracking-wider mb-0.5">Kelengkapan Dapur Bersama:</span>
+                                                        <div className="grid grid-cols-2 gap-2.5">
+                                                            {['Kompor', 'Kulkas', 'Dispenser', 'Wastafel Cuci Piring', 'Peralatan Masak', 'Meja Makan'].map(kfac => {
+                                                                const isKChecked = kmListingForm.publicKitchenFacilities?.includes(kfac);
+                                                                return (
+                                                                    <label key={kfac} className="flex items-center gap-2 cursor-pointer">
+                                                                        <input 
+                                                                            type="checkbox"
+                                                                            checked={!!isKChecked}
+                                                                            onChange={() => {
+                                                                                const current = kmListingForm.publicKitchenFacilities || [];
+                                                                                const updated = current.includes(kfac)
+                                                                                    ? current.filter((f: string) => f !== kfac)
+                                                                                    : [...current, kfac];
+                                                                                setKmListingForm({ ...kmListingForm, publicKitchenFacilities: updated });
+                                                                            }}
+                                                                            className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5 cursor-pointer"
+                                                                        />
+                                                                        <span className="text-xs text-[#584235] uppercase tracking-wider font-bold">{kfac}</span>
+                                                                    </label>
+                                                                );
+                                                            })}
 
-                                {/* Sub-Data WC Umum */}
-                                {(kmListingForm.facilities || []).includes('WC Umum') && (
-                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                                        <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">
-                                            🚿 Kelengkapan WC Umum:
-                                        </span>
-                                        <div className="flex flex-wrap gap-2">
-                                            {['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].map(bath => {
-                                                const isBChecked = (kmListingForm.publicBathroomFacilities || []).includes(bath);
-                                                return (
-                                                    <button
-                                                        key={bath}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const cur = kmListingForm.publicBathroomFacilities || [];
-                                                            const next = isBChecked ? cur.filter((b: string) => b !== bath) : [...cur, bath];
-                                                            setKmListingForm({ ...kmListingForm, publicBathroomFacilities: next });
-                                                        }}
-                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                                            isBChecked 
-                                                                ? 'bg-emerald-600 text-white shadow-2xs' 
-                                                                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-                                                        }`}
-                                                    >
-                                                        {bath}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
-                            </section>
+                                                            {/* Custom kitchen tags */}
+                                                            {(() => {
+                                                                const kCustoms = kmListingForm.publicKitchenFacilities?.filter((f: string) => !['Kompor', 'Kulkas', 'Dispenser', 'Wastafel Cuci Piring', 'Peralatan Masak', 'Meja Makan'].includes(f)) || [];
+                                                                if (kCustoms.length === 0) return null;
+                                                                return (
+                                                                    <div className="col-span-2 flex flex-wrap gap-1 mt-1 border-t border-orange-100 pt-2">
+                                                                        {kCustoms.map((facItem: string) => (
+                                                                            <span key={facItem} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-[#ff7a00] text-[9px] font-black rounded uppercase tracking-wider">
+                                                                                {facItem}
+                                                                                <button 
+                                                                                    type="button" 
+                                                                                    onClick={() => {
+                                                                                        const current = kmListingForm.publicKitchenFacilities || [];
+                                                                                        setKmListingForm({ ...kmListingForm, publicKitchenFacilities: current.filter((f) => f !== facItem) });
+                                                                                    }}
+                                                                                    className="hover:text-orange-700 text-xs font-bold leading-none p-0.5 cursor-pointer"
+                                                                                >
+                                                                                    &times;
+                                                                                </button>
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                );
+                                                            })()}
 
-                            {/* DOKUMENTASI FOTO AREA UMUM & FASILITAS PROPERTI */}
-                            <section className="bg-white rounded-2xl p-5 border border-[#e0c0af] shadow-xs space-y-4">
-                                <h4 className="font-bold text-xs text-[#0b1c30] uppercase tracking-wider flex items-center gap-2">
-                                    <Camera size={14} className="text-orange-500" />
-                                    <span>Dokumentasi Foto Fasilitas &amp; Area Umum Properti (WebP)</span>
-                                </h4>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {photoCategories.map(cat => {
-                                        const catPhotos = (kmListingForm.image_urls || []).filter((img: any) => {
-                                            const label = typeof img === 'object' ? img.label : '';
-                                            return label === cat;
-                                        });
-
-                                        return (
-                                            <div key={cat} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-xs font-black text-slate-800">{cat}</span>
-                                                    <label className="px-2.5 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-[10px] font-black uppercase cursor-pointer transition-all flex items-center gap-1">
-                                                        <Plus size={12} />
-                                                        <span>{uploadingPublicAreas[cat] ? 'Mengunggah...' : 'Upload'}</span>
-                                                        <input 
-                                                            type="file"
-                                                            accept="image/*"
-                                                            multiple
-                                                            className="hidden"
-                                                            onChange={e => handleUploadPublicPhoto(cat, e.target.files)}
-                                                            disabled={uploadingPublicAreas[cat]}
-                                                        />
-                                                    </label>
-                                                </div>
-
-                                                <div className="grid grid-cols-3 gap-2 min-h-[70px]">
-                                                    {catPhotos.map((p: any, pi: number) => {
-                                                        const url = getImageUrlString(p);
-                                                        return (
-                                                            <div key={pi} className="relative aspect-video rounded-lg overflow-hidden border border-slate-200 group bg-slate-200">
-                                                                <img src={url} alt={cat} className="w-full h-full object-cover" />
-                                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setLightboxPhoto({ url, label: cat })}
-                                                                        className="p-1 text-white hover:text-orange-400 cursor-pointer"
-                                                                    >
-                                                                        <Eye size={14} />
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleRemovePublicPhoto(url)}
-                                                                        className="p-1 text-white hover:text-rose-400 cursor-pointer"
-                                                                    >
-                                                                        <Trash2 size={14} />
-                                                                    </button>
-                                                                </div>
+                                                            {/* Custom kitchen facility input adder */}
+                                                            <div className="col-span-2 flex gap-1.5 mt-1 border-t border-orange-100 pt-2">
+                                                                <input 
+                                                                    type="text" 
+                                                                    value={customPublicKitchenFacilityInput} 
+                                                                    onChange={e => setCustomPublicKitchenFacilityInput(e.target.value)} 
+                                                                    placeholder="Tambah kelengkapan dapur..." 
+                                                                    className="flex-grow h-[32px] px-2.5 border border-[#e0c0af] rounded-lg text-[11px] bg-white outline-none text-[#584235] font-bold"
+                                                                />
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (!customPublicKitchenFacilityInput.trim()) return;
+                                                                        const current = kmListingForm.publicKitchenFacilities || [];
+                                                                        if (!current.includes(customPublicKitchenFacilityInput.trim())) {
+                                                                            setKmListingForm({ ...kmListingForm, publicKitchenFacilities: [...current, customPublicKitchenFacilityInput.trim()] });
+                                                                        }
+                                                                        setCustomPublicKitchenFacilityInput('');
+                                                                    }}
+                                                                    className="h-[32px] px-3.5 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-xs uppercase rounded-lg flex items-center justify-center transition-colors shadow-xs cursor-pointer"
+                                                                >
+                                                                    +
+                                                                </button>
                                                             </div>
-                                                        );
-                                                    })}
-                                                    {catPhotos.length === 0 && (
-                                                        <div className="col-span-3 flex items-center justify-center p-3 border border-dashed border-slate-200 rounded-lg text-[10px] font-bold text-slate-400">
-                                                            Belum ada foto {cat.toLowerCase()}
                                                         </div>
-                                                    )}
-                                                </div>
-                                            </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Sub-input Area Parkir - Inline Contextual */}
+                                                {fac === 'Area Parkir' && isChecked && (
+                                                    <div className="col-span-2 pl-6 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl animate-fadeIn">
+                                                        <span className="text-[10px] font-black text-[#584235] uppercase tracking-wider mb-0.5">Kelengkapan Area Parkir:</span>
+                                                        <div className="grid grid-cols-2 gap-2.5">
+                                                            {['Parkir Motor', 'Parkir Mobil', 'Parkir Sepeda'].map(pfac => {
+                                                                const isPChecked = kmListingForm.publicParkingFacilities?.includes(pfac);
+                                                                return (
+                                                                    <label key={pfac} className="flex items-center gap-2 cursor-pointer">
+                                                                        <input 
+                                                                            type="checkbox"
+                                                                            checked={!!isPChecked}
+                                                                            onChange={() => {
+                                                                                const current = kmListingForm.publicParkingFacilities || [];
+                                                                                const updated = current.includes(pfac)
+                                                                                    ? current.filter((f: string) => f !== pfac)
+                                                                                    : [...current, pfac];
+                                                                                setKmListingForm({ ...kmListingForm, publicParkingFacilities: updated });
+                                                                            }}
+                                                                            className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5 cursor-pointer"
+                                                                        />
+                                                                        <span className="text-xs text-[#584235] uppercase tracking-wider font-bold">{pfac}</span>
+                                                                    </label>
+                                                                );
+                                                            })}
+
+                                                            {/* Custom parking tags */}
+                                                            {(() => {
+                                                                const pCustoms = kmListingForm.publicParkingFacilities?.filter((f: string) => !['Parkir Motor', 'Parkir Mobil', 'Parkir Sepeda'].includes(f)) || [];
+                                                                if (pCustoms.length === 0) return null;
+                                                                return (
+                                                                    <div className="col-span-2 flex flex-wrap gap-1 mt-1 border-t border-orange-100 pt-2">
+                                                                        {pCustoms.map((facItem: string) => (
+                                                                            <span key={facItem} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-[#ff7a00] text-[9px] font-black rounded uppercase tracking-wider">
+                                                                                {facItem}
+                                                                                <button 
+                                                                                    type="button" 
+                                                                                    onClick={() => {
+                                                                                        const current = kmListingForm.publicParkingFacilities || [];
+                                                                                        setKmListingForm({ ...kmListingForm, publicParkingFacilities: current.filter((f) => f !== facItem) });
+                                                                                    }}
+                                                                                    className="hover:text-orange-700 text-xs font-bold leading-none p-0.5 cursor-pointer"
+                                                                                >
+                                                                                    &times;
+                                                                                </button>
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                );
+                                                            })()}
+
+                                                            {/* Custom parking facility input adder */}
+                                                            <div className="col-span-2 flex gap-1.5 mt-1 border-t border-orange-100 pt-2">
+                                                                <input 
+                                                                    type="text" 
+                                                                    value={customPublicParkingFacilityInput} 
+                                                                    onChange={e => setCustomPublicParkingFacilityInput(e.target.value)} 
+                                                                    placeholder="Tambah kelengkapan parkir..." 
+                                                                    className="flex-grow h-[32px] px-2.5 border border-[#e0c0af] rounded-lg text-[11px] bg-white outline-none text-[#584235] font-bold"
+                                                                />
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (!customPublicParkingFacilityInput.trim()) return;
+                                                                        const current = kmListingForm.publicParkingFacilities || [];
+                                                                        if (!current.includes(customPublicParkingFacilityInput.trim())) {
+                                                                            setKmListingForm({ ...kmListingForm, publicParkingFacilities: [...current, customPublicParkingFacilityInput.trim()] });
+                                                                        }
+                                                                        setCustomPublicParkingFacilityInput('');
+                                                                    }}
+                                                                    className="h-[32px] px-3.5 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-xs uppercase rounded-lg flex items-center justify-center transition-colors shadow-xs cursor-pointer"
+                                                                >
+                                                                    +
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Sub-input WC Umum - Inline Contextual */}
+                                                {fac === 'WC Umum' && isChecked && (
+                                                    <div className="col-span-2 pl-6 border-l-2 border-[#ff7a00] flex flex-col gap-2 bg-orange-50/30 p-3 rounded-xl animate-fadeIn">
+                                                        <span className="text-[10px] font-black text-[#584235] uppercase tracking-wider mb-0.5">Kelengkapan WC Umum:</span>
+                                                        <div className="grid grid-cols-2 gap-2.5">
+                                                            {['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].map(bfac => {
+                                                                const isBChecked = kmListingForm.publicBathroomFacilities?.includes(bfac);
+                                                                return (
+                                                                    <label key={bfac} className="flex items-center gap-2 cursor-pointer">
+                                                                        <input 
+                                                                            type="checkbox"
+                                                                            checked={!!isBChecked}
+                                                                            onChange={() => {
+                                                                                const current = kmListingForm.publicBathroomFacilities || [];
+                                                                                const updated = current.includes(bfac)
+                                                                                    ? current.filter((f: string) => f !== bfac)
+                                                                                    : [...current, bfac];
+                                                                                setKmListingForm({ ...kmListingForm, publicBathroomFacilities: updated });
+                                                                            }}
+                                                                            className="rounded border-[#e0c0af] text-[#ff7a00] focus:ring-[#ff7a00] w-4.5 h-4.5 cursor-pointer"
+                                                                        />
+                                                                        <span className="text-xs text-[#584235] uppercase tracking-wider font-bold">{bfac}</span>
+                                                                    </label>
+                                                                );
+                                                            })}
+
+                                                            {/* Custom bathroom tags */}
+                                                            {(() => {
+                                                                const bCustoms = kmListingForm.publicBathroomFacilities?.filter((f: string) => !['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel'].includes(f)) || [];
+                                                                if (bCustoms.length === 0) return null;
+                                                                return (
+                                                                    <div className="col-span-2 flex flex-wrap gap-1 mt-1 border-t border-orange-100 pt-2">
+                                                                        {bCustoms.map((facItem: string) => (
+                                                                            <span key={facItem} className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-[#ff7a00] text-[9px] font-black rounded uppercase tracking-wider">
+                                                                                {facItem}
+                                                                                <button 
+                                                                                    type="button" 
+                                                                                    onClick={() => {
+                                                                                        const current = kmListingForm.publicBathroomFacilities || [];
+                                                                                        setKmListingForm({ ...kmListingForm, publicBathroomFacilities: current.filter((f) => f !== facItem) });
+                                                                                    }}
+                                                                                    className="hover:text-orange-700 text-xs font-bold leading-none p-0.5 cursor-pointer"
+                                                                                >
+                                                                                    &times;
+                                                                                </button>
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                );
+                                                            })()}
+
+                                                            {/* Custom bathroom facility input adder */}
+                                                            <div className="col-span-2 flex gap-1.5 mt-1 border-t border-orange-100 pt-2">
+                                                                <input 
+                                                                    type="text" 
+                                                                    value={customPublicBathroomFacilityInput} 
+                                                                    onChange={e => setCustomPublicBathroomFacilityInput(e.target.value)} 
+                                                                    placeholder="Tambah kelengkapan WC..." 
+                                                                    className="flex-grow h-[32px] px-2.5 border border-[#e0c0af] rounded-lg text-[11px] bg-white outline-none text-[#584235] font-bold"
+                                                                />
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (!customPublicBathroomFacilityInput.trim()) return;
+                                                                        const current = kmListingForm.publicBathroomFacilities || [];
+                                                                        if (!current.includes(customPublicBathroomFacilityInput.trim())) {
+                                                                            setKmListingForm({ ...kmListingForm, publicBathroomFacilities: [...current, customPublicBathroomFacilityInput.trim()] });
+                                                                        }
+                                                                        setCustomPublicBathroomFacilityInput('');
+                                                                    }}
+                                                                    className="h-[32px] px-3.5 bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-xs uppercase rounded-lg flex items-center justify-center transition-colors shadow-xs cursor-pointer"
+                                                                >
+                                                                    +
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </React.Fragment>
                                         );
                                     })}
                                 </div>
-                            </section>
+
+                                {/* Custom Facilities Badges */}
+                                {kmListingForm.facilities && kmListingForm.facilities.filter((f: string) => !['wifi', 'dapur bersama', 'area parkir', 'ruang tamu', 'cctv', 'laundry', 'wc umum'].includes(f.toLowerCase().trim())).length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 mt-2">
+                                        {kmListingForm.facilities.filter((f: string) => !['wifi', 'dapur bersama', 'area parkir', 'ruang tamu', 'cctv', 'laundry', 'wc umum'].includes(f.toLowerCase().trim())).map((fac: string) => (
+                                            <span key={fac} className="inline-flex items-center gap-1.5 bg-[#eff4ff] text-[#264191] text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg border border-[#d3e4fe]">
+                                                <span>{fac}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setKmListingForm({
+                                                            ...kmListingForm,
+                                                            facilities: kmListingForm.facilities.filter((f: string) => f !== fac)
+                                                        });
+                                                    }}
+                                                    className="text-red-500 hover:text-red-700 font-bold ml-1 text-[11px] leading-none cursor-pointer"
+                                                >
+                                                    &times;
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div className="flex gap-2 mt-2">
+                                    <input 
+                                        type="text"
+                                        placeholder="Tambah fasilitas kustom..."
+                                        value={newFacilityName}
+                                        onChange={e => setNewFacilityName(e.target.value)}
+                                        className="flex-1 h-[38px] px-3.5 border border-[#e0c0af] rounded-xl text-xs outline-none bg-white font-medium focus:ring-2 focus:ring-[#ff7a00] focus:border-[#ff7a00]"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (!newFacilityName.trim()) return;
+                                            setKmListingForm({
+                                                ...kmListingForm,
+                                                facilities: [...(kmListingForm.facilities || []), newFacilityName.trim()]
+                                            });
+                                            setNewFacilityName('');
+                                        }}
+                                        className="bg-[#ff7a00] hover:bg-orange-600 text-white px-5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm cursor-pointer"
+                                    >
+                                        + Tambah
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* DOKUMENTASI AREA UMUM & FASILITAS PROPERTI */}
+                            <div className="flex flex-col gap-3 p-4 bg-white rounded-2xl border border-[#e0c0af] shadow-xs relative transition-all">
+                                <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider block">
+                                    DOKUMENTASI AREA UMUM &amp; FASILITAS PROPERTI
+                                </label>
+                                {(() => {
+                                    const imagesWithCats = (kmListingForm.image_urls || []).map((urlOrObj: any, idx: number) => {
+                                        const url = getImageUrlString(urlOrObj);
+                                        let rawCat = (typeof urlOrObj === 'object' && urlOrObj.label)
+                                            ? urlOrObj.label
+                                            : (kmListingForm.photoCategories?.[idx] || photoCategories[idx] || 'Foto Properti');
+                                        if (rawCat.toLowerCase() === 'area umum' || rawCat.toLowerCase() === 'parkiran' || rawCat.toLowerCase() === 'parkir motor' || rawCat.toLowerCase() === 'parkir mobil') rawCat = 'Area Parkir';
+                                        return { url, idx, rawCat };
+                                    }).filter((item: any) => !!item.url);
+
+                                    return (
+                                        <div className="space-y-3">
+                                            {photoCategories.map((label: string) => {
+                                                const catPhotos = imagesWithCats.filter((item: any) => item.rawCat === label);
+
+                                                return (
+                                                    <div key={label} className="bg-white border border-[#e0c0af]/60 rounded-2xl p-3.5 shadow-xs space-y-3">
+                                                        <div className="flex justify-between items-center">
+                                                            <div className="flex items-center gap-1.5">
+                                                                {label.includes('Depan') ? <Home className="w-4 h-4 text-[#ff7a00] shrink-0" /> :
+                                                                 label.includes('Parkir') ? <MapPin className="w-4 h-4 text-[#ff7a00] shrink-0" /> :
+                                                                 label.includes('Dapur') ? <Home className="w-4 h-4 text-[#ff7a00] shrink-0" /> :
+                                                                 <Camera className="w-4 h-4 text-[#ff7a00] shrink-0" />}
+                                                                <span className="text-xs font-black text-[#0b1c30] uppercase tracking-wider">{label}</span>
+                                                            </div>
+                                                            <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                                                                catPhotos.length > 0 ? 'bg-orange-100 text-[#ff7a00]' : 'bg-gray-100 text-gray-500'
+                                                            }`}>
+                                                                {catPhotos.length} Foto
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                                            {catPhotos.map((p: any, pIdx: number) => (
+                                                                <div key={p.idx} className="aspect-video w-full rounded-xl overflow-hidden border border-gray-200 relative group bg-gray-50">
+                                                                    <img src={getImageUrlString(p.url)} alt={`${label} ${pIdx + 1}`} className="w-full h-full object-cover" />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            const updatedImages = [...(kmListingForm.image_urls || [])];
+                                                                            const updatedCats = [...(kmListingForm.photoCategories || [])];
+                                                                            updatedImages.splice(p.idx, 1);
+                                                                            updatedCats.splice(p.idx, 1);
+                                                                            setKmListingForm({ 
+                                                                                ...kmListingForm, 
+                                                                                image_urls: updatedImages,
+                                                                                photoCategories: updatedCats
+                                                                            });
+                                                                        }}
+                                                                        className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md transition-all active:scale-90 cursor-pointer"
+                                                                        title="Hapus foto ini"
+                                                                    >
+                                                                        &times;
+                                                                    </button>
+                                                                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-1 px-1.5 text-[9px] text-white text-center uppercase font-black tracking-wider truncate">
+                                                                        {label} {pIdx + 1}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+
+                                                            <label 
+                                                                className={`aspect-video bg-white border-2 border-dashed border-[#ff7a00] rounded-xl flex flex-col items-center justify-center p-3 cursor-pointer hover:bg-orange-50/50 transition-all text-[#584235] ${
+                                                                    catPhotos.length === 0 ? 'col-span-2 sm:col-span-3 py-6' : ''
+                                                                }`}
+                                                            >
+                                                                <input 
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    multiple
+                                                                    className="hidden"
+                                                                    disabled={uploadingPublicAreas[`public_${label}`]}
+                                                                    onChange={async (e) => {
+                                                                        const files = e.target.files;
+                                                                        if (files && files.length > 0) {
+                                                                            const uploadKey = `public_${label}`;
+                                                                            setUploadingPublicAreas(prev => ({ ...prev, [uploadKey]: true }));
+                                                                            try {
+                                                                                const newUrls: any[] = [];
+                                                                                for (let f = 0; f < files.length; f++) {
+                                                                                    const webpFile = await compressImageToWebP(files[f]);
+                                                                                    const folder = `kostmanager/public/${Date.now()}_${f}`;
+                                                                                    const publicUrl = await uploadFileAndGetURL(webpFile, folder);
+                                                                                    newUrls.push({ original: publicUrl, url: publicUrl, label });
+                                                                                }
+                                                                                const updatedImages = [...(kmListingForm.image_urls || []), ...newUrls];
+                                                                                const updatedCats = [...(kmListingForm.photoCategories || []), ...newUrls.map(() => label)];
+                                                                                setKmListingForm({ 
+                                                                                    ...kmListingForm, 
+                                                                                    image_urls: updatedImages,
+                                                                                    photoCategories: updatedCats
+                                                                                });
+                                                                            } catch (err: any) {
+                                                                                alert('Gagal unggah foto: ' + err.message);
+                                                                            } finally {
+                                                                                setUploadingPublicAreas(prev => ({ ...prev, [uploadKey]: false }));
+                                                                            }
+                                                                        }
+                                                                    }}
+                                                                />
+                                                                {uploadingPublicAreas[`public_${label}`] ? (
+                                                                    <span className="text-[11px] font-bold animate-pulse text-gray-500">Mengunggah...</span>
+                                                                ) : (
+                                                                    <>
+                                                                        <ImagePlus className="w-6 h-6 text-[#ff7a00] shrink-0" />
+                                                                        <span className="text-[10px] font-black uppercase tracking-wider mt-1 text-center">
+                                                                            {catPhotos.length === 0 ? `+ Unggah Foto ${label}` : '+ Tambah Foto'}
+                                                                        </span>
+                                                                    </>
+                                                                )}
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                })()}
+
+                                <div className="flex gap-2 mt-1">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Kategori Foto Baru (misal: Dapur Bersama)" 
+                                        value={newPhotoCategoryName} 
+                                        onChange={e => setNewPhotoCategoryName(e.target.value)} 
+                                        className="flex-1 h-[38px] px-3.5 border border-[#e0c0af] rounded-xl text-xs outline-none bg-white font-medium focus:ring-2 focus:ring-[#ff7a00] focus:border-[#ff7a00]" 
+                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick={() => {
+                                            if (!newPhotoCategoryName.trim()) return;
+                                            const cat = newPhotoCategoryName.trim();
+                                            setPhotoCategories(prev => [...prev, cat]);
+                                            setNewPhotoCategoryName('');
+                                        }} 
+                                        className="bg-[#eff4ff] hover:bg-[#dce9ff] text-[#ff7a00] font-black text-xs uppercase tracking-wider px-4 rounded-xl border border-[#e0c0af] transition-all cursor-pointer"
+                                    >
+                                        + Kategori Area
+                                    </button>
+                                </div>
+                            </div>
 
                             {/* PERATURAN KOST */}
                             <section className="bg-white rounded-2xl p-5 border border-[#e0c0af] shadow-xs space-y-3">
@@ -2271,52 +2597,46 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                 </div>
 
                 {/* 4. FOOTER STICKY ACTION BAR */}
-                <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
+                <div className="p-4 sm:p-5 border-t border-[#e0c0af] bg-white flex flex-col sm:flex-row items-center gap-3 shrink-0">
                     <button
                         type="button"
-                        onClick={onClose}
-                        className="px-5 py-2.5 rounded-2xl border border-slate-200 text-slate-700 text-xs font-black uppercase tracking-wider hover:bg-slate-200/60 transition-all cursor-pointer"
+                        onClick={() => {
+                            if (kmStep > 1) {
+                                setKmStep(kmStep - 1);
+                            } else {
+                                onClose();
+                            }
+                        }}
+                        className="w-full sm:w-1/3 py-3 px-6 rounded-full border-2 border-[#ff7a00] text-[#ff7a00] font-black text-xs uppercase tracking-widest hover:bg-orange-50 transition-all text-center cursor-pointer active:scale-95"
                     >
-                        Batal
+                        {kmStep === 1 ? 'KELUAR' : `KEMBALI KE STEP ${kmStep - 1}`}
                     </button>
 
-                    <div className="flex items-center gap-2">
-                        {kmStep > 1 && (
-                            <button
-                                type="button"
-                                onClick={() => setKmStep(kmStep - 1)}
-                                className="px-4 py-2.5 rounded-2xl bg-white border border-slate-200 text-slate-700 text-xs font-black uppercase tracking-wider hover:bg-slate-100 transition-all cursor-pointer"
-                            >
-                                ← Sebelumnya
-                            </button>
-                        )}
-
-                        {kmStep < 3 ? (
-                            <button
-                                type="button"
-                                onClick={() => setKmStep(kmStep + 1)}
-                                className="px-5 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider shadow-sm transition-all cursor-pointer"
-                            >
-                                Lanjut: {kmStep === 1 ? 'Data Kamar →' : 'Review & Simpan →'}
-                            </button>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={handleDirectSave}
-                                disabled={savingProp}
-                                className="px-7 py-2.5 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
-                            >
-                                {savingProp ? (
-                                    <span>Menyimpan Properti...</span>
-                                ) : (
-                                    <>
-                                        <CheckCircle2 size={15} />
-                                        <span>{editingPropertyId ? 'Simpan Perubahan Properti' : 'Simpan Properti Kelolaan'}</span>
-                                    </>
-                                )}
-                            </button>
-                        )}
-                    </div>
+                    {kmStep < 3 ? (
+                        <button
+                            type="button"
+                            onClick={() => setKmStep(kmStep + 1)}
+                            className="w-full sm:w-2/3 py-3.5 px-6 rounded-full bg-[#ff7a00] hover:bg-orange-600 text-white font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-500/25 transition-all text-center cursor-pointer active:scale-95"
+                        >
+                            LANJUT KE STEP {kmStep + 1}
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={handleDirectSave}
+                            disabled={savingProp}
+                            className="w-full sm:w-2/3 py-3.5 px-6 rounded-full bg-[#ff7a00] hover:bg-orange-600 text-white font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+                        >
+                            {savingProp ? (
+                                <span>Menyimpan Properti...</span>
+                            ) : (
+                                <>
+                                    <CheckCircle2 size={16} />
+                                    <span>{editingPropertyId ? 'SIMPAN PERUBAHAN PROPERTI' : 'SIMPAN PROPERTI KELOLAAN'}</span>
+                                </>
+                            )}
+                        </button>
+                    )}
                 </div>
 
                 {/* Lightbox Preview Modal */}
