@@ -1,40 +1,43 @@
 
-# Walkthrough: Smart Auto-Detection Wilayah Administrasi (Provinsi, Kota/Kabupaten, Kecamatan)
+# Walkthrough: Restorasi & Penegasan Tampilan Kartu Peninjauan Pendataan KostManager Versi Modern
 
 ## 📌 Ringkasan Pekerjaan
-Fitur deteksi otomatis wilayah administrasi telah berhasil diintegrasikan pada Google Maps `LocationPicker` di Modal Properti Kelolaan Portal KostManager (`KostManagerPortal.tsx`). 
-
-Ketika pengguna atau surveyor meletakkan pin peta, mencari lokasi via autocomplete, atau mengklik *"Gunakan Lokasi GPS Saya"*, sistem secara otomatis dan cerdas membagi entitas alamat Google Maps menjadi 3 kategori wilayah administratif yang bersih dan presisi:
-1. 🏛️ **Provinsi**: Diekstrak dari `administrative_area_level_1` (misal: *"Sulawesi Selatan"*).
-2. 🏙️ **Kota / Kabupaten**: Diekstrak dari `administrative_area_level_2` dengan pembersihan awalan *"Kota "* / *"Kabupaten "* (misal: *"Kota Makassar"* $\rightarrow$ *"Makassar"*).
-3. 📍 **Kecamatan / Area**: Diekstrak dari `administrative_area_level_3` / `sublocality_level_1` / `locality` dengan pembersihan awalan *"Kecamatan "* / *"Kec. "* (misal: *"Kecamatan Tamalanrea"* $\rightarrow$ *"Tamalanrea"*).
+Telah dilakukan audit menyeluruh dan pembuatan ulang paket produksi frontend (*fresh build*) untuk memastikan bahwa antarmuka menu **"KostManager Auto-Pilot"** pada panel Dashboard Admin (`/admin` menu `kostmanager`) 100% menggunakan arsitektur **Pipeline Status Card Grid** dan **Modal Peninjauan Komprehensif 3-Tab**, serta menyingkirkan sisa tampilan tabel lama akibat cache peramban.
 
 ---
 
-## 🛠️ Detail Perubahan
+## 💎 Fitur & Tampilan Versi Modern yang Aktif
 
-### 1. Smart Geocoding Parser di `LocationPicker` (`KostManagerPortal.tsx`)
-- Memperbarui fungsi `reverseGeocode` dan event listener Google Places `place_changed` autocomplete untuk mengurai `address_components` secara hierarkis:
-  ```ts
-  const getComp = (type: string) => components.find((c: any) => c.types.includes(type))?.long_name || '';
-  const province = getComp('administrative_area_level_1').replace(/^(Provinsi|Prov\.)\s+/i, '').trim();
-  const rawCity = getComp('administrative_area_level_2') || getComp('locality') || getComp('administrative_area_level_1');
-  const city = rawCity.replace(/^(Kota|Kabupaten|Kab\.)\s+/i, '').trim();
-  const rawArea = getComp('administrative_area_level_3') || getComp('sublocality_level_1') || getComp('sublocality') || getComp('locality');
-  const area = rawArea.replace(/^(Kecamatan|Kec\.)\s+/i, '').trim();
-  ```
-- Mencegah bug lama di mana `locality` yang bernilai nama Kecamatan secara keliru mengisi kolom Kota.
-- Menyalurkan `province`, `city`, `area` ke callback `onLocationChange`.
+### 1. Kartu Permohonan Interaktif (Card Grid Layout)
+- **Header Profil Mitra**: Menampilkan avatar inisial berwarna oranye-amber, nama mitra, badge `Owner`, nomor kontak WhatsApp aktif dengan tautan direct-chat `wa.me`, serta status permohonan beranimasi *pulse*.
+- **Identitas & Chips Properti**:
+  - Badge tipe kost (`Campur`, `Putra`, `Putri`) dengan ikon murni vector SVG `Building2`.
+  - Chip jumlah kamar (`X Total / Y Kosong`) dengan ikon `Bed`.
+  - Alamat properti dengan ikon `MapPin` dan tombol navigasi koordinat titik lokasi Google Maps (`Compass`).
+- **Box Evaluasi & Catatan Revisi**: Menampilkan catatan evaluasi atau alasan perbaikan dari peninjauan surveyor secara rapi dan terstruktur dengan ikon `AlertTriangle` / `FileText`.
+- **Tombol Aksi Utama**:
+  - 🟢 **`🔍 Tinjau Hasil Pendataan Lengkap`**: Tampil menonjol pada permohonan yang membutuhkan verifikasi (`PENDING_ONBOARDING`, `SUBMITTED`, atau `REVISION_REQUIRED`) dengan efek gradient emerald/amber dan animasi ping.
+  - ⚙️ **`✏️ Kelola Agen & Drive`**: Untuk menetapkan agen survey atau memperbarui tautan Google Drive.
+  - 👁️ **`Lihat Detail Listing & Data`**: Untuk properti yang telah aktif (`ACTIVE`).
 
-### 2. Antarmuka 3 Kolom Wilayah Terstruktur di Tab 1 Modal KostManager
-- Menyediakan 3 field input yang bersih dan otomatis terisi saat pin peta berpindah:
-  - 🏛️ **Provinsi**: *Sulawesi Selatan*
-  - 🏙️ **Kota / Kabupaten**: *Makassar*
-  - 📍 **Kecamatan / Area**: *Tamalanrea*
-- Kolom alamat lengkap jalan real tetap tersedia di bawahnya untuk rincian detail (nama jalan, nomor, RT/RW, dan patokan).
-
-### 3. Persistensi Data ke Supabase
-- Menambahkan `province` pada `DEFAULT_PROP_FORM`, state `newPropForm`, payload insert/update `properties` di `handleSave`, dan pemetaan data saat mode edit `handleEditProperty`.
+### 2. Modal Peninjauan Komprehensif 3 Kategori (`ReviewKostManagerModal`)
+Ketika tombol **`🔍 Tinjau Hasil Pendataan Lengkap`** diklik, modal modern 3 kategori terbuka:
+1. 🏢 **Tab 1: Profil Gedung & Fasilitas**:
+   - Hero photo carousel interaktif dengan thumbnail mini.
+   - Slot foto fasad, ruang bersama, dan fasilitas umum terdata.
+   - Live Google Maps integrasi estimasi jarak dan waktu tempuh ke kampus-kampus terdekat (jalan kaki dan berkendara).
+   - Daftar fasilitas gedung terpadu dan tata tertib hunian.
+2. 🛏️ **Tab 2: Data Kamar & Penghuni**:
+   - Bar ringkasan statistik okupansi (Total Kamar, Kamar Terisi, Kamar Kosong Siap Huni).
+   - Hierarki *Parent-Child* pengelompokan tipe kamar.
+   - **Kamar Terisi**: Data penghuni lengkap (nama, nomor WA, tanggal mulai sewa, nominal sewa, skema tagihan, bukti sewa).
+   - **Kamar Kosong**: Data kesiapan huni, skema tarif lengkap (harian, mingguan, bulanan, tahunan, deposit, biaya listrik/air).
+   - Carousel foto unit kamar dinamis per-kamar dan sinkronisasi fasilitas.
+3. 🤝 **Tab 3: Data Mitra & Legalitas**:
+   - Profil lengkap pemilik kost dan kontak terverifikasi.
+   - Dokumen MoU dan tanda tangan digital.
+   - Formulir evaluasi & checklist minta revisi surveyor.
+   - Tombol **Approval & Aktivasi Autopilot** final.
 
 ---
 
@@ -48,21 +51,17 @@ vite v6.4.1 building for production...
 ✓ 2526 modules transformed.
 rendering chunks...
 computing gzip size...
-✓ built in 29.57s
+✓ built in 21.25s
 The command exited with code 0 (SUCCESS).
 ```
 
 ---
 
-## 🧭 Panduan Pengujian untuk Pengguna
-1. Buka halaman **Portal KostManager** di Dashboard Admin (`/admin/kostmanager`).
-2. Klik tombol **`+ Tambah Properti`** atau tombol **`✏️ Edit`** pada salah satu properti.
-3. Pada **Tab 1: Profil Gedung**, gulir ke bagian **Lokasi & Titik Koordinat GPS**.
-4. Ketik nama tempat atau geser pin marker pada Google Maps.
-5. Perhatikan bahwa 3 kolom wilayah:
-   - **🏛️ Provinsi**
-   - **🏙️ Kota / Kabupaten**
-   - **📍 Kecamatan / Area**
-   langsung terisi secara otomatis, rapi, dan presisi tanpa perlu diketik manual.
-6. Simpan properti dan verifikasi bahwa data tersimpan sempurna.
+## 🧭 Panduan Verifikasi Pengguna
+1. Buka halaman Dashboard Admin RuangSinggah di peramban Anda (`/admin`).
+2. Jika peramban Anda masih menyimpan tampilan lama, lakukan **Hard Refresh**:
+   - Di Windows: Tekan **`Ctrl + F5`** atau **`Ctrl + Shift + R`**.
+3. Klik menu **⚡ KostManager Auto-Pilot** pada sidebar kiri.
+4. Anda akan langsung melihat tampilan kartu permohonan modern berbentuk grid dengan badge status berwarna, counter kamar, dan tombol utama **`🔍 Tinjau Hasil Pendataan Lengkap`**.
+5. Klik tombol tersebut untuk membuka modal peninjauan 3-kategori yang komprehensif.
 

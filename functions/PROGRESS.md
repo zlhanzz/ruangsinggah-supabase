@@ -2611,3 +2611,22 @@
 - **Verifikasi**:
   - Build Vite frontend `npm run build` di `functions/public/` lulus 100% dengan 0 error (exit code 0).
 
+
+### 137. Penegasan & Restorasi Tampilan Kartu Peninjauan Pendataan KostManager Versi Modern (Agustus 2026)
+- **Permintaan & Latar Belakang**:
+  - Pengguna melihat tampilan menu *"KostManager Auto-Pilot"* di panel Admin sempat merender tampilan tabel jadul (kolom: `INFO KOST`, `PEMILIK (USER)`, `STATUS & AGEN`, `TRANSAKSI`, `AKSI`) akibat cache bundler/browser lama.
+  - Meminta penegasan dan pemulihan tampilan ke versi modern card-based dan modal peninjauan komprehensif 3-kategori yang telah dikembangkan secara matang.
+- **Audit & Penegasan Kode (`KostManagerManagement.tsx` & `Dashboard.tsx`)**:
+  - Memastikan seluruh arsitektur antarmuka `KostManagerManagement.tsx` beroperasi 100% menggunakan sistem **Pipeline Status Card Grid** (`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6`) tanpa ada sisa komponen tabel jadul.
+  - Menegaskan integrasi fitur:
+    - **Header Profil Mitra 2-Baris**: Menampilkan avatar, status badge (`Butuh Agen`, `Proses Survey`, `Menunggu Perbaikan Surveyor`, `Hasil Survey Siap Ditinjau`, `Aktif Autopilot`), dan nomor kontak WhatsApp langsung.
+    - **Properti & Indikator**: Chip tipe properti, counter kamar (Total vs Kosong), link integrasi peta koordinat GPS, dan alert box catatan evaluasi revisi.
+    - **Tombol Aksi Utama**: Tombol `🔍 Tinjau Hasil Pendataan Lengkap` (untuk permohonan berstatus `PENDING_ONBOARDING`, `SUBMITTED`, atau `REVISION_REQUIRED`) dan tombol `✏️ Kelola Agen & Drive`.
+    - **Modal Peninjauan Komprehensif 3-Tab (`ReviewKostManagerModal`)**:
+      * **Tab 1 (🏢 Profil Gedung & Fasilitas)**: Hero Carousel, Galeri Foto Fasad, Integrasi Google Maps Rute Kampus Terdekat (detour walking/driving), Fasilitas Umum Terpadu, dan Aturan Kost.
+      * **Tab 2 (🛏️ Tipe Kamar & Penghuni)**: Ringkasan okupansi kamar, hierarki parent-child tipe kamar, kartu kamar terisi (nama penyewa, WhatsApp, tanggal masuk, status tagihan) vs kamar kosong (siap huni, skema tarif lengkap), carousel galeri foto unit kamar dinamis, dan sinkronisasi fasilitas.
+      * **Tab 3 (🤝 Mitra & Legalitas)**: Data pemilik, MoU, tanda tangan digital, sistem checklist evaluasi & minta revisi surveyor, serta tombol aktivasi/approval final.
+  - Re-build seluruh bundel frontend dengan `npm run build` di direktori `functions/public/` untuk menghasilkan hash chunk baru dan cache-busting di sisi peramban pengguna.
+- **Verifikasi**:
+  - `npm run build` di `functions/public/` berhasil 100% dengan 0 error kompilasi (`exit code: 0`).
+
