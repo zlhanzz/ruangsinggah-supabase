@@ -1151,7 +1151,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 owner_uid: validOwnerUid,
                 mitra_id: validOwnerUid, // Add valid mitra_id for not-null DB constraint
                 room_types: currentForm.roomTypes,
-                status: 'draft',
+                status: (agreedToTerms || signatureData) ? 'published' : 'draft',
                 is_managed: true,
                 facilities: currentForm.facilities,
                 location: currentForm.location,
@@ -2291,7 +2291,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 owner_uid: validOwnerUid,
                 mitra_id: validOwnerUid, // Add valid mitra_id for not-null DB constraint
                 room_types: kmListingForm.roomTypes,
-                status: 'draft',
+                status: 'published',
                 is_managed: true,
                 facilities: kmListingForm.facilities,
                 location: kmListingForm.location,

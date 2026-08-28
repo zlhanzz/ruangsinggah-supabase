@@ -1131,7 +1131,18 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             const pkgs = await getKostManagerPackages();
             setPackages(pkgs);
 
-            // 1. Ambil owner (mitra) dengan status langganan kostmanager
+            // 1. Ambil data dari tabel khusus mitra_kostmanager (Primary Reference Table)
+            const { data: dedicatedKmProps, error: kmErr } = await supabase
+                .from('mitra_kostmanager')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (kmErr) console.warn('Warning loading mitra_kostmanager table:', kmErr);
+
+            const kmPropertyIds = (dedicatedKmProps || []).map((k: any) => k.property_id).filter(Boolean);
+            const kmOwnerIds = (dedicatedKmProps || []).map((k: any) => k.owner_uid).filter(Boolean);
+
+            // 2. Ambil owner (mitra) dengan status langganan kostmanager
             const { data: mitras } = await supabase
                 .from('mitra')
                 .select('user_id, business_name, business_address')
@@ -1139,7 +1150,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
 
             const ownerIds = mitras?.map(m => m.user_id).filter(Boolean) || [];
 
-            // 2. Ambil kostmanager_requests yang ACTIVE untuk property tambahan
+            // 3. Ambil kostmanager_requests yang ACTIVE untuk property tambahan
             const { data: kmRequests } = await supabase
                 .from('kostmanager_requests')
                 .select('id, user_id, kost_name, empty_rooms, property_id')
@@ -1148,28 +1159,58 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             const reqOwnerIds = kmRequests?.map(r => r.user_id).filter(Boolean) || [];
             const reqPropertyIds = kmRequests?.map(r => r.property_id).filter(Boolean) || [];
 
-            // 3. Ambil data properti dan filter HANYA properti yang terdaftar sebagai kelolaan KostManager
+            // 4. Ambil data dari tabel properties
             const { data: allRawProps, error: pErr } = await supabase
                 .from('properties')
                 .select('*')
-                .neq('status', 'draft')
                 .order('created_at', { ascending: false });
 
             if (pErr) throw pErr;
 
-            // Filter ketat isolasi: Hanya properti KostManager (is_managed = true atau milik mitra berlangganan/request aktif)
-            let props = (allRawProps || []).filter((p: any) => {
+            // 5. Filter HANYA properti yang terdaftar sebagai kelolaan KostManager secara sah
+            const matchedPropsMap = new Map<string, any>();
+
+            // A. Dari properti yang ada di properties table (is_managed = true, ada di mitra_kostmanager, atau request aktif)
+            (allRawProps || []).forEach((p: any) => {
+                const isInDedicatedKm = kmPropertyIds.includes(p.id);
                 const isManagedFlag = p.is_managed === true;
                 const isSubscribedOwner = ownerIds.includes(p.owner_uid);
                 const isActiveRequestOwner = reqOwnerIds.includes(p.owner_uid);
                 const isLinkedActiveRequest = Boolean(p.id && reqPropertyIds.includes(p.id));
-                return isManagedFlag || isSubscribedOwner || isActiveRequestOwner || isLinkedActiveRequest;
+
+                if (isInDedicatedKm || isManagedFlag || isSubscribedOwner || isActiveRequestOwner || isLinkedActiveRequest) {
+                    matchedPropsMap.set(p.id, p);
+                }
             });
 
-            // Fallback cerdas: Jika belum ada properti yang di-flag is_managed = true secara eksplisit di DB, muat seluruh properti terdaftar agar portal dapat mengelolanya
-            if (props.length === 0) {
-                props = allRawProps || [];
-            }
+            // B. Dari dedicated mitra_kostmanager table (jika record di properties belum ter-link)
+            (dedicatedKmProps || []).forEach((kp: any) => {
+                const existingKey = kp.property_id || kp.id;
+                if (!matchedPropsMap.has(existingKey)) {
+                    matchedPropsMap.set(existingKey, {
+                        id: existingKey,
+                        title: kp.title || 'Kost Auto-Pilot',
+                        description: kp.description || '',
+                        price: Number(kp.price) || 0,
+                        facilities: kp.facilities || [],
+                        address: kp.address || '',
+                        city: kp.city || '',
+                        area: kp.area || '',
+                        province: kp.metadata?.province || kp.province || '',
+                        location: kp.location || { lat: -5.147665, lng: 119.432731 },
+                        rules: kp.rules || [],
+                        campuses: kp.campuses || [],
+                        image_urls: kp.image_urls || [],
+                        room_types: kp.room_types || [],
+                        owner_uid: kp.owner_uid,
+                        status: 'published',
+                        is_managed: true,
+                        created_at: kp.created_at
+                    });
+                }
+            });
+
+            const props = Array.from(matchedPropsMap.values());
 
             const propOwnerIds = props.map((p: any) => p.owner_uid).filter(Boolean);
             const allRelevantOwnerUids = [...new Set([...ownerIds, ...reqOwnerIds, ...propOwnerIds])];

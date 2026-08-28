@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 151. Integrasi Tabel `mitra_kostmanager` sebagai Referensi Utama & Perbaikan Status Aktif Auto-Pilot Survei (`AgentDashboard.tsx` & `KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mempertanyakan mengapa seluruh 9 properti biasa muncul di portal KostManager dan mengusulkan penggunaan tabel khusus `mitra_kostmanager` sebagai referensi.
+  2. Pengguna mengidentifikasi bahwa status properti masih berstatus `draft` padahal sudah dikonfirmasi Auto-Pilot saat peninjauan hasil survei agen.
+  3. Penyebab: `AgentDashboard.tsx` men-hardcode `status: 'draft'` pada payload penyimpanan survei meskipun perjanjian dan TTD digital telah disetujui.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Integrasi Tabel `mitra_kostmanager` di `KostManagerPortal.tsx`**:
+    - Memperbarui `loadAllData` untuk memuat data dari tabel khusus `mitra_kostmanager` sebagai referensi utama, digabungkan dengan properti yang berstatus `is_managed = true` atau memiliki request KostManager aktif.
+    - Menghilangkan fallback global yang memuat seluruh properti reguler non-KostManager sehingga daftar properti kelolaan terisolasi secara bersih dan akurat.
+  * **2. Perbaikan Status Auto-Pilot Saat Konfirmasi Survei (`AgentDashboard.tsx`)**:
+    - Mengubah `status: 'draft'` menjadi `status: 'published'` dan `is_managed: true` pada `handleSaveKostManagerListing` dan `closeKostManagerListingWithSave` saat TTD digital dan kesepakatan Auto-Pilot telah disetujui.
+    - Menyinkronkan seluruh metadata properti ke tabel khusus `mitra_kostmanager` dan tabel `properties`.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 26.55s, 0 error).
+
+
 ### 150. Pemulihan Tampilan Kartu Properti Terkelola & Fallback Cerdas Database di Portal KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa kartu properti kelolaan di Portal KostManager mendadak hilang dan menampilkan teks *"Tidak ada properti terkelola yang sesuai dengan pencarian"* (0 Gedung Aktif).
