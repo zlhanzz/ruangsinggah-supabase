@@ -7156,8 +7156,51 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                         <span>⚠️ Perlu Revisi: Peraturan Kost</span>
                                                     </div>
                                                 )}
-                                                <h4 className="font-bold text-xs text-[#0b1c30]">Peraturan Kost</h4>
-                                                <div className="flex flex-col gap-2">                                                     {kmListingForm.rules && kmListingForm.rules.map((rule: string, rIdx: number) => (
+                                                <div className="flex items-center justify-between">
+                                                    <h4 className="font-bold text-xs text-[#0b1c30]">Peraturan Kost</h4>
+                                                    <span className="text-[9px] font-black text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                                        {(kmListingForm.rules || []).length} Aturan Aktif
+                                                    </span>
+                                                </div>
+
+                                                {/* Quick Preset Chips */}
+                                                <div className="space-y-1 pt-1">
+                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
+                                                        ⚡ Rekomendasi Aturan Populer:
+                                                    </span>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {[
+                                                            'Tidak boleh membawa hewan peliharaan',
+                                                            'Tamu dilarang menginap',
+                                                            'Dilarang merokok di dalam kamar',
+                                                            'Akses gerbang 24 jam',
+                                                            'Jam malam maksimal 23:00',
+                                                            'Dilarang membuat kegaduhan'
+                                                        ].map(preset => {
+                                                            const isSelected = (kmListingForm.rules || []).includes(preset);
+                                                            return (
+                                                                <button
+                                                                    key={preset}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const cur = kmListingForm.rules || [];
+                                                                        const next = isSelected ? cur.filter((r: string) => r !== preset) : [...cur, preset];
+                                                                        setKmListingForm({ ...kmListingForm, rules: next });
+                                                                    }}
+                                                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                                                                        isSelected 
+                                                                            ? 'bg-orange-500 text-white shadow-2xs' 
+                                                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                                                    }`}
+                                                                >
+                                                                    <span>{isSelected ? '✓ ' : '+ '}{preset}</span>
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-col gap-2 pt-1">                                                     {kmListingForm.rules && kmListingForm.rules.map((rule: string, rIdx: number) => (
                                                          <div key={rIdx} className="flex items-center gap-2">
                                                              <textarea 
                                                                  value={rule}

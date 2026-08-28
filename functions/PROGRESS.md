@@ -2,6 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 152. Penyelarasan Sistem Input Peraturan Kost 1:1 antara Portal KostManager dan Form Pendataan Agen (`KostManagerPropertyFormModal.tsx` & `AgentDashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa sistem input Peraturan Kost pada portal KostManager berbeda tampilan, fungsi, dan fleksibilitasnya dibandingkan form pendataan survei agen.
+  2. Di portal KostManager sebelumnya hanya ada 5 tombol chip statis hardcoded, sehingga pengguna tidak dapat mengedit isi teks peraturan, tidak bisa menghapus peraturan kustom, dan tidak bisa menambahkan peraturan baru secara fleksibel.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Standardisasi Sistem Input Peraturan Kost Dinamis (`KostManagerPropertyFormModal.tsx`)**:
+    - Mengganti chip statis menjadi list dinamis: setiap baris aturan dapat diedit langsung (`textarea` dengan `maxLength={100}`) dan memiliki tombol hapus tong sampah (`Trash2`).
+    - Menambahkan input field penambahan peraturan baru (`Tambah peraturan baru...` + tombol `+ Tambah` + shortcut `Enter`).
+    - Menambahkan **Quick Preset Chips (Rekomendasi Aturan Populer)**: *Tidak boleh membawa hewan peliharaan, Tamu dilarang menginap, Dilarang merokok di dalam kamar, Akses gerbang 24 jam, Jam malam maksimal 23:00, Dilarang membuat kegaduhan* untuk pemilihan cepat 1-klik.
+  * **2. Penyelarasan Simetris di Form Pendataan Agen (`AgentDashboard.tsx`)**:
+    - Menambahkan badge jumlah aturan aktif dan Quick Preset Chips aturan populer di `AgentDashboard.tsx` sehingga tampilan dan fiturnya 100% identik dan selaras 1:1 dengan portal KostManager.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx`
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 29.19s, 0 error).
+
+
 ### 151. Integrasi Tabel `mitra_kostmanager` sebagai Referensi Utama & Perbaikan Status Aktif Auto-Pilot Survei (`AgentDashboard.tsx` & `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna mempertanyakan mengapa seluruh 9 properti biasa muncul di portal KostManager dan mengusulkan penggunaan tabel khusus `mitra_kostmanager` sebagai referensi.

@@ -361,6 +361,7 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
     const [photoCategories, setPhotoCategories] = useState<string[]>(['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan']);
     const [newPhotoCategoryName, setNewPhotoCategoryName] = useState('');
     const [newFacilityName, setNewFacilityName] = useState('');
+    const [newRuleName, setNewRuleName] = useState('');
     const [uploadingPublicAreas, setUploadingPublicAreas] = useState<Record<string, boolean>>({});
 
     // Step 2 Room Management States
@@ -2212,40 +2213,125 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
 
                             {/* PERATURAN KOST */}
                             <section className="bg-white rounded-2xl p-5 border border-[#e0c0af] shadow-xs space-y-3">
-                                <h4 className="font-bold text-xs text-[#0b1c30] uppercase tracking-wider flex items-center gap-2">
-                                    <ShieldCheck size={14} className="text-orange-500" />
-                                    <span>Peraturan Kost</span>
-                                </h4>
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-gray-100 pb-2">
+                                    <div>
+                                        <h4 className="font-bold text-xs text-[#0b1c30] uppercase tracking-wider flex items-center gap-2">
+                                            <ShieldCheck size={14} className="text-orange-500" />
+                                            <span>Peraturan Kost</span>
+                                        </h4>
+                                        <p className="text-[10px] text-gray-400 font-bold mt-0.5">
+                                            Aturan &amp; tata tertib yang berlaku bagi seluruh penghuni properti
+                                        </p>
+                                    </div>
+                                    <span className="text-[9px] font-black text-orange-600 bg-orange-50 px-2.5 py-0.5 rounded-full uppercase tracking-wider self-start sm:self-auto">
+                                        {(kmListingForm.rules || []).length} Aturan Aktif
+                                    </span>
+                                </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    {[
-                                        'Tidak boleh membawa hewan peliharaan',
-                                        'Tamu dilarang menginap',
-                                        'Dilarang merokok di dalam kamar',
-                                        'Akses gerbang 24 jam',
-                                        'Jam malam maksimal 23:00'
-                                    ].map(rule => {
-                                        const isRChecked = (kmListingForm.rules || []).includes(rule);
-                                        return (
-                                            <button
-                                                key={rule}
+                                {/* Quick Preset Chips */}
+                                <div className="space-y-1.5 pt-1">
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
+                                        ⚡ Rekomendasi Aturan Populer:
+                                    </span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {[
+                                            'Tidak boleh membawa hewan peliharaan',
+                                            'Tamu dilarang menginap',
+                                            'Dilarang merokok di dalam kamar',
+                                            'Akses gerbang 24 jam',
+                                            'Jam malam maksimal 23:00',
+                                            'Dilarang membuat kegaduhan'
+                                        ].map(preset => {
+                                            const isSelected = (kmListingForm.rules || []).includes(preset);
+                                            return (
+                                                <button
+                                                    key={preset}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const cur = kmListingForm.rules || [];
+                                                        const next = isSelected ? cur.filter((r: string) => r !== preset) : [...cur, preset];
+                                                        setKmListingForm({ ...kmListingForm, rules: next });
+                                                    }}
+                                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                                                        isSelected 
+                                                            ? 'bg-orange-500 text-white shadow-2xs' 
+                                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                                    }`}
+                                                >
+                                                    <span>{isSelected ? '✓ ' : '+ '}{preset}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* List of Active Rules (Editable & Deletable) */}
+                                <div className="flex flex-col gap-2 pt-2">
+                                    {(kmListingForm.rules || []).map((rule: string, rIdx: number) => (
+                                        <div key={rIdx} className="flex items-center gap-2">
+                                            <textarea 
+                                                value={rule}
+                                                rows={2}
+                                                maxLength={100}
+                                                onChange={e => {
+                                                    const updated = [...(kmListingForm.rules || [])];
+                                                    updated[rIdx] = e.target.value.slice(0, 100);
+                                                    setKmListingForm({ ...kmListingForm, rules: updated });
+                                                }}
+                                                className="flex-1 min-h-[46px] p-2.5 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-800 bg-slate-50/50 resize-none leading-normal outline-none focus:bg-white focus:border-orange-400 focus:ring-2 focus:ring-orange-500/20 transition-all"
+                                            />
+                                            <button 
                                                 type="button"
                                                 onClick={() => {
-                                                    const cur = kmListingForm.rules || [];
-                                                    const next = isRChecked ? cur.filter((r: string) => r !== rule) : [...cur, rule];
-                                                    setKmListingForm({ ...kmListingForm, rules: next });
+                                                    setKmListingForm({
+                                                        ...kmListingForm,
+                                                        rules: (kmListingForm.rules || []).filter((_: any, idx: number) => idx !== rIdx)
+                                                    });
                                                 }}
-                                                className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between text-left transition-all cursor-pointer ${
-                                                    isRChecked 
-                                                        ? 'bg-orange-50 border-orange-300 text-orange-700' 
-                                                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                                                }`}
+                                                className="text-red-500 hover:bg-red-50 p-2.5 rounded-xl transition-colors cursor-pointer shrink-0"
+                                                title="Hapus Peraturan"
                                             >
-                                                <span>{rule}</span>
-                                                {isRChecked && <Check size={14} className="text-orange-600 shrink-0" />}
+                                                <Trash2 className="w-4 h-4 shrink-0" />
                                             </button>
-                                        );
-                                    })}
+                                        </div>
+                                    ))}
+
+                                    {/* Input Tambah Peraturan Baru */}
+                                    <div className="flex gap-2 mt-1">
+                                        <input 
+                                            type="text"
+                                            placeholder="Tambah peraturan baru..."
+                                            value={newRuleName}
+                                            maxLength={100}
+                                            onChange={e => setNewRuleName(e.target.value.slice(0, 100))}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    if (!newRuleName.trim()) return;
+                                                    setKmListingForm({
+                                                        ...kmListingForm,
+                                                        rules: [...(kmListingForm.rules || []), newRuleName.trim()]
+                                                    });
+                                                    setNewRuleName('');
+                                                }
+                                            }}
+                                            className="flex-1 h-[38px] px-3.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 bg-white placeholder-slate-400 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-500/20 transition-all"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (!newRuleName.trim()) return;
+                                                setKmListingForm({
+                                                    ...kmListingForm,
+                                                    rules: [...(kmListingForm.rules || []), newRuleName.trim()]
+                                                });
+                                                setNewRuleName('');
+                                            }}
+                                            className="bg-[#ff7a00] hover:bg-orange-600 text-white px-4 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm transition-all cursor-pointer active:scale-95 shrink-0"
+                                        >
+                                            + Tambah
+                                        </button>
+                                    </div>
                                 </div>
                             </section>
                         </div>
