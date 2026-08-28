@@ -144,11 +144,39 @@ export interface EvaluationData {
     hasPartner: boolean;
 }
 
-export const parseEvaluationData = (notesText?: string | null): EvaluationData => {
+export const detectProvinceFromAddress = (addr?: string | null): string => {
+    if (!addr) return 'Sulawesi Selatan';
+    const lower = addr.toLowerCase();
+    if (lower.includes('sulawesi selatan') || lower.includes('makassar') || lower.includes('gowa') || lower.includes('maros') || lower.includes('takalar') || lower.includes('bone') || lower.includes('palopo') || lower.includes('parepare')) return 'Sulawesi Selatan';
+    if (lower.includes('sulawesi barat') || lower.includes('mamuju') || lower.includes('polewali')) return 'Sulawesi Barat';
+    if (lower.includes('sulawesi tengah') || lower.includes('palu')) return 'Sulawesi Tengah';
+    if (lower.includes('sulawesi tenggara') || lower.includes('kendari')) return 'Sulawesi Tenggara';
+    if (lower.includes('sulawesi utara') || lower.includes('manado')) return 'Sulawesi Utara';
+    if (lower.includes('gorontalo')) return 'Gorontalo';
+    if (lower.includes('dki jakarta') || lower.includes('jakarta')) return 'DKI Jakarta';
+    if (lower.includes('jawa barat') || lower.includes('bandung') || lower.includes('bogor') || lower.includes('depok') || lower.includes('bekasi') || lower.includes('cimahi')) return 'Jawa Barat';
+    if (lower.includes('jawa timur') || lower.includes('surabaya') || lower.includes('malang') || lower.includes('sidoarjo')) return 'Jawa Timur';
+    if (lower.includes('jawa tengah') || lower.includes('semarang') || lower.includes('solo') || lower.includes('surakarta')) return 'Jawa Tengah';
+    if (lower.includes('di yogyakarta') || lower.includes('yogyakarta') || lower.includes('jogja') || lower.includes('sleman') || lower.includes('bantul')) return 'DI Yogyakarta';
+    if (lower.includes('bali') || lower.includes('denpasar') || lower.includes('badung')) return 'Bali';
+    if (lower.includes('banten') || lower.includes('tangerang') || lower.includes('serang') || lower.includes('cilegon')) return 'Banten';
+    if (lower.includes('sumatera utara') || lower.includes('medan')) return 'Sumatera Utara';
+    if (lower.includes('sumatera barat') || lower.includes('padang')) return 'Sumatera Barat';
+    if (lower.includes('sumatera selatan') || lower.includes('palembang')) return 'Sumatera Selatan';
+    if (lower.includes('riau') || lower.includes('pekanbaru')) return 'Riau';
+    if (lower.includes('kepulauan riau') || lower.includes('batam')) return 'Kepulauan Riau';
+    if (lower.includes('lampung') || lower.includes('bandar lampung')) return 'Lampung';
+    if (lower.includes('kalimantan timur') || lower.includes('samarinda') || lower.includes('balikpapan')) return 'Kalimantan Timur';
+    return 'Sulawesi Selatan';
+};
+
+export const parseEvaluationData = (notesText?: string | null, status?: string | null): EvaluationData => {
     const rawNotes = (notesText || '').trim();
     const lower = rawNotes.toLowerCase();
     
-    const hasRevision = lower.includes('[revisi') || lower.includes('evaluasi admin') || lower.includes('perlu diperbaiki') || lower.includes('revisi');
+    const containsRevisionTag = lower.includes('[revisi') || lower.includes('evaluasi admin') || lower.includes('perlu diperbaiki') || lower.includes('revisi');
+    const isSubmittedOrApproved = status === 'SUBMITTED' || status === 'APPROVED' || status === 'COMPLETED' || status === 'PENDING_ONBOARDING';
+    const hasRevision = Boolean(containsRevisionTag && !isSubmittedOrApproved);
     
     // Find all [REVISI ...] blocks
     const revisionBlocks = rawNotes.split(/\[REVISI\s*([^\]]*)\]/i);
@@ -1016,11 +1044,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             if ((types.includes('administrative_area_level_3') || types.includes('sublocality_level_1') || types.includes('sublocality')) && !area) area = comp.long_name;
                             if (types.includes('locality') && !area && comp.long_name !== city) area = comp.long_name;
                         }
+                        const detectedProv = province ? province.replace(/^(Provinsi|Prov\.)\s+/i, '').trim() : detectProvinceFromAddress(addr || fallbackAddr || '');
                         setKmListingForm((prev: any) => {
                             const updates: any = { address: addr || prev.address || fallbackAddr };
                             if (city) updates.city = city.replace(/^(Kota|Kabupaten|Kab\.)\s+/i, '').trim();
                             if (area) updates.area = area.replace(/^(Kecamatan|Kec\.)\s+/i, '').trim();
-                            if (province) updates.province = province.replace(/^(Provinsi|Prov\.)\s+/i, '').trim();
+                            updates.province = detectedProv || prev.province || detectProvinceFromAddress(prev.address || '');
                             return { ...prev, ...updates };
                         });
                     }
@@ -1744,6 +1773,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         campuses: draftCampuses,
                         title: parsed.kmListingForm.title || req.kost_name,
                         address: parsed.kmListingForm.address || req.kost_address,
+                        province: parsed.kmListingForm.province || detectProvinceFromAddress(parsed.kmListingForm.address || req.kost_address),
                         owner_uid: resolvedInitialOwnerUid
                     };
                     setKmListingForm(mergedForm);
@@ -1846,7 +1876,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                 let rawKmCity = dbKmProp.city || 'Makassar';
                 let rawKmArea = dbKmProp.area || '';
-                let rawKmProvince = dbKmProp.province || dbKmProp.metadata?.province || '';
+                let rawKmProvince = dbKmProp.province || dbKmProp.metadata?.province || detectProvinceFromAddress(dbKmProp.address || req.kost_address);
                 if (rawKmCity.toLowerCase().startsWith('kecamatan') || rawKmCity.toLowerCase().startsWith('kec.')) {
                     if (!rawKmArea) rawKmArea = rawKmCity.replace(/^(Kecamatan|Kec\.)\s+/i, '').trim();
                     rawKmCity = 'Makassar';
@@ -1907,7 +1937,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                 let rawPropCity = dbPropertyRecord.city || 'Makassar';
                 let rawPropArea = dbPropertyRecord.area || '';
-                let rawPropProvince = dbPropertyRecord.province || dbPropertyRecord.metadata?.province || '';
+                let rawPropProvince = dbPropertyRecord.province || dbPropertyRecord.metadata?.province || detectProvinceFromAddress(dbPropertyRecord.address || req.kost_address);
                 if (rawPropCity.toLowerCase().startsWith('kecamatan') || rawPropCity.toLowerCase().startsWith('kec.')) {
                     if (!rawPropArea) rawPropArea = rawPropCity.replace(/^(Kecamatan|Kec\.)\s+/i, '').trim();
                     rawPropCity = 'Makassar';
@@ -1950,6 +1980,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             title: req.kost_name,
             description: '',
             address: req.kost_address,
+            province: detectProvinceFromAddress(req.kost_address),
             city: 'Makassar',
             area: '',
             type: 'Campur',
@@ -3040,7 +3071,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const renderRoomEditor = (rt: any, idx: number) => {
         const activeRoomIdx = idx;
         const isOccupied = rt.isAvailable === false || rt.status === 'Terisi';
-        const roomEval = parseEvaluationData(isEditingKostManager?.notes);
+        const roomEval = parseEvaluationData(isEditingKostManager?.notes, isEditingKostManager?.status);
 
         const updateRoomFacilitiesWithPhotos = (newFacilities: string[], newStatus?: string) => {
             const statusToUse = newStatus !== undefined ? newStatus : (isOccupied ? 'Terisi' : 'Kosong');
@@ -4494,7 +4525,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                         {agentTab === 'active' && (
                                             <>
                                                 {req.status === 'REVISION_REQUIRED' || req.notes?.includes('[REVISI') ? (() => {
-                                                    const evalData = parseEvaluationData(req.notes);
+                                                    const evalData = parseEvaluationData(req.notes, req.status);
                                                     return (
                                                         <div className="relative overflow-hidden rounded-2xl border-2 border-amber-400 bg-gradient-to-br from-amber-500/[0.08] via-orange-500/[0.04] to-amber-500/[0.08] p-4 shadow-[0_0_20px_rgba(245,158,11,0.18)] flex flex-col gap-3.5 backdrop-blur-sm transition-all">
                                                             {/* Top Glowing Gradient Accent Bar */}
@@ -5791,7 +5822,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                             {/* Stepper Indicator with Dynamic Evaluation Glowing Badges */}
                             {(() => {
-                                const currentEvalData = parseEvaluationData(isEditingKostManager?.notes);
+                                const currentEvalData = parseEvaluationData(isEditingKostManager?.notes, isEditingKostManager?.status);
 
                                 return (
                                     <div className="bg-white border-b border-[#e0c0af] py-3 px-6 shrink-0 flex items-center justify-between gap-1">
@@ -5863,7 +5894,41 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                 
                                 {/* Modern Glowing Evaluation Notice Banner with Structured Chips & Quick-Jump */}
                                 {(() => {
-                                    const currentEvalData = parseEvaluationData(isEditingKostManager?.notes);
+                                    const currentEvalData = parseEvaluationData(isEditingKostManager?.notes, isEditingKostManager?.status);
+                                    if (isEditingKostManager?.status === 'SUBMITTED' || isEditingKostManager?.status === 'PENDING_ONBOARDING') {
+                                        return (
+                                            <div className="relative overflow-hidden rounded-2xl border border-emerald-300 bg-gradient-to-br from-emerald-500/[0.08] via-emerald-50 to-teal-500/[0.05] p-4 shadow-sm flex flex-col gap-2.5 backdrop-blur-sm animate-fadeIn">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                                                            <CheckCircle2 size={18} />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-xs font-black text-emerald-950 uppercase tracking-wider">
+                                                                Data Revisi Telah Dikirim ke Admin
+                                                            </h3>
+                                                            <p className="text-[10px] font-bold text-emerald-700">
+                                                                Status: SUBMITTED • Menunggu Verifikasi & Persetujuan Admin
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-200 text-emerald-900 border border-emerald-300 text-[9px] font-black uppercase tracking-wider">
+                                                        Terkirim
+                                                    </span>
+                                                </div>
+                                                {currentEvalData.items.length > 0 && (
+                                                    <div className="text-[10px] font-semibold text-emerald-800 bg-white/70 p-2.5 rounded-xl border border-emerald-200/60">
+                                                        <p className="font-bold text-emerald-900 mb-1">Riwayat Catatan yang Telah Diperbarui:</p>
+                                                        <ul className="list-disc list-inside space-y-0.5 text-emerald-700">
+                                                            {currentEvalData.items.map((it, idx) => (
+                                                                <li key={idx}>{it}</li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    }
                                     if (!currentEvalData.hasRevision) return null;
 
                                     return (
@@ -5974,7 +6039,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                                 {/* STEP 1: PROPERTI */}
                                 {kmStep === 1 && (() => {
-                                    const currentEvalData = parseEvaluationData(isEditingKostManager?.notes);
+                                    const currentEvalData = parseEvaluationData(isEditingKostManager?.notes, isEditingKostManager?.status);
 
                                     return (
                                         <div className="space-y-6">
@@ -7114,7 +7179,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                                 {/* STEP 2: DATA KAMAR */}
                                 {kmStep === 2 && (() => {
-                                    const currentEvalData = parseEvaluationData(isEditingKostManager?.notes);
+                                    const currentEvalData = parseEvaluationData(isEditingKostManager?.notes, isEditingKostManager?.status);
 
                                     return (
                                         <div className="space-y-6">
@@ -8318,7 +8383,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
                                  {/* STEP 3: REVIEW */}
                                 {kmStep === 3 && (() => {
-                                    const currentEvalData = parseEvaluationData(isEditingKostManager?.notes);
+                                    const currentEvalData = parseEvaluationData(isEditingKostManager?.notes, isEditingKostManager?.status);
 
                                     return (
                                         <div className="space-y-6">

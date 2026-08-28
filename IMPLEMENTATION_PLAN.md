@@ -1,68 +1,64 @@
-# Rencana Implementasi: Perbaikan Pin Lokasi Minimize, Sinkronisasi Wilayah Database & Indikator Evaluasi (`AgentDashboard.tsx`)
+# Rencana Implementasi: Auto-Detection & Persistensi Provinsi serta Penonaktifan Peringatan Evaluasi Pasca Kirim Ulang
 
-Dokumen ini disusun untuk menjawab dan menyelesaikan 3 kendala yang dialami pengguna pada form pendataan survei KostManager di `AgentDashboard.tsx`:
-1. Titik lokasi GPS tidak dapat ditetapkan saat peta dalam tampilan minimize (inline).
-2. Data Provinsi dan Kota/Kabupaten hilang saat kembali membuka form karena kegagalan simpan ke database (Supabase schema mismatch) dan ketiadaan pembacaan kembali `province` dari database record.
-3. Penjelasan dan penyempurnaan alur indikator kelap-kelip penunjuk evaluasi (revisi) saat data telah dikirim ulang oleh agen.
+Dokumen ini merinci solusi untuk 2 masalah yang dilaporkan pengguna pada `AgentDashboard.tsx`:
+1. **Persistensi Provinsi**: Isian Provinsi masih kosong saat membuka kembali data properti (sedangkan Kota dan Kecamatan sudah tersimpan).
+2. **Peringatan Evaluasi Belum Hilang Pasca Kirim Ulang**: Badge `REVISI` dan border evaluasi masih muncul meskipun agen sudah mengirim ulang data ke admin.
 
 ---
 
-## 1. Analisis Masalah Mendalam
+## 1. Analisis Akar Masalah
 
-### A. Lokasi Tidak Dapat Ditetapkan pada Tampilan Minimize
-- **Penyebab**: Event listener `click` dan `dragend` pada mini-map (`kmMapRef`) di `AgentDashboard.tsx` (baris 1383–1397) hanya memanggil `setPendingLocationChange({ lat, lng })` tanpa mengeksekusi fungsi update `kmListingForm.location` dan tanpa memicu *Google Maps Reverse Geocoding*. Marker langsung dikembalikan ke posisi lama karena state form tidak pernah diperbarui.
-- **Solusi**: Terapkan fungsi terpadu `updateFormLocationAndGeocode(lat, lng)` yang langsung memperbarui koordinat form, menggerakkan marker, dan memicu reverse geocoder untuk mengisi otomatis Alamat, Provinsi, Kota/Kabupaten, dan Kecamatan/Area saat user mengklik atau menggeser pin di peta minimize.
+### A. Kenapa Isian Provinsi Masih Kosong saat Dibuka Kembali?
+1. **Draft Lokal Lama**: Saat membuka data properti (`openKostManagerListing`), sistem memprioritaskan draft lokal `localStorage` (`parsed.kmListingForm`). Jika draft tersebut tersimpan sebelum perbaikan atau bernilai kosong/falsy, nilai `province` tetap kosong.
+2. **Ketiadaan Fallback Auto-Detection dari String Alamat**: Pada data properti di database (`dbPropertyRecord`), kolom `metadata` awal masih bernilai `{}` (belum ada key `province`). Jika `dbPropertyRecord.metadata?.province` kosong, kode tidak mengekstrak provinsi dari teks alamat `address` (yang sebenarnya sudah memuat *"Sulawesi Selatan"*).
+3. **Solusi**:
+   - Tambahkan helper `detectProvinceFromAddress(address)` yang cerdas mengekstrak nama provinsi (Sulawesi Selatan, DKI Jakarta, Jawa Barat, dll.) dari string alamat atau default ke `"Sulawesi Selatan"`.
+   - Di seluruh titik pemuatan data (`openKostManagerListing`): draft localStorage, `dbKmProp`, `dbPropertyRecord`, dan clean slate, pastikan `province` **selalu terisi secara otomatis** jika nilainya kosong/falsy.
+   - Di fungsi simpan (`handleSaveDraftDirectly` dan `handleSaveKostManagerListing`), pastikan `province` yang tersimpan di `metadata.province` tidak pernah bernilai string kosong.
 
-### B. Provinsi & Kota/Kabupaten Hilang Setelah Pengiriman Data
-- **Penyebab**:
-  1. **Supabase Schema Cache Error**: Pada fungsi `handleSaveDraftDirectly` dan `handleSaveKostManagerListing`, payload `propertyPayload` menyertakan `province: currentForm.province || ''` sebagai kolom tabel langsung. Karena tabel PostgreSQL `properties` tidak memiliki kolom `province` terpisah, Supabase menolak query update/insert dengan error: `Could not find the 'province' column of 'properties' in the schema cache`. Akibatnya penyimpanan ke database **gagal**.
-  2. **Pembacaan Balik `province` Tidak Ada**: Saat membuka kembali survei (`openKostManagerListing`), data diambil dari `properties` / `mitra_kostmanager`, namun properti `province` tidak dimasukkan ke dalam objek inisialisasi `setKmListingForm`.
-  3. **Anomali Nilai Kota**: Anomali lama di mana nama kecamatan (seperti *"Kecamatan Tamalanrea"*) tersimpan di kolom `city` belum ternormalisasi saat pembacaan database lama.
-- **Solusi**:
-  1. Simpan `province` ke dalam kolom `metadata: { ...metadata, province }` pada tabel `properties` dan `mitra_kostmanager` sehingga 100% aman dan tidak memicu error schema.
-  2. Saat memuat data di `openKostManagerListing`, baca `province` dari `dbPropertyRecord.province || dbPropertyRecord.metadata?.province || ''`.
-  3. Tambahkan sanitasi otomatis: jika `city` terisi teks *"Kecamatan ..."*, otomatis pindahkan ke `area` dan bersihkan prefiksnya.
-
-### C. Alur Indikator Evaluasi (Kelap-Kelip / Animasi Revisi)
-- **Penyebab & Klarifikasi**:
-  - Animasi kelap-kelip (glowing border, bouncing badge, ring pulse) aktif saat status permohonan adalah `REVISION_REQUIRED` atau catatan memuat tag `[REVISI ...]`.
-  - Saat agen menekan tombol **"Kirim Ulang Hasil Revisi ke Admin"**, status pengajuan di database diperbarui menjadi `SUBMITTED` / `PENDING_ONBOARDING` (karena agen telah menyelesaikan revisi dan kini giliran Admin meninjau).
-  - Ketika form dibuka kembali dalam status `SUBMITTED`, kita pastikan ringkasan catatan evaluasi tetap dapat dilihat dalam status *"Riwayat Evaluasi (Telah Direvisi & Menunggu Verifikasi Admin)"* secara rapi dan profesional tanpa membingungkan agen.
+### B. Kenapa Peringatan Evaluasi / Badge Revisi Masih Muncul Pasca Kirim Ulang?
+1. **Parser Hanya Membaca String Notes Tanpa Cek Status**: Fungsi `parseEvaluationData(notesText)` sebelumnya hanya memeriksa apakah teks catatan memuat kata `"[revisi"`. Karena teks catatan admin yang lama masih tersimpan di kolom `notes` pada database, `hasRevision` selalu bernilai `true` selamanya.
+2. **Pengabaian Status `SUBMITTED`**: Setelah agen menekan tombol *"Kirim Ulang Hasil Revisi ke Admin"*, status pengajuan berubah menjadi `SUBMITTED` / `PENDING_ONBOARDING`. Namun karena komponen tidak memeriksa status saat memanggil `parseEvaluationData`, UI tetap menganggap form berada dalam mode `REVISION_REQUIRED` (memunculkan badge `REVISI` dan border animasi kelap-kelip).
+3. **Solusi**:
+   - Perbarui fungsi `parseEvaluationData(notesText, status)`:
+     ```typescript
+     const containsRevisionTag = lower.includes('[revisi') || lower.includes('evaluasi admin') || lower.includes('perlu diperbaiki');
+     const isSubmittedOrApproved = status === 'SUBMITTED' || status === 'APPROVED' || status === 'COMPLETED' || status === 'PENDING_ONBOARDING';
+     const hasRevision = Boolean(containsRevisionTag && !isSubmittedOrApproved);
+     ```
+   - Berikan argumen `status` pada seluruh pemanggilan `parseEvaluationData(isEditingKostManager?.notes, isEditingKostManager?.status)`.
+   - Ketika status adalah `SUBMITTED`, badge `REVISI` dan border kelap-kelip otomatis **dinonaktifkan**, digantikan dengan banner status hijau/emerald: *"✨ Data Revisi Telah Dikirim ke Admin (Menunggu Verifikasi & Persetujuan)"*.
 
 ---
 
 ## 2. Dampak Perubahan File
 
-| File | Komponen / Bagian | Rencana Modifikasi |
+| File | Komponen / Fungsi | Rencana Modifikasi |
 |---|---|---|
-| [functions/public/pages/AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx) | Mini Map Listener & Geocoder (`kmMapRef`) | Menghubungkan klik/drag mini-map langsung ke `updateFormLocationAndGeocode` |
-| [functions/public/pages/AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx) | `handleSaveDraftDirectly` & `handleSaveKostManagerListing` | Memindahkan `province` ke dalam `metadata.province` agar aman dari error Supabase schema cache |
-| [functions/public/pages/AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx) | `openKostManagerListing` | Menambahkan pembacaan `province` dari metadata serta normalisasi otomatis `city`/`area` lama |
-| [functions/public/adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts) | `addPropertyWithMedia` & `updatePropertyWithMedia` | Memastikan `province` disimpan ke `metadata.province` tanpa menembak kolom non-eksisten |
+| [functions/public/pages/AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx) | `detectProvinceFromAddress`, `openKostManagerListing`, `reverseGeocodeAndApply` | Penambahan deteksi otomatis nama provinsi dari teks alamat & penjaminan fallback non-kosong |
+| [functions/public/pages/AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx) | `parseEvaluationData`, `handleSaveKostManagerListing`, Step Badges & Banners | Penyelarasan status `hasRevision = false` saat status `SUBMITTED` dan penambahan banner konfirmasi pengiriman |
+| [functions/PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md) | Entry #139 | Pencatatan riwayat progres |
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah ACC)
 
-1. **Implementasi Interaktivitas Peta Minimize**:
-   - Buat fungsi reverse geocoding terpadu yang dapat dipanggil oleh mini-map maupun modal popup.
-   - Pasang listener `click` dan `dragend` pada mini-map Google Maps instance agar langsung mengunci titik dan memperbarui form wilayah secara real-time.
-2. **Perbaikan Penyimpanan & Pembacaan Database**:
-   - Perbaiki konstruksi payload `propertyPayload` di `handleSaveDraftDirectly` dan `handleSaveKostManagerListing` agar `province` disimpan di `metadata.province`.
-   - Update `openKostManagerListing` di `AgentDashboard.tsx` agar memuat `province` dari `dbPropertyRecord.metadata?.province` atau `dbKmProp.metadata?.province`.
-   - Lakukan pembersihan otomatis jika `city` lama berisi nilai kecamatan.
-3. **Penyelarasan Tampilan Evaluasi**:
-   - Pastikan banner dan catatan evaluasi menampilkan status yang jelas baik saat `REVISION_REQUIRED` (mode revisi aktif ber-indikator interaktif) maupun saat `SUBMITTED` (mode menunggu tinjauan admin).
-4. **Uji Build Kompilasi**:
-   - Jalankan `npm run build` di `functions/public/` untuk memastikan 0 error TypeScript / JSX.
-5. **Dokumentasi & Push**:
+1. **Implementasi Auto-Detect & Fallback Provinsi**:
+   - Buat fungsi `detectProvinceFromAddress`.
+   - Terapkan di `openKostManagerListing` untuk draft localStorage, `dbKmProp`, `dbPropertyRecord`, dan geocoder.
+   - Pastikan `metadata.province` selalu terisi nilai valid saat menyimpan.
+2. **Penyempurnaan Parser Evaluasi & Penonaktifan Alarm Pasca-Submit**:
+   - Update `parseEvaluationData` agar menerima parameter `status`.
+   - Update seluruh pemanggilan `parseEvaluationData` di `AgentDashboard.tsx` agar menyertakan `status`.
+   - Tampilkan banner hijau *"Data Revisi Telah Dikirim"* saat `isEditingKostManager?.status === 'SUBMITTED'`.
+3. **Uji Kompilasi Build**:
+   - Jalankan `npm run build` di `functions/public/` dan pastikan 0 error.
+4. **Dokumentasi & Push**:
    - Catat di `functions/PROGRESS.md` dan `WALKTHROUGH.md`, lalu commit dan push ke branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-- [ ] **Uji Pin Minimize**: Mengklik dan menggeser marker pada peta mini tanpa membuka pop-up; pastikan koordinat terkunci dan Provinsi, Kota, Kecamatan terisi otomatis.
-- [ ] **Uji Simpan & Buka Kembali**: Mengisi data properti lengkap, simpan/kirim, lalu buka kembali dari daftar tugas; pastikan Provinsi, Kota, dan Kecamatan tetap terisi penuh dan akurat.
-- [ ] **Uji Supabase Mutation**: Memastikan respon database Supabase berstatus 200 OK (0 error schema cache).
-- [ ] **Uji Status Evaluasi**: Memverifikasi banner evaluasi tampil dengan indikator yang tepat sebelum dan sesudah pengiriman ulang.
+- [ ] **Uji Buka Kembali Form**: Membuka form pendataan survei; pastikan input **Provinsi** otomatis terisi (misal: *"Sulawesi Selatan"*) bersama dengan Kota dan Kecamatan.
+- [ ] **Uji Kirim Ulang & Hilangnya Peringatan Revisi**: Mengirim ulang data survei revisi; pastikan badge `REVISI` di tab step hilang, border kelap-kelip hilang, dan banner status beralih menjadi *"Data Revisi Telah Dikirim ke Admin"*.

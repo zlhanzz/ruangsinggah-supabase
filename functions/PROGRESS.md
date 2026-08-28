@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 139. Auto-Detection Cerdas & Persistensi Provinsi serta Penonaktifan Alarm Evaluasi Pasca Kirim Ulang (`AgentDashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. **Provinsi Masih Kosong saat Dibuka Kembali**: Meskipun Kota/Kabupaten dan Kecamatan sudah tersimpan, input Provinsi masih kosong saat membuka form karena data properti lama di database (`metadata`) belum memiliki key `province` dan draft lokal lama menyimpan string kosong tanpa fallback auto-detect dari teks alamat.
+  2. **Peringatan Evaluasi / Badge Revisi Masih Muncul Pasca Kirim Ulang**: Setelah agen mengirim ulang data revisi ke admin (`status: SUBMITTED`), badge `REVISI` dan border animasi kelap-kelip masih muncul karena parser `parseEvaluationData` sebelumnya hanya mengecek kata kunci di `notes` tanpa memvalidasi status pengajuan.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Helper Auto-Detection Cerdas (`detectProvinceFromAddress`)**:
+    - Membuat fungsi deteksi provinsi yang mengekstrak wilayah (Sulawesi Selatan, DKI Jakarta, Jawa Barat, Jawa Timur, Bali, dll.) dari string alamat atau default ke *"Sulawesi Selatan"*.
+    - Diterapkan secara otomatis di seluruh alur pemuatan data (`openKostManagerListing`): draft localStorage, `dbKmProp`, `dbPropertyRecord`, clean slate, dan Google Maps Geocoder.
+    - Menjamin field Provinsi tidak akan pernah kosong lagi saat survei dibuka kembali.
+  * **2. Penyelarasan Status Evaluasi & Penonaktifan Alarm Pasca-Submit**:
+    - Memperbarui `parseEvaluationData(notes, status)` agar memperhitungkan status pengajuan.
+    - Ketika status pengajuan adalah `SUBMITTED`, `PENDING_ONBOARDING`, atau `APPROVED`, `hasRevision` otomatis bernilai `false`.
+    - Badge `REVISI` pada tab stepper dan border glowing kelap-kelip otomatis **dinonaktifkan**.
+    - Menggantikannya dengan banner hijau/emerald: *"✨ Data Revisi Telah Dikirim ke Admin (Menunggu Verifikasi & Persetujuan)"* lengkap dengan riwayat poin evaluasi yang telah diperbaiki.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus 100% dengan 0 error dalam 21.20 detik (2526 modules transformed).
+
+
+
 ### 138. Perbaikan Pin Peta Minimize, Sinkronisasi Metadata Wilayah Supabase & Indikator Evaluasi Revisi (`AgentDashboard.tsx`, `adminService.ts`, `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. **Pin Peta Tidak Bisa Ditetapkan di Mode Minimize**: Pada form pendataan survei `AgentDashboard.tsx`, surveyor/agen tidak dapat mengunci atau mengubah titik koordinat langsung dari peta mini (inline mode) karena event klik dan geser hanya mengubah state temporary tanpa mengeksekusi reverse geocoding atau memperbarui koordinat form.
