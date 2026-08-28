@@ -2,6 +2,18 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 154. Perbaikan Import Komponen Ikon `Users` di `KostManagerPropertyFormModal.tsx` (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Terjadi runtime error `Uncaught ReferenceError: Users is not defined at KostManagerPropertyFormModal.tsx:2970:38` saat mengakses modal edit properti di Portal KostManager.
+  2. Penyebab: Ikon `<Users size={16} className="text-orange-500" />` digunakan di bagian Step 3 (Mitra Pemilik / Owner Payout), namun belum diimpor dari package `lucide-react`.
+- **Implementasi**:
+  - Menambahkan `Users` ke dalam daftar destructured import dari `lucide-react` di baris atas `KostManagerPropertyFormModal.tsx`.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 2m 9s, 0 error).
+
 ### 153. Perbaikan Parsing, Normalisasi Kategori Dinamis, Thumbnail Preview & Rendering Foto Kamar di Portal KostManager (`KostManagerPropertyFormModal.tsx` & `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa foto-foto yang telah terdata pada data kamar tidak tampil dengan baik saat melakukan pengeditan properti pada portal KostManager.
