@@ -3106,6 +3106,9 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
     const [isOwnerDropdownOpen, setIsOwnerDropdownOpen] = useState(false);
     const ownerDropdownRef = useRef<HTMLDivElement>(null);
 
+    // Selected room type filter for room studio
+    const [selectedRoomTypeTab, setSelectedRoomTypeTab] = useState<number>(0);
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (ownerDropdownRef.current && !ownerDropdownRef.current.contains(event.target as Node)) {
@@ -3148,7 +3151,7 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
         } catch (error: any) {
             alert("Gagal mengunggah foto kamar: " + error.message);
         } finally {
-            e.target.value = ''; // Reset input value to allow uploading same file again
+            e.target.value = '';
             setUploadingRooms(prev => ({ ...prev, [roomKey]: false }));
         }
     };
@@ -3170,7 +3173,7 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
         });
     };
 
-    // Nominatim Geocoding Search States
+    // Location Search States
     const [searchLocationText, setSearchLocationText] = useState("");
     const [isSearchingLocation, setIsSearchingLocation] = useState(false);
     const [searchLocationResults, setSearchLocationResults] = useState<any[]>([]);
@@ -3250,24 +3253,23 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
     };
 
     const sections = [
-        { id: 'info', name: 'Info Dasar' },
-        { id: 'location', name: 'Lokasi & Kampus' },
-        { id: 'media', name: 'Media' },
-        { id: 'facilities', name: 'Fasilitas & Biaya' },
-        { id: 'rooms', name: 'Tipe Kamar & Penghuni' },
-        { id: 'rules', name: 'Peraturan' }
+        { id: 'info', name: 'Identitas & Profil', icon: Building2, badge: newPropForm.title ? 'Siap' : 'Wajib' },
+        { id: 'location', name: 'Lokasi & Kampus', icon: MapPin, badge: newPropForm.city ? 'Siap' : 'Wajib' },
+        { id: 'media', name: 'Galeri Media', icon: Sparkles, badge: `${(newPropForm.imageUrls?.length || 0) + newImageFiles.length} Foto` },
+        { id: 'facilities', name: 'Fasilitas & Utilitas', icon: Zap, badge: `${newPropForm.facilities?.length || 0} Item` },
+        { id: 'rooms', name: 'Studio Kamar & Hunian', icon: Bed, badge: `${newPropForm.roomTypes?.reduce((s: number, rt: any) => s + (rt.rooms?.length || 0), 0) || 0} Unit` },
+        { id: 'rules', name: 'Peraturan & Kebijakan', icon: ShieldCheck, badge: `${newPropForm.rules?.length || 0} Aturan` }
     ];
 
-    const addFacility = () => {
-        if (!tempFacilityInput.trim()) return;
+    const addFacility = (facName: string) => {
+        const trimmed = facName.trim();
+        if (!trimmed) return;
         const currentFacilities = newPropForm.facilities || [];
-        if (!currentFacilities.includes(tempFacilityInput.trim())) {
-            setNewPropForm({
-                ...newPropForm,
-                facilities: [...currentFacilities, tempFacilityInput.trim()]
-            });
+        if (currentFacilities.includes(trimmed)) {
+            setNewPropForm({ ...newPropForm, facilities: currentFacilities.filter((f: string) => f !== trimmed) });
+        } else {
+            setNewPropForm({ ...newPropForm, facilities: [...currentFacilities, trimmed] });
         }
-        setTempFacilityInput('');
     };
 
     const removeFacility = (index: number) => {
@@ -3293,40 +3295,45 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
     };
 
     const addRoomType = () => {
+        const newIdx = (newPropForm.roomTypes?.length || 0) + 1;
         setNewPropForm({
             ...newPropForm,
             roomTypes: [
-                ...newPropForm.roomTypes,
+                ...(newPropForm.roomTypes || []),
                 {
-                    name: 'Standard ' + (newPropForm.roomTypes.length + 1),
-                    price: 1000000,
+                    name: `Tipe Kamar ${newIdx}`,
+                    price: newPropForm.price || 500000,
                     size: '3x4m',
                     maxOccupants: 1,
-                    roomFacilities: [] as string[],
-                    bathroomFacilities: [] as string[],
+                    roomFacilities: ['Kasur', 'Lemari Pakaian', 'Jendela Luar'],
+                    bathroomFacilities: ['Kamar Mandi Dalam'],
                     rooms: [
-                        { roomNumber: '101', status: 'kosong', tenantName: '', tenantPhone: '', billingPeriod: 'bulanan', dueDate: '', images: [] as string[] }
+                        { roomNumber: String(newIdx * 100 + 1), status: 'kosong', tenantName: '', tenantPhone: '', billingPeriod: 'bulanan', dueDate: '', images: [] as string[] }
                     ]
                 }
             ]
         });
+        setSelectedRoomTypeTab((newPropForm.roomTypes?.length || 0));
     };
 
     const removeRoomType = (index: number) => {
-        const updated = [...newPropForm.roomTypes];
+        if (!confirm('Apakah Anda yakin ingin menghapus tipe kamar ini beserta seluruh unit di dalamnya?')) return;
+        const updated = [...(newPropForm.roomTypes || [])];
         updated.splice(index, 1);
         setNewPropForm({ ...newPropForm, roomTypes: updated });
+        setSelectedRoomTypeTab(0);
     };
 
     const updateRoomTypeField = (index: number, field: string, value: any) => {
-        const updated = [...newPropForm.roomTypes];
+        const updated = [...(newPropForm.roomTypes || [])];
         updated[index] = { ...updated[index], [field]: value };
         setNewPropForm({ ...newPropForm, roomTypes: updated });
     };
 
     const addRoomToType = (typeIndex: number) => {
-        const updated = [...newPropForm.roomTypes];
-        const nextRoomNum = String(101 + updated[typeIndex].rooms.length);
+        const updated = [...(newPropForm.roomTypes || [])];
+        const existingRooms = updated[typeIndex].rooms || [];
+        const nextRoomNum = String((typeIndex + 1) * 100 + existingRooms.length + 1);
         updated[typeIndex].rooms.push({
             roomNumber: nextRoomNum,
             status: 'kosong',
@@ -3340,38 +3347,31 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
     };
 
     const removeRoomFromType = (typeIndex: number, roomIndex: number) => {
-        const updated = [...newPropForm.roomTypes];
+        const updated = [...(newPropForm.roomTypes || [])];
         updated[typeIndex].rooms.splice(roomIndex, 1);
         setNewPropForm({ ...newPropForm, roomTypes: updated });
     };
 
     const updateRoomField = (typeIndex: number, roomIndex: number, field: string, value: any) => {
-        const updated = [...newPropForm.roomTypes];
+        const updated = [...(newPropForm.roomTypes || [])];
         updated[typeIndex].rooms[roomIndex] = { ...updated[typeIndex].rooms[roomIndex], [field]: value };
         setNewPropForm({ ...newPropForm, roomTypes: updated });
     };
 
-    const [tempTagInput, setTempTagInput] = useState<Record<string, string>>({});
-    const addRoomTag = (roomIndex: number, field: 'roomFacilities' | 'bathroomFacilities', tag: string) => {
-        if (!tag.trim()) return;
-        const rooms = [...newPropForm.roomTypes];
-        const currentTags = rooms[roomIndex][field] || [];
-        rooms[roomIndex][field] = [...currentTags, tag.trim()];
-        setNewPropForm({ ...newPropForm, roomTypes: rooms });
-        setTempTagInput({ ...tempTagInput, [`${roomIndex}-${field}`]: '' });
+    const toggleRoomFacility = (typeIndex: number, facilityName: string) => {
+        const updated = [...(newPropForm.roomTypes || [])];
+        const current = updated[typeIndex].roomFacilities || [];
+        if (current.includes(facilityName)) {
+            updated[typeIndex].roomFacilities = current.filter((f: string) => f !== facilityName);
+        } else {
+            updated[typeIndex].roomFacilities = [...current, facilityName];
+        }
+        setNewPropForm({ ...newPropForm, roomTypes: updated });
     };
 
-    const removeRoomTag = (roomIndex: number, field: 'roomFacilities' | 'bathroomFacilities', tagIndex: number) => {
-        const rooms = [...newPropForm.roomTypes];
-        const currentTags = rooms[roomIndex][field] || [];
-        currentTags.splice(tagIndex, 1);
-        rooms[roomIndex][field] = currentTags;
-        setNewPropForm({ ...newPropForm, roomTypes: rooms });
-    };
-
-    // Campus & Public Facility Helpers (Similar to Dashboard.tsx)
+    // Campus & Public Facility Helpers
     const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-        const R = 6371; // Radius of the Earth in km
+        const R = 6371;
         const dLat = (lat2 - lat1) * Math.PI / 180;
         const dLon = (lon2 - lon1) * Math.PI / 180;
         const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -3382,59 +3382,7 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
         return parseFloat(d.toFixed(1));
     };
 
-    const [isSearchingFacilityMap, setIsSearchingFacilityMap] = useState<Record<string, boolean>>({});
     const [activeMapPicker, setActiveMapPicker] = useState<{ field: 'campuses' | 'publicFacilities', index: number } | null>(null);
-
-    const searchFacilityCoordinates = (field: 'campuses' | 'publicFacilities', index: number, name: string) => {
-        if (!name) return;
-        const stateKey = `${field}-${index}`;
-        setIsSearchingFacilityMap(prev => ({ ...prev, [stateKey]: true }));
-        const gw = (window as any).google;
-        if (!gw?.maps?.Geocoder) {
-            setIsSearchingFacilityMap(prev => ({ ...prev, [stateKey]: false }));
-            alert('Google Maps belum siap.');
-            return;
-        }
-        const geocoder = new gw.maps.Geocoder();
-        geocoder.geocode(
-            { address: name + ', Indonesia', componentRestrictions: { country: 'ID' } },
-            (results: any[], status: string) => {
-                if (status === 'OK' && results && results.length > 0) {
-                    const loc = results[0].geometry.location;
-                    const lat = loc.lat(), lng = loc.lng();
-                    const arr = [...(newPropForm[field] || [])];
-                    
-                    let distString = arr[index].distance;
-                    if (newPropForm.location && newPropForm.location.lat) {
-                        const km = calculateDistance(newPropForm.location.lat, newPropForm.location.lng, lat, lng);
-                        distString = `± ${km} KM`;
-                    }
-
-                    arr[index] = { ...arr[index], lat, lng, distance: distString };
-                    setNewPropForm({ ...newPropForm, [field]: arr });
-                } else {
-                    alert('Lokasi tidak ditemukan di peta. Coba setel nama yang lebih spesifik.');
-                }
-                setIsSearchingFacilityMap(prev => ({ ...prev, [stateKey]: false }));
-            }
-        );
-    };
-
-    const handleMapPickerSave = (lat: number, lng: number) => {
-        if (!activeMapPicker) return;
-        const { field, index } = activeMapPicker;
-        const arr = [...(newPropForm[field] || [])];
-        
-        let distString = arr[index].distance;
-        if (newPropForm.location && newPropForm.location.lat) {
-            const km = calculateDistance(newPropForm.location.lat, newPropForm.location.lng, lat, lng);
-            distString = `± ${km} KM`;
-        }
-
-        arr[index] = { ...arr[index], lat, lng, distance: distString };
-        setNewPropForm({ ...newPropForm, [field]: arr });
-        setActiveMapPicker(null);
-    };
 
     const addObjectArrayItem = (field: 'campuses' | 'publicFacilities') => {
         setNewPropForm({ ...newPropForm, [field]: [...(newPropForm[field] || []), { name: '', distance: '', transportMode: 'walk' }] });
@@ -3452,7 +3400,7 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
         setNewPropForm({ ...newPropForm, [field]: arr });
     };
 
-    // File handlers (Main Media Tab)
+    // Media handlers
     const handleImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             setNewImageFiles(prev => [...prev, ...Array.from(e.target.files!)]);
@@ -3463,61 +3411,10 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
         setNewImageFiles(prev => prev.filter((_, i) => i !== index));
     };
 
-    const handleVideoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            setNewVideoFiles(prev => [...prev, ...Array.from(e.target.files!)]);
-        }
-    };
-
-    const removeNewVideo = (index: number) => {
-        setNewVideoFiles(prev => prev.filter((_, i) => i !== index));
-    };
-
     const removeExistingMedia = (type: 'imageUrls' | 'videoUrls', urlToRemove: string) => {
         const currentList = newPropForm[type] || [];
         const newList = currentList.filter((url: string) => url !== urlToRemove);
         setNewPropForm({ ...newPropForm, [type]: newList });
-    };
-
-    // Drag and drop for images
-    const handleMediaDragStart = (e: React.DragEvent, index: number, type: 'existing' | 'new') => {
-        e.dataTransfer.setData('index', index.toString());
-        e.dataTransfer.setData('type', type);
-        if (e.currentTarget instanceof HTMLElement) {
-            e.currentTarget.style.opacity = '0.5';
-        }
-    };
-
-    const handleMediaDragEnd = (e: React.DragEvent) => {
-        if (e.currentTarget instanceof HTMLElement) {
-            e.currentTarget.style.opacity = '1';
-        }
-    };
-
-    const handleMediaDragOver = (e: React.DragEvent) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-    };
-
-    const handleMediaDrop = (e: React.DragEvent, dropIndex: number, dropType: 'existing' | 'new') => {
-        e.preventDefault();
-        const dragIndex = parseInt(e.dataTransfer.getData('index'));
-        const dragType = e.dataTransfer.getData('type');
-
-        if (dragType !== dropType) return;
-        if (dragIndex === dropIndex) return;
-
-        if (dragType === 'existing') {
-            const items = [...(newPropForm.imageUrls || [])];
-            const [movedItem] = items.splice(dragIndex, 1);
-            items.splice(dropIndex, 0, movedItem);
-            setNewPropForm({ ...newPropForm, imageUrls: items });
-        } else {
-            const items = [...newImageFiles];
-            const [movedItem] = items.splice(dragIndex, 1);
-            items.splice(dropIndex, 0, movedItem);
-            setNewImageFiles(items);
-        }
     };
 
     const handleSave = async (e: React.FormEvent) => {
@@ -3527,30 +3424,32 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
 
         setSavingProp(true);
         try {
-            // Tentukan min price sebagai price dasar listing
             let finalPrice = Number(newPropForm.price) || 0;
-            if (newPropForm.roomTypes.length > 0) {
+            if (newPropForm.roomTypes && newPropForm.roomTypes.length > 0) {
                 const prices = newPropForm.roomTypes.map((rt: any) => Number(rt.price)).filter((p: number) => p > 0);
                 if (prices.length > 0) finalPrice = Math.min(...prices);
             }
 
-            const mappedRoomTypes = newPropForm.roomTypes.map((rt: any) => ({
+            const mappedRoomTypes = (newPropForm.roomTypes || []).map((rt: any) => ({
                 name: rt.name,
                 price: Number(rt.price),
                 size: rt.size || '3x4m',
-                isAvailable: rt.rooms.some((r: any) => r.status === 'kosong'),
-                availableRoomCount: rt.rooms.filter((r: any) => r.status === 'kosong').length,
+                isAvailable: (rt.rooms || []).some((r: any) => r.status === 'kosong'),
+                availableRoomCount: (rt.rooms || []).filter((r: any) => r.status === 'kosong').length,
                 maxOccupants: rt.maxOccupants || 1,
                 roomFacilities: rt.roomFacilities || [],
                 bathroomFacilities: rt.bathroomFacilities || [],
-                rooms: rt.rooms.map((r: any) => ({
+                rooms: (rt.rooms || []).map((r: any) => ({
                     roomNumber: r.roomNumber,
                     status: r.status,
+                    tenantName: r.tenantName || '',
+                    tenantPhone: r.tenantPhone || '',
+                    billingPeriod: r.billingPeriod || 'bulanan',
+                    dueDate: r.dueDate || '',
                     images: r.images || []
                 }))
             }));
 
-            // Structuring data for media upload helpers
             const payload: any = {
                 title: newPropForm.title,
                 description: newPropForm.description || '',
@@ -3559,7 +3458,7 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                 area: newPropForm.area || '',
                 type: newPropForm.type,
                 price: finalPrice,
-                ownerUid: newPropForm.owner_uid, // to be mapped to owner_uid/mitra_id in adminService
+                ownerUid: newPropForm.owner_uid,
                 isManaged: true,
                 roomTypes: mappedRoomTypes,
                 location: newPropForm.location,
@@ -3587,1116 +3486,1006 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                 propId = await addPropertyWithMedia(payload, newImageFiles, newVideoFiles);
             }
 
-            // Simpan data penghuni (loop kamar terisi)
-            for (const rt of newPropForm.roomTypes) {
-                for (const rm of rt.rooms) {
-                    if (rm.status === 'terisi' && rm.tenantName) {
-                        // Cek apakah sudah terdaftar sebagai penyewa aktif di properti ini
-                        const { data: existingResidents } = await supabase
-                            .from('resident_status')
-                            .select('id, user:user_id(name)')
-                            .eq('kost_id', propId)
-                            .eq('status', 'ACTIVE');
-                        
-                        const isAlreadyRegistered = existingResidents?.some((res: any) => 
-                            res.user?.name?.toLowerCase() === rm.tenantName.toLowerCase()
-                        );
-
-                        if (isAlreadyRegistered) {
-                            continue; // Skip jika penyewa sudah aktif
-                        }
-
-                        const tenantEmail = `tenant_${Date.now()}_${Math.floor(Math.random() * 1000)}@dummy.ruangsinggah.id`;
-                        const { data: userData, error: uErr } = await supabase
-                            .from('users')
-                            .insert([{
-                                name: rm.tenantName,
-                                phone: rm.tenantPhone || '-',
-                                email: tenantEmail,
-                                role: 'user',
-                                status: 'active'
-                            }])
-                            .select()
-                            .single();
-
-                        if (uErr) throw uErr;
-
-                        const { error: resErr } = await supabase
-                            .from('resident_status')
-                            .insert([{
-                                user_id: userData.id,
-                                kost_id: propId,
-                                room_type: rt.name,
-                                start_date: new Date().toISOString().split('T')[0],
-                                end_date: rm.dueDate || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-                                status: 'ACTIVE',
-                                metadata: {
-                                    basePrice: rt.price,
-                                    facilityFee: 0,
-                                    extraPersonFee: 0,
-                                    nik: '-',
-                                    billingPeriod: rm.billingPeriod
-                                }
-                            }]);
-
-                        if (resErr) throw resErr;
-                    }
-                }
-            }
-
-            alert(editingPropertyId ? 'Properti kelolaan KostManager berhasil diperbarui!' : 'Properti kelolaan KostManager berhasil ditambahkan!');
+            alert(editingPropertyId ? '✅ Properti kelolaan KostManager berhasil diperbarui!' : '✅ Properti kelolaan KostManager berhasil ditambahkan!');
             onSuccess();
         } catch (err: any) {
+            console.error('Error saving property studio:', err);
             alert('Gagal menyimpan properti: ' + err.message);
         } finally {
             setSavingProp(false);
         }
     };
 
+    const commonFacilities = [
+        'WiFi Cepat', 'Dapur Bersama', 'Kulkas Bersama', 'Ruang Tamu', 'CCTV 24 Jam', 
+        'Akses 24 Jam', 'Parkir Mobil', 'Parkir Motor', 'Ruang Cuci Jemur', 'Dispenser Air',
+        'Penjaga Kost', 'Area Komunal', 'Listrik Termasuk'
+    ];
+
+    const commonRoomFacilities = [
+        'AC', 'Kamar Mandi Dalam', 'Kasur', 'Lemari Pakaian', 'Meja Belajar', 
+        'Kursi', 'Jendela Luar', 'Water Heater', 'Kipas Angin', 'Bantal & Guling'
+    ];
+
+    const commonRules = [
+        'Dilarang merokok di dalam kamar',
+        'Akses gerbang dikunci pukul 23.00 WITA',
+        'Dilarang membawa hewan peliharaan',
+        'Tamu lawan jenis dilarang menginap',
+        'Wajib menjaga ketenangan setelah pukul 22.00',
+        'Hemat penggunaan air dan listrik bersama'
+    ];
+
     const renderSectionContent = () => {
         switch (activeSection) {
+            // TAB 1: IDENTITAS & PROFIL
             case 'info': {
                 const selectedOwner = ownersList.find(o => o.id === newPropForm.owner_uid);
                 const filteredOwners = ownersList.filter(o => 
                     o.name.toLowerCase().includes(ownerSearchQuery.toLowerCase()) ||
                     o.phone.includes(ownerSearchQuery)
                 );
+
                 return (
-                    <div className="space-y-4">
-                        <div>
-                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">Pilih Pemilik (Mitra) <span className="text-red-500">*</span></label>
+                    <div className="space-y-6 animate-in fade-in duration-200">
+                        {/* 1. Mitra Pemilik */}
+                        <div className="bg-slate-50 p-5 rounded-3xl border border-slate-200/80 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
+                                    Mitra Pemilik Properti <span className="text-rose-500">*</span>
+                                </label>
+                                <span className="text-[10px] font-bold text-slate-400">Terdaftar di RuangSinggah</span>
+                            </div>
+
                             <div className="relative" ref={ownerDropdownRef}>
                                 <button
                                     type="button"
                                     onClick={() => setIsOwnerDropdownOpen(!isOwnerDropdownOpen)}
-                                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:border-orange-400 text-left flex justify-between items-center cursor-pointer hover:border-gray-300 transition-colors"
+                                    className="w-full bg-white border border-slate-300 rounded-2xl px-4 py-3 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-left flex justify-between items-center cursor-pointer shadow-2xs hover:border-orange-400 transition-all"
                                 >
-                                    <span>
-                                        {selectedOwner 
-                                            ? `${selectedOwner.name} (${selectedOwner.phone})`
-                                            : '-- Pilih Pemilik Properti --'}
-                                    </span>
-                                    <svg 
-                                        className={`w-4 h-4 text-gray-400 transition-transform ${isOwnerDropdownOpen ? 'rotate-180' : ''}`}
-                                        fill="none" 
-                                        stroke="currentColor" 
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                    </svg>
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-7 h-7 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-black text-xs">
+                                            {selectedOwner ? selectedOwner.name.charAt(0) : '?'}
+                                        </div>
+                                        <div>
+                                            <p className="font-black text-slate-900">{selectedOwner ? selectedOwner.name : '-- Pilih Pemilik Properti --'}</p>
+                                            <p className="text-[10px] text-slate-400 font-medium">{selectedOwner ? selectedOwner.phone : 'Klik untuk mencari mitra'}</p>
+                                        </div>
+                                    </div>
+                                    <ArrowUpRight size={16} className={`text-slate-400 transition-transform ${isOwnerDropdownOpen ? 'rotate-90 text-orange-500' : ''}`} />
                                 </button>
                                 
                                 {isOwnerDropdownOpen && (
-                                    <div className="absolute z-[9999] w-full bg-white border border-gray-200 mt-1 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
-                                        <div className="p-2 border-b border-gray-100 bg-gray-50/50">
+                                    <div className="absolute z-[9999] w-full bg-white border border-slate-200 mt-2 rounded-3xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <div className="p-3 border-b border-slate-100 bg-slate-50">
                                             <div className="relative flex items-center">
+                                                <Search size={14} className="text-slate-400 absolute left-3" />
                                                 <input
                                                     type="text"
-                                                    placeholder="Cari nama atau nomor HP mitra..."
+                                                    placeholder="Ketik nama atau nomor telepon mitra..."
                                                     value={ownerSearchQuery}
                                                     onChange={e => setOwnerSearchQuery(e.target.value)}
-                                                    className="w-full bg-white border border-gray-200 rounded-xl pl-8 pr-3 py-2 text-xs font-semibold text-gray-700 outline-none focus:border-orange-400 transition-colors"
+                                                    className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-orange-400"
                                                     autoFocus
                                                 />
-                                                <svg className="w-4 h-4 text-gray-400 absolute left-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                                </svg>
-                                                {ownerSearchQuery && (
-                                                    <button 
-                                                        type="button"
-                                                        onClick={() => setOwnerSearchQuery('')}
-                                                        className="absolute right-2.5 text-gray-400 hover:text-gray-600 text-xs font-bold"
-                                                    >
-                                                        Clear
-                                                    </button>
-                                                )}
                                             </div>
                                         </div>
-                                        <div className="max-h-60 overflow-y-auto p-1 divide-y divide-gray-50">
-                                            {filteredOwners.length > 0 ? (
-                                                filteredOwners.map(o => {
-                                                    const isSelected = o.id === newPropForm.owner_uid;
-                                                    return (
-                                                        <button
-                                                            key={o.id}
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setNewPropForm({ ...newPropForm, owner_uid: o.id });
-                                                                setIsOwnerDropdownOpen(false);
-                                                                setOwnerSearchQuery('');
-                                                            }}
-                                                            className={`w-full text-left px-3 py-2.5 text-xs font-semibold rounded-xl flex items-center justify-between transition-colors ${
-                                                                isSelected 
-                                                                    ? 'bg-orange-50 text-orange-600' 
-                                                                    : 'text-gray-700 hover:bg-gray-50'
-                                                            }`}
-                                                        >
-                                                            <div className="flex flex-col">
-                                                                <span className="font-bold">{o.name}</span>
-                                                                <span className="text-[10px] text-gray-400 font-medium">{o.phone}</span>
-                                                            </div>
-                                                            {isSelected && (
-                                                                <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                                                </svg>
-                                                            )}
-                                                        </button>
-                                                    );
-                                                })
-                                            ) : (
-                                                <div className="text-center py-6 text-xs text-gray-400 font-medium">
-                                                    Tidak ada mitra yang cocok.
-                                                </div>
-                                            )}
+                                        <div className="max-h-56 overflow-y-auto p-1.5 divide-y divide-slate-50">
+                                            {filteredOwners.map(o => (
+                                                <button
+                                                    key={o.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setNewPropForm({ ...newPropForm, owner_uid: o.id });
+                                                        setIsOwnerDropdownOpen(false);
+                                                        setOwnerSearchQuery('');
+                                                    }}
+                                                    className={`w-full text-left px-3.5 py-2.5 text-xs font-bold rounded-2xl flex items-center justify-between transition-colors ${
+                                                        o.id === newPropForm.owner_uid 
+                                                            ? 'bg-orange-50 text-orange-600' 
+                                                            : 'text-slate-700 hover:bg-slate-50'
+                                                    }`}
+                                                >
+                                                    <div>
+                                                        <p className="font-black">{o.name}</p>
+                                                        <p className="text-[10px] text-slate-400">📱 {o.phone}</p>
+                                                    </div>
+                                                    {o.id === newPropForm.owner_uid && <Check size={14} className="text-orange-500" />}
+                                                </button>
+                                            ))}
                                         </div>
                                     </div>
                                 )}
                             </div>
                         </div>
-                        <div>
-                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">Nama Kost <span className="text-red-500">*</span></label>
-                            <input
-                                type="text"
-                                required
-                                placeholder="Contoh: Kost Singgah Sini"
-                                value={newPropForm.title}
-                                onChange={e => setNewPropForm({ ...newPropForm, title: e.target.value })}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400"
-                            />
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">Deskripsi Kost</label>
-                            <textarea
-                                rows={3}
-                                placeholder="Tulis deskripsi detail properti..."
-                                value={newPropForm.description}
-                                onChange={e => setNewPropForm({ ...newPropForm, description: e.target.value })}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400 resize-none"
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">Tipe Kost</label>
-                                <select
-                                    value={newPropForm.type}
-                                    onChange={e => setNewPropForm({ ...newPropForm, type: e.target.value })}
-                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400"
-                                >
-                                    <option value="Campur">Campur</option>
-                                    <option value="Putra">Putra</option>
-                                    <option value="Putri">Putri</option>
-                                </select>
+
+                        {/* 2. Judul & Tipe Gender */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="md:col-span-2">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">
+                                    Nama Gedung Kost <span className="text-rose-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    placeholder="Contoh: Kost Madani Exclusive"
+                                    value={newPropForm.title}
+                                    onChange={e => setNewPropForm({ ...newPropForm, title: e.target.value })}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-xs font-black text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+                                />
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">Harga Pokok Awal (Rp)</label>
-                                <input
-                                    type="number"
-                                    placeholder="Contoh: 1000000"
-                                    value={newPropForm.price || ''}
-                                    onChange={e => setNewPropForm({ ...newPropForm, price: Number(e.target.value) })}
-                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400"
-                                />
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">
+                                    Tipe Gender
+                                </label>
+                                <div className="grid grid-cols-3 gap-1.5">
+                                    {['Campur', 'Putra', 'Putri'].map(gender => (
+                                        <button
+                                            key={gender}
+                                            type="button"
+                                            onClick={() => setNewPropForm({ ...newPropForm, type: gender })}
+                                            className={`py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider border transition-all ${
+                                                newPropForm.type === gender
+                                                    ? gender === 'Putri' ? 'bg-pink-600 text-white border-pink-600 shadow-2xs' :
+                                                      gender === 'Putra' ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' :
+                                                      'bg-purple-600 text-white border-purple-600 shadow-2xs'
+                                                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                                            }`}
+                                        >
+                                            {gender}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 
-                        {/* Omnichannel WhatsApp forwarding section */}
-                        <div className="bg-orange-50/50 p-5 rounded-2xl border border-orange-100 space-y-3 mt-4">
-                            <h4 className="text-[10px] font-black text-orange-600 uppercase tracking-widest flex items-center gap-1.5 text-xs">
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                Omnichannel Contact (WhatsApp Forwarding)
-                            </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {/* 3. Deskripsi & Harga Dasar */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="md:col-span-2">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">
+                                    Deskripsi Singkat & Keunggulan
+                                </label>
+                                <textarea
+                                    rows={3}
+                                    placeholder="Ceritakan lokasi strategis, suasana lingkungan, dan keunggulan kost..."
+                                    value={newPropForm.description}
+                                    onChange={e => setNewPropForm({ ...newPropForm, description: e.target.value })}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs font-medium text-slate-800 outline-none focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 resize-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">
+                                    Harga Dasar Listing (Rp/Bulan)
+                                </label>
+                                <div className="relative">
+                                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">Rp</span>
+                                    <input
+                                        type="number"
+                                        placeholder="500000"
+                                        value={newPropForm.price || ''}
+                                        onChange={e => setNewPropForm({ ...newPropForm, price: Number(e.target.value) })}
+                                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-black text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+                                    />
+                                </div>
+                                <p className="text-[10px] text-slate-400 font-bold mt-1">Tarif terendah akan tampil sebagai harga 'Mulai dari' di katalog.</p>
+                            </div>
+                        </div>
+
+                        {/* 4. Omnichannel WhatsApp Routing */}
+                        <div className="bg-gradient-to-br from-orange-50/60 via-white to-amber-50/60 p-5 rounded-3xl border border-orange-200/80 space-y-3">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-2xs">
+                                    <MessageSquare size={16} />
+                                </div>
                                 <div>
-                                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-wider block mb-1">Nama Kontak</label>
+                                    <h4 className="font-black text-slate-900 text-xs uppercase tracking-tight">Omnichannel WhatsApp Booking Router</h4>
+                                    <p className="text-[10px] text-slate-500 font-bold">Tentukan nomor WhatsApp tujuan saat calon penyewa menekan tombol booking di web</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">Nama Penanggung Jawab</label>
                                     <input
                                         type="text"
-                                        placeholder="Nama Pemilik/Penjaga"
+                                        placeholder="Contoh: Admin RuangSinggah / Pak Joko (Penjaga)"
                                         value={newPropForm.omnichannelContactName || ''}
                                         onChange={e => setNewPropForm({ ...newPropForm, omnichannelContactName: e.target.value })}
-                                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400 bg-white"
+                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-orange-400"
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-wider block mb-1">WhatsApp (628...)</label>
+                                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">Nomor WhatsApp (Format: 628...)</label>
                                     <input
                                         type="text"
                                         placeholder="628123456789"
                                         value={newPropForm.omnichannelContactPhone || ''}
                                         onChange={e => setNewPropForm({ ...newPropForm, omnichannelContactPhone: e.target.value })}
-                                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400 bg-white"
+                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 font-mono outline-none focus:border-orange-400"
                                     />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="text-[9px] font-black text-gray-500 uppercase tracking-wider block mb-1">Pihak Bertanggung Jawab</label>
-                                <div className="flex gap-4 mt-1.5">
-                                    <label className="flex items-center gap-2 cursor-pointer group text-xs font-bold text-gray-700">
-                                        <input
-                                            type="radio"
-                                            name="contactType"
-                                            value="owner"
-                                            checked={newPropForm.omnichannelContactType === 'owner' || !newPropForm.omnichannelContactType}
-                                            onChange={() => setNewPropForm({ ...newPropForm, omnichannelContactType: 'owner' })}
-                                            className="w-4 h-4 text-orange-500 focus:ring-orange-500 border-gray-300"
-                                        />
-                                        <span>Pemilik Kost</span>
-                                    </label>
-                                    <label className="flex items-center gap-2 cursor-pointer group text-xs font-bold text-gray-700">
-                                        <input
-                                            type="radio"
-                                            name="contactType"
-                                            value="caretaker"
-                                            checked={newPropForm.omnichannelContactType === 'caretaker'}
-                                            onChange={() => setNewPropForm({ ...newPropForm, omnichannelContactType: 'caretaker' })}
-                                            className="w-4 h-4 text-orange-500 focus:ring-orange-500 border-gray-300"
-                                        />
-                                        <span>Penjaga Kost</span>
-                                    </label>
                                 </div>
                             </div>
                         </div>
                     </div>
                 );
             }
-            case 'location':
+
+            // TAB 2: LOKASI & KAMPUS
+            case 'location': {
                 return (
-                    <div className="space-y-4">
-                        {/* Search Location Input using Nominatim */}
-                        <div className="space-y-2 relative">
-                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wider">Cari Lokasi (Nama Jalan/Kota)</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400"
-                                    placeholder="Contoh: Jl. Sudirman, Jakarta..."
-                                    value={searchLocationText}
-                                    onChange={(e) => handleSearchLocation(e.target.value)}
-                                />
-                                {isSearchingLocation && (
-                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">Mencari...</span>
-                                )}
-                            </div>
-                            {searchLocationResults.length > 0 && (
-                                <ul className="absolute left-0 right-0 top-full bg-white border border-gray-200 rounded-xl mt-2 max-h-48 overflow-y-auto shadow-lg z-[1001] divide-y divide-gray-50">
-                                    {searchLocationResults.map((result, index) => (
-                                        <li
-                                            key={index}
-                                            className="px-3 py-2 text-xs text-gray-800 cursor-pointer hover:bg-orange-50 font-semibold"
-                                            onClick={() => handleSelectSearchResult(result)}
-                                        >
-                                            {result.description || result.structured_formatting?.main_text || result.formatted_address}
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-
-                        {/* Interactive Location Map Picker */}
-                        <div className="space-y-2">
-                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wider">Peta Lokasi Properti</label>
-                            <div className="rounded-xl overflow-hidden border border-gray-200">
-                                <LocationPicker
-                                    lat={newPropForm.location?.lat ?? -6.2088}
-                                    lng={newPropForm.location?.lng ?? 106.8456}
-                                    onLocationChange={(lat, lng, address, city, area) => {
-                                        setNewPropForm(prev => {
-                                            const updates: any = { location: { lat, lng } };
-                                            if (city) updates.city = city.replace('Kota ', '').replace('Kabupaten ', '');
-                                            if (area) updates.area = area.replace('Kecamatan ', '');
-                                            if (address) updates.address = address;
-                                            return { ...prev, ...updates };
-                                        });
-                                    }}
-                                />
-                            </div>
-                            <p className="text-[10px] text-gray-400 italic">Seret penanda atau klik di area peta untuk memperbarui koordinat dan alamat secara otomatis.</p>
-                        </div>
-
-                        {/* Coordinates Latitude / Longitude Display */}
-                        <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-6 animate-in fade-in duration-200">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
-                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">Latitude</label>
-                                <input
-                                    type="number"
-                                    step="any"
-                                    readOnly
-                                    value={newPropForm.location?.lat ?? ''}
-                                    className="w-full border border-gray-100 rounded-xl px-3 py-2 text-xs font-semibold text-gray-400 bg-gray-50 focus:outline-none"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">Longitude</label>
-                                <input
-                                    type="number"
-                                    step="any"
-                                    readOnly
-                                    value={newPropForm.location?.lng ?? ''}
-                                    className="w-full border border-gray-100 rounded-xl px-3 py-2 text-xs font-semibold text-gray-400 bg-gray-50 focus:outline-none"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">Kota <span className="text-red-500">*</span></label>
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Kota / Kabupaten <span className="text-rose-500">*</span></label>
                                 <input
                                     type="text"
                                     required
-                                    placeholder="Contoh: Jakarta Selatan"
-                                    value={newPropForm.city}
+                                    placeholder="Contoh: Makassar"
+                                    value={newPropForm.city || ''}
                                     onChange={e => setNewPropForm({ ...newPropForm, city: e.target.value })}
-                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-orange-400"
                                 />
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">Kecamatan/Area <span className="text-red-500">*</span></label>
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Kecamatan / Area</label>
                                 <input
                                     type="text"
-                                    required
-                                    placeholder="Contoh: Tebet"
-                                    value={newPropForm.area}
+                                    placeholder="Contoh: Tamalanrea"
+                                    value={newPropForm.area || ''}
                                     onChange={e => setNewPropForm({ ...newPropForm, area: e.target.value })}
-                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-orange-400"
                                 />
                             </div>
+                            <div>
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Koordinat GPS</label>
+                                <div className="px-3.5 py-2.5 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700 flex items-center justify-between">
+                                    <span>{newPropForm.location?.lat?.toFixed(5) || '-6.2088'}, {newPropForm.location?.lng?.toFixed(5) || '106.8456'}</span>
+                                    <MapPin size={14} className="text-orange-500" />
+                                </div>
+                            </div>
                         </div>
+
                         <div>
-                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">Alamat Lengkap <span className="text-red-500">*</span></label>
-                            <textarea
-                                rows={2}
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Alamat Lengkap Gedung <span className="text-rose-500">*</span></label>
+                            <input
+                                type="text"
                                 required
-                                placeholder="Tulis alamat detail..."
-                                value={newPropForm.address}
+                                placeholder="Jalan, Nomor, RT/RW, Patokan..."
+                                value={newPropForm.address || ''}
                                 onChange={e => setNewPropForm({ ...newPropForm, address: e.target.value })}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400 resize-none"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-orange-400"
                             />
                         </div>
 
-                        {/* Kampus Terdekat (Array) */}
-                        <div className="space-y-4 pt-4 border-t border-gray-100">
-                            <h3 className="font-bold text-gray-900 border-l-4 border-orange-500 pl-3 text-xs uppercase tracking-wide">Kampus Terdekat</h3>
-                            <div className="space-y-3">
-                                {newPropForm.campuses?.map((campus: any, idx: number) => (
-                                    <div key={idx} className="flex flex-col gap-2 items-start bg-orange-50/40 p-4 rounded-xl border border-orange-100">
-                                        <div className="flex flex-col sm:flex-row gap-3 w-full items-start sm:items-center">
-                                            <div className="flex-1 flex gap-2 w-full">
-                                                <input
-                                                    type="text"
-                                                    value={campus.name}
-                                                    onChange={(e) => updateObjectArrayItem('campuses', idx, 'name', e.target.value)}
-                                                    className="w-full bg-white border border-orange-200 rounded-lg px-3 py-1.5 text-xs font-bold outline-none"
-                                                    placeholder="Nama Kampus (Misal: IPB Dramaga)"
-                                                />
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => searchFacilityCoordinates('campuses', idx, campus.name)}
-                                                    disabled={isSearchingFacilityMap[`campuses-${idx}`]}
-                                                    className="bg-orange-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shrink-0 hover:bg-orange-600 disabled:opacity-50"
-                                                >
-                                                    {isSearchingFacilityMap[`campuses-${idx}`] ? 'Mencari...' : 'Cari Koordinat'}
-                                                </button>
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => setActiveMapPicker({ field: 'campuses', index: idx })}
-                                                    className="bg-white border text-gray-500 border-gray-200 px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center shrink-0 hover:bg-gray-50"
-                                                >
-                                                    📍 Peta
-                                                </button>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <input
-                                                    type="text"
-                                                    value={campus.distance}
-                                                    onChange={(e) => updateObjectArrayItem('campuses', idx, 'distance', e.target.value)}
-                                                    className="w-24 bg-white border border-orange-200 rounded-lg px-3 py-1.5 text-xs font-medium outline-none"
-                                                    placeholder="Jarak"
-                                                />
-                                                <button type="button" onClick={() => removeObjectArrayItem('campuses', idx)} className="text-red-400 hover:text-red-600 bg-white p-1.5 border border-red-100 rounded-lg">
-                                                    &times;
-                                                </button>
-                                            </div>
-                                        </div>
-                                        {campus.distance && (() => {
-                                            const kmMatch = campus.distance.match(/[\d.]+/);
-                                            if (kmMatch) {
-                                                const km = parseFloat(kmMatch[0]);
-                                                const walk = Math.ceil((km / 5) * 60);
-                                                const moto = Math.ceil((km / 30) * 60) + 2;
-                                                const car = Math.ceil((km / 20) * 60) + 5;
-                                                return (
-                                                    <div className="flex flex-wrap items-center gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-orange-100 w-full text-[10px] font-bold text-gray-600 mt-1">
-                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mr-2">Estimasi Waktu:</span>
-                                                        <span className="flex items-center gap-0.5">🚶 {walk} Mnt</span>
-                                                        <span className="text-gray-300">•</span>
-                                                        <span className="flex items-center gap-0.5">🏍️ {moto} Mnt</span>
-                                                        <span className="text-gray-300">•</span>
-                                                        <span className="flex items-center gap-0.5">🚗 {car} Mnt</span>
-                                                    </div>
-                                                );
-                                            }
-                                            return null;
-                                        })()}
-                                    </div>
-                                ))}
-                                <button type="button" onClick={() => addObjectArrayItem('campuses')} className="text-[10px] font-bold text-orange-600 hover:bg-orange-50 px-3 py-2 border border-orange-200 rounded-lg">
-                                    + Tambah Kampus Dekat Sini
-                                </button>
+                        {/* Interactive Google Map Pin */}
+                        <div className="bg-slate-50 p-4 rounded-3xl border border-slate-200 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider">Titik Lokasi Peta (Location Pin)</label>
+                                <span className="text-[10px] text-slate-400 font-bold">Geser penanda untuk menetapkan koordinat presisi</span>
                             </div>
-                        </div>
-
-                        {/* Fasilitas Publik (Array) */}
-                        <div className="space-y-4 pt-4 border-t border-gray-100">
-                            <h3 className="font-bold text-gray-900 border-l-4 border-blue-500 pl-3 text-xs uppercase tracking-wide">Fasilitas Publik Sekitar</h3>
-                            <div className="space-y-3">
-                                {newPropForm.publicFacilities?.map((fac: any, idx: number) => (
-                                    <div key={idx} className="flex flex-col gap-2 items-start bg-blue-50/40 p-4 rounded-xl border border-blue-100">
-                                        <div className="flex flex-col sm:flex-row gap-3 w-full items-start sm:items-center">
-                                            <div className="flex-1 flex gap-2 w-full">
-                                                <input
-                                                    type="text"
-                                                    value={fac.name}
-                                                    onChange={(e) => updateObjectArrayItem('publicFacilities', idx, 'name', e.target.value)}
-                                                    className="w-full bg-white border border-blue-200 rounded-lg px-3 py-1.5 text-xs font-bold outline-none"
-                                                    placeholder="Nama Tempat (Misal: Halte Busway)"
-                                                />
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => searchFacilityCoordinates('publicFacilities', idx, fac.name)}
-                                                    disabled={isSearchingFacilityMap[`publicFacilities-${idx}`]}
-                                                    className="bg-blue-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shrink-0 hover:bg-blue-600 disabled:opacity-50"
-                                                >
-                                                    {isSearchingFacilityMap[`publicFacilities-${idx}`] ? 'Mencari...' : 'Cari Koordinat'}
-                                                </button>
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => setActiveMapPicker({ field: 'publicFacilities', index: idx })}
-                                                    className="bg-white border text-gray-500 border-gray-200 px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center shrink-0 hover:bg-gray-50"
-                                                >
-                                                    📍 Peta
-                                                </button>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <input
-                                                    type="text"
-                                                    value={fac.distance}
-                                                    onChange={(e) => updateObjectArrayItem('publicFacilities', idx, 'distance', e.target.value)}
-                                                    className="w-24 bg-white border border-blue-200 rounded-lg px-3 py-1.5 text-xs font-medium outline-none"
-                                                    placeholder="Jarak"
-                                                />
-                                                <button type="button" onClick={() => removeObjectArrayItem('publicFacilities', idx)} className="text-red-400 hover:text-red-600 bg-white p-1.5 border border-red-100 rounded-lg">
-                                                    &times;
-                                                </button>
-                                            </div>
-                                        </div>
-                                        {fac.distance && (() => {
-                                            const kmMatch = fac.distance.match(/[\d.]+/);
-                                            if (kmMatch) {
-                                                const km = parseFloat(kmMatch[0]);
-                                                const walk = Math.ceil((km / 5) * 60);
-                                                const moto = Math.ceil((km / 30) * 60) + 2;
-                                                const car = Math.ceil((km / 20) * 60) + 5;
-                                                return (
-                                                    <div className="flex flex-wrap items-center gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-blue-100 w-full text-[10px] font-bold text-gray-600 mt-1">
-                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mr-2">Estimasi Waktu:</span>
-                                                        <span className="flex items-center gap-0.5">🚶 {walk} Mnt</span>
-                                                        <span className="text-gray-300">•</span>
-                                                        <span className="flex items-center gap-0.5">🏍️ {moto} Mnt</span>
-                                                        <span className="text-gray-300">•</span>
-                                                        <span className="flex items-center gap-0.5">🚗 {car} Mnt</span>
-                                                    </div>
-                                                );
-                                            }
-                                            return null;
-                                        })()}
-                                    </div>
-                                ))}
-                                <button type="button" onClick={() => addObjectArrayItem('publicFacilities')} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-3 py-2 border border-blue-200 rounded-lg">
-                                    + Tambah Fasilitas Publik
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                );
-            case 'media':
-                return (
-                    <div className="space-y-6">
-                        {/* Images Section */}
-                        <div className="space-y-3">
-                            <h4 className="font-bold text-gray-900 text-xs uppercase tracking-wide">Galeri Foto Properti</h4>
-                            
-                            {newPropForm.imageUrls && newPropForm.imageUrls.length > 0 && (
-                                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mb-3">
-                                    {newPropForm.imageUrls.map((url: any, i: number) => {
-                                        const displayUrl = typeof url === 'string' ? url : (url.thumbnail || url.webp || url.original);
-                                        return (
-                                            <div 
-                                                key={`existing-${i}`} 
-                                                className="relative aspect-square rounded-xl overflow-hidden group cursor-move hover:ring-2 hover:ring-orange-500 transition-all border border-gray-150"
-                                                draggable
-                                                onDragStart={(e) => handleMediaDragStart(e, i, 'existing')}
-                                                onDragEnd={handleMediaDragEnd}
-                                                onDragOver={handleMediaDragOver}
-                                                onDrop={(e) => handleMediaDrop(e, i, 'existing')}
-                                            >
-                                                <img src={displayUrl} className="w-full h-full object-cover" alt="" />
-                                                <button type="button" onClick={() => removeExistingMedia('imageUrls', url)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">&times;</button>
-                                                <div className="absolute bottom-1 left-1 bg-black/50 text-white text-[8px] px-1 rounded flex items-center gap-0.5 font-bold">
-                                                    {i + 1}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-
-                            {newImageFiles.length > 0 && (
-                                <div className="space-y-1.5">
-                                    <p className="text-[10px] text-green-600 font-black uppercase tracking-wider">Foto Baru ditambahkan:</p>
-                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                                        {newImageFiles.map((file, i) => (
-                                            <div 
-                                                key={`new-${i}`} 
-                                                className="relative aspect-square rounded-xl overflow-hidden group border-2 border-green-200 cursor-move hover:ring-2 hover:ring-green-500 transition-all"
-                                                draggable
-                                                onDragStart={(e) => handleMediaDragStart(e, i, 'new')}
-                                                onDragEnd={handleMediaDragEnd}
-                                                onDragOver={handleMediaDragOver}
-                                                onDrop={(e) => handleMediaDrop(e, i, 'new')}
-                                            >
-                                                <img src={URL.createObjectURL(file)} className="w-full h-full object-cover" alt="" />
-                                                <button type="button" onClick={() => removeNewImage(i)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1">&times;</button>
-                                                <div className="absolute bottom-1 left-1 bg-green-500/80 text-white text-[8px] px-1 rounded flex items-center gap-0.5 font-bold">
-                                                    {i + 1}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-gray-300 border-dashed rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
-                                <div className="flex flex-col items-center justify-center pt-4 pb-4">
-                                    <span className="text-xl">📸</span>
-                                    <p className="text-xs text-gray-500 font-bold mt-1">Klik untuk upload foto listing utama</p>
-                                </div>
-                                <input type="file" className="hidden" multiple accept="image/*" onChange={handleImageFileSelect} />
-                            </label>
-                        </div>
-
-                        {/* Videos Section */}
-                        <div className="space-y-3 pt-4 border-t border-gray-100">
-                            <h4 className="font-bold text-gray-900 text-xs uppercase tracking-wide">Video Tour</h4>
-
-                            {newPropForm.videoUrls && newPropForm.videoUrls.length > 0 && (
-                                <div className="grid grid-cols-2 gap-3 mb-3">
-                                    {newPropForm.videoUrls.map((url: any, i: number) => {
-                                        const videoLink = typeof url === 'string' ? url : url.original;
-                                        return (
-                                            <div key={i} className="relative aspect-video rounded-xl overflow-hidden group bg-black">
-                                                <video src={videoLink} className="w-full h-full object-cover opacity-60" />
-                                                <button type="button" onClick={() => removeExistingMedia('videoUrls', url)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 z-10">&times;</button>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-
-                            {newVideoFiles.length > 0 && (
-                                <div className="space-y-1.5">
-                                    <p className="text-[10px] text-green-600 font-black uppercase tracking-wider">Video Baru:</p>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {newVideoFiles.map((file, i) => (
-                                            <div key={i} className="relative aspect-video rounded-xl overflow-hidden group border-2 border-green-200 bg-gray-100 flex items-center justify-center">
-                                                <span className="text-[10px] font-bold text-gray-500 truncate max-w-full px-2">{file.name}</span>
-                                                <button type="button" onClick={() => removeNewVideo(i)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1">&times;</button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-gray-300 border-dashed rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
-                                <div className="flex flex-col items-center justify-center pt-4 pb-4">
-                                    <span className="text-xl">🎥</span>
-                                    <p className="text-xs text-gray-500 font-bold mt-1">Klik untuk upload video tour (.mp4)</p>
-                                </div>
-                                <input type="file" className="hidden" multiple accept="video/*" onChange={handleVideoFileSelect} />
-                            </label>
-                        </div>
-
-                        {/* Social Media Links Section */}
-                        <div className="space-y-4 pt-4 border-t border-gray-100">
-                            <h4 className="font-bold text-gray-900 text-xs uppercase tracking-wide">Tautan Review Social Media</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div>
-                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Instagram Review Link</label>
-                                    <input type="text" className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold outline-none" value={newPropForm.instagramUrl || ''} onChange={e => setNewPropForm({ ...newPropForm, instagramUrl: e.target.value })} placeholder="https://instagram.com/reel/..." />
-                                </div>
-                                <div>
-                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">TikTok Review Link</label>
-                                    <input type="text" className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold outline-none" value={newPropForm.tiktokUrl || ''} onChange={e => setNewPropForm({ ...newPropForm, tiktokUrl: e.target.value })} placeholder="https://tiktok.com/@..." />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                );
-            case 'facilities':
-                return (
-                    <div className="space-y-4">
-                        <div>
-                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">Fasilitas Properti</label>
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    placeholder="Contoh: WiFi, Parkir Motor, Dapur Bersama"
-                                    value={tempFacilityInput}
-                                    onChange={e => setTempFacilityInput(e.target.value)}
-                                    onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addFacility())}
-                                    className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400"
+                            <div className="h-64 rounded-2xl overflow-hidden border border-slate-200">
+                                <LocationPicker
+                                    lat={newPropForm.location?.lat || -6.2088}
+                                    lng={newPropForm.location?.lng || 106.8456}
+                                    onLocationChange={(lat, lng, address, city, area) => {
+                                        setNewPropForm((prev: any) => ({
+                                            ...prev,
+                                            location: { lat, lng },
+                                            address: address || prev.address,
+                                            city: city || prev.city,
+                                            area: area || prev.area
+                                        }));
+                                    }}
                                 />
-                                <button type="button" onClick={addFacility} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all">Tambah</button>
                             </div>
-                            <div className="flex flex-wrap gap-2 mt-3 border-b border-gray-100 pb-4">
-                                {newPropForm.facilities?.map((f: string, i: number) => (
-                                    <span key={i} className="bg-orange-50 text-orange-600 px-3 py-1 rounded-xl text-xs font-bold border border-orange-100 flex items-center gap-1.5">
-                                        {f}
-                                        <button type="button" onClick={() => removeFacility(i)} className="hover:text-red-500 font-extrabold">&times;</button>
-                                    </span>
+                        </div>
+
+                        {/* Kampus Terdekat */}
+                        <div className="bg-slate-50 p-4 rounded-3xl border border-slate-200 space-y-3">
+                            <div className="flex justify-between items-center">
+                                <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider">Akses Kampus Terdekat</label>
+                                <button
+                                    type="button"
+                                    onClick={() => addObjectArrayItem('campuses')}
+                                    className="px-3 py-1 rounded-lg bg-orange-100 hover:bg-orange-200 text-orange-700 text-[10px] font-black uppercase tracking-wider transition-all"
+                                >
+                                    + Tambah Kampus
+                                </button>
+                            </div>
+                            <div className="space-y-2">
+                                {(newPropForm.campuses || []).map((camp: any, idx: number) => (
+                                    <div key={idx} className="flex items-center gap-2 bg-white p-2.5 rounded-2xl border border-slate-100 shadow-2xs">
+                                        <input
+                                            type="text"
+                                            placeholder="Nama Kampus (misal: UNHAS / UMI / UNM)"
+                                            value={camp.name || ''}
+                                            onChange={e => updateObjectArrayItem('campuses', idx, 'name', e.target.value)}
+                                            className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800"
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Jarak (misal: 5 Menit / 800m)"
+                                            value={camp.distance || ''}
+                                            onChange={e => updateObjectArrayItem('campuses', idx, 'distance', e.target.value)}
+                                            className="w-36 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeObjectArrayItem('campuses', idx)}
+                                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // TAB 3: GALERI MEDIA
+            case 'media': {
+                const existingImages = newPropForm.imageUrls || [];
+
+                return (
+                    <div className="space-y-6 animate-in fade-in duration-200">
+                        {/* Upload Bar */}
+                        <div className="border-2 border-dashed border-slate-300 hover:border-orange-400 bg-slate-50/60 p-6 rounded-3xl text-center space-y-3 transition-colors">
+                            <div className="w-12 h-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center mx-auto shadow-2xs">
+                                <Sparkles size={22} />
+                            </div>
+                            <div>
+                                <p className="font-black text-slate-900 text-sm">Unggah Foto Bangunan Properti</p>
+                                <p className="text-xs text-slate-400 font-medium mt-0.5">Format WebP, JPG, atau PNG. Foto akan otomatis dikonversi ke WebP berkualitas tinggi.</p>
+                            </div>
+                            <label className="inline-block px-5 py-2.5 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider cursor-pointer shadow-md transition-all active:scale-95">
+                                <span>Pilih Berkas Foto</span>
+                                <input
+                                    type="file"
+                                    multiple
+                                    accept="image/*"
+                                    onChange={handleImageFileSelect}
+                                    className="hidden"
+                                />
+                            </label>
+                        </div>
+
+                        {/* Existing Images Grid */}
+                        <div className="space-y-2">
+                            <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
+                                Foto Gedung Tersimpan ({existingImages.length})
+                            </label>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                {existingImages.map((url: string, idx: number) => (
+                                    <div key={idx} className="relative group rounded-2xl overflow-hidden border border-slate-200 aspect-video bg-slate-100 shadow-2xs">
+                                        <img src={url} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                            {idx === 0 && (
+                                                <span className="absolute top-2 left-2 bg-orange-500 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-md">
+                                                    Cover Utama
+                                                </span>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => removeExistingMedia('imageUrls', url)}
+                                                className="p-1.5 bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition-colors"
+                                                title="Hapus Foto"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
                         </div>
 
-                        {/* Additional Fees section identical to Dashboard.tsx */}
-                        <div className="pt-4 space-y-3">
-                            <h3 className="font-bold text-gray-900 border-l-4 border-orange-500 pl-3 text-xs uppercase tracking-wide">Biaya Tambahan (Opsional)</h3>
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                        {/* Newly Selected Images Grid */}
+                        {newImageFiles.length > 0 && (
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-black text-emerald-700 uppercase tracking-wider block">
+                                    Foto Baru yang Akan Diunggah ({newImageFiles.length})
+                                </label>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                    {newImageFiles.map((file, idx) => (
+                                        <div key={idx} className="relative group rounded-2xl overflow-hidden border-2 border-emerald-400 aspect-video bg-slate-100 shadow-2xs">
+                                            <img src={URL.createObjectURL(file)} alt="New" className="w-full h-full object-cover" />
+                                            <button
+                                                type="button"
+                                                onClick={() => removeNewImage(idx)}
+                                                className="absolute top-2 right-2 p-1 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Video Tour Links */}
+                        <div className="bg-slate-50 p-4 rounded-3xl border border-slate-200 space-y-3">
+                            <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">Tautan Video Virtual Tour (Opsional)</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
-                                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Keterangan Biaya Tambahan</label>
-                                    <input 
-                                        type="text" 
-                                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-orange-500" 
-                                        value={newPropForm.additionalFeeName || ''} 
-                                        onChange={e => setNewPropForm({ ...newPropForm, additionalFeeName: e.target.value })} 
-                                        placeholder="Contoh: Air, Listrik, Sampah, WiFi" 
+                                    <span className="text-[10px] font-bold text-slate-500 block mb-1">Link Reels Instagram</span>
+                                    <input
+                                        type="url"
+                                        placeholder="https://instagram.com/reel/..."
+                                        value={newPropForm.instagramUrl || ''}
+                                        onChange={e => setNewPropForm({ ...newPropForm, instagramUrl: e.target.value })}
+                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Total Nominal Ekstra</label>
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">Rp</span>
-                                        <input 
-                                            type="number" 
-                                            min="0" 
-                                            className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-xs font-bold outline-none focus:border-orange-500" 
-                                            value={newPropForm.additionalFeePrice || ''} 
-                                            onChange={e => setNewPropForm({ ...newPropForm, additionalFeePrice: e.target.value ? parseInt(e.target.value) : 0 })} 
-                                            placeholder="Contoh: 50000" 
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="lg:col-span-2 pt-3 border-t border-gray-150">
-                                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-2">Ketentuan Penagihan</p>
-                                    <div className="flex gap-2">
-                                        <button 
-                                            type="button"
-                                            onClick={() => setNewPropForm({ ...newPropForm, additionalFeeStartsFrom: 'month_1' })}
-                                            className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${
-                                                newPropForm.additionalFeeStartsFrom !== 'month_2' 
-                                                    ? 'bg-orange-500 text-white shadow-sm' 
-                                                    : 'bg-white text-gray-500 border border-gray-200'
-                                            }`}
-                                        >
-                                            Mulai dari Bulan Awal Sewa Pertama
-                                        </button>
-                                        <button 
-                                            type="button"
-                                            onClick={() => setNewPropForm({ ...newPropForm, additionalFeeStartsFrom: 'month_2' })}
-                                            className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${
-                                                newPropForm.additionalFeeStartsFrom === 'month_2' 
-                                                    ? 'bg-orange-500 text-white shadow-sm' 
-                                                    : 'bg-white text-gray-500 border border-gray-200'
-                                            }`}
-                                        >
-                                            Promo Bebas Tagihan di Bulan Pertama
-                                        </button>
-                                    </div>
-                                    <p className="text-[9px] text-gray-400 font-bold mt-2 leading-relaxed">
-                                        {newPropForm.additionalFeeStartsFrom === 'month_2' 
-                                            ? 'ℹ️ Biaya tambahan akan GRATIS pada awal sewa (bulan pertama), dan baru akan ditagih mulai periode perpanjangan berikutnya.'
-                                            : 'ℹ️ Biaya tambahan akan langsung ditagih bersamaan dengan pembayaran sewa pertama kali.'}
-                                    </p>
+                                    <span className="text-[10px] font-bold text-slate-500 block mb-1">Link Video TikTok</span>
+                                    <input
+                                        type="url"
+                                        placeholder="https://tiktok.com/@.../video/..."
+                                        value={newPropForm.tiktokUrl || ''}
+                                        onChange={e => setNewPropForm({ ...newPropForm, tiktokUrl: e.target.value })}
+                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                                    />
                                 </div>
                             </div>
-                            <p className="text-[10px] text-gray-400 italic">Isi jika kost menetapkan tagihan wajib bulanan di luar tagihan pokok kamar.</p>
                         </div>
                     </div>
                 );
-            case 'rooms':
+            }
+
+            // TAB 4: FASILITAS & UTILITAS
+            case 'facilities': {
                 return (
-                    <div className="space-y-6">
-                        {newPropForm.roomTypes.map((rt: any, rtIdx: number) => (
-                            <div key={rtIdx} className="border border-gray-200 rounded-2xl p-4 space-y-4 bg-gray-50/20 relative">
-                                <button type="button" onClick={() => removeRoomType(rtIdx)} className="absolute top-4 right-4 text-red-500 hover:bg-red-50 p-2 rounded-xl text-xs font-bold">Hapus Tipe</button>
-                                <div className="grid grid-cols-2 gap-3 pr-16">
-                                    <div>
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Nama Tipe Kamar</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            value={rt.name}
-                                            onChange={e => updateRoomTypeField(rtIdx, 'name', e.target.value)}
-                                            className="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400 bg-white"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Harga Bulanan (Rp)</label>
-                                        <input
-                                            type="number"
-                                            required
-                                            value={rt.price}
-                                            onChange={e => updateRoomTypeField(rtIdx, 'price', Number(e.target.value))}
-                                            className="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400 bg-white"
-                                        />
-                                    </div>
+                    <div className="space-y-6 animate-in fade-in duration-200">
+                        {/* Fasilitas Umum Visual Chips */}
+                        <div className="bg-slate-50 p-5 rounded-3xl border border-slate-200/80 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
+                                    Fasilitas Umum & Area Bersama
+                                </label>
+                                <span className="text-[10px] font-bold text-slate-400">Klik untuk mengaktifkan / menonaktifkan</span>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                                {commonFacilities.map(fac => {
+                                    const isSelected = (newPropForm.facilities || []).includes(fac);
+                                    return (
+                                        <button
+                                            key={fac}
+                                            type="button"
+                                            onClick={() => addFacility(fac)}
+                                            className={`px-3.5 py-2 rounded-2xl text-xs font-black uppercase tracking-wider border transition-all flex items-center gap-1.5 cursor-pointer ${
+                                                isSelected
+                                                    ? 'bg-orange-500 text-white border-orange-500 shadow-2xs'
+                                                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                                            }`}
+                                        >
+                                            {isSelected && <Check size={12} />}
+                                            <span>{fac}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Input Fasilitas Custom */}
+                            <div className="flex gap-2 pt-2">
+                                <input
+                                    type="text"
+                                    placeholder="Tambah fasilitas lain..."
+                                    value={tempFacilityInput}
+                                    onChange={e => setTempFacilityInput(e.target.value)}
+                                    onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addFacility(tempFacilityInput), setTempFacilityInput(''))}
+                                    className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        addFacility(tempFacilityInput);
+                                        setTempFacilityInput('');
+                                    }}
+                                    className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-black uppercase tracking-wider"
+                                >
+                                    Tambah
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Biaya Tambahan (Add-on Fees) */}
+                        <div className="bg-slate-50 p-5 rounded-3xl border border-slate-200/80 space-y-3">
+                            <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
+                                Biaya Tambahan & Add-on (Opsional)
+                            </label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <span className="text-[10px] font-bold text-slate-500 block mb-1">Nama Biaya Tambahan</span>
+                                    <input
+                                        type="text"
+                                        placeholder="Contoh: Parkir Mobil / Tambah Orang"
+                                        value={newPropForm.additionalFeeName || ''}
+                                        onChange={e => setNewPropForm({ ...newPropForm, additionalFeeName: e.target.value })}
+                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                                    />
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Ukuran Kamar</label>
-                                        <input
-                                            type="text"
-                                            value={rt.size}
-                                            onChange={e => updateRoomTypeField(rtIdx, 'size', e.target.value)}
-                                            className="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400 bg-white"
-                                        />
+                                <div>
+                                    <span className="text-[10px] font-bold text-slate-500 block mb-1">Tarif Biaya Tambahan (Rp/Bulan)</span>
+                                    <input
+                                        type="number"
+                                        placeholder="100000"
+                                        value={newPropForm.additionalFeePrice || ''}
+                                        onChange={e => setNewPropForm({ ...newPropForm, additionalFeePrice: Number(e.target.value) })}
+                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // TAB 5: STUDIO KAMAR & HUNIAN (THE CROWN JEWEL)
+            case 'rooms': {
+                const roomTypes = newPropForm.roomTypes || [];
+                const currentType = roomTypes[selectedRoomTypeTab] || roomTypes[0];
+
+                return (
+                    <div className="space-y-6 animate-in fade-in duration-200">
+                        {/* Header & Type Switcher */}
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-50 p-4 rounded-3xl border border-slate-200">
+                            <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 sm:pb-0">
+                                {roomTypes.map((rt: any, rtIdx: number) => (
+                                    <button
+                                        key={rtIdx}
+                                        type="button"
+                                        onClick={() => setSelectedRoomTypeTab(rtIdx)}
+                                        className={`px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
+                                            selectedRoomTypeTab === rtIdx
+                                                ? 'bg-slate-900 text-white shadow-sm'
+                                                : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                                        }`}
+                                    >
+                                        <span>{rt.name || `Tipe ${rtIdx + 1}`}</span>
+                                        <span className="ml-1.5 text-[10px] opacity-70">({rt.rooms?.length || 0} Kamar)</span>
+                                    </button>
+                                ))}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={addRoomType}
+                                className="px-3.5 py-2 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider shrink-0 shadow-2xs cursor-pointer"
+                            >
+                                + Tipe Kamar Baru
+                            </button>
+                        </div>
+
+                        {currentType && (
+                            <div className="space-y-6">
+                                {/* Room Type Config Bar */}
+                                <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
+                                    <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                                        <div className="flex items-center gap-2">
+                                            <Bed size={18} className="text-orange-500" />
+                                            <h4 className="font-black text-slate-900 text-sm uppercase">Konfigurasi {currentType.name}</h4>
+                                        </div>
+                                        {roomTypes.length > 1 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => removeRoomType(selectedRoomTypeTab)}
+                                                className="text-rose-500 hover:bg-rose-50 px-2.5 py-1 rounded-xl text-xs font-bold"
+                                            >
+                                                Hapus Tipe Ini
+                                            </button>
+                                        )}
                                     </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Nama Tipe Kamar</label>
+                                            <input
+                                                type="text"
+                                                value={currentType.name}
+                                                onChange={e => updateRoomTypeField(selectedRoomTypeTab, 'name', e.target.value)}
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Tarif Sewa (Rp/Bulan)</label>
+                                            <input
+                                                type="number"
+                                                value={currentType.price || ''}
+                                                onChange={e => updateRoomTypeField(selectedRoomTypeTab, 'price', Number(e.target.value))}
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Dimensi Kamar</label>
+                                            <input
+                                                type="text"
+                                                value={currentType.size || '3x4m'}
+                                                onChange={e => updateRoomTypeField(selectedRoomTypeTab, 'size', e.target.value)}
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Room Facilities Chips */}
                                     <div>
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Maks Penghuni</label>
-                                        <input
-                                            type="number"
-                                            value={rt.maxOccupants}
-                                            onChange={e => updateRoomTypeField(rtIdx, 'maxOccupants', Number(e.target.value))}
-                                            className="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400 bg-white"
-                                        />
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Fasilitas Dalam Kamar</label>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {commonRoomFacilities.map(rf => {
+                                                const hasFac = (currentType.roomFacilities || []).includes(rf);
+                                                return (
+                                                    <button
+                                                        key={rf}
+                                                        type="button"
+                                                        onClick={() => toggleRoomFacility(selectedRoomTypeTab, rf)}
+                                                        className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${
+                                                            hasFac
+                                                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                                                                : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
+                                                        }`}
+                                                    >
+                                                        {rf}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
+                                {/* Room Units Grid Header */}
+                                <div className="flex justify-between items-center pt-2">
                                     <div>
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Fasilitas Kamar</label>
-                                        <div className="flex flex-wrap gap-1 mb-2">
-                                            {rt.roomFacilities?.map((tag: string, tIdx: number) => (
-                                                <span key={tIdx} className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
-                                                    {tag}
-                                                    <button type="button" onClick={() => removeRoomTag(rtIdx, 'roomFacilities', tIdx)} className="font-extrabold">&times;</button>
-                                                </span>
-                                            ))}
-                                        </div>
-                                        <input
-                                            type="text"
-                                            placeholder="+ Tambah (Enter)"
-                                            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:border-orange-400"
-                                            value={tempTagInput[`${rtIdx}-roomFacilities`] || ''}
-                                            onChange={(e) => setTempTagInput({ ...tempTagInput, [`${rtIdx}-roomFacilities`]: e.target.value })}
-                                            onKeyPress={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    e.preventDefault();
-                                                    addRoomTag(rtIdx, 'roomFacilities', (e.target as HTMLInputElement).value);
-                                                }
-                                            }}
-                                        />
+                                        <h5 className="font-black text-slate-900 text-xs uppercase tracking-wider">Daftar Unit Kamar ({currentType.rooms?.length || 0} Unit)</h5>
+                                        <p className="text-[10px] text-slate-400 font-bold">Atur nomor unit kamar, status keterisian, dan identitas penyewa</p>
                                     </div>
-                                    <div>
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Fasilitas Kamar Mandi</label>
-                                        <div className="flex flex-wrap gap-1 mb-2">
-                                            {rt.bathroomFacilities?.map((tag: string, tIdx: number) => (
-                                                <span key={tIdx} className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
-                                                    {tag}
-                                                    <button type="button" onClick={() => removeRoomTag(rtIdx, 'bathroomFacilities', tIdx)} className="font-extrabold">&times;</button>
-                                                </span>
-                                            ))}
-                                        </div>
-                                        <input
-                                            type="text"
-                                            placeholder="+ Tambah (Enter)"
-                                            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:border-orange-400"
-                                            value={tempTagInput[`${rtIdx}-bathroomFacilities`] || ''}
-                                            onChange={(e) => setTempTagInput({ ...tempTagInput, [`${rtIdx}-bathroomFacilities`]: e.target.value })}
-                                            onKeyPress={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    e.preventDefault();
-                                                    addRoomTag(rtIdx, 'bathroomFacilities', (e.target as HTMLInputElement).value);
-                                                }
-                                            }}
-                                        />
-                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => addRoomToType(selectedRoomTypeTab)}
+                                        className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider transition-all"
+                                    >
+                                        + Tambah Unit Kamar
+                                    </button>
                                 </div>
 
-                                {/* ROOM MAP / HUNIAN DETAILS */}
-                                <div className="pt-4 border-t border-gray-200 space-y-3">
-                                    <div className="flex justify-between items-center">
-                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Daftar Kamar / Peta Hunian</p>
-                                        <button type="button" onClick={() => addRoomToType(rtIdx)} className="text-[10px] font-black text-orange-500 hover:underline">+ Tambah Kamar</button>
-                                    </div>
-                                    <div className="space-y-3">
-                                        {rt.rooms.map((rm: any, rmIdx: number) => (
-                                            <div key={rmIdx} className="bg-white p-3 rounded-xl border border-gray-200 space-y-3 relative">
-                                                <button type="button" onClick={() => removeRoomFromType(rtIdx, rmIdx)} className="absolute top-2.5 right-3 text-[10px] text-red-500 hover:bg-red-50 px-2 py-0.5 rounded">Hapus</button>
-                                                <div className="grid grid-cols-3 gap-3">
-                                                    <div>
-                                                        <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">No. Kamar</label>
-                                                        <input
-                                                            type="text"
-                                                            required
-                                                            value={rm.roomNumber}
-                                                            onChange={e => updateRoomField(rtIdx, rmIdx, 'roomNumber', e.target.value)}
-                                                            className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold text-gray-700"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">Status Kamar</label>
-                                                        <select
-                                                            value={rm.status}
-                                                            onChange={e => updateRoomField(rtIdx, rmIdx, 'status', e.target.value)}
-                                                            className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold text-gray-700"
-                                                        >
-                                                            <option value="kosong">Kosong</option>
-                                                            <option value="terisi">Terisi</option>
-                                                        </select>
-                                                    </div>
-                                                    {rm.status === 'terisi' && (
-                                                        <div>
-                                                            <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">Paket Sewa</label>
-                                                            <select
-                                                                value={rm.billingPeriod}
-                                                                onChange={e => updateRoomField(rtIdx, rmIdx, 'billingPeriod', e.target.value)}
-                                                                className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold text-gray-700"
-                                                            >
-                                                                <option value="bulanan">Bulanan</option>
-                                                                <option value="3bulanan">3 Bulan</option>
-                                                                <option value="6bulanan">6 Bulan</option>
-                                                                <option value="tahunan">Tahunan</option>
-                                                            </select>
+                                {/* Room Units Cards */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {(currentType.rooms || []).map((rm: any, rmIdx: number) => {
+                                        const isOccupied = rm.status === 'terisi';
+
+                                        return (
+                                            <div
+                                                key={rmIdx}
+                                                className={`p-5 rounded-3xl border transition-all space-y-4 ${
+                                                    isOccupied
+                                                        ? 'bg-emerald-50/40 border-emerald-200 shadow-2xs'
+                                                        : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
+                                                }`}
+                                            >
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <div className="w-9 h-9 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-xs">
+                                                            {rm.roomNumber || rmIdx + 1}
                                                         </div>
-                                                    )}
+                                                        <div>
+                                                            <input
+                                                                type="text"
+                                                                value={rm.roomNumber || ''}
+                                                                onChange={e => updateRoomField(selectedRoomTypeTab, rmIdx, 'roomNumber', e.target.value)}
+                                                                placeholder="No. Kamar"
+                                                                className="font-black text-slate-900 text-xs bg-transparent border-b border-dashed border-slate-300 focus:border-orange-500 outline-none w-24"
+                                                            />
+                                                            <p className="text-[10px] text-slate-400 font-bold">{currentType.name}</p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Status Switcher Button */}
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateRoomField(selectedRoomTypeTab, rmIdx, 'status', isOccupied ? 'kosong' : 'terisi')}
+                                                            className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border transition-all cursor-pointer ${
+                                                                isOccupied
+                                                                    ? 'bg-emerald-500 text-white border-emerald-500 shadow-2xs'
+                                                                    : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                                                            }`}
+                                                        >
+                                                            {isOccupied ? '🟢 Terisi' : '⚪ Kosong'}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeRoomFromType(selectedRoomTypeTab, rmIdx)}
+                                                            className="text-slate-300 hover:text-rose-500 p-1"
+                                                        >
+                                                            <X size={14} />
+                                                        </button>
+                                                    </div>
                                                 </div>
 
-                                                {/* CONDITIONAL TENANT INFORMATION */}
-                                                {rm.status === 'terisi' && (
-                                                    <div className="bg-orange-50/50 p-3 rounded-lg border border-orange-100 grid grid-cols-1 sm:grid-cols-3 gap-3 animate-in fade-in duration-200">
-                                                        <div>
-                                                            <label className="text-[8px] font-black text-orange-600 uppercase tracking-widest block mb-0.5">Nama Penghuni</label>
-                                                            <input
-                                                                type="text"
-                                                                required
-                                                                placeholder="Nama Lengkap"
-                                                                value={rm.tenantName}
-                                                                onChange={e => updateRoomField(rtIdx, rmIdx, 'tenantName', e.target.value)}
-                                                                className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold text-gray-700 bg-white"
-                                                            />
+                                                {/* Tenant Details (When Occupied) */}
+                                                {isOccupied ? (
+                                                    <div className="bg-white p-3.5 rounded-2xl border border-emerald-100 space-y-2 text-xs">
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <div>
+                                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Nama Penghuni</span>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Nama penyewa..."
+                                                                    value={rm.tenantName || ''}
+                                                                    onChange={e => updateRoomField(selectedRoomTypeTab, rmIdx, 'tenantName', e.target.value)}
+                                                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-800 mt-0.5"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">No. WhatsApp</span>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="0812..."
+                                                                    value={rm.tenantPhone || ''}
+                                                                    onChange={e => updateRoomField(selectedRoomTypeTab, rmIdx, 'tenantPhone', e.target.value)}
+                                                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-800 mt-0.5 font-mono"
+                                                                />
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <label className="text-[8px] font-black text-orange-600 uppercase tracking-widest block mb-0.5">Nomor HP</label>
-                                                            <input
-                                                                type="text"
-                                                                required
-                                                                placeholder="628..."
-                                                                value={rm.tenantPhone}
-                                                                onChange={e => updateRoomField(rtIdx, rmIdx, 'tenantPhone', e.target.value)}
-                                                                className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold text-gray-700 bg-white"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label className="text-[8px] font-black text-orange-600 uppercase tracking-widest block mb-0.5">Jatuh Tempo Sewa</label>
-                                                            <input
-                                                                type="date"
-                                                                required
-                                                                value={rm.dueDate}
-                                                                onChange={e => updateRoomField(rtIdx, rmIdx, 'dueDate', e.target.value)}
-                                                                className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold text-gray-700 bg-white"
-                                                            />
+                                                        <div className="grid grid-cols-2 gap-2 pt-1">
+                                                            <div>
+                                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Jatuh Tempo Sewa</span>
+                                                                <input
+                                                                    type="date"
+                                                                    value={rm.dueDate || ''}
+                                                                    onChange={e => updateRoomField(selectedRoomTypeTab, rmIdx, 'dueDate', e.target.value)}
+                                                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-800 mt-0.5"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Periode Tagihan</span>
+                                                                <select
+                                                                    value={rm.billingPeriod || 'bulanan'}
+                                                                    onChange={e => updateRoomField(selectedRoomTypeTab, rmIdx, 'billingPeriod', e.target.value)}
+                                                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-800 mt-0.5"
+                                                                >
+                                                                    <option value="bulanan">Bulanan</option>
+                                                                    <option value="triwulan">3 Bulan</option>
+                                                                    <option value="tahunan">Tahunan</option>
+                                                                </select>
+                                                            </div>
                                                         </div>
                                                     </div>
+                                                ) : (
+                                                    <div className="p-3 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center">
+                                                        <p className="text-[11px] font-bold text-emerald-700">✨ Unit Kosong Siap Disewakan</p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateRoomField(selectedRoomTypeTab, rmIdx, 'status', 'terisi')}
+                                                            className="text-[10px] font-black text-orange-600 uppercase tracking-wider mt-1 hover:underline cursor-pointer"
+                                                        >
+                                                            + Isi Data Penghuni
+                                                        </button>
+                                                    </div>
                                                 )}
-                                                {/* ROOM PHOTO GALLERY UPLOAD */}
-                                                <div className="pt-3 border-t border-gray-100 space-y-2">
-                                                    <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest block">Foto Kamar (Spesifik Unit)</label>
-                                                    <div className="flex flex-wrap gap-2 items-center">
-                                                        {/* Thumbnail list */}
-                                                        {rm.images?.map((imgUrl: string, imgIdx: number) => (
-                                                            <div key={imgIdx} className="relative w-14 h-14 rounded-lg overflow-hidden border border-gray-200 bg-gray-50 shrink-0 shadow-sm group">
-                                                                <img src={imgUrl} alt="Kamar" className="w-full h-full object-cover" />
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleDeleteRoomPhoto(rtIdx, rmIdx, imgUrl)}
-                                                                    className="absolute top-0.5 right-0.5 bg-black/60 hover:bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px] font-bold transition-all"
-                                                                >
-                                                                    &times;
-                                                                </button>
-                                                            </div>
-                                                        ))}
 
-                                                        {/* Upload Button */}
-                                                        <label className="w-14 h-14 rounded-lg border border-dashed border-gray-300 hover:border-orange-400 bg-gray-50 hover:bg-orange-50/20 flex flex-col items-center justify-center cursor-pointer transition-all shrink-0">
-                                                            {uploadingRooms[`${rtIdx}-${rmIdx}`] ? (
-                                                                <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-                                                            ) : (
-                                                                <>
-                                                                    <span className="text-sm">📷</span>
-                                                                    <span className="text-[7px] text-gray-400 font-bold uppercase mt-1">Upload</span>
-                                                                </>
-                                                            )}
+                                                {/* Room Photos Uploader */}
+                                                <div>
+                                                    <div className="flex justify-between items-center mb-1.5">
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Foto Kamar ({(rm.images || []).length})</span>
+                                                        <label className="text-[9px] font-black text-orange-600 uppercase tracking-wider hover:underline cursor-pointer">
+                                                            {uploadingRooms[`${selectedRoomTypeTab}-${rmIdx}`] ? 'Mengunggah...' : '+ Tambah Foto'}
                                                             <input
                                                                 type="file"
                                                                 accept="image/*"
-                                                                disabled={uploadingRooms[`${rtIdx}-${rmIdx}`]}
-                                                                onChange={(e) => handleUploadRoomPhoto(rtIdx, rmIdx, e)}
+                                                                disabled={uploadingRooms[`${selectedRoomTypeTab}-${rmIdx}`]}
+                                                                onChange={e => handleUploadRoomPhoto(selectedRoomTypeTab, rmIdx, e)}
                                                                 className="hidden"
                                                             />
                                                         </label>
                                                     </div>
+                                                    <div className="flex gap-2 overflow-x-auto pb-1">
+                                                        {(rm.images || []).map((imgUrl: string, iIdx: number) => (
+                                                            <div key={iIdx} className="relative w-14 h-14 rounded-xl overflow-hidden border border-slate-200 shrink-0 group">
+                                                                <img src={imgUrl} alt="Room" className="w-full h-full object-cover" />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDeleteRoomPhoto(selectedRoomTypeTab, rmIdx, imgUrl)}
+                                                                    className="absolute inset-0 bg-rose-950/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                                                >
+                                                                    <X size={12} />
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        ))}
-                                    </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
-                        ))}
-                        <button type="button" onClick={addRoomType} className="w-full py-3 border border-dashed border-gray-300 rounded-xl text-gray-500 font-bold hover:border-orange-500 hover:text-orange-500 transition-colors text-xs">
-                            + Tambah Tipe Kamar Baru
-                        </button>
+                        )}
                     </div>
                 );
-            case 'rules':
+            }
+
+            // TAB 6: PERATURAN & KEBIJAKAN
+            case 'rules': {
                 return (
-                    <div className="space-y-4">
-                        <div>
-                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">Peraturan Kost</label>
+                    <div className="space-y-6 animate-in fade-in duration-200">
+                        {/* Common Rules Suggestions */}
+                        <div className="bg-slate-50 p-5 rounded-3xl border border-slate-200/80 space-y-3">
+                            <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
+                                Pilihan Aturan Standar KostManager
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                                {commonRules.map(rule => {
+                                    const isAdded = (newPropForm.rules || []).includes(rule);
+                                    return (
+                                        <button
+                                            key={rule}
+                                            type="button"
+                                            onClick={() => {
+                                                if (isAdded) {
+                                                    setNewPropForm({ ...newPropForm, rules: (newPropForm.rules || []).filter((r: string) => r !== rule) });
+                                                } else {
+                                                    setNewPropForm({ ...newPropForm, rules: [...(newPropForm.rules || []), rule] });
+                                                }
+                                            }}
+                                            className={`px-3.5 py-2 rounded-2xl text-xs font-bold border transition-all text-left flex items-center gap-1.5 cursor-pointer ${
+                                                isAdded
+                                                    ? 'bg-slate-900 text-white border-slate-900 shadow-2xs font-black'
+                                                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                                            }`}
+                                        >
+                                            {isAdded && <Check size={12} />}
+                                            <span>{rule}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Custom Rules List */}
+                        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 space-y-3">
+                            <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
+                                Daftar Tata Tertib Gedung ({(newPropForm.rules || []).length})
+                            </label>
+
                             <div className="flex gap-2">
                                 <input
                                     type="text"
-                                    placeholder="Contoh: Dilarang membawa hewan peliharaan"
+                                    placeholder="Tulis aturan khusus lainnya..."
                                     value={tempRuleInput}
                                     onChange={e => setTempRuleInput(e.target.value)}
                                     onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addRule())}
-                                    className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400"
+                                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-800 outline-none focus:bg-white focus:border-orange-400"
                                 />
-                                <button type="button" onClick={addRule} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all">Tambah</button>
+                                <button
+                                    type="button"
+                                    onClick={addRule}
+                                    className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider"
+                                >
+                                    Tambah
+                                </button>
                             </div>
-                            <div className="space-y-2 mt-3">
-                                {newPropForm.rules?.map((r: string, i: number) => (
-                                    <div key={i} className="bg-white border border-gray-100 px-3 py-2 rounded-xl text-xs font-semibold flex justify-between items-center shadow-sm">
-                                        <span className="text-gray-700">{i + 1}. {r}</span>
-                                        <button type="button" onClick={() => removeRule(i)} className="text-red-500 hover:bg-red-50 px-2 py-0.5 rounded font-extrabold">&times;</button>
+
+                            <div className="space-y-2 pt-2">
+                                {(newPropForm.rules || []).map((r: string, i: number) => (
+                                    <div key={i} className="bg-slate-50 border border-slate-100 px-4 py-2.5 rounded-2xl text-xs font-bold flex justify-between items-center">
+                                        <span className="text-slate-800">{i + 1}. {r}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeRule(i)}
+                                            className="text-slate-400 hover:text-rose-500 p-1"
+                                        >
+                                            <X size={14} />
+                                        </button>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     </div>
                 );
+            }
+
             default:
                 return null;
         }
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-            <div className="bg-white rounded-[2rem] shadow-2xl max-w-4xl w-full overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
-                {/* Header */}
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
-                    <div>
-                        <span className="bg-orange-100 text-orange-600 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest">Portal KostManager</span>
-                        <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight mt-1.5">{editingPropertyId ? 'Edit Properti Kelolaan' : 'Tambah Properti Kelolaan Baru'}</h3>
-                        <p className="text-xs text-gray-400 font-bold mt-0.5">Lengkapi data properti dan pemetaan hunian secara detail</p>
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-md z-[110] flex items-center justify-center p-2 sm:p-4 animate-in fade-in">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-6xl w-full overflow-hidden max-h-[92vh] flex flex-col border border-slate-100 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                {/* 1. Header Bar Studio */}
+                <div className="p-5 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-xs">
+                            <Building2 size={22} />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                    🟢 Auto-Pilot Studio
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-bold">
+                                    {editingPropertyId ? 'Mode Pembaruan Data' : 'Pendaftaran Gedung Baru'}
+                                </span>
+                            </div>
+                            <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight mt-0.5">
+                                {editingPropertyId ? `Studio Properti: ${newPropForm.title || 'Kost'}` : 'Tambah Properti Kost Baru'}
+                            </h3>
+                        </div>
                     </div>
+
                     <button
                         onClick={onClose}
-                        className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"
+                        className="p-2.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
                     >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                        <X size={18} />
                     </button>
                 </div>
 
-                {/* Split-View Body */}
+                {/* 2. Split-View Body Workspace */}
                 <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-                    {/* Sidebar Nav (Style synced with Dashboard.tsx, no icons) */}
-                    <aside className="w-full md:w-56 bg-gray-50 border-b md:border-b-0 md:border-r border-gray-100 p-4 space-y-1 overflow-y-auto flex md:block shrink-0 gap-2">
-                        {sections.map(sec => (
-                            <button
-                                key={sec.id}
-                                type="button"
-                                onClick={() => setActiveSection(sec.id)}
-                                className={`w-full text-left px-6 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                                    activeSection === sec.id
-                                        ? 'bg-white text-orange-600 shadow-sm border border-gray-100'
-                                        : 'text-gray-400 hover:bg-white/50 hover:text-gray-600'
-                                }`}
-                            >
-                                <span>{sec.name}</span>
-                            </button>
-                        ))}
+                    {/* Sidebar Nav */}
+                    <aside className="w-full md:w-64 bg-slate-50/80 border-b md:border-b-0 md:border-r border-slate-200/80 p-3 space-y-1.5 overflow-x-auto md:overflow-y-auto flex md:block shrink-0 gap-1.5">
+                        {sections.map(sec => {
+                            const IconComponent = sec.icon;
+                            const isActive = activeSection === sec.id;
+
+                            return (
+                                <button
+                                    key={sec.id}
+                                    type="button"
+                                    onClick={() => setActiveSection(sec.id)}
+                                    className={`w-full text-left px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-between gap-2.5 cursor-pointer ${
+                                        isActive
+                                            ? 'bg-slate-900 text-white shadow-sm'
+                                            : 'text-slate-600 hover:bg-white hover:text-slate-900'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-2.5">
+                                        <IconComponent size={16} className={isActive ? 'text-orange-400' : 'text-slate-400'} />
+                                        <span>{sec.name}</span>
+                                    </div>
+                                    <span className={`text-[9px] px-2 py-0.5 rounded-md font-bold ${
+                                        isActive ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-600'
+                                    }`}>
+                                        {sec.badge}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </aside>
 
                     {/* Form Content Area */}
-                    <div className="flex-grow overflow-y-auto p-6 bg-white">
+                    <div className="flex-grow overflow-y-auto p-6 sm:p-8 bg-white">
                         {renderSectionContent()}
                     </div>
                 </div>
 
-                {/* Footer */}
-                <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-between items-center shrink-0">
+                {/* 3. Sticky Bottom Action Bar */}
+                <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+                        className="px-5 py-2.5 rounded-2xl border border-slate-200 text-slate-700 text-xs font-black uppercase tracking-wider hover:bg-slate-200/60 transition-all cursor-pointer"
                     >
                         Batal
                     </button>
-                    <button
-                        type="button"
-                        onClick={handleSave}
-                        disabled={savingProp}
-                        className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 disabled:opacity-50"
-                    >
-                        {savingProp ? 'Menyimpan...' : 'Simpan Properti'}
-                    </button>
-                </div>
-
-                {/* MODAL: MANUAL MAP PICKER FOR FACILITIES */}
-                {activeMapPicker && (
-                    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setActiveMapPicker(null)}></div>
-                        <div className="bg-white max-w-lg w-full rounded-3xl overflow-hidden shadow-2xl relative z-10 animate-in zoom-in-95 duration-300 flex flex-col">
-                            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                                <div>
-                                    <h3 className="font-black text-gray-900 uppercase tracking-tight">Pilih Titik di Peta</h3>
-                                    <p className="text-[10px] text-gray-500 font-bold uppercase mt-1">Geser peta untuk memilih lokasi presisi</p>
-                                </div>
-                                <button type="button" onClick={() => setActiveMapPicker(null)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 rounded-xl text-gray-400 hover:text-red-500 transition-colors">&times;</button>
-                            </div>
-                            <div className="relative h-[400px] w-full">
-                                <LocationPicker
-                                    lat={
-                                        (newPropForm[activeMapPicker.field] || [])[activeMapPicker.index]?.lat 
-                                        || newPropForm.location?.lat 
-                                        || -6.2088
-                                    }
-                                    lng={
-                                        (newPropForm[activeMapPicker.field] || [])[activeMapPicker.index]?.lng 
-                                        || newPropForm.location?.lng 
-                                        || 106.8456
-                                    }
-                                    onLocationChange={(lat, lng) => {
-                                        handleMapPickerSave(lat, lng);
-                                    }}
-                                />
-                            </div>
-                            <div className="p-4 bg-orange-50 border-t border-orange-100 flex justify-end">
-                              <p className="text-[10px] text-orange-600 font-bold italic">Lokasi otomatis disimpan saat penanda digeser.</p>
-                            </div>
-                        </div>
+                    <div className="flex items-center gap-2.5">
+                        <button
+                            type="button"
+                            onClick={handleSave}
+                            disabled={savingProp}
+                            className="px-7 py-3 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                        >
+                            {savingProp ? (
+                                <span>Menyimpan Studio...</span>
+                            ) : (
+                                <>
+                                    <CheckCircle2 size={15} />
+                                    <span>Simpan Perubahan Properti</span>
+                                </>
+                            )}
+                        </button>
                     </div>
-                )}
+                </div>
             </div>
         </div>
     );

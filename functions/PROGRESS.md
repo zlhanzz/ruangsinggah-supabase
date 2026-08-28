@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 134. Transformasi Modal Edit Properti Menjadi Advanced & Interactive Property Studio (`KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar modal pengeditan properti pada tingkatan KostManager tidak lagi berupa popup admin konvensional yang kaku dan sempit, melainkan dibuat lebih advance, profesional berstandar modern, dan sangat interaktif.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Full-Canvas Studio Workspace (`max-w-6xl` / 92vh)**:
+    - Layout kanvas kerja luas dengan sidebar navigasi ber-icon vector (`Building2`, `MapPin`, `Sparkles`, `Zap`, `Bed`, `ShieldCheck`), counter kelengkapan data per seksi, dan *sticky bottom action bar*.
+  * **2. Interactive Studio Kamar & Hunian (Per Tipe & Per Unit)**:
+    - Tab pemilih tipe kamar (`Tipe Kamar 1..N`) dengan rincian konfigurasi tarif, dimensi, dan fasilitas dalam kamar ber-chip interaktif.
+    - Kartu unit kamar interaktif: 1-klik switch status `🟢 Terisi` vs `⚪ Kosong`, form profil penghuni eksisting (Nama, No WA, Jatuh Tempo, Periode Bayar), dan galeri foto kamar dengan upload WebP instan.
+  * **3. Galeri Media Berbasis Aset & Video Tour**:
+    - Slot pengunggahan foto bangunan dengan preview instan, badge foto cover utama, dan input tautan video Reels Instagram / TikTok.
+  * **4. Fasilitas & Utilitas Berbasis Visual Chip Selector**:
+    - Chip selector fasilitas umum (`WiFi Cepat`, `Dapur Bersama`, `CCTV 24 Jam`, `Akses 24 Jam`, dll.), input fasilitas kustom, dan konfigurasi biaya tambahan (*add-on*).
+  * **5. Omnichannel WhatsApp Routing & Kebijakan Gedung**:
+    - Router penanggung jawab kontak booking WhatsApp dan daftar aturan tata tertib gedung interaktif.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus 100% dengan 0 error dalam 27.91 detik (2526 modules transformed).
+
 ### 133. Transformasi Tab Properti Terkelola Menjadi Enterprise Property Command Center (`KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta tinjauan komprehensif dan *devil's advocate* apakah tab Properti Terkelola sudah memadai untuk pengelolaan Auto-Pilot.
