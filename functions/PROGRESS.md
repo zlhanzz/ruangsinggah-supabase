@@ -2,6 +2,24 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 158. Penambahan Fungsi Interaktif Ubah Status Kamar (Kosong ↔ Terisi) pada Peta Unit Kamar (Room Matrix) di Portal KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta penambahan fitur pada menu kamar (*Room Matrix*) untuk mengubah status kamar dari Kosong menjadi Terisi, atau sebaliknya dari Terisi menjadi Kosong.
+- **Implementasi**:
+  * **1. Aksi Ubah Kosong -> Terisi (`quickOccupancyModal` & `handleSaveQuickOccupancy`)**:
+    - Tombol `[ ➕ Set Terisi ]` pada setiap unit kamar kosong.
+    - Menampilkan formulir cepat data penghuni (Nama Lengkap, Nomor WhatsApp, Tanggal Mulai Sewa, Tanggal Jatuh Tempo, dan Tarif Sewa Bulanan).
+    - Menyimpan mutasi status `Terisi` ke tabel `properties` dan `mitra_kostmanager` secara otomatis di Supabase.
+  * **2. Aksi Ubah Terisi -> Kosong (`vacateConfirmModal` & `handleConfirmVacateRoom`)**:
+    - Tombol `[ 🔓 Kosongkan Kamar ]` pada unit kamar yang sedang terisi.
+    - Menampilkan dialog konfirmasi pelepasan kamar.
+    - Menghapus data sewa kamar, mereset status unit menjadi `Kosong (Siap Disewakan)`, dan memperbarui okupansi gedung secara realtime.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 29.57s, 0 error).
+
 ### 157. Penambahan Tombol "Kirim Tagihan" & Generator Invoice WhatsApp di Modal Direktori Penghuni Properti (`KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta penambahan tombol khusus **Kirim Tagihan** pada modal Daftar Penghuni Properti (*Tenants Directory*) yang sebelumnya hanya memiliki satu tombol umum.

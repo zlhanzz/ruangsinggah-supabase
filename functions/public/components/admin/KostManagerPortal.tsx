@@ -1154,6 +1154,47 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     const [broadcastCategory, setBroadcastCategory] = useState<'LISTRIK_AIR' | 'KEBERSIHAN' | 'TAGIHAN' | 'TATA_TERTIB' | 'KUSTOM'>('LISTRIK_AIR');
     const [broadcastCustomText, setBroadcastCustomText] = useState<string>('');
 
+    // Room Occupancy Quick Mutation States (Kosong <-> Terisi)
+    const [quickOccupancyModal, setQuickOccupancyModal] = useState<{
+        open: boolean;
+        property: ManagedProperty | null;
+        roomIndex: number;
+        roomName: string;
+        price: number;
+        residentName: string;
+        residentPhone: string;
+        startDate: string;
+        endDate: string;
+        submitting: boolean;
+    }>({
+        open: false,
+        property: null,
+        roomIndex: -1,
+        roomName: '',
+        price: 0,
+        residentName: '',
+        residentPhone: '',
+        startDate: '',
+        endDate: '',
+        submitting: false
+    });
+
+    const [vacateConfirmModal, setVacateConfirmModal] = useState<{
+        open: boolean;
+        property: ManagedProperty | null;
+        roomIndex: number;
+        roomName: string;
+        residentName?: string;
+        submitting: boolean;
+    }>({
+        open: false,
+        property: null,
+        roomIndex: -1,
+        roomName: '',
+        residentName: '',
+        submitting: false
+    });
+
 
 
 
@@ -1517,6 +1558,156 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             alert('Gagal melakukan check-out: ' + err.message);
         } finally {
             setIsCheckingOut(false);
+        }
+    };
+
+    // --- QUICK OCCUPANCY MUTATION HANDLERS (ROOM MATRIX TOGGLE) ---
+    const handleSaveQuickOccupancy = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!quickOccupancyModal.property || quickOccupancyModal.roomIndex < 0) return;
+        const p = quickOccupancyModal.property;
+        const rIdx = quickOccupancyModal.roomIndex;
+
+        if (!quickOccupancyModal.residentName.trim()) {
+            alert('Mohon isi nama penghuni');
+            return;
+        }
+
+        setQuickOccupancyModal(prev => ({ ...prev, submitting: true }));
+        try {
+            const currentRooms = Array.isArray(p.room_types) ? JSON.parse(JSON.stringify(p.room_types)) : [];
+            if (currentRooms[rIdx]) {
+                currentRooms[rIdx] = {
+                    ...currentRooms[rIdx],
+                    status: 'Terisi',
+                    isAvailable: false,
+                    residentName: quickOccupancyModal.residentName.trim(),
+                    residentPhone: quickOccupancyModal.residentPhone.trim(),
+                    startDate: quickOccupancyModal.startDate || new Date().toISOString().split('T')[0],
+                    endDate: quickOccupancyModal.endDate || '',
+                    price: Number(quickOccupancyModal.price) || Number(currentRooms[rIdx].price) || Number(p.price) || 0
+                };
+            }
+
+            // Update properties table
+            await supabase
+                .from('properties')
+                .update({
+                    room_types: currentRooms,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', p.id);
+
+            // Sync mitra_kostmanager table if exists
+            await supabase
+                .from('mitra_kostmanager')
+                .update({
+                    room_types: currentRooms,
+                    updated_at: new Date().toISOString()
+                })
+                .or(`property_id.eq.${p.id},id.eq.${p.id}`);
+
+            // Refresh all data
+            await loadAllData();
+
+            // Update current selectedPropForRoomMatrix state
+            setSelectedPropForRoomMatrix(prev => {
+                if (!prev || prev.id !== p.id) return prev;
+                const occ = currentRooms.filter((r: any) => r.status === 'Terisi' || r.isAvailable === false || Boolean(r.residentName)).length;
+                return {
+                    ...prev,
+                    room_types: currentRooms,
+                    occupant_count: occ,
+                    empty_rooms: Math.max(0, currentRooms.length - occ)
+                };
+            });
+
+            setQuickOccupancyModal({
+                open: false,
+                property: null,
+                roomIndex: -1,
+                roomName: '',
+                price: 0,
+                residentName: '',
+                residentPhone: '',
+                startDate: '',
+                endDate: '',
+                submitting: false
+            });
+        } catch (err: any) {
+            console.error('Error saving occupancy:', err);
+            alert('Gagal memperbarui status kamar: ' + err.message);
+        } finally {
+            setQuickOccupancyModal(prev => ({ ...prev, submitting: false }));
+        }
+    };
+
+    const handleConfirmVacateRoom = async () => {
+        if (!vacateConfirmModal.property || vacateConfirmModal.roomIndex < 0) return;
+        const p = vacateConfirmModal.property;
+        const rIdx = vacateConfirmModal.roomIndex;
+
+        setVacateConfirmModal(prev => ({ ...prev, submitting: true }));
+        try {
+            const currentRooms = Array.isArray(p.room_types) ? JSON.parse(JSON.stringify(p.room_types)) : [];
+            if (currentRooms[rIdx]) {
+                currentRooms[rIdx] = {
+                    ...currentRooms[rIdx],
+                    status: 'Kosong',
+                    isAvailable: true,
+                    residentName: '',
+                    residentPhone: '',
+                    startDate: '',
+                    endDate: ''
+                };
+            }
+
+            // Update properties table
+            await supabase
+                .from('properties')
+                .update({
+                    room_types: currentRooms,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', p.id);
+
+            // Sync mitra_kostmanager table if exists
+            await supabase
+                .from('mitra_kostmanager')
+                .update({
+                    room_types: currentRooms,
+                    updated_at: new Date().toISOString()
+                })
+                .or(`property_id.eq.${p.id},id.eq.${p.id}`);
+
+            // Refresh all data
+            await loadAllData();
+
+            // Update current selectedPropForRoomMatrix state
+            setSelectedPropForRoomMatrix(prev => {
+                if (!prev || prev.id !== p.id) return prev;
+                const occ = currentRooms.filter((r: any) => r.status === 'Terisi' || r.isAvailable === false || Boolean(r.residentName)).length;
+                return {
+                    ...prev,
+                    room_types: currentRooms,
+                    occupant_count: occ,
+                    empty_rooms: Math.max(0, currentRooms.length - occ)
+                };
+            });
+
+            setVacateConfirmModal({
+                open: false,
+                property: null,
+                roomIndex: -1,
+                roomName: '',
+                residentName: '',
+                submitting: false
+            });
+        } catch (err: any) {
+            console.error('Error vacating room:', err);
+            alert('Gagal mengosongkan kamar: ' + err.message);
+        } finally {
+            setVacateConfirmModal(prev => ({ ...prev, submitting: false }));
         }
     };
 
@@ -2474,21 +2665,63 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                     </div>
 
                                                                     {isOccupied && tenant ? (
-                                                                        <div className="mt-3 pt-2.5 border-t border-emerald-200/60 text-xs space-y-1">
+                                                                        <div className="mt-3 pt-2.5 border-t border-emerald-200/60 text-xs space-y-2">
                                                                             <div className="flex items-center justify-between">
                                                                                 <span className="text-slate-500 font-bold text-[10px]">Penghuni:</span>
-                                                                                <span className="font-black text-slate-900 text-xs">{tenant.user?.name}</span>
+                                                                                <span className="font-black text-slate-900 text-xs">{tenant.user?.name || rt.residentName || 'Penyewa'}</span>
                                                                             </div>
                                                                             <div className="flex items-center justify-between text-[10px]">
                                                                                 <span className="text-slate-400 font-bold">Masa Sewa:</span>
-                                                                                <span className="text-slate-700 font-bold font-mono">{tenant.start_date} s/d {tenant.end_date}</span>
+                                                                                <span className="text-slate-700 font-bold font-mono">{tenant.start_date || rt.startDate || '-'} s/d {tenant.end_date || rt.endDate || '-'}</span>
+                                                                            </div>
+                                                                            <div className="flex items-center justify-end gap-1.5 pt-1">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => setVacateConfirmModal({
+                                                                                        open: true,
+                                                                                        property: p,
+                                                                                        roomIndex: rIdx,
+                                                                                        roomName,
+                                                                                        residentName: tenant.user?.name || rt.residentName || 'Penyewa',
+                                                                                        submitting: false
+                                                                                    })}
+                                                                                    className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-black text-[9px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                                                                                    title="Ubah status kamar menjadi Kosong"
+                                                                                >
+                                                                                    <LogOut size={11} /> Kosongkan Kamar
+                                                                                </button>
                                                                             </div>
                                                                         </div>
                                                                     ) : (
-                                                                        <div className="mt-3 pt-2.5 border-t border-slate-100 text-center">
-                                                                            <span className="text-[10px] text-emerald-600 font-bold flex items-center justify-center gap-1">
-                                                                                <CheckCircle2 size={11} /> Unit Siap Disewakan
+                                                                        <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
+                                                                            <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                                                                                <CheckCircle2 size={11} /> Siap Disewakan
                                                                             </span>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    const todayStr = new Date().toISOString().split('T')[0];
+                                                                                    const nextMonth = new Date();
+                                                                                    nextMonth.setMonth(nextMonth.getMonth() + 1);
+                                                                                    const nextMonthStr = nextMonth.toISOString().split('T')[0];
+                                                                                    setQuickOccupancyModal({
+                                                                                        open: true,
+                                                                                        property: p,
+                                                                                        roomIndex: rIdx,
+                                                                                        roomName,
+                                                                                        price: Number(rt.price) || Number(p.price) || 0,
+                                                                                        residentName: '',
+                                                                                        residentPhone: '',
+                                                                                        startDate: todayStr,
+                                                                                        endDate: nextMonthStr,
+                                                                                        submitting: false
+                                                                                    });
+                                                                                }}
+                                                                                className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-wider shadow-2xs transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                                                                                title="Ubah status kamar menjadi Terisi"
+                                                                            >
+                                                                                <Check size={11} /> Set Terisi
+                                                                            </button>
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -3769,6 +4002,137 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     setSavingProp={setSavingProp}
                     editingPropertyId={editingPropertyId}
                 />
+            )}
+            {/* MODAL 4: SET KAMAR TERISI (QUICK OCCUPANCY FORM) */}
+            {quickOccupancyModal.open && quickOccupancyModal.property && (
+                <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[120] flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white rounded-[2rem] shadow-2xl max-w-md w-full overflow-hidden flex flex-col border border-slate-100 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-emerald-50/70">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-black">
+                                    <Bed size={16} />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-black text-emerald-950 uppercase tracking-tight">Set Kamar Terisi</h3>
+                                    <p className="text-[10px] text-emerald-700 font-bold">{quickOccupancyModal.property.title} • {quickOccupancyModal.roomName}</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setQuickOccupancyModal(prev => ({ ...prev, open: false }))}
+                                className="p-2 hover:bg-slate-200/70 rounded-full text-slate-400 transition-colors"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSaveQuickOccupancy} className="p-6 space-y-4">
+                            <div>
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Nama Penghuni *</label>
+                                <input
+                                    type="text"
+                                    required
+                                    placeholder="Misal: Budi Santoso"
+                                    value={quickOccupancyModal.residentName}
+                                    onChange={e => setQuickOccupancyModal(prev => ({ ...prev, residentName: e.target.value }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500/20"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">No. WhatsApp / HP</label>
+                                <input
+                                    type="tel"
+                                    placeholder="Misal: 08123456789"
+                                    value={quickOccupancyModal.residentPhone}
+                                    onChange={e => setQuickOccupancyModal(prev => ({ ...prev, residentPhone: e.target.value }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500/20"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Tanggal Mulai Sewa</label>
+                                    <input
+                                        type="date"
+                                        value={quickOccupancyModal.startDate}
+                                        onChange={e => setQuickOccupancyModal(prev => ({ ...prev, startDate: e.target.value }))}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500/20"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Jatuh Tempo</label>
+                                    <input
+                                        type="date"
+                                        value={quickOccupancyModal.endDate}
+                                        onChange={e => setQuickOccupancyModal(prev => ({ ...prev, endDate: e.target.value }))}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500/20"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Tarif Sewa Bulanan (Rp)</label>
+                                <input
+                                    type="number"
+                                    value={quickOccupancyModal.price}
+                                    onChange={e => setQuickOccupancyModal(prev => ({ ...prev, price: Number(e.target.value) }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500/20"
+                                />
+                            </div>
+
+                            <div className="flex gap-2 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setQuickOccupancyModal(prev => ({ ...prev, open: false }))}
+                                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-black uppercase tracking-wider hover:bg-slate-100 transition-all cursor-pointer"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={quickOccupancyModal.submitting}
+                                    className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                                >
+                                    {quickOccupancyModal.submitting ? 'Menyimpan...' : 'Simpan & Set Terisi'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL 5: KONFIRMASI KOSONGKAN KAMAR */}
+            {vacateConfirmModal.open && vacateConfirmModal.property && (
+                <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[120] flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white rounded-[2rem] shadow-2xl max-w-sm w-full overflow-hidden flex flex-col border border-slate-100 animate-in zoom-in-95 p-6 space-y-4" onClick={e => e.stopPropagation()}>
+                        <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
+                            <LogOut size={24} />
+                        </div>
+                        <div className="text-center space-y-1">
+                            <h4 className="font-black text-base text-slate-900">Kosongkan Unit Kamar?</h4>
+                            <p className="text-xs text-slate-500 font-medium">
+                                Status <strong>{vacateConfirmModal.roomName}</strong> di <strong>{vacateConfirmModal.property.title}</strong> akan diubah menjadi <span className="text-emerald-600 font-bold">KOSONG</span> dan siap dipasarkan kembali.
+                            </p>
+                        </div>
+                        <div className="flex gap-2 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setVacateConfirmModal(prev => ({ ...prev, open: false }))}
+                                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                type="button"
+                                disabled={vacateConfirmModal.submitting}
+                                onClick={handleConfirmVacateRoom}
+                                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                            >
+                                {vacateConfirmModal.submitting ? 'Memproses...' : 'Ya, Kosongkan'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
