@@ -2,6 +2,18 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 156. Pembersihan Blok Modal Legacy `selectedPropForRoomDetail` di `KostManagerPortal.tsx` (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Terjadi runtime error `Uncaught ReferenceError: selectedPropForRoomDetail is not defined at KostManagerPortal (KostManagerPortal.tsx:3748:14)` saat memuat Portal KostManager.
+  2. Penyebab: Terdapat sisa blok modal legacy di baris 3747–3877 yang masih merujuk ke variabel `selectedPropForRoomDetail` yang sudah dihapus/digantikan oleh `selectedPropForTenants`.
+- **Implementasi**:
+  - Menghapus seluruh blok JSX modal legacy `selectedPropForRoomDetail` di bagian bawah file `KostManagerPortal.tsx`.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 33.55s, 0 error).
+
 ### 155. Transformasi Tombol Aksi Redundant Menjadi Modal Direktori Penghuni Properti (`👥 Penghuni`) di Portal KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna mempertanyakan redundansi antara tombol *Grid (Denah Kamar)* dan *🚪 Kamar*, karena keduanya menampilkan informasi unit kamar yang serupa.
