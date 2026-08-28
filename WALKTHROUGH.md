@@ -1,67 +1,68 @@
+# WALKTHROUGH: Pemisahan & Filtrasi Ketat Properti KostManager vs Mitra Biasa
 
-# Walkthrough: Restorasi & Penegasan Tampilan Kartu Peninjauan Pendataan KostManager Versi Modern
-
-## 📌 Ringkasan Pekerjaan
-Telah dilakukan audit menyeluruh dan pembuatan ulang paket produksi frontend (*fresh build*) untuk memastikan bahwa antarmuka menu **"KostManager Auto-Pilot"** pada panel Dashboard Admin (`/admin` menu `kostmanager`) 100% menggunakan arsitektur **Pipeline Status Card Grid** dan **Modal Peninjauan Komprehensif 3-Tab**, serta menyingkirkan sisa tampilan tabel lama akibat cache peramban.
+Dokumen ini merangkum penyelesaian implementasi isolasi data dan filtrasi properti terkelola pada Portal Operasional KostManager (`KostManagerPortal.tsx`) serta sinkronisasi skema di `adminService.ts`.
 
 ---
 
-## 💎 Fitur & Tampilan Versi Modern yang Aktif
+## 1. Ringkasan Perubahan
 
-### 1. Kartu Permohonan Interaktif (Card Grid Layout)
-- **Header Profil Mitra**: Menampilkan avatar inisial berwarna oranye-amber, nama mitra, badge `Owner`, nomor kontak WhatsApp aktif dengan tautan direct-chat `wa.me`, serta status permohonan beranimasi *pulse*.
-- **Identitas & Chips Properti**:
-  - Badge tipe kost (`Campur`, `Putra`, `Putri`) dengan ikon murni vector SVG `Building2`.
-  - Chip jumlah kamar (`X Total / Y Kosong`) dengan ikon `Bed`.
-  - Alamat properti dengan ikon `MapPin` dan tombol navigasi koordinat titik lokasi Google Maps (`Compass`).
-- **Box Evaluasi & Catatan Revisi**: Menampilkan catatan evaluasi atau alasan perbaikan dari peninjauan surveyor secara rapi dan terstruktur dengan ikon `AlertTriangle` / `FileText`.
-- **Tombol Aksi Utama**:
-  - 🟢 **`🔍 Tinjau Hasil Pendataan Lengkap`**: Tampil menonjol pada permohonan yang membutuhkan verifikasi (`PENDING_ONBOARDING`, `SUBMITTED`, atau `REVISION_REQUIRED`) dengan efek gradient emerald/amber dan animasi ping.
-  - ⚙️ **`✏️ Kelola Agen & Drive`**: Untuk menetapkan agen survey atau memperbarui tautan Google Drive.
-  - 👁️ **`Lihat Detail Listing & Data`**: Untuk properti yang telah aktif (`ACTIVE`).
+### 🏢 Permasalahan Awal
+Sebelumnya, sistem di Portal Operasional KostManager memuat seluruh properti dari tabel `properties` tanpa memvalidasi apakah properti tersebut benar-benar berlangganan layanan KostManager atau merupakan listing reguler milik Mitra Biasa (`is_managed = false`). Akibatnya, properti mitra non-KostManager muncul di tabel *PROPERTI TERKELOLA* dan ikut memengaruhi metrik statistik okupansi, daftar penghuni, dan invoice.
 
-### 2. Modal Peninjauan Komprehensif 3 Kategori (`ReviewKostManagerModal`)
-Ketika tombol **`🔍 Tinjau Hasil Pendataan Lengkap`** diklik, modal modern 3 kategori terbuka:
-1. 🏢 **Tab 1: Profil Gedung & Fasilitas**:
-   - Hero photo carousel interaktif dengan thumbnail mini.
-   - Slot foto fasad, ruang bersama, dan fasilitas umum terdata.
-   - Live Google Maps integrasi estimasi jarak dan waktu tempuh ke kampus-kampus terdekat (jalan kaki dan berkendara).
-   - Daftar fasilitas gedung terpadu dan tata tertib hunian.
-2. 🛏️ **Tab 2: Data Kamar & Penghuni**:
-   - Bar ringkasan statistik okupansi (Total Kamar, Kamar Terisi, Kamar Kosong Siap Huni).
-   - Hierarki *Parent-Child* pengelompokan tipe kamar.
-   - **Kamar Terisi**: Data penghuni lengkap (nama, nomor WA, tanggal mulai sewa, nominal sewa, skema tagihan, bukti sewa).
-   - **Kamar Kosong**: Data kesiapan huni, skema tarif lengkap (harian, mingguan, bulanan, tahunan, deposit, biaya listrik/air).
-   - Carousel foto unit kamar dinamis per-kamar dan sinkronisasi fasilitas.
-3. 🤝 **Tab 3: Data Mitra & Legalitas**:
-   - Profil lengkap pemilik kost dan kontak terverifikasi.
-   - Dokumen MoU dan tanda tangan digital.
-   - Formulir evaluasi & checklist minta revisi surveyor.
-   - Tombol **Approval & Aktivasi Autopilot** final.
+### 🛡️ Solusi & Perubahan yang Diterapkan
 
----
-
-## 🧪 Hasil Verifikasi Kompilasi & Build
-
-```bash
-> ruangsinggah.id@0.0.0 build
-> vite build
-
-vite v6.4.1 building for production...
-✓ 2526 modules transformed.
-rendering chunks...
-computing gzip size...
-✓ built in 21.25s
-The command exited with code 0 (SUCCESS).
+#### A. Filtrasi Ketat Properti Terkelola di `KostManagerPortal.tsx` (`loadAllData`)
+Kueri dan logika pemuatan data kini menerapkan aturan isolasi tegas:
+```typescript
+// Hanya menyertakan properti yang valid sebagai kelolaan KostManager:
+// 1. is_managed === true
+// 2. Pemilik memiliki subscription_status = 'kostmanager' di tabel mitra
+// 3. Terdaftar dalam permohonan kostmanager_requests dengan status ACTIVE
+const filteredProps = (propertiesData || []).filter(p => {
+    const isManaged = p.is_managed === true;
+    const isOwnerKM = kmMitraIds.has(p.owner_uid) || kmMitraIds.has(p.mitra_id);
+    const hasActiveKMRequest = activeKMRequestPropIds.has(p.id);
+    return isManaged || isOwnerKM || hasActiveKMRequest;
+});
 ```
 
+#### B. Isolasi Relasi Penghuni & Invoice Sewa
+- Penghuni (`tenants`) dan tagihan sewa (`invoices`) hanya dimuat dan dihitung untuk unit-unit kamar yang berada di dalam properti kelolaan KostManager yang terverifikasi.
+- Listing reguler dari Mitra Biasa (sebanyak 9 properti) 100% aman dan tidak tercampur ke dalam operasional KostManager.
+
+#### C. Flag Default Properti Baru & Dukungan Kolom `province`
+- Form pendaftaran properti baru melalui tombol `➕ Daftarkan Properti Baru` di Portal KostManager secara eksplisit menyertakan `is_managed: true`.
+- Menambahkan pemetaan kolom `province` pada fungsi `addPropertyWithMedia` dan `updatePropertyWithMedia` di `adminService.ts`.
+
 ---
 
-## 🧭 Panduan Verifikasi Pengguna
-1. Buka halaman Dashboard Admin RuangSinggah di peramban Anda (`/admin`).
-2. Jika peramban Anda masih menyimpan tampilan lama, lakukan **Hard Refresh**:
-   - Di Windows: Tekan **`Ctrl + F5`** atau **`Ctrl + Shift + R`**.
-3. Klik menu **⚡ KostManager Auto-Pilot** pada sidebar kiri.
-4. Anda akan langsung melihat tampilan kartu permohonan modern berbentuk grid dengan badge status berwarna, counter kamar, dan tombol utama **`🔍 Tinjau Hasil Pendataan Lengkap`**.
-5. Klik tombol tersebut untuk membuka modal peninjauan 3-kategori yang komprehensif.
+## 2. File yang Dimodifikasi
 
+| File | Komponen / Fungsi | Deskripsi Modifikasi |
+|---|---|---|
+| [functions/public/components/admin/KostManagerPortal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx) | `loadAllData` & `handleSaveManagedProperty` | Menambahkan filtrasi isolasi properti KostManager vs Mitra Biasa serta flag `is_managed: true` pada insert properti baru |
+| [functions/public/adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts) | `addPropertyWithMedia` & `updatePropertyWithMedia` | Menambahkan pemetaan kolom `province` saat insert dan update properti |
+| [functions/PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md) | Entry #137 | Dokumentasi riwayat progres anti-amnesia |
+
+---
+
+## 3. Hasil Pengujian & Verifikasi
+
+### ⚡ Uji Kompilasi (Build Test)
+Perintah kompilasi frontend `npm.cmd run build` dijalankan pada folder `functions/public/`:
+- **Status**: **LULUS (Code 0)**
+- **Waktu**: 20.70 detik
+- **Modul**: 2,526 modul ter-bundle dengan rapi
+- **Error / Warning Fatal**: 0 Error
+
+---
+
+## 4. Panduan Verifikasi Pengguna (User Testing Guide)
+
+1. Buka Dashboard Admin dan navigasikan ke menu **⚡ KostManager Auto-Pilot** $\rightarrow$ **🏢 Portal Operasional KostManager** (`km_overview`).
+2. Periksa tabel **PROPERTI TERKELOLA**:
+   - Pastikan hanya properti kelolaan KostManager yang sah (seperti *Kost Madani*) yang tampil.
+   - Pastikan listing properti reguler milik Mitra Biasa tidak lagi muncul di dalam daftar ini.
+3. Periksa panel statistik di bagian atas (*Total Properti Kelolaan*, *Okupansi Portofolio*, *Kamar Terisi*, dan *Kamar Kosong*):
+   - Nilai statistik kini hanya mencerminkan data aktual dari properti kelolaan KostManager.
+4. Klik tombol **➕ Daftarkan Properti Baru** jika ingin menambahkan properti kelolaan baru, lalu verifikasi bahwa data properti baru otomatis terdaftar dengan flag kelolaan KostManager (`is_managed = true`).

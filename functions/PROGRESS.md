@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 137. Pemisahan & Filtrasi Ketat Properti KostManager vs Mitra Biasa di Portal Operasional (`KostManagerPortal.tsx` & `adminService.ts`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menemukan bahwa properti milik **Mitra Biasa / Listing Reguler** (yang tidak berlangganan KostManager dan memiliki `is_managed = false`) ikut tercantum ke dalam tabel *PROPERTI TERKELOLA* di Portal Operasional KostManager dengan status *"AKTIF TERKELOLA"*.
+  2. Hal ini mencampuradukkan data portofolio autopilot, statistik okupansi kamar, daftar penghuni, dan penagihan sewa antara listing reguler dan properti kelolaan KostManager.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Filtrasi Ketat & Isolasi Mutlak di `loadAllData` (`KostManagerPortal.tsx`)**:
+    - Sistem hanya memuat properti ke dalam Portal KostManager jika memenuhi salah satu kriteria valid:
+      - `p.is_managed === true` (telah disetujui / diaktifkan sebagai kelolaan KostManager).
+      - Pemilik properti (`owner_uid`) tercatat memiliki status `subscription_status = 'kostmanager'` di tabel `mitra`.
+      - Pemilik properti atau properti terdaftar secara resmi pada pengajuan aktif `kostmanager_requests` (`status = 'ACTIVE'`).
+    - Seluruh 9 listing reguler milik Mitra Biasa non-KostManager **100% diisolasi dan dilarang masuk** ke Portal KostManager.
+  * **2. Penyelarasan Relasi Penghuni, Statistik & Penagihan Sewa**:
+    - Data penyewa kamar (`tenants`), metrik okupansi portofolio, kamar kosong siap huni, dan invoice sewa bulanan (`invoices`) hanya menghitung unit dari properti kelolaan KostManager yang sah.
+  * **3. Penegasan Flag `is_managed: true` pada Form Penambahan Properti**:
+    - Memastikan properti baru yang didaftarkan melalui tombol `➕ Daftarkan Properti Baru` di Portal KostManager otomatis menyimpan `is_managed: true` ke database Supabase.
+    - Menambahkan sinkronisasi kolom `province` pada `addPropertyWithMedia` dan `updatePropertyWithMedia` di `adminService.ts`.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus 100% dengan 0 error dalam 20.70 detik (2526 modules transformed).
+
 ### 136. Smart Auto-Detection & Split Wilayah Administrasi (Provinsi, Kota, Kecamatan) + Alamat Lengkap Real Bangunan (`KostManagerPortal.tsx` & `AgentDashboard.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar sistem secara otomatis dan cerdas membagi wilayah administrasi menjadi **Provinsi**, **Kota/Kabupaten**, dan **Kecamatan/Area** langsung dari Google Maps Geocoding API saat meletakkan/mencari titik pin pada peta.

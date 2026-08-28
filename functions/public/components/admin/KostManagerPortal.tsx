@@ -564,9 +564,10 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                 .eq('status', 'ACTIVE');
 
             const reqOwnerIds = kmRequests?.map(r => r.user_id).filter(Boolean) || [];
+            const reqPropertyIds = kmRequests?.map(r => r.property_id).filter(Boolean) || [];
 
-            // 3. Ambil SELURUH properti aktif non-draft untuk pengelolaan portofolio
-            const { data: props, error: pErr } = await supabase
+            // 3. Ambil data properti dan filter HANYA properti yang terdaftar sebagai kelolaan KostManager
+            const { data: allRawProps, error: pErr } = await supabase
                 .from('properties')
                 .select('*')
                 .neq('status', 'draft')
@@ -574,7 +575,16 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
 
             if (pErr) throw pErr;
 
-            const propOwnerIds = props?.map(p => p.owner_uid).filter(Boolean) || [];
+            // Filter ketat isolasi: Hanya properti KostManager (is_managed = true atau milik mitra berlangganan/request aktif)
+            const props = (allRawProps || []).filter((p: any) => {
+                const isManagedFlag = p.is_managed === true;
+                const isSubscribedOwner = ownerIds.includes(p.owner_uid);
+                const isActiveRequestOwner = reqOwnerIds.includes(p.owner_uid);
+                const isLinkedActiveRequest = Boolean(p.id && reqPropertyIds.includes(p.id));
+                return isManagedFlag || isSubscribedOwner || isActiveRequestOwner || isLinkedActiveRequest;
+            });
+
+            const propOwnerIds = props.map((p: any) => p.owner_uid).filter(Boolean);
             const allRelevantOwnerUids = [...new Set([...ownerIds, ...reqOwnerIds, ...propOwnerIds])];
 
             // 4. Ambil seluruh daftar pemilik (mitra) dari platform untuk dropdown modal
@@ -1010,6 +1020,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     type: newPropForm.type,
                     price: finalPrice,
                     owner_uid: newPropForm.owner_uid,
+                    is_managed: true,
                     room_types: mappedRoomTypes,
                     status: 'published',
                     location: newPropForm.location,
