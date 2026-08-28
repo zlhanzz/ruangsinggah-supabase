@@ -1015,7 +1015,10 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     description: newPropForm.description || '',
                     address: newPropForm.address,
                     city: newPropForm.city,
-                province: newPropForm.province || '',
+                metadata: {
+                    ...(newPropForm.metadata || {}),
+                    province: newPropForm.province || ''
+                },
                     area: newPropForm.area || '',
                     type: newPropForm.type,
                     price: finalPrice,
@@ -1193,7 +1196,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             address: p.address || '',
             city: p.city || '',
             area: p.area || '',
-            province: (p as any).province || '',
+            province: (p as any).province || p.metadata?.province || '',
             type: p.type || 'Campur',
             price: p.price || 0,
             owner_uid: p.owner_uid || '',

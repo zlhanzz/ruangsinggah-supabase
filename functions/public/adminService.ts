@@ -1759,7 +1759,10 @@ export async function addPropertyWithMedia(
       address: kostData.address,
       city: kostData.city,
       area: kostData.area || '',
-      province: kostData.province || '',
+      metadata: {
+        ...(kostData.metadata || {}),
+        province: kostData.province || ''
+      },
       type: kostData.type,
       property_type: kostData.type, // Map the type specifically for Supabase DB
       status: kostData.status || 'draft',
@@ -1898,7 +1901,11 @@ export async function updatePropertyWithMedia(
       address: kostData.address,
       city: kostData.city,
       area: kostData.area,
-      province: kostData.province !== undefined ? kostData.province : undefined,
+      metadata: {
+        ...(existing.metadata || {}),
+        ...(kostData.metadata || {}),
+        ...(kostData.province !== undefined ? { province: kostData.province } : {})
+      },
       type: kostData.type,
       property_type: kostData.type, // Sync added column
       status: kostData.status,

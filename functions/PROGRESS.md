@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 138. Perbaikan Pin Peta Minimize, Sinkronisasi Metadata Wilayah Supabase & Indikator Evaluasi Revisi (`AgentDashboard.tsx`, `adminService.ts`, `KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. **Pin Peta Tidak Bisa Ditetapkan di Mode Minimize**: Pada form pendataan survei `AgentDashboard.tsx`, surveyor/agen tidak dapat mengunci atau mengubah titik koordinat langsung dari peta mini (inline mode) karena event klik dan geser hanya mengubah state temporary tanpa mengeksekusi reverse geocoding atau memperbarui koordinat form.
+  2. **Data Provinsi & Kota/Kabupaten Hilang saat Dibuka Kembali**: Saat draf disimpan atau hasil survei dikirim ke database, query update/insert Supabase mengalami error `Could not find the 'province' column of 'properties' in the schema cache` karena tabel PostgreSQL `properties` tidak memiliki kolom terpisah `province` (harus berada di dalam `metadata`). Akibatnya mutasi database gagal dan data wilayah hilang saat form dibuka kembali.
+  3. **Indikator Kelap-Kelip Evaluasi**: Penjelasan dan penyelarasan alur transisi status revisi dari `REVISION_REQUIRED` (aktif ber-indikator interaktif) menjadi `SUBMITTED` / `PENDING_ONBOARDING` (telah dikirim ulang dan menunggu verifikasi admin).
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Interaktivitas Penuh Mini-Map Geocoding (`AgentDashboard.tsx`)**:
+    - Membuat fungsi terpadu `reverseGeocodeAndApply(lat, lng)` yang langsung mengunci koordinat GPS form, menggerakkan marker, melakukan pan pada peta, dan memicu *Google Maps Reverse Geocoder*.
+    - Menghubungkan listener `click` dan `dragend` pada instance peta mini (`kmMapRef`) serta tombol GPS (*"Gunakan Lokasi Saya Saat Ini"*) ke `reverseGeocodeAndApply`.
+    - Alamat, Provinsi, Kota/Kabupaten (tanpa prefiks *"Kota "* / *"Kabupaten "*), dan Kecamatan/Area (tanpa prefiks *"Kecamatan "* / *"Kec. "*) langsung terisi otomatis secara real-time di mode minimize maupun layar penuh.
+  * **2. Penyimpanan Wilayah Aman Berbasis Metadata (`metadata.province`)**:
+    - Memindahkan penyimpanan `province` ke dalam objek `metadata: { ...metadata, province }` pada `handleSaveDraftDirectly` dan `handleSaveKostManagerListing` di `AgentDashboard.tsx`, `addPropertyWithMedia` dan `updatePropertyWithMedia` di `adminService.ts`, serta `handleSaveManagedProperty` di `KostManagerPortal.tsx`.
+    - Menghilangkan kolom top-level `province` yang memicu kegagalan skema Supabase.
+    - Pada `openKostManagerListing`, `province` kini dimuat kembali dari `dbPropertyRecord.province || dbPropertyRecord.metadata?.province || dbKmProp?.metadata?.province || ''`.
+    - Menambahkan sanitasi otomatis jika data lama di `city` diawali teks *"Kecamatan ..."*, nilai tersebut otomatis dipindahkan ke `area` dan `city` di-reset ke *"Makassar"*.
+  * **3. Penyelarasan Indikator Evaluasi & Status Pengajuan**:
+    - Memastikan alur status dan catatan perbaikan tetap transparan dan akurat sepanjang siklus revisi antara agen dan Super Admin.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus 100% dengan 0 error dalam 28.82 detik (2526 modules transformed).
+
+
 ### 137. Pemisahan & Filtrasi Ketat Properti KostManager vs Mitra Biasa di Portal Operasional (`KostManagerPortal.tsx` & `adminService.ts`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menemukan bahwa properti milik **Mitra Biasa / Listing Reguler** (yang tidak berlangganan KostManager dan memiliki `is_managed = false`) ikut tercantum ke dalam tabel *PROPERTI TERKELOLA* di Portal Operasional KostManager dengan status *"AKTIF TERKELOLA"*.
