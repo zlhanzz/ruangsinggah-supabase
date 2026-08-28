@@ -2,6 +2,19 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 159. Perubahan Penamaan Menu & Judul "Tagihan Bulanan" Menjadi "Riwayat Pembayaran Sewa" pada Portal KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar menu "Tagihan Bulanan" di Portal KostManager diganti menjadi "Riwayat Pembayaran Sewa".
+- **Implementasi**:
+  * **1. Navigasi Sidebar**: Mengubah label menu item `billing` menjadi **"Riwayat Pembayaran Sewa"**.
+  * **2. Page Header & Deskripsi**: Mengubah header utama tab `billing` menjadi **"RIWAYAT PEMBAYARAN SEWA"** dengan deskripsi *"Mencatat, memantau riwayat pembayaran sewa, dan mengelola tagihan sewa kost"*.
+  * **3. Info Banner Operasional**: Menyelaraskan teks banner panduan operasional pada tab Ringkasan.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 52.86s, 0 error).
+
 ### 158. Penambahan Fungsi Interaktif Ubah Status Kamar (Kosong ↔ Terisi) pada Peta Unit Kamar (Room Matrix) di Portal KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta penambahan fitur pada menu kamar (*Room Matrix*) untuk mengubah status kamar dari Kosong menjadi Terisi, atau sebaliknya dari Terisi menjadi Kosong.

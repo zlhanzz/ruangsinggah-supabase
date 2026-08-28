@@ -2087,7 +2087,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                         { key: 'overview', icon: '📊', label: 'Ringkasan' },
                         { key: 'properties', icon: '🏠', label: 'Properti Terkelola' },
                         { key: 'tenants', icon: '👥', label: 'Penghuni' },
-                        { key: 'billing', icon: '🧾', label: 'Tagihan Bulanan' },
+                        { key: 'billing', icon: '🧾', label: 'Riwayat Pembayaran Sewa' },
                         { key: 'packages', icon: '⚙️', label: 'Harga Langganan' }
                     ] as const).map(t => (
                         <button
@@ -2123,13 +2123,13 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                             {activeTab === 'overview' ? 'Ringkasan Operasional' :
                              activeTab === 'properties' ? 'Properti Terkelola' :
                              activeTab === 'tenants' ? 'Daftar Penghuni' :
-                             activeTab === 'billing' ? 'Tagihan Bulanan' : 'Harga Langganan KostManager'}
+                             activeTab === 'billing' ? 'Riwayat Pembayaran Sewa' : 'Harga Langganan KostManager'}
                         </h2>
                         <p className="text-xs text-gray-400 font-bold mt-1">
                             {activeTab === 'overview' ? 'Analisis okupansi, tagihan, dan status auto-pilot aktif' :
                              activeTab === 'properties' ? 'Kelola detail kamar, kapasitas, dan status pemasaran properti' :
                              activeTab === 'tenants' ? 'Daftar penghuni aktif beserta periode sewa dan detail kontak' :
-                             activeTab === 'billing' ? 'Menerbitkan dan mengelola riwayat tagihan sewa bulanan' :
+                             activeTab === 'billing' ? 'Mencatat, memantau riwayat pembayaran sewa, dan mengelola tagihan sewa kost' :
                              'Mengatur pilihan durasi dan harga paket langganan KostManager untuk Mitra'}
                         </p>
                     </div>
@@ -2203,7 +2203,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                 <div>
                                     <h4 className="text-sm font-black text-orange-950 uppercase tracking-tight">Operasional Auto-Pilot Aktif</h4>
                                     <p className="text-xs text-orange-800 leading-relaxed mt-1">
-                                        Seluruh kost yang terdaftar di halaman ini berada di bawah kendali manajemen RuangSinggah. Calon penghuni baru dapat memesan langsung dari website utama. Untuk tagihan bulanan penyewa lama, gunakan tab <strong>"Tagihan Bulanan"</strong> untuk menerbitkan tagihan secara berkala.
+                                        Seluruh kost yang terdaftar di halaman ini berada di bawah kendali manajemen RuangSinggah. Calon penghuni baru dapat memesan langsung dari website utama. Untuk tagihan bulanan penyewa lama, gunakan tab <strong>"Riwayat Pembayaran Sewa"</strong> untuk menerbitkan dan memantau status pembayaran.
                                     </p>
                                 </div>
                             </div>
