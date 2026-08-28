@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '../../supabase';
-import { FORMAT_CURRENCY } from '../../constants';
 import { 
     Users, 
     Calendar, 
@@ -36,7 +34,18 @@ import {
     ShieldCheck,
     ArrowUpRight,
     TrendingUp,
-    MapPin
+    MapPin,
+    Camera,
+    ZoomIn,
+    Bath,
+    CookingPot,
+    ChevronLeft,
+    ChevronRight,
+    Home,
+    Lock,
+    AppWindow,
+    Plus,
+    Trash2
 } from 'lucide-react';
 import { KostManagerPackage } from '../../types';
 import { 
@@ -3094,21 +3103,31 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
     setSavingProp,
     editingPropertyId
 }) => {
-    const [activeSection, setActiveSection] = useState<string>('info');
+    // 3-Step Navigation Tabs (Identical to Survey Review/Pendataan)
+    const [activeTab, setActiveTab] = useState<1 | 2 | 3>(1);
+    
+    // Active Room Index in Step 2
+    const [activeRoomIdx, setActiveRoomIdx] = useState<number>(0);
+    
+    // Hero photo carousel state in Step 1
+    const [selectedHeroPhotoIdx, setSelectedHeroPhotoIdx] = useState<number>(0);
+
+    // Lightbox modal state
+    const [lightboxPhoto, setLightboxPhoto] = useState<{ url: string; label?: string } | null>(null);
+
+    // Temp Inputs
     const [tempFacilityInput, setTempFacilityInput] = useState('');
     const [tempRuleInput, setTempRuleInput] = useState('');
     const [uploadingRooms, setUploadingRooms] = useState<Record<string, boolean>>({});
 
-    // Local state for files (Main Media Tab)
+    // Local files state
     const [newImageFiles, setNewImageFiles] = useState<File[]>([]);
     const [newVideoFiles, setNewVideoFiles] = useState<File[]>([]);
 
+    // Owner search dropdown
     const [ownerSearchQuery, setOwnerSearchQuery] = useState('');
     const [isOwnerDropdownOpen, setIsOwnerDropdownOpen] = useState(false);
     const ownerDropdownRef = useRef<HTMLDivElement>(null);
-
-    // Selected room type filter for room studio
-    const [selectedRoomTypeTab, setSelectedRoomTypeTab] = useState<number>(0);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -3122,27 +3141,64 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
         };
     }, []);
 
-    const handleUploadRoomPhoto = async (typeIdx: number, roomIdx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    // Helper: Normalize Room List across roomTypes
+    const roomTypes = Array.isArray(newPropForm.roomTypes) ? newPropForm.roomTypes : [];
+    
+    // Flat rooms helper
+    const getFlattenedRooms = () => {
+        const list: any[] = [];
+        roomTypes.forEach((rt: any, rtIdx: number) => {
+            const rooms = Array.isArray(rt.rooms) ? rt.rooms : [];
+            rooms.forEach((rm: any, rmIdx: number) => {
+                list.push({
+                    ...rm,
+                    parentTypeIdx: rtIdx,
+                    parentRoomIdx: rmIdx,
+                    typeName: rt.name,
+                    typePrice: rt.price,
+                    typeSize: rt.size,
+                    typeFacilities: rt.roomFacilities || [],
+                    typeBathroomFacilities: rt.bathroomFacilities || []
+                });
+            });
+        });
+        return list;
+    };
+
+    const flatRooms = getFlattenedRooms();
+    const activeRoom = flatRooms[activeRoomIdx] || flatRooms[0] || null;
+
+    // Room Photo Upload per category (Kamar, Kasur, Kamar Mandi, Jendela)
+    const handleUploadCategorizedRoomPhoto = async (categoryKey: string, e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!activeRoom) return;
         const files = e.target.files;
         if (!files || files.length === 0) return;
         const file = files[0];
-        
-        const roomKey = `${typeIdx}-${roomIdx}`;
-        setUploadingRooms(prev => ({ ...prev, [roomKey]: true }));
+
+        const uploadKey = `${activeRoom.parentTypeIdx}-${activeRoom.parentRoomIdx}-${categoryKey}`;
+        setUploadingRooms(prev => ({ ...prev, [uploadKey]: true }));
+
         try {
             const folder = `kostmanager/rooms/${Date.now()}`;
             const publicUrl = await uploadFileAndGetURL(file, folder);
-            
+
             setNewPropForm((prev: any) => {
                 const updatedRoomTypes = (prev.roomTypes || []).map((rt: any, rtIdx: number) => {
-                    if (rtIdx !== typeIdx) return rt;
+                    if (rtIdx !== activeRoom.parentTypeIdx) return rt;
                     const updatedRooms = (rt.rooms || []).map((rm: any, rmIdx: number) => {
-                        if (rmIdx !== roomIdx) return rm;
-                        const currentImages = rm.images || [];
-                        if (currentImages.includes(publicUrl)) return rm;
+                        if (rmIdx !== activeRoom.parentRoomIdx) return rm;
+                        const currentImages = Array.isArray(rm.images) ? [...rm.images] : [];
+                        const currentCatPhotos = { ...(rm.categorizedPhotos || {}) };
+                        const catList = Array.isArray(currentCatPhotos[categoryKey]) ? [...currentCatPhotos[categoryKey]] : [];
+                        
+                        if (!currentImages.includes(publicUrl)) currentImages.push(publicUrl);
+                        if (!catList.includes(publicUrl)) catList.push(publicUrl);
+                        currentCatPhotos[categoryKey] = catList;
+
                         return {
                             ...rm,
-                            images: [...currentImages, publicUrl]
+                            images: currentImages,
+                            categorizedPhotos: currentCatPhotos
                         };
                     });
                     return { ...rt, rooms: updatedRooms };
@@ -3150,22 +3206,29 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                 return { ...prev, roomTypes: updatedRoomTypes };
             });
         } catch (error: any) {
-            alert("Gagal mengunggah foto kamar: " + error.message);
+            alert('Gagal mengunggah foto kamar: ' + error.message);
         } finally {
             e.target.value = '';
-            setUploadingRooms(prev => ({ ...prev, [roomKey]: false }));
+            setUploadingRooms(prev => ({ ...prev, [uploadKey]: false }));
         }
     };
 
-    const handleDeleteRoomPhoto = (typeIdx: number, roomIdx: number, photoUrl: string) => {
+    const handleDeleteCategorizedRoomPhoto = (categoryKey: string, photoUrl: string) => {
+        if (!activeRoom) return;
         setNewPropForm((prev: any) => {
             const updatedRoomTypes = (prev.roomTypes || []).map((rt: any, rtIdx: number) => {
-                if (rtIdx !== typeIdx) return rt;
+                if (rtIdx !== activeRoom.parentTypeIdx) return rt;
                 const updatedRooms = (rt.rooms || []).map((rm: any, rmIdx: number) => {
-                    if (rmIdx !== roomIdx) return rm;
+                    if (rmIdx !== activeRoom.parentRoomIdx) return rm;
+                    const currentImages = (rm.images || []).filter((u: string) => u !== photoUrl);
+                    const currentCatPhotos = { ...(rm.categorizedPhotos || {}) };
+                    if (currentCatPhotos[categoryKey]) {
+                        currentCatPhotos[categoryKey] = currentCatPhotos[categoryKey].filter((u: string) => u !== photoUrl);
+                    }
                     return {
                         ...rm,
-                        images: (rm.images || []).filter((img: string) => img !== photoUrl)
+                        images: currentImages,
+                        categorizedPhotos: currentCatPhotos
                     };
                 });
                 return { ...rt, rooms: updatedRooms };
@@ -3174,254 +3237,129 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
         });
     };
 
-    // Location Search States
-    const [searchLocationText, setSearchLocationText] = useState("");
-    const [isSearchingLocation, setIsSearchingLocation] = useState(false);
-    const [searchLocationResults, setSearchLocationResults] = useState<any[]>([]);
-    const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    // Update active room field directly
+    const updateActiveRoomField = (field: string, value: any) => {
+        if (!activeRoom) return;
+        setNewPropForm((prev: any) => {
+            const updatedRoomTypes = (prev.roomTypes || []).map((rt: any, rtIdx: number) => {
+                if (rtIdx !== activeRoom.parentTypeIdx) return rt;
+                const updatedRooms = (rt.rooms || []).map((rm: any, rmIdx: number) => {
+                    if (rmIdx !== activeRoom.parentRoomIdx) return rm;
+                    return { ...rm, [field]: value };
+                });
+                return { ...rt, rooms: updatedRooms };
+            });
+            return { ...prev, roomTypes: updatedRoomTypes };
+        });
+    };
 
-    const handleSearchLocation = (text: string) => {
-        setSearchLocationText(text);
+    // Update active room type specification
+    const updateActiveRoomTypeField = (field: string, value: any) => {
+        if (!activeRoom) return;
+        setNewPropForm((prev: any) => {
+            const updatedRoomTypes = (prev.roomTypes || []).map((rt: any, rtIdx: number) => {
+                if (rtIdx !== activeRoom.parentTypeIdx) return rt;
+                return { ...rt, [field]: value };
+            });
+            return { ...prev, roomTypes: updatedRoomTypes };
+        });
+    };
 
-        if (searchTimeoutRef.current) {
-            clearTimeout(searchTimeoutRef.current);
-        }
+    // Add new room unit to active type
+    const handleAddNewRoomUnit = () => {
+        if (!activeRoom) return;
+        setNewPropForm((prev: any) => {
+            const updatedRoomTypes = (prev.roomTypes || []).map((rt: any, rtIdx: number) => {
+                if (rtIdx !== activeRoom.parentTypeIdx) return rt;
+                const existing = rt.rooms || [];
+                const nextNum = String((rtIdx + 1) * 100 + existing.length + 1);
+                return {
+                    ...rt,
+                    rooms: [
+                        ...existing,
+                        {
+                            roomNumber: nextNum,
+                            status: 'kosong',
+                            tenantName: '',
+                            tenantPhone: '',
+                            billingPeriod: 'bulanan',
+                            dueDate: '',
+                            images: [],
+                            categorizedPhotos: {}
+                        }
+                    ]
+                };
+            });
+            return { ...prev, roomTypes: updatedRoomTypes };
+        });
+        setActiveRoomIdx(flatRooms.length);
+    };
 
-        if (text.length < 3) {
-            setSearchLocationResults([]);
-            setIsSearchingLocation(false);
+    // Delete active room unit
+    const handleDeleteActiveRoomUnit = () => {
+        if (!activeRoom) return;
+        if (flatRooms.length <= 1) {
+            alert('Minimal properti harus memiliki 1 unit kamar.');
             return;
         }
+        if (!confirm(`Apakah Anda yakin ingin menghapus Unit Kamar ${activeRoom.roomNumber || activeRoomIdx + 1}?`)) return;
 
-        searchTimeoutRef.current = setTimeout(() => {
-            setIsSearchingLocation(true);
-            try {
-                const gw = (window as any).google;
-                if (!gw?.maps?.places?.AutocompleteService) { setIsSearchingLocation(false); return; }
-                const svc = new gw.maps.places.AutocompleteService();
-                svc.getPlacePredictions(
-                    { input: text, componentRestrictions: { country: 'id' }, types: ['geocode', 'establishment'] },
-                    (predictions: any[], status: string) => {
-                        if (status === gw.maps.places.PlacesServiceStatus.OK && predictions) {
-                            setSearchLocationResults(predictions);
-                        } else {
-                            setSearchLocationResults([]);
-                        }
-                        setIsSearchingLocation(false);
-                    }
-                );
-            } catch (error) {
-                console.error("Error searching location with Google Places:", error);
-                setSearchLocationResults([]);
-                setIsSearchingLocation(false);
-            }
-        }, 500);
-    };
-
-    const handleSelectSearchResult = (result: any) => {
-        const gw = (window as any).google;
-        if (!gw?.maps?.Geocoder) return;
-        const geocoder = new gw.maps.Geocoder();
-        geocoder.geocode(
-            { placeId: result.place_id },
-            (results: any[], status: string) => {
-                if (status === 'OK' && results && results.length > 0) {
-                    const loc = results[0].geometry.location;
-                    const lat = loc.lat(), lng = loc.lng();
-                    const address = results[0].formatted_address;
-                    const components = results[0].address_components || [];
-                    let city = '', area = '';
-                    for (const comp of components) {
-                        const types = comp.types || [];
-                        if (types.includes('administrative_area_level_2') && !city) city = comp.long_name;
-                        if (types.includes('administrative_area_level_3') && !city) city = comp.long_name;
-                        if (types.includes('sublocality_level_1') && !area) area = comp.long_name;
-                        if (types.includes('sublocality') && !area) area = comp.long_name;
-                        if (types.includes('locality') && !city) city = comp.long_name;
-                    }
-                    setNewPropForm((prev: any) => {
-                        const updates: any = { location: { lat, lng } };
-                        if (city) updates.city = city.replace('Kota ', '').replace('Kabupaten ', '');
-                        if (area) updates.area = area.replace('Kecamatan ', '');
-                        if (address) updates.address = address;
-                        return { ...prev, ...updates };
-                    });
-                    setSearchLocationText(address);
-                    setSearchLocationResults([]);
-                }
-            }
-        );
-    };
-
-    const sections = [
-        { id: 'info', name: 'Identitas & Profil', icon: Building2, badge: newPropForm.title ? 'Siap' : 'Wajib' },
-        { id: 'location', name: 'Lokasi & Kampus', icon: MapPin, badge: newPropForm.city ? 'Siap' : 'Wajib' },
-        { id: 'media', name: 'Galeri Media', icon: Sparkles, badge: `${(newPropForm.imageUrls?.length || 0) + newImageFiles.length} Foto` },
-        { id: 'facilities', name: 'Fasilitas & Utilitas', icon: Zap, badge: `${newPropForm.facilities?.length || 0} Item` },
-        { id: 'rooms', name: 'Studio Kamar & Hunian', icon: Bed, badge: `${newPropForm.roomTypes?.reduce((s: number, rt: any) => s + (rt.rooms?.length || 0), 0) || 0} Unit` },
-        { id: 'rules', name: 'Peraturan & Kebijakan', icon: ShieldCheck, badge: `${newPropForm.rules?.length || 0} Aturan` }
-    ];
-
-    const addFacility = (facName: string) => {
-        const trimmed = facName.trim();
-        if (!trimmed) return;
-        const currentFacilities = newPropForm.facilities || [];
-        if (currentFacilities.includes(trimmed)) {
-            setNewPropForm({ ...newPropForm, facilities: currentFacilities.filter((f: string) => f !== trimmed) });
-        } else {
-            setNewPropForm({ ...newPropForm, facilities: [...currentFacilities, trimmed] });
-        }
-    };
-
-    const removeFacility = (index: number) => {
-        const currentFacilities = [...(newPropForm.facilities || [])];
-        currentFacilities.splice(index, 1);
-        setNewPropForm({ ...newPropForm, facilities: currentFacilities });
-    };
-
-    const addRule = () => {
-        if (!tempRuleInput.trim()) return;
-        const currentRules = newPropForm.rules || [];
-        setNewPropForm({
-            ...newPropForm,
-            rules: [...currentRules, tempRuleInput.trim()]
+        setNewPropForm((prev: any) => {
+            const updatedRoomTypes = (prev.roomTypes || []).map((rt: any, rtIdx: number) => {
+                if (rtIdx !== activeRoom.parentTypeIdx) return rt;
+                const updatedRooms = (rt.rooms || []).filter((_: any, rmIdx: number) => rmIdx !== activeRoom.parentRoomIdx);
+                return { ...rt, rooms: updatedRooms };
+            });
+            return { ...prev, roomTypes: updatedRoomTypes };
         });
-        setTempRuleInput('');
+        setActiveRoomIdx(Math.max(0, activeRoomIdx - 1));
     };
 
-    const removeRule = (index: number) => {
-        const currentRules = [...(newPropForm.rules || [])];
-        currentRules.splice(index, 1);
-        setNewPropForm({ ...newPropForm, rules: currentRules });
-    };
-
-    const addRoomType = () => {
-        const newIdx = (newPropForm.roomTypes?.length || 0) + 1;
-        setNewPropForm({
-            ...newPropForm,
-            roomTypes: [
-                ...(newPropForm.roomTypes || []),
-                {
-                    name: `Tipe Kamar ${newIdx}`,
-                    price: newPropForm.price || 500000,
-                    size: '3x4m',
-                    maxOccupants: 1,
-                    roomFacilities: ['Kasur', 'Lemari Pakaian', 'Jendela Luar'],
-                    bathroomFacilities: ['Kamar Mandi Dalam'],
-                    rooms: [
-                        { roomNumber: String(newIdx * 100 + 1), status: 'kosong', tenantName: '', tenantPhone: '', billingPeriod: 'bulanan', dueDate: '', images: [] as string[] }
-                    ]
-                }
-            ]
-        });
-        setSelectedRoomTypeTab((newPropForm.roomTypes?.length || 0));
-    };
-
-    const removeRoomType = (index: number) => {
-        if (!confirm('Apakah Anda yakin ingin menghapus tipe kamar ini beserta seluruh unit di dalamnya?')) return;
-        const updated = [...(newPropForm.roomTypes || [])];
-        updated.splice(index, 1);
-        setNewPropForm({ ...newPropForm, roomTypes: updated });
-        setSelectedRoomTypeTab(0);
-    };
-
-    const updateRoomTypeField = (index: number, field: string, value: any) => {
-        const updated = [...(newPropForm.roomTypes || [])];
-        updated[index] = { ...updated[index], [field]: value };
-        setNewPropForm({ ...newPropForm, roomTypes: updated });
-    };
-
-    const addRoomToType = (typeIndex: number) => {
-        const updated = [...(newPropForm.roomTypes || [])];
-        const existingRooms = updated[typeIndex].rooms || [];
-        const nextRoomNum = String((typeIndex + 1) * 100 + existingRooms.length + 1);
-        updated[typeIndex].rooms.push({
-            roomNumber: nextRoomNum,
-            status: 'kosong',
-            tenantName: '',
-            tenantPhone: '',
-            billingPeriod: 'bulanan',
-            dueDate: '',
-            images: [] as string[]
-        });
-        setNewPropForm({ ...newPropForm, roomTypes: updated });
-    };
-
-    const removeRoomFromType = (typeIndex: number, roomIndex: number) => {
-        const updated = [...(newPropForm.roomTypes || [])];
-        updated[typeIndex].rooms.splice(roomIndex, 1);
-        setNewPropForm({ ...newPropForm, roomTypes: updated });
-    };
-
-    const updateRoomField = (typeIndex: number, roomIndex: number, field: string, value: any) => {
-        const updated = [...(newPropForm.roomTypes || [])];
-        updated[typeIndex].rooms[roomIndex] = { ...updated[typeIndex].rooms[roomIndex], [field]: value };
-        setNewPropForm({ ...newPropForm, roomTypes: updated });
-    };
-
-    const toggleRoomFacility = (typeIndex: number, facilityName: string) => {
-        const updated = [...(newPropForm.roomTypes || [])];
-        const current = updated[typeIndex].roomFacilities || [];
+    // Toggle facility chips
+    const toggleFacility = (facilityName: string) => {
+        const current = newPropForm.facilities || [];
         if (current.includes(facilityName)) {
-            updated[typeIndex].roomFacilities = current.filter((f: string) => f !== facilityName);
+            setNewPropForm({ ...newPropForm, facilities: current.filter((f: string) => f !== facilityName) });
         } else {
-            updated[typeIndex].roomFacilities = [...current, facilityName];
+            setNewPropForm({ ...newPropForm, facilities: [...current, facilityName] });
         }
-        setNewPropForm({ ...newPropForm, roomTypes: updated });
     };
 
-    // Campus & Public Facility Helpers
-    const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-        const R = 6371;
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLon = (lon2 - lon1) * Math.PI / 180;
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                Math.sin(dLon/2) * Math.sin(dLon/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        const d = R * c;
-        return parseFloat(d.toFixed(1));
+    // Toggle active room facility chips
+    const toggleActiveRoomFacility = (facilityName: string) => {
+        if (!activeRoom) return;
+        setNewPropForm((prev: any) => {
+            const updatedRoomTypes = (prev.roomTypes || []).map((rt: any, rtIdx: number) => {
+                if (rtIdx !== activeRoom.parentTypeIdx) return rt;
+                const currentFacs = rt.roomFacilities || [];
+                const updatedFacs = currentFacs.includes(facilityName)
+                    ? currentFacs.filter((f: string) => f !== facilityName)
+                    : [...currentFacs, facilityName];
+                return { ...rt, roomFacilities: updatedFacs };
+            });
+            return { ...prev, roomTypes: updatedRoomTypes };
+        });
     };
 
-    const [activeMapPicker, setActiveMapPicker] = useState<{ field: 'campuses' | 'publicFacilities', index: number } | null>(null);
-
-    const addObjectArrayItem = (field: 'campuses' | 'publicFacilities') => {
-        setNewPropForm({ ...newPropForm, [field]: [...(newPropForm[field] || []), { name: '', distance: '', transportMode: 'walk' }] });
-    };
-
-    const updateObjectArrayItem = (field: 'campuses' | 'publicFacilities', index: number, key: string, value: any) => {
-        const arr = [...(newPropForm[field] || [])];
-        arr[index] = { ...arr[index], [key]: value };
-        setNewPropForm({ ...newPropForm, [field]: arr });
-    };
-
-    const removeObjectArrayItem = (field: 'campuses' | 'publicFacilities', index: number) => {
-        const arr = [...(newPropForm[field] || [])];
-        arr.splice(index, 1);
-        setNewPropForm({ ...newPropForm, [field]: arr });
-    };
-
-    // Media handlers
+    // Main media files select
     const handleImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             setNewImageFiles(prev => [...prev, ...Array.from(e.target.files!)]);
         }
     };
-    
-    const removeNewImage = (index: number) => {
-        setNewImageFiles(prev => prev.filter((_, i) => i !== index));
-    };
 
-    const removeExistingMedia = (type: 'imageUrls' | 'videoUrls', urlToRemove: string) => {
-        const currentList = newPropForm[type] || [];
+    const removeExistingHeroImage = (urlToRemove: string) => {
+        const currentList = newPropForm.imageUrls || [];
         const newList = currentList.filter((url: string) => url !== urlToRemove);
-        setNewPropForm({ ...newPropForm, [type]: newList });
+        setNewPropForm({ ...newPropForm, imageUrls: newList });
+        setSelectedHeroPhotoIdx(Math.max(0, selectedHeroPhotoIdx - 1));
     };
 
+    // Save handler
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newPropForm.owner_uid) return alert('Pilih pemilik/mitra terlebih dahulu');
-        if (!newPropForm.title) return alert('Nama kost harus diisi');
+        if (!newPropForm.title) return alert('Nama gedung kost harus diisi');
 
         setSavingProp(true);
         try {
@@ -3447,7 +3385,8 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                     tenantPhone: r.tenantPhone || '',
                     billingPeriod: r.billingPeriod || 'bulanan',
                     dueDate: r.dueDate || '',
-                    images: r.images || []
+                    images: r.images || [],
+                    categorizedPhotos: r.categorizedPhotos || {}
                 }))
             }));
 
@@ -3497,970 +3436,803 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
         }
     };
 
-    const commonFacilities = [
-        'WiFi Cepat', 'Dapur Bersama', 'Kulkas Bersama', 'Ruang Tamu', 'CCTV 24 Jam', 
-        'Akses 24 Jam', 'Parkir Mobil', 'Parkir Motor', 'Ruang Cuci Jemur', 'Dispenser Air',
-        'Penjaga Kost', 'Area Komunal', 'Listrik Termasuk'
-    ];
-
-    const commonRoomFacilities = [
-        'AC', 'Kamar Mandi Dalam', 'Kasur', 'Lemari Pakaian', 'Meja Belajar', 
-        'Kursi', 'Jendela Luar', 'Water Heater', 'Kipas Angin', 'Bantal & Guling'
-    ];
-
-    const commonRules = [
-        'Dilarang merokok di dalam kamar',
-        'Akses gerbang dikunci pukul 23.00 WITA',
-        'Dilarang membawa hewan peliharaan',
-        'Tamu lawan jenis dilarang menginap',
-        'Wajib menjaga ketenangan setelah pukul 22.00',
-        'Hemat penggunaan air dan listrik bersama'
-    ];
-
-    const renderSectionContent = () => {
-        switch (activeSection) {
-            // TAB 1: IDENTITAS & PROFIL
-            case 'info': {
-                const selectedOwner = ownersList.find(o => o.id === newPropForm.owner_uid);
-                const filteredOwners = ownersList.filter(o => 
-                    o.name.toLowerCase().includes(ownerSearchQuery.toLowerCase()) ||
-                    o.phone.includes(ownerSearchQuery)
-                );
-
-                return (
-                    <div className="space-y-6 animate-in fade-in duration-200">
-                        {/* 1. Mitra Pemilik */}
-                        <div className="bg-slate-50 p-5 rounded-3xl border border-slate-200/80 space-y-3">
-                            <div className="flex items-center justify-between">
-                                <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
-                                    Mitra Pemilik Properti <span className="text-rose-500">*</span>
-                                </label>
-                                <span className="text-[10px] font-bold text-slate-400">Terdaftar di RuangSinggah</span>
-                            </div>
-
-                            <div className="relative" ref={ownerDropdownRef}>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsOwnerDropdownOpen(!isOwnerDropdownOpen)}
-                                    className="w-full bg-white border border-slate-300 rounded-2xl px-4 py-3 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-left flex justify-between items-center cursor-pointer shadow-2xs hover:border-orange-400 transition-all"
-                                >
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="w-7 h-7 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-black text-xs">
-                                            {selectedOwner ? selectedOwner.name.charAt(0) : '?'}
-                                        </div>
-                                        <div>
-                                            <p className="font-black text-slate-900">{selectedOwner ? selectedOwner.name : '-- Pilih Pemilik Properti --'}</p>
-                                            <p className="text-[10px] text-slate-400 font-medium">{selectedOwner ? selectedOwner.phone : 'Klik untuk mencari mitra'}</p>
-                                        </div>
-                                    </div>
-                                    <ArrowUpRight size={16} className={`text-slate-400 transition-transform ${isOwnerDropdownOpen ? 'rotate-90 text-orange-500' : ''}`} />
-                                </button>
-                                
-                                {isOwnerDropdownOpen && (
-                                    <div className="absolute z-[9999] w-full bg-white border border-slate-200 mt-2 rounded-3xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                                        <div className="p-3 border-b border-slate-100 bg-slate-50">
-                                            <div className="relative flex items-center">
-                                                <Search size={14} className="text-slate-400 absolute left-3" />
-                                                <input
-                                                    type="text"
-                                                    placeholder="Ketik nama atau nomor telepon mitra..."
-                                                    value={ownerSearchQuery}
-                                                    onChange={e => setOwnerSearchQuery(e.target.value)}
-                                                    className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-orange-400"
-                                                    autoFocus
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="max-h-56 overflow-y-auto p-1.5 divide-y divide-slate-50">
-                                            {filteredOwners.map(o => (
-                                                <button
-                                                    key={o.id}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setNewPropForm({ ...newPropForm, owner_uid: o.id });
-                                                        setIsOwnerDropdownOpen(false);
-                                                        setOwnerSearchQuery('');
-                                                    }}
-                                                    className={`w-full text-left px-3.5 py-2.5 text-xs font-bold rounded-2xl flex items-center justify-between transition-colors ${
-                                                        o.id === newPropForm.owner_uid 
-                                                            ? 'bg-orange-50 text-orange-600' 
-                                                            : 'text-slate-700 hover:bg-slate-50'
-                                                    }`}
-                                                >
-                                                    <div>
-                                                        <p className="font-black">{o.name}</p>
-                                                        <p className="text-[10px] text-slate-400">📱 {o.phone}</p>
-                                                    </div>
-                                                    {o.id === newPropForm.owner_uid && <Check size={14} className="text-orange-500" />}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* 2. Judul & Tipe Gender */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="md:col-span-2">
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">
-                                    Nama Gedung Kost <span className="text-rose-500">*</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    required
-                                    placeholder="Contoh: Kost Madani Exclusive"
-                                    value={newPropForm.title}
-                                    onChange={e => setNewPropForm({ ...newPropForm, title: e.target.value })}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-xs font-black text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">
-                                    Tipe Gender
-                                </label>
-                                <div className="grid grid-cols-3 gap-1.5">
-                                    {['Campur', 'Putra', 'Putri'].map(gender => (
-                                        <button
-                                            key={gender}
-                                            type="button"
-                                            onClick={() => setNewPropForm({ ...newPropForm, type: gender })}
-                                            className={`py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider border transition-all ${
-                                                newPropForm.type === gender
-                                                    ? gender === 'Putri' ? 'bg-pink-600 text-white border-pink-600 shadow-2xs' :
-                                                      gender === 'Putra' ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' :
-                                                      'bg-purple-600 text-white border-purple-600 shadow-2xs'
-                                                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-                                            }`}
-                                        >
-                                            {gender}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 3. Deskripsi & Harga Dasar */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="md:col-span-2">
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">
-                                    Deskripsi Singkat & Keunggulan
-                                </label>
-                                <textarea
-                                    rows={3}
-                                    placeholder="Ceritakan lokasi strategis, suasana lingkungan, dan keunggulan kost..."
-                                    value={newPropForm.description}
-                                    onChange={e => setNewPropForm({ ...newPropForm, description: e.target.value })}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs font-medium text-slate-800 outline-none focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 resize-none"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">
-                                    Harga Dasar Listing (Rp/Bulan)
-                                </label>
-                                <div className="relative">
-                                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">Rp</span>
-                                    <input
-                                        type="number"
-                                        placeholder="500000"
-                                        value={newPropForm.price || ''}
-                                        onChange={e => setNewPropForm({ ...newPropForm, price: Number(e.target.value) })}
-                                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-black text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
-                                    />
-                                </div>
-                                <p className="text-[10px] text-slate-400 font-bold mt-1">Tarif terendah akan tampil sebagai harga 'Mulai dari' di katalog.</p>
-                            </div>
-                        </div>
-
-                        {/* 4. Omnichannel WhatsApp Routing */}
-                        <div className="bg-gradient-to-br from-orange-50/60 via-white to-amber-50/60 p-5 rounded-3xl border border-orange-200/80 space-y-3">
-                            <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-2xs">
-                                    <MessageSquare size={16} />
-                                </div>
-                                <div>
-                                    <h4 className="font-black text-slate-900 text-xs uppercase tracking-tight">Omnichannel WhatsApp Booking Router</h4>
-                                    <p className="text-[10px] text-slate-500 font-bold">Tentukan nomor WhatsApp tujuan saat calon penyewa menekan tombol booking di web</p>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                                <div>
-                                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">Nama Penanggung Jawab</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Contoh: Admin RuangSinggah / Pak Joko (Penjaga)"
-                                        value={newPropForm.omnichannelContactName || ''}
-                                        onChange={e => setNewPropForm({ ...newPropForm, omnichannelContactName: e.target.value })}
-                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-orange-400"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">Nomor WhatsApp (Format: 628...)</label>
-                                    <input
-                                        type="text"
-                                        placeholder="628123456789"
-                                        value={newPropForm.omnichannelContactPhone || ''}
-                                        onChange={e => setNewPropForm({ ...newPropForm, omnichannelContactPhone: e.target.value })}
-                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 font-mono outline-none focus:border-orange-400"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
-
-            // TAB 2: LOKASI & KAMPUS
-            case 'location': {
-                return (
-                    <div className="space-y-6 animate-in fade-in duration-200">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Kota / Kabupaten <span className="text-rose-500">*</span></label>
-                                <input
-                                    type="text"
-                                    required
-                                    placeholder="Contoh: Makassar"
-                                    value={newPropForm.city || ''}
-                                    onChange={e => setNewPropForm({ ...newPropForm, city: e.target.value })}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-orange-400"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Kecamatan / Area</label>
-                                <input
-                                    type="text"
-                                    placeholder="Contoh: Tamalanrea"
-                                    value={newPropForm.area || ''}
-                                    onChange={e => setNewPropForm({ ...newPropForm, area: e.target.value })}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-orange-400"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Koordinat GPS</label>
-                                <div className="px-3.5 py-2.5 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700 flex items-center justify-between">
-                                    <span>{newPropForm.location?.lat?.toFixed(5) || '-6.2088'}, {newPropForm.location?.lng?.toFixed(5) || '106.8456'}</span>
-                                    <MapPin size={14} className="text-orange-500" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Alamat Lengkap Gedung <span className="text-rose-500">*</span></label>
-                            <input
-                                type="text"
-                                required
-                                placeholder="Jalan, Nomor, RT/RW, Patokan..."
-                                value={newPropForm.address || ''}
-                                onChange={e => setNewPropForm({ ...newPropForm, address: e.target.value })}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-orange-400"
-                            />
-                        </div>
-
-                        {/* Interactive Google Map Pin */}
-                        <div className="bg-slate-50 p-4 rounded-3xl border border-slate-200 space-y-2">
-                            <div className="flex items-center justify-between">
-                                <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider">Titik Lokasi Peta (Location Pin)</label>
-                                <span className="text-[10px] text-slate-400 font-bold">Geser penanda untuk menetapkan koordinat presisi</span>
-                            </div>
-                            <div className="h-64 rounded-2xl overflow-hidden border border-slate-200">
-                                <LocationPicker
-                                    lat={newPropForm.location?.lat || -6.2088}
-                                    lng={newPropForm.location?.lng || 106.8456}
-                                    onLocationChange={(lat, lng, address, city, area) => {
-                                        setNewPropForm((prev: any) => ({
-                                            ...prev,
-                                            location: { lat, lng },
-                                            address: address || prev.address,
-                                            city: city || prev.city,
-                                            area: area || prev.area
-                                        }));
-                                    }}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Kampus Terdekat */}
-                        <div className="bg-slate-50 p-4 rounded-3xl border border-slate-200 space-y-3">
-                            <div className="flex justify-between items-center">
-                                <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider">Akses Kampus Terdekat</label>
-                                <button
-                                    type="button"
-                                    onClick={() => addObjectArrayItem('campuses')}
-                                    className="px-3 py-1 rounded-lg bg-orange-100 hover:bg-orange-200 text-orange-700 text-[10px] font-black uppercase tracking-wider transition-all"
-                                >
-                                    + Tambah Kampus
-                                </button>
-                            </div>
-                            <div className="space-y-2">
-                                {(newPropForm.campuses || []).map((camp: any, idx: number) => (
-                                    <div key={idx} className="flex items-center gap-2 bg-white p-2.5 rounded-2xl border border-slate-100 shadow-2xs">
-                                        <input
-                                            type="text"
-                                            placeholder="Nama Kampus (misal: UNHAS / UMI / UNM)"
-                                            value={camp.name || ''}
-                                            onChange={e => updateObjectArrayItem('campuses', idx, 'name', e.target.value)}
-                                            className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800"
-                                        />
-                                        <input
-                                            type="text"
-                                            placeholder="Jarak (misal: 5 Menit / 800m)"
-                                            value={camp.distance || ''}
-                                            onChange={e => updateObjectArrayItem('campuses', idx, 'distance', e.target.value)}
-                                            className="w-36 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => removeObjectArrayItem('campuses', idx)}
-                                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg"
-                                        >
-                                            <X size={14} />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
-
-            // TAB 3: GALERI MEDIA
-            case 'media': {
-                const existingImages = newPropForm.imageUrls || [];
-
-                return (
-                    <div className="space-y-6 animate-in fade-in duration-200">
-                        {/* Upload Bar */}
-                        <div className="border-2 border-dashed border-slate-300 hover:border-orange-400 bg-slate-50/60 p-6 rounded-3xl text-center space-y-3 transition-colors">
-                            <div className="w-12 h-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center mx-auto shadow-2xs">
-                                <Sparkles size={22} />
-                            </div>
-                            <div>
-                                <p className="font-black text-slate-900 text-sm">Unggah Foto Bangunan Properti</p>
-                                <p className="text-xs text-slate-400 font-medium mt-0.5">Format WebP, JPG, atau PNG. Foto akan otomatis dikonversi ke WebP berkualitas tinggi.</p>
-                            </div>
-                            <label className="inline-block px-5 py-2.5 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider cursor-pointer shadow-md transition-all active:scale-95">
-                                <span>Pilih Berkas Foto</span>
-                                <input
-                                    type="file"
-                                    multiple
-                                    accept="image/*"
-                                    onChange={handleImageFileSelect}
-                                    className="hidden"
-                                />
-                            </label>
-                        </div>
-
-                        {/* Existing Images Grid */}
-                        <div className="space-y-2">
-                            <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
-                                Foto Gedung Tersimpan ({existingImages.length})
-                            </label>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                                {existingImages.map((url: string, idx: number) => (
-                                    <div key={idx} className="relative group rounded-2xl overflow-hidden border border-slate-200 aspect-video bg-slate-100 shadow-2xs">
-                                        <img src={url} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
-                                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                            {idx === 0 && (
-                                                <span className="absolute top-2 left-2 bg-orange-500 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-md">
-                                                    Cover Utama
-                                                </span>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={() => removeExistingMedia('imageUrls', url)}
-                                                className="p-1.5 bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition-colors"
-                                                title="Hapus Foto"
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Newly Selected Images Grid */}
-                        {newImageFiles.length > 0 && (
-                            <div className="space-y-2">
-                                <label className="text-[11px] font-black text-emerald-700 uppercase tracking-wider block">
-                                    Foto Baru yang Akan Diunggah ({newImageFiles.length})
-                                </label>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                                    {newImageFiles.map((file, idx) => (
-                                        <div key={idx} className="relative group rounded-2xl overflow-hidden border-2 border-emerald-400 aspect-video bg-slate-100 shadow-2xs">
-                                            <img src={URL.createObjectURL(file)} alt="New" className="w-full h-full object-cover" />
-                                            <button
-                                                type="button"
-                                                onClick={() => removeNewImage(idx)}
-                                                className="absolute top-2 right-2 p-1 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors"
-                                            >
-                                                <X size={12} />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Video Tour Links */}
-                        <div className="bg-slate-50 p-4 rounded-3xl border border-slate-200 space-y-3">
-                            <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">Tautan Video Virtual Tour (Opsional)</label>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div>
-                                    <span className="text-[10px] font-bold text-slate-500 block mb-1">Link Reels Instagram</span>
-                                    <input
-                                        type="url"
-                                        placeholder="https://instagram.com/reel/..."
-                                        value={newPropForm.instagramUrl || ''}
-                                        onChange={e => setNewPropForm({ ...newPropForm, instagramUrl: e.target.value })}
-                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
-                                    />
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-bold text-slate-500 block mb-1">Link Video TikTok</span>
-                                    <input
-                                        type="url"
-                                        placeholder="https://tiktok.com/@.../video/..."
-                                        value={newPropForm.tiktokUrl || ''}
-                                        onChange={e => setNewPropForm({ ...newPropForm, tiktokUrl: e.target.value })}
-                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
-
-            // TAB 4: FASILITAS & UTILITAS
-            case 'facilities': {
-                return (
-                    <div className="space-y-6 animate-in fade-in duration-200">
-                        {/* Fasilitas Umum Visual Chips */}
-                        <div className="bg-slate-50 p-5 rounded-3xl border border-slate-200/80 space-y-3">
-                            <div className="flex items-center justify-between">
-                                <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
-                                    Fasilitas Umum & Area Bersama
-                                </label>
-                                <span className="text-[10px] font-bold text-slate-400">Klik untuk mengaktifkan / menonaktifkan</span>
-                            </div>
-
-                            <div className="flex flex-wrap gap-2">
-                                {commonFacilities.map(fac => {
-                                    const isSelected = (newPropForm.facilities || []).includes(fac);
-                                    return (
-                                        <button
-                                            key={fac}
-                                            type="button"
-                                            onClick={() => addFacility(fac)}
-                                            className={`px-3.5 py-2 rounded-2xl text-xs font-black uppercase tracking-wider border transition-all flex items-center gap-1.5 cursor-pointer ${
-                                                isSelected
-                                                    ? 'bg-orange-500 text-white border-orange-500 shadow-2xs'
-                                                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-                                            }`}
-                                        >
-                                            {isSelected && <Check size={12} />}
-                                            <span>{fac}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-
-                            {/* Input Fasilitas Custom */}
-                            <div className="flex gap-2 pt-2">
-                                <input
-                                    type="text"
-                                    placeholder="Tambah fasilitas lain..."
-                                    value={tempFacilityInput}
-                                    onChange={e => setTempFacilityInput(e.target.value)}
-                                    onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addFacility(tempFacilityInput), setTempFacilityInput(''))}
-                                    className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        addFacility(tempFacilityInput);
-                                        setTempFacilityInput('');
-                                    }}
-                                    className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-black uppercase tracking-wider"
-                                >
-                                    Tambah
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Biaya Tambahan (Add-on Fees) */}
-                        <div className="bg-slate-50 p-5 rounded-3xl border border-slate-200/80 space-y-3">
-                            <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
-                                Biaya Tambahan & Add-on (Opsional)
-                            </label>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div>
-                                    <span className="text-[10px] font-bold text-slate-500 block mb-1">Nama Biaya Tambahan</span>
-                                    <input
-                                        type="text"
-                                        placeholder="Contoh: Parkir Mobil / Tambah Orang"
-                                        value={newPropForm.additionalFeeName || ''}
-                                        onChange={e => setNewPropForm({ ...newPropForm, additionalFeeName: e.target.value })}
-                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
-                                    />
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-bold text-slate-500 block mb-1">Tarif Biaya Tambahan (Rp/Bulan)</span>
-                                    <input
-                                        type="number"
-                                        placeholder="100000"
-                                        value={newPropForm.additionalFeePrice || ''}
-                                        onChange={e => setNewPropForm({ ...newPropForm, additionalFeePrice: Number(e.target.value) })}
-                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
-
-            // TAB 5: STUDIO KAMAR & HUNIAN (THE CROWN JEWEL)
-            case 'rooms': {
-                const roomTypes = newPropForm.roomTypes || [];
-                const currentType = roomTypes[selectedRoomTypeTab] || roomTypes[0];
-
-                return (
-                    <div className="space-y-6 animate-in fade-in duration-200">
-                        {/* Header & Type Switcher */}
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-50 p-4 rounded-3xl border border-slate-200">
-                            <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 sm:pb-0">
-                                {roomTypes.map((rt: any, rtIdx: number) => (
-                                    <button
-                                        key={rtIdx}
-                                        type="button"
-                                        onClick={() => setSelectedRoomTypeTab(rtIdx)}
-                                        className={`px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
-                                            selectedRoomTypeTab === rtIdx
-                                                ? 'bg-slate-900 text-white shadow-sm'
-                                                : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
-                                        }`}
-                                    >
-                                        <span>{rt.name || `Tipe ${rtIdx + 1}`}</span>
-                                        <span className="ml-1.5 text-[10px] opacity-70">({rt.rooms?.length || 0} Kamar)</span>
-                                    </button>
-                                ))}
-                            </div>
-                            <button
-                                type="button"
-                                onClick={addRoomType}
-                                className="px-3.5 py-2 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider shrink-0 shadow-2xs cursor-pointer"
-                            >
-                                + Tipe Kamar Baru
-                            </button>
-                        </div>
-
-                        {currentType && (
-                            <div className="space-y-6">
-                                {/* Room Type Config Bar */}
-                                <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
-                                    <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                                        <div className="flex items-center gap-2">
-                                            <Bed size={18} className="text-orange-500" />
-                                            <h4 className="font-black text-slate-900 text-sm uppercase">Konfigurasi {currentType.name}</h4>
-                                        </div>
-                                        {roomTypes.length > 1 && (
-                                            <button
-                                                type="button"
-                                                onClick={() => removeRoomType(selectedRoomTypeTab)}
-                                                className="text-rose-500 hover:bg-rose-50 px-2.5 py-1 rounded-xl text-xs font-bold"
-                                            >
-                                                Hapus Tipe Ini
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Nama Tipe Kamar</label>
-                                            <input
-                                                type="text"
-                                                value={currentType.name}
-                                                onChange={e => updateRoomTypeField(selectedRoomTypeTab, 'name', e.target.value)}
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Tarif Sewa (Rp/Bulan)</label>
-                                            <input
-                                                type="number"
-                                                value={currentType.price || ''}
-                                                onChange={e => updateRoomTypeField(selectedRoomTypeTab, 'price', Number(e.target.value))}
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Dimensi Kamar</label>
-                                            <input
-                                                type="text"
-                                                value={currentType.size || '3x4m'}
-                                                onChange={e => updateRoomTypeField(selectedRoomTypeTab, 'size', e.target.value)}
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Room Facilities Chips */}
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Fasilitas Dalam Kamar</label>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {commonRoomFacilities.map(rf => {
-                                                const hasFac = (currentType.roomFacilities || []).includes(rf);
-                                                return (
-                                                    <button
-                                                        key={rf}
-                                                        type="button"
-                                                        onClick={() => toggleRoomFacility(selectedRoomTypeTab, rf)}
-                                                        className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${
-                                                            hasFac
-                                                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
-                                                                : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
-                                                        }`}
-                                                    >
-                                                        {rf}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Room Units Grid Header */}
-                                <div className="flex justify-between items-center pt-2">
-                                    <div>
-                                        <h5 className="font-black text-slate-900 text-xs uppercase tracking-wider">Daftar Unit Kamar ({currentType.rooms?.length || 0} Unit)</h5>
-                                        <p className="text-[10px] text-slate-400 font-bold">Atur nomor unit kamar, status keterisian, dan identitas penyewa</p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => addRoomToType(selectedRoomTypeTab)}
-                                        className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider transition-all"
-                                    >
-                                        + Tambah Unit Kamar
-                                    </button>
-                                </div>
-
-                                {/* Room Units Cards */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {(currentType.rooms || []).map((rm: any, rmIdx: number) => {
-                                        const isOccupied = rm.status === 'terisi';
-
-                                        return (
-                                            <div
-                                                key={rmIdx}
-                                                className={`p-5 rounded-3xl border transition-all space-y-4 ${
-                                                    isOccupied
-                                                        ? 'bg-emerald-50/40 border-emerald-200 shadow-2xs'
-                                                        : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
-                                                }`}
-                                            >
-                                                <div className="flex justify-between items-start">
-                                                    <div className="flex items-center gap-2.5">
-                                                        <div className="w-9 h-9 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-xs">
-                                                            {rm.roomNumber || rmIdx + 1}
-                                                        </div>
-                                                        <div>
-                                                            <input
-                                                                type="text"
-                                                                value={rm.roomNumber || ''}
-                                                                onChange={e => updateRoomField(selectedRoomTypeTab, rmIdx, 'roomNumber', e.target.value)}
-                                                                placeholder="No. Kamar"
-                                                                className="font-black text-slate-900 text-xs bg-transparent border-b border-dashed border-slate-300 focus:border-orange-500 outline-none w-24"
-                                                            />
-                                                            <p className="text-[10px] text-slate-400 font-bold">{currentType.name}</p>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Status Switcher Button */}
-                                                    <div className="flex items-center gap-2">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => updateRoomField(selectedRoomTypeTab, rmIdx, 'status', isOccupied ? 'kosong' : 'terisi')}
-                                                            className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border transition-all cursor-pointer ${
-                                                                isOccupied
-                                                                    ? 'bg-emerald-500 text-white border-emerald-500 shadow-2xs'
-                                                                    : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
-                                                            }`}
-                                                        >
-                                                            {isOccupied ? '🟢 Terisi' : '⚪ Kosong'}
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removeRoomFromType(selectedRoomTypeTab, rmIdx)}
-                                                            className="text-slate-300 hover:text-rose-500 p-1"
-                                                        >
-                                                            <X size={14} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* Tenant Details (When Occupied) */}
-                                                {isOccupied ? (
-                                                    <div className="bg-white p-3.5 rounded-2xl border border-emerald-100 space-y-2 text-xs">
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <div>
-                                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Nama Penghuni</span>
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder="Nama penyewa..."
-                                                                    value={rm.tenantName || ''}
-                                                                    onChange={e => updateRoomField(selectedRoomTypeTab, rmIdx, 'tenantName', e.target.value)}
-                                                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-800 mt-0.5"
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">No. WhatsApp</span>
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder="0812..."
-                                                                    value={rm.tenantPhone || ''}
-                                                                    onChange={e => updateRoomField(selectedRoomTypeTab, rmIdx, 'tenantPhone', e.target.value)}
-                                                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-800 mt-0.5 font-mono"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        <div className="grid grid-cols-2 gap-2 pt-1">
-                                                            <div>
-                                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Jatuh Tempo Sewa</span>
-                                                                <input
-                                                                    type="date"
-                                                                    value={rm.dueDate || ''}
-                                                                    onChange={e => updateRoomField(selectedRoomTypeTab, rmIdx, 'dueDate', e.target.value)}
-                                                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-800 mt-0.5"
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Periode Tagihan</span>
-                                                                <select
-                                                                    value={rm.billingPeriod || 'bulanan'}
-                                                                    onChange={e => updateRoomField(selectedRoomTypeTab, rmIdx, 'billingPeriod', e.target.value)}
-                                                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-800 mt-0.5"
-                                                                >
-                                                                    <option value="bulanan">Bulanan</option>
-                                                                    <option value="triwulan">3 Bulan</option>
-                                                                    <option value="tahunan">Tahunan</option>
-                                                                </select>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="p-3 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center">
-                                                        <p className="text-[11px] font-bold text-emerald-700">✨ Unit Kosong Siap Disewakan</p>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => updateRoomField(selectedRoomTypeTab, rmIdx, 'status', 'terisi')}
-                                                            className="text-[10px] font-black text-orange-600 uppercase tracking-wider mt-1 hover:underline cursor-pointer"
-                                                        >
-                                                            + Isi Data Penghuni
-                                                        </button>
-                                                    </div>
-                                                )}
-
-                                                {/* Room Photos Uploader */}
-                                                <div>
-                                                    <div className="flex justify-between items-center mb-1.5">
-                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Foto Kamar ({(rm.images || []).length})</span>
-                                                        <label className="text-[9px] font-black text-orange-600 uppercase tracking-wider hover:underline cursor-pointer">
-                                                            {uploadingRooms[`${selectedRoomTypeTab}-${rmIdx}`] ? 'Mengunggah...' : '+ Tambah Foto'}
-                                                            <input
-                                                                type="file"
-                                                                accept="image/*"
-                                                                disabled={uploadingRooms[`${selectedRoomTypeTab}-${rmIdx}`]}
-                                                                onChange={e => handleUploadRoomPhoto(selectedRoomTypeTab, rmIdx, e)}
-                                                                className="hidden"
-                                                            />
-                                                        </label>
-                                                    </div>
-                                                    <div className="flex gap-2 overflow-x-auto pb-1">
-                                                        {(rm.images || []).map((imgUrl: string, iIdx: number) => (
-                                                            <div key={iIdx} className="relative w-14 h-14 rounded-xl overflow-hidden border border-slate-200 shrink-0 group">
-                                                                <img src={imgUrl} alt="Room" className="w-full h-full object-cover" />
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleDeleteRoomPhoto(selectedRoomTypeTab, rmIdx, imgUrl)}
-                                                                    className="absolute inset-0 bg-rose-950/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                                                                >
-                                                                    <X size={12} />
-                                                                </button>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                );
-            }
-
-            // TAB 6: PERATURAN & KEBIJAKAN
-            case 'rules': {
-                return (
-                    <div className="space-y-6 animate-in fade-in duration-200">
-                        {/* Common Rules Suggestions */}
-                        <div className="bg-slate-50 p-5 rounded-3xl border border-slate-200/80 space-y-3">
-                            <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
-                                Pilihan Aturan Standar KostManager
-                            </label>
-                            <div className="flex flex-wrap gap-2">
-                                {commonRules.map(rule => {
-                                    const isAdded = (newPropForm.rules || []).includes(rule);
-                                    return (
-                                        <button
-                                            key={rule}
-                                            type="button"
-                                            onClick={() => {
-                                                if (isAdded) {
-                                                    setNewPropForm({ ...newPropForm, rules: (newPropForm.rules || []).filter((r: string) => r !== rule) });
-                                                } else {
-                                                    setNewPropForm({ ...newPropForm, rules: [...(newPropForm.rules || []), rule] });
-                                                }
-                                            }}
-                                            className={`px-3.5 py-2 rounded-2xl text-xs font-bold border transition-all text-left flex items-center gap-1.5 cursor-pointer ${
-                                                isAdded
-                                                    ? 'bg-slate-900 text-white border-slate-900 shadow-2xs font-black'
-                                                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-                                            }`}
-                                        >
-                                            {isAdded && <Check size={12} />}
-                                            <span>{rule}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        {/* Custom Rules List */}
-                        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 space-y-3">
-                            <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
-                                Daftar Tata Tertib Gedung ({(newPropForm.rules || []).length})
-                            </label>
-
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    placeholder="Tulis aturan khusus lainnya..."
-                                    value={tempRuleInput}
-                                    onChange={e => setTempRuleInput(e.target.value)}
-                                    onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addRule())}
-                                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-800 outline-none focus:bg-white focus:border-orange-400"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={addRule}
-                                    className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider"
-                                >
-                                    Tambah
-                                </button>
-                            </div>
-
-                            <div className="space-y-2 pt-2">
-                                {(newPropForm.rules || []).map((r: string, i: number) => (
-                                    <div key={i} className="bg-slate-50 border border-slate-100 px-4 py-2.5 rounded-2xl text-xs font-bold flex justify-between items-center">
-                                        <span className="text-slate-800">{i + 1}. {r}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => removeRule(i)}
-                                            className="text-slate-400 hover:text-rose-500 p-1"
-                                        >
-                                            <X size={14} />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
-
-            default:
-                return null;
+    // Master Facility Categories (Identical to Survey Form)
+    const facilityCategories = [
+        {
+            name: 'Kenyamanan & Umum',
+            icon: Sparkles,
+            items: ['WiFi Cepat', 'Dapur Bersama', 'Kulkas Bersama', 'Dispenser Air', 'Ruang Tamu', 'Ruang Cuci Jemur', 'Area Komunal']
+        },
+        {
+            name: 'Keamanan & Akses',
+            icon: ShieldCheck,
+            items: ['CCTV 24 Jam', 'Akses Kunci 24 Jam', 'Penjaga Kost', 'Parkir Mobil', 'Parkir Motor', 'Gerbang Tertutup']
+        },
+        {
+            name: 'Utilitas & Listrik',
+            icon: Zap,
+            items: ['Listrik Termasuk', 'Air PDAM / Sumur Bersih', 'Token Mandiri Tiap Kamar', 'Iuran Sampah Termasuk']
         }
-    };
+    ];
+
+    const allHeroImages = [...(newPropForm.imageUrls || []), ...newImageFiles.map(f => URL.createObjectURL(f))];
+    const totalOccupiedUnits = flatRooms.filter(r => r.status === 'terisi').length;
+    const totalVacantUnits = flatRooms.length - totalOccupiedUnits;
 
     return (
-        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-md z-[110] flex items-center justify-center p-2 sm:p-4 animate-in fade-in">
-            <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-6xl w-full overflow-hidden max-h-[92vh] flex flex-col border border-slate-100 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
-                {/* 1. Header Bar Studio */}
-                <div className="p-5 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[110] flex items-center justify-center p-2 sm:p-4 animate-in fade-in">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-5xl w-full overflow-hidden max-h-[92vh] flex flex-col border border-slate-100 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                
+                {/* ========================================================= */}
+                {/* 1. HEADER MODAL (SURVEY REVIEW THEME)                    */}
+                {/* ========================================================= */}
+                <div className="p-5 border-b border-slate-100 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-xs">
-                            <Building2 size={22} />
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#ff7a00] to-amber-500 text-white flex items-center justify-center shadow-xs">
+                            <Building2 size={24} />
                         </div>
                         <div>
                             <div className="flex items-center gap-2">
-                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                    🟢 Auto-Pilot Studio
+                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    <span>KostManager Auto-Pilot</span>
                                 </span>
                                 <span className="text-[10px] text-slate-400 font-bold">
-                                    {editingPropertyId ? 'Mode Pembaruan Data' : 'Pendaftaran Gedung Baru'}
+                                    {editingPropertyId ? 'Mode Editor Properti' : 'Pendaftaran Baru'}
                                 </span>
                             </div>
-                            <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight mt-0.5">
-                                {editingPropertyId ? `Studio Properti: ${newPropForm.title || 'Kost'}` : 'Tambah Properti Kost Baru'}
+                            <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase tracking-tight mt-0.5">
+                                {newPropForm.title || 'Properti Kelolaan Baru'}
                             </h3>
                         </div>
                     </div>
 
+                    {/* 3-Tab Navigator Pills */}
+                    <div className="flex items-center gap-1.5 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab(1)}
+                            className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                                activeTab === 1
+                                    ? 'bg-slate-900 text-white shadow-xs'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                            }`}
+                        >
+                            <Building2 size={14} className={activeTab === 1 ? 'text-orange-400' : 'text-slate-400'} />
+                            <span>1. Profil Gedung</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab(2)}
+                            className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                                activeTab === 2
+                                    ? 'bg-slate-900 text-white shadow-xs'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                            }`}
+                        >
+                            <Bed size={14} className={activeTab === 2 ? 'text-orange-400' : 'text-slate-400'} />
+                            <span>2. Kamar & Penghuni ({flatRooms.length})</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab(3)}
+                            className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                                activeTab === 3
+                                    ? 'bg-slate-900 text-white shadow-xs'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                            }`}
+                        >
+                            <ShieldCheck size={14} className={activeTab === 3 ? 'text-orange-400' : 'text-slate-400'} />
+                            <span>3. Mitra & Auto-Pilot</span>
+                        </button>
+                    </div>
+
                     <button
                         onClick={onClose}
-                        className="p-2.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
+                        className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors hidden sm:block"
                     >
                         <X size={18} />
                     </button>
                 </div>
 
-                {/* 2. Split-View Body Workspace */}
-                <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-                    {/* Sidebar Nav */}
-                    <aside className="w-full md:w-64 bg-slate-50/80 border-b md:border-b-0 md:border-r border-slate-200/80 p-3 space-y-1.5 overflow-x-auto md:overflow-y-auto flex md:block shrink-0 gap-1.5">
-                        {sections.map(sec => {
-                            const IconComponent = sec.icon;
-                            const isActive = activeSection === sec.id;
+                {/* ========================================================= */}
+                {/* 2. BODY CONTENT (3 TABS)                                  */}
+                {/* ========================================================= */}
+                <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-6 bg-slate-50/50">
 
-                            return (
-                                <button
-                                    key={sec.id}
-                                    type="button"
-                                    onClick={() => setActiveSection(sec.id)}
-                                    className={`w-full text-left px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-between gap-2.5 cursor-pointer ${
-                                        isActive
-                                            ? 'bg-slate-900 text-white shadow-sm'
-                                            : 'text-slate-600 hover:bg-white hover:text-slate-900'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-2.5">
-                                        <IconComponent size={16} className={isActive ? 'text-orange-400' : 'text-slate-400'} />
-                                        <span>{sec.name}</span>
+                    {/* ===================================================== */}
+                    {/* TAB 1: PROFIL & FASILITAS GEDUNG                     */}
+                    {/* ===================================================== */}
+                    {activeTab === 1 && (
+                        <div className="space-y-6 animate-in fade-in duration-200">
+                            {/* Hero Carousel: Foto Utama / Fasad Gedung */}
+                            <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Camera size={16} className="text-[#ff7a00]" />
+                                        <h4 className="font-black text-slate-900 text-xs uppercase tracking-tight">Foto Utama & Fasad Gedung ({allHeroImages.length})</h4>
                                     </div>
-                                    <span className={`text-[9px] px-2 py-0.5 rounded-md font-bold ${
-                                        isActive ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-600'
-                                    }`}>
-                                        {sec.badge}
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </aside>
+                                    <label className="px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#ff7a00] border border-orange-200 text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all">
+                                        + Tambah Foto Gedung
+                                        <input
+                                            type="file"
+                                            multiple
+                                            accept="image/*"
+                                            onChange={handleImageFileSelect}
+                                            className="hidden"
+                                        />
+                                    </label>
+                                </div>
 
-                    {/* Form Content Area */}
-                    <div className="flex-grow overflow-y-auto p-6 sm:p-8 bg-white">
-                        {renderSectionContent()}
-                    </div>
+                                {allHeroImages.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {/* Active Hero Image Display */}
+                                        <div className="relative aspect-[16/8] sm:aspect-[16/7] rounded-2xl overflow-hidden bg-slate-950 shadow-inner group">
+                                            <img
+                                                src={allHeroImages[selectedHeroPhotoIdx] || allHeroImages[0]}
+                                                alt="Fasad Bangunan"
+                                                className="w-full h-full object-cover"
+                                            />
+                                            <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-sm text-white px-2.5 py-1 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                                                <span>📸 Foto #{selectedHeroPhotoIdx + 1} of {allHeroImages.length}</span>
+                                            </div>
+                                            <div className="absolute top-3 right-3 flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setLightboxPhoto({ url: allHeroImages[selectedHeroPhotoIdx], label: 'Foto Bangunan' })}
+                                                    className="p-2 rounded-xl bg-black/60 text-white hover:bg-black/80 transition-colors"
+                                                    title="Perbesar Foto"
+                                                >
+                                                    <ZoomIn size={14} />
+                                                </button>
+                                                {newPropForm.imageUrls && newPropForm.imageUrls[selectedHeroPhotoIdx] && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeExistingHeroImage(newPropForm.imageUrls[selectedHeroPhotoIdx])}
+                                                        className="p-2 rounded-xl bg-rose-600/80 text-white hover:bg-rose-700 transition-colors"
+                                                        title="Hapus Foto Ini"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Thumbnail Strip */}
+                                        <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
+                                            {allHeroImages.map((imgUrl, idx) => (
+                                                <button
+                                                    key={idx}
+                                                    type="button"
+                                                    onClick={() => setSelectedHeroPhotoIdx(idx)}
+                                                    className={`relative w-16 h-12 rounded-xl overflow-hidden shrink-0 border-2 transition-all ${
+                                                        selectedHeroPhotoIdx === idx ? 'border-orange-500 ring-2 ring-orange-500/20 scale-105' : 'border-slate-200 opacity-70 hover:opacity-100'
+                                                    }`}
+                                                >
+                                                    <img src={imgUrl} alt="Thumb" className="w-full h-full object-cover" />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="p-8 border-2 border-dashed border-slate-200 rounded-2xl text-center space-y-2">
+                                        <Camera size={28} className="text-slate-300 mx-auto" />
+                                        <p className="text-xs font-bold text-slate-500">Belum ada foto gedung yang diunggah.</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Identitas Properti */}
+                            <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
+                                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                                    <Home size={16} className="text-[#ff7a00]" />
+                                    <h4 className="font-black text-slate-900 text-xs uppercase tracking-tight">Identitas & Tipe Kost</h4>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div className="sm:col-span-2">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Nama Kost <span className="text-rose-500">*</span></label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={newPropForm.title || ''}
+                                            onChange={e => setNewPropForm({ ...newPropForm, title: e.target.value })}
+                                            placeholder="Contoh: Kost Madani Exclusive"
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-black text-slate-900 outline-none focus:bg-white focus:border-orange-400"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Tipe Gender</label>
+                                        <select
+                                            value={newPropForm.type || 'Campur'}
+                                            onChange={e => setNewPropForm({ ...newPropForm, type: e.target.value })}
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-orange-400"
+                                        >
+                                            <option value="Campur">Campur</option>
+                                            <option value="Putra">Putra</option>
+                                            <option value="Putri">Putri</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Deskripsi & Keunggulan</label>
+                                    <textarea
+                                        rows={3}
+                                        value={newPropForm.description || ''}
+                                        onChange={e => setNewPropForm({ ...newPropForm, description: e.target.value })}
+                                        placeholder="Ceritakan suasana kost, lingkungan sekitar, dan fasilitas unggulan..."
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 outline-none focus:bg-white focus:border-orange-400 resize-none"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Titik GPS & Alamat */}
+                            <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
+                                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                                    <MapPin size={16} className="text-[#ff7a00]" />
+                                    <h4 className="font-black text-slate-900 text-xs uppercase tracking-tight">Lokasi & Titik Koordinat GPS</h4>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Kota / Kabupaten</label>
+                                        <input
+                                            type="text"
+                                            value={newPropForm.city || ''}
+                                            onChange={e => setNewPropForm({ ...newPropForm, city: e.target.value })}
+                                            placeholder="Makassar"
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Kecamatan / Area</label>
+                                        <input
+                                            type="text"
+                                            value={newPropForm.area || ''}
+                                            onChange={e => setNewPropForm({ ...newPropForm, area: e.target.value })}
+                                            placeholder="Tamalanrea"
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Koordinat GPS</label>
+                                        <div className="px-3 py-2 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700 flex items-center justify-between">
+                                            <span>{newPropForm.location?.lat?.toFixed(5) || '-6.2088'}, {newPropForm.location?.lng?.toFixed(5) || '106.8456'}</span>
+                                            <Navigation size={13} className="text-orange-500" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Alamat Lengkap Bangunan</label>
+                                    <input
+                                        type="text"
+                                        value={newPropForm.address || ''}
+                                        onChange={e => setNewPropForm({ ...newPropForm, address: e.target.value })}
+                                        placeholder="Jalan, Nomor Rumah, RT/RW, Patokan..."
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800"
+                                    />
+                                </div>
+
+                                <div className="h-56 rounded-2xl overflow-hidden border border-slate-200">
+                                    <LocationPicker
+                                        lat={newPropForm.location?.lat || -6.2088}
+                                        lng={newPropForm.location?.lng || 106.8456}
+                                        onLocationChange={(lat, lng, address, city, area) => {
+                                            setNewPropForm((prev: any) => ({
+                                                ...prev,
+                                                location: { lat, lng },
+                                                address: address || prev.address,
+                                                city: city || prev.city,
+                                                area: area || prev.area
+                                            }));
+                                        }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Fasilitas Umum 3 Kategori */}
+                            <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
+                                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                                    <Sparkles size={16} className="text-[#ff7a00]" />
+                                    <h4 className="font-black text-slate-900 text-xs uppercase tracking-tight">Fasilitas Umum & Area Bersama ({newPropForm.facilities?.length || 0} Terpilih)</h4>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {facilityCategories.map((cat, cIdx) => (
+                                        <div key={cIdx} className="space-y-2">
+                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">
+                                                {cat.name}
+                                            </span>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {cat.items.map(fItem => {
+                                                    const isChecked = (newPropForm.facilities || []).includes(fItem);
+                                                    return (
+                                                        <button
+                                                            key={fItem}
+                                                            type="button"
+                                                            onClick={() => toggleFacility(fItem)}
+                                                            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                                                                isChecked
+                                                                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs font-black'
+                                                                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                                                            }`}
+                                                        >
+                                                            {isChecked && <Check size={12} strokeWidth={3} />}
+                                                            <span>{fItem}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ===================================================== */}
+                    {/* TAB 2: RINCIAN KAMAR & PENGHUNI TERDATA              */}
+                    {/* ===================================================== */}
+                    {activeTab === 2 && (
+                        <div className="space-y-6 animate-in fade-in duration-200">
+                            {/* Horizontal Room Selector Strip (Exact survey theme) */}
+                            <div className="p-4 bg-white rounded-3xl border border-slate-200/90 shadow-2xs space-y-3">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">
+                                        Pilih Unit Kamar untuk Dikelola:
+                                    </span>
+                                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider">
+                                        <span className="text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                                            Total: {flatRooms.length} Kamar
+                                        </span>
+                                        <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                                            🔒 {totalOccupiedUnits} Terisi
+                                        </span>
+                                        <span className="text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                            ✨ {totalVacantUnits} Kosong
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
+                                    {flatRooms.map((rm: any, rIdx: number) => {
+                                        const isSelected = activeRoomIdx === rIdx;
+                                        const isOccupied = rm.status === 'terisi' || Boolean(rm.tenantName);
+
+                                        return (
+                                            <button
+                                                key={rIdx}
+                                                type="button"
+                                                onClick={() => setActiveRoomIdx(rIdx)}
+                                                className={`px-3.5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shrink-0 transition-all cursor-pointer border ${
+                                                    isSelected
+                                                        ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-orange-500/30'
+                                                        : isOccupied
+                                                            ? 'bg-amber-50/80 hover:bg-amber-100 text-slate-800 border-amber-200/90 shadow-2xs'
+                                                            : 'bg-emerald-50/80 hover:bg-emerald-100 text-slate-800 border-emerald-200/90 shadow-2xs'
+                                                }`}
+                                            >
+                                                <DoorClosed size={14} className={isSelected ? 'text-[#ff7a00]' : isOccupied ? 'text-amber-600' : 'text-emerald-600'} />
+                                                <span>Kamar {rm.roomNumber || rIdx + 1}</span>
+                                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                                    isSelected
+                                                        ? isOccupied ? 'bg-amber-400/20 text-amber-300' : 'bg-emerald-400/20 text-emerald-300'
+                                                        : isOccupied ? 'bg-amber-200 text-amber-900' : 'bg-emerald-200 text-emerald-900'
+                                                }`}>
+                                                    {isOccupied ? '🔒 Terisi' : '✨ Kosong'}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+
+                                    <button
+                                        type="button"
+                                        onClick={handleAddNewRoomUnit}
+                                        className="px-3.5 py-2 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider shrink-0 shadow-2xs cursor-pointer flex items-center gap-1"
+                                    >
+                                        <Plus size={14} /> + Tambah Kamar
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Active Room Workspace */}
+                            {activeRoom && (
+                                <div className="space-y-5">
+                                    {/* Active Room Banner */}
+                                    <div className="p-4 bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-white rounded-3xl border border-orange-200/80 flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-2xl bg-[#ff7a00] text-white flex items-center justify-center font-black text-sm shadow-xs">
+                                                #{activeRoomIdx + 1}
+                                            </div>
+                                            <div>
+                                                <h4 className="text-sm font-black text-slate-900 uppercase">
+                                                    Kamar {activeRoom.roomNumber || activeRoomIdx + 1} ({activeRoom.typeName || 'Standard'})
+                                                </h4>
+                                                <p className="text-[10px] text-slate-500 font-bold">
+                                                    Tarif: {FORMAT_CURRENCY(Number(activeRoom.typePrice) || Number(newPropForm.price) || 0)}/bln • {activeRoom.typeSize || '3x4m'} • {activeRoom.status === 'terisi' ? '🔒 Terisi' : '✨ Kosong'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => updateActiveRoomField('status', activeRoom.status === 'terisi' ? 'kosong' : 'terisi')}
+                                                className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border transition-all cursor-pointer ${
+                                                    activeRoom.status === 'terisi'
+                                                        ? 'bg-amber-500 text-white border-amber-500 shadow-2xs'
+                                                        : 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                                                }`}
+                                            >
+                                                {activeRoom.status === 'terisi' ? '🔒 Status: Terisi' : '✨ Status: Kosong'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleDeleteActiveRoomUnit}
+                                                className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl"
+                                                title="Hapus Unit Kamar Ini"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* 1. Spesifikasi Kamar (Dimensi & Tarif) */}
+                                    <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
+                                        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                                            <Layers size={16} className="text-[#ff7a00]" />
+                                            <h4 className="font-black text-slate-900 text-xs uppercase tracking-tight">Dimensi & Tarif Kamar</h4>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                            <div>
+                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Nomor Unit Kamar</label>
+                                                <input
+                                                    type="text"
+                                                    value={activeRoom.roomNumber || ''}
+                                                    onChange={e => updateActiveRoomField('roomNumber', e.target.value)}
+                                                    placeholder="Contoh: 101 / A1"
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-900"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Tarif Sewa (Rp/Bulan)</label>
+                                                <input
+                                                    type="number"
+                                                    value={activeRoom.typePrice || ''}
+                                                    onChange={e => updateActiveRoomTypeField('price', Number(e.target.value))}
+                                                    placeholder="500000"
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-900"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Dimensi Kamar (PxL)</label>
+                                                <input
+                                                    type="text"
+                                                    value={activeRoom.typeSize || '3x4m'}
+                                                    onChange={e => updateActiveRoomTypeField('size', e.target.value)}
+                                                    placeholder="3x4 meter"
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Fasilitas Kamar Chips */}
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Fasilitas Dalam Kamar</label>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {['AC', 'Kamar Mandi Dalam', 'Kasur', 'Lemari Pakaian', 'Meja Belajar', 'Kursi', 'Jendela Luar', 'Water Heater', 'Kipas Angin'].map(rf => {
+                                                    const isChecked = (activeRoom.typeFacilities || []).includes(rf);
+                                                    return (
+                                                        <button
+                                                            key={rf}
+                                                            type="button"
+                                                            onClick={() => toggleActiveRoomFacility(rf)}
+                                                            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all flex items-center gap-1.5 cursor-pointer ${
+                                                                isChecked
+                                                                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                                                                    : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
+                                                            }`}
+                                                        >
+                                                            {isChecked && <Check size={11} strokeWidth={3} />}
+                                                            <span>{rf}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 2. Data Penghuni Terdata */}
+                                    <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
+                                        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                                            <Users size={16} className="text-[#ff7a00]" />
+                                            <h4 className="font-black text-slate-900 text-xs uppercase tracking-tight">Status Sewa & Data Penghuni</h4>
+                                        </div>
+
+                                        {activeRoom.status === 'terisi' ? (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-amber-50/50 p-4 rounded-2xl border border-amber-200/80">
+                                                <div>
+                                                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">Nama Penghuni</label>
+                                                    <input
+                                                        type="text"
+                                                        value={activeRoom.tenantName || ''}
+                                                        onChange={e => updateActiveRoomField('tenantName', e.target.value)}
+                                                        placeholder="Nama penyewa aktif..."
+                                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">No. WhatsApp Penghuni</label>
+                                                    <input
+                                                        type="text"
+                                                        value={activeRoom.tenantPhone || ''}
+                                                        onChange={e => updateActiveRoomField('tenantPhone', e.target.value)}
+                                                        placeholder="08123456789"
+                                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 font-mono"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">Jatuh Tempo Sewa</label>
+                                                    <input
+                                                        type="date"
+                                                        value={activeRoom.dueDate || ''}
+                                                        onChange={e => updateActiveRoomField('dueDate', e.target.value)}
+                                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">Periode Tagihan</label>
+                                                    <select
+                                                        value={activeRoom.billingPeriod || 'bulanan'}
+                                                        onChange={e => updateActiveRoomField('billingPeriod', e.target.value)}
+                                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                                                    >
+                                                        <option value="bulanan">Bulanan</option>
+                                                        <option value="triwulan">3 Bulan</option>
+                                                        <option value="tahunan">Tahunan</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="p-4 bg-emerald-50 rounded-2xl border border-dashed border-emerald-200 text-center">
+                                                <p className="text-xs font-bold text-emerald-800">✨ Unit Kamar Ini Berstatus Kosong (Siap Huni)</p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => updateActiveRoomField('status', 'terisi')}
+                                                    className="text-[11px] font-black text-orange-600 uppercase tracking-wider mt-1 hover:underline cursor-pointer"
+                                                >
+                                                    + Pasang Penghuni ke Kamar Ini
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* 3. Dokumentasi Foto Unit Kamar (4 Kategori Standar Survei) */}
+                                    <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
+                                        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                                            <Camera size={16} className="text-[#ff7a00]" />
+                                            <h4 className="font-black text-slate-900 text-xs uppercase tracking-tight">Dokumentasi Foto Unit Kamar (4 Kategori)</h4>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                            {[
+                                                { key: 'interior', label: '🛏️ Interior Kamar' },
+                                                { key: 'kasur', label: '🛌 Kasur & Bantal' },
+                                                { key: 'wc', label: '🚿 Kamar Mandi' },
+                                                { key: 'jendela', label: '🪟 Jendela / Ventilasi' }
+                                            ].map(cat => {
+                                                const catPhotos = (activeRoom.categorizedPhotos && activeRoom.categorizedPhotos[cat.key]) || [];
+                                                const hasPhoto = catPhotos.length > 0;
+                                                const uploadKey = `${activeRoom.parentTypeIdx}-${activeRoom.parentRoomIdx}-${cat.key}`;
+
+                                                return (
+                                                    <div key={cat.key} className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col justify-between space-y-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight">{cat.label}</span>
+                                                            <label className="text-[9px] font-black text-orange-600 uppercase cursor-pointer hover:underline">
+                                                                {uploadingRooms[uploadKey] ? '...' : '+ Foto'}
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    disabled={uploadingRooms[uploadKey]}
+                                                                    onChange={e => handleUploadCategorizedRoomPhoto(cat.key, e)}
+                                                                    className="hidden"
+                                                                />
+                                                            </label>
+                                                        </div>
+
+                                                        {hasPhoto ? (
+                                                            <div className="relative aspect-[4/3] rounded-xl overflow-hidden border border-slate-200 group bg-black">
+                                                                <img src={catPhotos[0]} alt={cat.label} className="w-full h-full object-cover" />
+                                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setLightboxPhoto({ url: catPhotos[0], label: cat.label })}
+                                                                        className="p-1 bg-white/80 text-slate-900 rounded-lg"
+                                                                    >
+                                                                        <ZoomIn size={12} />
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleDeleteCategorizedRoomPhoto(cat.key, catPhotos[0])}
+                                                                        className="p-1 bg-rose-600 text-white rounded-lg"
+                                                                    >
+                                                                        <Trash2 size={12} />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="aspect-[4/3] rounded-xl border border-dashed border-slate-300 flex flex-col items-center justify-center p-2 text-center bg-white/60">
+                                                                <Camera size={18} className="text-slate-300 mb-0.5" />
+                                                                <span className="text-[8px] text-slate-400 font-bold">Belum Ada</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ===================================================== */}
+                    {/* TAB 3: MITRA, REKENING & AUTO-PILOT HUB              */}
+                    {/* ===================================================== */}
+                    {activeTab === 3 && (() => {
+                        const selectedOwner = ownersList.find(o => o.id === newPropForm.owner_uid);
+                        const filteredOwners = ownersList.filter(o => 
+                            o.name.toLowerCase().includes(ownerSearchQuery.toLowerCase()) ||
+                            o.phone.includes(ownerSearchQuery)
+                        );
+
+                        // Financial simulation
+                        const totalPotentialOmset = flatRooms.reduce((sum, r) => sum + (Number(r.typePrice) || Number(newPropForm.price) || 0), 0);
+                        const realizedOmset = flatRooms.filter(r => r.status === 'terisi').reduce((sum, r) => sum + (Number(r.typePrice) || Number(newPropForm.price) || 0), 0);
+                        const estimatedFee = Math.round(realizedOmset * 0.10);
+                        const estimatedPayout = realizedOmset - estimatedFee;
+
+                        return (
+                            <div className="space-y-6 animate-in fade-in duration-200">
+                                {/* Mitra Pemilik Properti */}
+                                <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
+                                    <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                                        <Users size={16} className="text-[#ff7a00]" />
+                                        <h4 className="font-black text-slate-900 text-xs uppercase tracking-tight">Mitra Pemilik (Owner Payout) <span className="text-rose-500">*</span></h4>
+                                    </div>
+
+                                    <div className="relative" ref={ownerDropdownRef}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsOwnerDropdownOpen(!isOwnerDropdownOpen)}
+                                            className="w-full bg-slate-50 border border-slate-300 rounded-2xl px-4 py-3 text-xs font-bold text-slate-800 focus:outline-none text-left flex justify-between items-center cursor-pointer hover:border-orange-400"
+                                        >
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-black text-xs">
+                                                    {selectedOwner ? selectedOwner.name.charAt(0) : '?'}
+                                                </div>
+                                                <div>
+                                                    <p className="font-black text-slate-900">{selectedOwner ? selectedOwner.name : '-- Pilih Mitra Pemilik --'}</p>
+                                                    <p className="text-[10px] text-slate-400 font-medium">{selectedOwner ? `📱 ${selectedOwner.phone}` : 'Klik untuk mencari data mitra'}</p>
+                                                </div>
+                                            </div>
+                                            <ArrowUpRight size={16} className={`text-slate-400 transition-transform ${isOwnerDropdownOpen ? 'rotate-90 text-orange-500' : ''}`} />
+                                        </button>
+
+                                        {isOwnerDropdownOpen && (
+                                            <div className="absolute z-[9999] w-full bg-white border border-slate-200 mt-2 rounded-3xl shadow-xl overflow-hidden">
+                                                <div className="p-3 border-b border-slate-100 bg-slate-50">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Cari nama atau nomor WhatsApp mitra..."
+                                                        value={ownerSearchQuery}
+                                                        onChange={e => setOwnerSearchQuery(e.target.value)}
+                                                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none"
+                                                        autoFocus
+                                                    />
+                                                </div>
+                                                <div className="max-h-56 overflow-y-auto p-1.5 divide-y divide-slate-50">
+                                                    {filteredOwners.map(o => (
+                                                        <button
+                                                            key={o.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setNewPropForm({ ...newPropForm, owner_uid: o.id });
+                                                                setIsOwnerDropdownOpen(false);
+                                                                setOwnerSearchQuery('');
+                                                            }}
+                                                            className={`w-full text-left px-3.5 py-2.5 text-xs font-bold rounded-2xl flex items-center justify-between ${
+                                                                o.id === newPropForm.owner_uid ? 'bg-orange-50 text-orange-600' : 'text-slate-700 hover:bg-slate-50'
+                                                            }`}
+                                                        >
+                                                            <div>
+                                                                <p className="font-black">{o.name}</p>
+                                                                <p className="text-[10px] text-slate-400">{o.phone}</p>
+                                                            </div>
+                                                            {o.id === newPropForm.owner_uid && <Check size={14} className="text-orange-500" />}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Omnichannel WhatsApp Router */}
+                                <div className="bg-gradient-to-br from-orange-50/60 via-white to-amber-50/60 p-5 rounded-3xl border border-orange-200/80 space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-2xs">
+                                            <MessageSquare size={16} />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-black text-slate-900 text-xs uppercase tracking-tight">Omnichannel WhatsApp Booking Router</h4>
+                                            <p className="text-[10px] text-slate-500 font-bold">Nomor WhatsApp tujuan saat calon penyewa menekan tombol booking di web</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">Nama Penanggung Jawab</label>
+                                            <input
+                                                type="text"
+                                                placeholder="Contoh: CS RuangSinggah / Pak Joko"
+                                                value={newPropForm.omnichannelContactName || ''}
+                                                onChange={e => setNewPropForm({ ...newPropForm, omnichannelContactName: e.target.value })}
+                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block mb-1">Nomor WhatsApp (628...)</label>
+                                            <input
+                                                type="text"
+                                                placeholder="628123456789"
+                                                value={newPropForm.omnichannelContactPhone || ''}
+                                                onChange={e => setNewPropForm({ ...newPropForm, omnichannelContactPhone: e.target.value })}
+                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 font-mono"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Simulasi Finansial Portofolio */}
+                                <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-2xs space-y-3">
+                                    <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                                        <DollarSign size={16} className="text-emerald-600" />
+                                        <h4 className="font-black text-slate-900 text-xs uppercase tracking-tight">Simulasi Finansial & Bagi Hasil Pemilik</h4>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Potensi Omset Penuh</span>
+                                            <p className="text-sm font-black text-slate-900 mt-0.5">{FORMAT_CURRENCY(totalPotentialOmset)}</p>
+                                            <span className="text-[9px] text-slate-400 font-bold">Jika seluruh {flatRooms.length} kamar terisi</span>
+                                        </div>
+                                        <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-100">
+                                            <span className="text-[9px] font-black text-emerald-700 uppercase tracking-wider block">Realisasi Sewa Berjalan</span>
+                                            <p className="text-sm font-black text-emerald-800 mt-0.5">{FORMAT_CURRENCY(realizedOmset)}</p>
+                                            <span className="text-[9px] text-emerald-600 font-bold">{totalOccupiedUnits} kamar terisi aktif</span>
+                                        </div>
+                                        <div className="p-3.5 bg-blue-50 rounded-2xl border border-blue-100">
+                                            <span className="text-[9px] font-black text-blue-700 uppercase tracking-wider block">Estimasi Payout Pemilik</span>
+                                            <p className="text-sm font-black text-blue-800 mt-0.5">{FORMAT_CURRENCY(estimatedPayout)}</p>
+                                            <span className="text-[9px] text-blue-600 font-bold">Setelah fee KostManager (10%)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
 
-                {/* 3. Sticky Bottom Action Bar */}
+                {/* ========================================================= */}
+                {/* 3. FOOTER STICKY ACTION BAR                              */}
+                {/* ========================================================= */}
                 <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
                     <button
                         type="button"
@@ -4469,24 +4241,62 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                     >
                         Batal
                     </button>
-                    <div className="flex items-center gap-2.5">
-                        <button
-                            type="button"
-                            onClick={handleSave}
-                            disabled={savingProp}
-                            className="px-7 py-3 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
-                        >
-                            {savingProp ? (
-                                <span>Menyimpan Studio...</span>
-                            ) : (
-                                <>
-                                    <CheckCircle2 size={15} />
-                                    <span>Simpan Perubahan Properti</span>
-                                </>
-                            )}
-                        </button>
+
+                    <div className="flex items-center gap-2">
+                        {activeTab > 1 && (
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab((activeTab - 1) as any)}
+                                className="px-4 py-2.5 rounded-2xl bg-white border border-slate-200 text-slate-700 text-xs font-black uppercase tracking-wider hover:bg-slate-100 transition-all cursor-pointer"
+                            >
+                                ← Sebelumnya
+                            </button>
+                        )}
+
+                        {activeTab < 3 ? (
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab((activeTab + 1) as any)}
+                                className="px-5 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider shadow-sm transition-all cursor-pointer"
+                            >
+                                Lanjut: {activeTab === 1 ? 'Kamar & Penghuni →' : 'Mitra & Auto-Pilot →'}
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={handleSave}
+                                disabled={savingProp}
+                                className="px-7 py-2.5 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                            >
+                                {savingProp ? (
+                                    <span>Menyimpan Properti...</span>
+                                ) : (
+                                    <>
+                                        <CheckCircle2 size={15} />
+                                        <span>Simpan Perubahan Properti</span>
+                                    </>
+                                )}
+                            </button>
+                        )}
                     </div>
                 </div>
+
+                {/* Lightbox Preview Modal */}
+                {lightboxPhoto && (
+                    <div className="fixed inset-0 bg-black/90 z-[150] flex items-center justify-center p-4" onClick={() => setLightboxPhoto(null)}>
+                        <div className="max-w-3xl w-full bg-slate-900 rounded-3xl overflow-hidden relative" onClick={e => e.stopPropagation()}>
+                            <div className="p-3 bg-slate-800 text-white flex justify-between items-center text-xs font-bold">
+                                <span>{lightboxPhoto.label || 'Preview Foto'}</span>
+                                <button type="button" onClick={() => setLightboxPhoto(null)} className="p-1 hover:bg-slate-700 rounded-lg">
+                                    <X size={16} />
+                                </button>
+                            </div>
+                            <div className="p-2 flex items-center justify-center">
+                                <img src={lightboxPhoto.url} alt="Full Preview" className="max-h-[75vh] w-auto object-contain rounded-2xl" />
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 135. Penyelarasan Layout & Skema Input Modal Edit Properti Sesuai Standar Peninjauan Survei KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menginstruksikan untuk menyelaraskan tampilan tema layout dan skema input modal pengeditan properti pada tingkatan KostManager dengan standar tampilan peninjauan hasil survei (Review Modal) yang ada di Dashboard Admin (`KostManagerManagement.tsx`).
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Struktur 3-Step Navigator Tabs**:
+    - **Tab 1: 🏢 Profil & Fasilitas Gedung**:
+      - Hero Carousel Foto Utama / Fasad Bangunan dengan preview thumbnail strip dan upload foto ber-kompresi WebP.
+      - Identitas Properti (Nama Kost, Tipe Gender, Deskripsi Lengkap).
+      - Lokasi & Titik Koordinat GPS dengan peta satelit `LocationPicker`.
+      - Fasilitas Umum 3 Kategori Terstruktur: *Kenyamanan & Umum*, *Keamanan & Akses*, dan *Utilitas & Listrik*.
+    - **Tab 2: 🛏️ Kamar & Penghuni Terdata**:
+      - Horizontal Room Selector Strip dengan badge counter status total kamar, terisi (`🔒 Terisi`), dan kosong (`✨ Kosong`).
+      - Banner status kamar aktif, spesifikasi dimensi ($P \times L$), dan tarif sewa per unit.
+      - Data penghuni terdata (Nama, No WhatsApp, Tanggal Mulai & Jatuh Tempo, Periode Tagihan).
+      - Dokumentasi Foto Kamar 4 Kategori: *Interior Kamar*, *Kasur & Bantal*, *Kamar Mandi*, dan *Jendela / Ventilasi*.
+    - **Tab 3: 📋 Mitra, Rekening & Auto-Pilot Hub**:
+      - Data pemilik mitra (Owner Payout) dengan pencarian cepat.
+      - Omnichannel WhatsApp Booking Router.
+      - Simulasi Finansial Properti (Potensi Omset Maksimal, Realisasi Sewa Berjalan, dan Estimasi Payout Pemilik setelah fee KostManager 10%).
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus 100% dengan 0 error dalam 23.83 detik (2526 modules transformed).
+
 ### 134. Transformasi Modal Edit Properti Menjadi Advanced & Interactive Property Studio (`KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar modal pengeditan properti pada tingkatan KostManager tidak lagi berupa popup admin konvensional yang kaku dan sempit, melainkan dibuat lebih advance, profesional berstandar modern, dan sangat interaktif.
