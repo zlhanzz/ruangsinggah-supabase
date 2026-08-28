@@ -2586,3 +2586,28 @@
   - Menambahkan banner evaluasi teratas lengkap dengan **Quick-Jump Pill Buttons** untuk langsung beralih ke Step formulir yang perlu direvisi.
   - Menambahkan conditional amber border & warning badge (`⚠️ Perlu Revisi Admin`) pada section Profil & Fasad, GPS & Lokasi Maps, Fasilitas Umum, Aturan Kost, Data Kamar, Syarat Mitra, dan Tanda Tangan Digital Pemilik.
 
+
+### 136. Smart Auto-Detection & Split Wilayah Administrasi (Provinsi, Kota/Kabupaten, Kecamatan) dari Google Maps Geocoder (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna memperhatikan adanya pengkotak-kotakan input wilayah (Provinsi, Kota/Kabupaten, Kecamatan) yang jika diisi manual merepotkan agen atau admin.
+  2. Pemisahan wilayah yang presisi sangat krusial dan bernilai strategis tinggi untuk kemudahan filter pencarian katalog hunian kost di sisi pengguna/calon penyewa.
+  3. Google Maps geocoding standar sering kali mengembalikan `locality` yang bernilai nama Kecamatan (misal: `"Kecamatan Tamalanrea"`), sehingga jika langsung dimasukkan ke Kota, data kota menjadi keliru.
+- **Implementasi & Solusi Presisi**:
+  * **Smart Geocoding Address Components Parser (`LocationPicker` di `KostManagerPortal.tsx`)**:
+    - **Provinsi**: Diekstrak dari `administrative_area_level_1` dengan sanitasi pembersihan awalan `"Provinsi "` / `"Prov. "` (misal: `"Sulawesi Selatan"`).
+    - **Kota / Kabupaten**: Diekstrak dengan prioritas utama `administrative_area_level_2`, dengan pembersihan awalan `"Kota "` / `"Kabupaten "` / `"Kab. "` (misal: `"Kota Makassar"` ➔ `"Makassar"`, `"Kabupaten Gowa"` ➔ `"Gowa"`).
+    - **Kecamatan / Area**: Diekstrak dari `administrative_area_level_3`, `sublocality_level_1`, `sublocality`, atau `locality` dengan pembersihan awalan `"Kecamatan "` / `"Kec. "` (misal: `"Kecamatan Tamalanrea"` ➔ `"Tamalanrea"`).
+  * **Komprehensif pada Autocomplete & Marker Drag/Click**:
+    - Diterapkan secara otomatis saat pin peta digeser (*dragend*), peta diklik (*map click*), tombol *Gunakan Lokasi GPS Saya* ditekan, maupun saat user memilih hasil pencarian di Google Places Autocomplete input.
+  * **Integrasi 3 Kolom Wilayah Terstruktur di Tab 1 Modal KostManager**:
+    - 🏛️ **Provinsi**: `Sulawesi Selatan`
+    - 🏙️ **Kota / Kabupaten**: `Makassar`
+    - 📍 **Kecamatan / Area**: `Tamalanrea`
+    - Disertai Alamat Lengkap Real Bangunan (Detail Jalan, No, RT/RW, Patokan) yang otomatis terisi dan tetap dapat disesuaikan manual.
+  * **Persistensi Data ke Supabase**:
+    - Kolom `province`, `city`, dan `area` diteruskan ke `newPropForm`, payload insert/update `properties`, dan `DEFAULT_PROP_FORM`.
+- **File Tersentuh**: 
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+- **Verifikasi**:
+  - Build Vite frontend `npm run build` di `functions/public/` lulus 100% dengan 0 error (exit code 0).
+

@@ -1,67 +1,68 @@
-# WALKTHROUGH - Penyimpanan & Pembersihan Draf Database KostManager
 
-Dokumen ini menjelaskan daftar perubahan, hasil pengujian, dan instruksi deploy untuk memindahkan arsitektur draf dari local storage peramban langsung ke database Supabase, serta menambahkan sistem pembersihan draf otomatis (draft cleaner) berbasis backend cron job/schedule.
+# Walkthrough: Smart Auto-Detection Wilayah Administrasi (Provinsi, Kota/Kabupaten, Kecamatan)
 
----
+## 📌 Ringkasan Pekerjaan
+Fitur deteksi otomatis wilayah administrasi telah berhasil diintegrasikan pada Google Maps `LocationPicker` di Modal Properti Kelolaan Portal KostManager (`KostManagerPortal.tsx`). 
 
-## 1. Daftar Perubahan (List of Changes)
-
-### A. Helper Fungsi Penyimpanan Draf Database
-* **File**: [`functions/public/pages/AgentDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx)
-* **Perubahan**:
-  * Menambahkan fungsi `handleSaveDraftDirectly` yang bertugas untuk melakukan upsert secara instan ke tabel `properties` (dengan status `'draft'`) dan tabel `mitra_kostmanager` berdasarkan form state yang dikirimkan.
-  * Menambahkan fungsi `closeKostManagerListingWithSave` yang secara otomatis memanggil `handleSaveDraftDirectly` untuk mengamankan data survei terbaru ke database sebelum state lokal di-reset dan dibersihkan.
-  * **Perbaikan Constraint**: Menyertakan `mitra_id` (sama dengan `owner_uid`) pada seluruh payload penyimpanan `properties` untuk menghindari kegagalan *constraint not-null* (`code: '23502'`) ketika membuat listing properti baru dari draf.
-
-### B. Integrasi Auto-Save pada Siklus Transisi
-* **File**: [`functions/public/pages/AgentDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx)
-* **Perubahan**:
-  * **Tombol Close/Keluar**: Semua event penutupan modal (backdrop overlay click, tombol "Keluar" di warning modal, tombol silang `X` di header, dan tombol "Keluar" di footer Step 1) kini memanggil `closeKostManagerListingWithSave` untuk auto-save sebelum keluar.
-  * **Perpindahan Step**: Navigasi transisi langkah (tombol "Lanjut ke Step 2", "Kembali ke Step 1", "Lanjut ke Step 3", "Kembali ke Step 2", dan tombol back arrow di header) kini memicu penyimpanan draf secara asinkron ke database sebelum melangkah ke step berikutnya.
-  * **Penambahan Kamar**: Tombol "Simpan Kamar Baru" kini memicu penyimpanan draf database instan dengan form data yang baru ditambahkan untuk mencegah data hilang akibat close tiba-tiba setelah input kamar.
-
-### C. Restorasi Otomatis (Auto-Heal) Kamar dari Database
-* **File**: [`functions/public/pages/AgentDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx)
-* **Perubahan**:
-  * Ketika onboarding dibuka kembali, sistem memeriksa draf lokal. Jika draf lokal memiliki array kamar kosong (`roomTypes.length === 0`), sistem secara cerdas akan menarik kembali data kamar asli dari database (`dbKmProp.room_types`) dan menggabungkannya ke draf lokal agar data kamar tidak terbuang.
-
-### D. Simulasi Tampilan Mobile App (Preview Listing) & Redesain Data Kamar
-* **File**: [`functions/public/pages/AgentDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx)
-* **Perubahan**:
-  * **Simulator Tampilan Mobile**: Mengganti seksi ringkasan properti sederhana dengan bingkai simulator handphone interaktif modern (dilengkapi status bar, app bar, indikator, dan tombol aksi pemesanan sewa) yang merepresentasikan persis visualisasi detail kost di layar aplikasi calon penyewa.
-  * **Carousel Interaktif**: Pemilik kost dapat mengetuk tombol-tombol foto mini di bawah carousel simulator handphone untuk berganti-ganti foto kost secara interaktif.
-  * **Redesain Data Kamar**: Merestrukturisasi panel statistik kamar (Total, Terisi, Kosong) dengan gaya minimalis abu-abu/oranye agar konsisten dengan warna sistem, dan memperluas isi akordeon saat di-*maximize* untuk memaparkan seluruh rincian kamar yang diinput (tipe, lantai, kapasitas, informasi sewa penyewa aktif, daftar skema harga lengkap, biaya bulanan tambahan, kelengkapan WC/Dapur, serta grid foto kondisi kamar).
-
-### E. Sistem Pembersih Draf Otomatis (Backend Scheduler & HTTP Trigger)
-* **File**: [`functions/src/index.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/src/index.ts)
-* **Perubahan**:
-  * Menambahkan fungsi inti `cleanExpiredDraftsCore(daysThreshold)` untuk menyaring draf usang:
-    1. Memilih properti di mana `status = 'draft'` dan `is_managed = true` dan `is_verified = false`.
-    2. Menyaring properti yang tidak aktif berdasarkan batas hari non-aktif (`updated_at < thresholdDate`).
-    3. Melakukan pemeriksaan ke tabel `kostmanager_requests` untuk memastikan properti tersebut **tidak pernah memiliki request** dengan status `'APPROVED'` atau `'COMPLETED'`. Hal ini menjamin properti aktif, properti publish, atau properti yang pernah publish TIDAK akan pernah terhapus.
-    4. Menghapus properti yang lolos filter (karena hubungan constraint `ON DELETE CASCADE`, baris terkait di tabel `mitra_kostmanager` dan `rooms` otomatis terhapus bersih).
-  * Menambahkan `scheduledCleanExpiredDrafts` menggunakan Firebase scheduler v2 (`onSchedule`) untuk menjalankan pembersihan otomatis setiap 24 jam.
-  * Menambahkan `triggerCleanExpiredDrafts` menggunakan HTTP onRequest handler agar administrator dapat memicu pembersihan draf usang secara manual melalui pemanggilan URL (contoh: `triggerCleanExpiredDrafts?days=30`).
+Ketika pengguna atau surveyor meletakkan pin peta, mencari lokasi via autocomplete, atau mengklik *"Gunakan Lokasi GPS Saya"*, sistem secara otomatis dan cerdas membagi entitas alamat Google Maps menjadi 3 kategori wilayah administratif yang bersih dan presisi:
+1. 🏛️ **Provinsi**: Diekstrak dari `administrative_area_level_1` (misal: *"Sulawesi Selatan"*).
+2. 🏙️ **Kota / Kabupaten**: Diekstrak dari `administrative_area_level_2` dengan pembersihan awalan *"Kota "* / *"Kabupaten "* (misal: *"Kota Makassar"* $\rightarrow$ *"Makassar"*).
+3. 📍 **Kecamatan / Area**: Diekstrak dari `administrative_area_level_3` / `sublocality_level_1` / `locality` dengan pembersihan awalan *"Kecamatan "* / *"Kec. "* (misal: *"Kecamatan Tamalanrea"* $\rightarrow$ *"Tamalanrea"*).
 
 ---
 
-## 2. Hasil Pengujian (Test Results)
+## 🛠️ Detail Perubahan
 
-1. **Pengujian Persistensi Kamar**:
-   * Surveyor membuka form onboarding, menambahkan 1 kamar baru, lalu langsung menutup form (mengklik area hitam di luar modal).
-   * Saat form dibuka kembali, data kamar tersebut **langsung terisi kembali dengan sempurna** karena draf berhasil ditarik langsung dari database.
-2. **Uji Coba Kompilasi Backend & Frontend**:
-   * Proses kompilasi Typescript backend (`tsc`) berhasil 100% tanpa error.
-   * Proses kompilasi Vite frontend (`npm run build`) berhasil 100% tanpa error.
+### 1. Smart Geocoding Parser di `LocationPicker` (`KostManagerPortal.tsx`)
+- Memperbarui fungsi `reverseGeocode` dan event listener Google Places `place_changed` autocomplete untuk mengurai `address_components` secara hierarkis:
+  ```ts
+  const getComp = (type: string) => components.find((c: any) => c.types.includes(type))?.long_name || '';
+  const province = getComp('administrative_area_level_1').replace(/^(Provinsi|Prov\.)\s+/i, '').trim();
+  const rawCity = getComp('administrative_area_level_2') || getComp('locality') || getComp('administrative_area_level_1');
+  const city = rawCity.replace(/^(Kota|Kabupaten|Kab\.)\s+/i, '').trim();
+  const rawArea = getComp('administrative_area_level_3') || getComp('sublocality_level_1') || getComp('sublocality') || getComp('locality');
+  const area = rawArea.replace(/^(Kecamatan|Kec\.)\s+/i, '').trim();
+  ```
+- Mencegah bug lama di mana `locality` yang bernilai nama Kecamatan secara keliru mengisi kolom Kota.
+- Menyalurkan `province`, `city`, `area` ke callback `onLocationChange`.
+
+### 2. Antarmuka 3 Kolom Wilayah Terstruktur di Tab 1 Modal KostManager
+- Menyediakan 3 field input yang bersih dan otomatis terisi saat pin peta berpindah:
+  - 🏛️ **Provinsi**: *Sulawesi Selatan*
+  - 🏙️ **Kota / Kabupaten**: *Makassar*
+  - 📍 **Kecamatan / Area**: *Tamalanrea*
+- Kolom alamat lengkap jalan real tetap tersedia di bawahnya untuk rincian detail (nama jalan, nomor, RT/RW, dan patokan).
+
+### 3. Persistensi Data ke Supabase
+- Menambahkan `province` pada `DEFAULT_PROP_FORM`, state `newPropForm`, payload insert/update `properties` di `handleSave`, dan pemetaan data saat mode edit `handleEditProperty`.
 
 ---
 
-## 3. Petunjuk Deploy (Deployment Instructions)
-
-Silakan jalankan perintah manual berikut di terminal Anda untuk mendorong perubahan ke GitHub:
+## 🧪 Hasil Verifikasi Kompilasi & Build
 
 ```bash
-git add .
-git commit -m "feat: implementasi draf database kostmanager dan sistem cleanExpiredDrafts backend scheduler"
-git push origin bukan-productions
+> ruangsinggah.id@0.0.0 build
+> vite build
+
+vite v6.4.1 building for production...
+✓ 2526 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 29.57s
+The command exited with code 0 (SUCCESS).
 ```
+
+---
+
+## 🧭 Panduan Pengujian untuk Pengguna
+1. Buka halaman **Portal KostManager** di Dashboard Admin (`/admin/kostmanager`).
+2. Klik tombol **`+ Tambah Properti`** atau tombol **`✏️ Edit`** pada salah satu properti.
+3. Pada **Tab 1: Profil Gedung**, gulir ke bagian **Lokasi & Titik Koordinat GPS**.
+4. Ketik nama tempat atau geser pin marker pada Google Maps.
+5. Perhatikan bahwa 3 kolom wilayah:
+   - **🏛️ Provinsi**
+   - **🏙️ Kota / Kabupaten**
+   - **📍 Kecamatan / Area**
+   langsung terisi secara otomatis, rapi, dan presisi tanpa perlu diketik manual.
+6. Simpan properti dan verifikasi bahwa data tersimpan sempurna.
+

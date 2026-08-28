@@ -474,6 +474,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
         address: '',
         city: '',
         area: '',
+        province: '',
         type: 'Campur',
         price: 0,
         owner_uid: '',
@@ -564,11 +565,10 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
 
             const reqOwnerIds = kmRequests?.map(r => r.user_id).filter(Boolean) || [];
 
-            // 3. Ambil SELURUH properti yang is_managed = true dan non-draft
+            // 3. Ambil SELURUH properti aktif non-draft untuk pengelolaan portofolio
             const { data: props, error: pErr } = await supabase
                 .from('properties')
                 .select('*')
-                .eq('is_managed', true)
                 .neq('status', 'draft')
                 .order('created_at', { ascending: false });
 
@@ -1182,6 +1182,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             address: p.address || '',
             city: p.city || '',
             area: p.area || '',
+            province: (p as any).province || '',
             type: p.type || 'Campur',
             price: p.price || 0,
             owner_uid: p.owner_uid || '',
@@ -3426,6 +3427,7 @@ const ManagedPropertyAddModal: React.FC<ManagedPropertyAddModalProps> = ({
                 address: newPropForm.address,
                 city: newPropForm.city,
                 area: newPropForm.area || '',
+                province: newPropForm.province || '',
                 type: newPropForm.type,
                 price: finalPrice,
                 ownerUid: newPropForm.owner_uid,

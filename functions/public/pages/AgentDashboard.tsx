@@ -1097,6 +1097,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 address: currentForm.address,
                 city: currentForm.city,
                 area: currentForm.area,
+                province: currentForm.province || '',
                 type: currentForm.type,
                 price: finalPrice,
                 owner_uid: validOwnerUid,
@@ -2220,6 +2221,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 address: kmListingForm.address,
                 city: kmListingForm.city,
                 area: kmListingForm.area,
+                province: kmListingForm.province || '',
                 type: kmListingForm.type,
                 price: finalPrice,
                 owner_uid: validOwnerUid,
@@ -6009,35 +6011,53 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                 </div>
 
                                                 <div className="flex flex-col gap-1.5">
-                                                    <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Alamat Lengkap</label>
+                                                    <label className="text-[11px] font-bold text-[#584235] uppercase tracking-wider">Alamat Lengkap Real Bangunan</label>
                                                     <textarea
                                                         value={kmListingForm.address}
                                                         onChange={e => setKmListingForm({ ...kmListingForm, address: e.target.value })}
-                                                        placeholder="Jalan, RT/RW, Kelurahan, Kecamatan..."
-                                                        className="w-full p-3.5 border border-[#8c7263] rounded-xl bg-[#f8f9ff] focus:ring-2 focus:ring-[#ff7a00] focus:border-[#ff7a00] outline-none text-sm font-medium min-h-[80px] resize-none"
+                                                        placeholder="Jalan, Nomor Rumah, RT/RW, Kelurahan, Patokan..."
+                                                        className="w-full p-3.5 border border-[#8c7263] rounded-xl bg-[#f8f9ff] focus:ring-2 focus:ring-[#ff7a00] focus:border-[#ff7a00] outline-none text-sm font-medium min-h-[75px] resize-none"
                                                     />
-                                                    {(kmListingForm.province || kmListingForm.city || kmListingForm.area) && (
-                                                        <div className="flex flex-wrap items-center gap-1.5 p-2.5 bg-orange-50/70 border border-orange-200/80 rounded-xl text-[10px] font-bold text-slate-700">
-                                                            <span className="text-[#ff7a00] font-black uppercase text-[9px] flex items-center gap-1 mr-1">
-                                                                <Sparkles size={11} /> Wilayah Terdeteksi:
-                                                            </span>
-                                                            {kmListingForm.province && (
-                                                                <span className="bg-white px-2 py-0.5 rounded-md border border-orange-200 text-slate-800">
-                                                                    🏛️ {kmListingForm.province}
-                                                                </span>
-                                                            )}
-                                                            {kmListingForm.city && (
-                                                                <span className="bg-white px-2 py-0.5 rounded-md border border-orange-200 text-slate-800">
-                                                                    🏙️ {kmListingForm.city}
-                                                                </span>
-                                                            )}
-                                                            {kmListingForm.area && (
-                                                                <span className="bg-white px-2 py-0.5 rounded-md border border-orange-200 text-slate-800">
-                                                                    📍 Kec. {kmListingForm.area}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                </div>
+
+                                                {/* 3 Kotak Input Kategori Wilayah Terstruktur (Auto-Filled dari Geocoding & Editable) */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-[10px] font-bold text-[#584235] uppercase tracking-wider flex items-center gap-1">
+                                                            🏛️ Provinsi
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={kmListingForm.province || ''}
+                                                            onChange={e => setKmListingForm({ ...kmListingForm, province: e.target.value })}
+                                                            placeholder="Provinsi (Otomatis)"
+                                                            className="w-full h-[42px] px-3 border border-[#8c7263] rounded-xl bg-[#f8f9ff] focus:ring-2 focus:ring-[#ff7a00] focus:border-[#ff7a00] outline-none text-xs font-bold text-slate-800"
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-[10px] font-bold text-[#584235] uppercase tracking-wider flex items-center gap-1">
+                                                            🏙️ Kota / Kabupaten
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={kmListingForm.city || ''}
+                                                            onChange={e => setKmListingForm({ ...kmListingForm, city: e.target.value })}
+                                                            placeholder="Kota / Kab (Otomatis)"
+                                                            className="w-full h-[42px] px-3 border border-[#8c7263] rounded-xl bg-[#f8f9ff] focus:ring-2 focus:ring-[#ff7a00] focus:border-[#ff7a00] outline-none text-xs font-bold text-slate-800"
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-[10px] font-bold text-[#584235] uppercase tracking-wider flex items-center gap-1">
+                                                            📍 Kecamatan / Area
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={kmListingForm.area || ''}
+                                                            onChange={e => setKmListingForm({ ...kmListingForm, area: e.target.value })}
+                                                            placeholder="Kecamatan (Otomatis)"
+                                                            className="w-full h-[42px] px-3 border border-[#8c7263] rounded-xl bg-[#f8f9ff] focus:ring-2 focus:ring-[#ff7a00] focus:border-[#ff7a00] outline-none text-xs font-bold text-slate-800"
+                                                        />
+                                                    </div>
                                                 </div>
 
                                                 <div className="flex flex-col gap-1.5">
@@ -6085,11 +6105,38 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                                 if (confirmLocationChange()) {
                                                                     if (navigator.geolocation) {
                                                                         navigator.geolocation.getCurrentPosition((pos) => {
-                                                                            setKmListingForm({
-                                                                                ...kmListingForm,
-                                                                                location: { lat: pos.coords.latitude, lng: pos.coords.longitude }
-                                                                            });
-                                                                            alert('Koordinat properti presisi berhasil dikunci!');
+                                                                            const plat = pos.coords.latitude;
+                                                                            const plng = pos.coords.longitude;
+                                                                            setKmListingForm(prev => ({
+                                                                                ...prev,
+                                                                                location: { lat: plat, lng: plng }
+                                                                            }));
+                                                                            const gw = (window as any).google;
+                                                                            if (gw?.maps?.Geocoder) {
+                                                                                const geocoder = new gw.maps.Geocoder();
+                                                                                geocoder.geocode({ location: { lat: plat, lng: plng } }, (results: any[], status: string) => {
+                                                                                    if (status === 'OK' && results && results.length > 0) {
+                                                                                        const addr = results[0].formatted_address;
+                                                                                        const components = results[0].address_components || [];
+                                                                                        let city = '', area = '', province = '';
+                                                                                        for (const comp of components) {
+                                                                                            const types = comp.types || [];
+                                                                                            if (types.includes('administrative_area_level_1') && !province) province = comp.long_name;
+                                                                                            if (types.includes('administrative_area_level_2') && !city) city = comp.long_name;
+                                                                                            if ((types.includes('administrative_area_level_3') || types.includes('sublocality_level_1') || types.includes('sublocality')) && !area) area = comp.long_name;
+                                                                                            if (types.includes('locality') && !area && comp.long_name !== city) area = comp.long_name;
+                                                                                        }
+                                                                                        setKmListingForm(prev => ({
+                                                                                            ...prev,
+                                                                                            address: addr,
+                                                                                            city: city.replace(/^(Kota|Kabupaten|Kab\.)\s+/i, '').trim(),
+                                                                                            area: area.replace(/^(Kecamatan|Kec\.)\s+/i, '').trim(),
+                                                                                            province: province.replace(/^(Provinsi|Prov\.)\s+/i, '').trim()
+                                                                                        }));
+                                                                                    }
+                                                                                });
+                                                                            }
+                                                                            alert('Koordinat properti presisi berhasil dikunci & wilayah terdeteksi!');
                                                                         }, err => alert('Gagal membaca GPS: ' + err.message));
                                                                     }
                                                                 }
