@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 140. Transformasi Kartu Evaluasi Menjadi Baris Kompak Riwayat Revisi Pasca Pengiriman Ulang (`AgentDashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pada daftar tugas surveyor, ketika data hasil revisi telah dikirim ulang ke admin (`status: SUBMITTED`), kartu evaluasi besar berwarna oranye menyala dengan badge *"PERLU TINDAKAN"* masih muncul karena teks catatan memuat kata `[REVISI]`.
+  2. Pengguna meminta agar kartu besar tersebut dihilangkan setelah revisi terkirim, dan digantikan dengan **satu baris kecil memanjang yang rapi sebagai penanda Riwayat Revisi** yang menampilkan tanggal dan waktu pengiriman revisi.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Pemisahan Mode Kartu Tugas Berdasarkan Status**:
+    - **Mode Revisi Aktif (`REVISION_REQUIRED` / `NEED_REVISION`)**: Tetap menampilkan kartu besar oranye ber-prioritas tinggi dan ber-animasi untuk menuntun surveyor segera memperbaiki poin-poin yang diminta admin.
+    - **Mode Pasca-Kirim Ulang (`SUBMITTED` / `PENDING_ONBOARDING`)**: Kartu besar oranye otomatis dihilangkan dan digantikan dengan **satu baris kecil memanjang (horizontal compact bar)**:
+      `[🕒 Riwayat Revisi: Terkirim 28 Agu 2026, 17:31 WITA] [✓ Terkirim]`.
+  * **2. Helper Format Waktu Lengkap (`getFormattedRevisionDateTime`)**:
+    - Memformat tanggal dan jam pengiriman data secara presisi (contoh: *"28 Agu 2026, 17:31 WITA"*).
+  * **3. Tombol Aksi Tenang Berwarna Hijau**:
+    - Di bawah baris riwayat, disajikan kartu info status terkirim dan tombol aksi emerald: *"✏️ Edit & Perbarui Data Listing"*.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**: Build Vite frontend (`npm run build`) di `functions/public/` lulus 100% dengan 0 error dalam 22.56 detik (2526 modules transformed).
+
+
+
 ### 139. Auto-Detection Cerdas & Persistensi Provinsi serta Penonaktifan Alarm Evaluasi Pasca Kirim Ulang (`AgentDashboard.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. **Provinsi Masih Kosong saat Dibuka Kembali**: Meskipun Kota/Kabupaten dan Kecamatan sudah tersimpan, input Provinsi masih kosong saat membuka form karena data properti lama di database (`metadata`) belum memiliki key `province` dan draft lokal lama menyimpan string kosong tanpa fallback auto-detect dari teks alamat.

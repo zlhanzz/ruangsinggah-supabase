@@ -1,25 +1,22 @@
-# WALKTHROUGH: Auto-Detection Cerdas Provinsi & Penonaktifan Alarm Evaluasi Pasca Kirim Ulang
+# WALKTHROUGH: Baris Kompak Riwayat Revisi Pasca Pengiriman Ulang Data Survei
 
-Dokumen ini merangkum penyelesaian implementasi perbaikan auto-detection provinsi dan sinkronisasi status evaluasi pada `AgentDashboard.tsx`.
+Dokumen ini merangkum penyelesaian implementasi perbaikan tampilan kartu evaluasi pada daftar tugas surveyor (`AgentDashboard.tsx`) pasca pengiriman ulang data revisi.
 
 ---
 
 ## 1. Ringkasan Perubahan
 
-### A. Auto-Detection Cerdas & Persistensi Provinsi (`detectProvinceFromAddress`)
-- **Sebelumnya**: Kolom input Provinsi masih kosong saat membuka kembali data properti karena data awal di database belum memiliki metadata provinsi dan draft lokal lama menyimpan nilai string kosong.
+### A. Satu Baris Kecil Memanjang untuk Riwayat Revisi
+- **Sebelumnya**: Ketika data hasil revisi telah dikirim ulang ke admin (`status: SUBMITTED`), kartu evaluasi besar berwarna oranye menyala dengan badge *"PERLU TINDAKAN"* dan tombol mencolok *"⚡ BUKA & PERBAIKI BAGIAN YANG DIEVALUASI"* masih muncul.
 - **Sekarang**:
-  - Diterapkan helper `detectProvinceFromAddress(address)` yang secara cerdas mendeteksi nama provinsi (Sulawesi Selatan, DKI Jakarta, Jawa Barat, Jawa Timur, Bali, dll.) dari string alamat atau default ke *"Sulawesi Selatan"*.
-  - Diintegrasikan di seluruh alur pemuatan data (`openKostManagerListing`): draft localStorage, `dbKmProp`, `dbPropertyRecord`, clean slate fallback, dan Google Maps Geocoder.
-  - Hasil: Input Provinsi **selalu otomatis terisi** dan tersimpan permanen bersama Kota/Kabupaten dan Kecamatan/Area.
+  - Kartu besar oranye otomatis dihilangkan ketika status bukan lagi `REVISION_REQUIRED`.
+  - Digantikan dengan **satu baris kecil memanjang (horizontal strip)** yang rapi dan elegan:
+    - Ikon `Clock` dengan teks: **`Riwayat Revisi: Terkirim 28 Agu 2026, 17:31 WITA`**.
+    - Badge hijau compact: **`✓ Terkirim`**.
+  - Diikuti dengan kotak status pengiriman tenang dan tombol hijau: **`✏️ Edit & Perbarui Data Listing`**.
 
-### B. Penonaktifan Alarm Evaluasi & Banner Terkirim Pasca Kirim Ulang
-- **Sebelumnya**: Badge `REVISI` di tab stepper dan border kelap-kelip masih muncul setelah agen mengirim ulang hasil revisi, karena fungsi `parseEvaluationData` hanya memeriksa kata kunci di teks `notes` tanpa mengecek status pengajuan.
-- **Sekarang**:
-  - `parseEvaluationData(notes, status)` kini memvalidasi status pengajuan.
-  - Ketika status beralih ke `SUBMITTED`, `PENDING_ONBOARDING`, atau `APPROVED`, `hasRevision` otomatis bernilai `false`.
-  - Badge `REVISI` pada tab stepper dan border glowing kelap-kelip otomatis **dinonaktifkan**.
-  - Ditampilkan banner hijau/emerald konfirmasi pengiriman: *"✨ Data Revisi Telah Dikirim ke Admin (Menunggu Verifikasi & Persetujuan)"* lengkap dengan riwayat poin yang telah diperbaiki.
+### B. Format Waktu Lengkap & Presisi
+- Diterapkan fungsi `getFormattedRevisionDateTime(req, evalData)` yang memformat tanggal dan waktu pengiriman terakhir secara presisi ke format waktu Indonesia (contoh: *"28 Agu 2026, 17:31 WITA"*).
 
 ---
 
@@ -27,9 +24,8 @@ Dokumen ini merangkum penyelesaian implementasi perbaikan auto-detection provins
 
 | File | Komponen / Fungsi | Deskripsi Modifikasi |
 |---|---|---|
-| [functions/public/pages/AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx) | `detectProvinceFromAddress`, `openKostManagerListing`, `reverseGeocodeAndApply` | Penambahan auto-detection nama provinsi dari teks alamat & penjaminan fallback non-kosong |
-| [functions/public/pages/AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx) | `parseEvaluationData`, Step Badges & Banners | Penonaktifan badge `REVISI` saat status `SUBMITTED` dan penambahan banner konfirmasi hijau |
-| [functions/PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md) | Entry #139 | Pencatatan riwayat progres anti-amnesia |
+| [functions/public/pages/AgentDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentDashboard.tsx) | `getFormattedRevisionDateTime`, Blok Kartu Tugas `agentTab === 'active'` | Penggantian kartu besar evaluasi dengan satu baris kecil memanjang riwayat revisi saat status `SUBMITTED` |
+| [functions/PROGRESS.md](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md) | Entry #140 | Pencatatan riwayat progres anti-amnesia |
 
 ---
 
@@ -38,7 +34,7 @@ Dokumen ini merangkum penyelesaian implementasi perbaikan auto-detection provins
 ### ⚡ Uji Kompilasi (Build Test)
 Perintah kompilasi frontend `npm.cmd run build` dijalankan pada folder `functions/public/`:
 - **Status**: **LULUS (Code 0)**
-- **Waktu**: 21.20 detik
+- **Waktu**: 22.56 detik
 - **Modul**: 2,526 modul ter-bundle dengan rapi
 - **Error / Warning Fatal**: 0 Error
 
@@ -46,11 +42,10 @@ Perintah kompilasi frontend `npm.cmd run build` dijalankan pada folder `function
 
 ## 4. Panduan Verifikasi Pengguna (User Testing Guide)
 
-1. Buka Portal Surveyor / Agen di dashboard dan buka tugas survei KostManager.
-2. **Verifikasi Isian Provinsi**:
-   - Periksa field **Provinsi**: pastikan kini terisi otomatis (misal: *"Sulawesi Selatan"*) berdampingan dengan Kota/Kabupaten (*"Makassar"*) dan Kecamatan/Area (*"Tamalanrea"*).
-   - Ubah atau simpan draf, lalu muat ulang halaman; pastikan isian Provinsi tetap terisi utuh.
-3. **Verifikasi Status Evaluasi Pasca Kirim Ulang**:
-   - Pada tugas yang sebelumnya memerlukan revisi dan telah dikirim ulang ke admin (`status: SUBMITTED`), buka detail survei.
-   - Pastikan badge `REVISI` di tab stepper dan border kelap-kelip **sudah hilang**.
-   - Pastikan banner atas kini menampilkan status hijau: *"Data Revisi Telah Dikirim ke Admin (Menunggu Verifikasi & Persetujuan)"*.
+1. Buka halaman utama **Dashboard Surveyor / Agen** pada tab **Tugas Aktif**.
+2. Cari kartu survei yang sebelumnya berstatus revisi dan telah dikirim ulang ke admin.
+3. **Verifikasi Tampilan Baris Riwayat Revisi**:
+   - Pastikan kartu besar oranye menyala *"PERLU TINDAKAN"* sudah **tidak ada lagi**.
+   - Pastikan kini hanya tampil **satu baris kecil memanjang** bertuliskan:
+     `[🕒 Riwayat Revisi: Terkirim <Tanggal & Jam> WITA] [✓ Terkirim]`.
+   - Pastikan tombol di bawahnya berwarna hijau: `✏️ Edit & Perbarui Data Listing`.
