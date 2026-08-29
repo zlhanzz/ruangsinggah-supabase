@@ -4187,14 +4187,6 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                         >
                                                             <ExternalLink size={12} /> Buka Listing
                                                         </a>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setSelectedPropForRoomMatrix(activeProp as any)}
-                                                            className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
-                                                            title="Lihat Matrix Denah Kamar"
-                                                        >
-                                                            <Bed size={12} /> Cek Kamar
-                                                        </button>
                                                     </div>
                                                 </div>
                                             )}

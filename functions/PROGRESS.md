@@ -2,6 +2,19 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 190. Penghapusan Tombol 'Cek Kamar' Non-Fungsional pada Header Chat (`KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan mengapa tombol "Cek Kamar" di header chat CS tidak merespons ketika diklik, dan menginstruksikan untuk menghapusnya jika memang tidak fungsional.
+  2. Akar masalah: Tombol tersebut sebelumnya memanggil state `setSelectedPropForRoomMatrix`, tetapi modal denah kamarnya hanya dirender di dalam tab `Properti Terkelola`, sehingga saat berada di tab `Pesan & Chat Customer`, modal tidak pernah muncul. Selain itu, header chat CS sudah memiliki status ketersediaan kamar instan (`🟢 4 Kamar Kosong` / `✨ Full Terisi`), sehingga tombol tersebut bersifat redundan.
+- **Implementasi**:
+  * Menghapus tombol `<button> Cek Kamar </button>` dari header chat di `KostManagerPortal.tsx`.
+  * Header chat CS kini lebih bersih, fokus, dan hanya mempertahankan tombol fungsional `Buka Listing` serta indikator ketersediaan kamar real-time.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 28.93s, 0 error).
+
 ### 189. Perbaikan Kebijakan UPDATE RLS `chat_messages` & Reset Instan Badge Unread (`supabase_schema.sql`, `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa ketika sesi chat sudah dibuka dan bahkan sudah dibalas oleh CS di Portal KostManager, kartu sesi di kolom kiri tetap menampilkan badge angka unread (seperti badge angka 7 pada `Game Burik`).
