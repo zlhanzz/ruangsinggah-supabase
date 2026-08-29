@@ -546,14 +546,14 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                 )}
               </div>
 
-              {/* Thumbnails Strip (Preview Foto Carousel) */}
+              {/* Thumbnails Strip (Preview Foto Carousel - 1 Baris Horizontal Rapi) */}
               {displayedImages.length > 1 && (
-                <div className="flex flex-wrap gap-2.5 mb-4">
+                <div className="flex gap-3 overflow-x-auto pb-2 px-1 scrollbar-hide mb-4">
                   {displayedImages.map((img, idx) => (
                     <button
                       key={idx}
                       onClick={() => setCurrentPhoto(idx)}
-                      className={`relative w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 rounded-2xl overflow-hidden transition-all duration-300 cursor-pointer ${currentPhoto === idx
+                      className={`relative w-20 h-20 lg:w-24 lg:h-24 shrink-0 rounded-2xl overflow-hidden transition-all duration-300 cursor-pointer ${currentPhoto === idx
                         ? 'ring-2 ring-orange-500 ring-offset-2 opacity-100 scale-95'
                         : 'opacity-50 hover:opacity-100 hover:scale-105'
                         }`}

@@ -2,6 +2,18 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 163. Penyesuaian Preview Thumbnail Menjadi 1 Baris Horizontal Kompak (`KostDetail.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna mengonfirmasi bahwa preview carousel foto tidak perlu menumpuk ke bawah (multi-row grid), melainkan tetap dalam 1 baris horizontal yang rapi di bawah foto utama.
+- **Implementasi**:
+  * **1. Preview Thumbnail 1 Baris Rapi**: Mengembalikan deretan thumbnail menjadi `flex gap-3 overflow-x-auto pb-2 px-1 scrollbar-hide mb-4` dengan `shrink-0`.
+  * **2. Bilah Tombol Kamar Tetap Flex-Wrap**: Mempertahankan `flex flex-wrap gap-2` pada tombol unit kamar kosong agar seluruh tombol kamar terlihat utuh dan otomatis berpindah baris jika ruang penuh.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 25.36s, 0 error).
+
 ### 162. Pembaruan Layout Galeri & Tombol Navigasi Kamar Menjadi Flex-Wrap Responsif (`KostDetail.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar layout peletakan tombol navigasi dan thumbnail tidak menggunakan scroll menyamping yang kaku, melainkan tersusun secara berurutan dan otomatis berpindah ke bawah (wrap) jika ruang tidak mencukupi.
