@@ -2,6 +2,38 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 197. Menu Baru 'Pengajuan Sewa' di Portal KostManager & Pemisahan Alur Persetujuan Admin (ACC) dengan Otomasi Notifikasi WhatsApp (`KostManagerPortal.tsx`, `MitraDashboard.tsx`, `rentBillingService.ts`, `Dashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta: *"dalam proses booking untuk kost yang sudah terdaftar ke kostmanager, harusnya persetujuan sewa sekarang masuknya ke portal kostmanager kan? tidak lagi masuk ke dashboard mitra. sebenarnya awalnya saya ingin langsung payment, tapi untuk cari aman kita buat aja agar alurnya harus dikonfirmasi oleh admin dulu, sebagai bentuk profesiionalitas juga, dan sepertinya jika langsung bayar akan sedikit meragukan dan kurang profesional, tidak ada sentuhan manusia"*.
+  2. Pengguna meminta penambahan menu baru: *"tapi sepertinya kita perlu buat menu baru di portal kostmanager yaitu pengajuan sewa, menu untuk mendukung alur persetujuan admin terkait permintaaan sewa yang masuk"*.
+  3. Untuk seluruh kost yang berada di bawah naungan KostManager (seperti *Kost Madani*), permintaan sewa dari pencari kost harus dialihkan dan disetujui oleh Tim KostManager Admin di Portal KostManager (bukan pemilik kost di Dashboard Mitra), sekaligus memicu notifikasi WhatsApp resmi berisi persetujuan dan link bayar.
+- **Implementasi**:
+  * **1. Menu Baru 'Pengajuan Sewa' di Sidebar Portal KostManager (`KostManagerPortal.tsx` & `Dashboard.tsx`)**:
+    - Menambahkan menu `bookings` (`📥 Pengajuan Sewa`) pada sidebar navigasi Portal KostManager dengan badge jumlah pengajuan baru yang menunggu persetujuan secara realtime (`pendingBookingCount`).
+    - Menambahkan tipe `km_bookings` pada `DashboardMenu` di `Dashboard.tsx`.
+    - Di tab Overview, menyajikan banner notifikasi aksi cepat jika terdapat pengajuan sewa baru yang butuh persetujuan (ACC).
+  * **2. Antarmuka Manajemen Pengajuan Sewa Enterprise (`KostManagerPortal.tsx`)**:
+    - **Grid Statistik**: 4 kartu status (Menunggu Persetujuan / Pending ACC, Menunggu Bayar, Disetujui & Lunas, Ditolak).
+    - **Filter Bar**: Filter status 1-klik dan pencarian cerdas nama pemohon, properti, unit kamar, atau No. WhatsApp.
+    - **Tabel Pengajuan Sewa Lengkap**: Kolom Calon Penghuni (dengan tautan direct WhatsApp), Properti & Unit Kamar, Paket Durasi & Rencana Masuk, Total Tagihan Awal, dan Status.
+    - **Aksi Cepat Admin**:
+      - **"✅ Setujui (ACC)"**: Mengubah status transaksi menjadi `AWAITING_PAYMENT`, menyinkronkan status sewa, dan otomatis mengirimkan pesan WhatsApp konfirmasi persetujuan + link bayar.
+      - **"❌ Tolak"**: Mengubah status transaksi menjadi `REJECTED` dengan dialog pencatatan alasan penolakan.
+      - **"💬 Hubungi WhatsApp"**: Membuka percakapan langsung dengan calon penyewa.
+  * **3. Engine WhatsApp Persetujuan Booking (`rentBillingService.ts`)**:
+    - Membuat `generateBookingApprovalWhatsAppMessage` dan `sendBookingApprovalWhatsApp` yang menyusun pesan konfirmasi resmi korporat dari Manajemen KostManager RuangSinggah beserta tautan pembayaran resmi `/my-kost?orderId=...&tab=payment`.
+  * **4. Autopilot Murni di Dashboard Mitra (`MitraDashboard.tsx`)**:
+    - Memfilter data antrean pesanan pending milik mitra agar transaksi properti KostManager (`kmPropIds`) tidak membebani tindakan manual pemilik kost.
+    - Menambahkan badge status `⚡ Dikelola KostManager` pada riwayat pesanan mitra.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/rentBillingService.ts`
+  - `functions/public/pages/Dashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `walkthrough.md`
+- **Verifikasi**: Build frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, ✓ built in 28.67s, 0 error).
+
 ### 196. Otomasi Pengiriman Kwitansi WhatsApp & Penerbitan Kwitansi Digital Resmi Perpanjangan Sewa Lunas (`rentBillingService.ts`, `DigitalReceiptModal.tsx`, `DigitalReceiptPage.tsx`, `OrderPaymentStatus.tsx`, `MyKost.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta: *"bagaimana jika perpanjangan sewa berhasil dilakukan, maka sistem akan otomatis mengirimkan kwitansinya melalui whatsapp"*.

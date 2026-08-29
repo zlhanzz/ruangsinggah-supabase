@@ -435,7 +435,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             setStats({
                 totalRevenue: allTimeRevenue,
                 availableBalance: availableBalance,
-                pendingApprovals: bookingsData.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL').length,
+                pendingApprovals: bookingsData.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL' && !kmPropIds.has(b.product_id)).length,
                 totalViews: totalViews,
                 activeTenants: activeCount,
                 ctr: totalViews > 0 ? parseFloat(((bookingsData.length * 5 / totalViews) * 100).toFixed(1)) : 0
@@ -588,14 +588,21 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         }
     };
 
+    const kmPropIds = new Set(
+        (properties || [])
+            .filter((p: any) => p.is_managed === true || p.isManaged === true || p.kost_manager_status === 'ACTIVE' || p.kostManager?.status === 'ACTIVE')
+            .map((p: any) => p.id)
+    );
+
     const filteredBookings = bookings.filter(b => {
         const s = (b.status || '').toUpperCase();
-        if (bookingTab === 'pending') return s === 'PENDING_APPROVAL';
+        const isKm = kmPropIds.has(b.product_id);
+        if (bookingTab === 'pending') return s === 'PENDING_APPROVAL' && !isKm;
         if (bookingTab === 'awaiting_payment') return s === 'AWAITING_PAYMENT';
         return s === 'PAID' || s === 'COMPLETED';
     });
 
-    const pendingCount = bookings.filter(b => b.status === 'PENDING_APPROVAL').length;
+    const pendingCount = bookings.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL' && !kmPropIds.has(b.product_id)).length;
     const chatCount = chatSessions.length;
 
     const NAV_ITEMS: { key: MenuKey; icon: React.ReactNode; label: string; badge?: number }[] = [
@@ -1527,6 +1534,11 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                                 <span className="px-3 py-1 bg-orange-50 text-orange-600 rounded-lg text-[9px] font-black uppercase tracking-widest border border-orange-100">
                                                                     {b.property?.title}
                                                                 </span>
+                                                                {kmPropIds.has(b.product_id) && (
+                                                                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-orange-100 text-orange-700 border border-orange-200">
+                                                                        ⚡ Dikelola KostManager
+                                                                    </span>
+                                                                )}
                                                                 <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest text-center">
                                                                     #{b.id.substring(0, 6)}
                                                                 </span>

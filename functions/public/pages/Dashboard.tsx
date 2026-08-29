@@ -224,7 +224,7 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
 
 
 
-type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_extension' | 'transactions_db' | 'transactions_survey' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'wallet' | 'tenants' | 'active_tenants' | 'agent_verification' | 'banners' | 'articles' | 'withdrawals' | 'manual_bill' | 'referral_rewards' | 'kostmanager' | 'km_overview' | 'km_properties' | 'km_tenants' | 'km_billing';
+type DashboardMenu = 'analytics' | 'overview' | 'properties' | 'databases' | 'transactions_rent' | 'transactions_extension' | 'transactions_db' | 'transactions_survey' | 'mitra' | 'verification' | 'complaints' | 'verifikasi' | 'my_surveys' | 'agent_wallet' | 'wallet' | 'tenants' | 'active_tenants' | 'agent_verification' | 'banners' | 'articles' | 'withdrawals' | 'manual_bill' | 'referral_rewards' | 'kostmanager' | 'km_overview' | 'km_properties' | 'km_bookings' | 'km_chats' | 'km_tenants' | 'km_billing' | 'km_packages';
 
 const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, onLogout, listings = [], onAdd, onEdit, onDelete, onRefreshListings, verificationStatus }) => {
     const isAdmin = role === 'admin';

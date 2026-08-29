@@ -308,4 +308,66 @@ export async function sendRentReceiptWhatsApp(params: RentReceiptParams): Promis
   }
 }
 
+export interface BookingApprovalWhatsAppParams {
+  phone: string;
+  tenantName: string;
+  propertyTitle: string;
+  roomName: string;
+  periodLabel: string;
+  startDate: string;
+  totalAmount: number;
+  orderId: string;
+  basePrice?: number;
+  extraFee?: number;
+  extraFeeName?: string;
+  occupants?: number;
+}
+
+/**
+ * Menyusun pesan WhatsApp Konfirmasi Persetujuan Pengajuan Sewa (ACC) dari Admin KostManager
+ */
+export function generateBookingApprovalWhatsAppMessage(params: BookingApprovalWhatsAppParams): { message: string; paymentUrl: string } {
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://ruangsinggah.id';
+  const paymentUrl = `${origin}/my-kost?orderId=${params.orderId}&tab=payment`;
+  
+  const formatDate = (d?: string) => {
+    if (!d || d === 'Sewa Berjalan') return '-';
+    return new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
+  let message = `Halo Kak *${params.tenantName}*! 👋🎉\n\n` +
+    `Kabar baik! Pengajuan sewa kamar Anda di *${params.propertyTitle}* telah *DISETUJUI (ACC)* oleh Manajemen KostManager RuangSinggah.\n\n` +
+    `📋 *Rincian Pengajuan Sewa:*\n` +
+    `🏠 *Properti:* ${params.propertyTitle}\n` +
+    `🚪 *Kamar:* ${params.roomName}\n` +
+    `📌 *Skema Sewa:* ${params.periodLabel}\n` +
+    `📅 *Rencana Masuk:* ${formatDate(params.startDate)}\n` +
+    (params.occupants && params.occupants > 1 ? `👥 *Jumlah Penghuni:* ${params.occupants} Orang\n` : '') +
+    (params.basePrice ? `💵 *Harga Sewa Dasar:* ${FORMAT_CURRENCY(params.basePrice)}\n` : '') +
+    (params.extraFee && params.extraFee > 0 ? `➕ *${params.extraFeeName || 'Biaya Tambahan'}:* ${FORMAT_CURRENCY(params.extraFee)}\n` : '') +
+    `💰 *Total Tagihan Pertama:* *${FORMAT_CURRENCY(params.totalAmount)}*\n\n` +
+    `Untuk mengonfirmasi pesanan Anda dan mengamankan kamar, silakan selesaikan pembayaran melalui tautan resmi Kost Saya di bawah ini:\n\n` +
+    `👉 *Selesaikan Pembayaran Sekarang:* \n${paymentUrl}\n\n` +
+    `_(Pembayaran dapat dilakukan melalui QRIS, Transfer Virtual Account, atau E-Wallet)_\n\n` +
+    `Jika ada pertanyaan atau butuh bantuan, Anda dapat membalas pesan ini atau menghubungi CS KostManager. Terima kasih! 🙏✨\n` +
+    `_Manajemen KostManager - RuangSinggah_`;
+
+  return { message, paymentUrl };
+}
+
+/**
+ * Mengirimkan pesan WhatsApp persetujuan sewa ke calon penghuni
+ */
+export async function sendBookingApprovalWhatsApp(params: BookingApprovalWhatsAppParams): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { message } = generateBookingApprovalWhatsAppMessage(params);
+    const res = await sendWhatsAppText(params.phone, message);
+    return { success: res.success, error: res.error };
+  } catch (err: any) {
+    console.error('Error sending booking approval WhatsApp:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+
 

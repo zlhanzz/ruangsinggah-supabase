@@ -72,7 +72,11 @@ import {
     CheckSquare,
     Link as LinkIcon,
     Send,
-    CheckCheck
+    CheckCheck,
+    Inbox,
+    ClipboardList,
+    UserCheck,
+    UserX
 } from 'lucide-react';
 import { KostManagerPackage } from '../../types';
 import { 
@@ -98,14 +102,17 @@ import {
     ChatMessage, 
     SYSTEM_ADMIN_ID 
 } from '../../chatService';
+import { updateBookingStatus } from '../../userService';
 import KostManagerPropertyFormModal from './KostManagerPropertyFormModal';
 import { 
     sendRentBillingReminderWhatsApp, 
     createRentClaimToken,
     calculateNextLeasePeriod,
-    sendRentReceiptWhatsApp
+    sendRentReceiptWhatsApp,
+    sendBookingApprovalWhatsApp
 } from '../../rentBillingService';
 import DigitalReceiptModal, { ReceiptData } from '../DigitalReceiptModal';
+
 
 
 
@@ -1072,12 +1079,12 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     const activeTab = (() => {
         if (!activeMenu) return 'overview';
         if (activeMenu.startsWith('km_')) {
-            return activeMenu.substring(3) as 'overview' | 'properties' | 'tenants' | 'billing' | 'packages' | 'chats';
+            return activeMenu.substring(3) as 'overview' | 'properties' | 'bookings' | 'tenants' | 'billing' | 'packages' | 'chats';
         }
         return 'overview';
     })();
 
-    const setActiveTab = (tab: 'overview' | 'properties' | 'tenants' | 'billing' | 'packages' | 'chats') => {
+    const setActiveTab = (tab: 'overview' | 'properties' | 'bookings' | 'tenants' | 'billing' | 'packages' | 'chats') => {
         if (onMenuChange) {
             onMenuChange('km_' + tab);
         }
@@ -1090,12 +1097,14 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     // --- DATA STATE ---
     const [properties, setProperties] = useState<ManagedProperty[]>([]);
     const [tenants, setTenants] = useState<TenantRecord[]>([]);
+    const [bookings, setBookings] = useState<any[]>([]);
     const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [ownersList, setOwnersList] = useState<{ id: string; name: string; phone: string }[]>([]);
     const [packages, setPackages] = useState<KostManagerPackage[]>([]);
     const [isAddPkgOpen, setIsAddPkgOpen] = useState(false);
     const [editingPkgId, setEditingPkgId] = useState<string | null>(null);
+
     const [pkgForm, setPkgForm] = useState({
         duration_months: 1,
         price: 0,
@@ -1156,11 +1165,15 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     const [propertySearch, setPropertySearch] = useState('');
     const [tenantSearch, setTenantSearch] = useState('');
     const [invoiceSearch, setInvoiceSearch] = useState('');
+    const [bookingSearch, setBookingSearch] = useState('');
+    const [bookingStatusFilter, setBookingStatusFilter] = useState<'ALL' | 'PENDING_APPROVAL' | 'AWAITING_PAYMENT' | 'PAID' | 'REJECTED'>('ALL');
+    const [isProcessingBooking, setIsProcessingBooking] = useState(false);
     const [selectedPropForTenants, setSelectedPropForTenants] = useState<ManagedProperty | null>(null);
     const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
 
     // Lifecycle Filter Tab State
     const [tenantLifecycleFilter, setTenantLifecycleFilter] = useState<'ALL' | 'ACTIVE' | 'DUE_SOON' | 'OVERDUE' | 'CHECKOUT'>('ALL');
+
 
     // Operational Modals States (Renew, Checkout, Detail)
     const [selectedTenantForRenew, setSelectedTenantForRenew] = useState<TenantRecord | null>(null);
@@ -1656,15 +1669,75 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                 return false;
             });
 
+            // 9. Ambil data pengajuan sewa (Booking Requests) untuk properti KostManager
+            let managedBookings: any[] = [];
+            if (allManagedIds.length > 0) {
+                const { data: rawBookings, error: bErr } = await supabase
+                    .from('transactions')
+                    .select('*, user:user_id(id, name, phone, email)')
+                    .in('product_id', allManagedIds)
+                    .in('product_type', ['kost_booking', 'sewa', 'rent', 'tagihan_ekstra'])
+                    .order('created_at', { ascending: false });
+
+                if (bErr) console.warn('Warning loading bookings for KostManager:', bErr);
+
+                // Grouping split transactions (Rent + Facility) into one parent booking
+                const groupedBookingsMap = new Map<string, any>();
+                const sessionToParentMap = new Map<string, string>();
+                (rawBookings || []).forEach((b: any) => {
+                    const bMeta = typeof b.metadata === 'string' ? JSON.parse(b.metadata) : (b.metadata || {});
+                    if (bMeta.booking_session_id && (b.product_type === 'kost_booking' || b.product_type === 'rent' || b.product_type === 'sewa')) {
+                        sessionToParentMap.set(bMeta.booking_session_id, b.id);
+                    }
+                });
+
+                (rawBookings || []).forEach((b: any) => {
+                    const bMeta = typeof b.metadata === 'string' ? JSON.parse(b.metadata) : (b.metadata || {});
+                    const trueParentId = (bMeta.booking_session_id ? sessionToParentMap.get(bMeta.booking_session_id) : null) 
+                                         || bMeta.parent_order_id 
+                                         || b.id;
+
+                    const matchedProp = mappedProperties.find(p => p.id === b.product_id);
+
+                    if (!groupedBookingsMap.has(trueParentId)) {
+                        groupedBookingsMap.set(trueParentId, {
+                            ...b,
+                            property: matchedProp || { id: b.product_id, title: bMeta.kostName || 'Kost', price: b.amount },
+                            metadata: bMeta,
+                            all_transactions: [b],
+                            total_amount: Number(b.amount || 0)
+                        });
+                    } else {
+                        const existing = groupedBookingsMap.get(trueParentId);
+                        existing.all_transactions.push(b);
+                        existing.total_amount += Number(b.amount || 0);
+                        if (['kost_booking', 'rent', 'sewa'].includes(b.product_type)) {
+                            existing.id = b.id;
+                            existing.product_type = b.product_type;
+                            existing.metadata = { ...existing.metadata, ...bMeta };
+                            existing.amount = b.amount;
+                            if (matchedProp) existing.property = matchedProp;
+                        }
+                    }
+                });
+
+                managedBookings = Array.from(groupedBookingsMap.values()).map(group => ({
+                    ...group,
+                    amount: group.total_amount
+                }));
+            }
+
             setProperties(mappedProperties);
             setTenants(combinedTenants);
             setInvoices(rentInvoices);
+            setBookings(managedBookings);
 
             // Load Sesi Chat KostManager
             loadChatSessions(allManagedIds);
         } catch (err) {
             console.error('Error loading KostManager Portal data:', err);
         } finally {
+
             setLoading(false);
         }
     };
@@ -2352,6 +2425,96 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
         }
     };
 
+    // Handler: Persetujuan Pengajuan Sewa (ACC) oleh Admin KostManager
+    const handleApproveBooking = async (booking: any) => {
+        const tenantName = booking.user?.name || booking.metadata?.tenantName || 'Calon Penghuni';
+        const propTitle = booking.property?.title || booking.metadata?.kostName || 'Kost';
+        const roomName = booking.metadata?.roomType || booking.metadata?.roomNumber || 'Kamar';
+        const cleanPhone = (booking.user?.phone || booking.metadata?.tenantPhone || booking.metadata?.phone || '').replace(/[^0-9]/g, '');
+
+        if (!window.confirm(`Setujui pengajuan sewa dari ${tenantName} untuk ${propTitle} (${roomName})?\n\nStatus akan diubah menjadi MENUNGGU PEMBAYARAN dan notifikasi WhatsApp resmi beserta tautan pembayaran akan otomatis dikirimkan ke calon penghuni.`)) {
+            return;
+        }
+
+        setIsProcessingBooking(true);
+        try {
+            const transactions = booking.all_transactions || [booking];
+            await Promise.all(transactions.map((t: any) => updateBookingStatus(t.id, 'AWAITING_PAYMENT')));
+
+            // Sinkronkan status resident_status jika ada
+            if (booking.resident_status_id) {
+                await supabase
+                    .from('resident_status')
+                    .update({ status: 'AWAITING_PAYMENT', updated_at: new Date().toISOString() })
+                    .eq('id', booking.resident_status_id);
+            }
+
+            // Kirim notifikasi WhatsApp resmi persetujuan sewa
+            if (cleanPhone) {
+                const extra = Number(booking.metadata?.extraPersonFee || 0) + Number(booking.metadata?.facilityFee || 0);
+                const extraName = booking.metadata?.extraPersonFee > 0 ? 'Biaya Tambahan Orang' : (booking.metadata?.facilityFeeName || 'Biaya Fasilitas');
+                const res = await sendBookingApprovalWhatsApp({
+                    phone: cleanPhone,
+                    tenantName,
+                    propertyTitle: propTitle,
+                    roomName,
+                    periodLabel: booking.metadata?.periodLabel || 'Bulanan',
+                    startDate: booking.metadata?.startDate || new Date().toISOString().split('T')[0],
+                    totalAmount: Number(booking.amount || booking.total_amount || 0),
+                    orderId: booking.id,
+                    basePrice: Number(booking.metadata?.basePrice || booking.amount),
+                    extraFee: extra > 0 ? extra : undefined,
+                    extraFeeName: extra > 0 ? extraName : undefined,
+                    occupants: Number(booking.metadata?.occupants || 1)
+                });
+
+                if (res.success) {
+                    alert(`🎉 Pengajuan sewa berhasil disetujui (ACC)!\n\nSurat konfirmasi dan link pembayaran telah dikirimkan ke WhatsApp ${tenantName} (+${cleanPhone}).`);
+                } else {
+                    alert(`Pengajuan sewa disetujui! Namun gateway WA mengembalikan info: ${res.error || 'Silakan hubungi calon penghuni secara manual.'}`);
+                }
+            } else {
+                alert(`🎉 Pengajuan sewa berhasil disetujui (ACC)! Calon penghuni dapat melanjutkan pembayaran.`);
+            }
+
+            await loadAllData();
+        } catch (err: any) {
+            console.error('Error approving booking:', err);
+            alert('Gagal menyetujui pengajuan sewa: ' + err.message);
+        } finally {
+            setIsProcessingBooking(false);
+        }
+    };
+
+    // Handler: Penolakan Pengajuan Sewa oleh Admin KostManager
+    const handleRejectBooking = async (booking: any) => {
+        const tenantName = booking.user?.name || booking.metadata?.tenantName || 'Calon Penghuni';
+        const reason = window.prompt(`Tolak pengajuan sewa dari ${tenantName}? Masukkan catatan alasan penolakan:`, 'Kamar sedang dalam masa pemeliharaan / sudah terisi');
+        if (reason === null) return;
+
+        setIsProcessingBooking(true);
+        try {
+            const transactions = booking.all_transactions || [booking];
+            await Promise.all(transactions.map((t: any) => updateBookingStatus(t.id, 'REJECTED')));
+
+            if (booking.resident_status_id) {
+                await supabase
+                    .from('resident_status')
+                    .update({ status: 'REJECTED', updated_at: new Date().toISOString() })
+                    .eq('id', booking.resident_status_id);
+            }
+
+            alert(`Pengajuan sewa dari ${tenantName} telah ditolak.`);
+            await loadAllData();
+        } catch (err: any) {
+            console.error('Error rejecting booking:', err);
+            alert('Gagal menolak pengajuan sewa: ' + err.message);
+        } finally {
+            setIsProcessingBooking(false);
+        }
+    };
+
+
 
     // Auto-fill bill form when tenant is selected (Struktur biaya riil tanpa hardcoded 1 Juta)
     useEffect(() => {
@@ -2426,12 +2589,14 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     {([
                         { key: 'overview', icon: '📊', label: 'Ringkasan' },
                         { key: 'properties', icon: '🏠', label: 'Properti Terkelola' },
+                        { key: 'bookings', icon: '📥', label: 'Pengajuan Sewa' },
                         { key: 'chats', icon: '💬', label: 'Pesan & Chat Customer' },
                         { key: 'tenants', icon: '👥', label: 'Penghuni' },
                         { key: 'billing', icon: '🧾', label: 'Riwayat Pembayaran Sewa' },
                         { key: 'packages', icon: '⚙️', label: 'Harga Langganan' }
                     ] as const).map(t => {
                         const unreadChatCount = chatSessions.reduce((acc, s) => acc + (s.unread_count || 0), 0);
+                        const pendingBookingCount = bookings.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL').length;
                         return (
                             <button
                                 key={t.key}
@@ -2449,6 +2614,11 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                 {t.key === 'chats' && unreadChatCount > 0 && (
                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === 'chats' ? 'bg-orange-500 text-white' : 'bg-orange-100 text-orange-700'}`}>
                                         {unreadChatCount}
+                                    </span>
+                                )}
+                                {t.key === 'bookings' && pendingBookingCount > 0 && (
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === 'bookings' ? 'bg-orange-500 text-white' : 'bg-rose-500 text-white animate-pulse'}`}>
+                                        {pendingBookingCount}
                                     </span>
                                 )}
                             </button>
@@ -2473,6 +2643,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                         <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">
                             {activeTab === 'overview' ? 'Ringkasan Operasional' :
                              activeTab === 'properties' ? 'Properti Terkelola' :
+                             activeTab === 'bookings' ? 'Pengajuan Sewa Masuk' :
                              activeTab === 'chats' ? 'Pesan & Chat Customer' :
                              activeTab === 'tenants' ? 'Daftar Penghuni' :
                              activeTab === 'billing' ? 'Riwayat Pembayaran Sewa' : 'Harga Langganan KostManager'}
@@ -2480,12 +2651,14 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                         <p className="text-xs text-gray-400 font-bold mt-1">
                             {activeTab === 'overview' ? 'Analisis okupansi, tagihan, dan status auto-pilot aktif' :
                              activeTab === 'properties' ? 'Kelola detail kamar, kapasitas, dan status pemasaran properti' :
+                             activeTab === 'bookings' ? 'Tinjau dan verifikasi permintaan sewa masuk dari calon penghuni sebelum pembayaran' :
                              activeTab === 'chats' ? 'Layanan CS terpusat & konsultasi calon penyewa untuk seluruh kost terkelola' :
                              activeTab === 'tenants' ? 'Daftar penghuni aktif beserta periode sewa dan detail kontak' :
                              activeTab === 'billing' ? 'Mencatat, memantau riwayat pembayaran sewa, dan mengelola tagihan sewa kost' :
                              'Mengatur pilihan durasi dan harga paket langganan KostManager untuk Mitra'}
                         </p>
                     </div>
+
 
                     {loading ? (
                         <div className="bg-white border text-center border-gray-100 rounded-3xl p-16 shadow-sm flex flex-col items-center justify-center gap-4">
@@ -2550,6 +2723,27 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                 </div>
                             </div>
 
+                            {/* Alert Permintaan Sewa Baru */}
+                            {bookings.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL').length > 0 && (
+                                <div className="bg-gradient-to-r from-amber-500 to-rose-500 text-white p-6 rounded-3xl shadow-md flex flex-col sm:flex-row items-center justify-between gap-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-2xl shrink-0">
+                                            📥
+                                        </div>
+                                        <div>
+                                            <h4 className="text-base font-black uppercase tracking-tight">Ada {bookings.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL').length} Pengajuan Sewa Baru Menunggu Persetujuan (ACC)!</h4>
+                                            <p className="text-xs text-amber-100 font-semibold mt-0.5">Calon penghuni sedang menunggu konfirmasi admin sebelum melakukan pembayaran sewa.</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setActiveTab('bookings')}
+                                        className="px-5 py-2.5 bg-white text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm transition-all active:scale-95 shrink-0 cursor-pointer"
+                                    >
+                                        Tinjau Pengajuan ➔
+                                    </button>
+                                </div>
+                            )}
+
                             {/* Status Banner */}
                             <div className="bg-orange-50 border border-orange-100 rounded-3xl p-6 flex gap-4">
                                 <div className="text-orange-600 text-2xl shrink-0">⚡</div>
@@ -2564,9 +2758,377 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     )}
 
                     {/* =========================================== */}
+                    {/* TAB: BOOKINGS (PENGAJUAN SEWA MASUK)        */}
+                    {/* =========================================== */}
+                    {activeTab === 'bookings' && (() => {
+                        const pendingBookings = bookings.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL');
+                        const awaitingPaymentBookings = bookings.filter(b => (b.status || '').toUpperCase() === 'AWAITING_PAYMENT');
+                        const paidBookings = bookings.filter(b => ['PAID', 'COMPLETED'].includes((b.status || '').toUpperCase()));
+                        const rejectedBookings = bookings.filter(b => ['REJECTED', 'CANCELLED'].includes((b.status || '').toUpperCase()));
+
+                        const filteredList = bookings.filter(b => {
+                            const s = (b.status || '').toUpperCase();
+                            if (bookingStatusFilter === 'PENDING_APPROVAL' && s !== 'PENDING_APPROVAL') return false;
+                            if (bookingStatusFilter === 'AWAITING_PAYMENT' && s !== 'AWAITING_PAYMENT') return false;
+                            if (bookingStatusFilter === 'PAID' && !['PAID', 'COMPLETED'].includes(s)) return false;
+                            if (bookingStatusFilter === 'REJECTED' && !['REJECTED', 'CANCELLED'].includes(s)) return false;
+
+                            if (bookingSearch.trim()) {
+                                const q = bookingSearch.toLowerCase();
+                                const name = (b.user?.name || b.metadata?.tenantName || '').toLowerCase();
+                                const phone = (b.user?.phone || b.metadata?.phone || b.metadata?.tenantPhone || '').toLowerCase();
+                                const kostName = (b.property?.title || b.metadata?.kostName || '').toLowerCase();
+                                const room = (b.metadata?.roomType || b.metadata?.roomNumber || '').toLowerCase();
+                                return name.includes(q) || phone.includes(q) || kostName.includes(q) || room.includes(q);
+                            }
+                            return true;
+                        });
+
+                        return (
+                            <div className="space-y-6">
+                                {/* 1. Grid Stats Pengajuan Sewa */}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <button
+                                        onClick={() => setBookingStatusFilter('PENDING_APPROVAL')}
+                                        className={`p-5 rounded-3xl border text-left transition-all cursor-pointer ${
+                                            bookingStatusFilter === 'PENDING_APPROVAL'
+                                                ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-[1.02]'
+                                                : 'bg-white border-slate-200/90 text-slate-700 hover:border-amber-300'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className={`text-[10px] font-black uppercase tracking-wider ${bookingStatusFilter === 'PENDING_APPROVAL' ? 'text-amber-100' : 'text-slate-400'}`}>Menunggu Persetujuan</span>
+                                            <span className="text-xl">⏳</span>
+                                        </div>
+                                        <p className="text-3xl font-black">{pendingBookings.length}</p>
+                                        <p className={`text-[10px] font-bold mt-1 ${bookingStatusFilter === 'PENDING_APPROVAL' ? 'text-amber-100' : 'text-amber-600'}`}>Perlu Tindakan Admin (ACC)</p>
+                                    </button>
+
+                                    <button
+                                        onClick={() => setBookingStatusFilter('AWAITING_PAYMENT')}
+                                        className={`p-5 rounded-3xl border text-left transition-all cursor-pointer ${
+                                            bookingStatusFilter === 'AWAITING_PAYMENT'
+                                                ? 'bg-blue-600 text-white border-blue-700 shadow-md scale-[1.02]'
+                                                : 'bg-white border-slate-200/90 text-slate-700 hover:border-blue-300'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className={`text-[10px] font-black uppercase tracking-wider ${bookingStatusFilter === 'AWAITING_PAYMENT' ? 'text-blue-100' : 'text-slate-400'}`}>Menunggu Bayar</span>
+                                            <span className="text-xl">💳</span>
+                                        </div>
+                                        <p className="text-3xl font-black">{awaitingPaymentBookings.length}</p>
+                                        <p className={`text-[10px] font-bold mt-1 ${bookingStatusFilter === 'AWAITING_PAYMENT' ? 'text-blue-100' : 'text-blue-600'}`}>Sudah di-ACC, Tunggu Bayar</p>
+                                    </button>
+
+                                    <button
+                                        onClick={() => setBookingStatusFilter('PAID')}
+                                        className={`p-5 rounded-3xl border text-left transition-all cursor-pointer ${
+                                            bookingStatusFilter === 'PAID'
+                                                ? 'bg-emerald-600 text-white border-emerald-700 shadow-md scale-[1.02]'
+                                                : 'bg-white border-slate-200/90 text-slate-700 hover:border-emerald-300'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className={`text-[10px] font-black uppercase tracking-wider ${bookingStatusFilter === 'PAID' ? 'text-emerald-100' : 'text-slate-400'}`}>Disetujui & Lunas</span>
+                                            <span className="text-xl">✅</span>
+                                        </div>
+                                        <p className="text-3xl font-black">{paidBookings.length}</p>
+                                        <p className={`text-[10px] font-bold mt-1 ${bookingStatusFilter === 'PAID' ? 'text-emerald-100' : 'text-emerald-600'}`}>Penghuni Aktif Berhasil</p>
+                                    </button>
+
+                                    <button
+                                        onClick={() => setBookingStatusFilter('REJECTED')}
+                                        className={`p-5 rounded-3xl border text-left transition-all cursor-pointer ${
+                                            bookingStatusFilter === 'REJECTED'
+                                                ? 'bg-rose-600 text-white border-rose-700 shadow-md scale-[1.02]'
+                                                : 'bg-white border-slate-200/90 text-slate-700 hover:border-rose-300'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className={`text-[10px] font-black uppercase tracking-wider ${bookingStatusFilter === 'REJECTED' ? 'text-rose-100' : 'text-slate-400'}`}>Ditolak / Batal</span>
+                                            <span className="text-xl">❌</span>
+                                        </div>
+                                        <p className="text-3xl font-black">{rejectedBookings.length}</p>
+                                        <p className={`text-[10px] font-bold mt-1 ${bookingStatusFilter === 'REJECTED' ? 'text-rose-100' : 'text-rose-600'}`}>Permintaan Dibatalkan</p>
+                                    </button>
+                                </div>
+
+                                {/* 2. Search & Filter Bar */}
+                                <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-white p-4 rounded-3xl border border-slate-200/90 shadow-soft">
+                                    <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+                                        {[
+                                            { key: 'ALL', label: 'Semua Pengajuan', count: bookings.length },
+                                            { key: 'PENDING_APPROVAL', label: 'Menunggu Persetujuan', count: pendingBookings.length },
+                                            { key: 'AWAITING_PAYMENT', label: 'Menunggu Bayar', count: awaitingPaymentBookings.length },
+                                            { key: 'PAID', label: 'Lunas', count: paidBookings.length },
+                                            { key: 'REJECTED', label: 'Ditolak', count: rejectedBookings.length }
+                                        ].map(f => (
+                                            <button
+                                                key={f.key}
+                                                onClick={() => setBookingStatusFilter(f.key as any)}
+                                                className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                                                    bookingStatusFilter === f.key
+                                                        ? 'bg-slate-900 text-white shadow-sm'
+                                                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/60'
+                                                }`}
+                                            >
+                                                <span>{f.label}</span>
+                                                <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+                                                    bookingStatusFilter === f.key ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'
+                                                }`}>
+                                                    {f.count}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div className="relative w-full sm:w-72">
+                                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Cari pemohon, kost, unit, No. WA..."
+                                            value={bookingSearch}
+                                            onChange={e => setBookingSearch(e.target.value)}
+                                            className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* 3. Tabel Daftar Pengajuan Sewa (Enterprise Grade) */}
+                                <div className="bg-white border border-slate-200/90 rounded-3xl shadow-soft overflow-hidden">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-xs text-left">
+                                            <thead>
+                                                <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-black uppercase tracking-wider text-[10px]">
+                                                    <th className="px-6 py-4">Calon Penghuni</th>
+                                                    <th className="px-6 py-4">Properti & Kamar</th>
+                                                    <th className="px-6 py-4">Paket & Rencana Masuk</th>
+                                                    <th className="px-6 py-4">Total Biaya</th>
+                                                    <th className="px-6 py-4">Status Pengajuan</th>
+                                                    <th className="px-6 py-4 text-right">Aksi Manajemen</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 font-medium">
+                                                {filteredList.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-bold uppercase tracking-wider text-xs">
+                                                            <div className="flex flex-col items-center justify-center gap-2">
+                                                                <Inbox size={32} className="text-slate-300" />
+                                                                <p>Tidak ada pengajuan sewa yang sesuai dengan filter.</p>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ) : (
+                                                    filteredList.map((b: any) => {
+                                                        const rawStatus = (b.status || '').toUpperCase();
+                                                        const tenantName = b.user?.name || b.metadata?.tenantName || 'Calon Penghuni';
+                                                        const tenantPhone = b.user?.phone || b.metadata?.tenantPhone || b.metadata?.phone || '-';
+                                                        const cleanPhone = tenantPhone.replace(/[^0-9]/g, '');
+                                                        const tenantEmail = b.user?.email || b.metadata?.email || '-';
+                                                        const propTitle = b.property?.title || b.metadata?.kostName || 'Kost';
+                                                        const roomName = b.metadata?.roomType || b.metadata?.roomNumber || 'Kamar Standar';
+                                                        const periodLabel = b.metadata?.periodLabel || b.metadata?.period || 'Bulanan';
+                                                        const startDate = b.metadata?.startDate || '-';
+                                                        const occupants = Number(b.metadata?.occupants || b.metadata?.occupantCount || 1);
+                                                        const totalPay = Number(b.amount || b.total_amount || 0);
+
+                                                        const isPending = rawStatus === 'PENDING_APPROVAL';
+                                                        const isAwaitingPayment = rawStatus === 'AWAITING_PAYMENT';
+                                                        const isPaid = ['PAID', 'COMPLETED'].includes(rawStatus);
+                                                        const isRejected = ['REJECTED', 'CANCELLED'].includes(rawStatus);
+
+                                                        return (
+                                                            <tr key={b.id} className="hover:bg-slate-50/70 transition-colors">
+                                                                {/* Calon Penghuni */}
+                                                                <td className="px-6 py-4">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-400 text-white font-black flex items-center justify-center text-sm shadow-sm shrink-0 uppercase">
+                                                                            {tenantName.charAt(0) || 'U'}
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="font-black text-slate-900 text-sm leading-snug">{tenantName}</p>
+                                                                            <div className="flex items-center gap-2 mt-0.5">
+                                                                                {cleanPhone ? (
+                                                                                    <a
+                                                                                        href={`https://wa.me/${cleanPhone}`}
+                                                                                        target="_blank"
+                                                                                        rel="noreferrer"
+                                                                                        className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+                                                                                    >
+                                                                                        <Phone size={11} />
+                                                                                        <span>+{cleanPhone}</span>
+                                                                                    </a>
+                                                                                ) : (
+                                                                                    <span className="text-[11px] text-slate-400">-</span>
+                                                                                )}
+                                                                            </div>
+                                                                            {tenantEmail !== '-' && (
+                                                                                <p className="text-[10px] text-slate-400 font-medium">{tenantEmail}</p>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+
+                                                                {/* Properti & Kamar */}
+                                                                <td className="px-6 py-4">
+                                                                    <div>
+                                                                        <p className="font-black text-slate-800 text-xs">{propTitle}</p>
+                                                                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                                                            <span className="px-2 py-0.5 rounded-lg bg-orange-50 text-orange-700 border border-orange-200/60 text-[10px] font-bold">
+                                                                                🚪 {roomName}
+                                                                            </span>
+                                                                            {occupants > 1 && (
+                                                                                <span className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200/60 text-[10px] font-bold">
+                                                                                    👥 {occupants} Orang
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+
+                                                                {/* Paket & Rencana Masuk */}
+                                                                <td className="px-6 py-4">
+                                                                    <div>
+                                                                        <span className="inline-block px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-black text-[10px] uppercase tracking-wider mb-1">
+                                                                            {periodLabel}
+                                                                        </span>
+                                                                        <p className="text-[11px] text-slate-600 font-bold flex items-center gap-1">
+                                                                            <Calendar size={12} className="text-slate-400" />
+                                                                            <span>Masuk: {startDate !== '-' ? new Date(startDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}</span>
+                                                                        </p>
+                                                                    </div>
+                                                                </td>
+
+                                                                {/* Total Biaya */}
+                                                                <td className="px-6 py-4">
+                                                                    <div>
+                                                                        <p className="font-black text-slate-900 text-sm">{FORMAT_CURRENCY(totalPay)}</p>
+                                                                        <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Total Tagihan Awal</p>
+                                                                    </div>
+                                                                </td>
+
+                                                                {/* Status */}
+                                                                <td className="px-6 py-4">
+                                                                    {isPending && (
+                                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
+                                                                            <Clock size={11} /> Menunggu Persetujuan
+                                                                        </span>
+                                                                    )}
+                                                                    {isAwaitingPayment && (
+                                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+                                                                            <CreditCard size={11} /> Menunggu Pembayaran
+                                                                        </span>
+                                                                    )}
+                                                                    {isPaid && (
+                                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                                            <CheckCircle2 size={11} /> Lunas & Aktif
+                                                                        </span>
+                                                                    )}
+                                                                    {isRejected && (
+                                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200">
+                                                                            <AlertCircle size={11} /> Ditolak / Batal
+                                                                        </span>
+                                                                    )}
+                                                                </td>
+
+                                                                {/* Aksi Manajemen */}
+                                                                <td className="px-6 py-4 text-right">
+                                                                    <div className="flex items-center justify-end gap-1.5">
+                                                                        {/* Tombol Hubungi WhatsApp */}
+                                                                        {cleanPhone && (
+                                                                            <a
+                                                                                href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Halo Kak ${tenantName}, kami dari Manajemen KostManager RuangSinggah terkait pengajuan sewa kamar di ${propTitle}...`)}`}
+                                                                                target="_blank"
+                                                                                rel="noreferrer"
+                                                                                className="p-2 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-xs font-bold transition-all active:scale-95 flex items-center gap-1"
+                                                                                title="Hubungi via WhatsApp"
+                                                                            >
+                                                                                <MessageSquare size={13} />
+                                                                            </a>
+                                                                        )}
+
+                                                                        {isPending && (
+                                                                            <>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={isProcessingBooking}
+                                                                                    onClick={() => handleRejectBooking(b)}
+                                                                                    className="px-3 py-2 rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 text-xs font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                                                                                >
+                                                                                    Tolak
+                                                                                </button>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={isProcessingBooking}
+                                                                                    onClick={() => handleApproveBooking(b)}
+                                                                                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider shadow-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                                                                                >
+                                                                                    <Check size={13} strokeWidth={3} />
+                                                                                    <span>Setujui (ACC)</span>
+                                                                                </button>
+                                                                            </>
+                                                                        )}
+
+                                                                        {isAwaitingPayment && cleanPhone && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    const extra = Number(b.metadata?.extraPersonFee || 0) + Number(b.metadata?.facilityFee || 0);
+                                                                                    const extraName = b.metadata?.extraPersonFee > 0 ? 'Biaya Tambahan Orang' : (b.metadata?.facilityFeeName || 'Biaya Fasilitas');
+                                                                                    sendBookingApprovalWhatsApp({
+                                                                                        phone: cleanPhone,
+                                                                                        tenantName,
+                                                                                        propertyTitle: propTitle,
+                                                                                        roomName,
+                                                                                        periodLabel,
+                                                                                        startDate,
+                                                                                        totalAmount: totalPay,
+                                                                                        orderId: b.id,
+                                                                                        basePrice: Number(b.metadata?.basePrice || totalPay),
+                                                                                        extraFee: extra > 0 ? extra : undefined,
+                                                                                        extraFeeName: extra > 0 ? extraName : undefined,
+                                                                                        occupants
+                                                                                    }).then(res => {
+                                                                                        if (res.success) alert(`Pesan konfirmasi & link bayar berhasil dikirimkan ulang ke WA ${tenantName}!`);
+                                                                                        else alert(`Gagal kirim WA: ${res.error || 'Cek koneksi'}`);
+                                                                                    });
+                                                                                }}
+                                                                                className="px-3 py-2 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-xs font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+                                                                            >
+                                                                                <Send size={12} />
+                                                                                <span>Kirim Link Bayar</span>
+                                                                            </button>
+                                                                        )}
+
+                                                                        {isPaid && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setActiveTab('tenants')}
+                                                                                className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+                                                                            >
+                                                                                <Users size={12} />
+                                                                                <span>Penghuni</span>
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
+                    {/* =========================================== */}
                     {/* TAB: PROPERTIES (PROPERTY COMMAND CENTER)   */}
                     {/* =========================================== */}
                     {activeTab === 'properties' && (() => {
+
                         // Portfolio Global Metrics
                         const totalPropsCount = properties.length;
                         const totalRoomsAll = properties.reduce((sum, p) => sum + (Array.isArray(p.room_types) ? p.room_types.length : 0), 0);
