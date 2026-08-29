@@ -99,6 +99,10 @@ import {
     SYSTEM_ADMIN_ID 
 } from '../../chatService';
 import KostManagerPropertyFormModal from './KostManagerPropertyFormModal';
+import { 
+    sendRentBillingReminderWhatsApp, 
+    createRentClaimToken 
+} from '../../rentBillingService';
 
 
 // Helper: Normalisasi URL Foto (Handle string, object { url, label }, dsb.)
@@ -864,6 +868,8 @@ interface TenantRecord {
     start_date: string;
     end_date: string;
     status: string;
+    totalRent?: number;
+    rent_price?: number;
     metadata: any;
     user?: {
         name: string;
@@ -872,7 +878,9 @@ interface TenantRecord {
         photo_url?: string;
     };
     property?: {
+        id?: string;
         title: string;
+        price?: number;
         address: string;
     };
 }
@@ -1507,7 +1515,21 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             // 6. Ambil data resident_status (penyewa online dari DB)
             const allResidents = await getResidentStatus();
             const managedPropIds = props?.map(p => p.id) || [];
-            const managedResidents: TenantRecord[] = (allResidents || []).filter((r: any) => managedPropIds.includes(r.kost_id));
+            const managedResidents: TenantRecord[] = (allResidents || []).filter((r: any) => managedPropIds.includes(r.kost_id)).map((r: any) => {
+                const prop = props.find(p => p.id === r.kost_id);
+                const rentPrice = Number(r.metadata?.basePrice) || Number(r.metadata?.price) || Number(r.last_transaction?.amount) || Number(prop?.price) || 0;
+                return {
+                    ...r,
+                    totalRent: rentPrice,
+                    rent_price: rentPrice,
+                    property: {
+                        id: r.kost_id,
+                        title: prop?.title || r.property?.title || 'Kost',
+                        price: prop?.price || 0,
+                        address: prop?.address || r.property?.address || ''
+                    }
+                };
+            });
 
             // 7. Ekstraksi penghuni terdata dari hasil pendataan kamar properti (offline/survey occupants)
             const propertyTenants: TenantRecord[] = [];
@@ -1528,9 +1550,12 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                             start_date: rt.startDate || rt.leaseStartDate || rt.start_date || (p.created_at ? p.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
                             end_date: rt.endDate || rt.leaseEndDate || rt.end_date || 'Sewa Berjalan',
                             status: 'ACTIVE',
+                            totalRent: rentPrice,
+                            rent_price: rentPrice,
                             metadata: {
                                 basePrice: rentPrice,
                                 price: rentPrice,
+                                rentPrice: rentPrice,
                                 facilityFee: 0,
                                 extraPersonFee: Number(rt.extraOccupantFee) || 0,
                                 billingPeriod: rt.paymentPeriod || rt.billingPeriod || 'bulanan',
@@ -1544,7 +1569,9 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                 photo_url: rt.residentKtpUrl || ''
                             },
                             property: {
+                                id: p.id,
                                 title: p.title || 'Kost',
+                                price: Number(p.price) || rentPrice,
                                 address: p.address || ''
                             }
                         });
@@ -1950,8 +1977,8 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     };
 
     // --- FORM SUBMIT HANDLER ---
-    const handleCreateBill = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleCreateBill = async (e?: React.FormEvent, sendWhatsApp: boolean = true) => {
+        if (e) e.preventDefault();
         if (!selectedTenantIdForBill) return alert('Pilih penghuni terlebih dahulu');
         const tenant = tenants.find(t => t.id === selectedTenantIdForBill);
         if (!tenant) return alert('Penghuni tidak ditemukan');
@@ -1989,12 +2016,12 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             await saveManualInvoice({
                 bill_number: billNumber,
                 bill_date: new Date().toISOString().split('T')[0],
-                due_date: billForm.dueDate,
+                due_date: billForm.dueDate || tenant.end_date || new Date().toISOString().split('T')[0],
                 category: 'sewa',
                 recipient_name: tenant.user?.name || 'Penyewa',
-                recipient_phone: tenant.user?.phone || '',
+                recipient_phone: tenant.user?.phone || tenant.metadata?.phone || '',
                 recipient_address: tenant.property?.address || '',
-                kost_name: tenant.property?.title || '',
+                kost_name: tenant.property?.title || 'Kost',
                 rental_amount: amount,
                 commission_percent: 0,
                 commission_amount: 0,
@@ -2003,7 +2030,30 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                 total
             });
 
-            alert('Tagihan sewa bulanan berhasil dibuat dan dikirim!');
+            if (sendWhatsApp) {
+                const cleanPhone = (tenant.user?.phone || tenant.metadata?.phone || '').replace(/[^0-9]/g, '');
+                if (cleanPhone) {
+                    const waRes = await sendRentBillingReminderWhatsApp({
+                        phone: cleanPhone,
+                        tenantName: tenant.user?.name || 'Penghuni Kost',
+                        propertyTitle: tenant.property?.title || 'Kost',
+                        roomNumber: (tenant.room_type || '1').replace(/[^0-9]/g, '') || '1',
+                        monthlyPrice: total,
+                        dueDate: billForm.dueDate || tenant.end_date || new Date().toISOString().split('T')[0],
+                        propertyId: tenant.kost_id
+                    });
+                    if (waRes.success) {
+                        alert(`🎉 Tagihan sewa dan link auto-login berhasil dikirim ke WhatsApp ${tenant.user?.name || 'penghuni'} (+${cleanPhone})!`);
+                    } else {
+                        alert(`Tagihan tersimpan di sistem, namun gateway WA mengembalikan info: ${waRes.error || 'Silakan gunakan tombol WhatsApp Web manual'}`);
+                    }
+                } else {
+                    alert('Tagihan sewa berhasil diterbitkan! (Nomor HP penghuni belum tercatat untuk kirim WA otomatis)');
+                }
+            } else {
+                alert('Tagihan sewa bulanan berhasil diterbitkan!');
+            }
+
             setIsAddBillOpen(false);
             setSelectedTenantIdForBill('');
             setBillForm({
@@ -2015,7 +2065,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             });
             loadAllData();
         } catch (err: any) {
-            alert('Gagal menyimpan tagihan: ' + err.message);
+            alert('Gagal memproses tagihan: ' + err.message);
         } finally {
             setSubmittingBill(false);
         }
@@ -3257,15 +3307,22 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                         // Compute Lifecycle for all tenants
                         const enrichedTenants = tenants.map(t => {
                             const life = calculateTenantLifecycle(t.start_date, t.end_date, t.status);
-                            const basePrice = Number(t.metadata?.basePrice) || Number(t.metadata?.price) || Number(t.metadata?.monthlyPrice) || 0;
+                            const prop = properties.find(p => p.id === t.kost_id);
+                            const basePrice = Number(t.metadata?.basePrice) || Number(t.metadata?.price) || Number(t.metadata?.monthlyPrice) || Number(t.totalRent) || Number(t.rent_price) || Number(prop?.price) || 0;
                             const facilityFee = Number(t.metadata?.facilityFee) || 0;
                             const extraFee = Number(t.metadata?.extraPersonFee) || 0;
-                            const totalRent = basePrice + facilityFee + extraFee;
+                            const totalRent = (basePrice > 0 ? basePrice : (Number(prop?.price) || 0)) + facilityFee + extraFee;
 
                             return {
                                 ...t,
                                 lifecycle: life,
-                                totalRent
+                                totalRent,
+                                property: {
+                                    id: t.kost_id,
+                                    title: t.property?.title || prop?.title || 'Kost',
+                                    price: Number(prop?.price) || totalRent,
+                                    address: t.property?.address || prop?.address || ''
+                                }
                             };
                         });
 
@@ -3527,14 +3584,19 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                             type="button"
                                                                             onClick={() => {
                                                                                 setSelectedTenantIdForBill(t.id);
+                                                                                const autoPrice = Number(t.totalRent) || Number(t.metadata?.basePrice) || Number(t.metadata?.price) || Number(t.property?.price) || 0;
+                                                                                const autoDueDate = (t.end_date && t.end_date !== 'Sewa Berjalan') ? t.end_date : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
                                                                                 setBillForm({
-                                                                                    ...billForm,
-                                                                                    rentalAmount: t.totalRent || 0
+                                                                                    dueDate: autoDueDate,
+                                                                                    rentalAmount: autoPrice,
+                                                                                    extraFee: 0,
+                                                                                    extraFeeName: '',
+                                                                                    notes: ''
                                                                                 });
                                                                                 setIsAddBillOpen(true);
                                                                             }}
                                                                             className="px-2.5 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#ff7a00] border border-orange-200/80 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
-                                                                            title="Terbitkan Tagihan Sewa"
+                                                                            title="Terbitkan Tagihan Sewa Otomatis"
                                                                         >
                                                                             🧾 Tagih
                                                                         </button>
@@ -4305,128 +4367,252 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                 </div>
             </div>
 
-            {/* MODAL: TERBITKAN TAGIHAN SEWA */}
+            {/* MODAL: TERBITKAN TAGIHAN SEWA (AUTO-PILOT WHATSAPP + MAGIC LINK) */}
             {isAddBillOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-xl w-full overflow-hidden max-h-[92vh] flex flex-col animate-in zoom-in-95 border border-gray-100" onClick={e => e.stopPropagation()}>
                         {/* Header */}
                         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
-                            <div>
-                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Formulir Tagihan</p>
-                                <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight mt-0.5">Tagih Sewa Bulanan</h3>
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center">
+                                    <MessageSquare size={20} />
+                                </div>
+                                <div>
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Auto-Pilot Penagihan Sewa</p>
+                                    <h3 className="text-base font-black text-gray-900 uppercase tracking-tight mt-0.5">Tagih Sewa & WhatsApp Magic Link</h3>
+                                </div>
                             </div>
                             <button
                                 onClick={() => {
                                     setIsAddBillOpen(false);
                                     setSelectedTenantIdForBill('');
                                 }}
-                                className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"
+                                className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors cursor-pointer"
                             >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                                <X size={20} />
                             </button>
                         </div>
 
                         {/* Body */}
-                        <form onSubmit={handleCreateBill} className="flex-1 overflow-y-auto p-6 space-y-4">
-                            {/* Pilih Tenant */}
-                            <div>
-                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">Pilih Penghuni Kost <span className="text-red-500">*</span></label>
-                                <select
-                                    value={selectedTenantIdForBill}
-                                    onChange={e => setSelectedTenantIdForBill(e.target.value)}
-                                    required
-                                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400"
-                                >
-                                    <option value="">-- Pilih Penghuni Aktif --</option>
-                                    {tenants.map(t => (
-                                        <option key={t.id} value={t.id}>
-                                            {t.user?.name} ({t.property?.title} - {t.room_type})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                        {(() => {
+                            const selectedTenant = tenants.find(t => t.id === selectedTenantIdForBill);
+                            const tenantPhone = (selectedTenant?.user?.phone || selectedTenant?.metadata?.phone || '').replace(/[^0-9]/g, '');
+                            const tenantName = selectedTenant?.user?.name || 'Penghuni';
+                            const propTitle = selectedTenant?.property?.title || 'Kost';
+                            const roomName = selectedTenant?.room_type || 'Kamar 1';
+                            const totalAmount = Number(billForm.rentalAmount) + Number(billForm.extraFee || 0);
+                            const formattedDueDate = billForm.dueDate ? new Date(billForm.dueDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
 
-                            {selectedTenantIdForBill && (
-                                <>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">Nominal Sewa Pokok (Rp)</label>
-                                            <input
-                                                type="number"
-                                                required
-                                                min="0"
-                                                value={billForm.rentalAmount}
-                                                onChange={e => setBillForm({ ...billForm, rentalAmount: Number(e.target.value) })}
-                                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">Tanggal Jatuh Tempo</label>
-                                            <input
-                                                type="date"
-                                                required
-                                                value={billForm.dueDate}
-                                                onChange={e => setBillForm({ ...billForm, dueDate: e.target.value })}
-                                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400"
-                                            />
-                                        </div>
-                                    </div>
+                            const claimToken = selectedTenant ? createRentClaimToken({
+                                phone: tenantPhone,
+                                tenantName,
+                                propertyId: selectedTenant.kost_id,
+                                propertyTitle: propTitle,
+                                roomNumber: roomName.replace(/[^0-9]/g, '') || '1',
+                                roomType: roomName,
+                                monthlyPrice: totalAmount,
+                                dueDate: billForm.dueDate || selectedTenant.end_date || '',
+                                createdAt: Date.now()
+                            }) : '';
 
-                                    {/* Biaya Tambahan */}
-                                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-3">
-                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Biaya Tambahan / Denda (Opsional)</p>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <label className="text-[9px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Nama Biaya</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Contoh: Denda Keterlambatan / Listrik"
-                                                    value={billForm.extraFeeName}
-                                                    onChange={e => setBillForm({ ...billForm, extraFeeName: e.target.value })}
-                                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400 bg-white"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-[9px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Nominal (Rp)</label>
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    value={billForm.extraFee || ''}
-                                                    onChange={e => setBillForm({ ...billForm, extraFee: Number(e.target.value) })}
-                                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400 bg-white"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
+                            const origin = typeof window !== 'undefined' ? window.location.origin : 'https://ruangsinggah.id';
+                            const claimUrl = `${origin}/claim-kost?token=${claimToken}`;
 
+                            const cleanWaNumber = tenantPhone.startsWith('0') ? '62' + tenantPhone.substring(1) : tenantPhone;
+                            const waMessagePreview = `Halo Kak *${tenantName}*! 👋\n\n` +
+                                `Kami dari Manajemen *KostManager - RuangSinggah* menginformasikan mengenai masa sewa kamar Anda:\n\n` +
+                                `🏠 *Properti:* ${propTitle}\n` +
+                                `🚪 *Kamar:* ${roomName}\n` +
+                                `📅 *Jatuh Tempo:* ${formattedDueDate}\n` +
+                                `💵 *Tarif Sewa:* ${FORMAT_CURRENCY(totalAmount)} / bulan\n\n` +
+                                `Untuk memantau sisa masa sewa, mengunduh kwitansi resmi, dan melakukan perpanjangan sewa dengan mudah via QRIS / Transfer Bank, silakan klik tautan resmi berikut:\n\n` +
+                                `👉 *Akses Kost Saya & Bayar:* \n${claimUrl}\n\n` +
+                                `_(Tautan ini akan langsung membuka halaman Kost Anda secara otomatis)_\n\n` +
+                                `Terima kasih atas kerjasamanya! 🙏✨`;
+
+                            const manualWaUrl = `https://wa.me/${cleanWaNumber}?text=${encodeURIComponent(waMessagePreview)}`;
+
+                            return (
+                                <form onSubmit={e => handleCreateBill(e, true)} className="flex-1 overflow-y-auto p-6 space-y-4">
+                                    {/* Pilih Tenant */}
                                     <div>
-                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">Catatan Tagihan</label>
-                                        <textarea
-                                            rows={2}
-                                            placeholder="Contoh: Tagihan sewa periode Juni 2026. Mohon bayar tepat waktu."
-                                            value={billForm.notes}
-                                            onChange={e => setBillForm({ ...billForm, notes: e.target.value })}
-                                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:border-orange-400 resize-none"
-                                        />
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">
+                                            Pilih Penghuni Kost <span className="text-red-500">*</span>
+                                        </label>
+                                        <select
+                                            value={selectedTenantIdForBill}
+                                            onChange={e => {
+                                                const tId = e.target.value;
+                                                setSelectedTenantIdForBill(tId);
+                                                const targetT = tenants.find(t => t.id === tId);
+                                                if (targetT) {
+                                                    const autoPrice = Number(targetT.totalRent) || Number(targetT.metadata?.basePrice) || Number(targetT.metadata?.price) || Number(targetT.property?.price) || 0;
+                                                    const autoDueDate = (targetT.end_date && targetT.end_date !== 'Sewa Berjalan') ? targetT.end_date : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                                                    setBillForm({
+                                                        ...billForm,
+                                                        rentalAmount: autoPrice,
+                                                        dueDate: autoDueDate
+                                                    });
+                                                }
+                                            }}
+                                            required
+                                            className="w-full border border-gray-200 rounded-2xl px-3.5 py-2.5 text-xs font-bold text-gray-800 focus:outline-none focus:border-orange-500 bg-white"
+                                        >
+                                            <option value="">-- Pilih Penghuni Aktif --</option>
+                                            {tenants.map(t => (
+                                                <option key={t.id} value={t.id}>
+                                                    {t.user?.name} ({t.property?.title} - {t.room_type})
+                                                </option>
+                                            ))}
+                                        </select>
                                     </div>
 
-                                    {/* Total Summary */}
-                                    <div className="bg-gradient-to-r from-orange-500 to-amber-400 p-5 rounded-2xl text-white flex justify-between items-center shadow-lg">
-                                        <div>
-                                            <p className="text-[10px] font-black text-orange-100 uppercase tracking-widest">Total Ditagihkan</p>
-                                            <p className="text-2xl font-black">{FORMAT_CURRENCY(Number(billForm.rentalAmount) + Number(billForm.extraFee))}</p>
-                                        </div>
-                                        <button
-                                            type="submit"
-                                            disabled={submittingBill}
-                                            className="bg-white text-orange-600 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm transition-all active:scale-95"
-                                        >
-                                            {submittingBill ? 'Memproses...' : 'Kirim Tagihan'}
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-                        </form>
+                                    {selectedTenant && (
+                                        <>
+                                            {/* Tenant Info Card */}
+                                            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-xl bg-orange-500 text-white font-black text-sm flex items-center justify-center shadow-sm">
+                                                        {(tenantName || 'P').charAt(0)}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-black text-gray-900">{tenantName}</p>
+                                                        <p className="text-[11px] text-gray-500 font-bold">{propTitle} • {roomName}</p>
+                                                    </div>
+                                                </div>
+                                                {tenantPhone ? (
+                                                    <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1">
+                                                        <Phone size={10} /> +{tenantPhone}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded">
+                                                        No HP Kosong
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {/* Rincian Tagihan */}
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">
+                                                        Nominal Sewa Pokok (Rp)
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        required
+                                                        min="0"
+                                                        value={billForm.rentalAmount}
+                                                        onChange={e => setBillForm({ ...billForm, rentalAmount: Number(e.target.value) })}
+                                                        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-black text-gray-900 focus:outline-none focus:border-orange-500 bg-white"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">
+                                                        Tanggal Jatuh Tempo
+                                                    </label>
+                                                    <input
+                                                        type="date"
+                                                        required
+                                                        value={billForm.dueDate}
+                                                        onChange={e => setBillForm({ ...billForm, dueDate: e.target.value })}
+                                                        className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-gray-900 focus:outline-none focus:border-orange-500 bg-white"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Biaya Tambahan */}
+                                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-2.5">
+                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Biaya Tambahan / Denda (Opsional)</p>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div>
+                                                        <label className="text-[9px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Nama Biaya</label>
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Contoh: Denda / Listrik"
+                                                            value={billForm.extraFeeName}
+                                                            onChange={e => setBillForm({ ...billForm, extraFeeName: e.target.value })}
+                                                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 focus:outline-none focus:border-orange-400 bg-white"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[9px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Nominal (Rp)</label>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            value={billForm.extraFee || ''}
+                                                            onChange={e => setBillForm({ ...billForm, extraFee: Number(e.target.value) })}
+                                                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 focus:outline-none focus:border-orange-400 bg-white"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Live WhatsApp Message Preview */}
+                                            <div className="space-y-1.5">
+                                                <div className="flex items-center justify-between">
+                                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                                                        <MessageSquare size={12} className="text-emerald-500" /> Pratinjau Pesan WhatsApp Resmi
+                                                    </label>
+                                                    <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+                                                        ✨ Auto-Login Link Aktif
+                                                    </span>
+                                                </div>
+                                                <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-[11px] text-gray-800 font-mono whitespace-pre-wrap leading-relaxed shadow-inner max-h-40 overflow-y-auto">
+                                                    {waMessagePreview}
+                                                </div>
+                                            </div>
+
+                                            {/* Total Summary & Action Buttons */}
+                                            <div className="pt-2 space-y-3">
+                                                <div className="bg-gradient-to-r from-orange-500 to-amber-400 p-4 rounded-2xl text-white flex justify-between items-center shadow-lg">
+                                                    <div>
+                                                        <p className="text-[9px] font-black text-orange-100 uppercase tracking-widest">Total Ditagihkan</p>
+                                                        <p className="text-xl font-black">{FORMAT_CURRENCY(totalAmount)}</p>
+                                                    </div>
+                                                    <span className="text-[10px] font-black bg-white/20 px-3 py-1 rounded-full uppercase tracking-wider">
+                                                        {formattedDueDate}
+                                                    </span>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <button
+                                                        type="submit"
+                                                        disabled={submittingBill || !tenantPhone}
+                                                        className={`w-full py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                                                            submittingBill || !tenantPhone
+                                                                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                                                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30 active:scale-98'
+                                                        }`}
+                                                    >
+                                                        <Send size={15} />
+                                                        {submittingBill ? 'Mengirim Tagihan...' : '🚀 Kirim WhatsApp Otomatis (+ Magic Link)'}
+                                                    </button>
+
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <a
+                                                            href={manualWaUrl}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all text-center"
+                                                        >
+                                                            <ExternalLink size={12} /> Buka WA Web
+                                                        </a>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleCreateBill(undefined, false)}
+                                                            disabled={submittingBill}
+                                                            className="py-2.5 px-3 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer text-center"
+                                                        >
+                                                            <FileText size={12} /> Simpan Invoice Saja
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </form>
+                            );
+                        })()}
                     </div>
                 </div>
             )}

@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 193. Modernisasi & Otomasi Modal Penagihan Sewa WhatsApp Magic Link di Portal KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan mengapa formulir "Tagih Sewa Bulanan" pada UI Portal KostManager masih bersifat manual dan menampilkan nominal yang salah (misal Rp 1.000.000 untuk Kost Madani yang tarif aslinya Rp 400.000).
+  2. Akar masalah: Dropdown penghuni tidak menyinkronkan nominal dan tanggal jatuh tempo pada event `onChange`, pemetaan harga sewa penghuni survei/offline belum terisi di `totalRent`, serta formulir masih menggunakan alur invoice manual lama tanpa integrasi WhatsApp Gateway.
+- **Implementasi**:
+  * **1. Sinkronisasi Otomatis Harga Sewa & Tanggal Jatuh Tempo (`KostManagerPortal.tsx`)**:
+    - Memetakan tarif riil properti/kamar (`rt.price` / `p.price` / `basePrice`) ke `totalRent` dan `rent_price` pada seluruh entitas penghuni di `loadAllData()` dan `enrichedTenants`.
+    - Menghubungkan dropdown `<select>` penghuni agar otomatis mengisi `rentalAmount` dan `dueDate` secara instan saat penghuni diganti.
+    - Memperbarui tombol "🧾 Tagih" di tabel penghuni agar langsung memuat data akurat (Rp 400.000 untuk Kost Madani Kamar 1).
+  * **2. Redesain Modal Penagihan Pintar & Live WhatsApp Preview**:
+    - Merombak tampilan modal penagihan menjadi panel otomasi cerdas berstandar modern:
+      - Kartu ringkasan profil penyewa, properti, kamar, dan badge nomor WhatsApp.
+      - Input nominal dan tanggal jatuh tempo yang otomatis terisi namun tetap fleksibel disesuaikan.
+      - **Live Preview Pesan WhatsApp Resmi**: Menampilkan gelembung chat pratinjau pesan pengingat sewa lengkap dengan link auto-login `/claim-kost?token=...`.
+  * **3. Tombol Aksi Multi-Kanal (Gateway & Manual)**:
+    - **"🚀 Kirim WhatsApp Otomatis (+ Magic Link)"**: 1-klik memicu pengiriman pesan via `sendRentBillingReminderWhatsApp()` dan mencatat riwayat invoice ke database.
+    - **"💬 Buka WhatsApp Web"**: Opsi membuka `wa.me/...` manual dengan teks pesan yang sudah terformat rapi.
+    - **"📄 Simpan Invoice Saja"**: Opsi pencatatan invoice tanpa memicu pengiriman WhatsApp.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2529 modules transformed, ✓ built in 33.30s, 0 error).
+
 ### 192. Sistem Penagihan Otomatis WhatsApp, Magic Auto-Login Penghuni, & Perpanjangan Sewa 'Kost Saya' (`rentBillingService.ts`, `ClaimKost.tsx`, `MyKost.tsx`, `App.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta perancangan dan implementasi mekanisme penagihan sewa otomatis WhatsApp untuk penghuni kost terkelola KostManager yang belum memiliki akun RuangSinggah.
