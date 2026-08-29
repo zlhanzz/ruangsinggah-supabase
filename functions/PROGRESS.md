@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 178. Pemisahan Kendali Operasional Penghuni Mitra Biasa vs KostManager Auto-Pilot (`MitraTenantManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menyampaikan masukan arsitektur bisnis: pada properti KostManager, pemilik kost seharusnya tidak memiliki kendali penagihan manual (`$ Selesai` dan `📄 Tagih`) karena seluruh operasional harian telah diserahkan sepenuhnya ke Tim KostManager RuangSinggah (Auto-Pilot).
+  2. Tombol penagihan manual hanya relevan bagi Mitra Biasa (Self-Managed). Jika tetap aktif pada KostManager, dapat memicu bentrok penagihan ganda (*double billing*) atau selisih pencatatan kas offline.
+- **Implementasi**:
+  * **1. Mode Auto-Pilot Protected Monitoring untuk KostManager**:
+    - Tombol aksi manual `$ Selesai` (konfirmasi bayar cash) dan `📄 Tagih` (kirim invoice tagihan manual) disembunyikan untuk penghuni properti KostManager.
+    - Digantikan dengan status badge elegan: **`🛡️ Auto-Pilot Managed`**.
+    - Tombol **`💬 Chat`** tetap dipertahankan untuk komunikasi ramah tamah/silaturahmi pemilik dengan penyewa melalui WhatsApp.
+  * **2. Banner Jaminan Pengelolaan KostManager**:
+    - Pada panel detail lipat (*Collapsible Details*) penghuni KostManager, ditambahkan banner informasi kepastian layanan:
+      *"Dikelola Tim KostManager RuangSinggah: Penagihan sewa, pengiriman invoice, dan perpanjangan kamar ini ditangani penuh secara Auto-Pilot"* dengan tombol cepat **`Hubungi Tim KM`**.
+  * **3. Pelestarian Kendali Penuh untuk Mitra Biasa**:
+    - Mitra biasa yang mengelola kost secara mandiri tetap memiliki tombol aksi penagihan dan konfirmasi pembayaran tunai lengkap.
+- **File Tersentuh**:
+  - `functions/public/components/mitra/MitraTenantManagement.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 31.96s, 0 error).
+
 ### 177. Sinkronisasi Penghuni Aktif KostManager ke Database Penghuni Mitra (`adminService.ts`, `MitraTenantManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa menu **Database Penghuni** (*Penghuni Aktif*) di Dashboard Mitra menampilkan `0 TOTAL • 0 AKTIF • 0 TENGGANG - BELUM ADA PENGHUNI AKTIF`, padahal properti KostManager (*Kost Madani*) sudah memiliki unit terisi (Kamar 1 oleh **zul**, No. HP `081527080656`, sewa `28 Ags - 28 Sep 2026`, tarif `Rp 400.000/bln`, status `Terisi`).

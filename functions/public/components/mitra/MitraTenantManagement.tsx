@@ -3,7 +3,7 @@ import {
     Users, Search, Filter, Calendar, Clock, ArrowRight, User, 
     MessageCircle, MoreHorizontal, ChevronRight, ChevronDown, ChevronUp, MapPin, Briefcase, 
     GraduationCap, ClipboardList, TrendingUp, AlertCircle, Plus, DollarSign, ExternalLink, X, Home, Zap, RefreshCw,
-    Share2, ShieldAlert, File, History
+    Share2, ShieldAlert, File, History, ShieldCheck, Sparkles
 } from 'lucide-react';
 import PaymentHistoryModal from '../PaymentHistoryModal';
 import { FORMAT_CURRENCY } from '../../constants';
@@ -332,6 +332,7 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                     filteredResidents.map((resident) => {
                         const daysLeft = getRemainingDays(resident.endDate);
                         const resKey = resident.id || resident.uid;
+                        const isKostManager = resident.isSurveyOccupant || Boolean(properties.find(p => p.id === resident.kostId)?.isManaged);
                         
                         return (
                             <div key={resKey} className="bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 mb-4 group">
@@ -350,7 +351,7 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-center gap-2 mb-1">
                                                     <span className="text-[9px] bg-orange-50 text-orange-600 px-2 py-0.5 rounded-lg font-bold border border-orange-100 uppercase truncate max-w-[120px]">{resident.kostName}</span>
-                                                    {resident.isSurveyOccupant && (
+                                                    {isKostManager && (
                                                         <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100 uppercase tracking-wider flex items-center gap-1">⭐ KOSTMANAGER</span>
                                                     )}
                                                     {resident.isExpired ? (
@@ -394,24 +395,35 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                                         {/* Right: Actions & Expand Button */}
                                         <div className="flex items-center justify-between gap-2 border-t lg:border-t-0 pt-3 lg:pt-0 border-gray-100 w-full lg:w-auto">
                                             <div className="flex items-center gap-1.5 flex-wrap">
-                                                <button 
-                                                    onClick={() => handleManualPayment(resident)}
-                                                    disabled={daysLeft !== null && daysLeft > 7 || isUpdating}
-                                                    title={daysLeft !== null && daysLeft > 7 ? 'Tombol aktif 7 hari sebelum masa sewa berakhir' : ''}
-                                                    className={`px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1 shadow-sm border ${
-                                                        daysLeft !== null && daysLeft > 7
-                                                            ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed opacity-60' 
-                                                            : 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100'
-                                                    }`}
-                                                >
-                                                    <DollarSign size={11} /> Selesai
-                                                </button>
-                                                <button 
-                                                    onClick={() => setViewingInvoice(resident)}
-                                                    className="px-2.5 py-1.5 bg-orange-50 text-orange-600 rounded-xl border border-orange-100 text-[9px] font-black uppercase tracking-wider hover:bg-orange-100 transition-all flex items-center gap-1"
-                                                >
-                                                    <File size={11} /> Tagih
-                                                </button>
+                                                {isKostManager ? (
+                                                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-700 shadow-sm" title="Penagihan dan operasional ditangani 100% oleh Tim KostManager RuangSinggah">
+                                                        <ShieldCheck size={13} className="text-indigo-600 shrink-0" />
+                                                        <span className="text-[9px] font-black uppercase tracking-wider">
+                                                            Auto-Pilot Managed
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <button 
+                                                            onClick={() => handleManualPayment(resident)}
+                                                            disabled={daysLeft !== null && daysLeft > 7 || isUpdating}
+                                                            title={daysLeft !== null && daysLeft > 7 ? 'Tombol aktif 7 hari sebelum masa sewa berakhir' : ''}
+                                                            className={`px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1 shadow-sm border ${
+                                                                daysLeft !== null && daysLeft > 7
+                                                                    ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed opacity-60' 
+                                                                    : 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100 cursor-pointer'
+                                                            }`}
+                                                        >
+                                                            <DollarSign size={11} /> Selesai
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => setViewingInvoice(resident)}
+                                                            className="px-2.5 py-1.5 bg-orange-50 text-orange-600 rounded-xl border border-orange-100 text-[9px] font-black uppercase tracking-wider hover:bg-orange-100 transition-all flex items-center gap-1 cursor-pointer"
+                                                        >
+                                                            <File size={11} /> Tagih
+                                                        </button>
+                                                    </>
+                                                )}
                                                 <button 
                                                     onClick={() => {
                                                         if (resident.profile.phone && resident.profile.phone !== '-') {
@@ -430,7 +442,7 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
 
                                             <button 
                                                 onClick={() => toggleExpand(resKey)}
-                                                className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 hover:text-gray-950 transition-all shrink-0"
+                                                className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 hover:text-gray-950 transition-all shrink-0 cursor-pointer"
                                                 title={expandedResidents[resKey] ? 'Sembunyikan Detail' : 'Tampilkan Detail'}
                                             >
                                                 {expandedResidents[resKey] ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
@@ -439,8 +451,27 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                                     </div>
 
                                     {/* Collapsible Info Grid */}
-                                    {expandedResidents[resident.uid] && (
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 pt-6 mt-6 border-t border-gray-100 animate-in slide-in-from-top-4 duration-300">
+                                    {expandedResidents[resKey] && (
+                                        <div className="space-y-6 pt-6 mt-6 border-t border-gray-100 animate-in slide-in-from-top-4 duration-300">
+                                            {isKostManager && (
+                                                <div className="bg-gradient-to-r from-indigo-50/80 to-blue-50/50 border border-indigo-100/80 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 shrink-0">
+                                                            <Sparkles size={18} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs font-black text-indigo-950 uppercase tracking-tight">Dikelola Tim KostManager RuangSinggah</p>
+                                                            <p className="text-[11px] text-indigo-700/80 mt-0.5">Penagihan sewa, pengiriman invoice, dan perpanjangan kamar ini ditangani penuh secara Auto-Pilot.</p>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => window.open('https://wa.me/6281527080656', '_blank')}
+                                                        className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-sm shrink-0 cursor-pointer flex items-center gap-1.5 self-end sm:self-auto"
+                                                    >
+                                                        <MessageCircle size={12} /> Hubungi Tim KM
+                                                    </button>
+                                                </div>
+                                            )}
                                             {/* Paket & Durasi */}
                                             <div className="space-y-4">
                                                 <div className="flex items-center gap-2">
