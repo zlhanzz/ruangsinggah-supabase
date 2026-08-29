@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 204. Penyesuaian Badge Lantai dan Pembersihan Dimensi Kamar pada Kartu Sewa Aktif (`MyKost.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta: *"hapus aja "auto pilot" dan ganti posisinya dengan "lantai 3". hapus juga "2x2""*.
+  2. Badge `⚡ AUTO-PILOT` tidak lagi diperlukan pengguna di baris badge unit sewa aktif dan diminta diganti dengan informasi posisi lantai (`LANTAI 3`).
+  3. Informasi dimensi kamar `2x2 meter` dan pengulangan `Lantai 3` pada sub-info alamat di bawah nama properti dihapus agar baris lokasi tampil lebih ringkas dan fokus.
+- **Implementasi**:
+  * **1. Ganti Badge Auto-Pilot Menjadi Badge Lantai Kamar (`MyKost.tsx`)**:
+    - Menghapus badge `kost.isManagedKost` (`Auto-Pilot`).
+    - Menambahkan badge lantai unit kamar `kost.roomFloor` (`LANTAI 3` dengan icon vector `<Layers />`).
+  * **2. Pembersihan Sub-Info Alamat Lokasi**:
+    - Menghapus rendering `kost.roomFloor` dan `kost.roomSize` (dimensi `2x2 meter`) dari blok sub-info di bawah judul nama kost.
+  * **3. Pembersihan Import**:
+    - Menghapus import `Sparkles` yang sudah tidak lagi digunakan.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `walkthrough.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% dengan 0 error.
+  - Kartu sewa aktif menampilkan badge `LANTAI 3`, bebas dari badge `AUTO-PILOT`, dan bebas dari teks `2x2 meter`.
+
 ### 203. Perbaikan Runtime Crash 'ReferenceError: DoorClosed is not defined' pada Kartu Sewa Aktif (`MyKost.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan error runtime console browser:

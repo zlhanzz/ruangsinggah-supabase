@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../supabase';
-import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity, DoorClosed, ChevronDown, ChevronUp, Camera, ShieldCheck, Sparkles, Building, Bed, Bath, Wifi, Maximize2, Share2, PhoneCall, HelpCircle, Layers, Wrench } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity, DoorClosed, ChevronDown, ChevronUp, Camera, ShieldCheck, Building, Bed, Bath, Wifi, Maximize2, Share2, PhoneCall, HelpCircle, Layers, Wrench } from 'lucide-react';
 import { Page } from '../types';
 import { addPropertyReview, getExtraBills, settlePendingBills, cancelBookingRequest } from '../userService';
 import PaymentGateway from '../components/PaymentGateway';
@@ -1967,9 +1967,10 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                             {kost.roomType || 'Standard'}
                                                         </span>
 
-                                                        {kost.isManagedKost && (
-                                                            <span className="px-3 py-1 rounded-full text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200 uppercase tracking-wider flex items-center gap-1">
-                                                                <Sparkles className="w-3 h-3 text-amber-500" /> Auto-Pilot
+                                                        {kost.roomFloor && (
+                                                            <span className="px-3 py-1 rounded-full text-[9px] font-bold text-slate-700 uppercase tracking-wider bg-slate-100 border border-slate-200 flex items-center gap-1">
+                                                                <Layers className="w-3 h-3 text-slate-500" />
+                                                                {kost.roomFloor.toLowerCase().includes('lantai') ? kost.roomFloor.toUpperCase() : `LANTAI ${kost.roomFloor.toUpperCase()}`}
                                                             </span>
                                                         )}
                                                     </div>
@@ -1989,18 +1990,6 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                             <MapPin className="w-3.5 h-3.5 text-orange-500 shrink-0" />
                                                             <span className="truncate">{kost.address || kost.areaCity || 'Makassar'}</span>
                                                         </div>
-                                                        {kost.roomFloor && (
-                                                            <span className="hidden sm:inline-block text-gray-300">•</span>
-                                                        )}
-                                                        {kost.roomFloor && (
-                                                            <span className="text-gray-500 font-bold">{kost.roomFloor}</span>
-                                                        )}
-                                                        {kost.roomSize && (
-                                                            <span className="hidden sm:inline-block text-gray-300">•</span>
-                                                        )}
-                                                        {kost.roomSize && (
-                                                            <span className="text-gray-500 font-bold">{kost.roomSize}</span>
-                                                        )}
                                                     </div>
 
                                                     <div className="flex items-center justify-center sm:justify-start gap-3">
