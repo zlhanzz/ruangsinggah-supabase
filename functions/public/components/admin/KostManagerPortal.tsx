@@ -2405,7 +2405,9 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             omnichannelContactName: p.omnichannel_contact_name || (p as any).metadata?.omnichannelContactName || '',
             omnichannelContactPhone: p.omnichannel_contact_phone || (p as any).metadata?.omnichannelContactPhone || '',
             omnichannelContactType: p.omnichannel_contact_type || 'owner',
-            roomTypes: reconstructedRoomTypes
+            roomTypes: reconstructedRoomTypes,
+            metadata: p.metadata || {},
+            managed_at: (p as any).managed_at || (p as any).metadata?.managed_at || ''
         });
 
         setIsAddPropOpen(true);
