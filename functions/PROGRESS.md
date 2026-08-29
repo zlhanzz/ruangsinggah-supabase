@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 184. Perbaikan Routing & Akses Real-Time Chat Properti KostManager ke Portal KostManager (`chatService.ts`, `KostDetail.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa saat login menggunakan akun penyewa (role: `user`) dan mengirim chat ke listing kost kelolaan KostManager (Kost Madani), chat tersebut tidak muncul di Portal KostManager (`/dashboard-admin/km_chats`) maupun di Dashboard Mitra.
+  2. Akar masalah:
+     - **Di Dashboard Mitra**: Sesuai desain isolasi peran KostManager, sesi chat properti KostManager memang sengaja disembunyikan dari mitra pemilik kost agar tidak ada transaksi/interaksi di luar kendali pengelola.
+     - **Di Portal KostManager**: Sesi chat sebelumnya mencatat `owner_id` pemilik pribadi (Abdullah), sehingga kebijakan keamanan database PostgreSQL (RLS) menyaring dan menyembunyikannya dari akun Admin. Serta `SYSTEM_ADMIN_ID` sebelumnya masih dummy.
+- **Implementasi**:
+  * **1. Konfigurasi Valid `SYSTEM_ADMIN_ID` & Routing Eksklusif KostManager (`chatService.ts` & `KostDetail.tsx`)**:
+    - Menetapkan `SYSTEM_ADMIN_ID` ke ID Admin resmi yang terdaftar di `public.users` (`ca842776-97ab-48a7-b1cd-6dea17d78c1e`).
+    - Pada `KostDetail.tsx`, jika properti berstatus kelolaan KostManager (`kost.is_managed || kost.isKostManager`), `targetOwnerId` secara otomatis diarahkan ke `SYSTEM_ADMIN_ID`.
+  * **2. Migrasi Sesi Database Eksisting**:
+    - Menyelaraskan seluruh sesi chat properti Kost Madani di database ke `owner_id = SYSTEM_ADMIN_ID` sehingga chat calon penyewa yang baru saja dikirim langsung muncul di portal.
+  * **3. Realtime Subscription Daftar Sesi (`KostManagerPortal.tsx`)**:
+    - Menambahkan listener WebSocket `subscribeToChatSessions` pada tabel `chat_sessions` di `KostManagerPortal.tsx` agar setiap ada sesi baru atau pesan baru dari calon penyewa, daftar sesi di kolom kiri portal langsung ter-update otomatis seketika tanpa perlu refresh halaman.
+- **File Tersentuh**:
+  - `functions/public/chatService.ts`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 42.11s, 0 error).
+
 ### 183. Fitur Indikator Status Pesan WhatsApp-Style (Centang 1, Centang 2 Abu-Abu, Centang 2 Biru) (`chatService.ts`, `ChatWindow.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta penambahan indikator visual tanda centang ala WhatsApp (Centang 1, Centang 2 Abu-Abu, dan Centang 2 Biru) pada gelembung pesan untuk mengetahui status apakah pesan sedang dikirim, sudah tersimpan/diterima di server, dan sudah dibaca oleh lawan bicara (baik CS KostManager, Pemilik Kost, maupun Calon Penyewa).

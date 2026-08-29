@@ -1,8 +1,8 @@
 import { supabase } from './supabase';
 import { sendNotification } from './notificationService';
 
-// Fallback UUID for properties without owners. Change this to your real Admin UUID.
-export const SYSTEM_ADMIN_ID = '00000000-0000-0000-0000-000000000000';
+// Real Admin UUID terdaftar di public.users (Sulhan - Administrator KostManager)
+export const SYSTEM_ADMIN_ID = 'ca842776-97ab-48a7-b1cd-6dea17d78c1e';
 
 function isValidUUID(uuid: string) {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -339,6 +339,26 @@ export function subscribeToMessages(
         if (payload.new && (payload.new as any).id) {
           onMessage(payload.new as ChatMessage, payload.eventType as 'INSERT' | 'UPDATE');
         }
+      }
+    )
+    .subscribe();
+}
+
+/**
+ * Subscribe ke update sesi chat (misal penambahan sesi baru atau pembaruan last_message)
+ */
+export function subscribeToChatSessions(onSessionChange: () => void) {
+  return supabase
+    .channel('public:chat_sessions_realtime')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'chat_sessions'
+      },
+      () => {
+        onSessionChange();
       }
     )
     .subscribe();

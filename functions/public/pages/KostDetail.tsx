@@ -619,8 +619,10 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
 
     try {
       setIsSubmittingChat(true);
-      // Gunakan ownerUid kost untuk memenuhi valid Foreign Key pada tabel chat_sessions
-      const targetOwnerId = kost.ownerUid || SYSTEM_ADMIN_ID;
+      // Jika properti dikelola KostManager, arahkan chat ke KostManager Admin (SYSTEM_ADMIN_ID)
+      const isKostManagerManaged = (kost as any).is_managed || (kost as any).isKostManager;
+      const targetOwnerId = isKostManagerManaged ? SYSTEM_ADMIN_ID : (kost.ownerUid || SYSTEM_ADMIN_ID);
+      
       const session = await getOrCreateChatSession(
         user.uid, 
         targetOwnerId, 

@@ -92,6 +92,7 @@ import {
     getChatMessages, 
     sendMessage, 
     subscribeToMessages, 
+    subscribeToChatSessions,
     markMessagesAsRead,
     ChatSession, 
     ChatMessage, 
@@ -1253,6 +1254,20 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             console.error('Failed to load KM chat sessions:', err);
         }
     };
+
+    // Realtime subscription untuk daftar sesi percakapan KostManager
+    useEffect(() => {
+        const propIds = properties.map(p => p.id).filter(Boolean);
+        if (propIds.length === 0) return;
+
+        const sub = subscribeToChatSessions(() => {
+            loadChatSessions(propIds);
+        });
+
+        return () => {
+            sub.unsubscribe();
+        };
+    }, [properties]);
 
     // Load messages when selectedChatSession changes
     useEffect(() => {
