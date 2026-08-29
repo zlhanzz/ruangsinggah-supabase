@@ -483,13 +483,11 @@ export async function getMyChatSessions(userId: string): Promise<ChatSession[]> 
  */
 export async function getKostManagerChatSessions(managedPropertyIds: string[]): Promise<ChatSession[]> {
   try {
-    // 1. Fetch raw sessions for managed properties OR directed to SYSTEM_ADMIN_ID
-    let query = supabase.from('chat_sessions').select('*');
+    // 1. Fetch raw sessions where owner_id = SYSTEM_ADMIN_ID (Hanya chat yang masuk di era KostManager)
+    let query = supabase.from('chat_sessions').select('*').eq('owner_id', SYSTEM_ADMIN_ID);
     
     if (managedPropertyIds && managedPropertyIds.length > 0) {
       query = query.in('property_id', managedPropertyIds);
-    } else {
-      query = query.eq('owner_id', SYSTEM_ADMIN_ID);
     }
 
     const { data: sessions, error } = await query.order('updated_at', { ascending: false });

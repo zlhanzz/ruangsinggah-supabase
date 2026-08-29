@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 186. Pemisahan Bersih Chat Era Mitra Biasa vs Era KostManager (`chatService.ts`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar sistem dapat membedakan chat yang masuk ke kost saat masih berstatus Mitra Biasa vs chat yang masuk saat sudah berstatus Mitra KostManager.
+  2. Tujuannya agar riwayat chat lawas dari era Mitra Biasa tidak masuk ke Portal KostManager dan tidak memenuhi menu pesan CS KostManager.
+- **Implementasi**:
+  * **1. Pengetatan Filter Query `getKostManagerChatSessions` (`chatService.ts`)**:
+    - Memperbarui query pembacaan sesi di Portal KostManager menjadi `supabase.from('chat_sessions').select('*').eq('owner_id', SYSTEM_ADMIN_ID).in('property_id', managedPropertyIds)`.
+    - Dengan filter ini, hanya percakapan yang dibuat di era KostManager (`owner_id = SYSTEM_ADMIN_ID`) yang dimuat di Portal CS.
+  * **2. Normalisasi Data Sesi Lawas**:
+    - Mengembalikan `owner_id` pada 15 percakapan lawas (April – Juni 2026) kembali ke UID pemilik kost pribadi (Abdullah: `c58e7306-d657-420a-9435-91f5fbd1a3a0`).
+    - Portal KostManager kini tampil sangat bersih, rapi, dan hanya memuat 4 percakapan aktif era KostManager (Agustus 2026).
+- **File Tersentuh**:
+  - `functions/public/chatService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 27.38s, 0 error).
+
 ### 185. Fitur Diferensiasi Visual Chat Belum Dibaca (Unread) vs Sudah Dibaca & Sinkronisasi Centang WhatsApp (`chatService.ts`, `KostManagerPortal.tsx`, `ChatWindow.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar percakapan yang memiliki pesan baru (belum dibaca / unread) dapat dibedakan secara visual dari percakapan yang sudah pernah dibuka atau dibaca.
