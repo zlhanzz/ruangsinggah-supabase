@@ -4062,11 +4062,19 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                         <div className="flex items-center justify-between gap-2 mb-1.5">
                                                             <div className="flex items-center gap-2 min-w-0">
                                                                 <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-orange-500 to-amber-400 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs overflow-hidden relative">
-                                                                    {session.user?.photo_url ? (
-                                                                        <img src={session.user.photo_url} alt="" className="w-full h-full object-cover" />
-                                                                    ) : (
-                                                                        customerName.charAt(0).toUpperCase()
+                                                                    {session.user?.photo_url && (
+                                                                        <img
+                                                                            src={session.user.photo_url}
+                                                                            alt=""
+                                                                            className="w-full h-full object-cover relative z-10"
+                                                                            onError={(e) => {
+                                                                                (e.target as HTMLElement).style.display = 'none';
+                                                                            }}
+                                                                        />
                                                                     )}
+                                                                    <span className="select-none uppercase font-black">
+                                                                        {(customerName || 'U').charAt(0)}
+                                                                    </span>
                                                                 </div>
                                                                 <div className="min-w-0 flex items-center gap-1.5">
                                                                     <p className={`text-xs truncate ${hasUnread ? 'font-black text-gray-900' : 'font-bold text-gray-700'}`}>

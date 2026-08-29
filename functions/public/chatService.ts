@@ -454,8 +454,20 @@ export async function getMyChatSessions(userId: string): Promise<ChatSession[]> 
     unreadMap.set(r.session_id, (unreadMap.get(r.session_id) || 0) + 1);
   });
 
-  // 4. Map back to sessions and parse tunneled metadata
-  return sessions.map(s => {
+  // 3.6. Fetch session IDs with actual messages (filter out empty sessions)
+  const { data: messageCounts } = sessionIds.length > 0
+    ? await supabase
+        .from('chat_messages')
+        .select('session_id')
+        .in('session_id', sessionIds)
+    : { data: [] };
+
+  const activeSessionIds = new Set((messageCounts || []).map(m => m.session_id));
+
+  // 4. Map back to sessions, filter empty ones, and parse tunneled metadata
+  return sessions
+    .filter(s => activeSessionIds.has(s.id))
+    .map(s => {
     let ownerInfo = profileMap.get(s.owner_id) || { name: 'Pemilik', photo_url: '' };
     let userInfo = profileMap.get(s.user_id) || { name: 'Calon Penghuni', photo_url: '' };
     let cleanMessage = s.last_message || '';
@@ -550,8 +562,20 @@ export async function getKostManagerChatSessions(managedPropertyIds: string[]): 
       unreadMap.set(r.session_id, (unreadMap.get(r.session_id) || 0) + 1);
     });
 
-    // 4. Map back to sessions and parse tunneled metadata
-    return sessions.map(s => {
+    // 3.6. Fetch session IDs with actual messages (filter out empty sessions)
+    const { data: messageCounts } = sessionIds.length > 0
+      ? await supabase
+          .from('chat_messages')
+          .select('session_id')
+          .in('session_id', sessionIds)
+      : { data: [] };
+
+    const activeSessionIds = new Set((messageCounts || []).map(m => m.session_id));
+
+    // 4. Map back to sessions, filter empty ones, and parse tunneled metadata
+    return sessions
+      .filter(s => activeSessionIds.has(s.id))
+      .map(s => {
       let userInfo = profileMap.get(s.user_id) || { name: 'Calon Penghuni', photo_url: '' };
       let cleanMessage = s.last_message || '';
 

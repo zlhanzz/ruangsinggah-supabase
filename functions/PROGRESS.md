@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 188. Pembersihan Sesi Chat Kosong & Peningkatan Fallback Avatar Profil (`chatService.ts`, `KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan mengapa ada percakapan yang masuk dengan pesan kosong (*"Mulai percakapan..."* tanpa isi pesan) dan profil kosong/rusak di Portal KostManager (contoh: `Rahmat Hidayat03`).
+  2. Akar masalah: Ketika calon penyewa mengklik tombol Chat lalu langsung menutup popup tanpa mengetik atau mengirim pesan apa pun, record sesi tetap tersimpan di database dengan 0 pesan. Selain itu, tag gambar avatar sebelumnya tidak memiliki *fallback error handler* ketika URL foto pengguna gagal dimuat.
+- **Implementasi**:
+  * **1. Penyaringan Sesi Kosong Tanpa Pesan (`chatService.ts`)**:
+    - Memperbarui fungsi `getKostManagerChatSessions` dan `getMyChatSessions` agar secara efisien menyaring dan hanya menampilkan sesi percakapan yang memiliki setidaknya satu pesan nyata (`chat_messages > 0`).
+    - Sesi coba-coba yang ditutup tanpa mengirim pesan tidak akan pernah membebani inbox CS KostManager maupun Dashboard Mitra.
+  * **2. Pembersihan Database dari Sesi Kosong**:
+    - Menghapus 27 sesi kosong lama (0 pesan) dari tabel `chat_sessions`.
+    - Inbox Portal KostManager kini 100% bersih, rapi, dan hanya memuat percakapan aktif yang nyata.
+  * **3. Peningkatan Fallback Avatar Profil (`KostManagerPortal.tsx`)**:
+    - Menambahkan atribut `onError` pada tag gambar profil pelanggan. Jika foto gagal dimuat atau tidak tersedia, sistem secara mulus menyembunyikan tag gambar dan merender inisial huruf pertama nama pengguna di atas gradien oranye modern.
+- **File Tersentuh**:
+  - `functions/public/chatService.ts`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 31.07s, 0 error).
+
 ### 187. Pencegahan Duplikasi Sesi Chat & Penggabungan Sesi Terpisah (`chatService.ts`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan mengapa chat dari pengguna yang sama (`Game Burik` dan `Administrator`) pada properti yang sama (`Kost Madani`) sempat menghasilkan 2 kartu percakapan terpisah di Portal KostManager.
