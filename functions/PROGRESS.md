@@ -2,6 +2,21 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 172. Independent Scrollable Container pada Sidebar Booking Card (`KostDetail.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan mengapa kartu sidebar pemesanan (kanan) tidak dapat di-scroll langsung saat kursor mouse di atasnya, melainkan harus menunggu halaman utama/badan website di-scroll ke bawah terlebih dahulu.
+- **Implementasi**:
+  * **1. Penerapan Kontainer Scroll Mandiri**:
+    - Memberikan batasan `max-h-[calc(100vh-5.5rem)]`, `overflow-y-auto`, dan `overscroll-contain` pada kartu sidebar booking.
+    - Begitu kursor mouse berada di atas kartu sidebar, pengguna dapat langsung menggeser/scroll kartu secara instan dan mandiri tanpa menggerakkan badan utama website.
+  * **2. Optimasi Padding & Scrollbar Ramping**:
+    - Menyesuaikan padding kartu menjadi `p-6 lg:p-7` serta menambahkan styling scrollbar ramping (*scrollbar-thin scrollbar-thumb-orange-200*).
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 31.64s, 0 error).
+
 ### 171. Pembersihan Teks Harga pada Chip Pilihan Nomor Kamar (`KostDetail.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta menghapus teks harga dari dalam chip nomor kamar karena menyebabkan penumpukan (*overlap*) dengan teks lantai dan mengurangi keindahan estetika.

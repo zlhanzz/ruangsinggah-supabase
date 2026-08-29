@@ -1162,8 +1162,8 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
 
           {/* Right Sidebar - Booking Card */}
           <div className="relative">
-            <div className="sticky top-24 space-y-6">
-              <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-xl shadow-gray-100/50">
+            <div className="sticky top-20">
+              <div className="bg-white rounded-[2rem] lg:rounded-[2.5rem] p-6 lg:p-7 border border-gray-100 shadow-xl shadow-gray-100/50 max-h-[calc(100vh-5.5rem)] overflow-y-auto overscroll-contain pr-4 lg:pr-5 scrollbar-thin scrollbar-thumb-orange-200">
                 <div className="mb-6">
                   <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-2">Harga Sewa</p>
                   <div className="flex flex-col">
