@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Kost, RoomType, PricingPeriod, Page } from '../types';
 import { FORMAT_CURRENCY } from '../constants';
@@ -10,7 +10,7 @@ import { incrementPropertyView } from '../userService';
 import { getOrCreateChatSession, SYSTEM_ADMIN_ID } from '../chatService';
 import { createBookingRequest } from '../userService';
 import { supabase } from '../supabase';
-import { Bed, Home, Camera, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Bed, Home, Camera, Sparkles, CheckCircle2, ChevronDown, Layers } from 'lucide-react';
 
 interface KostDetailProps {
   kost: Kost;
@@ -51,6 +51,7 @@ const InfoSection: React.FC<{ title: string; children: React.ReactNode; defaultO
 
 const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user, onLoginRedirect, validateProfile }) => {
   const [currentPhoto, setCurrentPhoto] = useState(0);
+  const [selectedParentTypeIdx, setSelectedParentTypeIdx] = useState(0);
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
   const [physicalRooms, setPhysicalRooms] = useState<any[]>([]);
   const [selectedPhysicalRoom, setSelectedPhysicalRoom] = useState<any>(null);
@@ -340,6 +341,168 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
       photoItems: roomPhotoItems
     }];
   });
+
+  // Interface for Parent-Child room grouping
+  interface ChildRoomUnit {
+    id: string;
+    variantIdx: number;
+    roomNumber: string;
+    displayName: string;
+    floor: string;
+    status: string;
+    isAvailable: boolean;
+    price: number;
+    size: string;
+    pricing: any[];
+    roomFacilities: string[];
+    bathroomFacilities: string[];
+    kitchenFacilities: string[];
+    images: string[];
+    photoItems: PhotoItem[];
+    rawRoom: any;
+  }
+
+  interface ParentRoomGroup {
+    typeName: string;
+    minPrice: number;
+    size: string;
+    roomFacilities: string[];
+    availableCount: number;
+    totalCount: number;
+    isAvailable: boolean;
+    rooms: ChildRoomUnit[];
+  }
+
+  // Compute Parent-Child room groups
+  const parentRoomGroups: ParentRoomGroup[] = useMemo(() => {
+    if (!kost.roomTypes || kost.roomTypes.length === 0) {
+      return [{
+        typeName: defaultRoom.name,
+        minPrice: defaultRoom.price,
+        size: defaultRoom.size,
+        roomFacilities: defaultRoom.roomFacilities || [],
+        availableCount: 1,
+        totalCount: 1,
+        isAvailable: true,
+        rooms: [{
+          id: 'default_room',
+          variantIdx: 0,
+          roomNumber: '1',
+          displayName: 'Kamar 1',
+          floor: 'Lantai 1',
+          status: 'Kosong',
+          isAvailable: true,
+          price: defaultRoom.price,
+          size: defaultRoom.size,
+          pricing: defaultRoom.pricing || [],
+          roomFacilities: defaultRoom.roomFacilities || [],
+          bathroomFacilities: [],
+          kitchenFacilities: [],
+          images: [],
+          photoItems: [],
+          rawRoom: defaultRoom
+        }]
+      }];
+    }
+    
+    if (!kost.isManaged) {
+      // For regular kost: each item in kost.roomTypes is its own parent type
+      return kost.roomTypes.map((rt: any, idx: number) => {
+        const isAvail = rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh';
+        const rName = rt.name || `Tipe ${idx + 1}`;
+        const matchedNorm = normalizedRooms.find(r => r.variantIdx === idx);
+        
+        return {
+          typeName: rName,
+          minPrice: Number(rt.pricing?.find((p: any) => p.period === 'bulanan')?.price || rt.pricing?.[0]?.price || rt.price || kost.price || 0),
+          size: rt.size || '3x3',
+          roomFacilities: rt.roomFacilities || [],
+          availableCount: isAvail ? 1 : 0,
+          totalCount: 1,
+          isAvailable: isAvail,
+          rooms: [{
+            id: rt.id || `room_${idx}`,
+            variantIdx: idx,
+            roomNumber: rName,
+            displayName: rName,
+            floor: rt.floor || '',
+            status: isAvail ? 'Kosong' : 'Terisi',
+            isAvailable: isAvail,
+            price: Number(rt.price || kost.price || 0),
+            size: rt.size || '3x3',
+            pricing: rt.pricing || [{ period: 'bulanan', price: rt.price || kost.price }],
+            roomFacilities: rt.roomFacilities || [],
+            bathroomFacilities: rt.bathroomFacilities || [],
+            kitchenFacilities: rt.kitchenFacilities || [],
+            images: matchedNorm?.images || [],
+            photoItems: matchedNorm?.photoItems || [],
+            rawRoom: rt
+          }]
+        };
+      });
+    }
+
+    // For KostManager: Group rooms by type (e.g. 'Standard', 'VIP', etc.)
+    const groupsMap = new Map<string, ChildRoomUnit[]>();
+    
+    kost.roomTypes.forEach((rt: any, idx: number) => {
+      const typeKey = (rt.type && rt.type.trim()) ? rt.type.trim() : (rt.roomTypeName || 'Standard');
+      const isAvail = rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh';
+      const rNum = String(rt.name || rt.roomNumber || idx + 1).trim();
+      const displayName = rNum.toLowerCase().startsWith('kamar') ? rNum : `Kamar ${rNum}`;
+      const matchedNorm = normalizedRooms.find(r => r.variantIdx === idx);
+
+      const childUnit: ChildRoomUnit = {
+        id: rt.id || `room_${idx}`,
+        variantIdx: idx,
+        roomNumber: rNum,
+        displayName: displayName,
+        floor: rt.floor || 'Lantai 1',
+        status: isAvail ? 'Kosong' : 'Terisi',
+        isAvailable: isAvail,
+        price: Number(rt.price || kost.price || 0),
+        size: rt.size || '3x3',
+        pricing: rt.pricing || [{ period: 'bulanan', price: rt.price || kost.price }],
+        roomFacilities: rt.roomFacilities || [],
+        bathroomFacilities: rt.bathroomFacilities || [],
+        kitchenFacilities: rt.kitchenFacilities || [],
+        images: matchedNorm?.images || [],
+        photoItems: matchedNorm?.photoItems || [],
+        rawRoom: rt
+      };
+
+      if (!groupsMap.has(typeKey)) {
+        groupsMap.set(typeKey, []);
+      }
+      groupsMap.get(typeKey)!.push(childUnit);
+    });
+
+    return Array.from(groupsMap.entries()).map(([typeName, rooms]) => {
+      const availableRooms = rooms.filter(r => r.isAvailable);
+      const minPrice = Math.min(...rooms.map(r => {
+        const bulanan = r.pricing?.find(p => p.period === 'bulanan');
+        return bulanan?.price || r.pricing?.[0]?.price || r.price || 0;
+      }).filter(p => p > 0)) || Number(kost.price || 0);
+
+      // Common facilities from rooms
+      const facSet = new Set<string>();
+      rooms.forEach(r => (r.roomFacilities || []).forEach(f => facSet.add(f)));
+
+      return {
+        typeName: typeName.toLowerCase().startsWith('tipe') ? typeName : `Tipe ${typeName}`,
+        minPrice,
+        size: rooms[0]?.size || '3x3',
+        roomFacilities: Array.from(facSet),
+        availableCount: availableRooms.length,
+        totalCount: rooms.length,
+        isAvailable: availableRooms.length > 0,
+        rooms
+      };
+    });
+  }, [kost.roomTypes, kost.isManaged, kost.price, normalizedRooms]);
+
+  const currentParentGroup = parentRoomGroups[selectedParentTypeIdx] || parentRoomGroups[0];
+  const selectedChildRoom = currentParentGroup?.rooms.find(r => r.variantIdx === selectedVariantIdx) || currentParentGroup?.rooms[0];
 
   // Filter only empty/available rooms
   const emptyRooms = normalizedRooms.filter(r => r.isAvailable);
@@ -1037,107 +1200,127 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                   ) : null}
                 </div>
 
-                {/* Variant Selector with integrated availability and specs */}
-                {kost.roomTypes && kost.roomTypes.length > 0 && (
+                {/* Parent-Child Room Type & Room Number Selection */}
+                {parentRoomGroups.length > 0 && (
                   <div className="mb-6">
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Pilih Tipe Kamar</label>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+                      PILIH TIPE KAMAR
+                    </label>
                     <div className="space-y-3">
-                      {kost.roomTypes.map((type, idx) => {
-                        const isAvailable = type.isAvailable !== false;
+                      {parentRoomGroups.map((group, pIdx) => {
+                        const isSelectedParent = selectedParentTypeIdx === pIdx;
                         return (
                           <div
-                            key={idx}
+                            key={pIdx}
                             onClick={() => {
-                              setSelectedVariantIdx(idx);
-                              const matchedRoom = normalizedRooms.find(r => r.variantIdx === idx);
-                              if (matchedRoom && matchedRoom.isAvailable) {
-                                setActivePhotoFilter(matchedRoom.id);
-                                setCurrentPhoto(0);
+                              setSelectedParentTypeIdx(pIdx);
+                              const firstChild = group.rooms.find(r => r.isAvailable) || group.rooms[0];
+                              if (firstChild) {
+                                setSelectedVariantIdx(firstChild.variantIdx);
+                                if (firstChild.isAvailable) {
+                                  setActivePhotoFilter(firstChild.id);
+                                  setCurrentPhoto(0);
+                                }
+                                if (kost.isManaged && physicalRooms.length > 0) {
+                                  const matchedPhys = physicalRooms.find(pr => pr.room_number === firstChild.roomNumber || pr.room_number === firstChild.displayName);
+                                  if (matchedPhys) setSelectedPhysicalRoom(matchedPhys);
+                                }
                               }
                             }}
-                            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative ${selectedVariantIdx === idx ? 'border-orange-500 bg-orange-50/50' : 'border-gray-100 hover:border-gray-200'}`}
+                            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative ${
+                              isSelectedParent 
+                                ? 'border-orange-500 bg-orange-50/40 shadow-sm ring-1 ring-orange-500/30' 
+                                : 'border-gray-150 hover:border-orange-200 bg-white'
+                            }`}
                           >
                             <div className="flex justify-between items-start mb-1">
-                              <span className="text-xs font-black uppercase tracking-tight text-gray-900">{type.name}</span>
-                              {/* Availability Badge moved here */}
-                              <div className={`text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${isAvailable ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                <div className={`w-1.5 h-1.5 rounded-full ${isAvailable ? 'bg-green-600' : 'bg-red-600'}`}></div>
-                                {isAvailable ? 'Tersedia' : 'Penuh'}
+                              <span className="text-xs font-black uppercase tracking-tight text-gray-900 flex items-center gap-1.5">
+                                <Layers size={14} className={isSelectedParent ? "text-orange-500" : "text-gray-400"} />
+                                {group.typeName}
+                              </span>
+                              {/* Availability Badge */}
+                              <div className={`text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                                group.isAvailable ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                              }`}>
+                                <div className={`w-1.5 h-1.5 rounded-full ${group.isAvailable ? 'bg-green-600' : 'bg-red-600'}`}></div>
+                                {kost.isManaged ? (
+                                  group.isAvailable ? `${group.availableCount} Kamar Tersedia` : 'Penuh'
+                                ) : (
+                                  group.isAvailable ? 'Tersedia' : 'Penuh'
+                                )}
                               </div>
                             </div>
 
                             {/* Price */}
                             <p className="text-xs font-medium text-gray-500 mb-2">
-                              Mulai {FORMAT_CURRENCY(type.pricing?.find(p => p.period === 'bulanan')?.price || type.pricing?.[0]?.price || type.price)}
+                              Mulai {FORMAT_CURRENCY(group.minPrice)} /bln
                             </p>
 
-                            {/* Specs/Features moved below price */}
-                            <div className="flex flex-wrap gap-1.5">
-                              <span className="text-[9px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded border border-gray-200">
-                                {type.size}
+                            {/* Specs/Features */}
+                            <div className="flex flex-wrap gap-1.5 mb-1">
+                              <span className="text-[9px] font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md border border-gray-200">
+                                {group.size}
                               </span>
-                              {type.roomFacilities?.slice(0, 2).map((fac, fIdx) => (
-                                <span key={fIdx} className="text-[9px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded border border-gray-200 truncate max-w-[120px]">
+                              {group.roomFacilities.slice(0, 2).map((fac, fIdx) => (
+                                <span key={fIdx} className="text-[9px] font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md border border-gray-200 truncate max-w-[130px]">
                                   {fac}
                                 </span>
                               ))}
                             </div>
+
+                            {/* DROPDOWN CHILD: Nomor Kamar Selector (Hanya muncul pada tipe kamar aktif di KostManager) */}
+                            {kost.isManaged && isSelectedParent && group.rooms.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-orange-200/70 flex flex-col gap-1.5 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
+                                <label className="text-[10px] font-black text-orange-950 uppercase tracking-wider flex items-center justify-between">
+                                  <span className="flex items-center gap-1.5">
+                                    <Bed size={13} className="text-orange-500" />
+                                    PILIH NOMOR KAMAR:
+                                  </span>
+                                  <span className="text-[9px] font-bold text-orange-600">
+                                    {group.availableCount} Unit Kosong
+                                  </span>
+                                </label>
+
+                                <div className="relative">
+                                  <select
+                                    value={selectedChildRoom?.id || ''}
+                                    onChange={(e) => {
+                                      const targetRoom = group.rooms.find(r => r.id === e.target.value);
+                                      if (targetRoom) {
+                                        setSelectedVariantIdx(targetRoom.variantIdx);
+                                        if (targetRoom.isAvailable) {
+                                          setActivePhotoFilter(targetRoom.id);
+                                          setCurrentPhoto(0);
+                                        }
+                                        if (kost.isManaged && physicalRooms.length > 0) {
+                                          const matchedPhys = physicalRooms.find(pr => pr.room_number === targetRoom.roomNumber || pr.room_number === targetRoom.displayName);
+                                          if (matchedPhys) setSelectedPhysicalRoom(matchedPhys);
+                                        }
+                                      }
+                                    }}
+                                    className="w-full h-10 px-3 bg-white border-2 border-orange-300 focus:border-orange-500 rounded-xl text-xs font-black text-slate-800 outline-none shadow-xs transition-all cursor-pointer appearance-none pr-9"
+                                  >
+                                    {group.rooms.map((room) => (
+                                      <option 
+                                        key={room.id} 
+                                        value={room.id}
+                                        disabled={!room.isAvailable}
+                                        className={room.isAvailable ? "font-bold text-slate-900" : "text-slate-400 bg-slate-50"}
+                                      >
+                                        {room.displayName} ({room.floor}) — {room.isAvailable ? `🟢 Tersedia (${FORMAT_CURRENCY(room.price)}/bln)` : '🔴 Terisi (Penuh)'}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-orange-500 font-bold">
+                                    <ChevronDown size={15} />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
                     </div>
-                  </div>
-                )}
-
-                {/* Physical Rooms Selector for KostManager properties */}
-                {kost.isManaged && physicalRooms.length > 0 && (
-                  <div className="mb-6 border-t border-gray-100 pt-6">
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
-                      Pilih Nomor Kamar ({physicalRooms.filter(r => r.room_type_name === selectedRoom.name && r.status === 'available').length} Tersedia)
-                    </label>
-                    {loadingRooms ? (
-                      <div className="py-4 text-center text-xs font-bold text-gray-400 uppercase">Memuat nomor kamar...</div>
-                    ) : (
-                      <div className="grid grid-cols-4 gap-2">
-                        {(() => {
-                          const typeRooms = physicalRooms.filter(r => r.room_type_name === selectedRoom.name);
-                          if (typeRooms.length === 0) {
-                            return <div className="col-span-4 text-center py-4 text-xs font-bold text-gray-400 uppercase">Tidak ada kamar terdaftar</div>;
-                          }
-                          return typeRooms.map((room) => {
-                            const isOccupied = room.status === 'occupied';
-                            const isMaintenance = room.status === 'maintenance';
-                            const isSelected = selectedPhysicalRoom?.id === room.id;
-                            
-                            let bgStyle = 'border-gray-200 hover:border-orange-500 bg-white text-gray-700';
-                            if (isSelected) {
-                              bgStyle = 'border-orange-500 bg-orange-50 text-orange-600 font-extrabold shadow-md';
-                            } else if (isOccupied) {
-                              bgStyle = 'border-red-100 bg-red-50/50 text-red-400 cursor-not-allowed opacity-60';
-                            } else if (isMaintenance) {
-                              bgStyle = 'border-gray-150 bg-gray-50 text-gray-400 cursor-not-allowed opacity-60';
-                            }
-                            
-                            return (
-                              <button
-                                key={room.id}
-                                type="button"
-                                disabled={isOccupied || isMaintenance}
-                                onClick={() => setSelectedPhysicalRoom(room)}
-                                className={`p-2.5 rounded-xl border text-center transition-all flex flex-col items-center justify-center relative ${bgStyle}`}
-                              >
-                                <span className="text-xs uppercase tracking-tight font-black">
-                                  {room.room_number}
-                                </span>
-                                <span className="text-[8px] font-bold mt-0.5 uppercase tracking-wider block">
-                                  {isOccupied ? 'Terisi' : isMaintenance ? 'Perbaikan' : 'Kosong'}
-                                </span>
-                              </button>
-                            );
-                          });
-                        })()}
-                      </div>
-                    )}
                   </div>
                 )}
 

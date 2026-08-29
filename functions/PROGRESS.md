@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 169. Struktur Parent (Tipe Kamar) & Child (Dropdown Nomor Kamar) untuk KostManager (`KostDetail.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menjelaskan bahwa listing KostManager memiliki Tipe Kamar dan Nomor Kamar tersendiri. Sebelumnya nomor kamar (1, 2, 3, 4, 5) tampil langsung sebagai kartu tipe kamar.
+  2. Pengguna meminta arsitektur Parent & Child: kartu induk adalah Tipe Kamar (misal: *Tipe Standard*), dan di dalamnya terdapat dropdown nomor kamar (Child) yang interaktif.
+- **Implementasi**:
+  * **1. Struktur Pengelompokan Data Parent-Child (`parentRoomGroups`)**:
+    - Mengelompokkan seluruh unit kamar KostManager berdasarkan `type` (default ke `'Standard'`).
+    - Menghitung rentang harga terendah, dimensi, fasilitas umum tipe kamar, serta status ketersediaan agregat (`availableCount` dari `totalCount`).
+  * **2. Kartu Induk Parent (Tipe Kamar)**:
+    - Menampilkan nama Tipe Kamar (misal: `Tipe Standard`), harga mulai dari, fasilitas, dan badge agregat (`3 Kamar Tersedia` atau `Penuh`).
+  * **3. Dropdown Interaktif Child (Pilihan Nomor Kamar)**:
+    - Menampilkan dropdown nomor kamar (`Kamar 1`, `Kamar 2`, `Kamar 3`, dll.) dengan indikator visual `🟢 Tersedia (Rp .../bln)` vs `🔴 Terisi (Penuh)`.
+    - Memilih nomor kamar dari dropdown langsung mengarahkan unit booking, durasi sewa, serta memicu galeri foto carousel di atas ke unit kamar terpilih.
+  * **4. Kompatibilitas Listing Biasa**:
+    - Tetap mendukung listing kost biasa tanpa child unit nomor kamar secara transparan.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 41.32s, 0 error).
+
 ### 168. Penguatan Sistem Input & Pencatatan Kategori Foto Kamar pada Dashboard Surveyor, Portal KostManager, & Detail Kost (`AgentDashboard.tsx`, `KostManagerPropertyFormModal.tsx`, `KostDetail.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar sistem input/unggah foto pada dashboard surveyor dan portal KostManager diperbaiki sehingga metadata kategori foto benar-benar tercatat dengan baik dan tidak ada lagi kamar dengan kategori `undefined`.
