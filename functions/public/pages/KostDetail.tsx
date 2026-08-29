@@ -554,6 +554,8 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
         return;
       }
 
+      const isKm = Boolean(kost.isManaged || (kost as any).is_managed);
+
       await createBookingRequest({
         userId: user.id || user.uid,
         productId: kost.id,
@@ -562,11 +564,15 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
         metadata: {
           kostId: kost.id,
           kostName: kost.title,
+          is_managed_kost: isKm,
+          isManaged: isKm,
+          managed_by: isKm ? 'kostmanager' : 'mitra',
           imageUrls: kost.image_urls,
           periodLabel: periodLabels[selectedPeriod] || selectedPeriod,
-          roomType: kost.isManaged 
+          roomType: isKm 
             ? (currentParentGroup?.typeName || selectedRoom.type || selectedRoom.name || '-')
             : (data.variantName || selectedRoom.name || '-'),
+
           roomNumber: kost.isManaged 
             ? (selectedChildRoom?.roomNumber || selectedRoom.displayName || selectedRoom.name || null)
             : null,

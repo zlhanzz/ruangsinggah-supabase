@@ -1085,6 +1085,7 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                     totalRooms: kmListingForm.totalRooms || kmListingForm.roomTypes.length,
                     signature_data: signatureData || null,
                     agreed_to_terms: agreedToTerms,
+                    managed_at: (editingPropertyId && (initialPropertyData as any)?.metadata?.managed_at) || new Date().toISOString(),
                     omnichannelContactName: kmListingForm.omnichannelContactName || '',
                     omnichannelContactPhone: kmListingForm.omnichannelContactPhone || ''
                 },

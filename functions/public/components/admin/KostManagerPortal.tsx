@@ -1650,7 +1650,11 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     omnichannel_contact_name: p.omnichannel_contact_name || '',
                     omnichannel_contact_phone: p.omnichannel_contact_phone || '',
                     omnichannel_contact_type: p.omnichannel_contact_type || 'owner',
-                    rules: p.rules || []
+                    rules: p.rules || [],
+                    created_at: p.created_at,
+                    updated_at: p.updated_at,
+                    managed_at: p.metadata?.managed_at || p.managed_at || (p.is_managed && p.updated_at ? p.updated_at : null) || p.created_at,
+                    metadata: p.metadata || {}
                 };
             });
 
@@ -1721,10 +1725,38 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     }
                 });
 
-                managedBookings = Array.from(groupedBookingsMap.values()).map(group => ({
-                    ...group,
-                    amount: group.total_amount
-                }));
+                // Filter HANYA pengajuan sewa yang dibuat saat / setelah properti resmi berstatus KostManager
+                managedBookings = Array.from(groupedBookingsMap.values())
+                    .filter((group: any) => {
+                        const bMeta = group.metadata || {};
+
+                        // A. Jika transaksi secara eksplisit ditandai booking untuk kostmanager
+                        if (bMeta.is_managed_kost === true || bMeta.isManaged === true || bMeta.managed_by === 'kostmanager') {
+                            return true;
+                        }
+
+                        // B. Periksa tanggal transisi properti ke status KostManager
+                        const matchedProp = group.property;
+                        if (matchedProp) {
+                            const kmTransitionDate = matchedProp.managed_at ||
+                                                     matchedProp.metadata?.managed_at ||
+                                                     matchedProp.metadata?.managed_since ||
+                                                     (matchedProp.is_managed && matchedProp.updated_at ? matchedProp.updated_at : null) ||
+                                                     matchedProp.created_at;
+
+                            if (kmTransitionDate && group.created_at) {
+                                const trxTime = new Date(group.created_at).getTime();
+                                const kmTime = new Date(kmTransitionDate).getTime();
+                                return trxTime >= kmTime;
+                            }
+                        }
+
+                        return false;
+                    })
+                    .map((group: any) => ({
+                        ...group,
+                        amount: group.total_amount
+                    }));
             }
 
             setProperties(mappedProperties);

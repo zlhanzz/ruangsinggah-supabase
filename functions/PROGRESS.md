@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 198. Penyaringan Pengajuan Sewa di Portal KostManager Berdasarkan Waktu Transisi KostManager (`KostManagerPortal.tsx`, `KostDetail.tsx`, `KostManagerPropertyFormModal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta: *"tolong agar yang tampil hanya yang mengajukan sewa saat kostnya sudah berubah menjadi kostmanager"*.
+  2. Saat kost beralih dari listing reguler/mitra pemasaran ke program auto-pilot KostManager (seperti *Kost Madani* yang beralih pada 29 Agustus 2026), transaksi pemesanan historis lama yang dibuat pada Mei/Juni 2026 sebelum masa kontrak kelolaan KostManager tidak boleh tercampur atau masuk ke dalam antrean menu **Pengajuan Sewa** dan kartu statistik Portal KostManager.
+  3. Menu Pengajuan Sewa dan metriknya harus secara presisi hanya memuat pengajuan sewa yang dibuat pada saat / setelah properti resmi berstatus KostManager.
+- **Implementasi**:
+  * **1. Penandaan Metadata Pemesanan Baru (`KostDetail.tsx`)**:
+    - Menambahkan tag identifikasi permanen `is_managed_kost: true`, `isManaged: true`, dan `managed_by: 'kostmanager'` pada metadata transaksi saat calon penghuni mengajukan sewa kamar pada kost yang dikelola KostManager.
+  * **2. Penyimpanan Stempel Waktu `managed_at` (`KostManagerPropertyFormModal.tsx` & `KostManagerPortal.tsx`)**:
+    - Memastikan properti kelolaan KostManager menyimpan dan mempertahankan timestamp `managed_at` pada `metadata` secara konsisten.
+  * **3. Filter Waktu Transisi KostManager pada Query Transaksi (`KostManagerPortal.tsx`)**:
+    - Memperbarui pemrosesan transaksi `rawBookings` di `loadAllData()`:
+      - Jika transaksi memiliki flag eksplisit `is_managed_kost === true` / `isManaged === true` / `managed_by === 'kostmanager'`, transaksi diikutsertakan.
+      - Jika tidak memiliki flag (transaksi era transisi), sistem membandingkan `b.created_at` terhadap tanggal resmi properti berstatus KostManager (`prop.managed_at || prop.updated_at || prop.created_at`).
+      - Transaksi historis lama (sebelum tanggal transisi KostManager) otomatis difilter keluar dari antrean dan statistik.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx`
+  - `functions/PROGRESS.md`
+  - `walkthrough.md`
+- **Verifikasi**: Build frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, ✓ built in 29.16s, 0 error).
+
 ### 197. Menu Baru 'Pengajuan Sewa' di Portal KostManager & Pemisahan Alur Persetujuan Admin (ACC) dengan Otomasi Notifikasi WhatsApp (`KostManagerPortal.tsx`, `MitraDashboard.tsx`, `rentBillingService.ts`, `Dashboard.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta: *"dalam proses booking untuk kost yang sudah terdaftar ke kostmanager, harusnya persetujuan sewa sekarang masuknya ke portal kostmanager kan? tidak lagi masuk ke dashboard mitra. sebenarnya awalnya saya ingin langsung payment, tapi untuk cari aman kita buat aja agar alurnya harus dikonfirmasi oleh admin dulu, sebagai bentuk profesiionalitas juga, dan sepertinya jika langsung bayar akan sedikit meragukan dan kurang profesional, tidak ada sentuhan manusia"*.
