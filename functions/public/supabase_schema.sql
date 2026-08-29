@@ -847,44 +847,75 @@ ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
 
 -- 4. Hapus policy lama jika ada (mencegah error 42710)
 DROP POLICY IF EXISTS "Users can view their own chat sessions" ON public.chat_sessions;
+DROP POLICY IF EXISTS "Users and admins can view chat sessions" ON public.chat_sessions;
 DROP POLICY IF EXISTS "Users can start a chat session" ON public.chat_sessions;
+DROP POLICY IF EXISTS "Users and admins can start a chat session" ON public.chat_sessions;
+DROP POLICY IF EXISTS "Users can update their own chat sessions" ON public.chat_sessions;
+DROP POLICY IF EXISTS "Users and admins can update chat sessions" ON public.chat_sessions;
 DROP POLICY IF EXISTS "Users can view messages in their sessions" ON public.chat_messages;
+DROP POLICY IF EXISTS "Users and admins can view messages in their sessions" ON public.chat_messages;
 DROP POLICY IF EXISTS "Users can send messages in their sessions" ON public.chat_messages;
+DROP POLICY IF EXISTS "Users and admins can send messages in their sessions" ON public.chat_messages;
 
--- 5. Kebijakan RLS (Hanya pihak terlibat yang bisa akses)
-CREATE POLICY "Users can view their own chat sessions"
+-- 5. Kebijakan RLS (Partisipan dan Admin memiliki akses penuh)
+CREATE POLICY "Users and admins can view chat sessions"
 ON public.chat_sessions FOR SELECT
-USING (auth.uid() = user_id OR auth.uid() = owner_id);
-
-CREATE POLICY "Users can start a chat session"
-ON public.chat_sessions FOR INSERT
-WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own chat sessions"
-ON public.chat_sessions FOR UPDATE
-USING (auth.uid() = user_id OR auth.uid() = owner_id)
-WITH CHECK (auth.uid() = user_id OR auth.uid() = owner_id);
-
--- 5. Policies for chat_messages
-CREATE POLICY "Users can view messages in their sessions"
-ON public.chat_messages FOR SELECT
 USING (
-    EXISTS (
-        SELECT 1 FROM public.chat_sessions
-        WHERE chat_sessions.id = chat_messages.session_id
-        AND (chat_sessions.user_id = auth.uid() OR chat_sessions.owner_id = auth.uid())
-    )
+  auth.uid() = user_id 
+  OR auth.uid() = owner_id 
+  OR EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
 );
 
-CREATE POLICY "Users can send messages in their sessions"
+CREATE POLICY "Users and admins can start a chat session"
+ON public.chat_sessions FOR INSERT
+WITH CHECK (
+  auth.uid() = user_id 
+  OR EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
+);
+
+CREATE POLICY "Users and admins can update chat sessions"
+ON public.chat_sessions FOR UPDATE
+USING (
+  auth.uid() = user_id 
+  OR auth.uid() = owner_id 
+  OR EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
+)
+WITH CHECK (
+  auth.uid() = user_id 
+  OR auth.uid() = owner_id 
+  OR EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
+);
+
+-- Policies for chat_messages
+CREATE POLICY "Users and admins can view messages in their sessions"
+ON public.chat_messages FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM public.chat_sessions
+    WHERE chat_sessions.id = chat_messages.session_id
+    AND (
+      chat_sessions.user_id = auth.uid() 
+      OR chat_sessions.owner_id = auth.uid()
+      OR EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
+    )
+  )
+);
+
+CREATE POLICY "Users and admins can send messages in their sessions"
 ON public.chat_messages FOR INSERT
 WITH CHECK (
+  (
     EXISTS (
-        SELECT 1 FROM public.chat_sessions
-        WHERE chat_sessions.id = chat_messages.session_id
-        AND (chat_sessions.user_id = auth.uid() OR chat_sessions.owner_id = auth.uid())
+      SELECT 1 FROM public.chat_sessions
+      WHERE chat_sessions.id = chat_messages.session_id
+      AND (
+        chat_sessions.user_id = auth.uid() 
+        OR chat_sessions.owner_id = auth.uid()
+        OR EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
+      )
     )
-    AND auth.uid() = sender_id
+  )
+  AND (auth.uid() = sender_id OR EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin'))
 );
 
 -- 6. Realtime Enrollment

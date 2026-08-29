@@ -1,8 +1,8 @@
 import { supabase } from './supabase';
 import { sendNotification } from './notificationService';
 
-// Real Admin UUID terdaftar di public.users (Sulhan - Administrator KostManager)
-export const SYSTEM_ADMIN_ID = 'ca842776-97ab-48a7-b1cd-6dea17d78c1e';
+// Primary Administrator UUID (admin@ruangsinggah.id) terdaftar di public.users
+export const SYSTEM_ADMIN_ID = '8c8b8d89-0114-4c0c-a814-27055fc777fc';
 
 function isValidUUID(uuid: string) {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
