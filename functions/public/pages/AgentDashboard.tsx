@@ -2280,6 +2280,25 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
             const validOwnerUid = resolveValidOwnerUid(kmListingForm.owner_uid, isEditingKostManager, mitraProfile);
 
+            // Strictly normalize and sanitize room photo categories before saving
+            const normalizedRoomTypesPayload = (kmListingForm.roomTypes || []).map((rm: any) => {
+                const categorized = getRoomCategorizedPhotos(rm);
+                const { images, photoCategories: exportedCats } = exportCategorizedPhotos(categorized);
+                
+                const finalImages = images.length > 0 ? images : (Array.isArray(rm.images) ? rm.images : []);
+                const finalPhotoCategories = finalImages.map((u: string, i: number) => {
+                    return exportedCats[i] || (rm.photoCategories && rm.photoCategories[i]) || (i === 0 ? (rm.status === 'Terisi' ? 'Interior Kamar (Opsional)' : 'Interior Kamar *Wajib') : (i === 1 ? 'Kamar Mandi' : (i === 2 ? 'Tempat Tidur' : `Foto Kamar ${i + 1}`)));
+                });
+
+                return {
+                    ...rm,
+                    categorized_photos: categorized,
+                    categorizedPhotos: categorized,
+                    images: finalImages,
+                    photoCategories: finalPhotoCategories
+                };
+            });
+
             const propertyPayload = {
                 title: kmListingForm.title,
                 description: kmListingForm.description,
@@ -2290,7 +2309,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 price: finalPrice,
                 owner_uid: validOwnerUid,
                 mitra_id: validOwnerUid, // Add valid mitra_id for not-null DB constraint
-                room_types: kmListingForm.roomTypes,
+                room_types: normalizedRoomTypesPayload,
                 status: 'published',
                 is_managed: true,
                 facilities: kmListingForm.facilities,

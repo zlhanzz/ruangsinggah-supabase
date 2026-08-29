@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 168. Penguatan Sistem Input & Pencatatan Kategori Foto Kamar pada Dashboard Surveyor, Portal KostManager, & Detail Kost (`AgentDashboard.tsx`, `KostManagerPropertyFormModal.tsx`, `KostDetail.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar sistem input/unggah foto pada dashboard surveyor dan portal KostManager diperbaiki sehingga metadata kategori foto benar-benar tercatat dengan baik dan tidak ada lagi kamar dengan kategori `undefined`.
+- **Implementasi**:
+  * **1. Normalisasi Ketat Sebelum Submit Survei (`AgentDashboard.tsx`)**:
+    - Memastikan seluruh unit kamar di dalam `kmListingForm.roomTypes` selalu dinormalisasi sebelum disimpan ke Supabase.
+    - Menghasilkan array `photoCategories`, `images`, dan objek map `categorized_photos` / `categorizedPhotos` secara sinkron 1-to-1.
+  * **2. Normalisasi Ketat pada Portal KostManager (`KostManagerPropertyFormModal.tsx`)**:
+    - Menerapkan normalisasi payload kamar yang sama pada `handleDirectSave` sebelum update/insert ke tabel `properties` dan `mitra_kostmanager`.
+  * **3. Fallback Cerdas Unit Kamar di Detail Kost (`KostDetail.tsx`)**:
+    - Memberikan label kamar standar (*Interior Kamar, Kamar Mandi, Tempat Tidur, Lemari / Storage*) khusus foto yang berada di dalam unit kamar jika data riwayat lama di database belum memiliki `photoCategories` (seperti Kamar 3).
+    - Mempertahankan foto properti umum listing biasa tetap bersih tanpa label palsu.
+- **File Tersentuh**:
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 27.20s, 0 error).
+
 ### 167. Kondisionalitas Dinamis Kategori Foto & Bilah Pilihan Kamar Murni Berbasis Database (`KostDetail.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar kategori foto dan bilah tombol pilihan kamar hanya ditampilkan jika kost memang memiliki data yang sesuai di database (tidak menampilkan tebakan/placeholder pada listing kost biasa yang bukan KostManager).

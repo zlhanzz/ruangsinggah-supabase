@@ -275,6 +275,11 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
             }
           }
 
+          if (!label) {
+            const defaultRoomCats = ['Interior Kamar', 'Kamar Mandi', 'Tempat Tidur', 'Lemari / Storage'];
+            label = defaultRoomCats[imgIdx] || `Foto Kamar ${imgIdx + 1}`;
+          }
+
           return { url, label: cleanPhotoCategoryLabel(label), isRoom: true, roomName: rName };
         }).filter(p => !!p.url);
 
@@ -312,6 +317,11 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
             break;
           }
         }
+      }
+
+      if (!label) {
+        const defaultRoomCats = ['Interior Kamar', 'Kamar Mandi', 'Tempat Tidur', 'Lemari / Storage'];
+        label = defaultRoomCats[imgIdx] || `Foto Kamar ${imgIdx + 1}`;
       }
 
       return { url, label: cleanPhotoCategoryLabel(label), isRoom: true, roomName: rName };
