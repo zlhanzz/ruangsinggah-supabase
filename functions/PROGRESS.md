@@ -2,6 +2,32 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 199. Perbaikan Sinkronisasi Status Kamar (False Positive 'Terisi' / 'Penuh') & Penyempurnaan Integrasi Database Form Edit Listing Properti KostManager (`KostManagerPortal.tsx`, `KostManagerPropertyFormModal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menemukan: *"pada pengeditan listing properti yang ada pada portal kostmanager, saya ingin merubah harga salah satu kamar rp 1 untuk melakukan simulasu sewa, tapi pas saya buka pengeditannya, kenapa semua kamar yang ada statusnya penuh, sedangkan di database ada beberapa yang kosong kan. tolong lakukan analisa yang menyeluruh terkait listing properti ini apakah semuanya sudah benar benar terhubung dengan database"*.
+  2. Saat form edit listing properti dibuka, seluruh kamar (Kamar 1, 3, 2, 4, 5) menampilkan status `🔒 TERISI`, padahal di database Supabase fisik (`properties.room_types`), Kamar 3, 4, dan 5 berstatus `Kosong` (`isAvailable: true`).
+  3. Hal ini menghalangi pengujian simulasi sewa karena kamar yang kosong tidak dapat dipesan di halaman detail kost akibat status kamar yang terkunci 'penuh'.
+  4. Penyebab bug: Pada fungsi `unrollToSurveyRooms` dan `groupIntoRoomTypesGlobal` di `KostManagerPortal.tsx`, logika pencocokan penyewa menggunakan perbandingan `t.metadata?.roomNumber === rt?.roomNumber`. Karena objek `propertyTenants` dan objek kamar database `rt` sama-sama belum memiliki key `roomNumber` (nomor kamar tersimpan pada key `name`), perbandingan mengevaluasi `undefined === undefined` yang bernilai `true`. Akibatnya seluruh kamar secara keliru dianggap menampung penyewa pertama (Zul), sehingga semua kamar berubah menjadi `Terisi`.
+- **Implementasi**:
+  * **1. Helper Pencocokan Kamar & Tenant yang Aman (`isMatchingRoomTenant`)**:
+    - Membuat fungsi `isMatchingRoomTenant(t, roomName, rawRoomNumber, rawName)` di `KostManagerPortal.tsx` yang memvalidasi bahwa nilai tidak kosong/undefined sebelum membandingkan.
+    - Mendukung perbandingan nama kamar yang dinormalisasi, ekstraksi angka murni (misal: "Kamar 1" vs "1"), serta pencocokan `t.room_type` dan `t.room_number`.
+  * **2. Perbaikan 4 Titik Pencocokan Tenant (`KostManagerPortal.tsx`)**:
+    - Mengganti perbandingan longgar `undefined === undefined` di `groupIntoRoomTypesGlobal` (sub-unit dan flat units) serta `unrollToSurveyRooms` (sub-unit dan flat units) dengan `isMatchingRoomTenant`.
+    - Mengisi secara eksplisit field `room_number: cleanRoomName` dan `metadata: { ... roomNumber: cleanRoomName }` saat mengekstrak `propertyTenants` di `loadAllData()`.
+  * **3. Sinkronisasi Data Kamar Kosong & Penghapusan Sisa `resident_status` (`KostManagerPropertyFormModal.tsx`)**:
+    - Pada `handleUpdateExistingRoom`, jika status kamar diubah menjadi `Kosong`, data penghuni (`residentName` dan `residentPhone`) otomatis dikosongkan.
+    - Pada saat form disimpan, jika suatu kamar berstatus `Kosong`, sistem otomatis menghapus record `resident_status` kamar terkait pada database (`supabase.from('resident_status').delete().eq('kost_id', savedPropId).eq('room_number', roomNum)`), menjamin tidak ada sisa data penghuni hantu.
+    - Memastikan perubahan harga kamar (termasuk Rp 1 untuk keperluan simulasi) dan array `pricing` tersimpan secara sempurna ke tabel `properties` dan `mitra_kostmanager`.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/public/components/admin/KostManagerPropertyFormModal.tsx`
+  - `functions/PROGRESS.md`
+  - `walkthrough.md`
+- **Verifikasi**:
+  - Simulasi pencocokan kamar (`simulate_unroll.js`) menghasilkan: Kamar 1 & 2 = `Terisi`, Kamar 3, 4, 5 = `Kosong` (100% akurat sesuai database).
+  - Build frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, ✓ built in 21.30s, 0 error).
+
 ### 198. Penyaringan Pengajuan Sewa di Portal KostManager Berdasarkan Waktu Transisi KostManager (`KostManagerPortal.tsx`, `KostDetail.tsx`, `KostManagerPropertyFormModal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta: *"tolong agar yang tampil hanya yang mengajukan sewa saat kostnya sudah berubah menjadi kostmanager"*.

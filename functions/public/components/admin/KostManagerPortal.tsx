@@ -442,6 +442,32 @@ const formatRoomNameGlobal = (name: string, idx: number): string => {
     return clean;
 };
 
+// Helper pencocokan kamar & tenant yang aman, presisi, dan kebal dari bug undefined === undefined
+const isMatchingRoomTenant = (t: any, roomName: string, rawRoomNumber?: string, rawName?: string): boolean => {
+    if (!t) return false;
+    const cleanRoomName = String(roomName || '').trim().toLowerCase();
+    const cleanRawNum = String(rawRoomNumber || '').trim().toLowerCase();
+    const cleanRawName = String(rawName || '').trim().toLowerCase();
+
+    const extractNum = (str: string) => str.replace(/^kamar\s*/i, '').trim();
+
+    const tRoomType = String(t.room_type || '').trim().toLowerCase();
+    const tRoomNum = String(t.room_number || t.metadata?.roomNumber || '').trim().toLowerCase();
+
+    if (tRoomType && cleanRoomName && (tRoomType === cleanRoomName || (extractNum(tRoomType) && extractNum(tRoomType) === extractNum(cleanRoomName)))) {
+        return true;
+    }
+    if (tRoomNum && (
+        (cleanRoomName && (tRoomNum === cleanRoomName || (extractNum(tRoomNum) && extractNum(tRoomNum) === extractNum(cleanRoomName)))) ||
+        (cleanRawNum && tRoomNum === cleanRawNum) ||
+        (cleanRawName && tRoomNum === cleanRawName)
+    )) {
+        return true;
+    }
+
+    return false;
+};
+
 const groupIntoRoomTypesGlobal = (rawList: any[], propertyTenants: any[] = []): any[] => {
     if (!Array.isArray(rawList) || rawList.length === 0) return [];
 
@@ -452,11 +478,7 @@ const groupIntoRoomTypesGlobal = (rawList: any[], propertyTenants: any[] = []): 
             const rawUnits = (Array.isArray(rt.rooms) && rt.rooms.length > 0) ? rt.rooms : (Array.isArray(rt.unit_rooms) ? rt.unit_rooms : [rt]);
             const rooms = rawUnits.map((u: any, uIdx: number) => {
                 const unitName = formatRoomNameGlobal(u?.name || u?.roomNumber || u?.room_number || String(uIdx + 1), uIdx);
-                const matchedTenant = propertyTenants.find(t => 
-                    t.metadata?.roomNumber === unitName || 
-                    t.metadata?.roomNumber === u?.roomNumber || 
-                    t.metadata?.roomNumber === u?.name
-                );
+                const matchedTenant = propertyTenants.find(t => isMatchingRoomTenant(t, unitName, u?.roomNumber, u?.name));
 
                 const tenantName = u?.tenantName || u?.residentName || u?.occupant_name || u?.occupantName || rt.residentName || rt.occupant_name || matchedTenant?.user?.name || '';
                 const tenantPhone = u?.tenantPhone || u?.residentPhone || u?.occupant_phone || u?.occupantPhone || rt.residentPhone || rt.occupant_phone || matchedTenant?.user?.phone || '';
@@ -539,11 +561,7 @@ const groupIntoRoomTypesGlobal = (rawList: any[], propertyTenants: any[] = []): 
         }
 
         const unitName = formatRoomNameGlobal(roomItem.name || roomItem.roomNumber || String(idx + 1), idx);
-        const matchedTenant = propertyTenants.find(t => 
-            t.metadata?.roomNumber === unitName || 
-            t.metadata?.roomNumber === roomItem.roomNumber || 
-            t.metadata?.roomNumber === roomItem.name
-        );
+        const matchedTenant = propertyTenants.find(t => isMatchingRoomTenant(t, unitName, roomItem?.roomNumber, roomItem?.name));
 
         const tenantName = roomItem.tenantName || roomItem.residentName || roomItem.occupant_name || roomItem.occupantName || matchedTenant?.user?.name || '';
         const tenantPhone = roomItem.tenantPhone || roomItem.residentPhone || roomItem.occupant_phone || roomItem.occupantPhone || matchedTenant?.user?.phone || '';
@@ -592,11 +610,7 @@ const unrollToSurveyRooms = (rawList: any[], propertyTenants: any[] = []): any[]
         if (rawUnits && rawUnits.length > 0) {
             rawUnits.forEach((u: any, uIdx: number) => {
                 const uName = formatRoomNameGlobal(u?.roomNumber || u?.name || `${idx + 1}0${uIdx + 1}`, uIdx);
-                const matchedTenant = propertyTenants.find(t => 
-                    t.metadata?.roomNumber === uName || 
-                    t.room_number === uName || 
-                    t.metadata?.roomNumber === u?.roomNumber
-                );
+                const matchedTenant = propertyTenants.find(t => isMatchingRoomTenant(t, uName, u?.roomNumber, u?.name));
                 const tenantName = u?.tenantName || u?.residentName || rt.residentName || matchedTenant?.user?.name || '';
                 const tenantPhone = u?.tenantPhone || u?.residentPhone || rt.residentPhone || matchedTenant?.user?.phone || '';
                 const isOccupied = u?.status === 'terisi' || u?.status === 'Terisi' || u?.isAvailable === false || Boolean(tenantName || tenantPhone);
@@ -632,11 +646,7 @@ const unrollToSurveyRooms = (rawList: any[], propertyTenants: any[] = []): any[]
             });
         } else {
             const rName = formatRoomNameGlobal(rt?.roomNumber || rt?.name || `Kamar ${idx + 1}`, idx);
-            const matchedTenant = propertyTenants.find(t => 
-                t.metadata?.roomNumber === rName || 
-                t.room_number === rName || 
-                t.metadata?.roomNumber === rt?.roomNumber
-            );
+            const matchedTenant = propertyTenants.find(t => isMatchingRoomTenant(t, rName, rt?.roomNumber, rt?.name));
             const tenantName = rt?.residentName || rt?.tenantName || matchedTenant?.user?.name || '';
             const tenantPhone = rt?.residentPhone || rt?.tenantPhone || matchedTenant?.user?.phone || '';
             const isOccupied = rt?.status === 'terisi' || rt?.status === 'Terisi' || rt?.isAvailable === false || Boolean(tenantName || tenantPhone);
@@ -1569,6 +1579,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                             user_id: p.owner_uid,
                             kost_id: p.id,
                             room_type: cleanRoomName,
+                            room_number: cleanRoomName,
                             start_date: rt.startDate || rt.leaseStartDate || rt.start_date || (p.created_at ? p.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
                             end_date: rt.endDate || rt.leaseEndDate || rt.end_date || 'Sewa Berjalan',
                             status: 'ACTIVE',
@@ -1582,7 +1593,8 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                 extraPersonFee: Number(rt.extraOccupantFee) || 0,
                                 billingPeriod: rt.paymentPeriod || rt.billingPeriod || 'bulanan',
                                 phone: rt.residentPhone || rt.tenantPhone || '-',
-                                isSurveyOccupant: true
+                                isSurveyOccupant: true,
+                                roomNumber: cleanRoomName
                             },
                             user: {
                                 name: tenantName,

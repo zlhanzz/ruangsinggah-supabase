@@ -928,7 +928,12 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
             const updated = [...(prev.roomTypes || [])];
             updated[idx] = { ...updated[idx], ...updates };
             if (updates.status !== undefined) {
-                updated[idx].isAvailable = updates.status !== 'Terisi' && updates.status !== 'terisi';
+                const isOcc = updates.status === 'Terisi' || updates.status === 'terisi';
+                updated[idx].isAvailable = !isOcc;
+                if (!isOcc) {
+                    updated[idx].residentName = '';
+                    updated[idx].residentPhone = '';
+                }
             }
             return { ...prev, roomTypes: updated };
         });
@@ -1147,7 +1152,7 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                 }
             }
 
-            // Sync resident_status for occupied rooms
+            // Sync resident_status for occupied rooms & clean up vacated rooms
             if (savedPropId && Array.isArray(kmListingForm.roomTypes)) {
                 for (const rm of kmListingForm.roomTypes) {
                     const isOcc = rm.status === 'Terisi' || rm.status === 'terisi';
@@ -1155,36 +1160,45 @@ export const KostManagerPropertyFormModal: React.FC<KostManagerPropertyFormModal
                     const resPhone = (rm.residentPhone || rm.tenantPhone || '').trim();
                     const roomNum = rm.name || rm.roomNumber || '';
 
-                    if (isOcc && resName && roomNum) {
+                    if (roomNum) {
                         try {
-                            const { data: existingRes } = await supabase
-                                .from('resident_status')
-                                .select('id, user_id')
-                                .eq('kost_id', savedPropId)
-                                .eq('room_number', roomNum)
-                                .maybeSingle();
+                            if (isOcc && resName) {
+                                const { data: existingRes } = await supabase
+                                    .from('resident_status')
+                                    .select('id, user_id')
+                                    .eq('kost_id', savedPropId)
+                                    .eq('room_number', roomNum)
+                                    .maybeSingle();
 
-                            const resPayload: any = {
-                                kost_id: savedPropId,
-                                room_number: roomNum,
-                                room_type: rm.type || 'Standard',
-                                status: 'ACTIVE',
-                                start_date: rm.startDate || new Date().toISOString().split('T')[0],
-                                end_date: rm.endDate || rm.dueDate || '',
-                                monthly_rent: Number(rm.price || finalPrice || 0),
-                                metadata: {
-                                    residentName: resName,
-                                    residentPhone: resPhone,
-                                    billingPeriod: rm.paymentPeriod || 'bulanan',
-                                    currentOccupants: rm.currentOccupants || 1,
-                                    additionalOccupants: rm.additionalOccupants || []
+                                const resPayload: any = {
+                                    kost_id: savedPropId,
+                                    room_number: roomNum,
+                                    room_type: rm.type || 'Standard',
+                                    status: 'ACTIVE',
+                                    start_date: rm.startDate || new Date().toISOString().split('T')[0],
+                                    end_date: rm.endDate || rm.dueDate || '',
+                                    monthly_rent: Number(rm.price || finalPrice || 0),
+                                    metadata: {
+                                        residentName: resName,
+                                        residentPhone: resPhone,
+                                        billingPeriod: rm.paymentPeriod || 'bulanan',
+                                        currentOccupants: rm.currentOccupants || 1,
+                                        additionalOccupants: rm.additionalOccupants || []
+                                    }
+                                };
+
+                                if (existingRes) {
+                                    await supabase.from('resident_status').update(resPayload).eq('id', existingRes.id);
+                                } else {
+                                    await supabase.from('resident_status').insert([resPayload]);
                                 }
-                            };
-
-                            if (existingRes) {
-                                await supabase.from('resident_status').update(resPayload).eq('id', existingRes.id);
-                            } else {
-                                await supabase.from('resident_status').insert([resPayload]);
+                            } else if (!isOcc) {
+                                // Bersihkan record resident_status jika kamar dikosongkan
+                                await supabase
+                                    .from('resident_status')
+                                    .delete()
+                                    .eq('kost_id', savedPropId)
+                                    .eq('room_number', roomNum);
                             }
                         } catch (resErr) {
                             console.warn('Sync resident_status note:', resErr);
