@@ -2,6 +2,18 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 164. Penyederhanaan Tombol Navigasi Kamar Menjadi Minimalis (`KostDetail.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar tombol kamar tidak perlu memuat kata "Tersedia" dan "N Foto", sehingga tombol tampil lebih bersih dan ringkas.
+- **Implementasi**:
+  * **1. Format Tombol Minimalis**: Menghapus badge label status dan counter foto dari tombol, menyisakan ikon `lucide-react` dan nama unit kamar (contoh: `[ 🛏️ Kamar 3 ]`, `[ 🛏️ Kamar 4 ]`, `[ 🛏️ Kamar 5 ]`).
+  * **2. Tombol Semua Foto Bersih**: Menghapus counter angka pada tombol `[ 🏠 Semua Foto ]`.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 29.40s, 0 error).
+
 ### 163. Penyesuaian Preview Thumbnail Menjadi 1 Baris Horizontal Kompak (`KostDetail.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna mengonfirmasi bahwa preview carousel foto tidak perlu menumpuk ke bawah (multi-row grid), melainkan tetap dalam 1 baris horizontal yang rapi di bawah foto utama.

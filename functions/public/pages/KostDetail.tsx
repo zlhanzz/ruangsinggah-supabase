@@ -594,7 +594,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                         setActivePhotoFilter('all');
                         setCurrentPhoto(0);
                       }}
-                      className={`px-3.5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+                      className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
                         activePhotoFilter === 'all'
                           ? 'bg-slate-900 text-white shadow-md ring-2 ring-slate-900 ring-offset-1'
                           : 'bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-100'
@@ -602,17 +602,11 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                     >
                       <Home size={13} />
                       <span>Semua Foto</span>
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-mono ${
-                        activePhotoFilter === 'all' ? 'bg-slate-800 text-slate-200' : 'bg-slate-200 text-slate-600'
-                      }`}>
-                        {propertyPhotos.length || displayedImages.length}
-                      </span>
                     </button>
 
                     {/* Tombol Per Kamar Kosong */}
                     {emptyRooms.map((room) => {
                       const isSelected = activePhotoFilter === room.id || activePhotoFilter === room.name || activePhotoFilter === room.rawName;
-                      const photoCount = room.images.length;
 
                       return (
                         <button
@@ -627,7 +621,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                               if (matchedPhys) setSelectedPhysicalRoom(matchedPhys);
                             }
                           }}
-                          className={`px-3.5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+                          className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
                             isSelected
                               ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20 ring-2 ring-orange-500 ring-offset-1'
                               : 'bg-white text-slate-700 border border-slate-200 hover:border-orange-300 hover:bg-orange-50/30'
@@ -635,22 +629,6 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                         >
                           <Bed size={13} className={isSelected ? 'text-white' : 'text-orange-500'} />
                           <span>{room.name}</span>
-                          <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest ${
-                            isSelected ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          }`}>
-                            Tersedia
-                          </span>
-                          {photoCount > 0 ? (
-                            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md ${
-                              isSelected ? 'bg-orange-600 text-orange-100' : 'bg-slate-100 text-slate-600'
-                            }`}>
-                              {photoCount} Foto
-                            </span>
-                          ) : (
-                            <span className={`text-[8px] font-bold ${isSelected ? 'text-orange-200' : 'text-slate-400'}`}>
-                              Foto Properti
-                            </span>
-                          )}
                         </button>
                       );
                     })}
