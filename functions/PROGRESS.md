@@ -2,6 +2,24 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 187. Pencegahan Duplikasi Sesi Chat & Penggabungan Sesi Terpisah (`chatService.ts`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan mengapa chat dari pengguna yang sama (`Game Burik` dan `Administrator`) pada properti yang sama (`Kost Madani`) sempat menghasilkan 2 kartu percakapan terpisah di Portal KostManager.
+  2. Akar masalah: Sesi pertama dibuat pada masa transisi routing awal (ber-`owner_id` pemilik pribadi), sedangkan sesi kedua dibuat setelah routing dialihkan ke `SYSTEM_ADMIN_ID`. Logika query `getOrCreateChatSession` sebelumnya mencari kecocokan `(user_id, owner_id, property_id)`. Karena `owner_id` sesi lama belum sinkron dengan `SYSTEM_ADMIN_ID`, sistem membuat sesi baru.
+- **Implementasi**:
+  * **1. Logika Anti-Duplikasi `getOrCreateChatSession` (`chatService.ts`)**:
+    - Memperbarui mekanisme pencarian sesi dengan memprioritaskan pasangan `(user_id, property_id)`.
+    - Jika sesi untuk kost tersebut sudah pernah ada (apapun `owner_id` awalnya), sistem me-reuse sesi yang sudah ada dan secara otomatis memperbarui `owner_id = finalOwnerId` (tanpa membuat sesi baru).
+  * **2. Penggabungan (Merge) Data Sesi Duplikat di Database**:
+    - Menyatukan seluruh riwayat pesan dari sesi lama (`c672b032-1e5a-42aa-88b0-cfc113fba20e`) ke dalam sesi utama (`5044377a-9eca-4d79-b3ae-a3c87cf88a08`) untuk `Game Burik`.
+    - Menyatukan pesan sesi duplikat untuk `Administrator` dan `Sulhan`.
+    - Menghapus record sesi duplikat lama yang sudah kosong, sehingga di Portal KostManager kini 1 pengguna hanya memiliki 1 sesi percakapan tunggal yang utuh dan berkesinambungan.
+- **File Tersentuh**:
+  - `functions/public/chatService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 25.84s, 0 error).
+
 ### 186. Pemisahan Bersih Chat Era Mitra Biasa vs Era KostManager (`chatService.ts`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar sistem dapat membedakan chat yang masuk ke kost saat masih berstatus Mitra Biasa vs chat yang masuk saat sudah berstatus Mitra KostManager.

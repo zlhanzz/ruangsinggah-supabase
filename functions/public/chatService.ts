@@ -102,27 +102,37 @@ export async function getOrCreateChatSession(
     ? SYSTEM_ADMIN_ID 
     : ownerId;
 
-  // Cek apakah sudah ada sesi untuk kombinasi ini
+  // 1. Cek apakah sudah ada sesi untuk user dan properti ini (cegah duplikasi)
   let query = supabase
     .from('chat_sessions')
     .select('*')
-    .eq('user_id', userId)
-    .eq('owner_id', finalOwnerId);
+    .eq('user_id', userId);
     
   if (propertyId) {
     query = query.eq('property_id', propertyId);
   } else {
-    query = query.is('property_id', null);
+    query = query.eq('owner_id', finalOwnerId).is('property_id', null);
   }
 
-  const { data: existing, error: fetchError } = await query.maybeSingle();
+  const { data: existingSessions, error: fetchError } = await query.order('created_at', { ascending: false });
 
   if (fetchError) {
     console.error('Error fetching chat session:', fetchError);
     throw fetchError;
   }
 
-  if (existing) return existing;
+  if (existingSessions && existingSessions.length > 0) {
+    const existing = existingSessions[0];
+    // Jika status kelola properti berubah (misal upgrade ke KostManager), sinkronkan owner_id
+    if (existing.owner_id !== finalOwnerId) {
+      await supabase
+        .from('chat_sessions')
+        .update({ owner_id: finalOwnerId })
+        .eq('id', existing.id);
+      existing.owner_id = finalOwnerId;
+    }
+    return existing;
+  }
 
   // Buat sesi baru jika belum ada
   // RLS BYPASS: Proactively tunnel the requester's name/photo so the Mitra can see it immediately
