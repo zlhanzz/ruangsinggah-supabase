@@ -371,7 +371,16 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
             setProperties(propsData);
             setBookings(bookingsData);
             setResidentStatus(statusRecords);
-            setChatSessions(chatData);
+
+            // Filter sesi chat: Pesan terkait properti KostManager dikelola oleh CS KostManager (tidak masuk ke Mitra)
+            const kmPropIds = new Set(
+                (propsData || [])
+                    .filter((p: any) => p.is_managed === true || p.isManaged === true || p.kost_manager_status === 'ACTIVE' || p.kostManager?.status === 'ACTIVE')
+                    .map((p: any) => p.id)
+            );
+            const nonKmChatSessions = (chatData || []).filter((s: any) => !kmPropIds.has(s.property_id));
+            setChatSessions(nonKmChatSessions);
+
             setKmRequests(kmRequestsData.data || []);
 
             // --- TIME TRAVEL SYNCED ANALYTICS ---

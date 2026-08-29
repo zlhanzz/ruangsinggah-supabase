@@ -2,28 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 181. Perbaikan Routing Chat Customer KostManager ke Portal KostManager & Separasi Inbox Mitra (`KostDetail.tsx`, `chatService.ts`, `KostManagerPortal.tsx`) (Agustus 2026)
+### 181. Perbaikan Foreign Key Chat & Separasi Inbox Mitra vs Portal KostManager (`KostDetail.tsx`, `MitraDashboard.tsx`, `chatService.ts`, `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
-  1. Calon penyewa yang mengklik tombol Chat pada listing properti terkelola KostManager (misal: Kost Madani) pesannya masih langsung masuk ke tab Pesan pada Dashboard Mitra (karena `owner_id` terikat pada UID pemilik asli).
-  2. Di Portal KostManager (`/dashboard-admin/km_chats`), pesan tersebut tidak muncul (menampilkan "Semua Properti (0) - Belum Ada Pesan") akibat kegagalan join relasi skema kolom dan query yang belum mencakup sesi dengan target `SYSTEM_ADMIN_ID`.
+  1. Pengguna mengalami error *"Gagal membuka chat. Silakan coba lagi nanti."* saat mengklik tombol Chat di listing Kost Madani.
+  2. Akar masalah: Foreign Key constraint database PostgreSQL `chat_sessions_owner_id_fkey` mewajibkan `owner_id` terdaftar di tabel `public.users`. Penggunaan hardcoded `00000000-0000-0000-0000-000000000000` memicu error pelanggaran Foreign Key (FK Violation Error 23503).
+  3. Separasi inbox: Properti yang dikelola KostManager tidak boleh muncul di tab Pesan Dashboard Mitra.
 - **Implementasi**:
-  * **1. Pengalihan Otomatis di Detail Kost (`KostDetail.tsx`)**:
-    - Menambahkan deteksi otomatis `isManagedProp` pada fungsi `handleOpenChat`.
-    - Jika properti dikelola oleh KostManager, `targetOwnerId` otomatis diarahkan ke `SYSTEM_ADMIN_ID` (`00000000-0000-0000-0000-000000000000`).
-    - `ChatWindow` otomatis menampilkan identitas kontak: **`Tim KostManager RuangSinggah`** (*Caretaker / CS Resmi*) dan bukan lagi nama/UID mitra.
-  * **2. Resiliensi Query Backend Chat (`chatService.ts`)**:
-    - Memperbaiki query `getKostManagerChatSessions` dengan filter `.or(property_id.in.(...),owner_id.eq.SYSTEM_ADMIN_ID)`.
-    - Mengganti nested join rentan dengan fetching terpisah untuk data `properties` dan profil `users`, menghindari error kolom database dan kendala Foreign Key.
-  * **3. Sinkronisasi Data di Portal KostManager (`KostManagerPortal.tsx`)**:
-    - Memastikan passing `allManagedIds` secara utuh ke `loadChatSessions(allManagedIds)`.
-    - Pesan calon penyewa kini 100% masuk ke Portal KostManager dan bersih dari Dashboard Mitra.
+  * **1. Penanganan Foreign Key Presisi (`KostDetail.tsx`)**:
+    - Menggunakan `kost.ownerUid` asli pemilik kost pada `getOrCreateChatSession` sehingga transaksi insert tabel `chat_sessions` selalu valid 100% dan bebas error FK.
+    - Menampilkan identitas header `ChatWindow` sebagai: **`Tim KostManager RuangSinggah`** (*Caretaker / CS Resmi*) pada properti KostManager.
+  * **2. Separasi Inbox Dashboard Mitra (`MitraDashboard.tsx`)**:
+    - Menambahkan filter pada `setChatSessions`: seluruh sesi chat dengan `property_id` milik kost berstatus KostManager (`is_managed === true`) otomatis disembunyikan/dikeluarkan dari layar Mitra.
+  * **3. Resiliensi Query Portal KostManager (`chatService.ts` & `KostManagerPortal.tsx`)**:
+    - Query `getKostManagerChatSessions` mengambil seluruh sesi chat terikat portofolio `managedPropertyIds` (`query.in('property_id', managedPropertyIds)`).
+    - Memastikan passing `allManagedIds` dieksekusi tanpa error skema di Portal KostManager.
 - **File Tersentuh**:
   - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
   - `functions/public/chatService.ts`
   - `functions/public/components/admin/KostManagerPortal.tsx`
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
-- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 36.22s, 0 error).
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 34.39s, 0 error).
 
 ### 180. Fitur Manajemen Chat Customer Terpusat (Unified CS Inbox) & Property Context Bar di Portal KostManager (`KostManagerPortal.tsx`, `chatService.ts`, `KostDetail.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:

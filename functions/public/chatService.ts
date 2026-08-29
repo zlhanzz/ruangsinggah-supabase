@@ -423,7 +423,7 @@ export async function getKostManagerChatSessions(managedPropertyIds: string[]): 
     let query = supabase.from('chat_sessions').select('*');
     
     if (managedPropertyIds && managedPropertyIds.length > 0) {
-      query = query.or(`property_id.in.(${managedPropertyIds.join(',')}),owner_id.eq.${SYSTEM_ADMIN_ID}`);
+      query = query.in('property_id', managedPropertyIds);
     } else {
       query = query.eq('owner_id', SYSTEM_ADMIN_ID);
     }
