@@ -26,6 +26,7 @@ const OrderPaymentStatus = lazy(() => import('./pages/OrderPaymentStatus'));
 const Terms = lazy(() => import('./pages/Terms'));
 const Articles = lazy(() => import('./pages/Articles'));
 const KostManagerLanding = lazy(() => import('./pages/KostManagerLanding'));
+const ClaimKost = lazy(() => import('./pages/ClaimKost'));
 
 // Loading fallback
 const PageLoader = () => (
@@ -212,6 +213,22 @@ const App: React.FC = () => {
     }
 
     if (!supabaseUser) {
+      const cached = localStorage.getItem('rs_cached_user');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed && (parsed.id || parsed.uid)) {
+            setUser({
+              ...parsed,
+              uid: parsed.id || parsed.uid,
+              id: parsed.id || parsed.uid,
+              isProfileComplete: true
+            });
+            setLoadingAuth(false);
+            return;
+          }
+        } catch {}
+      }
       console.log("No supabaseUser, setting user to null.");
       setUser(null);
       setLoadingAuth(false);
@@ -700,6 +717,7 @@ const App: React.FC = () => {
                 <Chat user={user} onPageChange={(p: Page) => navigate(p)} />
               </ProtectedRoute>
             } />
+            <Route path="/claim-kost" element={<ClaimKost user={user} />} />
             
             <Route path={Page.LOGIN} element={
               (user && !location.search.includes('mode=recovery')) ? (

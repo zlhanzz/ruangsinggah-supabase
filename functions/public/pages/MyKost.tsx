@@ -724,11 +724,173 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                 return acc;
             }, []);
 
+            // [NEW] Injeksi Data Klaim Sewa KostManager dari Magic Link WhatsApp
+            const rawClaim = localStorage.getItem('rs_active_tenant_claim');
+            if (rawClaim) {
+                try {
+                    const claim = JSON.parse(rawClaim);
+                    const alreadyInActive = uniqueActive.some((k: any) => k.kostId === claim.propertyId);
+                    if (!alreadyInActive && claim.propertyId) {
+                        const { data: claimProp } = await supabase
+                            .from('properties')
+                            .select('id, title, image_urls, owner_uid, city, area, price, room_types, location, additional_fee_price, additional_fee_name, additional_fee_starts_from')
+                            .eq('id', claim.propertyId)
+                            .maybeSingle();
+
+                        if (claimProp) {
+                            let end = new Date(claim.dueDate);
+                            let daysRem = null;
+                            if (!isNaN(end.getTime())) {
+                                const today = getCurrentDate();
+                                const tNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                                const eNorm = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+                                daysRem = Math.ceil((eNorm.getTime() - tNorm.getTime()) / (1000 * 60 * 60 * 24));
+                            }
+
+                            let displayImg = null;
+                            if (claimProp.image_urls && claimProp.image_urls.length > 0) {
+                                const img = claimProp.image_urls[0];
+                                const path = typeof img === 'string' ? img : (img.original || img.webp || '');
+                                if (path) {
+                                    displayImg = path.startsWith('http') ? path : supabase.storage.from('properties').getPublicUrl(path).data.publicUrl;
+                                }
+                            }
+
+                            uniqueActive.push({
+                                id: `claim_${claim.propertyId}_${claim.roomNumber}`,
+                                transactionId: `trx_claim_${claim.propertyId}`,
+                                residentStatusId: `claim_${claim.propertyId}`,
+                                kostName: claimProp.title || claim.propertyTitle || 'Kost Terkelola',
+                                kostId: claimProp.id,
+                                roomType: claim.roomType || `Kamar No. ${claim.roomNumber}`,
+                                room_number: claim.roomNumber,
+                                duration: 1,
+                                period: 'bulanan',
+                                moveInDate: claim.periodStart || new Date().toISOString(),
+                                endDate: claim.dueDate,
+                                end_date: claim.dueDate,
+                                start_date: claim.periodStart || new Date().toISOString(),
+                                daysRemaining: daysRem,
+                                totalPrice: Number(claim.monthlyPrice || claimProp.price || 0),
+                                displayImage: displayImg,
+                                status: 'ACTIVE',
+                                is_managed_kost: true,
+                                tenant_name: claim.tenantName,
+                                tenant_phone: claim.phone,
+                                basePrice: Number(claim.monthlyPrice || claimProp.price || 0),
+                                location: claimProp.location,
+                                additionalFeePrice: claimProp.additional_fee_price,
+                                additionalFeeName: claimProp.additional_fee_name,
+                                additionalFeeStartsFrom: claimProp.additional_fee_starts_from,
+                                room_types: claimProp.room_types,
+                                occupants: 1,
+                                pendingBills: [],
+                                totalPendingBills: 0,
+                                metadata: {
+                                    isKostManagerClaim: true,
+                                    roomNumber: claim.roomNumber,
+                                    tenantName: claim.tenantName,
+                                    tenantPhone: claim.phone,
+                                    paketSewa: 1
+                                }
+                            });
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Failed to parse active tenant claim:', err);
+                }
+            }
+
                 setResidentStatus(uniqueActive);
                 setActiveKosts(activeWithBills);
             } else {
-                setResidentStatus([]);
-                setActiveKosts([]);
+                // Fallback untuk user baru yang belum ada transaksi tetapi memiliki claim sewa
+                const rawClaim = localStorage.getItem('rs_active_tenant_claim');
+                if (rawClaim) {
+                    try {
+                        const claim = JSON.parse(rawClaim);
+                        if (claim.propertyId) {
+                            const { data: claimProp } = await supabase
+                                .from('properties')
+                                .select('id, title, image_urls, owner_uid, city, area, price, room_types, location, additional_fee_price, additional_fee_name, additional_fee_starts_from')
+                                .eq('id', claim.propertyId)
+                                .maybeSingle();
+
+                            if (claimProp) {
+                                let end = new Date(claim.dueDate);
+                                let daysRem = null;
+                                if (!isNaN(end.getTime())) {
+                                    const today = getCurrentDate();
+                                    const tNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                                    const eNorm = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+                                    daysRem = Math.ceil((eNorm.getTime() - tNorm.getTime()) / (1000 * 60 * 60 * 24));
+                                }
+
+                                let displayImg = null;
+                                if (claimProp.image_urls && claimProp.image_urls.length > 0) {
+                                    const img = claimProp.image_urls[0];
+                                    const path = typeof img === 'string' ? img : (img.original || img.webp || '');
+                                    if (path) {
+                                        displayImg = path.startsWith('http') ? path : supabase.storage.from('properties').getPublicUrl(path).data.publicUrl;
+                                    }
+                                }
+
+                                const claimedItem = {
+                                    id: `claim_${claim.propertyId}_${claim.roomNumber}`,
+                                    transactionId: `trx_claim_${claim.propertyId}`,
+                                    residentStatusId: `claim_${claim.propertyId}`,
+                                    kostName: claimProp.title || claim.propertyTitle || 'Kost Terkelola',
+                                    kostId: claimProp.id,
+                                    roomType: claim.roomType || `Kamar No. ${claim.roomNumber}`,
+                                    room_number: claim.roomNumber,
+                                    duration: 1,
+                                    period: 'bulanan',
+                                    moveInDate: claim.periodStart || new Date().toISOString(),
+                                    endDate: claim.dueDate,
+                                    end_date: claim.dueDate,
+                                    start_date: claim.periodStart || new Date().toISOString(),
+                                    daysRemaining: daysRem,
+                                    totalPrice: Number(claim.monthlyPrice || claimProp.price || 0),
+                                    displayImage: displayImg,
+                                    status: 'ACTIVE',
+                                    is_managed_kost: true,
+                                    tenant_name: claim.tenantName,
+                                    tenant_phone: claim.phone,
+                                    basePrice: Number(claim.monthlyPrice || claimProp.price || 0),
+                                    location: claimProp.location,
+                                    additionalFeePrice: claimProp.additional_fee_price,
+                                    additionalFeeName: claimProp.additional_fee_name,
+                                    additionalFeeStartsFrom: claimProp.additional_fee_starts_from,
+                                    room_types: claimProp.room_types,
+                                    occupants: 1,
+                                    pendingBills: [],
+                                    totalPendingBills: 0,
+                                    metadata: {
+                                        isKostManagerClaim: true,
+                                        roomNumber: claim.roomNumber,
+                                        tenantName: claim.tenantName,
+                                        tenantPhone: claim.phone,
+                                        paketSewa: 1
+                                    }
+                                };
+                                setResidentStatus([claimedItem]);
+                                setActiveKosts([claimedItem]);
+                            } else {
+                                setResidentStatus([]);
+                                setActiveKosts([]);
+                            }
+                        } else {
+                            setResidentStatus([]);
+                            setActiveKosts([]);
+                        }
+                    } catch {
+                        setResidentStatus([]);
+                        setActiveKosts([]);
+                    }
+                } else {
+                    setResidentStatus([]);
+                    setActiveKosts([]);
+                }
             }
 
             // Recommendations

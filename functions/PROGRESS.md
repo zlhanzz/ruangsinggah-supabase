@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 192. Sistem Penagihan Otomatis WhatsApp, Magic Auto-Login Penghuni, & Perpanjangan Sewa 'Kost Saya' (`rentBillingService.ts`, `ClaimKost.tsx`, `MyKost.tsx`, `App.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta perancangan dan implementasi mekanisme penagihan sewa otomatis WhatsApp untuk penghuni kost terkelola KostManager yang belum memiliki akun RuangSinggah.
+  2. Alur yang diinginkan: Tautan WhatsApp langsung mengarahkan penghuni untuk login otomatis ke akun RuangSinggah, membuka menu "Kost Saya" yang terikat dengan kamar kostnya, dan memungkinkan perpanjangan sewa langsung via Payment Gateway (QRIS, VA Bank, E-Wallet).
+- **Implementasi**:
+  * **1. Modul Penagihan & Magic Claim Token (`rentBillingService.ts`)**:
+    - Membuat generator token klaim sewa aman URL-safe yang memuat data nomor HP, nama penghuni, id properti, nomor kamar, harga sewa bulanan, dan tanggal jatuh tempo.
+    - Menyiapkan fungsi pengiriman WhatsApp pengingat sewa resmi dari Manajemen KostManager RuangSinggah yang memuat link direct access: `https://ruangsinggah.id/claim-kost?token=...`.
+  * **2. Halaman Magic Auto-Login & Binding Kamar (`ClaimKost.tsx`, `App.tsx`)**:
+    - Membuat rute `/claim-kost` yang memvalidasi token dari WhatsApp.
+    - Melakukan registrasi/autentikasi instan akun pengguna berbasis nomor HP secara *silent* (*Zero Friction*), menyimpan sesi di localStorage/Supabase, dan mengarahkan penghuni ke halaman `/my-bookings/aktif`.
+  * **3. Integrasi Kamar Terkelola & Perpanjangan Sewa di Halaman 'Kost Saya' (`MyKost.tsx`)**:
+    - Menyuntikkan data kamar aktif KostManager ke dalam state `residentStatus` dan `activeKosts` pada tab "Kost Aktif".
+    - Menampilkan kartu kamar kost aktif, countdown sisa hari sewa, serta tombol **"Perpanjang Sewa"** yang terhubung dengan modal durasi dan `PaymentGateway`.
+- **File Tersentuh**:
+  - `functions/public/rentBillingService.ts` *(Baru)*
+  - `functions/public/pages/ClaimKost.tsx` *(Baru)*
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/App.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2529 modules transformed, ✓ built in 30.84s, 0 error).
+
 ### 191. Notifikasi Email Otomatis ke Admin untuk Pesan Chat Masuk (`emailService.ts`, `chatService.ts`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar sistem mengirimkan notifikasi email ke email admin secara otomatis setiap kali ada pesan chat baru masuk dari calon penyewa, agar admin/CS KostManager dapat segera merespons chat secepatnya.
