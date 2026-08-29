@@ -1253,6 +1253,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     const [selectedChatSession, setSelectedChatSession] = useState<ChatSession | null>(null);
     const [chatSearch, setChatSearch] = useState<string>('');
     const [chatPropertyFilter, setChatPropertyFilter] = useState<string>('all');
+    const [chatCategoryFilter, setChatCategoryFilter] = useState<'all' | 'resident' | 'inquirer' | 'unread'>('all');
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
     const [newChatMessage, setNewChatMessage] = useState<string>('');
     const [sendingChat, setSendingChat] = useState<boolean>(false);
@@ -4829,14 +4830,43 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     {/* TAB: CHATS (UNIFIED CS INBOX & CONTEXT BAR) */}
                     {/* =========================================== */}
                     {activeTab === 'chats' && (() => {
+                        // Helper: Mencocokkan sesi chat dengan penyewa aktif di properti terkelola
+                        const getTenantForSession = (session: ChatSession | null | undefined): TenantRecord | undefined => {
+                            if (!session) return undefined;
+                            return tenants.find(t => 
+                                t.status === 'ACTIVE' && 
+                                (
+                                    (t.user_id && session.user_id && t.user_id === session.user_id) ||
+                                    (t.user?.email && session.user?.email && t.user.email.toLowerCase() === session.user.email.toLowerCase())
+                                ) &&
+                                (!session.property_id || t.kost_id === session.property_id)
+                            );
+                        };
+
+                        const totalResidentChats = chatSessions.filter(s => Boolean(getTenantForSession(s))).length;
+                        const totalInquirerChats = chatSessions.filter(s => !getTenantForSession(s)).length;
+                        const totalUnreadChats = chatSessions.filter(s => Boolean(s.unread_count && s.unread_count > 0)).length;
+
                         const filteredSessions = chatSessions.filter(s => {
                             const matchProp = chatPropertyFilter === 'all' || s.property_id === chatPropertyFilter;
+                            const isResident = Boolean(getTenantForSession(s));
+                            const hasUnread = Boolean(s.unread_count && s.unread_count > 0);
+
+                            let matchCategory = true;
+                            if (chatCategoryFilter === 'resident') {
+                                matchCategory = isResident;
+                            } else if (chatCategoryFilter === 'inquirer') {
+                                matchCategory = !isResident;
+                            } else if (chatCategoryFilter === 'unread') {
+                                matchCategory = hasUnread;
+                            }
+
                             const searchLower = chatSearch.toLowerCase().trim();
-                            const partnerName = (s.user?.name || 'Calon Penghuni').toLowerCase();
+                            const partnerName = (s.user?.name || (isResident ? 'Penghuni Kost' : 'Calon Penghuni')).toLowerCase();
                             const propTitle = (s.property?.title || '').toLowerCase();
                             const lastMsg = (s.last_message || '').toLowerCase();
                             const matchSearch = !searchLower || partnerName.includes(searchLower) || propTitle.includes(searchLower) || lastMsg.includes(searchLower);
-                            return matchProp && matchSearch;
+                            return matchProp && matchCategory && matchSearch;
                         });
 
                         const activeProp = selectedChatSession
@@ -4862,7 +4892,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                 type="text"
                                                 value={chatSearch}
                                                 onChange={e => setChatSearch(e.target.value)}
-                                                placeholder="Cari calon penyewa/pesan..."
+                                                placeholder="Cari nama, kamar, pesan..."
                                                 className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:border-orange-500 focus:bg-white transition-all shadow-2xs"
                                             />
                                         </div>
@@ -4884,6 +4914,68 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                         </div>
                                     </div>
 
+                                    {/* Quick Filter Tabs: Semua | Penghuni Aktif | Calon Penyewa | Belum Dibalas */}
+                                    <div className="flex items-center gap-1.5 px-3 py-2 border-b border-gray-100 bg-slate-50/70 overflow-x-auto no-scrollbar shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => setChatCategoryFilter('all')}
+                                            className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-tight whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer ${
+                                                chatCategoryFilter === 'all'
+                                                    ? 'bg-slate-900 text-white shadow-xs'
+                                                    : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200'
+                                            }`}
+                                        >
+                                            <span>Semua</span>
+                                            <span className={`px-1 py-0.2 rounded-full text-[9px] ${chatCategoryFilter === 'all' ? 'bg-slate-700 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                                                {chatSessions.length}
+                                            </span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setChatCategoryFilter('resident')}
+                                            className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-tight whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer ${
+                                                chatCategoryFilter === 'resident'
+                                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                                    : 'bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-200'
+                                            }`}
+                                        >
+                                            <span>🏠 Penghuni</span>
+                                            <span className={`px-1 py-0.2 rounded-full text-[9px] ${chatCategoryFilter === 'resident' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-800'}`}>
+                                                {totalResidentChats}
+                                            </span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setChatCategoryFilter('inquirer')}
+                                            className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-tight whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer ${
+                                                chatCategoryFilter === 'inquirer'
+                                                    ? 'bg-sky-600 text-white shadow-xs'
+                                                    : 'bg-white text-sky-700 hover:bg-sky-50 border border-sky-200'
+                                            }`}
+                                        >
+                                            <span>💬 Calon</span>
+                                            <span className={`px-1 py-0.2 rounded-full text-[9px] ${chatCategoryFilter === 'inquirer' ? 'bg-sky-700 text-white' : 'bg-sky-100 text-sky-800'}`}>
+                                                {totalInquirerChats}
+                                            </span>
+                                        </button>
+                                        {totalUnreadChats > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setChatCategoryFilter('unread')}
+                                                className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-tight whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer ${
+                                                    chatCategoryFilter === 'unread'
+                                                        ? 'bg-orange-500 text-white shadow-xs'
+                                                        : 'bg-white text-orange-600 hover:bg-orange-50 border border-orange-200'
+                                                }`}
+                                            >
+                                                <span>🔔 Unread</span>
+                                                <span className={`px-1 py-0.2 rounded-full text-[9px] ${chatCategoryFilter === 'unread' ? 'bg-orange-600 text-white' : 'bg-orange-100 text-orange-700'}`}>
+                                                    {totalUnreadChats}
+                                                </span>
+                                            </button>
+                                        )}
+                                    </div>
+
                                     {/* List Percakapan */}
                                     <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
                                         {filteredSessions.length === 0 ? (
@@ -4892,14 +4984,16 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                     <MessageSquare size={24} />
                                                 </div>
                                                 <p className="text-xs font-black text-gray-500 uppercase tracking-wider">Belum Ada Pesan</p>
-                                                <p className="text-[10px] text-gray-400 mt-1">Pesan dari calon penyewa pada properti terkelola akan masuk di sini secara otomatis.</p>
+                                                <p className="text-[10px] text-gray-400 mt-1">Pesan yang sesuai dengan filter pilihan Anda akan muncul di sini.</p>
                                             </div>
                                         ) : (
                                             filteredSessions.map(session => {
                                                 const isSelected = selectedChatSession?.id === session.id;
                                                 const sessProp = properties.find(p => p.id === session.property_id) || session.property;
                                                 const sessPropPhoto = sessProp ? normalizePhotoUrl((sessProp.image_urls && sessProp.image_urls.length > 0) ? sessProp.image_urls[0] : (sessProp.images?.[0] || '')) : '';
-                                                const customerName = session.user?.name || 'Calon Penyewa';
+                                                const tenantInfo = getTenantForSession(session);
+                                                const isResident = Boolean(tenantInfo);
+                                                const customerName = session.user?.name || (isResident ? 'Penghuni Kost' : 'Calon Penyewa');
                                                 const hasUnread = Boolean(session.unread_count && session.unread_count > 0);
 
                                                 return (
@@ -4920,10 +5014,10 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                 : 'bg-white hover:bg-slate-50 border-gray-100 shadow-2xs'
                                                         }`}
                                                     >
-                                                        {/* Top Row: Customer Avatar, Name & Timestamp */}
-                                                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                                                        {/* Top Row: Customer Avatar, Name, Status Badge & Timestamp */}
+                                                        <div className="flex items-start justify-between gap-2 mb-1.5">
                                                             <div className="flex items-center gap-2 min-w-0">
-                                                                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-orange-500 to-amber-400 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs overflow-hidden relative">
+                                                                <div className={`w-8 h-8 rounded-full ${isResident ? 'bg-gradient-to-tr from-emerald-600 to-teal-500' : 'bg-gradient-to-tr from-orange-500 to-amber-400'} text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs overflow-hidden relative`}>
                                                                     {session.user?.photo_url && (
                                                                         <img
                                                                             src={session.user.photo_url}
@@ -4938,13 +5032,30 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                         {(customerName || 'U').charAt(0)}
                                                                     </span>
                                                                 </div>
-                                                                <div className="min-w-0 flex items-center gap-1.5">
-                                                                    <p className={`text-xs truncate ${hasUnread ? 'font-black text-gray-900' : 'font-bold text-gray-700'}`}>
-                                                                        {customerName}
-                                                                    </p>
-                                                                    {hasUnread && (
-                                                                        <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0 animate-pulse" />
-                                                                    )}
+                                                                <div className="min-w-0">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <p className={`text-xs truncate ${hasUnread ? 'font-black text-gray-900' : 'font-bold text-gray-700'}`}>
+                                                                            {customerName}
+                                                                        </p>
+                                                                        {hasUnread && (
+                                                                            <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0 animate-pulse" />
+                                                                        )}
+                                                                    </div>
+                                                                    {/* Status Badge: Penghuni Aktif vs Calon */}
+                                                                    <div className="flex items-center gap-1 mt-0.5">
+                                                                        {isResident ? (
+                                                                            <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                                                <span>🏠 Penghuni</span>
+                                                                                {tenantInfo?.metadata?.roomNumber && (
+                                                                                    <span className="font-bold text-emerald-950">• Unit {tenantInfo.metadata.roomNumber}</span>
+                                                                                )}
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                                                                                <span>🔍 Calon</span>
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                             <div className="flex flex-col items-end shrink-0 gap-1">
@@ -4995,7 +5106,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                 <MessageSquare size={32} />
                                             </div>
                                             <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Pilih Percakapan Customer</h3>
-                                            <p className="text-xs text-gray-400 mt-1 max-w-sm">Pilih salah satu sesi di sebelah kiri untuk melayani calon penyewa dengan konteks kost yang akurat.</p>
+                                            <p className="text-xs text-gray-400 mt-1 max-w-sm">Pilih salah satu sesi di sebelah kiri untuk melayani calon penyewa dan penghuni aktif dengan konteks kost yang akurat.</p>
                                         </div>
                                     ) : (
                                         <>
@@ -5050,6 +5161,68 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                     </div>
                                                 </div>
                                             )}
+
+                                            {/* 🌟 1.5 HIGH-CONTEXT RESIDENT STATUS STRIP */}
+                                            {(() => {
+                                                const activeTenant = getTenantForSession(selectedChatSession);
+                                                if (!activeTenant) {
+                                                    return (
+                                                        <div className="bg-slate-50/90 border-b border-slate-200/70 px-4 py-2 flex items-center justify-between gap-2 text-[10px] text-slate-500 shrink-0">
+                                                            <div className="flex items-center gap-1.5 font-bold">
+                                                                <span className="px-2 py-0.5 rounded-md bg-slate-200/80 text-slate-700 font-black text-[9px] uppercase tracking-wider">
+                                                                    🔍 Calon Penyewa
+                                                                </span>
+                                                                <span>Pengguna belum terdaftar sebagai penghuni aktif pada unit kost ini.</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                const roomUnit = activeTenant.metadata?.roomNumber ? `Unit Kamar ${activeTenant.metadata.roomNumber}` : (activeTenant.room_type || 'Unit Kamar');
+                                                const floorInfo = activeTenant.metadata?.roomFloor ? `Lantai ${activeTenant.metadata.roomFloor}` : '';
+                                                const safeFormat = (d?: string) => {
+                                                    if (!d) return '-';
+                                                    try {
+                                                        const dt = new Date(d);
+                                                        return isNaN(dt.getTime()) ? d : dt.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+                                                    } catch {
+                                                        return d;
+                                                    }
+                                                };
+
+                                                return (
+                                                    <div className="bg-gradient-to-r from-emerald-50/95 via-teal-50/60 to-white border-b border-emerald-200/80 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0">
+                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                            <span className="px-2 py-1 rounded-lg bg-emerald-600 text-white font-black text-[9px] uppercase tracking-wider shadow-2xs flex items-center gap-1 shrink-0">
+                                                                <Home size={11} /> Penghuni Aktif
+                                                            </span>
+                                                            <div className="flex items-center flex-wrap gap-2 text-xs">
+                                                                <span className="font-black text-emerald-950 uppercase tracking-tight">
+                                                                    {roomUnit} {floorInfo && `• ${floorInfo}`}
+                                                                </span>
+                                                                <span className="text-emerald-300">•</span>
+                                                                <span className="text-[11px] font-bold text-emerald-800">
+                                                                    Periode: {safeFormat(activeTenant.start_date)} s/d {safeFormat(activeTenant.end_date)}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2">
+                                                            {activeTenant.user?.phone && (
+                                                                <a
+                                                                    href={`https://wa.me/${activeTenant.user.phone.replace(/[^0-9]/g, '')}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="px-2.5 py-1 bg-emerald-100/80 hover:bg-emerald-200 text-emerald-900 border border-emerald-300/60 rounded-lg text-[9.5px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"
+                                                                    title="Chat WhatsApp Penghuni"
+                                                                >
+                                                                    <Phone size={11} /> WhatsApp
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
 
                                             {/* 💬 2. MESSAGE BUBBLE AREA */}
                                             <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-3 bg-slate-50/40">

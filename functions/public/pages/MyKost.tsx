@@ -13,6 +13,7 @@ import TimeSimulator from '../components/TimeSimulator';
 import { getResidentStatus, syncResidentStatus, autoSyncAllSurveys } from '../adminService';
 import DigitalReceiptModal, { ReceiptData } from '../components/DigitalReceiptModal';
 import { sendRentReceiptWhatsApp } from '../rentBillingService';
+import { getOrCreateChatSession, SYSTEM_ADMIN_ID } from '../chatService';
 
 
 interface MyKostProps {
@@ -294,39 +295,30 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
             // Ambil detail properti untuk mendapatkan info omnichannel
             const { data: propData, error: propError } = await supabase
                 .from('properties')
-                .select('owner_uid, title, omnichannel_contact_name, omnichannel_contact_type')
+                .select('owner_uid, title, omnichannel_contact_name, omnichannel_contact_type, is_managed')
                 .eq('id', kost.kostId)
-                .single();
+                .maybeSingle();
 
             if (propError) {
-                console.warn('Property not found in Supabase for chat:', propError);
-                // Fallback jika properti tidak ditemukan di Supabase (misal data legacy)
-                const ownerId = SYSTEM_ADMIN_ID;
-                const session = await getOrCreateChatSession(user.uid, ownerId, null);
-
-                setActiveChatSession({
-                    ...session,
-                    propertyName: kost.kostName || 'Kost Saya',
-                    contactName: 'Admin',
-                    contactType: 'owner'
-                });
-                setShowChatWindow(true);
-                return;
+                console.warn('Property query warning in Supabase for chat:', propError);
             }
 
-            const ownerId = propData.owner_uid;
-            if (!ownerId) {
-                alert('Pemilik kost ini belum terdaftar di sistem chat. Hubungi admin RS jika berkelanjutan.');
-                return;
-            }
+            const isManaged = Boolean(kost.isManagedKost || propData?.is_managed);
+            const targetOwnerId = isManaged ? SYSTEM_ADMIN_ID : (propData?.owner_uid || SYSTEM_ADMIN_ID);
 
-            const session = await getOrCreateChatSession(user.uid, ownerId, kost.kostId);
+            const session = await getOrCreateChatSession(
+                user.uid,
+                targetOwnerId,
+                kost.kostId || null,
+                user.displayName || user.name || user.email?.split('@')[0] || 'Penghuni',
+                user.photoURL || user.avatar_url || ''
+            );
 
             setActiveChatSession({
                 ...session,
-                propertyName: propData.title || kost.kostName,
-                contactName: propData.omnichannel_contact_name,
-                contactType: propData.omnichannel_contact_type
+                propertyName: propData?.title || kost.kostName || 'Kost Saya',
+                contactName: isManaged ? 'Tim KostManager' : (propData?.omnichannel_contact_name || 'Pemilik Kost'),
+                contactType: isManaged ? 'admin' : (propData?.omnichannel_contact_type || 'owner')
             });
             setShowChatWindow(true);
         } catch (error) {

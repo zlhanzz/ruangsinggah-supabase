@@ -2,6 +2,39 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 206. Perbaikan ReferenceError 'getOrCreateChatSession' & Integrasi Smart Inbox Terpadu Calon Penyewa vs Penghuni Aktif (`MyKost.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan error saat mengklik tombol "Bantuan KostManager" di menu Kost Saya:
+     `Failed to open chat: ReferenceError: getOrCreateChatSession is not defined at handleOpenChat (MyKost.tsx:323:29)`.
+  2. Pengguna mengajukan pertanyaan arsitektur/UX: *"pada portal kostmanager, haruskah kita membedakan lokasi chat masuk antara user bukan penghuni dan jugaa user yang sudah merupakan penghuni dari kost yang dikelola atau tidak? atau bagaimana"*.
+- **Implementasi**:
+  * **1. Perbaikan Bug Import & Routing Chat KostManager (`MyKost.tsx`)**:
+    - Mengimpor `getOrCreateChatSession` dan `SYSTEM_ADMIN_ID` dari `../chatService`.
+    - Memperbarui `handleOpenChat` agar untuk kost terkelola (`isManagedKost` / `is_managed`), percakapan otomatis dialihkan ke `SYSTEM_ADMIN_ID` dengan identitas kontak `Tim KostManager` (contactType: `admin`).
+    - Menyertakan nama lengkap dan foto profil pengguna pemanggil secara eksplisit ke dalam parameter sesi chat.
+  * **2. Desain Unified Smart Inbox dengan Filter Kategori Cepat (`KostManagerPortal.tsx`)**:
+    - Menghindari pemisahan menu yang membebani CS; seluruh percakapan tetap tersentralisasi dalam satu inbox terpadu di tab `Pesan & Chat Customer`.
+    - Menambahkan **Quick Filter Tabs** responsif di kolom kiri:
+      - `[ SEMUA (N) ]`
+      - `[ 🏠 PENGHUNI (N) ]` (filter instan percakapan dari penghuni aktif)
+      - `[ 💬 CALON (N) ]` (filter percakapan tanya-tanya dari calon penyewa)
+      - `[ 🔔 UNREAD (N) ]` (filter pesan baru yang belum dibalas)
+  * **3. Indikator Status Visual & High-Context Resident Banner**:
+    - Setiap kartu chat di kolom kiri menampilkan badge status yang kontras:
+      - Penghuni Aktif: `[ 🏠 PENGHUNI • UNIT X ]` dengan border dan warna hijau emerald.
+      - Calon Penyewa: `[ 🔍 CALON ]` dengan border dan warna netral abu-abu.
+    - Ketika percakapan dengan penghuni aktif dibuka, di atas jendela percakapan muncul **High-Context Resident Status Strip**:
+      - Menampilkan nomor kamar & lantai unit (`Unit Kamar X • Lantai Y`), periode sewa aktif (`Mulai s/d Selesai`), dan tombol cepat WhatsApp.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `walkthrough.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, ✓ built in 31.81s, 0 error).
+  - Tombol "Bantuan KostManager" di `MyKost.tsx` membuka chat tanpa error.
+  - Portal KostManager menyediakan filter pintar dan badge pembeda status calon penyewa vs penghuni aktif.
+
 ### 205. Optimalisasi Responsivitas UI/UX Tampilan Mobile pada Kartu Sewa Aktif (`MyKost.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan: *"sebenarnya tampilan pc nya cukup oke, tapi kalau diubah ke tampilan mobile, ui/ux nya tidak fit ke layar, tolong lakukan penyesuaian untuk tampilan mobile agar fit dan tetap responsif"*.
