@@ -478,25 +478,28 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     });
 
     return Array.from(groupsMap.entries()).map(([typeName, rooms]) => {
-      const availableRooms = rooms.filter(r => r.isAvailable);
-      const minPrice = Math.min(...rooms.map(r => {
+      const sortedRooms = [...rooms].sort((a, b) => {
+        return a.displayName.localeCompare(b.displayName, undefined, { numeric: true, sensitivity: 'base' });
+      });
+      const availableRooms = sortedRooms.filter(r => r.isAvailable);
+      const minPrice = Math.min(...sortedRooms.map(r => {
         const bulanan = r.pricing?.find(p => p.period === 'bulanan');
         return bulanan?.price || r.pricing?.[0]?.price || r.price || 0;
       }).filter(p => p > 0)) || Number(kost.price || 0);
 
       // Common facilities from rooms
       const facSet = new Set<string>();
-      rooms.forEach(r => (r.roomFacilities || []).forEach(f => facSet.add(f)));
+      sortedRooms.forEach(r => (r.roomFacilities || []).forEach(f => facSet.add(f)));
 
       return {
         typeName: typeName.toLowerCase().startsWith('tipe') ? typeName : `Tipe ${typeName}`,
         minPrice,
-        size: rooms[0]?.size || '3x3',
+        size: sortedRooms[0]?.size || '3x3',
         roomFacilities: Array.from(facSet),
         availableCount: availableRooms.length,
-        totalCount: rooms.length,
+        totalCount: sortedRooms.length,
         isAvailable: availableRooms.length > 0,
-        rooms
+        rooms: sortedRooms
       };
     });
   }, [kost.roomTypes, kost.isManaged, kost.price, normalizedRooms]);
@@ -1268,53 +1271,78 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                               ))}
                             </div>
 
-                            {/* DROPDOWN CHILD: Nomor Kamar Selector (Hanya muncul pada tipe kamar aktif di KostManager) */}
-                            {kost.isManaged && isSelectedParent && group.rooms.length > 0 && (
-                              <div className="mt-3 pt-3 border-t border-orange-200/70 flex flex-col gap-1.5 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
-                                <label className="text-[10px] font-black text-orange-950 uppercase tracking-wider flex items-center justify-between">
-                                  <span className="flex items-center gap-1.5">
+                            {/* INTERACTIVE CHIP / PILL GRID: Nomor Kamar Tersedia */}
+                            {kost.isManaged && isSelectedParent && (
+                              <div className="mt-3 pt-3 border-t border-orange-200/70 flex flex-col gap-2 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
+                                <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider">
+                                  <span className="flex items-center gap-1.5 text-orange-950 font-extrabold">
                                     <Bed size={13} className="text-orange-500" />
                                     PILIH NOMOR KAMAR:
                                   </span>
-                                  <span className="text-[9px] font-bold text-orange-600">
-                                    {group.availableCount} Unit Kosong
+                                  <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                                    {group.availableCount} Unit Tersedia
                                   </span>
-                                </label>
-
-                                <div className="relative">
-                                  <select
-                                    value={selectedChildRoom?.id || ''}
-                                    onChange={(e) => {
-                                      const targetRoom = group.rooms.find(r => r.id === e.target.value);
-                                      if (targetRoom) {
-                                        setSelectedVariantIdx(targetRoom.variantIdx);
-                                        if (targetRoom.isAvailable) {
-                                          setActivePhotoFilter(targetRoom.id);
-                                          setCurrentPhoto(0);
-                                        }
-                                        if (kost.isManaged && physicalRooms.length > 0) {
-                                          const matchedPhys = physicalRooms.find(pr => pr.room_number === targetRoom.roomNumber || pr.room_number === targetRoom.displayName);
-                                          if (matchedPhys) setSelectedPhysicalRoom(matchedPhys);
-                                        }
-                                      }
-                                    }}
-                                    className="w-full h-10 px-3 bg-white border-2 border-orange-300 focus:border-orange-500 rounded-xl text-xs font-black text-slate-800 outline-none shadow-xs transition-all cursor-pointer appearance-none pr-9"
-                                  >
-                                    {group.rooms.map((room) => (
-                                      <option 
-                                        key={room.id} 
-                                        value={room.id}
-                                        disabled={!room.isAvailable}
-                                        className={room.isAvailable ? "font-bold text-slate-900" : "text-slate-400 bg-slate-50"}
-                                      >
-                                        {room.displayName} ({room.floor}) — {room.isAvailable ? `🟢 Tersedia (${FORMAT_CURRENCY(room.price)}/bln)` : '🔴 Terisi (Penuh)'}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-orange-500 font-bold">
-                                    <ChevronDown size={15} />
-                                  </div>
                                 </div>
+
+                                {(() => {
+                                  const availableRooms = group.rooms.filter(r => r.isAvailable);
+                                  if (availableRooms.length === 0) {
+                                    return (
+                                      <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-center">
+                                        <p className="text-xs font-bold text-rose-600">Semua kamar pada tipe ini sedang penuh</p>
+                                      </div>
+                                    );
+                                  }
+
+                                  return (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                      {availableRooms.map((room) => {
+                                        const isSelected = selectedChildRoom?.id === room.id;
+                                        return (
+                                          <button
+                                            key={room.id}
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setSelectedVariantIdx(room.variantIdx);
+                                              setActivePhotoFilter(room.id);
+                                              setCurrentPhoto(0);
+                                              if (kost.isManaged && physicalRooms.length > 0) {
+                                                const matchedPhys = physicalRooms.find(pr => pr.room_number === room.roomNumber || pr.room_number === room.displayName);
+                                                if (matchedPhys) setSelectedPhysicalRoom(matchedPhys);
+                                              }
+                                            }}
+                                            className={`p-2.5 rounded-xl border text-left transition-all relative flex flex-col justify-between cursor-pointer group/chip ${
+                                              isSelected
+                                                ? 'bg-orange-500 border-orange-600 text-white shadow-sm ring-2 ring-orange-500/20'
+                                                : 'bg-white hover:bg-orange-50/60 border-slate-200 hover:border-orange-300 text-slate-800'
+                                            }`}
+                                          >
+                                            <div className="flex items-center justify-between gap-1 mb-1">
+                                              <span className={`text-xs font-black tracking-tight ${isSelected ? 'text-white' : 'text-slate-900 group-hover/chip:text-orange-600'}`}>
+                                                {room.displayName}
+                                              </span>
+                                              {isSelected ? (
+                                                <CheckCircle2 size={13} className="text-white shrink-0" />
+                                              ) : (
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                              )}
+                                            </div>
+                                            
+                                            <div className="flex items-center justify-between text-[9px] font-semibold">
+                                              <span className={isSelected ? 'text-orange-100' : 'text-slate-500'}>
+                                                {room.floor || 'Lt. 1'}
+                                              </span>
+                                              <span className={`font-bold ${isSelected ? 'text-white' : 'text-orange-600'}`}>
+                                                {FORMAT_CURRENCY(room.price).replace(',00', '')}
+                                              </span>
+                                            </div>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             )}
                           </div>

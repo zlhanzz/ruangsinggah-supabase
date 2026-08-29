@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 170. Redesain UI Nomor Kamar Menjadi Interactive Chip Grid Khusus Kamar Tersedia (`KostDetail.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna merasa tampilan dropdown native `<select>` nomor kamar pada kartu tipe kamar terlihat kaku, jelek, dan rawan terpotong.
+  2. Pengguna meminta agar kamar yang sudah terisi (*status: Terisi / Penuh*) **tidak usah ditampilkan sama sekali** agar daftar pilihan bersih dan ringkas.
+- **Implementasi**:
+  * **1. Natural Sorting Nomor Kamar**: Mengurutkan seluruh unit kamar secara alami berdasarkan nomor/nama kamar (`Kamar 1, 2, 3, 4, 5`).
+  * **2. Penyaringan Khusus Unit Tersedia**:
+    - Memfilter daftar unit kamar hanya yang `isAvailable: true` (`availableRooms = group.rooms.filter(r => r.isAvailable)`).
+    - Kamar yang sudah terisi otomatis disembunyikan sepenuhnya dari grid pilihan.
+  * **3. Interactive Chip/Pills Grid**:
+    - Mengganti native `<select>` dengan grid 2/3 kolom tombol chip mini yang modern.
+    - Menampilkan Nomor Kamar, Lantai (`Lt. 1`, `Lt. 3`), dan Harga sewa per bulan.
+    - Status visual instan: tombol aktif berwarna oranye pekat (*bg-orange-500*) dengan icon *CheckCircle2*, sedangkan tombol tersedia berlatar putih bersih dengan titik hijau.
+    - Klik 1 kali instan langsung menyinkronkan unit terpilih dan mengarahkan galeri foto carousel di atas ke unit kamar tersebut.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 34.45s, 0 error).
+
 ### 169. Struktur Parent (Tipe Kamar) & Child (Dropdown Nomor Kamar) untuk KostManager (`KostDetail.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menjelaskan bahwa listing KostManager memiliki Tipe Kamar dan Nomor Kamar tersendiri. Sebelumnya nomor kamar (1, 2, 3, 4, 5) tampil langsung sebagai kartu tipe kamar.
