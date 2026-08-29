@@ -957,21 +957,99 @@ export async function syncResidentStatus(transactionId: string, metadataOverride
             const { error } = await supabase.from('resident_status').update(payload).eq('id', existing.id);
             syncError = error;
         } else {
-            const { error } = await supabase.from('resident_status').insert([payload]);
-            if (error && error.code === '23505') {
-                const { data: retryRow } = await supabase.from('resident_status').select('id').eq('user_id', userId).eq('kost_id', kostId).maybeSingle();
-                if (retryRow?.id) {
-                    const { error: updateErr } = await supabase.from('resident_status').update(payload).eq('id', retryRow.id);
-                    syncError = updateErr;
-                }
-            } else {
+            // Check once more right before insert to prevent race-condition duplicates
+            const { data: doubleCheck } = await supabase
+                .from('resident_status')
+                .select('id')
+                .eq('user_id', userId)
+                .eq('kost_id', kostId)
+                .maybeSingle();
+
+            if (doubleCheck?.id) {
+                console.log(`SYNC_RESIDENT: [DEBUG] Race-condition prevented: Found existing resident_status ${doubleCheck.id}, updating instead of insert.`);
+                const { error } = await supabase.from('resident_status').update(payload).eq('id', doubleCheck.id);
                 syncError = error;
+            } else {
+                const { error } = await supabase.from('resident_status').insert([payload]);
+                if (error && error.code === '23505') {
+                    const { data: retryRow } = await supabase.from('resident_status').select('id').eq('user_id', userId).eq('kost_id', kostId).maybeSingle();
+                    if (retryRow?.id) {
+                        const { error: updateErr } = await supabase.from('resident_status').update(payload).eq('id', retryRow.id);
+                        syncError = updateErr;
+                    }
+                } else {
+                    syncError = error;
+                }
             }
         }
 
         if (syncError) throw syncError;
 
-        // Update room status to occupied in the rooms table
+        // Update room status to occupied in the properties.room_types array & sync to mitra_kostmanager
+        if (!isFacilityOnly && kostId) {
+            const targetRoomName = (meta.roomNumber || meta.variantName || meta.roomName || '').trim();
+            const tenantDisplayName = (meta.tenantName || meta.userName || meta.name || '').trim();
+            const tenantPhoneNum = (meta.userPhone || meta.phone || meta.residentPhone || '').trim();
+
+            try {
+                const { data: propRow } = await supabase
+                    .from('properties')
+                    .select('id, room_types')
+                    .eq('id', kostId)
+                    .maybeSingle();
+
+                if (propRow && Array.isArray(propRow.room_types)) {
+                    let roomMatched = false;
+                    const updatedRoomTypes = propRow.room_types.map((rm: any, rmIdx: number) => {
+                        const curRoomNum = (rm.name || rm.roomNumber || '').trim();
+                        const curRoomNumNorm = curRoomNum.replace(/^kamar\s*/i, '').toLowerCase();
+                        const targetRoomNumNorm = targetRoomName.replace(/^kamar\s*/i, '').toLowerCase();
+
+                        const isMatch = targetRoomName && (
+                            curRoomNum.toLowerCase() === targetRoomName.toLowerCase() ||
+                            (curRoomNumNorm && targetRoomNumNorm && curRoomNumNorm === targetRoomNumNorm) ||
+                            (rm.id && rm.id === roomId)
+                        );
+
+                        if (isMatch) {
+                            roomMatched = true;
+                            return {
+                                ...rm,
+                                status: 'Terisi',
+                                isAvailable: false,
+                                residentName: tenantDisplayName || rm.residentName || 'Penghuni Terdata',
+                                residentPhone: tenantPhoneNum || rm.residentPhone || '',
+                                startDate: startDate || rm.startDate || '',
+                                endDate: endDate || rm.endDate || ''
+                            };
+                        }
+                        return rm;
+                    });
+
+                    if (roomMatched) {
+                        await supabase
+                            .from('properties')
+                            .update({
+                                room_types: updatedRoomTypes,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', kostId);
+
+                        // Sync to mitra_kostmanager table as well
+                        await supabase
+                            .from('mitra_kostmanager')
+                            .update({ room_types: updatedRoomTypes })
+                            .eq('property_id', kostId);
+
+                        console.log(`SYNC_RESIDENT: [SUCCESS] Room ${targetRoomName} marked as occupied in properties.room_types for ${kostId}`);
+                    }
+                }
+            } catch (propRoomErr) {
+                console.warn('SYNC_RESIDENT: Failed to update room_types on property:', propRoomErr);
+            }
+        }
+
+        // Update legacy room status if roomId present
         if (!isFacilityOnly && roomId) {
             await supabase
                 .from('rooms')

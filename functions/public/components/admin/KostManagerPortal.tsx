@@ -1613,10 +1613,29 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                 });
             });
 
-            // Gabungkan penyewa online + penghuni offline hasil survei (deduplikasi per kamar)
-            const combinedTenants: TenantRecord[] = [...managedResidents];
+            // Gabungkan penyewa online + penghuni offline hasil survei (deduplikasi per user & per kamar)
+            const combinedTenants: TenantRecord[] = [];
+            const seenResidentKeys = new Set<string>();
+
+            managedResidents.forEach((mr: any) => {
+                const roomKey = (mr.metadata?.roomNumber || mr.room_number || mr.metadata?.variantName || mr.room_type || '').trim().toLowerCase().replace(/^kamar\s*/i, '');
+                const userKey = mr.user_id || mr.id;
+                const uniqueKey = `${mr.kost_id}_${userKey}_${roomKey}`;
+                if (!seenResidentKeys.has(uniqueKey)) {
+                    seenResidentKeys.add(uniqueKey);
+                    combinedTenants.push(mr);
+                }
+            });
+
             propertyTenants.forEach(pt => {
-                const exists = combinedTenants.some(ct => ct.kost_id === pt.kost_id && ct.room_type?.toLowerCase() === pt.room_type?.toLowerCase());
+                const ptRoomNorm = (pt.room_number || pt.room_type || '').trim().toLowerCase().replace(/^kamar\s*/i, '');
+                const exists = combinedTenants.some(ct => {
+                    const ctRoomNorm = (ct.metadata?.roomNumber || ct.room_number || ct.metadata?.variantName || ct.room_type || '').trim().toLowerCase().replace(/^kamar\s*/i, '');
+                    return ct.kost_id === pt.kost_id && (
+                        (ptRoomNorm && ctRoomNorm && ptRoomNorm === ctRoomNorm) ||
+                        (ct.room_type?.toLowerCase() === pt.room_type?.toLowerCase())
+                    );
+                });
                 if (!exists) {
                     combinedTenants.push(pt);
                 }
@@ -4048,10 +4067,13 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                             // 2. Search Filter
                             if (tenantSearch.trim()) {
                                 const q = tenantSearch.toLowerCase();
-                                const matchName = t.user?.name?.toLowerCase().includes(q);
+                                const nameToSearch = (t.user?.name || t.metadata?.tenantName || t.metadata?.userName || t.metadata?.residentName || '').toLowerCase();
+                                const matchName = nameToSearch.includes(q);
                                 const matchKost = t.property?.title?.toLowerCase().includes(q);
-                                const matchRoom = t.room_type?.toLowerCase().includes(q);
-                                const matchPhone = (t.user?.phone || '').includes(q);
+                                const roomToSearch = (t.metadata?.roomNumber || t.room_number || t.metadata?.variantName || t.room_type || '').toLowerCase();
+                                const matchRoom = roomToSearch.includes(q);
+                                const phoneToSearch = (t.user?.phone || t.metadata?.phone || t.metadata?.userPhone || t.metadata?.residentPhone || '');
+                                const matchPhone = phoneToSearch.includes(q);
                                 return matchName || matchKost || matchRoom || matchPhone;
                             }
                             return true;
@@ -4190,8 +4212,15 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                     </tr>
                                                 ) : (
                                                     filteredTenants.map(t => {
-                                                        const cleanPhone = (t.user?.phone || t.metadata?.phone || '').replace(/[^0-9]/g, '');
+                                                        const tenantDisplayName = t.user?.name || t.metadata?.tenantName || t.metadata?.userName || t.metadata?.residentName || 'Penghuni Terdata';
+                                                        const rawPhone = t.user?.phone || t.metadata?.phone || t.metadata?.userPhone || t.metadata?.residentPhone || '';
+                                                        const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
                                                         const waLink = generateTenantWhatsAppReminder(t);
+
+                                                        const displayRoom = (t.metadata?.roomNumber || t.room_number || t.metadata?.variantName || '').trim();
+                                                        const roomBadgeText = displayRoom 
+                                                            ? (t.room_type && t.room_type !== displayRoom ? `${displayRoom} (${t.room_type})` : displayRoom)
+                                                            : (t.room_type || 'Kamar');
 
                                                         return (
                                                             <tr key={t.id} className="hover:bg-slate-50/60 transition-colors group">
@@ -4199,11 +4228,11 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                 <td className="px-6 py-4">
                                                                     <div className="flex items-center gap-3">
                                                                         <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-400 to-amber-500 text-white flex items-center justify-center font-black text-sm uppercase shadow-2xs shrink-0">
-                                                                            {(t.user?.name || 'P').charAt(0)}
+                                                                            {tenantDisplayName.charAt(0)}
                                                                         </div>
                                                                         <div className="min-w-0">
                                                                             <div className="flex items-center gap-1.5">
-                                                                                <p className="font-black text-slate-900 text-xs truncate">{t.user?.name || 'Penghuni Terdata'}</p>
+                                                                                <p className="font-black text-slate-900 text-xs truncate">{tenantDisplayName}</p>
                                                                                 <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded">
                                                                                     {t.metadata?.billingPeriod || 'Bulanan'}
                                                                                 </span>
@@ -4231,7 +4260,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                     <div className="flex items-center gap-1.5 mt-0.5">
                                                                         <span className="px-2 py-0.5 rounded-md bg-orange-50 border border-orange-200/80 text-[#ff7a00] font-black text-[9px] uppercase tracking-wider flex items-center gap-1">
                                                                             <DoorClosed size={10} />
-                                                                            {t.room_type || 'Kamar'}
+                                                                            {roomBadgeText}
                                                                         </span>
                                                                     </div>
                                                                 </td>

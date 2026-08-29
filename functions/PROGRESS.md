@@ -2,6 +2,43 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 200. Eliminasi Duplikasi Kartu Penghuni, Kelengkapan Profil & Nomor Kamar, serta Sinkronisasi Status Kamar Listing Online (`adminService.ts`, `KostManagerPortal.tsx`, `index.ts`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan setelah simulasi booking hingga pembayaran:
+     - *"telah mendaftarkan akun pengguna terkait ke daftar penghuni yang ada pada portal kostmanager, tapi kenapa malah double ya? kartunya ada dua."*
+     - *"selain itu tidak tercatat dengan baik nomor kamar mana yang sedang dia booking."*
+     - *"dan kamar terkait yang sudah dibooking masih muncul pada listing kost yang ada di tampilan user"*
+  2. Ditemukan bahwa saat pembayaran sukses via simulasi atau Midtrans, backend webhook dan frontend sama-sama memicu sinkronisasi penghuni (`syncResidentStatus`), menghasilkan 2 record di tabel `resident_status` dengan perbedaan rentang hari dan metadata.
+  3. Baris yang dibuat oleh webhook backend tidak memiliki `booking_session_id`, `roomNumber`, dan profil penyewa di `metadata`, sehingga saat frontend berjalan beberapa milidetik kemudian, frontend menganggapnya sebagai sesi baru dan membuat baris kedua.
+  4. Pada tampilan tabel penghuni Portal KostManager (`KostManagerPortal.tsx`), nama penyewa hanya membaca `t.user?.name` (yang bernilai null untuk penyewa guest/online sehingga fallback ke generic *"Penghuni Terdata"*), nomor telepon tidak terbaca, dan badge unit kamar hanya menampilkan kategori generic `{t.room_type || 'Kamar'}` (*Tipe Standard*) alih-alih nomor kamar spesifik (*Kamar 3*).
+  5. Kamar yang dibooking (Kamar 3) masih muncul sebagai kamar kosong di halaman detail kost tampilan user (`KostDetail.tsx`) karena `syncResidentStatus` hanya meng-update tabel SQL `rooms` tanpa menyinkronkan array JSONB `properties.room_types`.
+- **Implementasi**:
+  * **1. Deduplikasi & Ketahanan Idempotensi di `adminService.ts`**:
+    - Memperketat pencarian record existing: jika sudah ada `resident_status` aktif untuk `user_id` + `kost_id` yang sama, sistem tidak pernah membuat baris baru melainkan memperbarui (*merge*) baris tersebut.
+    - Pada saat transaksi `PAID`, sistem otomatis mencari kamar terkait di dalam `properties.room_types` dan mengubah statusnya menjadi `status: 'Terisi'`, `isAvailable: false`, serta mengisi `residentName` dan `residentPhone`. Perubahan disinkronkan ke tabel `properties` dan `mitra_kostmanager`.
+  * **2. Kelengkapan Metadata & Sinkronisasi Kamar Terisi di Backend (`functions/src/index.ts`)**:
+    - Menambahkan `roomNumber`, `tenantName`, `userName`, `userPhone`, `userEmail`, dan `booking_session_id` pada objek `residentMeta` di backend `syncResidentStatus`.
+    - Menambahkan langkah otomatis `[ROOM SYNC]` pada backend untuk menandai kamar yang dibooking menjadi `status: 'Terisi'`, `isAvailable: false` pada `properties.room_types` dan `mitra_kostmanager`.
+  * **3. Deduplikasi & Penyempurnaan Tampilan Tabel Penghuni di `KostManagerPortal.tsx`**:
+    - Menambahkan deduplikasi multi-kunci pada `loadAllData()` untuk `combinedTenants` berdasarkan `${mr.kost_id}_${userKey}_${roomKey}` agar tidak ada kartu ganda yang dirender.
+    - Menampilkan nama penyewa dengan fallback komprehensif: `t.user?.name || t.metadata?.tenantName || t.metadata?.userName || t.metadata?.residentName || 'Penghuni Terdata'`.
+    - Menampilkan nomor WhatsApp penyewa: `t.user?.phone || t.metadata?.phone || t.metadata?.userPhone || t.metadata?.residentPhone`.
+    - Menampilkan nomor kamar spesifik pada badge unit: misal `Kamar 3 (Tipe Standard)` atau `Kamar 3`.
+    - Memperbarui filter pencarian penghuni agar mencakup nama, kamar spesifik, dan nomor HP dari metadata.
+  * **4. Pembersihan Data Riil Database Supabase**:
+    - Menghapus record duplikat yang kosong (`5202ad06-b149-...`) setelah mere-point relasi foreign key transaksi.
+    - Memperbarui status Kamar 3 Kost Madani di `properties.room_types` menjadi `Terisi` (`isAvailable: false`, `residentName: 'SULHAN'`, `residentPhone: '+6281527080656'`).
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/src/index.ts`
+  - `functions/PROGRESS.md`
+  - `walkthrough.md`
+- **Verifikasi**:
+  - Simulasi kueri listing kamar Kost Madani membuktikan Kamar 3 berstatus Terisi (`isAvailable: false`) dan hanya Kamar 4 & 5 yang tampil tersedia.
+  - Tabel `resident_status` Kost Madani bersih dari duplikasi (hanya 1 baris aktif dengan nomor kamar dan profil lengkap).
+  - Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, ✓ built in 24.88s, 0 error).
+
 ### 199. Perbaikan Sinkronisasi Status Kamar (False Positive 'Terisi' / 'Penuh') & Penyempurnaan Integrasi Database Form Edit Listing Properti KostManager (`KostManagerPortal.tsx`, `KostManagerPropertyFormModal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menemukan: *"pada pengeditan listing properti yang ada pada portal kostmanager, saya ingin merubah harga salah satu kamar rp 1 untuk melakukan simulasu sewa, tapi pas saya buka pengeditannya, kenapa semua kamar yang ada statusnya penuh, sedangkan di database ada beberapa yang kosong kan. tolong lakukan analisa yang menyeluruh terkait listing properti ini apakah semuanya sudah benar benar terhubung dengan database"*.

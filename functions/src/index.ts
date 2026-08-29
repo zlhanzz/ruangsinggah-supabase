@@ -2139,6 +2139,12 @@ export async function syncResidentStatus(trxId: string, options: { overrideMasaS
     const residentMeta = {
       ...(resident?.metadata && typeof resident.metadata === 'object' ? resident.metadata : {}),
       roomType: trx.room_type || metadata.roomType || metadata.variantName || resident?.room_type || '-',
+      roomNumber: metadata.roomNumber || metadata.variantName || resident?.metadata?.roomNumber || null,
+      tenantName: metadata.tenantName || metadata.userName || resident?.metadata?.tenantName || null,
+      userName: metadata.userName || metadata.tenantName || resident?.metadata?.userName || null,
+      userPhone: metadata.userPhone || metadata.phone || resident?.metadata?.userPhone || null,
+      userEmail: metadata.userEmail || metadata.email || resident?.metadata?.userEmail || null,
+      booking_session_id: metadata.booking_session_id || metadata.bookingSessionId || resident?.metadata?.booking_session_id || null,
       // Divide by extensionPeriod to get per-month base price (composition stores TOTAL for N months)
       basePrice: rawBaseRent > 0 ? Math.round(rawBaseRent / extPeriodCount) : (resident?.metadata?.basePrice || 0),
       extraPersonFee: rawExtraFee > 0 ? Math.round(rawExtraFee / extPeriodCount) : (resident?.metadata?.extraPersonFee || 0),
@@ -2249,6 +2255,68 @@ export async function syncResidentStatus(trxId: string, options: { overrideMasaS
         else console.log(`SYNC_RESIDENT: Sweep successfully fixed ${sweepIds.length} transactions.`);
     } else {
         console.log(`SYNC_RESIDENT: Sweep found no missing transactions.`);
+    }
+
+    // 3.5 [ROOM SYNC] Mark booked room as occupied in properties.room_types & sync to mitra_kostmanager
+    const targetRoomName = (metadata.roomNumber || metadata.variantName || metadata.roomName || '').trim();
+    const tenantDisplayName = (metadata.tenantName || metadata.userName || metadata.name || '').trim();
+    const tenantPhoneNum = (metadata.userPhone || metadata.phone || '').trim();
+
+    if (trx.product_id && targetRoomName) {
+      try {
+        const { data: propRow } = await supabase
+          .from('properties')
+          .select('id, room_types')
+          .eq('id', trx.product_id)
+          .maybeSingle();
+
+        if (propRow && Array.isArray(propRow.room_types)) {
+          let roomMatched = false;
+          const updatedRoomTypes = propRow.room_types.map((rm: any) => {
+            const curRoomNum = (rm.name || rm.roomNumber || '').trim();
+            const curRoomNumNorm = curRoomNum.replace(/^kamar\s*/i, '').toLowerCase();
+            const targetRoomNumNorm = targetRoomName.replace(/^kamar\s*/i, '').toLowerCase();
+
+            const isMatch = (
+              curRoomNum.toLowerCase() === targetRoomName.toLowerCase() ||
+              (curRoomNumNorm && targetRoomNumNorm && curRoomNumNorm === targetRoomNumNorm)
+            );
+
+            if (isMatch) {
+              roomMatched = true;
+              return {
+                ...rm,
+                status: 'Terisi',
+                isAvailable: false,
+                residentName: tenantDisplayName || rm.residentName || 'Penghuni Terdata',
+                residentPhone: tenantPhoneNum || rm.residentPhone || '',
+                startDate: startDate || rm.startDate || '',
+                endDate: newEnd.toISOString().split('T')[0] || rm.endDate || ''
+              };
+            }
+            return rm;
+          });
+
+          if (roomMatched) {
+            await supabase
+              .from('properties')
+              .update({
+                room_types: updatedRoomTypes,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', trx.product_id);
+
+            await supabase
+              .from('mitra_kostmanager')
+              .update({ room_types: updatedRoomTypes })
+              .eq('property_id', trx.product_id);
+
+            console.log(`SYNC_RESIDENT: [BACKEND] Room ${targetRoomName} marked as occupied in properties.room_types for ${trx.product_id}`);
+          }
+        }
+      } catch (propErr) {
+        console.warn(`SYNC_RESIDENT: [BACKEND] Failed to update room_types on property:`, propErr);
+      }
     }
 
     // 4. [IDEMPOTENCY] Mark this transaction as synced to prevent doubling lease on retry/double call
