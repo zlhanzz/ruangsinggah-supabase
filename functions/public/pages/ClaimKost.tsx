@@ -146,6 +146,11 @@ const ClaimKost: React.FC<ClaimKostProps> = ({ user }) => {
               <p className="text-xs text-gray-600 font-medium">
                 Kamar <b>No. {claimData?.roomNumber}</b> di <b>{claimData?.propertyTitle}</b> telah berhasil terhubung ke akun Anda.
               </p>
+              {claimData?.newPeriodStart && (
+                <div className="mt-2 py-1.5 px-3 bg-emerald-50 border border-emerald-100 rounded-xl text-[11px] text-emerald-800 font-bold inline-block">
+                  Masa Sewa Baru: {claimData.newPeriodStart} s/d {claimData.newPeriodEnd} ({claimData.billingPeriod || 'Bulanan'})
+                </div>
+              )}
             </div>
             <p className="text-[11px] text-orange-600 font-bold flex items-center justify-center gap-1">
               <span>Membuka halaman Kost Saya</span>

@@ -765,11 +765,11 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                 roomType: claim.roomType || `Kamar No. ${claim.roomNumber}`,
                                 room_number: claim.roomNumber,
                                 duration: 1,
-                                period: 'bulanan',
-                                moveInDate: claim.periodStart || new Date().toISOString(),
-                                endDate: claim.dueDate,
-                                end_date: claim.dueDate,
-                                start_date: claim.periodStart || new Date().toISOString(),
+                                period: claim.billingPeriod || 'bulanan',
+                                moveInDate: claim.newPeriodStart || claim.previousPeriodStart || claim.periodStart || new Date().toISOString(),
+                                endDate: claim.newPeriodEnd || claim.dueDate,
+                                end_date: claim.newPeriodEnd || claim.dueDate,
+                                start_date: claim.newPeriodStart || claim.previousPeriodStart || claim.periodStart || new Date().toISOString(),
                                 daysRemaining: daysRem,
                                 totalPrice: Number(claim.monthlyPrice || claimProp.price || 0),
                                 displayImage: displayImg,
@@ -777,7 +777,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                 is_managed_kost: true,
                                 tenant_name: claim.tenantName,
                                 tenant_phone: claim.phone,
-                                basePrice: Number(claim.monthlyPrice || claimProp.price || 0),
+                                basePrice: Number(claim.monthlyPrice || claimProp.price || 0) - Number(claim.extraFee || 0),
                                 location: claimProp.location,
                                 additionalFeePrice: claimProp.additional_fee_price,
                                 additionalFeeName: claimProp.additional_fee_name,
@@ -791,6 +791,15 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                     roomNumber: claim.roomNumber,
                                     tenantName: claim.tenantName,
                                     tenantPhone: claim.phone,
+                                    billingPeriod: claim.billingPeriod,
+                                    previousPeriodStart: claim.previousPeriodStart,
+                                    previousPeriodEnd: claim.previousPeriodEnd,
+                                    newPeriodStart: claim.newPeriodStart,
+                                    newPeriodEnd: claim.newPeriodEnd,
+                                    extraFee: claim.extraFee,
+                                    extraFeeName: claim.extraFeeName,
+                                    extraPersonFee: claim.extraFee,
+                                    basePrice: Number(claim.monthlyPrice || claimProp.price || 0) - Number(claim.extraFee || 0),
                                     paketSewa: 1
                                 }
                             });
@@ -817,7 +826,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                 .maybeSingle();
 
                             if (claimProp) {
-                                let end = new Date(claim.dueDate);
+                                let end = new Date(claim.newPeriodEnd || claim.dueDate);
                                 let daysRem = null;
                                 if (!isNaN(end.getTime())) {
                                     const today = getCurrentDate();
@@ -844,11 +853,11 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                     roomType: claim.roomType || `Kamar No. ${claim.roomNumber}`,
                                     room_number: claim.roomNumber,
                                     duration: 1,
-                                    period: 'bulanan',
-                                    moveInDate: claim.periodStart || new Date().toISOString(),
-                                    endDate: claim.dueDate,
-                                    end_date: claim.dueDate,
-                                    start_date: claim.periodStart || new Date().toISOString(),
+                                    period: claim.billingPeriod || 'bulanan',
+                                    moveInDate: claim.newPeriodStart || claim.previousPeriodStart || claim.periodStart || new Date().toISOString(),
+                                    endDate: claim.newPeriodEnd || claim.dueDate,
+                                    end_date: claim.newPeriodEnd || claim.dueDate,
+                                    start_date: claim.newPeriodStart || claim.previousPeriodStart || claim.periodStart || new Date().toISOString(),
                                     daysRemaining: daysRem,
                                     totalPrice: Number(claim.monthlyPrice || claimProp.price || 0),
                                     displayImage: displayImg,
@@ -856,7 +865,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                     is_managed_kost: true,
                                     tenant_name: claim.tenantName,
                                     tenant_phone: claim.phone,
-                                    basePrice: Number(claim.monthlyPrice || claimProp.price || 0),
+                                    basePrice: Number(claim.monthlyPrice || claimProp.price || 0) - Number(claim.extraFee || 0),
                                     location: claimProp.location,
                                     additionalFeePrice: claimProp.additional_fee_price,
                                     additionalFeeName: claimProp.additional_fee_name,
@@ -870,6 +879,15 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                         roomNumber: claim.roomNumber,
                                         tenantName: claim.tenantName,
                                         tenantPhone: claim.phone,
+                                        billingPeriod: claim.billingPeriod,
+                                        previousPeriodStart: claim.previousPeriodStart,
+                                        previousPeriodEnd: claim.previousPeriodEnd,
+                                        newPeriodStart: claim.newPeriodStart,
+                                        newPeriodEnd: claim.newPeriodEnd,
+                                        extraFee: claim.extraFee,
+                                        extraFeeName: claim.extraFeeName,
+                                        extraPersonFee: claim.extraFee,
+                                        basePrice: Number(claim.monthlyPrice || claimProp.price || 0) - Number(claim.extraFee || 0),
                                         paketSewa: 1
                                     }
                                 };

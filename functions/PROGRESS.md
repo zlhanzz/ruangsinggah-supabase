@@ -2,6 +2,41 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 195. Otomasi Struktur Biaya Riil Pendataan Survei & Aturan Baku Perpanjangan Sewa Bersambung (*Continuous Lease Anchor*) (`KostManagerPortal.tsx`, `rentBillingService.ts`, `ClaimKost.tsx`, `MyKost.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan mengapa muncul angka default Rp 1.000.000 pada modal penagihan sewa padahal tidak pernah diinput saat pendataan survei oleh agen.
+  2. Seluruh struktur biaya aktual hasil survei (harga kamar riil misal Rp 400.000 untuk Kamar 2 `arif`, biaya tambahan orang `extraOccupantFee` Rp 50.000, biaya fasilitas tambahan `additional_fee_price`, dan sisa tagihan awal) harus tersinkronisasi otomatis ke rincian tagihan.
+  3. Sistem wajib menerapkan **Aturan Baku Perpanjangan Sewa Bersambung (*Continuous Lease Anchor*)**:
+     - Jenis sewa terakhir (Bulanan, 3 Bulanan, 6 Bulanan, Tahunan, dsb.) harus tercatat dan terhitung durasinya.
+     - Tanggal mulai perpanjangan baru (`newStartDate`) **SELALU berpatokan pada tanggal akhir sewa sebelumnya (`currentEndDate`)**, walaupun penghuni terlambat melakukan pembayaran.
+     - Tanggal akhir sewa baru (`newEndDate`) dihitung otomatis bersambung dari tanggal mulai baru sesuai durasi sewa.
+     - Jika terlambat bayar, sistem menyajikan label dan banner informasi keterlambatan yang jelas.
+- **Implementasi**:
+  * **1. Engine Kalkulasi Perpanjangan Sewa Bersambung (`rentBillingService.ts`)**:
+    - Membuat fungsi pembantu `calculateNextLeasePeriod(currentStart, currentEnd, billingPeriod, durationCount)`.
+    - Mengunci tanggal mulai baru `newStartDate` tepat pada akhir periode sebelumnya (`currentEnd`), lalu menambahkan durasi sewa (1 bulan, 3 bulan, 6 bulan, atau 12 bulan) untuk menghasilkan `newEndDate`.
+    - Mendeteksi status keterlambatan (`isLate` dan `lateDays`) jika tanggal hari ini telah melewati tanggal jatuh tempo sebelumnya.
+    - Memperluas antarmuka `RentClaimPayload` dan format pesan WhatsApp resmi agar mencantumkan rincian skema sewa, masa sewa berjalan, masa sewa perpanjangan baru, dan batas pembayaran.
+  * **2. Penghapusan Hardcoded Fallback & Integrasi Biaya Survei Riil (`KostManagerPortal.tsx`)**:
+    - Menghapus seluruh fallback hardcoded `1000000` (Rp 1 Juta) di `KostManagerPortal.tsx`.
+    - Menghubungkan pembacaan struktur biaya dari data kamar riil (`rt.price` / `p.price` / `totalRent`), biaya tambahan orang (`extraOccupantFee` / `extraPersonFee`), dan fasilitas tambahan (`additional_fee_price`).
+    - Merancang **Smart Extension Lease Card** pada modal penagihan:
+      - Menampilkan kartu rincian periode sewa berjalan vs periode sewa perpanjangan baru.
+      - Menampilkan badge skema sewa terdaftar (*Bulanan*, *3 Bulanan*, dll.).
+      - Menampilkan banner peringatan keterlambatan (*Late Notice Banner*) jika masa sewa telah lewat tempo dengan keterangan bahwa perpanjangan tetap dihitung bersambung.
+      - Menampilkan *Live WhatsApp Preview* yang akurat beserta tombol pengiriman otomatis dan link auto-login.
+  * **3. Sinkronisasi Data Sewa Baru & Metadata Penghuni di Halaman Pengguna (`ClaimKost.tsx`, `MyKost.tsx`)**:
+    - Memperbarui halaman magic link `ClaimKost.tsx` agar menampilkan rincian periode perpanjangan baru sebelum diarahkan ke halaman Kost Saya.
+    - Menyelaraskan penyimpanan `rs_active_tenant_claim` di `MyKost.tsx` agar tanggal mulai sewa, tanggal akhir sewa, skema periode sewa, serta rincian biaya pokok dan biaya tambahan tersinkronisasi 100% dengan data penagihan.
+- **File Tersentuh**:
+  - `functions/public/rentBillingService.ts`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/public/pages/ClaimKost.tsx`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2529 modules transformed, ✓ built in 23.61s, 0 error).
+
 ### 194. Pemindahan Otomatis Tugas Pendataan KostManager yang Telah Listing ke Tab 'Riwayat' Dashboard Agen (`adminService.ts`, `AgentDashboard.tsx`, `KostManagerManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa tugas pendataan KostManager yang sudah disetujui (ACC) oleh admin dan propertinya sudah listing tayang sebagai mitra KostManager (misal order `#12415302` - Kost Madani) masih tertahan di tab **"Aktif"** Dashboard Agen dengan label `DATA DIKIRIM (MENUNGGU TINJAUAN ADMIN)`.

@@ -101,7 +101,8 @@ import {
 import KostManagerPropertyFormModal from './KostManagerPropertyFormModal';
 import { 
     sendRentBillingReminderWhatsApp, 
-    createRentClaimToken 
+    createRentClaimToken,
+    calculateNextLeasePeriod 
 } from '../../rentBillingService';
 
 
@@ -2033,14 +2034,23 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             if (sendWhatsApp) {
                 const cleanPhone = (tenant.user?.phone || tenant.metadata?.phone || '').replace(/[^0-9]/g, '');
                 if (cleanPhone) {
+                    const rawPeriod = tenant.metadata?.billingPeriod || tenant.metadata?.paymentPeriod || 'bulanan';
+                    const leaseCalc = calculateNextLeasePeriod(tenant.start_date, tenant.end_date, rawPeriod, 1);
                     const waRes = await sendRentBillingReminderWhatsApp({
                         phone: cleanPhone,
                         tenantName: tenant.user?.name || 'Penghuni Kost',
                         propertyTitle: tenant.property?.title || 'Kost',
                         roomNumber: (tenant.room_type || '1').replace(/[^0-9]/g, '') || '1',
-                        monthlyPrice: total,
+                        monthlyPrice: amount,
                         dueDate: billForm.dueDate || tenant.end_date || new Date().toISOString().split('T')[0],
-                        propertyId: tenant.kost_id
+                        propertyId: tenant.kost_id,
+                        billingPeriod: leaseCalc.periodLabel,
+                        previousPeriodStart: tenant.start_date,
+                        previousPeriodEnd: tenant.end_date,
+                        newPeriodStart: leaseCalc.newStartDate,
+                        newPeriodEnd: leaseCalc.newEndDate,
+                        extraFee: extra,
+                        extraFeeName: billForm.extraFeeName
                     });
                     if (waRes.success) {
                         alert(`🎉 Tagihan sewa dan link auto-login berhasil dikirim ke WhatsApp ${tenant.user?.name || 'penghuni'} (+${cleanPhone})!`);
@@ -2287,27 +2297,55 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
         }
     };
 
-    // Auto-fill bill form when tenant is selected
+    // Auto-fill bill form when tenant is selected (Struktur biaya riil tanpa hardcoded 1 Juta)
     useEffect(() => {
         if (selectedTenantIdForBill) {
             const tenant = tenants.find(t => t.id === selectedTenantIdForBill);
             if (tenant) {
-                const basePrice = Number(tenant.metadata?.basePrice) || 0;
+                const prop = properties.find(p => p.id === tenant.kost_id) || tenant.property;
+                const basePrice = Number(tenant.totalRent) || Number(tenant.rent_price) || Number(tenant.metadata?.basePrice) || Number(tenant.metadata?.price) || Number(prop?.price) || 0;
                 const facilityFee = Number(tenant.metadata?.facilityFee) || 0;
                 const extraPersonFee = Number(tenant.metadata?.extraPersonFee) || 0;
-                const totalRent = basePrice + facilityFee + extraPersonFee;
+                const remainingBill = Number(tenant.metadata?.remainingBill) || 0;
+                const propAdditionalFee = Number(prop?.additional_fee_price) || 0;
+                const propAdditionalFeeName = prop?.additional_fee_name || '';
 
-                const defaultDue = new Date();
-                defaultDue.setDate(defaultDue.getDate() + 7);
+                let extraFee = facilityFee + extraPersonFee;
+                let extraFeeName = '';
+                if (extraPersonFee > 0) {
+                    extraFeeName = 'Biaya Tambahan Orang';
+                } else if (propAdditionalFee > 0 && propAdditionalFeeName) {
+                    extraFee = propAdditionalFee;
+                    extraFeeName = propAdditionalFeeName;
+                } else if (remainingBill > 0) {
+                    extraFee = remainingBill;
+                    extraFeeName = 'Sisa Tagihan Awal';
+                }
 
-                setBillForm(prev => ({
-                    ...prev,
-                    rentalAmount: totalRent || 1000000, // fallback
-                    dueDate: defaultDue.toISOString().split('T')[0]
-                }));
+                // Kalkulasi tanggal jatuh tempo: mengacu pada end_date sewa berjalan (atau 1 bulan dari start_date)
+                let autoDueDate = '';
+                if (tenant.end_date && tenant.end_date !== 'Sewa Berjalan') {
+                    autoDueDate = tenant.end_date;
+                } else if (tenant.start_date) {
+                    const sDate = new Date(tenant.start_date);
+                    sDate.setMonth(sDate.getMonth() + 1);
+                    autoDueDate = sDate.toISOString().split('T')[0];
+                } else {
+                    const defaultDue = new Date();
+                    defaultDue.setDate(defaultDue.getDate() + 7);
+                    autoDueDate = defaultDue.toISOString().split('T')[0];
+                }
+
+                setBillForm({
+                    rentalAmount: basePrice,
+                    extraFee,
+                    extraFeeName,
+                    dueDate: autoDueDate,
+                    notes: ''
+                });
             }
         }
-    }, [selectedTenantIdForBill, tenants]);
+    }, [selectedTenantIdForBill, tenants, properties]);
 
     // --- STATISTIK ---
     const totalOccupants = tenants.filter(t => t.status === 'ACTIVE').length;
@@ -4403,6 +4441,14 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                             const totalAmount = Number(billForm.rentalAmount) + Number(billForm.extraFee || 0);
                             const formattedDueDate = billForm.dueDate ? new Date(billForm.dueDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
 
+                            const rawPeriod = selectedTenant?.metadata?.billingPeriod || selectedTenant?.metadata?.paymentPeriod || 'bulanan';
+                            const leaseCalc = calculateNextLeasePeriod(
+                                selectedTenant?.start_date,
+                                selectedTenant?.end_date,
+                                rawPeriod,
+                                1
+                            );
+
                             const claimToken = selectedTenant ? createRentClaimToken({
                                 phone: tenantPhone,
                                 tenantName,
@@ -4411,7 +4457,14 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                 roomNumber: roomName.replace(/[^0-9]/g, '') || '1',
                                 roomType: roomName,
                                 monthlyPrice: totalAmount,
-                                dueDate: billForm.dueDate || selectedTenant.end_date || '',
+                                dueDate: billForm.dueDate || leaseCalc.newStartDate || selectedTenant.end_date || '',
+                                billingPeriod: leaseCalc.periodLabel,
+                                previousPeriodStart: selectedTenant.start_date,
+                                previousPeriodEnd: selectedTenant.end_date,
+                                newPeriodStart: leaseCalc.newStartDate,
+                                newPeriodEnd: leaseCalc.newEndDate,
+                                extraFee: Number(billForm.extraFee || 0),
+                                extraFeeName: billForm.extraFeeName || '',
                                 createdAt: Date.now()
                             }) : '';
 
@@ -4419,12 +4472,22 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                             const claimUrl = `${origin}/claim-kost?token=${claimToken}`;
 
                             const cleanWaNumber = tenantPhone.startsWith('0') ? '62' + tenantPhone.substring(1) : tenantPhone;
+                            const lateWarningText = leaseCalc.isLate 
+                                ? `⚠️ *Catatan Keterlambatan:* Masa sewa sebelumnya telah jatuh tempo (${leaseCalc.lateDays} hari lalu). Periode sewa baru tetap dihitung bersambung sejak akhir sewa sebelumnya.\n\n`
+                                : '';
+
                             const waMessagePreview = `Halo Kak *${tenantName}*! 👋\n\n` +
-                                `Kami dari Manajemen *KostManager - RuangSinggah* menginformasikan mengenai masa sewa kamar Anda:\n\n` +
+                                `Kami dari Manajemen *KostManager - RuangSinggah* menginformasikan mengenai rincian perpanjangan masa sewa kamar Anda:\n\n` +
                                 `🏠 *Properti:* ${propTitle}\n` +
                                 `🚪 *Kamar:* ${roomName}\n` +
-                                `📅 *Jatuh Tempo:* ${formattedDueDate}\n` +
-                                `💵 *Tarif Sewa:* ${FORMAT_CURRENCY(totalAmount)} / bulan\n\n` +
+                                `📌 *Skema Sewa:* ${leaseCalc.periodLabel}\n` +
+                                `⏳ *Masa Sewa Berjalan:* ${selectedTenant?.start_date || '-'} s/d ${selectedTenant?.end_date || '-'}\n` +
+                                `🔄 *Masa Sewa Perpanjangan Baru:* ${leaseCalc.newStartDate} s/d ${leaseCalc.newEndDate}\n` +
+                                `📅 *Batas Pembayaran:* ${formattedDueDate}\n` +
+                                `💵 *Tarif Sewa Pokok:* ${FORMAT_CURRENCY(billForm.rentalAmount)}` + 
+                                (billForm.extraFee ? `\n➕ *${billForm.extraFeeName || 'Biaya Tambahan'}:* ${FORMAT_CURRENCY(billForm.extraFee)}` : '') + `\n` +
+                                `💰 *Total Ditagihkan:* ${FORMAT_CURRENCY(totalAmount)}\n\n` +
+                                lateWarningText +
                                 `Untuk memantau sisa masa sewa, mengunduh kwitansi resmi, dan melakukan perpanjangan sewa dengan mudah via QRIS / Transfer Bank, silakan klik tautan resmi berikut:\n\n` +
                                 `👉 *Akses Kost Saya & Bayar:* \n${claimUrl}\n\n` +
                                 `_(Tautan ini akan langsung membuka halaman Kost Anda secara otomatis)_\n\n` +
@@ -4444,16 +4507,6 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                             onChange={e => {
                                                 const tId = e.target.value;
                                                 setSelectedTenantIdForBill(tId);
-                                                const targetT = tenants.find(t => t.id === tId);
-                                                if (targetT) {
-                                                    const autoPrice = Number(targetT.totalRent) || Number(targetT.metadata?.basePrice) || Number(targetT.metadata?.price) || Number(targetT.property?.price) || 0;
-                                                    const autoDueDate = (targetT.end_date && targetT.end_date !== 'Sewa Berjalan') ? targetT.end_date : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-                                                    setBillForm({
-                                                        ...billForm,
-                                                        rentalAmount: autoPrice,
-                                                        dueDate: autoDueDate
-                                                    });
-                                                }
                                             }}
                                             required
                                             className="w-full border border-gray-200 rounded-2xl px-3.5 py-2.5 text-xs font-bold text-gray-800 focus:outline-none focus:border-orange-500 bg-white"
@@ -4491,7 +4544,53 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                 )}
                                             </div>
 
-                                            {/* Rincian Tagihan */}
+                                            {/* SMART LEASE PERIOD CARD (Perpanjangan Sewa Bersambung) */}
+                                            <div className="bg-gradient-to-br from-amber-50/80 via-orange-50/40 to-slate-50 border border-amber-200/80 rounded-2xl p-4 space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                                                        <RotateCw size={13} className="text-orange-500" /> Rincian Periode Sewa & Perpanjangan
+                                                    </span>
+                                                    <span className="text-[10px] font-black bg-amber-200/70 text-amber-900 px-2.5 py-0.5 rounded-full border border-amber-300">
+                                                        Skema: {leaseCalc.periodLabel}
+                                                    </span>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-3 pt-1">
+                                                    <div className="bg-white/80 border border-amber-100 rounded-xl p-2.5">
+                                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Masa Sewa Berjalan</p>
+                                                        <p className="text-xs font-bold text-gray-800">
+                                                            {selectedTenant.start_date || '-'} <span className="text-gray-400">s/d</span> {selectedTenant.end_date || '-'}
+                                                        </p>
+                                                    </div>
+                                                    <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-2.5">
+                                                        <p className="text-[9px] font-black text-emerald-700 uppercase tracking-wider mb-0.5 flex items-center gap-1">
+                                                            <Sparkles size={10} /> Periode Perpanjangan Baru
+                                                        </p>
+                                                        <p className="text-xs font-black text-emerald-900">
+                                                            {leaseCalc.newStartDate} <span className="text-emerald-500 font-bold">s/d</span> {leaseCalc.newEndDate}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Notice / Banner Aturan Sewa Bersambung */}
+                                                {leaseCalc.isLate ? (
+                                                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-[11px] text-rose-800">
+                                                        <AlertTriangle size={15} className="shrink-0 text-rose-600 mt-0.5" />
+                                                        <div className="leading-tight">
+                                                            <span className="font-black">Masa sewa jatuh tempo ({leaseCalc.lateDays} hari lalu).</span> Sesuai aturan sewa bersambung, tanggal mulai perpanjangan baru tetap dihitung sejak akhir sewa sebelumnya (<b>{leaseCalc.newStartDate}</b>).
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="p-2 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-2 text-[10px] text-blue-800">
+                                                        <Clock size={13} className="shrink-0 text-blue-600 mt-0.5" />
+                                                        <div className="leading-tight">
+                                                            Perpanjangan sewa bersambung: Periode baru terhitung mulai <b>{leaseCalc.newStartDate}</b> hingga <b>{leaseCalc.newEndDate}</b>.
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Rincian Tagihan Input Grid */}
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div>
                                                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block mb-1">
@@ -4528,7 +4627,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                         <label className="text-[9px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Nama Biaya</label>
                                                         <input
                                                             type="text"
-                                                            placeholder="Contoh: Denda / Listrik"
+                                                            placeholder="Contoh: Biaya Tambahan Orang / Denda"
                                                             value={billForm.extraFeeName}
                                                             onChange={e => setBillForm({ ...billForm, extraFeeName: e.target.value })}
                                                             className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 focus:outline-none focus:border-orange-400 bg-white"
@@ -4557,7 +4656,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                         ✨ Auto-Login Link Aktif
                                                     </span>
                                                 </div>
-                                                <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-[11px] text-gray-800 font-mono whitespace-pre-wrap leading-relaxed shadow-inner max-h-40 overflow-y-auto">
+                                                <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-[11px] text-gray-800 font-mono whitespace-pre-wrap leading-relaxed shadow-inner max-h-48 overflow-y-auto">
                                                     {waMessagePreview}
                                                 </div>
                                             </div>
