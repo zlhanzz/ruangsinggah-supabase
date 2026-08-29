@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, MessageSquare, Clock, Check, ChevronLeft } from 'lucide-react';
-import { ChatSession, ChatMessage, getChatMessages, sendMessage, subscribeToMessages } from '../chatService';
+import { X, Send, MessageSquare, Clock, Check, CheckCheck, ChevronLeft } from 'lucide-react';
+import { ChatSession, ChatMessage, getChatMessages, sendMessage, subscribeToMessages, markMessagesAsRead } from '../chatService';
 
 interface ChatWindowProps {
   session: ChatSession;
@@ -21,12 +21,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
 
   useEffect(() => {
     loadMessages();
+    const currentId = currentUser.uid || currentUser.id;
+    const currentSenderType = currentId === session.user_id ? 'user' : 'owner';
+    markMessagesAsRead(session.id, currentSenderType);
     
-    // Subscribe ke pesan baru secara real-time
-    const subscription = subscribeToMessages(session.id, (msg) => {
+    // Subscribe ke pesan baru & update status baca secara real-time
+    const subscription = subscribeToMessages(session.id, (msg, eventType) => {
       setMessages((prev) => {
-        // 1. Jika pesan dengan ID database ini sudah ada, lewati
-        if (prev.some(m => m.id === msg.id)) return prev;
+        // 1. Jika event UPDATE (misal status is_read berubah), perbarui pesan yang ada
+        if (eventType === 'UPDATE' || prev.some(m => m.id === msg.id)) {
+          return prev.map(m => m.id === msg.id ? msg : m);
+        }
 
         // 2. Jika ada pesan optimistik lokal dari pengirim yang sama dengan teks yang sama, ganti posisinya
         const optimisticIndex = prev.findIndex(
@@ -40,6 +45,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
           const updated = [...prev];
           updated[optimisticIndex] = msg;
           return updated;
+        }
+
+        // Jika pesan datang dari lawan bicara saat window terbuka, tandai sebagai dibaca
+        if (msg.sender_type !== currentSenderType) {
+          markMessagesAsRead(session.id, currentSenderType);
         }
 
         return [...prev, msg];
@@ -134,20 +144,35 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
               <h4 className="text-gray-900 font-black uppercase text-[10px] tracking-widest mb-1">Belum Ada Pesan</h4>
             </div>
           ) : (
-             messages.map((msg, idx) => {
-               const currentId = currentUser.uid || currentUser.id;
-               const isMe = msg.sender_id === currentId;
-               return (
-                 <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in fade-in duration-300`}>
-                   <div className={`max-w-[85%] rounded-[1.25rem] px-4 py-2.5 shadow-sm relative ${isMe ? 'bg-orange-500 text-white rounded-tr-none' : 'bg-white border border-gray-100 text-gray-800 rounded-tl-none'}`}>
-                     <p className="text-[12px] font-medium leading-relaxed">{msg.message}</p>
-                     <p className={`text-[8px] font-bold uppercase mt-1 ${isMe ? 'text-white/60 text-right' : 'text-gray-400'}`}>
-                        {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                     </p>
-                   </div>
-                 </div>
-               );
-             })
+              messages.map((msg, idx) => {
+                const currentId = currentUser.uid || currentUser.id;
+                const isMe = msg.sender_id === currentId;
+                const isTemp = !msg.id || (!msg.id.includes('-') && msg.id.length < 20);
+
+                return (
+                  <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in fade-in duration-300`}>
+                    <div className={`max-w-[85%] rounded-[1.25rem] px-4 py-2.5 shadow-sm relative ${isMe ? 'bg-orange-500 text-white rounded-tr-none' : 'bg-white border border-gray-100 text-gray-800 rounded-tl-none'}`}>
+                      <p className="text-[12px] font-medium leading-relaxed">{msg.message}</p>
+                      <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                        <span className={`text-[8px] font-bold uppercase ${isMe ? 'text-white/70' : 'text-gray-400'}`}>
+                          {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </span>
+                        {isMe && (
+                          <span className="inline-flex items-center ml-0.5" title={msg.is_read ? "Dibaca" : isTemp ? "Mengirim..." : "Terkirim ke server"}>
+                            {msg.is_read ? (
+                              <CheckCheck size={12} className="text-sky-300 stroke-[2.5]" />
+                            ) : isTemp ? (
+                              <Check size={11} className="text-white/60" />
+                            ) : (
+                              <CheckCheck size={12} className="text-white/60" />
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
           )}
         </div>
 
@@ -217,14 +242,27 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
             messages.map((msg, idx) => {
               const currentId = currentUser.uid || currentUser.id;
               const isMe = msg.sender_id === currentId;
+              const isTemp = !msg.id || (!msg.id.includes('-') && msg.id.length < 20);
+
               return (
                 <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
                   <div className={`max-w-[80%] rounded-3xl px-5 py-3.5 shadow-sm relative ${isMe ? 'bg-orange-500 text-white rounded-tr-none' : 'bg-white border border-gray-100 text-gray-800 rounded-tl-none'}`}>
                     <p className="text-[13px] font-medium leading-relaxed">{msg.message}</p>
                     <div className={`flex items-center gap-1.5 mt-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                      <span className={`text-[9px] font-bold uppercase ${isMe ? 'text-white/60 text-right' : 'text-gray-400'}`}>
+                      <span className={`text-[9px] font-bold uppercase ${isMe ? 'text-white/70' : 'text-gray-400'}`}>
                         {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                       </span>
+                      {isMe && (
+                        <span className="inline-flex items-center ml-0.5" title={msg.is_read ? "Dibaca" : isTemp ? "Mengirim..." : "Terkirim ke server"}>
+                          {msg.is_read ? (
+                            <CheckCheck size={14} className="text-sky-300 stroke-[2.5]" />
+                          ) : isTemp ? (
+                            <Check size={13} className="text-white/60" />
+                          ) : (
+                            <CheckCheck size={14} className="text-white/60" />
+                          )}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

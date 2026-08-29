@@ -92,6 +92,7 @@ import {
     getChatMessages, 
     sendMessage, 
     subscribeToMessages, 
+    markMessagesAsRead,
     ChatSession, 
     ChatMessage, 
     SYSTEM_ADMIN_ID 
@@ -1262,6 +1263,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
 
         let isMounted = true;
         setLoadingChatMessages(true);
+        markMessagesAsRead(selectedChatSession.id, 'owner');
 
         const fetchMsgs = async () => {
             try {
@@ -1278,12 +1280,14 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
 
         fetchMsgs();
 
-        // Subscribe to real-time incoming messages
-        const subscription = subscribeToMessages(selectedChatSession.id, (incomingMsg) => {
+        // Subscribe to real-time incoming messages & read updates
+        const subscription = subscribeToMessages(selectedChatSession.id, (incomingMsg, eventType) => {
             if (isMounted) {
                 setChatMessages(prev => {
-                    // 1. Jika pesan dengan ID database ini sudah ada, lewati
-                    if (prev.some(m => m.id === incomingMsg.id)) return prev;
+                    // 1. Jika event UPDATE (misal status is_read berubah), perbarui pesan yang ada
+                    if (eventType === 'UPDATE' || prev.some(m => m.id === incomingMsg.id)) {
+                        return prev.map(m => m.id === incomingMsg.id ? incomingMsg : m);
+                    }
 
                     // 2. Jika ada pesan optimistik lokal dari pengirim yang sama dengan teks yang sama, ganti posisinya
                     const optimisticIndex = prev.findIndex(
@@ -1297,6 +1301,11 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                         const updated = [...prev];
                         updated[optimisticIndex] = incomingMsg;
                         return updated;
+                    }
+
+                    // Jika pesan datang dari customer saat sesi sedang dibuka oleh CS, tandai dibaca
+                    if (incomingMsg.sender_type !== 'owner') {
+                        markMessagesAsRead(selectedChatSession.id, 'owner');
                     }
 
                     return [...prev, incomingMsg];
@@ -4179,7 +4188,21 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                 >
                                                                     <p className="whitespace-pre-wrap">{msg.message}</p>
                                                                     <div className={`flex items-center justify-end gap-1 mt-1 text-[8px] ${isFromOwner ? 'text-orange-100' : 'text-gray-400'}`}>
-                                                                        <CheckCheck size={11} />
+                                                                        <span>{new Date(msg.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                                        {isFromOwner && (() => {
+                                                                            const isTemp = !msg.id || (!msg.id.includes('-') && msg.id.length < 20);
+                                                                            return (
+                                                                                <span className="inline-flex items-center ml-0.5" title={msg.is_read ? "Dibaca oleh customer" : isTemp ? "Mengirim..." : "Terkirim ke server"}>
+                                                                                    {msg.is_read ? (
+                                                                                        <CheckCheck size={12} className="text-sky-300 stroke-[2.5]" />
+                                                                                    ) : isTemp ? (
+                                                                                        <Check size={11} className="text-orange-200" />
+                                                                                    ) : (
+                                                                                        <CheckCheck size={12} className="text-orange-200" />
+                                                                                    )}
+                                                                                </span>
+                                                                            );
+                                                                        })()}
                                                                     </div>
                                                                 </div>
                                                             </div>

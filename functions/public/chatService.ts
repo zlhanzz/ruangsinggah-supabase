@@ -298,21 +298,47 @@ export async function sendMessage(
 }
 
 /**
- * Subscribe ke pesan baru secara real-time
+ * Menandai semua pesan dalam sesi yang ditujukan kepada pembaca sebagai sudah dibaca (is_read = true)
  */
-export function subscribeToMessages(sessionId: string, onMessage: (message: ChatMessage) => void) {
+export async function markMessagesAsRead(sessionId: string, readerSenderType: 'user' | 'owner') {
+  try {
+    const targetSenderType = readerSenderType === 'user' ? 'owner' : 'user';
+    const { error } = await supabase
+      .from('chat_messages')
+      .update({ is_read: true })
+      .eq('session_id', sessionId)
+      .eq('sender_type', targetSenderType)
+      .eq('is_read', false);
+
+    if (error) {
+      console.warn('Error marking messages as read:', error);
+    }
+  } catch (err) {
+    console.warn('Failed to mark messages as read:', err);
+  }
+}
+
+/**
+ * Subscribe ke pesan baru & status update pembacaan secara real-time
+ */
+export function subscribeToMessages(
+  sessionId: string, 
+  onMessage: (message: ChatMessage, eventType?: 'INSERT' | 'UPDATE') => void
+) {
   return supabase
     .channel(`chat:${sessionId}`)
     .on(
       'postgres_changes',
       {
-        event: 'INSERT',
+        event: '*',
         schema: 'public',
         table: 'chat_messages',
         filter: `session_id=eq.${sessionId}`
       },
       (payload) => {
-        onMessage(payload.new as ChatMessage);
+        if (payload.new && (payload.new as any).id) {
+          onMessage(payload.new as ChatMessage, payload.eventType as 'INSERT' | 'UPDATE');
+        }
       }
     )
     .subscribe();

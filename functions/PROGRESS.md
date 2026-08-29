@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 183. Fitur Indikator Status Pesan WhatsApp-Style (Centang 1, Centang 2 Abu-Abu, Centang 2 Biru) (`chatService.ts`, `ChatWindow.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta penambahan indikator visual tanda centang ala WhatsApp (Centang 1, Centang 2 Abu-Abu, dan Centang 2 Biru) pada gelembung pesan untuk mengetahui status apakah pesan sedang dikirim, sudah tersimpan/diterima di server, dan sudah dibaca oleh lawan bicara (baik CS KostManager, Pemilik Kost, maupun Calon Penyewa).
+- **Implementasi**:
+  * **1. Backend Read Receipt & Realtime Update (`chatService.ts`)**:
+    - Menambahkan fungsi `markMessagesAsRead(sessionId, readerSenderType)` untuk menandai pesan lawan bicara menjadi `is_read = true` di tabel `chat_messages`.
+    - Memperluas listener `subscribeToMessages` ke event `*` (WebSocket Supabase Realtime) sehingga perubahan `is_read = true` langsung disiarkan ke layar pengirim secara instan.
+  * **2. Render Indikator Centang WhatsApp di Front-End (`ChatWindow.tsx` & `KostManagerPortal.tsx`)**:
+    - **Centang 1 Abu-Abu (`<Check />`)**: Pesan sedang dalam antrean pengiriman lokal (*Optimistic temporary ID*).
+    - **Centang 2 Abu-Abu (`<CheckCheck />` text-white/60 / text-orange-200)**: Pesan telah sukses terkirim dan tersimpan di server database PostgreSQL (`is_read = false`).
+    - **Centang 2 Biru Cerah (`<CheckCheck />` text-sky-300)**: Pesan telah dibuka dan dibaca secara nyata oleh lawan bicara (`is_read = true`).
+  * **3. Pemicu Otomatis Pembacaan (Auto-Mark as Read)**:
+    - Saat calon penyewa membuka popup `ChatWindow` atau CS KostManager memilih percakapan di Portal KostManager, sistem otomatis memicu `markMessagesAsRead`, seketika mengubah centang 2 abu-abu di layar lawan bicara menjadi centang 2 biru secara real-time.
+- **File Tersentuh**:
+  - `functions/public/chatService.ts`
+  - `functions/public/components/ChatWindow.tsx`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 37.43s, 0 error).
+
 ### 182. Rekonsiliasi Pesan Optimistik & Pencegahan Duplikasi Bubble Chat (`ChatWindow.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa setiap kali mengirim chat baru, pesannya selalu muncul ganda (*double bubble*) di awal, tetapi saat chat ditutup dan dibuka kembali, jumlah pesan menjadi normal (1 pesan).
