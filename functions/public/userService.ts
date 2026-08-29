@@ -657,16 +657,45 @@ export async function getOwnerTenancyData(ownerUid: string): Promise<any[]> {
 
 export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
   try {
-    const { data, error } = await supabase
+    const { data: directProps, error } = await supabase
       .from('properties')
       .select('*')
       .eq('owner_uid', ownerUid)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    if (!data) return [];
+    
+    let allProps = directProps || [];
+    const directIds = new Set(allProps.map(p => p.id));
 
-    return data.map((row) => {
+    // Also check if user has KostManager requests with linked property_id
+    try {
+      const { data: kmReqs } = await supabase
+        .from('kostmanager_requests')
+        .select('property_id')
+        .eq('user_id', ownerUid)
+        .not('property_id', 'is', null);
+
+      const extraIds = (kmReqs || [])
+        .map((r: any) => r.property_id)
+        .filter((id: string) => id && !directIds.has(id));
+
+      if (extraIds.length > 0) {
+        const { data: extraProps } = await supabase
+          .from('properties')
+          .select('*')
+          .in('id', extraIds);
+        if (extraProps && extraProps.length > 0) {
+          allProps = [...allProps, ...extraProps];
+        }
+      }
+    } catch (kmE) {
+      console.warn("getOwnerProperties: KM fallback error", kmE);
+    }
+
+    if (!allProps || allProps.length === 0) return [];
+
+    return allProps.map((row) => {
       const rawImages = row.image_urls || [];
       const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
 

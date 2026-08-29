@@ -1122,10 +1122,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         profile?: any
     ): string => {
         const uuidPat = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (formOwnerUid && uuidPat.test(formOwnerUid)) return formOwnerUid;
         if (req?.user_id && uuidPat.test(req.user_id)) return req.user_id;
         if (profile?.id && uuidPat.test(profile.id)) return profile.id;
         if (req?.user?.id && uuidPat.test(req.user.id)) return req.user.id;
+        if (formOwnerUid && uuidPat.test(formOwnerUid) && formOwnerUid !== user?.id && formOwnerUid !== uid) return formOwnerUid;
+        if (formOwnerUid && uuidPat.test(formOwnerUid)) return formOwnerUid;
         if (user?.id && uuidPat.test(user.id)) return user.id;
         if (uid && uuidPat.test(uid)) return uid;
         return uid || '00000000-0000-0000-0000-000000000000';

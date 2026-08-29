@@ -17,7 +17,8 @@ import {
     Zap, Home, ClipboardList, Wallet, User, Users, Compass,
     Plus, Edit, Eye, Check, MessageSquare, Search, Filter, MoreHorizontal, ArrowUpRight,
     Clock, LogOut, Bell, ChevronRight, TrendingUp, Menu, X, Landmark, CreditCard, Save,
-    Briefcase, GraduationCap, Heart, MapPin, Trash2
+    Briefcase, GraduationCap, Heart, MapPin, Trash2,
+    Bed, Lock, Send, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Phone
 } from 'lucide-react';
 import MitraProfile from './MitraProfile';
 import ChatWindow from '../components/ChatWindow';
@@ -172,6 +173,46 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [testWaPhone, setTestWaPhone] = useState('');
     const [selectedBookingForProfile, setSelectedBookingForProfile] = useState<any | null>(null);
     const [selectedUserForProfile, setSelectedUserForProfile] = useState<any | null>(null);
+
+    // --- KOSTMANAGER SMART AUTO-PILOT STATE ---
+    const [selectedKmForRooms, setSelectedKmForRooms] = useState<Kost | null>(null);
+    const [showKmRoomTracker, setShowKmRoomTracker] = useState(false);
+    const [selectedKmForRequest, setSelectedKmForRequest] = useState<Kost | null>(null);
+    const [showKmRequestModal, setShowKmRequestModal] = useState(false);
+    const [requestTab, setRequestTab] = useState<'hold' | 'price' | 'maintenance' | 'contact'>('hold');
+    const [requestRoomNumber, setRequestRoomNumber] = useState('');
+    const [requestNotes, setRequestNotes] = useState('');
+    const [requestTargetPrice, setRequestTargetPrice] = useState('');
+    const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+
+    const handleSubmitKmRequest = async () => {
+        if (!selectedKmForRequest) return;
+        if (requestTab === 'hold' && !requestRoomNumber) {
+            alert('Silakan pilih nomor kamar yang ingin di-hold/kunci.');
+            return;
+        }
+        if (requestTab === 'price' && (!requestTargetPrice || !requestNotes)) {
+            alert('Silakan masukkan harga baru dan alasan penyesuaian.');
+            return;
+        }
+        if (requestTab === 'maintenance' && !requestNotes) {
+            alert('Silakan jelaskan detail perbaikan atau kendala fasilitas.');
+            return;
+        }
+
+        setIsSubmittingRequest(true);
+        try {
+            alert('Permintaan Anda berhasil dikirim ke Tim KostManager RuangSinggah! Tim kami akan segera menindaklanjuti.');
+            setShowKmRequestModal(false);
+            setRequestNotes('');
+            setRequestRoomNumber('');
+            setRequestTargetPrice('');
+        } catch (e: any) {
+            alert('Gagal mengirim permintaan: ' + e.message);
+        } finally {
+            setIsSubmittingRequest(false);
+        }
+    };
 
     const handleTestWhatsApp = async () => {
         if (!testWaPhone) {
@@ -748,35 +789,70 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 </div>
                             )}
 
-                            {/* KostManager Premium Upsell Banner */}
-                            {isVerified && (
-                                <div className="bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-orange-500/20">
-                                    {/* Decorative Background Elements */}
-                                    <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full mix-blend-overlay filter blur-2xl opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                                    
-                                    <div className="relative z-10 flex flex-col md:flex-row gap-4 items-center justify-between">
-                                        <div className="text-left flex-1">
-                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 rounded-full mb-2 shadow-sm backdrop-blur-sm">
-                                                <Zap size={10} className="text-white animate-pulse" fill="currentColor" />
-                                                <span className="text-[9px] font-black text-white uppercase tracking-widest">Premium</span>
+                            {/* KostManager Status / Upsell Banner */}
+                            {(() => {
+                                const hasKmActive = properties.some(p => p.isManaged) || kmRequests.length > 0;
+
+                                if (hasKmActive) {
+                                    return (
+                                        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-emerald-500/20 text-white">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full mix-blend-overlay filter blur-2xl opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                                            <div className="relative z-10 flex flex-col md:flex-row gap-4 items-center justify-between">
+                                                <div className="text-left flex-1">
+                                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 rounded-full mb-2 shadow-sm backdrop-blur-sm">
+                                                        <Sparkles size={11} className="text-amber-300 animate-pulse" fill="currentColor" />
+                                                        <span className="text-[9px] font-black uppercase tracking-widest text-amber-200">KostManager Auto-Pilot Aktif</span>
+                                                    </div>
+                                                    <h3 className="text-base lg:text-lg font-black tracking-tight leading-tight">
+                                                        Properti Anda Dikelola Penuh oleh RuangSinggah
+                                                    </h3>
+                                                    <p className="text-xs text-emerald-100 leading-relaxed max-w-2xl mt-1 font-medium font-sans">
+                                                        Status kamar, foto terverifikasi, dan promosi dikelola secara profesional. Pantau okupansi kamar dan ajukan request kapan saja.
+                                                    </p>
+                                                </div>
+                                                <div className="flex gap-2 w-full md:w-auto">
+                                                    <button
+                                                        onClick={() => handleMenuChange('properties')}
+                                                        className="bg-white hover:bg-emerald-50 text-emerald-800 px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md shrink-0 flex items-center justify-center gap-1.5 w-full md:w-auto"
+                                                    >
+                                                        <Eye size={14} /> Pantau Properti
+                                                    </button>
+                                                </div>
                                             </div>
-                                            <h3 className="text-base lg:text-lg font-black text-white tracking-tight leading-tight">
-                                                Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!
-                                            </h3>
-                                            <p className="text-xs text-orange-50 leading-relaxed max-w-2xl mt-1 font-medium font-sans">
-                                                Duduk manis, biarkan tim kami mengurus foto/video profesional, penagihan otomatis, dan promosi penuh untuk mendatangkan penyewa baru.
-                                            </p>
                                         </div>
-                                        
-                                        <button 
-                                            onClick={() => navigate(Page.KOSTMANAGER)}
-                                            className="bg-white hover:bg-orange-50 text-orange-600 px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md shrink-0 flex items-center justify-center gap-2 w-full md:w-auto"
-                                        >
-                                            Pelajari <ArrowUpRight size={14} />
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
+                                    );
+                                }
+
+                                if (isVerified) {
+                                    return (
+                                        <div className="bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-orange-500/20">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full mix-blend-overlay filter blur-2xl opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                                            <div className="relative z-10 flex flex-col md:flex-row gap-4 items-center justify-between">
+                                                <div className="text-left flex-1">
+                                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 rounded-full mb-2 shadow-sm backdrop-blur-sm">
+                                                        <Zap size={10} className="text-white animate-pulse" fill="currentColor" />
+                                                        <span className="text-[9px] font-black text-white uppercase tracking-widest">Premium</span>
+                                                    </div>
+                                                    <h3 className="text-base lg:text-lg font-black text-white tracking-tight leading-tight">
+                                                        Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!
+                                                    </h3>
+                                                    <p className="text-xs text-orange-50 leading-relaxed max-w-2xl mt-1 font-medium font-sans">
+                                                        Duduk manis, biarkan tim kami mengurus foto/video profesional, penagihan otomatis, dan promosi penuh untuk mendatangkan penyewa baru.
+                                                    </p>
+                                                </div>
+                                                <button 
+                                                    onClick={() => navigate(Page.KOSTMANAGER)}
+                                                    className="bg-white hover:bg-orange-50 text-orange-600 px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md shrink-0 flex items-center justify-center gap-2 w-full md:w-auto"
+                                                >
+                                                    Pelajari <ArrowUpRight size={14} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                return null;
+                            })()}
 
                             {/* ── ALUR PEMILIK KOST (TIMELINE) & KOSTMANAGER UPSELL ── */}
                             {localStorage.getItem('mitraTourCompleted') !== 'true' && (
@@ -1006,35 +1082,65 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     {/* KOST SAYA */}
                     {activeMenu === 'properties' && (
                         <div className="space-y-6 animate-in fade-in duration-300">
-                            {/* KostManager Premium Upsell Banner */}
-                            {isVerified && (
-                                <div className="bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-orange-500/20">
-                                    {/* Decorative Background Elements */}
-                                    <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full mix-blend-overlay filter blur-2xl opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                                    
-                                    <div className="relative z-10 flex flex-col md:flex-row gap-4 items-center justify-between">
-                                        <div className="text-left flex-1">
-                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 rounded-full mb-2 shadow-sm backdrop-blur-sm">
-                                                <Zap size={10} className="text-white animate-pulse" fill="currentColor" />
-                                                <span className="text-[9px] font-black text-white uppercase tracking-widest">Premium</span>
+                            {/* KostManager Status / Upsell Banner */}
+                            {(() => {
+                                const hasKmActive = properties.some(p => p.isManaged) || kmRequests.length > 0;
+
+                                if (hasKmActive) {
+                                    return (
+                                        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-emerald-500/20 text-white">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full mix-blend-overlay filter blur-2xl opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                                            <div className="relative z-10 flex flex-col md:flex-row gap-4 items-center justify-between">
+                                                <div className="text-left flex-1">
+                                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 rounded-full mb-2 shadow-sm backdrop-blur-sm">
+                                                        <Sparkles size={11} className="text-amber-300 animate-pulse" fill="currentColor" />
+                                                        <span className="text-[9px] font-black uppercase tracking-widest text-amber-200">KostManager Auto-Pilot Aktif</span>
+                                                    </div>
+                                                    <h3 className="text-base lg:text-lg font-black tracking-tight leading-tight">
+                                                        Properti Anda Dikelola Penuh oleh RuangSinggah
+                                                    </h3>
+                                                    <p className="text-xs text-emerald-100 leading-relaxed max-w-2xl mt-1 font-medium font-sans">
+                                                        Status kamar, foto terverifikasi, dan promosi dikelola secara profesional. Pantau okupansi kamar dan ajukan request kapan saja.
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <h3 className="text-base lg:text-lg font-black text-white tracking-tight leading-tight">
-                                                Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!
-                                            </h3>
-                                            <p className="text-xs text-orange-50 leading-relaxed max-w-2xl mt-1 font-medium font-sans">
-                                                Duduk manis, biarkan tim kami mengurus foto/video profesional, penagihan otomatis, dan promosi penuh untuk mendatangkan penyewa baru.
-                                            </p>
                                         </div>
-                                        
-                                        <button 
-                                            onClick={() => navigate(Page.KOSTMANAGER)}
-                                            className="bg-white hover:bg-orange-50 text-orange-600 px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md shrink-0 flex items-center justify-center gap-2 w-full md:w-auto"
-                                        >
-                                            Pelajari <ArrowUpRight size={14} />
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
+                                    );
+                                }
+
+                                if (isVerified) {
+                                    return (
+                                        <div className="bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-orange-500/20">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full mix-blend-overlay filter blur-2xl opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                                            
+                                            <div className="relative z-10 flex flex-col md:flex-row gap-4 items-center justify-between">
+                                                <div className="text-left flex-1">
+                                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 rounded-full mb-2 shadow-sm backdrop-blur-sm">
+                                                        <Zap size={10} className="text-white animate-pulse" fill="currentColor" />
+                                                        <span className="text-[9px] font-black text-white uppercase tracking-widest">Premium</span>
+                                                    </div>
+                                                    <h3 className="text-base lg:text-lg font-black text-white tracking-tight leading-tight">
+                                                        Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!
+                                                    </h3>
+                                                    <p className="text-xs text-orange-50 leading-relaxed max-w-2xl mt-1 font-medium font-sans">
+                                                        Duduk manis, biarkan tim kami mengurus foto/video profesional, penagihan otomatis, dan promosi penuh untuk mendatangkan penyewa baru.
+                                                    </p>
+                                                </div>
+                                                
+                                                <button 
+                                                    onClick={() => navigate(Page.KOSTMANAGER)}
+                                                    className="bg-white hover:bg-orange-50 text-orange-600 px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md shrink-0 flex items-center justify-center gap-2 w-full md:w-auto"
+                                                >
+                                                    Pelajari <ArrowUpRight size={14} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                return null;
+                            })()}
+
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h3 className="font-black text-gray-900 text-lg">Kost Saya</h3>
@@ -1047,71 +1153,142 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                             setShowKostForm(true); 
                                         }
                                     }}
-                                    className="h-11 px-5 bg-orange-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 flex items-center gap-2 active:scale-95 transition-transform"
+                                    className="h-11 px-5 bg-orange-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 flex items-center gap-2 active:scale-95 transition-transform cursor-pointer"
                                 >
                                     <Plus size={16} strokeWidth={3} /> Tambah
                                 </button>
                             </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                                {properties.map(p => (
-                                    <div key={p.id} className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
-                                        <div className="relative h-52">
-                                            <img src={p.imageUrls[0] as string} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="" />
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-                                            <div className="absolute top-4 right-4">
-                                                <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${p.status === 'published' ? 'bg-green-500 text-white border-green-400' : 'bg-gray-700 text-white border-gray-600'}`}>
-                                                    {p.status === 'published' ? '● Aktif' : '● Draft'}
-                                                </span>
+                                {properties.map(p => {
+                                    const isKm = Boolean(p.isManaged);
+                                    const totalRooms = p.roomTypes?.length || 0;
+                                    const availRooms = p.roomTypes?.filter((r: any) => r.isAvailable !== false && r.status?.toLowerCase() !== 'terisi' && r.status?.toLowerCase() !== 'penuh')?.length || 0;
+                                    const occRate = totalRooms > 0 ? Math.round(((totalRooms - availRooms) / totalRooms) * 100) : 0;
+
+                                    return (
+                                        <div key={p.id} className={`bg-white rounded-3xl border overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group ${isKm ? 'border-orange-200 ring-1 ring-orange-100' : 'border-gray-100'}`}>
+                                            <div className="relative h-52">
+                                                <img src={p.imageUrls[0] as string} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="" />
+                                                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
+                                                
+                                                {/* Badges */}
+                                                <div className="absolute top-4 left-4 flex flex-col gap-1.5 items-start">
+                                                    {isKm && (
+                                                        <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-md flex items-center gap-1 border border-orange-300">
+                                                            <Sparkles size={11} className="text-white" /> KostManager Auto-Pilot
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div className="absolute top-4 right-4">
+                                                    <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${p.status === 'published' ? 'bg-green-500 text-white border-green-400' : 'bg-gray-700 text-white border-gray-600'}`}>
+                                                        {p.status === 'published' ? '● Aktif' : '● Draft'}
+                                                    </span>
+                                                </div>
+                                                
+                                                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-white">
+                                                    <p className="text-[10px] font-bold opacity-80">{p.views || 0} views</p>
+                                                    {isKm && (
+                                                        <span className="text-[10px] font-black bg-black/60 backdrop-blur-md px-2.5 py-0.5 rounded-lg border border-white/20">
+                                                            Okupansi {occRate}%
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="absolute bottom-4 left-4 text-white">
-                                                <p className="text-[10px] font-bold opacity-70">{p.views || 0} views</p>
+
+                                            <div className="p-5">
+                                                <h4 className="font-black text-gray-900 uppercase tracking-tight truncate group-hover:text-orange-500 transition-colors text-base">
+                                                    {p.title}
+                                                </h4>
+                                                
+                                                <p className="text-xs font-bold text-gray-400 mt-1 flex items-center gap-1 uppercase tracking-widest truncate">
+                                                    <MapPin size={12} className="text-orange-400 shrink-0" /> {p.address || p.city}
+                                                </p>
+
+                                                {isKm ? (
+                                                    <div className="mt-4 p-3 bg-orange-50/70 border border-orange-200/60 rounded-2xl">
+                                                        <div className="flex items-center justify-between text-xs mb-1">
+                                                            <span className="font-bold text-orange-950 flex items-center gap-1.5">
+                                                                <Bed size={13} className="text-orange-600" />
+                                                                Ketersediaan Unit
+                                                            </span>
+                                                            <span className="font-black text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full text-[10px]">
+                                                                {availRooms} dari {totalRooms} Kamar Kosong
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[10px] text-orange-800/80 font-medium leading-relaxed mt-1">
+                                                            Dikelola secara Auto-Pilot. Bebas dari repot penagihan sewa & administrasi.
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid grid-cols-2 gap-3 mt-4">
+                                                        <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Harga/Bulan</p>
+                                                            <p className="text-xs font-black text-green-600 mt-0.5">{FORMAT_CURRENCY(p.price)}</p>
+                                                        </div>
+                                                        <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Rating</p>
+                                                            <p className="text-xs font-black text-gray-900 mt-0.5">⭐ {p.rating}</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Action Buttons */}
+                                                {isKm ? (
+                                                    <div className="grid grid-cols-2 gap-2 mt-4">
+                                                        <button
+                                                            onClick={() => {
+                                                                setSelectedKmForRooms(p);
+                                                                setShowKmRoomTracker(true);
+                                                            }}
+                                                            className="h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer"
+                                                        >
+                                                            <Eye size={14} /> Pantau Kamar
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setSelectedKmForRequest(p);
+                                                                setShowKmRequestModal(true);
+                                                            }}
+                                                            className="h-11 rounded-xl bg-gray-900 hover:bg-black text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md active:scale-95 cursor-pointer"
+                                                        >
+                                                            <Send size={13} /> Request Aksi
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex gap-2 mt-4">
+                                                        <button 
+                                                            onClick={() => navigate(`/kost/${p.id}`)}
+                                                            className="flex-1 h-11 rounded-xl bg-gray-50 text-gray-700 font-bold text-xs hover:bg-gray-100 transition-colors border border-gray-100 flex items-center justify-center gap-1"
+                                                        >
+                                                            <Eye size={14} /> Preview
+                                                        </button>
+                                                        <button
+                                                            onClick={() => { 
+                                                                if (checkVerification()) {
+                                                                    setEditingKost(p); 
+                                                                    setShowKostForm(true); 
+                                                                }
+                                                            }}
+                                                            className="w-11 h-11 rounded-xl bg-gray-900 text-white flex items-center justify-center hover:bg-orange-500 transition-colors shadow-md"
+                                                            title="Edit Kost"
+                                                        >
+                                                            <Edit size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteKost(p.id)}
+                                                            className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors shadow-sm"
+                                                            title="Hapus Kost"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
-                                        <div className="p-5">
-                                            <h4 className="font-black text-gray-900 uppercase tracking-tight truncate group-hover:text-orange-500 transition-colors">{p.title}</h4>
-                                            <p className="text-xs font-bold text-gray-400 mt-1 flex items-center gap-1 uppercase tracking-widest truncate">
-                                                <MoreHorizontal size={12} className="text-orange-400 shrink-0" /> {p.address}
-                                            </p>
-                                            <div className="grid grid-cols-2 gap-3 mt-4">
-                                                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Harga/Bulan</p>
-                                                    <p className="text-xs font-black text-green-600 mt-0.5">{FORMAT_CURRENCY(p.price)}</p>
-                                                </div>
-                                                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Rating</p>
-                                                    <p className="text-xs font-black text-gray-900 mt-0.5">⭐ {p.rating}</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex gap-2 mt-4">
-                                                <button 
-                                                    onClick={() => navigate(`/kost/${p.id}`)}
-                                                    className="flex-1 h-11 rounded-xl bg-gray-50 text-gray-700 font-bold text-xs hover:bg-gray-100 transition-colors border border-gray-100 flex items-center justify-center gap-1"
-                                                >
-                                                    <Eye size={14} /> Preview
-                                                </button>
-                                                <button
-                                                    onClick={() => { 
-                                                        if (checkVerification()) {
-                                                            setEditingKost(p); 
-                                                            setShowKostForm(true); 
-                                                        }
-                                                    }}
-                                                    className="w-11 h-11 rounded-xl bg-gray-900 text-white flex items-center justify-center hover:bg-orange-500 transition-colors shadow-md"
-                                                    title="Edit Kost"
-                                                >
-                                                    <Edit size={16} />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeleteKost(p.id)}
-                                                    className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors shadow-sm"
-                                                    title="Hapus Kost"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
@@ -1800,6 +1977,328 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* ── MODAL 1: KOSTMANAGER LIVE ROOM TRACKER (OKUPANSI REAL-TIME) ── */}
+            {showKmRoomTracker && selectedKmForRooms && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowKmRoomTracker(false)} />
+                    <div className="relative bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-2xl bg-orange-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/20">
+                                    <Bed size={22} />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight leading-tight">
+                                        Live Status Okupansi Kamar
+                                    </h3>
+                                    <p className="text-xs font-bold text-orange-600 uppercase tracking-wider mt-0.5">
+                                        {selectedKmForRooms.title} • KostManager Auto-Pilot
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowKmRoomTracker(false)}
+                                className="w-10 h-10 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors cursor-pointer"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Summary Stats */}
+                        <div className="p-6 pb-2 grid grid-cols-3 gap-3">
+                            {(() => {
+                                const total = selectedKmForRooms.roomTypes?.length || 0;
+                                const avail = selectedKmForRooms.roomTypes?.filter((r: any) => r.isAvailable !== false && r.status?.toLowerCase() !== 'terisi' && r.status?.toLowerCase() !== 'penuh')?.length || 0;
+                                const occupied = total - avail;
+                                const rate = total > 0 ? Math.round((occupied / total) * 100) : 0;
+
+                                return (
+                                    <>
+                                        <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-100 text-center">
+                                            <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Kamar Kosong</p>
+                                            <p className="text-2xl font-black text-emerald-700 mt-0.5">{avail}</p>
+                                            <p className="text-[9px] text-emerald-600 font-bold">Siap Dipesan</p>
+                                        </div>
+                                        <div className="p-3.5 bg-rose-50 rounded-2xl border border-rose-100 text-center">
+                                            <p className="text-[9px] font-black text-rose-600 uppercase tracking-widest">Kamar Terisi</p>
+                                            <p className="text-2xl font-black text-rose-700 mt-0.5">{occupied}</p>
+                                            <p className="text-[9px] text-rose-600 font-bold">Aktif Dihuni</p>
+                                        </div>
+                                        <div className="p-3.5 bg-orange-50 rounded-2xl border border-orange-100 text-center">
+                                            <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest">Tingkat Okupansi</p>
+                                            <p className="text-2xl font-black text-orange-700 mt-0.5">{rate}%</p>
+                                            <p className="text-[9px] text-orange-600 font-bold">Total {total} Unit</p>
+                                        </div>
+                                    </>
+                                );
+                            })()}
+                        </div>
+
+                        {/* Room Grid List */}
+                        <div className="p-6 overflow-y-auto space-y-3 flex-1">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Daftar Seluruh Unit Kamar</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {selectedKmForRooms.roomTypes?.map((room: any, idx: number) => {
+                                    const isAvail = room.isAvailable !== false && room.status?.toLowerCase() !== 'terisi' && room.status?.toLowerCase() !== 'penuh';
+                                    const rName = room.name || room.roomNumber || `Kamar ${idx + 1}`;
+                                    const rFloor = room.floor || 'Lantai 1';
+                                    const rSize = room.size || '2x2 meter';
+
+                                    return (
+                                        <div
+                                            key={idx}
+                                            className={`p-4 rounded-2xl border transition-all ${
+                                                isAvail
+                                                    ? 'bg-emerald-50/40 border-emerald-200 text-slate-900'
+                                                    : 'bg-rose-50/40 border-rose-200 text-slate-800'
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between gap-2 mb-2">
+                                                <span className="font-black text-sm uppercase tracking-tight flex items-center gap-1.5">
+                                                    <Bed size={15} className={isAvail ? 'text-emerald-600' : 'text-rose-500'} />
+                                                    {rName.startsWith('Kamar') ? rName : `Kamar ${rName}`}
+                                                </span>
+                                                <span
+                                                    className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                                        isAvail
+                                                            ? 'bg-emerald-500 text-white'
+                                                            : 'bg-rose-500 text-white'
+                                                    }`}
+                                                >
+                                                    {isAvail ? '🟢 Kosong' : '🔴 Terisi'}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center justify-between text-xs text-gray-500 font-semibold mb-2">
+                                                <span>{rFloor} • {rSize}</span>
+                                                <span className="font-black text-gray-900">{FORMAT_CURRENCY(room.price || selectedKmForRooms.price)}</span>
+                                            </div>
+                                            {room.roomFacilities && room.roomFacilities.length > 0 && (
+                                                <div className="flex flex-wrap gap-1">
+                                                    {room.roomFacilities.slice(0, 2).map((fac: string, fIdx: number) => (
+                                                        <span key={fIdx} className="text-[8px] font-bold bg-white/80 text-gray-600 px-2 py-0.5 rounded border border-gray-200 truncate max-w-[120px]">
+                                                            {fac}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                            <p className="text-[10px] text-gray-500 font-bold flex items-center gap-1">
+                                <ShieldCheck size={14} className="text-emerald-600" />
+                                Data disinkronkan otomatis oleh RuangSinggah Auto-Pilot
+                            </p>
+                            <button
+                                onClick={() => setShowKmRoomTracker(false)}
+                                className="px-5 py-2 bg-gray-900 hover:bg-black text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all"
+                            >
+                                Tutup
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── MODAL 2: AJUKAN REQUEST / KOORDINASI KOSTMANAGER ── */}
+            {showKmRequestModal && selectedKmForRequest && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowKmRequestModal(false)} />
+                    <div className="relative bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight leading-tight">
+                                    Ajukan Permintaan / Koordinasi
+                                </h3>
+                                <p className="text-xs font-bold text-orange-600 uppercase tracking-wider mt-0.5">
+                                    {selectedKmForRequest.title} • KostManager Portal
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowKmRequestModal(false)}
+                                className="w-10 h-10 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors cursor-pointer"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Request Type Selector */}
+                        <div className="p-6 pb-2">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2.5">Pilih Jenis Request</p>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                {[
+                                    { key: 'hold', label: 'Hold Kamar', icon: <Lock size={14} /> },
+                                    { key: 'price', label: 'Ubah Harga', icon: <CreditCard size={14} /> },
+                                    { key: 'maintenance', label: 'Maintenance', icon: <Zap size={14} /> },
+                                    { key: 'contact', label: 'WhatsApp Tim', icon: <Phone size={14} /> },
+                                ].map(tab => (
+                                    <button
+                                        key={tab.key}
+                                        type="button"
+                                        onClick={() => setRequestTab(tab.key as any)}
+                                        className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center gap-1.5 cursor-pointer ${
+                                            requestTab === tab.key
+                                                ? 'bg-orange-500 border-orange-600 text-white shadow-md shadow-orange-500/20'
+                                                : 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700'
+                                        }`}
+                                    >
+                                        {tab.icon}
+                                        <span className="text-[10px] font-black uppercase tracking-wider">{tab.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Form Content */}
+                        <div className="p-6 overflow-y-auto space-y-4 flex-1">
+                            {requestTab === 'hold' && (
+                                <div className="space-y-4">
+                                    <div className="p-4 bg-orange-50 border border-orange-200 rounded-2xl">
+                                        <p className="text-xs font-bold text-orange-950 flex items-center gap-1.5 mb-1">
+                                            <Lock size={14} className="text-orange-600" />
+                                            Kunci Kamar untuk Tamu / Keluarga Pribadi
+                                        </p>
+                                        <p className="text-[11px] text-orange-800 leading-relaxed">
+                                            Kamar yang di-hold akan otomatis disembunyikan dari pencarian online agar tidak disewa penyewa publik.
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-1.5">Pilih Nomor Kamar</label>
+                                        <select
+                                            value={requestRoomNumber}
+                                            onChange={(e) => setRequestRoomNumber(e.target.value)}
+                                            className="w-full h-12 px-4 rounded-xl border border-gray-200 font-bold text-sm bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                                        >
+                                            <option value="">-- Pilih Kamar Kosong --</option>
+                                            {selectedKmForRequest.roomTypes
+                                                ?.filter((r: any) => r.isAvailable !== false && r.status?.toLowerCase() !== 'terisi')
+                                                .map((r: any, idx: number) => (
+                                                    <option key={idx} value={r.name || r.roomNumber || `Kamar ${idx + 1}`}>
+                                                        {r.name || r.roomNumber || `Kamar ${idx + 1}`} ({r.floor || 'Lt. 1'})
+                                                    </option>
+                                                ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-1.5">Durasi / Catatan Hold</label>
+                                        <textarea
+                                            value={requestNotes}
+                                            onChange={(e) => setRequestNotes(e.target.value)}
+                                            placeholder="Contoh: Dipakai saudara menginap dari tanggal 1 s/d 10 September 2026..."
+                                            className="w-full p-4 rounded-xl border border-gray-200 text-xs font-medium focus:ring-2 focus:ring-orange-500 focus:outline-none min-h-[90px]"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {requestTab === 'price' && (
+                                <div className="space-y-4">
+                                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl">
+                                        <p className="text-xs font-bold text-blue-950 flex items-center gap-1.5 mb-1">
+                                            <CreditCard size={14} className="text-blue-600" />
+                                            Pengajuan Penyesuaian Tarif Sewa
+                                        </p>
+                                        <p className="text-[11px] text-blue-800 leading-relaxed">
+                                            Tim operasional KostManager akan meninjau dan memperbarui harga sewa di platform publik.
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-1.5">Usulan Harga Baru (Rp / Bulan)</label>
+                                        <input
+                                            type="number"
+                                            value={requestTargetPrice}
+                                            onChange={(e) => setRequestTargetPrice(e.target.value)}
+                                            placeholder="Contoh: 450000"
+                                            className="w-full h-12 px-4 rounded-xl border border-gray-200 font-bold text-sm bg-white focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-1.5">Alasan / Detail Kamar</label>
+                                        <textarea
+                                            value={requestNotes}
+                                            onChange={(e) => setRequestNotes(e.target.value)}
+                                            placeholder="Contoh: Penyesuaian tarif untuk Tipe Standard karena penambahan fasilitas WiFi baru..."
+                                            className="w-full p-4 rounded-xl border border-gray-200 text-xs font-medium focus:ring-2 focus:ring-orange-500 focus:outline-none min-h-[90px]"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {requestTab === 'maintenance' && (
+                                <div className="space-y-4">
+                                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+                                        <p className="text-xs font-bold text-amber-950 flex items-center gap-1.5 mb-1">
+                                            <Zap size={14} className="text-amber-600" />
+                                            Request Bantuan Perbaikan & Maintenance
+                                        </p>
+                                        <p className="text-[11px] text-amber-800 leading-relaxed">
+                                            Laporkan kendala fasilitas kost atau kebutuhan teknis lapangan untuk dikoordinasikan oleh tim operasional.
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-1.5">Detail Kendala / Perbaikan</label>
+                                        <textarea
+                                            value={requestNotes}
+                                            onChange={(e) => setRequestNotes(e.target.value)}
+                                            placeholder="Jelaskan kendala fasilitas, misal: Keran air di kamar mandi kamar 2 bocor, tolong dijadwalkan teknisi..."
+                                            className="w-full p-4 rounded-xl border border-gray-200 text-xs font-medium focus:ring-2 focus:ring-orange-500 focus:outline-none min-h-[110px]"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {requestTab === 'contact' && (
+                                <div className="space-y-4 text-center py-4">
+                                    <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-md">
+                                        <Phone size={28} />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-black text-gray-900 text-base">Account Manager KostManager</h4>
+                                        <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
+                                            Hubungi PIC operasional RuangSinggah secara langsung melalui WhatsApp untuk koordinasi instan.
+                                        </p>
+                                    </div>
+                                    <a
+                                        href="https://wa.me/6281527080656?text=Halo%20Tim%20KostManager%20RuangSinggah,%20saya%20pemilik%20kost%20ingin%20koordinasi%20mengenai%20properti%20saya."
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all active:scale-95"
+                                    >
+                                        <Phone size={15} /> Hubungi via WhatsApp (+6281527080656)
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer CTA */}
+                        {requestTab !== 'contact' && (
+                            <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowKmRequestModal(false)}
+                                    className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-100 transition-colors"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleSubmitKmRequest}
+                                    disabled={isSubmittingRequest}
+                                    className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-md shadow-orange-500/20 active:scale-95 disabled:opacity-50 flex items-center gap-2"
+                                >
+                                    <Send size={13} /> {isSubmittingRequest ? 'Mengirim...' : 'Kirim Permintaan'}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

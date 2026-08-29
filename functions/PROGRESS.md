@@ -2,6 +2,40 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 174. Integrasi Listing KostManager & Penerapan Fitur Smart Auto-Pilot di Dashboard Mitra (`MitraDashboard.tsx`, `userService.ts`, `AgentDashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa pada Dashboard Mitra dari kost yang terdaftar sebagai KostManager (*Kost Madani*), setelah status pendaftaran berhasil, kartu listing kost hilang dari daftar properti dan *Panduan Mulai Cepat* malah ter-reset kembali ke langkah awal (*"Mulai Upload Kost Sekarang"*), seolah-olah akun belum memiliki listing sama sekali.
+  2. Pengguna meminta implementasi menyeluruh terkait tampilan dan fungsionalitas listing kost di Dashboard Mitra jika properti telah terdaftar sebagai KostManager (konsep Auto-Pilot).
+- **Implementasi**:
+  * **1. Koreksi & Proteksi Data Kepemilikan (`owner_uid`)**:
+    - Memperbaiki `owner_uid` properti *Kost Madani* (`67f062a8-b5a5-4adb-bd40-928e6e8d9ee6`) di database Supabase (`properties` & `mitra_kostmanager`) kembali ke UID pemilik/mitra pemohon asli (`c58e7306-d657-420a-9435-91f5fbd1a3a0`).
+    - Memperbarui fungsi `resolveValidOwnerUid` di `AgentDashboard.tsx` agar selalu memprioritaskan `req.user_id` (UID pemohon) saat surveyor/agen menyimpan draf atau hasil survei lapangan, mencegah ID agen menimpa kepemilikan mitra.
+  * **2. Penyempurnaan Dual-Check Query `getOwnerProperties` (`userService.ts`)**:
+    - Menambahkan mekanisme fallback untuk menyertakan properti yang terhubung melalui relasi `kostmanager_requests.property_id` milik mitra sehingga pemilik tidak akan pernah kehilangan jejak propertinya.
+  * **3. Kartu Listing Auto-Pilot di "Properti Saya" (`MitraDashboard.tsx`)**:
+    - Kartu kost KostManager tampil elegan dengan badge: **`⭐ KostManager Auto-Pilot`**.
+    - Menampilkan informasi okupansi langsung: misal **`Okupansi: 40% (3 dari 5 Kamar Kosong)`**.
+    - Mengunci edit master data (*Protected Mode*) untuk menjaga integritas hasil survei & mencegah double booking.
+  * **4. Fitur "Pantau Kamar" (Live Room Tracker Modal)**:
+    - Tombol **`👁️ Pantau Kamar`** membuka modal interaktif yang menampilkan status seluruh unit kamar secara real-time:
+      - Kamar Kosong / Tersedia (🟢) vs Kamar Terisi (🔴), lengkap dengan nomor kamar, lantai, ukuran, harga sewa, dan fasilitas.
+  * **5. Fitur "Request Aksi" (Controlled Request Modal)**:
+    - Tombol **`📋 Request Aksi`** menyediakan 4 menu koordinasi terkontrol bagi pemilik:
+      - 🔒 *Hold Unit Pribadi* (Kunci kamar untuk keluarga/tamu pemilik agar tidak disewa publik).
+      - 💳 *Ubah Harga Sewa* (Ajukan penyesuaian tarif sewa unit).
+      - ⚡ *Maintenance* (Laporkan kendala fasilitas atau perbaikan teknis lapangan).
+      - 📞 *WhatsApp Tim* (Hubungi Account Manager langsung via WhatsApp).
+  * **6. Penyesuaian Beranda & Panduan Mulai Cepat**:
+    - Jika mitra memiliki properti KostManager aktif, *Panduan Mulai Cepat* otomatis tercentang selesai ✓.
+    - Banner promosi upgrade digantikan dengan status aktif: **`⭐ KostManager Auto-Pilot Aktif`** dengan tombol cepat ke *Pantau Properti*.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/userService.ts`
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 50.63s, 0 error).
+
 ### 173. Pemisahan Total (100% Independen pada Semua Aspek) antara KostManager dan Mitra Biasa (`KostDetail.tsx`, `BookingModal.tsx`, `KostCard.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar properti listing KostManager **100% lepas dan independen dari setting/data properti saat masih menjadi mitra biasa** (seperti saklar on/off mandiri pada semua aspek).
