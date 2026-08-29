@@ -619,9 +619,23 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
 
     try {
       setIsSubmittingChat(true);
-      // owner_uid is available in the kost object
-      const ownerId = kost.ownerUid || SYSTEM_ADMIN_ID;
-      const session = await getOrCreateChatSession(user.uid, ownerId, kost.id);
+      // Deteksi apakah kost berstatus KostManager
+      const isManagedProp = Boolean(
+        (kost as any).isManaged || 
+        (kost as any).is_managed || 
+        (kost as any).kostManager?.status === 'ACTIVE' || 
+        (kost as any).kostManager?.isActive
+      );
+
+      // Jika kost adalah KostManager, target penerima (ownerId) diarahkan ke SYSTEM_ADMIN_ID
+      const targetOwnerId = isManagedProp ? SYSTEM_ADMIN_ID : (kost.ownerUid || SYSTEM_ADMIN_ID);
+      const session = await getOrCreateChatSession(
+        user.uid, 
+        targetOwnerId, 
+        kost.id,
+        user.displayName || user.name || user.email?.split('@')[0] || 'Calon Penghuni',
+        user.photoURL || user.avatar_url || ''
+      );
       setActiveChatSession(session);
       setShowChatWindow(true);
     } catch (error) {
@@ -1441,16 +1455,24 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
         />
       )}
 
-      {showChatWindow && activeChatSession && (
-        <ChatWindow
-          session={activeChatSession}
-          currentUser={user}
-          onClose={() => setShowChatWindow(false)}
-          propertyName={kost.title}
-          contactName={kost.omnichannelContactName}
-          contactType={kost.omnichannelContactType}
-        />
-      )}
+      {showChatWindow && activeChatSession && (() => {
+        const isManagedProp = Boolean(
+          (kost as any).isManaged || 
+          (kost as any).is_managed || 
+          (kost as any).kostManager?.status === 'ACTIVE' || 
+          (kost as any).kostManager?.isActive
+        );
+        return (
+          <ChatWindow
+            session={activeChatSession}
+            currentUser={user}
+            onClose={() => setShowChatWindow(false)}
+            propertyName={kost.title || (kost as any).name || 'Kost'}
+            contactName={isManagedProp ? 'Tim KostManager RuangSinggah' : (kost.omnichannelContactName || 'Pemilik Kost')}
+            contactType={isManagedProp ? 'caretaker' : (kost.omnichannelContactType || 'owner')}
+          />
+        );
+      })()}
     </div>
   );
 };

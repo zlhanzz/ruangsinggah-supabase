@@ -1560,11 +1560,13 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                 };
             });
 
+            const allManagedIds = mappedProperties.map(p => p.id).filter(Boolean);
+
             // 8. Ambil tagihan manual (filter kategori sewa)
             const allInvoices = await getManualInvoices();
-            const rentInvoices = managedPropIds.length === 0 ? [] : (allInvoices || []).filter((inv: any) => {
+            const rentInvoices = allManagedIds.length === 0 ? [] : (allInvoices || []).filter((inv: any) => {
                 if (inv.category !== 'sewa') return false;
-                if (inv.kost_id && managedPropIds.includes(inv.kost_id)) return true;
+                if (inv.kost_id && allManagedIds.includes(inv.kost_id)) return true;
                 if (inv.kost_name) {
                     return mappedProperties.some(p =>
                         p.title?.toLowerCase().trim() === inv.kost_name?.toLowerCase().trim()
@@ -1578,7 +1580,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             setInvoices(rentInvoices);
 
             // Load Sesi Chat KostManager
-            loadChatSessions(managedPropIds);
+            loadChatSessions(allManagedIds);
         } catch (err) {
             console.error('Error loading KostManager Portal data:', err);
         } finally {
