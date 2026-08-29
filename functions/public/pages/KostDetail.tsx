@@ -53,9 +53,6 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   const [currentPhoto, setCurrentPhoto] = useState(0);
   const [selectedParentTypeIdx, setSelectedParentTypeIdx] = useState(0);
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
-  const [physicalRooms, setPhysicalRooms] = useState<any[]>([]);
-  const [selectedPhysicalRoom, setSelectedPhysicalRoom] = useState<any>(null);
-  const [loadingRooms, setLoadingRooms] = useState(false);
 
   // === SEO: Dynamic Meta Tags ===
   const kostName = kost.name || 'Kost Makassar';
@@ -162,39 +159,6 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     }
   }, [selectedVariantIdx, selectedRoom]);
 
-  // Load physical rooms if isManaged is true
-  useEffect(() => {
-    if (kost.id && kost.isManaged) {
-      const fetchRooms = async () => {
-        setLoadingRooms(true);
-        try {
-          const { data, error } = await supabase
-            .from('rooms')
-            .select('*')
-            .eq('property_id', kost.id)
-            .order('room_number', { ascending: true });
-          if (!error && data) {
-            setPhysicalRooms(data);
-          }
-        } catch (e) {
-          console.error("Error loading rooms:", e);
-        } finally {
-          setLoadingRooms(false);
-        }
-      };
-      fetchRooms();
-    }
-  }, [kost.id, kost.isManaged]);
-
-  // Sync selectedPhysicalRoom when variant changes
-  useEffect(() => {
-    if (kost.isManaged && physicalRooms.length > 0) {
-      const typeRooms = physicalRooms.filter(r => r.room_type_name === selectedRoom.name);
-      const firstAvail = typeRooms.find(r => r.status === 'available');
-      setSelectedPhysicalRoom(firstAvail || typeRooms[0] || null);
-    }
-  }, [selectedVariantIdx, physicalRooms, selectedRoom.name, kost.isManaged]);
-
   // --- EMPTY ROOMS PHOTO ISOLATION & GALLERY STATE ---
   const [activePhotoFilter, setActivePhotoFilter] = useState<'all' | string>('all');
 
@@ -252,7 +216,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
       return rt.rooms.map((r: any, rSubIdx: number) => {
         const isAvail = r.status?.toLowerCase() === 'kosong' || r.status?.toLowerCase() === 'available' || r.isAvailable !== false;
         const rName = r.name || r.roomNumber ? (String(r.name || r.roomNumber).trim().toLowerCase().startsWith('kamar') ? (r.name || r.roomNumber) : `Kamar ${r.name || r.roomNumber}`) : `Kamar ${rSubIdx + 1}`;
-        
+
         const rawImages = r.images || r.image_urls || [];
         const roomPhotoItems: PhotoItem[] = rawImages.map((img: any, imgIdx: number) => {
           const url = typeof img === 'string' ? img : (img?.url || img?.original || '');
@@ -404,14 +368,14 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
         }]
       }];
     }
-    
+
     if (!kost.isManaged) {
       // For regular kost: each item in kost.roomTypes is its own parent type
       return kost.roomTypes.map((rt: any, idx: number) => {
         const isAvail = rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh';
         const rName = rt.name || `Tipe ${idx + 1}`;
         const matchedNorm = normalizedRooms.find(r => r.variantIdx === idx);
-        
+
         return {
           typeName: rName,
           minPrice: Number(rt.pricing?.find((p: any) => p.period === 'bulanan')?.price || rt.pricing?.[0]?.price || rt.price || kost.price || 0),
@@ -444,7 +408,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
 
     // For KostManager: Group rooms by type (e.g. 'Standard', 'VIP', etc.)
     const groupsMap = new Map<string, ChildRoomUnit[]>();
-    
+
     kost.roomTypes.forEach((rt: any, idx: number) => {
       const typeKey = (rt.type && rt.type.trim()) ? rt.type.trim() : (rt.roomTypeName || 'Standard');
       const isAvail = rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh';
@@ -511,7 +475,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   const emptyRooms = normalizedRooms.filter(r => r.isAvailable);
 
   // Active room if a specific room filter is selected
-  const activeFilteredRoom = activePhotoFilter !== 'all' 
+  const activeFilteredRoom = activePhotoFilter !== 'all'
     ? normalizedRooms.find(r => r.id === activePhotoFilter || r.name === activePhotoFilter || r.rawName === activePhotoFilter)
     : null;
 
@@ -532,7 +496,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     // Default 'all': Property photos + all empty rooms photos combined
     const allVacantPhotos = emptyRooms.flatMap(r => r.photoItems || []);
     const combined = [...propertyPhotos, ...allVacantPhotos];
-    
+
     // De-duplicate by URL
     const seen = new Set<string>();
     const unique: PhotoItem[] = [];
@@ -553,14 +517,16 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   const prevPhoto = () => setCurrentPhoto((prev) => (prev - 1 + (displayedImages.length || 1)) % (displayedImages.length || 1));
 
   const handleBookingClick = () => {
-    if (kost.isManaged && !selectedPhysicalRoom) {
-      alert("Silakan pilih nomor kamar yang tersedia terlebih dahulu.");
-      return;
-    }
-
-    if (!kost.isManaged && !selectedRoom.isAvailable) {
-      alert("Mohon maaf, tipe kamar ini sedang penuh.");
-      return;
+    if (kost.isManaged) {
+      if (!selectedChildRoom || !selectedChildRoom.isAvailable) {
+        alert("Silakan pilih nomor kamar yang masih tersedia terlebih dahulu.");
+        return;
+      }
+    } else {
+      if (!selectedRoom.isAvailable) {
+        alert("Mohon maaf, tipe kamar ini sedang penuh.");
+        return;
+      }
     }
 
     if (!user) {
@@ -598,9 +564,15 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           kostName: kost.title,
           imageUrls: kost.image_urls,
           periodLabel: periodLabels[selectedPeriod] || selectedPeriod,
-          roomType: data.variantName || selectedRoom.name || '-',
-          roomNumber: selectedPhysicalRoom?.room_number || null,
-          roomId: selectedPhysicalRoom?.id || null,
+          roomType: kost.isManaged 
+            ? (currentParentGroup?.typeName || selectedRoom.type || selectedRoom.name || '-')
+            : (data.variantName || selectedRoom.name || '-'),
+          roomNumber: kost.isManaged 
+            ? (selectedChildRoom?.roomNumber || selectedRoom.displayName || selectedRoom.name || null)
+            : null,
+          roomId: kost.isManaged 
+            ? (selectedChildRoom?.id || selectedRoom.id || null)
+            : null,
           startDate: data.startDate || new Date().toISOString().split('T')[0],
           endDate: (() => {
             const d = new Date(data.startDate || new Date());
@@ -812,7 +784,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                     <>
                       <span className="text-white/40">•</span>
                       <span className={currentPhotoItem.isRoom ? "text-orange-400 font-bold" : "text-emerald-400 font-bold"}>
-                        {currentPhotoItem.isRoom 
+                        {currentPhotoItem.isRoom
                           ? (currentPhotoItem.roomName ? `${currentPhotoItem.roomName} - ${currentPhotoItem.label}` : currentPhotoItem.label)
                           : currentPhotoItem.label}
                       </span>
@@ -862,7 +834,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                   <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                     <span className="text-[11px] font-black text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
                       <Camera size={14} className="text-orange-500" />
-                      Pilih Foto Unit Kamar Kosong ({emptyRooms.length} Kamar Tersedia)
+                      Pilih Foto Unit Kamar
                     </span>
                     {activePhotoFilter !== 'all' && (
                       <button
@@ -886,11 +858,10 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                         setActivePhotoFilter('all');
                         setCurrentPhoto(0);
                       }}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
-                        activePhotoFilter === 'all'
+                      className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${activePhotoFilter === 'all'
                           ? 'bg-slate-900 text-white shadow-md ring-2 ring-slate-900 ring-offset-1'
                           : 'bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-100'
-                      }`}
+                        }`}
                     >
                       <Home size={13} />
                       <span>Semua Foto</span>
@@ -908,16 +879,11 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                             setActivePhotoFilter(room.id);
                             setCurrentPhoto(0);
                             setSelectedVariantIdx(room.variantIdx);
-                            if (kost.isManaged && physicalRooms.length > 0) {
-                              const matchedPhys = physicalRooms.find(pr => pr.room_number === room.rawName || pr.room_number === room.name);
-                              if (matchedPhys) setSelectedPhysicalRoom(matchedPhys);
-                            }
                           }}
-                          className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
-                            isSelected
+                          className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${isSelected
                               ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20 ring-2 ring-orange-500 ring-offset-1'
                               : 'bg-white text-slate-700 border border-slate-200 hover:border-orange-300 hover:bg-orange-50/30'
-                          }`}
+                            }`}
                         >
                           <Bed size={13} className={isSelected ? 'text-white' : 'text-orange-500'} />
                           <span>{room.name}</span>
@@ -1224,17 +1190,12 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                   setActivePhotoFilter(firstChild.id);
                                   setCurrentPhoto(0);
                                 }
-                                if (kost.isManaged && physicalRooms.length > 0) {
-                                  const matchedPhys = physicalRooms.find(pr => pr.room_number === firstChild.roomNumber || pr.room_number === firstChild.displayName);
-                                  if (matchedPhys) setSelectedPhysicalRoom(matchedPhys);
-                                }
                               }
                             }}
-                            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative ${
-                              isSelectedParent 
-                                ? 'border-orange-500 bg-orange-50/40 shadow-sm ring-1 ring-orange-500/30' 
+                            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative ${isSelectedParent
+                                ? 'border-orange-500 bg-orange-50/40 shadow-sm ring-1 ring-orange-500/30'
                                 : 'border-gray-150 hover:border-orange-200 bg-white'
-                            }`}
+                              }`}
                           >
                             <div className="flex justify-between items-start mb-1">
                               <span className="text-xs font-black uppercase tracking-tight text-gray-900 flex items-center gap-1.5">
@@ -1242,9 +1203,8 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                 {group.typeName}
                               </span>
                               {/* Availability Badge */}
-                              <div className={`text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                                group.isAvailable ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                              }`}>
+                              <div className={`text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${group.isAvailable ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                }`}>
                                 <div className={`w-1.5 h-1.5 rounded-full ${group.isAvailable ? 'bg-green-600' : 'bg-red-600'}`}></div>
                                 {kost.isManaged ? (
                                   group.isAvailable ? `${group.availableCount} Kamar Tersedia` : 'Penuh'
@@ -1307,16 +1267,11 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                               setSelectedVariantIdx(room.variantIdx);
                                               setActivePhotoFilter(room.id);
                                               setCurrentPhoto(0);
-                                              if (kost.isManaged && physicalRooms.length > 0) {
-                                                const matchedPhys = physicalRooms.find(pr => pr.room_number === room.roomNumber || pr.room_number === room.displayName);
-                                                if (matchedPhys) setSelectedPhysicalRoom(matchedPhys);
-                                              }
                                             }}
-                                            className={`p-2.5 rounded-xl border text-left transition-all relative flex flex-col justify-between cursor-pointer group/chip ${
-                                              isSelected
+                                            className={`p-2.5 rounded-xl border text-left transition-all relative flex flex-col justify-between cursor-pointer group/chip ${isSelected
                                                 ? 'bg-orange-500 border-orange-600 text-white shadow-sm ring-2 ring-orange-500/20'
                                                 : 'bg-white hover:bg-orange-50/60 border-slate-200 hover:border-orange-300 text-slate-800'
-                                            }`}
+                                              }`}
                                           >
                                             <div className="flex items-center justify-between gap-1 mb-1">
                                               <span className={`text-xs font-black tracking-tight ${isSelected ? 'text-white' : 'text-slate-900 group-hover/chip:text-orange-600'}`}>
@@ -1328,7 +1283,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
                                               )}
                                             </div>
-                                            
+
                                             <span className={`text-[10px] font-semibold block ${isSelected ? 'text-orange-100' : 'text-slate-500'}`}>
                                               {room.floor || 'Lantai 1'}
                                             </span>
@@ -1396,20 +1351,36 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                 </div>
 
                 <div className="space-y-3">
-                  <button
-                    onClick={handleBookingClick}
-                    disabled={kost.isManaged ? (!selectedPhysicalRoom || selectedPhysicalRoom.status !== 'available') : (selectedRoom.isAvailable === false)}
-                    className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl transition-all active:scale-95 ${
-                      (kost.isManaged ? (!selectedPhysicalRoom || selectedPhysicalRoom.status !== 'available') : (selectedRoom.isAvailable === false))
-                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
-                      : 'bg-orange-500 text-white shadow-orange-100 hover:bg-orange-600'
-                      }`}
-                  >
-                    {kost.isManaged 
-                      ? (!selectedPhysicalRoom ? 'Pilih Kamar' : selectedPhysicalRoom.status !== 'available' ? 'Kamar Penuh' : `Ajukan Sewa Kamar ${selectedPhysicalRoom.room_number}`) 
-                      : (selectedRoom.isAvailable === false ? 'Kamar Penuh' : `Ajukan Sewa (${periodLabels[selectedPeriod] || selectedPeriod})`)
-                    }
-                  </button>
+                  {(() => {
+                    const isManaged = Boolean(kost.isManaged);
+                    const isAvailable = isManaged
+                      ? Boolean(selectedChildRoom && selectedChildRoom.isAvailable)
+                      : Boolean(selectedRoom && selectedRoom.isAvailable !== false);
+
+                    const buttonText = isManaged
+                      ? (!selectedChildRoom
+                          ? 'Pilih Kamar'
+                          : !selectedChildRoom.isAvailable
+                            ? 'Kamar Penuh'
+                            : `Ajukan Sewa ${selectedChildRoom.displayName}`)
+                      : (!isAvailable
+                          ? 'Kamar Penuh'
+                          : `Ajukan Sewa (${periodLabels[selectedPeriod] || selectedPeriod})`);
+
+                    return (
+                      <button
+                        onClick={handleBookingClick}
+                        disabled={!isAvailable}
+                        className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl transition-all active:scale-95 ${
+                          !isAvailable
+                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                            : 'bg-orange-500 text-white shadow-orange-100 hover:bg-orange-600 cursor-pointer'
+                        }`}
+                      >
+                        {buttonText}
+                      </button>
+                    );
+                  })()}
                   <button
                     onClick={handleOpenChat}
                     disabled={isSubmittingChat}

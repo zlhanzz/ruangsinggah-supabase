@@ -143,7 +143,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ kost, variant, initialPerio
         <div className="p-8 border-b border-gray-50 flex justify-between items-center">
           <div>
             <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight leading-none mb-1">Ajukan Sewa Kost</h2>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{kost.title} • {variant.name}</p>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{kost.title} • {(variant as any).displayName || variant.name}</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-50 rounded-full transition-colors">
             <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>

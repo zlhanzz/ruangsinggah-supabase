@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 173. Pemisahan Total (100% Independen pada Semua Aspek) antara KostManager dan Mitra Biasa (`KostDetail.tsx`, `BookingModal.tsx`, `KostCard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar properti listing KostManager **100% lepas dan independen dari setting/data properti saat masih menjadi mitra biasa** (seperti saklar on/off mandiri pada semua aspek).
+  2. Sebelumnya, ketika properti mitra biasa diubah menjadi KostManager dengan 3 kamar kosong (Kamar 3, 4, 5), tombol booking terkunci (*disabled*) dengan tulisan **"PILIH KAMAR"** karena sistem masih terikat dengan pembacaan tabel SQL lama (`rooms`) saat masih menjadi mitra biasa.
+- **Implementasi**:
+  * **1. Pelepasan Total dari Tabel SQL Lama (`rooms`)**:
+    - Menghapus ketergantungan `physicalRooms`, `selectedPhysicalRoom`, `loadingRooms`, dan efek polling tabel lama dari `KostDetail.tsx`.
+  * **2. Ketersediaan Murni Unit Kamar KostManager**:
+    - Status kamar tersedia, nomor kamar, lantai, dan fasilitas 100% bersumber langsung dari data unit kamar KostManager (`selectedChildRoom` / `properties.room_types`).
+  * **3. Tombol CTA Booking Instan & Dinamis**:
+    - Saat calon penyewa memilih unit kamar yang tersedia (misal: *Kamar 3*), tombol CTA langsung **AKTIF** (warna oranye, dapat diklik) dan menampilkan label unit kamar: **`Ajukan Sewa Kamar 3`**.
+    - Mengklik tombol langsung membuka `BookingModal` untuk kamar tersebut dan mencatat metadata booking (`roomType`, `roomNumber`, `roomId`) secara akurat.
+  * **4. Penyesuaian Modal & Kartu Katalog**:
+    - `BookingModal.tsx`: Menampilkan nama spesifik kamar (`Kost Madani • Kamar 3`).
+    - `KostCard.tsx`: Menghitung varian parent type KostManager secara independen.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/components/BookingModal.tsx`
+  - `functions/public/components/KostCard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 40.11s, 0 error).
+
 ### 172. Independent Scrollable Container pada Sidebar Booking Card (`KostDetail.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan mengapa kartu sidebar pemesanan (kanan) tidak dapat di-scroll langsung saat kursor mouse di atasnya, melainkan harus menunggu halaman utama/badan website di-scroll ke bawah terlebih dahulu.

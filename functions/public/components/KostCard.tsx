@@ -11,7 +11,9 @@ interface KostCardProps {
 }
 
 const KostCard: React.FC<KostCardProps> = ({ kost, onClick, onDelete }) => {
-  const variantCount = kost.roomTypes?.length || 1;
+  const variantCount = kost.isManaged 
+    ? (Array.from(new Set(kost.roomTypes?.map((rt: any) => rt.type?.trim() || rt.roomTypeName || 'Standard') || [])).length || 1)
+    : (kost.roomTypes?.length || 1);
 
   // Calculate prices across all room types
   let displayPrices: number[] = [];
