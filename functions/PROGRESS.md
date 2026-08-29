@@ -2,6 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 189. Perbaikan Kebijakan UPDATE RLS `chat_messages` & Reset Instan Badge Unread (`supabase_schema.sql`, `KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa ketika sesi chat sudah dibuka dan bahkan sudah dibalas oleh CS di Portal KostManager, kartu sesi di kolom kiri tetap menampilkan badge angka unread (seperti badge angka 7 pada `Game Burik`).
+  2. Akar masalah: Tabel `chat_messages` di database sebelumnya belum memiliki kebijakan RLS untuk operasi `UPDATE`. Akibatnya, perintah `markMessagesAsRead` (yang memperbarui `is_read = true`) ditolak diam-diam oleh database PostgreSQL. Nilai `is_read` tetap `false`, sehingga query kalkulasi unread terus menghitung pesan tersebut belum dibaca. Selain itu, local state `unread_count` pada `chatSessions` belum di-reset seketika saat auto-select atau saat pesan dibuka.
+- **Implementasi**:
+  * **1. Penambahan Kebijakan RLS `UPDATE` pada `chat_messages` (`supabase_schema.sql`)**:
+    - Mendaftarkan kebijakan `UPDATE` resmi pada `chat_messages` agar seluruh partisipan sesi dan akun ber-role `'admin'` diizinkan memperbarui `is_read = true`.
+  * **2. Reaktivitas Reset State Front-End (`KostManagerPortal.tsx`)**:
+    - Pada `useEffect` pembacaan pesan dan pada listener `subscribeToMessages`, sistem seketika mereset `unread_count = 0` pada local state `chatSessions` untuk sesi yang sedang aktif terbuka.
+    - Badge angka dan dot oranye kini **langsung hilang seketika** begitu sesi dipilih atau pesan dibalas.
+  * **3. Sinkronisasi Database**:
+    - Menjalankan normalisasi 69 pesan eksisting yang sudah dibuka menjadi `is_read = true`.
+- **File Tersentuh**:
+  - `functions/public/supabase_schema.sql`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 31.76s, 0 error).
+
 ### 188. Pembersihan Sesi Chat Kosong & Peningkatan Fallback Avatar Profil (`chatService.ts`, `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan mengapa ada percakapan yang masuk dengan pesan kosong (*"Mulai percakapan..."* tanpa isi pesan) dan profil kosong/rusak di Portal KostManager (contoh: `Rahmat Hidayat03`).

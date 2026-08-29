@@ -918,6 +918,31 @@ WITH CHECK (
   AND (auth.uid() = sender_id OR EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin'))
 );
 
+CREATE POLICY "Users and admins can update messages in their sessions"
+ON public.chat_messages FOR UPDATE
+USING (
+  EXISTS (
+    SELECT 1 FROM public.chat_sessions
+    WHERE chat_sessions.id = chat_messages.session_id
+    AND (
+      chat_sessions.user_id = auth.uid() 
+      OR chat_sessions.owner_id = auth.uid()
+      OR EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
+    )
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.chat_sessions
+    WHERE chat_sessions.id = chat_messages.session_id
+    AND (
+      chat_sessions.user_id = auth.uid() 
+      OR chat_sessions.owner_id = auth.uid()
+      OR EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.role = 'admin')
+    )
+  )
+);
+
 -- 6. Realtime Enrollment
 DO $$ 
 BEGIN

@@ -1279,6 +1279,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
         let isMounted = true;
         setLoadingChatMessages(true);
         markMessagesAsRead(selectedChatSession.id, 'owner');
+        setChatSessions(prev => prev.map(s => s.id === selectedChatSession.id ? { ...s, unread_count: 0 } : s));
 
         const fetchMsgs = async () => {
             try {
@@ -1321,6 +1322,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     // Jika pesan datang dari customer saat sesi sedang dibuka oleh CS, tandai dibaca
                     if (incomingMsg.sender_type !== 'owner') {
                         markMessagesAsRead(selectedChatSession.id, 'owner');
+                        setChatSessions(prevSessions => prevSessions.map(s => s.id === selectedChatSession.id ? { ...s, unread_count: 0 } : s));
                     }
 
                     return [...prev, incomingMsg];
