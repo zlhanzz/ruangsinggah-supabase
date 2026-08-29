@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 182. Rekonsiliasi Pesan Optimistik & Pencegahan Duplikasi Bubble Chat (`ChatWindow.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa setiap kali mengirim chat baru, pesannya selalu muncul ganda (*double bubble*) di awal, tetapi saat chat ditutup dan dibuka kembali, jumlah pesan menjadi normal (1 pesan).
+  2. Akar masalah: Front-end menambahkan pesan optimistik dengan ID sementara timestamp (`tempId`), sementara Supabase Realtime memancarkan event `INSERT` dengan UUID resmi database. Pengecekan ID lama menganggapnya sebagai pesan yang berbeda sehingga merender pesan kedua.
+- **Implementasi**:
+  * **1. Smart Message Reconciliation pada Listener Real-Time (`ChatWindow.tsx` & `KostManagerPortal.tsx`)**:
+    - Saat payload pesan dari Supabase Realtime tiba, sistem memeriksa apakah terdapat pesan optimistik lokal dengan teks dan pengirim yang sama.
+    - Jika ditemukan, sistem langsung **mereplace/menggantikan posisi ID sementara optimistik dengan ID UUID resmi database**, alih-alih menambahkan bubble baru.
+  * **2. Safe State Mutation pada Handler Kirim**:
+    - Menyelaraskan hasil kembalian dari `sendMessage` untuk memetakan ID secara aman tanpa memicu *flicker* atau duplikasi ganda.
+- **File Tersentuh**:
+  - `functions/public/components/ChatWindow.tsx`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 34.82s, 0 error).
+
 ### 181. Perbaikan Foreign Key Chat & Separasi Inbox Mitra vs Portal KostManager (`KostDetail.tsx`, `MitraDashboard.tsx`, `chatService.ts`, `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna mengalami error *"Gagal membuka chat. Silakan coba lagi nanti."* saat mengklik tombol Chat di listing Kost Madani.

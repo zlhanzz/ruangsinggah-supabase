@@ -1282,7 +1282,23 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
         const subscription = subscribeToMessages(selectedChatSession.id, (incomingMsg) => {
             if (isMounted) {
                 setChatMessages(prev => {
+                    // 1. Jika pesan dengan ID database ini sudah ada, lewati
                     if (prev.some(m => m.id === incomingMsg.id)) return prev;
+
+                    // 2. Jika ada pesan optimistik lokal dari pengirim yang sama dengan teks yang sama, ganti posisinya
+                    const optimisticIndex = prev.findIndex(
+                        m => m.sender_id === incomingMsg.sender_id && 
+                             m.sender_type === incomingMsg.sender_type && 
+                             m.message.trim() === incomingMsg.message.trim() &&
+                             (!m.id.includes('-') || m.id.length < 20)
+                    );
+
+                    if (optimisticIndex !== -1) {
+                        const updated = [...prev];
+                        updated[optimisticIndex] = incomingMsg;
+                        return updated;
+                    }
+
                     return [...prev, incomingMsg];
                 });
             }
@@ -1323,13 +1339,16 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
         if (!customText) setNewChatMessage('');
 
         try {
-            await sendMessage(
+            const savedMsg = await sendMessage(
                 selectedChatSession.id,
                 currentAdminId,
                 'owner',
                 optimisticMsg.message,
                 'Tim KostManager RuangSinggah'
             );
+            if (savedMsg && savedMsg.id) {
+                setChatMessages(prev => prev.map(m => m.id === tempId ? savedMsg : m));
+            }
             const propIds = properties.map(p => p.id).filter(Boolean);
             loadChatSessions(propIds);
         } catch (err: any) {

@@ -25,8 +25,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
     // Subscribe ke pesan baru secara real-time
     const subscription = subscribeToMessages(session.id, (msg) => {
       setMessages((prev) => {
-        // Hindari duplikasi pesan
-        if (prev.find(m => m.id === msg.id)) return prev;
+        // 1. Jika pesan dengan ID database ini sudah ada, lewati
+        if (prev.some(m => m.id === msg.id)) return prev;
+
+        // 2. Jika ada pesan optimistik lokal dari pengirim yang sama dengan teks yang sama, ganti posisinya
+        const optimisticIndex = prev.findIndex(
+          m => m.sender_id === msg.sender_id && 
+               m.sender_type === msg.sender_type && 
+               m.message.trim() === msg.message.trim() &&
+               (!m.id.includes('-') || m.id.length < 20)
+        );
+
+        if (optimisticIndex !== -1) {
+          const updated = [...prev];
+          updated[optimisticIndex] = msg;
+          return updated;
+        }
+
         return [...prev, msg];
       });
     });
@@ -82,7 +97,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
     try {
       if (!currentId) throw new Error("ID User tidak ditemukan. Silakan login ulang.");
       const senderType = optimisticMsg.sender_type;
-      await sendMessage(session.id, currentId, senderType, optimisticMsg.message);
+      const savedMsg = await sendMessage(session.id, currentId, senderType, optimisticMsg.message);
+      if (savedMsg && savedMsg.id) {
+        setMessages(prev => prev.map(m => m.id === tempId ? savedMsg : m));
+      }
     } catch (err: any) {
       console.error('Failed to send message:', err);
       setMessages(prev => prev.filter(m => m.id !== tempId));
