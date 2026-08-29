@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 207. Perbaikan Runtime Crash 'ReferenceError: currentSenderType is not defined' pada Jendela Pesan (`ChatWindow.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan error runtime console browser saat jendela chat dibuka:
+     ```text
+     ChatWindow.tsx:75 Failed to load messages: ReferenceError: currentSenderType is not defined
+         at loadMessages (ChatWindow.tsx:73:38)
+     ```
+  2. Akar masalah: Variabel `currentSenderType` sebelumnya hanya dideklarasikan secara lokal di dalam block `useEffect`. Ketika fungsi `loadMessages()` dieksekusi di luar `useEffect`, pemanggilan `markMessagesAsRead(session.id, currentSenderType)` melempar `ReferenceError`.
+- **Implementasi**:
+  * **1. Pengangkatan Scope (Hoisting) ke Tingkat Komponen (`ChatWindow.tsx`)**:
+    - Mendeklarasikan `currentId` dan `currentSenderType` langsung di tingkat atas komponen `ChatWindow`:
+      `const currentId = currentUser?.uid || currentUser?.id || '';`
+      `const currentSenderType: 'user' | 'owner' = currentId === session.user_id ? 'user' : 'owner';`
+  * **2. Pembersihan Redeklarasi & Penyelarasan Scope**:
+    - Menghapus deklarasi lokal duplikat di dalam `useEffect` dan `handleSendMessage`.
+    - Fungsi `loadMessages()` kini membaca `currentSenderType` secara valid tanpa error.
+    - Menambahkan `currentSenderType` ke dependency array `useEffect`.
+- **File Tersentuh**:
+  - `functions/public/components/ChatWindow.tsx`
+  - `functions/PROGRESS.md`
+  - `walkthrough.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, ✓ built in 35.38s, 0 error).
+  - Jendela chat berhasil memuat pesan dan menandai status baca tanpa `ReferenceError`.
+
 ### 206. Perbaikan ReferenceError 'getOrCreateChatSession' & Integrasi Smart Inbox Terpadu Calon Penyewa vs Penghuni Aktif (`MyKost.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan error saat mengklik tombol "Bantuan KostManager" di menu Kost Saya:

@@ -19,11 +19,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
   const [sendingMessages, setSendingMessages] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Identitas pengirim saat ini di tingkat komponen (diakses oleh loadMessages, useEffect, dan handleSendMessage)
+  const currentId = currentUser?.uid || currentUser?.id || '';
+  const currentSenderType: 'user' | 'owner' = currentId === session.user_id ? 'user' : 'owner';
+
   useEffect(() => {
     loadMessages();
-    const currentId = currentUser.uid || currentUser.id;
-    const currentSenderType = currentId === session.user_id ? 'user' : 'owner';
-    markMessagesAsRead(session.id, currentSenderType);
+    if (currentSenderType) {
+      markMessagesAsRead(session.id, currentSenderType);
+    }
     
     // Subscribe ke pesan baru & update status baca secara real-time
     const subscription = subscribeToMessages(session.id, (msg, eventType) => {
@@ -59,7 +63,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
     return () => {
       subscription.unsubscribe();
     };
-  }, [session.id]);
+  }, [session.id, currentSenderType]);
 
   useEffect(() => {
     scrollToBottom();
@@ -70,7 +74,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
     try {
       const msgs = await getChatMessages(session.id);
       setMessages(msgs);
-      markMessagesAsRead(session.id, currentSenderType);
+      if (currentSenderType) {
+        markMessagesAsRead(session.id, currentSenderType);
+      }
     } catch (err) {
       console.error('Failed to load messages:', err);
     } finally {
@@ -92,12 +98,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
     setSendingMessages(prev => new Set(prev).add(tempId));
     
     // Add optimistic message
-    const currentId = currentUser.uid || currentUser.id;
     const optimisticMsg: ChatMessage = {
       id: tempId,
       session_id: session.id,
       sender_id: currentId,
-      sender_type: currentId === session.user_id ? 'user' : 'owner',
+      sender_type: currentSenderType,
       message: newMessage.trim(),
       is_read: false,
       created_at: new Date().toISOString()

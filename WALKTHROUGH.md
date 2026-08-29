@@ -1,57 +1,45 @@
-# WALKTHROUGH — Perbaikan Bug Chat Bantuan KostManager & Implementasi Smart Inbox Terpadu (Penghuni vs Calon Penyewa)
+# WALKTHROUGH — Perbaikan Runtime Bug `currentSenderType is not defined` pada ChatWindow
 
 **Tanggal Selesai**: 30 Agustus 2026  
-**Entry PROGRESS.md**: #206  
+**Entry PROGRESS.md**: #207  
 **Branch**: `bukan-productions`
 
 ---
 
-## 1. Ringkasan Pekerjaan
+## 1. Ringkasan Masalah & Perbaikan
 
-Pekerjaan ini menyelesaikan 2 poin utama:
-1. **Perbaikan Runtime Error Tombol "Bantuan KostManager" pada Menu Kost Saya (`MyKost.tsx`)**:
-   - Menghilangkan crash `ReferenceError: getOrCreateChatSession is not defined` saat penghuni mengklik tombol *"Bantuan KostManager"* di tab Kost Aktif.
-   - Memastikan routing chat properti terkelola otomatis terhubung ke CS Resmi KostManager (`SYSTEM_ADMIN_ID`).
-2. **Implementasi Unified Smart Inbox di Portal KostManager (`KostManagerPortal.tsx`)**:
-   - Menjawab kebutuhan arsitektur penanganan chat calon penyewa vs penghuni aktif: **Tersentralisasi dalam satu inbox terpadu** tanpa memecah menu, namun diperkaya dengan **Quick Filter Tabs**, **Visual Identity Badges**, dan **High-Context Resident Information Strip**.
+### Gejala
+Ketika pengguna mengklik tombol chat (misalnya *"Bantuan KostManager"* di menu Kost Saya atau tombol chat listing), muncul error di console browser:
+```text
+ChatWindow.tsx:75 Failed to load messages: ReferenceError: currentSenderType is not defined
+    at loadMessages (ChatWindow.tsx:73:38)
+```
+Pesan gagal dimuat dan status pembacaan pesan tidak dapat disinkronkan.
 
----
-
-## 2. Daftar Perubahan Kode
-
-### A. [`MyKost.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx)
-- **Import Module**: Menambahkan import `getOrCreateChatSession` dan `SYSTEM_ADMIN_ID` dari `../chatService`.
-- **Routing Chat Cerdas**:
-  - Pada fungsi `handleOpenChat`, sistem mendeteksi apakah properti berstatus kelolaan KostManager (`kost.isManagedKost` / `kost.is_managed`).
-  - Jika ya:
-    - Target penerima otomatis dialihkan ke `SYSTEM_ADMIN_ID`.
-    - Nama kontak ditampilkan sebagai **`Tim KostManager`** dengan tipe `contactType: 'admin'`.
-    - Mengirimkan metadata lengkap (`customerName`, `customerPhoto`) ke `getOrCreateChatSession` agar kartu CS langsung memiliki identitas pengguna yang valid.
-
-### B. [`KostManagerPortal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx)
-- **State Filter Kategori**:
-  - Menambahkan state `chatCategoryFilter: 'all' | 'resident' | 'inquirer' | 'unread'` (default `'all'`).
-- **Pencocokan Otomatis Penghuni (`getTenantForSession`)**:
-  - Fungsi pencocokan otomatis antara pengirim chat dengan database penyewa aktif (`tenants`) berdasarkan `user_id` / `email` dan `property_id`.
-- **Quick Filter Tabs di Kolom Kiri**:
-  - `[ SEMUA (N) ]`: Menampilkan seluruh percakapan.
-  - `[ 🏠 PENGHUNI (N) ]`: Menyaring khusus percakapan dari penyewa yang memiliki kamar aktif.
-  - `[ 💬 CALON (N) ]`: Menyaring calon penyewa yang sedang menanyakan ketersediaan kamar.
-  - `[ 🔔 UNREAD (N) ]`: Menyaring percakapan yang memiliki pesan baru belum dibalas.
-- **Micro-Badges Identitas pada Kartu Sesi**:
-  - Penghuni: Badge hijau emerald `[ 🏠 PENGHUNI • UNIT X ]` dengan avatar bergradasi emerald.
-  - Calon: Badge abu-abu `[ 🔍 CALON ]` dengan avatar bergradasi oranye.
-- **High-Context Resident Status Strip di Header Chat**:
-  - Ketika percakapan penghuni aktif dipilih, muncul banner konteks sewa di atas pesan:
-    - **Unit Hunian & Posisi Lantai**: misal `Unit Kamar 1 • Lantai 1`.
-    - **Periode Masa Sewa**: misal `28 Ags 2026 s/d 28 Sep 2026`.
-    - **Tombol Pintas WhatsApp**: Akses cepat ke kontak WhatsApp penghuni.
+### Solusi
+Mengangkat (*hoisting*) deklarasi variabel `currentId` dan `currentSenderType` dari dalam blok `useEffect` ke tingkat root komponen `ChatWindow`:
+```typescript
+const currentId = currentUser?.uid || currentUser?.id || '';
+const currentSenderType: 'user' | 'owner' = currentId === session.user_id ? 'user' : 'owner';
+```
+Dengan perubahan ini, seluruh fungsi pembantu di dalam `ChatWindow` (`loadMessages`, callback `subscribeToMessages`, `handleSendMessage`, dan rendering JSX) memiliki akses penuh ke `currentSenderType` tanpa memicu `ReferenceError`.
 
 ---
 
-## 3. Hasil Pengujian & Verifikasi
+## 2. File yang Diubah
 
-### A. Uji Kompilasi TypeScript & Vite Build
+### [`functions/public/components/ChatWindow.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/ChatWindow.tsx)
+- **Baris ~22**: Menambahkan deklarasi `currentId` dan `currentSenderType`.
+- **Baris ~24–27**: Menghapus deklarasi lokal di dalam `useEffect` dan menambahkan pengecekan `if (currentSenderType) markMessagesAsRead(...)`.
+- **Baris ~60**: Menambahkan `currentSenderType` ke dependency array `useEffect`.
+- **Baris ~73**: Memperbarui `loadMessages()` agar memanggil `markMessagesAsRead(session.id, currentSenderType)` dengan aman.
+- **Baris ~95**: Menghapus deklarasi `currentId` berulang di `handleSendMessage`.
+
+---
+
+## 3. Hasil Pengujian & Kompilasi
+
+### Uji Build Vite
 ```bash
 > ruangsinggah.id@0.0.0 build
 > vite build
@@ -61,25 +49,17 @@ transforming...
 ✓ 2531 modules transformed.
 rendering chunks...
 computing gzip size...
-✓ built in 31.81s (Exit code 0)
+✓ built in 35.38s (Exit code 0)
 ```
-Semua file terkompilasi 100% tanpa error TypeScript maupun syntax error.
-
-### B. Uji Skenario Pengguna
-1. **Klik Bantuan KostManager di Kost Saya (`MyKost.tsx`)**:
-   - Membuka jendela obrolan dengan CS `Tim KostManager` tanpa runtime exception `getOrCreateChatSession`.
-2. **Penerimaan Chat di Portal CS (`KostManagerPortal.tsx`)**:
-   - Chat masuk terdaftar dan terdeteksi statusnya secara otomatis (`🏠 PENGHUNI` vs `🔍 CALON`).
-   - CS dapat mengklik tab `[ 🏠 PENGHUNI ]` untuk merespons kendala kamar dengan segera, atau tab `[ 💬 CALON ]` untuk memprioritaskan konversi prospek sewa baru.
-   - Context bar menampilkan unit kamar dan masa sewa aktif tanpa perlu CS berpindah tab.
+- 0 error TypeScript
+- 0 warning kompilasi fatal
+- Asset build berhasil diperbarui
 
 ---
 
-## 4. Riwayat Git
+## 4. Panduan Verifikasi untuk Pengguna
 
-- **Branch**: `bukan-productions`
-- **File Dimodifikasi**:
-  - `functions/public/pages/MyKost.tsx`
-  - `functions/public/components/admin/KostManagerPortal.tsx`
-  - `functions/PROGRESS.md`
-  - `walkthrough.md`
+1. Buka menu **Kost Saya** (`/my-bookings/aktif`).
+2. Klik tombol **"Bantuan KostManager"** pada kartu sewa aktif.
+3. Jendela obrolan obrolan (*ChatWindow*) akan terbuka mulus tanpa error `ReferenceError: currentSenderType is not defined` di console browser.
+4. Riwayat pesan percakapan termuat dengan sempurna dan indikator centang baca (*read receipts*) tersinkronisasi secara real-time.
