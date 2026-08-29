@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 208. Perbaikan RLS Violations 'notifications' & Penyelarasan Sub-Label KostManager (`notificationService.ts`, `ChatWindow.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan error console saat mengirim pesan obrolan:
+     ```text
+     notificationService.ts:40 Notification insertion failed: new row violates row-level security policy for table "notifications"
+     ```
+  2. Sub-label pada header obrolan di jendela chat menampilkan `TIM KOSTMANAGER (PEMILIK)` yang rancu karena properti dikelola oleh Tim KostManager, bukan pemilik perseorangan.
+- **Akar Masalah & Implementasi**:
+  * **1. Eliminasi Error RLS `notifications` (`notificationService.ts`)**:
+    - Kebijakan RLS database membolehkan siapa pun melakukan `INSERT` notifikasi (`WITH CHECK (true)`), namun kebijakan `SELECT` membatasi agar user hanya bisa membaca notifikasinya sendiri (`USING (auth.uid() = user_id)`).
+    - `sendNotification` sebelumnya mengeksekusi `.insert([...]).select().single()`. PostgREST berhasil menyimpan baris notifikasi, namun seketika gagal saat mencoba melakukan `.select()` terhadap baris notifikasi milik user penerima (lawan bicara/mitra/admin).
+    - Memperbaiki `sendNotification` agar mengeksekusi `insert([...])` murni tanpa chaining `.select().single()`. Pengiriman notifikasi in-app kini 100% mulus dan bebas dari error RLS.
+  * **2. Penyelarasan Sub-Label ChatWindow (`ChatWindow.tsx`)**:
+    - Memperluas interface `ChatWindowProps` agar mendukung `contactType?: 'owner' | 'caretaker' | 'admin' | 'manager'`.
+    - Menambahkan deteksi cerdas pada peran pengelola (`admin`, `manager`, atau nama mengandung `KostManager`) sehingga sub-label header menampilkan **`TIM KOSTMANAGER (PENGELOLA RESMI)`** alih-alih `(PEMILIK)`.
+- **File Tersentuh**:
+  - `functions/public/notificationService.ts`
+  - `functions/public/components/ChatWindow.tsx`
+  - `functions/PROGRESS.md`
+  - `walkthrough.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` berhasil 100% (✓ 2531 modules transformed, 34.06s, exit code 0).
+  - Uji inseri notifikasi anonim dan autentikasi berjalan sukses tanpa pelanggaran RLS.
+
 ### 207. Perbaikan Runtime Crash 'ReferenceError: currentSenderType is not defined' pada Jendela Pesan (`ChatWindow.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan error runtime console browser saat jendela chat dibuka:

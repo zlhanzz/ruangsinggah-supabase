@@ -21,7 +21,7 @@ export const sendNotification = async (
   link?: string
 ) => {
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('notifications')
       .insert([
         {
@@ -32,9 +32,7 @@ export const sendNotification = async (
           metadata,
           link
         }
-      ])
-      .select()
-      .single();
+      ]);
 
     if (error) {
       console.error('Notification insertion failed:', error.message);
@@ -42,7 +40,7 @@ export const sendNotification = async (
       // but log it clearly as an error now.
       return null;
     }
-    return data;
+    return { success: true };
   } catch (error) {
     console.error('Error in sendNotification (non-fatal):', error);
     return null;

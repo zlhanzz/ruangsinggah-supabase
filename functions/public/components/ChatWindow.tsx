@@ -8,7 +8,7 @@ interface ChatWindowProps {
   onClose: () => void;
   propertyName?: string;
   contactName?: string;
-  contactType?: 'owner' | 'caretaker';
+  contactType?: 'owner' | 'caretaker' | 'admin' | 'manager';
   isEmbedded?: boolean;
 }
 
@@ -220,9 +220,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
               </h3>
               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest flex items-center gap-2">
                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" /> 
-                {contactName 
-                  ? `${contactName} (${contactType === 'caretaker' ? 'Penjaga' : 'Pemilik'})` 
-                  : (contactType === 'caretaker' ? 'Penjaga Kost' : 'Pemilik Kost')}
+                {(() => {
+                  const isKM = contactType === 'admin' || contactType === 'manager' || contactName?.toLowerCase().includes('kostmanager');
+                  const roleLabel = isKM ? 'Pengelola Resmi' : (contactType === 'caretaker' ? 'Penjaga Kost' : 'Pemilik Kost');
+                  return contactName ? `${contactName} (${roleLabel})` : roleLabel;
+                })()}
               </p>
             </div>
           </div>
