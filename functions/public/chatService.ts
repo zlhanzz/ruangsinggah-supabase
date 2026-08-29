@@ -18,6 +18,7 @@ export interface ChatSession {
   last_message_at?: string;
   created_at: string;
   updated_at: string;
+  unread_count?: number;
   owner?: any;
   user?: any;
   property?: any;
@@ -427,6 +428,22 @@ export async function getMyChatSessions(userId: string): Promise<ChatSession[]> 
     });
   }
 
+  // 3.5. Fetch unread messages for user
+  const sessionIds = sessions.map(s => s.id);
+  const { data: unreadRows } = sessionIds.length > 0
+    ? await supabase
+        .from('chat_messages')
+        .select('session_id')
+        .in('session_id', sessionIds)
+        .neq('sender_id', userId)
+        .eq('is_read', false)
+    : { data: [] };
+
+  const unreadMap = new Map<string, number>();
+  unreadRows?.forEach((r: any) => {
+    unreadMap.set(r.session_id, (unreadMap.get(r.session_id) || 0) + 1);
+  });
+
   // 4. Map back to sessions and parse tunneled metadata
   return sessions.map(s => {
     let ownerInfo = profileMap.get(s.owner_id) || { name: 'Pemilik', photo_url: '' };
@@ -454,6 +471,7 @@ export async function getMyChatSessions(userId: string): Promise<ChatSession[]> 
     return {
       ...s,
       last_message: cleanMessage,
+      unread_count: unreadMap.get(s.id) || 0,
       user: userInfo,
       owner: ownerInfo
     };
@@ -508,6 +526,22 @@ export async function getKostManagerChatSessions(managedPropertyIds: string[]): 
       });
     });
 
+    // 3.5. Fetch Unread Message Counts for CS
+    const sessionIds = sessions.map(s => s.id);
+    const { data: unreadRows } = sessionIds.length > 0
+      ? await supabase
+          .from('chat_messages')
+          .select('session_id')
+          .in('session_id', sessionIds)
+          .eq('sender_type', 'user')
+          .eq('is_read', false)
+      : { data: [] };
+
+    const unreadMap = new Map<string, number>();
+    unreadRows?.forEach((r: any) => {
+      unreadMap.set(r.session_id, (unreadMap.get(r.session_id) || 0) + 1);
+    });
+
     // 4. Map back to sessions and parse tunneled metadata
     return sessions.map(s => {
       let userInfo = profileMap.get(s.user_id) || { name: 'Calon Penghuni', photo_url: '' };
@@ -535,6 +569,7 @@ export async function getKostManagerChatSessions(managedPropertyIds: string[]): 
         ...s,
         property: propData,
         last_message: cleanMessage,
+        unread_count: unreadMap.get(s.id) || 0,
         user: userInfo,
         owner: { name: 'Tim KostManager RuangSinggah', photo_url: '' }
       };

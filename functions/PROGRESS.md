@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 185. Fitur Diferensiasi Visual Chat Belum Dibaca (Unread) vs Sudah Dibaca & Sinkronisasi Centang WhatsApp (`chatService.ts`, `KostManagerPortal.tsx`, `ChatWindow.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar percakapan yang memiliki pesan baru (belum dibaca / unread) dapat dibedakan secara visual dari percakapan yang sudah pernah dibuka atau dibaca.
+  2. Pengguna meminta agar status unread ini terhubung langsung secara real-time dengan indikator centang WhatsApp (Centang 1, Centang 2 Abu-Abu, dan Centang 2 Biru).
+  3. Badge angka di sidebar menu `PESAN & CHAT CUSTOMER` sebelumnya keliru menampilkan total seluruh sesi (18), seharusnya hanya menampilkan jumlah chat yang *unread*.
+- **Implementasi**:
+  * **1. Kalkulasi Dinamis `unread_count` Backend & Service (`chatService.ts`)**:
+    - Menambahkan kolom terhitung `unread_count` pada interface `ChatSession`.
+    - Di `getKostManagerChatSessions` dan `getMyChatSessions`, sistem secara efisien melakukan agregasi jumlah pesan `is_read = false` yang dikirim oleh lawan bicara untuk setiap sesi.
+  * **2. Visual UI WhatsApp-Style Unread vs Read (`KostManagerPortal.tsx`)**:
+    - **Unread Chat**: Menampilkan badge lingkaran oranye dengan angka jumlah unread, dot indikator oranye, nama calon penyewa dan cuplikan teks pesan dicetak **Tebal (Font-Black text-gray-900)**, jam pesan diwarnai oranye, dan kartu diberi aksen border oranye lembut (`bg-amber-50/40 border-amber-200/80`).
+    - **Read Chat**: Tipografi teks reguler abu-abu bersih tanpa badge angka.
+    - **Koreksi Badge Sidebar**: Menghitung `unreadChatCount = chatSessions.reduce((acc, s) => acc + (s.unread_count || 0), 0)`. Badge hanya muncul jika ada pesan unread.
+  * **3. Sinkronisasi Real-Time Centang WhatsApp**:
+    - Saat CS mengklik/memilih sesi unread di portal, sistem memicu `markMessagesAsRead(session.id, 'owner')` dan seketika mereset `unread_count = 0` pada kartu dan badge sidebar.
+    - Perubahan `is_read = true` disiarkan melalui Supabase Realtime WebSocket ke layar calon penyewa, seketika mengubah status centang dari **Centang 2 Abu-Abu** menjadi **Centang 2 Biru Cerah**.
+    - Sebaliknya, saat calon penyewa membuka popup chat ([ChatWindow.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/ChatWindow.tsx)), sistem menandai pesan CS telah dibaca sehingga centang balasan CS di Portal KostManager seketika berubah menjadi biru.
+- **File Tersentuh**:
+  - `functions/public/chatService.ts`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/public/components/ChatWindow.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 36.62s, 0 error).
+
 ### 184. Perbaikan Routing & Akses Real-Time Chat Properti KostManager ke Portal KostManager (`chatService.ts`, `KostDetail.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa saat login menggunakan akun penyewa (role: `user`) dan mengirim chat ke listing kost kelolaan KostManager (Kost Madani), chat tersebut tidak muncul di Portal KostManager (`/dashboard-admin/km_chats`) maupun di Dashboard Mitra.

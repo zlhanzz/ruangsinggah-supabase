@@ -70,6 +70,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, currentUser, onClose, 
     try {
       const msgs = await getChatMessages(session.id);
       setMessages(msgs);
+      markMessagesAsRead(session.id, currentSenderType);
     } catch (err) {
       console.error('Failed to load messages:', err);
     } finally {

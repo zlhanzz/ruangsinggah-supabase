@@ -2285,7 +2285,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                         { key: 'billing', icon: '🧾', label: 'Riwayat Pembayaran Sewa' },
                         { key: 'packages', icon: '⚙️', label: 'Harga Langganan' }
                     ] as const).map(t => {
-                        const chatCount = chatSessions.length;
+                        const unreadChatCount = chatSessions.reduce((acc, s) => acc + (s.unread_count || 0), 0);
                         return (
                             <button
                                 key={t.key}
@@ -2300,9 +2300,9 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                     <span className="text-lg">{t.icon}</span>
                                     <span className="text-xs uppercase tracking-wide">{t.label}</span>
                                 </div>
-                                {t.key === 'chats' && chatCount > 0 && (
+                                {t.key === 'chats' && unreadChatCount > 0 && (
                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === 'chats' ? 'bg-orange-500 text-white' : 'bg-orange-100 text-orange-700'}`}>
-                                        {chatCount}
+                                        {unreadChatCount}
                                     </span>
                                 )}
                             </button>
@@ -4038,32 +4038,55 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                 const sessProp = properties.find(p => p.id === session.property_id) || session.property;
                                                 const sessPropPhoto = sessProp ? normalizePhotoUrl((sessProp.image_urls && sessProp.image_urls.length > 0) ? sessProp.image_urls[0] : (sessProp.images?.[0] || '')) : '';
                                                 const customerName = session.user?.name || 'Calon Penyewa';
+                                                const hasUnread = Boolean(session.unread_count && session.unread_count > 0);
 
                                                 return (
                                                     <div
                                                         key={session.id}
-                                                        onClick={() => setSelectedChatSession(session)}
+                                                        onClick={() => {
+                                                            setSelectedChatSession(session);
+                                                            if (session.unread_count && session.unread_count > 0) {
+                                                                setChatSessions(prev => prev.map(s => s.id === session.id ? { ...s, unread_count: 0 } : s));
+                                                                markMessagesAsRead(session.id, 'owner');
+                                                            }
+                                                        }}
                                                         className={`p-3 rounded-2xl cursor-pointer transition-all duration-200 border ${
                                                             isSelected
-                                                                ? 'bg-orange-50/80 border-orange-200 shadow-2xs'
+                                                                ? 'bg-orange-50/90 border-orange-300 shadow-xs'
+                                                                : hasUnread
+                                                                ? 'bg-amber-50/40 hover:bg-amber-50/70 border-amber-200/80 shadow-xs ring-1 ring-amber-400/20'
                                                                 : 'bg-white hover:bg-slate-50 border-gray-100 shadow-2xs'
                                                         }`}
                                                     >
                                                         {/* Top Row: Customer Avatar, Name & Timestamp */}
                                                         <div className="flex items-center justify-between gap-2 mb-1.5">
                                                             <div className="flex items-center gap-2 min-w-0">
-                                                                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-orange-500 to-amber-400 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs overflow-hidden">
+                                                                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-orange-500 to-amber-400 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs overflow-hidden relative">
                                                                     {session.user?.photo_url ? (
                                                                         <img src={session.user.photo_url} alt="" className="w-full h-full object-cover" />
                                                                     ) : (
                                                                         customerName.charAt(0).toUpperCase()
                                                                     )}
                                                                 </div>
-                                                                <p className="text-xs font-black text-gray-900 truncate">{customerName}</p>
+                                                                <div className="min-w-0 flex items-center gap-1.5">
+                                                                    <p className={`text-xs truncate ${hasUnread ? 'font-black text-gray-900' : 'font-bold text-gray-700'}`}>
+                                                                        {customerName}
+                                                                    </p>
+                                                                    {hasUnread && (
+                                                                        <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0 animate-pulse" />
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                            <span className="text-[9px] font-bold text-gray-400 shrink-0">
-                                                                {session.updated_at ? new Date(session.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : ''}
-                                                            </span>
+                                                            <div className="flex flex-col items-end shrink-0 gap-1">
+                                                                <span className={`text-[9px] ${hasUnread ? 'font-black text-orange-600' : 'font-bold text-gray-400'}`}>
+                                                                    {session.updated_at ? new Date(session.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : ''}
+                                                                </span>
+                                                                {hasUnread && (
+                                                                    <span className="px-1.5 py-0.5 rounded-full bg-orange-500 text-white text-[9px] font-black leading-none shadow-xs">
+                                                                        {session.unread_count}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
 
                                                         {/* Middle Row: Prominent Property Badge */}
@@ -4084,7 +4107,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                         )}
 
                                                         {/* Bottom Row: Message Snippet */}
-                                                        <p className="text-[11px] text-gray-500 line-clamp-1 font-medium pl-1">
+                                                        <p className={`text-[11px] line-clamp-1 pl-1 ${hasUnread ? 'font-black text-gray-900' : 'font-medium text-gray-500'}`}>
                                                             {session.last_message || 'Mulai percakapan...'}
                                                         </p>
                                                     </div>
