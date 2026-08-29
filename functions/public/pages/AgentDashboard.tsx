@@ -4205,8 +4205,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     const renderTasks = () => {
         const filteredRequests = surveyRequests.filter(req => {
             if (agentTab === 'pending') return req.status === 'PENDING_ASSIGNMENT';
-            if (agentTab === 'active') return ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED', 'SUBMITTED', 'REVISION_REQUIRED', 'NEED_REVISION'].includes(req.status);
-            if (agentTab === 'history') return ['COMPLETED', 'CANCELLED'].includes(req.status);
+            if (agentTab === 'active') return ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED', 'SUBMITTED', 'REVISION_REQUIRED', 'NEED_REVISION'].includes(req.status) && !['COMPLETED', 'APPROVED', 'ACTIVE', 'CANCELLED'].includes(req.status);
+            if (agentTab === 'history') return ['COMPLETED', 'CANCELLED', 'APPROVED', 'ACTIVE'].includes(req.status);
             return false;
         });
 
@@ -4231,8 +4231,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             {t.label}
                             {surveyRequests.filter(r => {
                                 if (t.id === 'pending') return r.status === 'PENDING_ASSIGNMENT';
-                                if (t.id === 'active') return ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED', 'SUBMITTED', 'REVISION_REQUIRED', 'NEED_REVISION'].includes(r.status);
-                                if (t.id === 'history') return ['COMPLETED', 'CANCELLED'].includes(r.status);
+                                if (t.id === 'active') return ['AGENT_ASSIGNED', 'HEADING_TO_LOCATION', 'SURVEYING', 'RESCHEDULED', 'SUBMITTED', 'REVISION_REQUIRED', 'NEED_REVISION'].includes(r.status) && !['COMPLETED', 'APPROVED', 'ACTIVE', 'CANCELLED'].includes(r.status);
+                                if (t.id === 'history') return ['COMPLETED', 'CANCELLED', 'APPROVED', 'ACTIVE'].includes(r.status);
                                 return false;
                             }).length > 0 && (
                                 <span className={`w-2 h-2 rounded-full ${agentTab === t.id ? 'bg-white' : 'bg-red-500'}`} />
@@ -4322,7 +4322,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                 'SUBMITTED': 'bg-emerald-100 text-emerald-950 border border-emerald-300 font-bold',
                                                 'REVISION_REQUIRED': 'bg-amber-100 text-amber-950 border-2 border-amber-400 font-extrabold shadow-md animate-pulse',
                                                 'NEED_REVISION': 'bg-amber-100 text-amber-950 border-2 border-amber-400 font-extrabold shadow-md animate-pulse',
-                                                'COMPLETED': 'bg-green-100 text-green-900 border border-green-200',
+                                                'COMPLETED': 'bg-emerald-100 text-emerald-950 border border-emerald-300 font-bold',
+                                                'APPROVED': 'bg-emerald-100 text-emerald-950 border border-emerald-300 font-bold',
+                                                'ACTIVE': 'bg-emerald-100 text-emerald-950 border border-emerald-300 font-bold',
                                                 'RESCHEDULED': 'bg-amber-100 text-amber-900 border border-amber-200'
                                             };
                                             const bgClass = statusColorMap[req.status] || 'bg-primary-fixed text-on-primary-fixed';
@@ -4335,7 +4337,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                                 'SUBMITTED': 'DATA DIKIRIM (MENUNGGU TINJAUAN ADMIN)',
                                                 'REVISION_REQUIRED': '⚠️ PERLU REVISI / EVALUASI ADMIN',
                                                 'NEED_REVISION': '⚠️ PERLU REVISI / EVALUASI ADMIN',
-                                                'COMPLETED': 'SELESAI',
+                                                'COMPLETED': isKostManager ? 'SELESAI (SUDAH LISTING KOSTMANAGER)' : 'SELESAI',
+                                                'APPROVED': 'SELESAI (SUDAH LISTING KOSTMANAGER)',
+                                                'ACTIVE': 'SELESAI (SUDAH LISTING KOSTMANAGER)',
                                                 'RESCHEDULED': 'JADWAL ULANG'
                                             };
                                             return (

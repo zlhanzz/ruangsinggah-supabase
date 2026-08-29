@@ -2700,13 +2700,56 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
         payment_method
       )
     `);
-
-  if (isAgent) {
+    if (isAgent) {
     query = query.or(`assigned_agent_id.eq.${user.id},assigned_agent_id.is.null,status.eq.PENDING_ASSIGNMENT`);
   } else if (!isAdmin) {
     // Regular user: only see their own requests
     query = query.eq('user_id', user.id);
   }
+
+  // Fetch active managed properties & active KostManager requests to auto-complete surveys that are already published
+  const [propsRes, kmActiveReqsRes] = await Promise.all([
+    supabase
+      .from('properties')
+      .select('id, title, is_managed, status')
+      .or('is_managed.eq.true,status.eq.published'),
+    supabase
+      .from('kostmanager_requests')
+      .select('id, kost_name, property_id, status, transaction_id')
+      .in('status', ['ACTIVE', 'APPROVED', 'COMPLETED'])
+  ]);
+
+  const managedPropTitles = new Set(
+    (propsRes.data || [])
+      .filter(p => p.is_managed || p.status === 'published' || p.status === 'active')
+      .map(p => (p.title || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  const managedPropIds = new Set(
+    (propsRes.data || [])
+      .filter(p => p.is_managed || p.status === 'published' || p.status === 'active')
+      .map(p => p.id)
+      .filter(Boolean)
+  );
+
+  const activeKmTxIds = new Set(
+    (kmActiveReqsRes.data || [])
+      .map(r => r.transaction_id)
+      .filter(Boolean)
+  );
+
+  const activeKmPropIds = new Set(
+    (kmActiveReqsRes.data || [])
+      .map(r => r.property_id)
+      .filter(Boolean)
+  );
+
+  const activeKmTitles = new Set(
+    (kmActiveReqsRes.data || [])
+      .map(r => (r.kost_name || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
 
   const { data: surveys, error } = await query.order('created_at', { ascending: false });
   if (error) throw error;
@@ -2720,8 +2763,21 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
     if ((!summary || Object.keys(summary).length === 0) && s.transaction?.metadata) {
       summary = s.transaction.metadata.evaluation_summary || s.transaction.metadata.surveyForm || s.transaction.metadata.surveyResult || summary;
     }
+
+    const sTitle = (s.kost_name || '').trim().toLowerCase();
+    const isAlreadyManagedAndActive = 
+      (s.kost_id && (managedPropIds.has(s.kost_id) || activeKmPropIds.has(s.kost_id))) ||
+      (sTitle && (managedPropTitles.has(sTitle) || activeKmTitles.has(sTitle))) ||
+      (s.transaction_id && activeKmTxIds.has(s.transaction_id));
+
+    let finalStatus = s.status;
+    if (isAlreadyManagedAndActive && ['SUBMITTED', 'ACTIVE', 'APPROVED'].includes(s.status)) {
+      finalStatus = 'COMPLETED';
+    }
+
     return {
       ...s,
+      status: finalStatus,
       evaluation_summary: summary || {},
       task_type: isKostManager ? 'kostmanager' : 'survei_biasa'
     };
@@ -2768,14 +2824,25 @@ export async function getAdminSurveyRequests(): Promise<SurveyRequest[]> {
     const { data: kmSurveys, error: kmErr } = await kmQuery.order('created_at', { ascending: false });
     if (!kmErr && kmSurveys) {
       mappedKmSurveys = kmSurveys.map((ks: any) => {
+        const kmTitle = (ks.request?.kost_name || '').trim().toLowerCase();
+        const isKmManagedAndActive =
+          ks.request?.status === 'ACTIVE' ||
+          ks.status === 'COMPLETED' ||
+          ks.status === 'APPROVED' ||
+          (ks.request?.property_id && managedPropIds.has(ks.request?.property_id)) ||
+          (kmTitle && managedPropTitles.has(kmTitle));
+
         let computedStatus = ks.status;
-        if (ks.status === 'REVISION_REQUIRED' || ks.request?.status === 'REVISION_REQUIRED') {
+        if (isKmManagedAndActive) {
+          computedStatus = 'COMPLETED';
+        } else if (ks.status === 'REVISION_REQUIRED' || ks.request?.status === 'REVISION_REQUIRED') {
           computedStatus = 'REVISION_REQUIRED';
         } else if (ks.status === 'SUBMITTED' || ks.request?.status === 'PENDING_ONBOARDING') {
           computedStatus = 'SUBMITTED';
         } else if (ks.status === 'SURVEYING' && ks.request?.status === 'AGENT_ASSIGNED') {
           computedStatus = 'PENDING_ASSIGNMENT';
         }
+
         return {
           id: ks.id,
           task_type: 'kostmanager',

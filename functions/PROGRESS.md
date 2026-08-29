@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 194. Pemindahan Otomatis Tugas Pendataan KostManager yang Telah Listing ke Tab 'Riwayat' Dashboard Agen (`adminService.ts`, `AgentDashboard.tsx`, `KostManagerManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa tugas pendataan KostManager yang sudah disetujui (ACC) oleh admin dan propertinya sudah listing tayang sebagai mitra KostManager (misal order `#12415302` - Kost Madani) masih tertahan di tab **"Aktif"** Dashboard Agen dengan label `DATA DIKIRIM (MENUNGGU TINJAUAN ADMIN)`.
+  2. Akar masalah: Saat admin menyetujui listing kost, status tugas pada database tidak otomatis disinkronkan ke `COMPLETED`, fungsi `getAdminSurveyRequests()` belum memeriksa status publikasi properti/mitra, dan filter tab `history` di `AgentDashboard.tsx` hanya menangkap status `COMPLETED` mentah tanpa sinkronisasi properti aktif.
+- **Implementasi**:
+  * **1. Cross-Check Properti Listing & Sinkronisasi Otomatis (`adminService.ts`)**:
+    - Memperbarui `getAdminSurveyRequests()` agar melakukan verifikasi silang (*cross-reference*) dengan tabel `properties` (`is_managed = true` / `status = 'published'`) dan `kostmanager_requests` (`status = 'ACTIVE'`).
+    - Jika properti yang disurvei telah aktif/listing sebagai mitra KostManager, status tugas otomatis diselesaikan (`COMPLETED`), baik untuk survei biasa maupun survei KostManager (`kostmanager_surveys`).
+  * **2. Pembaruan Filter Tab & Badge Riwayat (`AgentDashboard.tsx`)**:
+    - Menyempurnakan filter `agentTab === 'active'` agar mengecualikan seluruh tugas yang sudah selesai (`COMPLETED`, `APPROVED`, `ACTIVE`).
+    - Memperbarui filter `agentTab === 'history'` dan penghitung dot indikator notifikasi untuk menampung seluruh tugas yang telah selesai/listing.
+    - Menampilkan label status `SELESAI (SUDAH LISTING KOSTMANAGER)` dengan warna hijau emerald yang elegan di tab Riwayat.
+  * **3. Sinkronisasi Menyeluruh pada Approval Admin (`KostManagerManagement.tsx`)**:
+    - Memperbarui handler persetujuan admin `handleApproveAndActivate` agar melakukan batch update `status: 'COMPLETED'` pada seluruh `survey_requests` terkait berdasarkan `transaction_id`, `kost_name`, dan `user_id`.
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/pages/AgentDashboard.tsx`
+  - `functions/public/components/admin/KostManagerManagement.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2529 modules transformed, ✓ built in 41.15s, 0 error).
+
 ### 193. Modernisasi & Otomasi Modal Penagihan Sewa WhatsApp Magic Link di Portal KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan mengapa formulir "Tagih Sewa Bulanan" pada UI Portal KostManager masih bersifat manual dan menampilkan nominal yang salah (misal Rp 1.000.000 untuk Kost Madani yang tarif aslinya Rp 400.000).

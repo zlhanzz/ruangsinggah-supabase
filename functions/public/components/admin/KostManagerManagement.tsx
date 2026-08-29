@@ -692,11 +692,22 @@ const KostManagerManagement: React.FC<KostManagerManagementProps> = ({
                 })
                 .eq('kostmanager_request_id', req.id);
 
-            // 5. Update survey_requests to COMPLETED if any
+            // 5. Update survey_requests to COMPLETED if any (by transaction_id, user_id, or kost_name)
             if (req.transaction_id) {
                 await supabase.from('survey_requests')
                     .update({ status: 'COMPLETED', updated_at: new Date().toISOString() })
                     .eq('transaction_id', req.transaction_id);
+            }
+            if (req.kost_name) {
+                await supabase.from('survey_requests')
+                    .update({ status: 'COMPLETED', updated_at: new Date().toISOString() })
+                    .ilike('kost_name', req.kost_name.trim());
+            }
+            if (req.user_id) {
+                await supabase.from('survey_requests')
+                    .update({ status: 'COMPLETED', updated_at: new Date().toISOString() })
+                    .eq('user_id', req.user_id)
+                    .ilike('notes', '%KostManager%');
             }
 
             alert(`✅ Layanan KostManager untuk "${req.kost_name}" berhasil diaktifkan sepenuhnya (ACTIVE)!`);
