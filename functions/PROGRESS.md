@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 180. Fitur Manajemen Chat Customer Terpusat (Unified CS Inbox) & Property Context Bar di Portal KostManager (`KostManagerPortal.tsx`, `chatService.ts`, `KostDetail.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menyampaikan kebutuhan arsitektur operasional: untuk properti yang dikelola 100% oleh KostManager, pesan/chat in-app dari calon penyewa di web wajib masuk ke antrean operator/CS di Portal KostManager.
+  2. Ketika CS membuka percakapan di portal KostManager, UI/UX wajib secara presisi dan visual menampilkan kost mana yang sedang ditanyakan calon penyewa (*High-Context Property Display*), agar CS tidak perlu menebak atau bertanya ulang ke penyewa.
+- **Implementasi**:
+  * **1. Penambahan Menu Sidebar & Routing (`KostManagerPortal.tsx`)**:
+    - Menambahkan tab menu ke-6 di sidebar Portal KostManager: **`💬 Pesan & Chat Customer`** dengan counter badge jumlah sesi aktif.
+    - Menambahkan tombol pintas **`💬 Chat (N)`** pada setiap baris properti di tab *Properti Terkelola* yang otomatis memfilter sesi ke kost tersebut.
+  * **2. Desain Unified CS Inbox Split-View 2-Kolom (`KostManagerPortal.tsx`)**:
+    - **Kolom Kiri (Daftar Percakapan)**: Filter pencarian nama/pesan, dropdown filter properti terkelola, kartu sesi dengan avatar penyewa, cuplikan pesan, dan **Badge Properti Menonjol** (thumbnail foto kost, nama kost, tipe gender).
+    - **Kolom Kanan (Jendela Chat Aktif)**: Dilengkapi **Sticky Property Context Bar** di bagian atas chat yang menampilkan foto kost, nama kost, kota/alamat, tarif bulanan, status ketersediaan kamar riil (misal: *🟢 4 Kamar Kosong Siap Huni*), tombol *[ 🔗 Buka Listing ]* dan *[ 🛏️ Cek Kamar ]*.
+    - Dilengkapi fitur **Quick Replies** balasan cepat (*ketersediaan kamar, jadwal survey, booking via web, rincian fasilitas*).
+  * **3. Query & Realtime Backend Service (`chatService.ts`)**:
+    - Menambahkan fungsi `getKostManagerChatSessions(managedPropertyIds)` yang mengambil seluruh sesi chat terikat portofolio kost terkelola beserta join data profil penyewa dan detail properti.
+    - Sinkronisasi real-time subscription Supabase untuk pertukaran pesan instan antara calon penyewa dan CS KostManager.
+- **File Tersentuh**:
+  - `functions/public/chatService.ts`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 34.21s, 0 error).
+
 ### 179. Proteksi Disintermediasi & Penghapusan Chat Langsung Penghuni KostManager (`MitraTenantManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna memberikan masukan proteksi bisnis krusial: pada properti KostManager, pemilik kost tidak boleh memiliki tombol chat langsung ke nomor WhatsApp penghuni untuk mencegah risiko transaksi sewa di luar aplikasi (*platform bypass / revenue leakage*).

@@ -413,3 +413,83 @@ export async function getMyChatSessions(userId: string): Promise<ChatSession[]> 
     };
   }) as ChatSession[];
 }
+
+/**
+ * Mendapatkan daftar sesi chat untuk seluruh properti yang dikelola KostManager
+ */
+export async function getKostManagerChatSessions(managedPropertyIds: string[]): Promise<ChatSession[]> {
+  if (!managedPropertyIds || managedPropertyIds.length === 0) {
+    return [];
+  }
+
+  // 1. Fetch raw sessions with full property details for managed properties
+  const { data: sessions, error } = await supabase
+    .from('chat_sessions')
+    .select(`
+      *,
+      property:property_id (
+        id,
+        title,
+        address,
+        city,
+        price_monthly,
+        gender_type,
+        images,
+        room_types
+      )
+    `)
+    .in('property_id', managedPropertyIds)
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching KostManager chat sessions:', error);
+    return [];
+  }
+
+  if (!sessions || sessions.length === 0) return [];
+
+  // 2. Fetch User profiles
+  const uniqueUserIds = [...new Set(sessions.map(s => s.user_id))].filter(Boolean);
+
+  const { data: profiles } = await supabase
+    .from('users')
+    .select('id, name, photo_url')
+    .in('id', uniqueUserIds);
+
+  const profileMap = new Map();
+  profiles?.forEach((p: any) => {
+    profileMap.set(p.id, {
+      name: p.name,
+      photo_url: p.photo_url || p.avatar_url || ''
+    });
+  });
+
+  // 3. Map back to sessions and parse tunneled metadata
+  return sessions.map(s => {
+    let userInfo = profileMap.get(s.user_id) || { name: 'Calon Penghuni', photo_url: '' };
+    let cleanMessage = s.last_message || '';
+
+    if (s.last_message?.includes('|||')) {
+      const parts = s.last_message.split('|||');
+      if (parts.length >= 3) {
+        const tunneledName = parts[0];
+        const tunneledPhoto = parts[1];
+        cleanMessage = parts.slice(2).join('|||');
+
+        if (userInfo.name === 'Calon Penghuni' || !userInfo.name) {
+          userInfo = {
+            name: tunneledName,
+            photo_url: tunneledPhoto || userInfo.photo_url
+          };
+        }
+      }
+    }
+
+    return {
+      ...s,
+      last_message: cleanMessage,
+      user: userInfo,
+      owner: { name: 'Tim KostManager RuangSinggah', photo_url: '' }
+    };
+  }) as ChatSession[];
+}

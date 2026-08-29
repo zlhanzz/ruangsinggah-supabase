@@ -70,7 +70,9 @@ import {
     ArrowLeft,
     UploadCloud,
     CheckSquare,
-    Link as LinkIcon
+    Link as LinkIcon,
+    Send,
+    CheckCheck
 } from 'lucide-react';
 import { KostManagerPackage } from '../../types';
 import { 
@@ -85,6 +87,15 @@ import {
     saveKostManagerPackage,
     deleteKostManagerPackage
 } from '../../adminService';
+import { 
+    getKostManagerChatSessions, 
+    getChatMessages, 
+    sendMessage, 
+    subscribeToMessages, 
+    ChatSession, 
+    ChatMessage, 
+    SYSTEM_ADMIN_ID 
+} from '../../chatService';
 import KostManagerPropertyFormModal from './KostManagerPropertyFormModal';
 
 
@@ -1047,12 +1058,12 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     const activeTab = (() => {
         if (!activeMenu) return 'overview';
         if (activeMenu.startsWith('km_')) {
-            return activeMenu.substring(3) as 'overview' | 'properties' | 'tenants' | 'billing' | 'packages';
+            return activeMenu.substring(3) as 'overview' | 'properties' | 'tenants' | 'billing' | 'packages' | 'chats';
         }
         return 'overview';
     })();
 
-    const setActiveTab = (tab: 'overview' | 'properties' | 'tenants' | 'billing' | 'packages') => {
+    const setActiveTab = (tab: 'overview' | 'properties' | 'tenants' | 'billing' | 'packages' | 'chats') => {
         if (onMenuChange) {
             onMenuChange('km_' + tab);
         }
@@ -1194,6 +1205,141 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
         residentName: '',
         submitting: false
     });
+
+    // --- CHAT STATE ---
+    const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+    const [selectedChatSession, setSelectedChatSession] = useState<ChatSession | null>(null);
+    const [chatSearch, setChatSearch] = useState<string>('');
+    const [chatPropertyFilter, setChatPropertyFilter] = useState<string>('all');
+    const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+    const [newChatMessage, setNewChatMessage] = useState<string>('');
+    const [sendingChat, setSendingChat] = useState<boolean>(false);
+    const [loadingChatMessages, setLoadingChatMessages] = useState<boolean>(false);
+    const [currentAdminId, setCurrentAdminId] = useState<string>(SYSTEM_ADMIN_ID);
+    const chatScrollRef = useRef<HTMLDivElement>(null);
+
+    // Ambil auth admin ID saat component dimuat
+    useEffect(() => {
+        const fetchAuthUser = async () => {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user?.id) {
+                    setCurrentAdminId(user.id);
+                }
+            } catch (err) {
+                console.warn('Could not fetch admin auth user:', err);
+            }
+        };
+        fetchAuthUser();
+    }, []);
+
+    const loadChatSessions = async (propIds: string[]) => {
+        if (!propIds || propIds.length === 0) {
+            setChatSessions([]);
+            return;
+        }
+        try {
+            const sessions = await getKostManagerChatSessions(propIds);
+            setChatSessions(sessions);
+            setSelectedChatSession(prev => {
+                if (prev) {
+                    const fresh = sessions.find(s => s.id === prev.id);
+                    return fresh || sessions[0] || null;
+                }
+                return sessions[0] || null;
+            });
+        } catch (err) {
+            console.error('Failed to load KM chat sessions:', err);
+        }
+    };
+
+    // Load messages when selectedChatSession changes
+    useEffect(() => {
+        if (!selectedChatSession) {
+            setChatMessages([]);
+            return;
+        }
+
+        let isMounted = true;
+        setLoadingChatMessages(true);
+
+        const fetchMsgs = async () => {
+            try {
+                const msgs = await getChatMessages(selectedChatSession.id);
+                if (isMounted) {
+                    setChatMessages(msgs);
+                }
+            } catch (err) {
+                console.error('Failed to load chat messages:', err);
+            } finally {
+                if (isMounted) setLoadingChatMessages(false);
+            }
+        };
+
+        fetchMsgs();
+
+        // Subscribe to real-time incoming messages
+        const subscription = subscribeToMessages(selectedChatSession.id, (incomingMsg) => {
+            if (isMounted) {
+                setChatMessages(prev => {
+                    if (prev.some(m => m.id === incomingMsg.id)) return prev;
+                    return [...prev, incomingMsg];
+                });
+            }
+        });
+
+        return () => {
+            isMounted = false;
+            subscription.unsubscribe();
+        };
+    }, [selectedChatSession?.id]);
+
+    // Auto scroll chat to bottom
+    useEffect(() => {
+        if (chatScrollRef.current) {
+            chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+        }
+    }, [chatMessages, loadingChatMessages]);
+
+    // Handle Send Message
+    const handleSendChatMessage = async (e?: React.FormEvent, customText?: string) => {
+        if (e) e.preventDefault();
+        const textToSend = customText || newChatMessage;
+        if (!textToSend.trim() || !selectedChatSession || sendingChat) return;
+
+        setSendingChat(true);
+        const tempId = Date.now().toString();
+        const optimisticMsg: ChatMessage = {
+            id: tempId,
+            session_id: selectedChatSession.id,
+            sender_id: currentAdminId,
+            sender_type: 'owner',
+            message: textToSend.trim(),
+            is_read: false,
+            created_at: new Date().toISOString()
+        };
+
+        setChatMessages(prev => [...prev, optimisticMsg]);
+        if (!customText) setNewChatMessage('');
+
+        try {
+            await sendMessage(
+                selectedChatSession.id,
+                currentAdminId,
+                'owner',
+                optimisticMsg.message,
+                'Tim KostManager RuangSinggah'
+            );
+            const propIds = properties.map(p => p.id).filter(Boolean);
+            loadChatSessions(propIds);
+        } catch (err: any) {
+            console.error('Failed to send message:', err);
+            setChatMessages(prev => prev.filter(m => m.id !== tempId));
+            alert('Gagal mengirim pesan: ' + (err.message || 'Silakan coba lagi.'));
+        } finally {
+            setSendingChat(false);
+        }
+    };
 
 
 
@@ -1430,6 +1576,9 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             setProperties(mappedProperties);
             setTenants(combinedTenants);
             setInvoices(rentInvoices);
+
+            // Load Sesi Chat KostManager
+            loadChatSessions(managedPropIds);
         } catch (err) {
             console.error('Error loading KostManager Portal data:', err);
         } finally {
@@ -2086,23 +2235,34 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     {([
                         { key: 'overview', icon: '📊', label: 'Ringkasan' },
                         { key: 'properties', icon: '🏠', label: 'Properti Terkelola' },
+                        { key: 'chats', icon: '💬', label: 'Pesan & Chat Customer' },
                         { key: 'tenants', icon: '👥', label: 'Penghuni' },
                         { key: 'billing', icon: '🧾', label: 'Riwayat Pembayaran Sewa' },
                         { key: 'packages', icon: '⚙️', label: 'Harga Langganan' }
-                    ] as const).map(t => (
-                        <button
-                            key={t.key}
-                            onClick={() => setActiveTab(t.key)}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${
-                                activeTab === t.key
-                                    ? 'bg-orange-50 text-orange-600 font-bold'
-                                    : 'text-gray-600 hover:bg-gray-50 font-semibold'
-                            }`}
-                        >
-                            <span className="text-lg">{t.icon}</span>
-                            <span className="text-xs uppercase tracking-wide">{t.label}</span>
-                        </button>
-                    ))}
+                    ] as const).map(t => {
+                        const chatCount = chatSessions.length;
+                        return (
+                            <button
+                                key={t.key}
+                                onClick={() => setActiveTab(t.key)}
+                                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all ${
+                                    activeTab === t.key
+                                        ? 'bg-orange-50 text-orange-600 font-bold shadow-2xs'
+                                        : 'text-gray-600 hover:bg-gray-50 font-semibold'
+                                }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className="text-lg">{t.icon}</span>
+                                    <span className="text-xs uppercase tracking-wide">{t.label}</span>
+                                </div>
+                                {t.key === 'chats' && chatCount > 0 && (
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === 'chats' ? 'bg-orange-500 text-white' : 'bg-orange-100 text-orange-700'}`}>
+                                        {chatCount}
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
                 </nav>
                 <div className="p-4 border-t border-gray-100">
                     <button
@@ -2122,12 +2282,14 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                         <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">
                             {activeTab === 'overview' ? 'Ringkasan Operasional' :
                              activeTab === 'properties' ? 'Properti Terkelola' :
+                             activeTab === 'chats' ? 'Pesan & Chat Customer' :
                              activeTab === 'tenants' ? 'Daftar Penghuni' :
                              activeTab === 'billing' ? 'Riwayat Pembayaran Sewa' : 'Harga Langganan KostManager'}
                         </h2>
                         <p className="text-xs text-gray-400 font-bold mt-1">
                             {activeTab === 'overview' ? 'Analisis okupansi, tagihan, dan status auto-pilot aktif' :
                              activeTab === 'properties' ? 'Kelola detail kamar, kapasitas, dan status pemasaran properti' :
+                             activeTab === 'chats' ? 'Layanan CS terpusat & konsultasi calon penyewa untuk seluruh kost terkelola' :
                              activeTab === 'tenants' ? 'Daftar penghuni aktif beserta periode sewa dan detail kontak' :
                              activeTab === 'billing' ? 'Mencatat, memantau riwayat pembayaran sewa, dan mengelola tagihan sewa kost' :
                              'Mengatur pilihan durasi dan harga paket langganan KostManager untuk Mitra'}
@@ -2546,7 +2708,21 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                             <span>Penghuni ({p.occupant_count || 0})</span>
                                                                         </button>
 
-                                                                        {/* Tombol 4: Broadcast WhatsApp Pengumuman Gedung */}
+                                                                        {/* Tombol 4: Chat Customer Properti Ini */}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setChatPropertyFilter(p.id);
+                                                                                setActiveTab('chats');
+                                                                            }}
+                                                                            className="px-2.5 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200/80 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
+                                                                            title="Buka Pesan & Chat Customer untuk Kost Ini"
+                                                                        >
+                                                                            <MessageSquare size={13} />
+                                                                            <span>Chat ({chatSessions.filter(s => s.property_id === p.id).length})</span>
+                                                                        </button>
+
+                                                                        {/* Tombol 5: Broadcast WhatsApp Pengumuman Gedung */}
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => {
@@ -3742,6 +3918,304 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                             </div>
                         </div>
                     )}
+                    {/* =========================================== */}
+                    {/* TAB: CHATS (UNIFIED CS INBOX & CONTEXT BAR) */}
+                    {/* =========================================== */}
+                    {activeTab === 'chats' && (() => {
+                        const filteredSessions = chatSessions.filter(s => {
+                            const matchProp = chatPropertyFilter === 'all' || s.property_id === chatPropertyFilter;
+                            const searchLower = chatSearch.toLowerCase().trim();
+                            const partnerName = (s.user?.name || 'Calon Penghuni').toLowerCase();
+                            const propTitle = (s.property?.title || '').toLowerCase();
+                            const lastMsg = (s.last_message || '').toLowerCase();
+                            const matchSearch = !searchLower || partnerName.includes(searchLower) || propTitle.includes(searchLower) || lastMsg.includes(searchLower);
+                            return matchProp && matchSearch;
+                        });
+
+                        const activeProp = selectedChatSession
+                            ? (properties.find(p => p.id === selectedChatSession.property_id) || selectedChatSession.property)
+                            : null;
+
+                        const propPhoto = activeProp
+                            ? normalizePhotoUrl((activeProp.image_urls && activeProp.image_urls.length > 0) ? activeProp.image_urls[0] : (activeProp.images?.[0] || ''))
+                            : '';
+
+                        const activePropEmptyRooms = activeProp ? (activeProp.empty_rooms ?? 0) : 0;
+
+                        return (
+                            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden flex flex-col md:flex-row h-[720px] max-h-[82vh] animate-in fade-in duration-300">
+                                
+                                {/* KOLOM KIRI: DAFTAR SESI PERCAKAPAN */}
+                                <div className="w-full md:w-80 lg:w-96 border-r border-gray-100 flex flex-col shrink-0 bg-slate-50/40">
+                                    {/* Search & Filter Header */}
+                                    <div className="p-4 border-b border-gray-100 space-y-2.5 bg-white shrink-0">
+                                        <div className="relative">
+                                            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <input
+                                                type="text"
+                                                value={chatSearch}
+                                                onChange={e => setChatSearch(e.target.value)}
+                                                placeholder="Cari calon penyewa/pesan..."
+                                                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:border-orange-500 focus:bg-white transition-all shadow-2xs"
+                                            />
+                                        </div>
+                                        <div className="relative">
+                                            <Building2 size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                            <select
+                                                value={chatPropertyFilter}
+                                                onChange={e => setChatPropertyFilter(e.target.value)}
+                                                className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none focus:border-orange-500 focus:bg-white transition-all shadow-2xs appearance-none cursor-pointer"
+                                            >
+                                                <option value="all">Semua Properti ({chatSessions.length})</option>
+                                                {properties.map(p => (
+                                                    <option key={p.id} value={p.id}>
+                                                        {p.title} ({chatSessions.filter(s => s.property_id === p.id).length})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                        </div>
+                                    </div>
+
+                                    {/* List Percakapan */}
+                                    <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+                                        {filteredSessions.length === 0 ? (
+                                            <div className="text-center py-16 px-4">
+                                                <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-3 text-gray-300">
+                                                    <MessageSquare size={24} />
+                                                </div>
+                                                <p className="text-xs font-black text-gray-500 uppercase tracking-wider">Belum Ada Pesan</p>
+                                                <p className="text-[10px] text-gray-400 mt-1">Pesan dari calon penyewa pada properti terkelola akan masuk di sini secara otomatis.</p>
+                                            </div>
+                                        ) : (
+                                            filteredSessions.map(session => {
+                                                const isSelected = selectedChatSession?.id === session.id;
+                                                const sessProp = properties.find(p => p.id === session.property_id) || session.property;
+                                                const sessPropPhoto = sessProp ? normalizePhotoUrl((sessProp.image_urls && sessProp.image_urls.length > 0) ? sessProp.image_urls[0] : (sessProp.images?.[0] || '')) : '';
+                                                const customerName = session.user?.name || 'Calon Penyewa';
+
+                                                return (
+                                                    <div
+                                                        key={session.id}
+                                                        onClick={() => setSelectedChatSession(session)}
+                                                        className={`p-3 rounded-2xl cursor-pointer transition-all duration-200 border ${
+                                                            isSelected
+                                                                ? 'bg-orange-50/80 border-orange-200 shadow-2xs'
+                                                                : 'bg-white hover:bg-slate-50 border-gray-100 shadow-2xs'
+                                                        }`}
+                                                    >
+                                                        {/* Top Row: Customer Avatar, Name & Timestamp */}
+                                                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-orange-500 to-amber-400 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs overflow-hidden">
+                                                                    {session.user?.photo_url ? (
+                                                                        <img src={session.user.photo_url} alt="" className="w-full h-full object-cover" />
+                                                                    ) : (
+                                                                        customerName.charAt(0).toUpperCase()
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-xs font-black text-gray-900 truncate">{customerName}</p>
+                                                            </div>
+                                                            <span className="text-[9px] font-bold text-gray-400 shrink-0">
+                                                                {session.updated_at ? new Date(session.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : ''}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Middle Row: Prominent Property Badge */}
+                                                        {sessProp && (
+                                                            <div className="mb-1.5 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-100/80 border border-slate-200/60">
+                                                                {sessPropPhoto ? (
+                                                                    <img src={sessPropPhoto} alt="" className="w-4 h-4 rounded-md object-cover shrink-0" />
+                                                                ) : (
+                                                                    <Building2 size={12} className="text-orange-500 shrink-0" />
+                                                                )}
+                                                                <span className="text-[9px] font-black text-slate-800 uppercase tracking-tight truncate">
+                                                                    {sessProp.title}
+                                                                </span>
+                                                                <span className="text-[8px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-100 ml-auto shrink-0 uppercase">
+                                                                    {sessProp.type || 'Campur'}
+                                                                </span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Bottom Row: Message Snippet */}
+                                                        <p className="text-[11px] text-gray-500 line-clamp-1 font-medium pl-1">
+                                                            {session.last_message || 'Mulai percakapan...'}
+                                                        </p>
+                                                    </div>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* KOLOM KANAN: JENDELA CHAT AKTIF & STICKY PROPERTY CONTEXT BAR */}
+                                <div className="flex-1 flex flex-col bg-white overflow-hidden">
+                                    {!selectedChatSession ? (
+                                        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-50/30">
+                                            <div className="w-16 h-16 rounded-3xl bg-orange-50 text-orange-500 flex items-center justify-center mb-3 shadow-sm border border-orange-100">
+                                                <MessageSquare size={32} />
+                                            </div>
+                                            <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Pilih Percakapan Customer</h3>
+                                            <p className="text-xs text-gray-400 mt-1 max-w-sm">Pilih salah satu sesi di sebelah kiri untuk melayani calon penyewa dengan konteks kost yang akurat.</p>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {/* 🌟 1. STICKY HIGH-CONTEXT PROPERTY BAR */}
+                                            {activeProp && (
+                                                <div className="bg-gradient-to-r from-orange-50/90 via-amber-50/60 to-white border-b border-orange-100/80 p-3.5 lg:p-4 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs">
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <div className="w-12 h-12 rounded-2xl overflow-hidden bg-slate-100 border border-orange-200 shrink-0 shadow-2xs">
+                                                            {propPhoto ? (
+                                                                <img src={propPhoto} alt="" className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <div className="w-full h-full flex items-center justify-center text-orange-400">
+                                                                    <Building2 size={20} />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-md bg-orange-500 text-white shadow-2xs">
+                                                                    ⭐ Properti Terkelola
+                                                                </span>
+                                                                <span className="text-[8px] font-bold text-gray-600 bg-white border border-gray-200 px-1.5 py-0.5 rounded-md uppercase">
+                                                                    {activeProp.type || 'Campur'}
+                                                                </span>
+                                                            </div>
+                                                            <h4 className="text-sm font-black text-gray-900 truncate mt-0.5">{activeProp.title}</h4>
+                                                            <p className="text-[10px] text-gray-500 font-medium truncate flex items-center gap-1">
+                                                                <MapPin size={10} className="text-orange-500 shrink-0" />
+                                                                <span>{activeProp.city || 'Makassar'}</span>
+                                                                <span>•</span>
+                                                                <span className="font-black text-orange-600">{FORMAT_CURRENCY(activeProp.price || 0)}/bln</span>
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="hidden sm:flex flex-col text-right mr-1">
+                                                            <span className="text-[8px] font-bold text-gray-400 uppercase">Kapasitas Kamar</span>
+                                                            <span className="text-xs font-black text-emerald-600">
+                                                                {activePropEmptyRooms > 0 ? `🟢 ${activePropEmptyRooms} Kamar Kosong` : '✨ Full Terisi'}
+                                                            </span>
+                                                        </div>
+                                                        <a
+                                                            href={`/kost/${activeProp.id}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="px-3 py-2 bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                                                            title="Buka Halaman Listing Publik Kost Ini"
+                                                        >
+                                                            <ExternalLink size={12} /> Buka Listing
+                                                        </a>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSelectedPropForRoomMatrix(activeProp as any)}
+                                                            className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                                                            title="Lihat Matrix Denah Kamar"
+                                                        >
+                                                            <Bed size={12} /> Cek Kamar
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* 💬 2. MESSAGE BUBBLE AREA */}
+                                            <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-3 bg-slate-50/40">
+                                                {loadingChatMessages ? (
+                                                    <div className="flex flex-col items-center justify-center py-12">
+                                                        <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">Memuat Riwayat Chat...</p>
+                                                    </div>
+                                                ) : chatMessages.length === 0 ? (
+                                                    <div className="text-center py-12 text-gray-400">
+                                                        <p className="text-xs font-bold">Belum ada percakapan sebelumnya.</p>
+                                                        <p className="text-[10px] mt-1">Ketik balasan di bawah untuk menyapa calon penyewa.</p>
+                                                    </div>
+                                                ) : (
+                                                    chatMessages.map(msg => {
+                                                        const isFromOwner = msg.sender_type === 'owner';
+                                                        return (
+                                                            <div
+                                                                key={msg.id}
+                                                                className={`flex flex-col ${isFromOwner ? 'items-end' : 'items-start'}`}
+                                                            >
+                                                                <div className="flex items-center gap-1.5 mb-1 px-1">
+                                                                    <span className="text-[9px] font-bold text-gray-400">
+                                                                        {isFromOwner ? 'CS KostManager' : (selectedChatSession.user?.name || 'Calon Penyewa')}
+                                                                    </span>
+                                                                    <span className="text-[8px] text-gray-300">
+                                                                        {new Date(msg.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                                                    </span>
+                                                                </div>
+                                                                <div
+                                                                    className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-xs font-medium leading-relaxed shadow-2xs ${
+                                                                        isFromOwner
+                                                                            ? 'bg-orange-500 text-white rounded-tr-xs'
+                                                                            : 'bg-white text-gray-800 border border-gray-200/80 rounded-tl-xs'
+                                                                    }`}
+                                                                >
+                                                                    <p className="whitespace-pre-wrap">{msg.message}</p>
+                                                                    <div className={`flex items-center justify-end gap-1 mt-1 text-[8px] ${isFromOwner ? 'text-orange-100' : 'text-gray-400'}`}>
+                                                                        <CheckCheck size={11} />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })
+                                                )}
+                                            </div>
+
+                                            {/* ⚡ 3. QUICK REPLIES */}
+                                            <div className="px-4 py-2 bg-white border-t border-gray-100 flex items-center gap-1.5 overflow-x-auto shrink-0">
+                                                <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider shrink-0 mr-1">
+                                                    ⚡ Cepat:
+                                                </span>
+                                                {[
+                                                    `Halo kak! Kamar di ${activeProp?.title || 'kost kami'} saat ini masih tersedia 😊`,
+                                                    `Bisa survey langsung ke lokasi kak, kami bantu jadwalkan 👍`,
+                                                    `Bisa langsung booking dan bayar via web RuangSinggah untuk kunci kamar kak ✨`,
+                                                    `Fasilitas sudah termasuk WiFi, listrik/air, dan dapur bersama ya kak.`
+                                                ].map((quickText, qIdx) => (
+                                                    <button
+                                                        key={qIdx}
+                                                        type="button"
+                                                        onClick={() => handleSendChatMessage(undefined, quickText)}
+                                                        className="px-2.5 py-1 rounded-lg bg-gray-50 hover:bg-orange-50 text-gray-600 hover:text-orange-600 border border-gray-200 text-[10px] font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0 shadow-2xs"
+                                                    >
+                                                        {quickText.length > 35 ? quickText.substring(0, 35) + '...' : quickText}
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            {/* ✍️ 4. CHAT INPUT BAR */}
+                                            <form onSubmit={handleSendChatMessage} className="p-3.5 lg:p-4 bg-white border-t border-gray-100 flex items-center gap-2 shrink-0">
+                                                <input
+                                                    type="text"
+                                                    value={newChatMessage}
+                                                    onChange={e => setNewChatMessage(e.target.value)}
+                                                    placeholder={`Balas ${selectedChatSession.user?.name || 'calon penyewa'} terkait ${activeProp?.title || 'kost'}...`}
+                                                    className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-xs font-bold text-gray-800 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:bg-white transition-all shadow-2xs"
+                                                />
+                                                <button
+                                                    type="submit"
+                                                    disabled={!newChatMessage.trim() || sendingChat}
+                                                    className={`p-3 rounded-2xl transition-all flex items-center justify-center cursor-pointer shadow-sm ${
+                                                        !newChatMessage.trim() || sendingChat
+                                                            ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                                                            : 'bg-orange-500 hover:bg-orange-600 text-white active:scale-95'
+                                                    }`}
+                                                >
+                                                    <Send size={16} />
+                                                </button>
+                                            </form>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </>
             )}
                 </div>
