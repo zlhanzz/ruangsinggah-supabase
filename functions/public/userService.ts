@@ -146,6 +146,8 @@ export async function getPublishedProperties(): Promise<Kost[]> {
         omnichannelContactName: row.omnichannel_contact_name,
         omnichannelContactPhone: row.omnichannel_contact_phone,
         omnichannelContactType: row.omnichannel_contact_type,
+        photoCategories: row.photo_categories || row.photoCategories || [],
+        categorizedPhotos: row.categorized_photos || row.categorizedPhotos || {},
       } as Kost;
     });
   } catch (error: any) {
@@ -203,6 +205,8 @@ export async function getPublishedPropertyDetails(propertyId: string): Promise<K
       omnichannelContactName: row.omnichannel_contact_name,
       omnichannelContactPhone: row.omnichannel_contact_phone,
       omnichannelContactType: row.omnichannel_contact_type,
+      photoCategories: row.photo_categories || row.photoCategories || [],
+      categorizedPhotos: row.categorized_photos || row.categorizedPhotos || {},
     } as Kost;
   } catch (error) {
     console.error('Error getting property details:', error);

@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 165. Integrasi Caption & Kategori Foto Survei Dinamis pada Carousel Galeri (`KostDetail.tsx`, `userService.ts`, `types.ts`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar caption atau kategori foto (seperti *Bangunan Depan*, *Area Parkir*, *Koridor*, *Lingkungan*, *Interior Kamar*, *Kamar Mandi*, dll.) yang telah diinput melalui pendataan agen survey muncul secara dinamis di tampilan galeri foto.
+- **Implementasi**:
+  * **1. Pemetaan Data Survey (`types.ts` & `userService.ts`)**: Menambahkan `photoCategories` dan `categorizedPhotos` pada `Kost` dan `RoomType` serta memetakannya dari tabel Supabase `properties`.
+  * **2. Ekstraksi Metadata Foto (`KostDetail.tsx`)**: Menormalisasi seluruh foto properti dan foto kamar menjadi objek `{ url, label, isRoom, roomName }` dengan membaca label kategori hasil pendataan survey.
+  * **3. Tampilan Dinamis pada Carousel**:
+    - **Badge Counter (Kanan Bawah)**: Menampilkan nama kategori foto aktif (contoh: `1 / 18 FOTO • BANGUNAN DEPAN` atau `2 / 6 FOTO • KAMAR 3 - KAMAR MANDI`).
+    - **Floating Caption Tag (Kiri Atas)**: Menampilkan badge glassmorphism elegan kategori foto aktif (contoh: `✨ Bangunan Depan` atau `🛏️ Kamar 3 • Interior Kamar`).
+- **File Tersentuh**:
+  - `functions/public/types.ts`
+  - `functions/public/userService.ts`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 30.66s, 0 error).
+
 ### 164. Penyederhanaan Tombol Navigasi Kamar Menjadi Minimalis (`KostDetail.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar tombol kamar tidak perlu memuat kata "Tersedia" dan "N Foto", sehingga tombol tampil lebih bersih dan ringkas.

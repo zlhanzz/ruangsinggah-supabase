@@ -46,6 +46,10 @@ export interface RoomType {
   availableRoomCount?: number; // Number of available rooms for this type
   maxOccupants?: number; // Maximum number of occupants allowed
   additionalCostPerPerson?: number; // Additional cost per extra person
+  images?: (string | ImageUrlObject | any)[];
+  photoCategories?: string[];
+  categorizedPhotos?: Record<string, string[]>;
+  rooms?: any[];
 }
 
 export interface Review {
@@ -118,6 +122,10 @@ export interface Kost {
 
   // KostManager / Management Type
   managed_by?: 'self' | 'kostmanager';
+
+  // Photo categories from survey
+  photoCategories?: string[];
+  categorizedPhotos?: Record<string, string[]>;
 }
 
 export interface ImageUrlObject {

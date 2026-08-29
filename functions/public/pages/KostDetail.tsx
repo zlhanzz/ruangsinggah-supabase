@@ -197,19 +197,85 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   // --- EMPTY ROOMS PHOTO ISOLATION & GALLERY STATE ---
   const [activePhotoFilter, setActivePhotoFilter] = useState<'all' | string>('all');
 
-  // Extract all property-level photos
-  const propertyPhotos: string[] = (kost.imageUrls || []).map((img: any) => {
-    if (typeof img === 'string') return img;
-    return img?.url || img?.original || img?.thumbnail || '';
-  }).filter(Boolean);
+  interface PhotoItem {
+    url: string;
+    label: string;
+    isRoom: boolean;
+    roomName?: string;
+  }
 
-  // Normalize all individual room units and extract their photos
+  // Extract all property-level photos with their surveyed category labels
+  const propertyPhotos: PhotoItem[] = (kost.imageUrls || []).map((img: any, idx: number) => {
+    const url = typeof img === 'string' ? img : (img?.url || img?.original || img?.thumbnail || '');
+    let label = '';
+    if (typeof img === 'object' && (img.label || img.category || img.caption || img.title)) {
+      label = img.label || img.category || img.caption || img.title;
+    } else if (Array.isArray(kost.photoCategories) && kost.photoCategories[idx]) {
+      label = kost.photoCategories[idx];
+    } else if (Array.isArray((kost as any).photo_categories) && (kost as any).photo_categories[idx]) {
+      label = (kost as any).photo_categories[idx];
+    } else if (kost.categorizedPhotos && typeof kost.categorizedPhotos === 'object') {
+      for (const [catName, catUrls] of Object.entries(kost.categorizedPhotos)) {
+        if (Array.isArray(catUrls) && catUrls.includes(url)) {
+          label = catName;
+          break;
+        }
+      }
+    } else if ((kost as any).categorized_photos && typeof (kost as any).categorized_photos === 'object') {
+      for (const [catName, catUrls] of Object.entries((kost as any).categorized_photos)) {
+        if (Array.isArray(catUrls) && (catUrls as any[]).includes(url)) {
+          label = catName;
+          break;
+        }
+      }
+    }
+
+    if (!label) {
+      const defaultCats = ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'];
+      label = defaultCats[idx] || (idx === 0 ? 'Bangunan Depan' : `Foto Properti ${idx + 1}`);
+    }
+
+    return { url, label, isRoom: false };
+  }).filter(p => !!p.url);
+
+  // Normalize all individual room units and extract their photos with survey category labels
   const normalizedRooms = (kost.roomTypes || []).flatMap((rt: any, rtIdx: number) => {
     if (Array.isArray(rt.rooms) && rt.rooms.length > 0) {
       return rt.rooms.map((r: any, rSubIdx: number) => {
         const isAvail = r.status?.toLowerCase() === 'kosong' || r.status?.toLowerCase() === 'available' || r.isAvailable !== false;
-        const roomPhotos: string[] = (r.images || r.image_urls || []).map((img: any) => typeof img === 'string' ? img : (img?.url || img?.original || '')).filter(Boolean);
         const rName = r.name || r.roomNumber ? (String(r.name || r.roomNumber).trim().toLowerCase().startsWith('kamar') ? (r.name || r.roomNumber) : `Kamar ${r.name || r.roomNumber}`) : `Kamar ${rSubIdx + 1}`;
+        
+        const rawImages = r.images || r.image_urls || [];
+        const roomPhotoItems: PhotoItem[] = rawImages.map((img: any, imgIdx: number) => {
+          const url = typeof img === 'string' ? img : (img?.url || img?.original || '');
+          let label = '';
+          if (typeof img === 'object' && (img.label || img.category || img.caption || img.title)) {
+            label = img.label || img.category || img.caption || img.title;
+          } else if (Array.isArray(r.photoCategories) && r.photoCategories[imgIdx]) {
+            label = r.photoCategories[imgIdx];
+          } else if (Array.isArray(r.photo_categories) && r.photo_categories[imgIdx]) {
+            label = r.photo_categories[imgIdx];
+          } else if (Array.isArray(rt.photoCategories) && rt.photoCategories[imgIdx]) {
+            label = rt.photoCategories[imgIdx];
+          } else if (Array.isArray(rt.photo_categories) && rt.photo_categories[imgIdx]) {
+            label = rt.photo_categories[imgIdx];
+          } else if (r.categorizedPhotos && typeof r.categorizedPhotos === 'object') {
+            for (const [catName, catUrls] of Object.entries(r.categorizedPhotos)) {
+              if (Array.isArray(catUrls) && catUrls.includes(url)) {
+                label = catName;
+                break;
+              }
+            }
+          }
+
+          if (!label) {
+            const defaultRoomCats = ['Interior Kamar', 'Kamar Mandi', 'Tempat Tidur', 'Lemari / Storage'];
+            label = defaultRoomCats[imgIdx] || `Foto Kamar ${imgIdx + 1}`;
+          }
+
+          return { url, label, isRoom: true, roomName: rName };
+        }).filter(p => !!p.url);
+
         return {
           id: r.id || `room_${rtIdx}_${rSubIdx}`,
           name: rName,
@@ -219,14 +285,41 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           status: r.status || (isAvail ? 'Kosong' : 'Terisi'),
           price: Number(r.price) || Number(rt.price) || Number(kost.price) || 0,
           size: r.size || rt.size || '3x3',
-          images: roomPhotos
+          images: roomPhotoItems.map(p => p.url),
+          photoItems: roomPhotoItems
         };
       });
     }
 
     const isAvail = rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh';
-    const roomPhotos: string[] = (rt.images || rt.image_urls || []).map((img: any) => typeof img === 'string' ? img : (img?.url || img?.original || '')).filter(Boolean);
     const rName = rt.name ? (String(rt.name).trim().toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${rtIdx + 1}`;
+    const rawImages = rt.images || rt.image_urls || [];
+    const roomPhotoItems: PhotoItem[] = rawImages.map((img: any, imgIdx: number) => {
+      const url = typeof img === 'string' ? img : (img?.url || img?.original || '');
+      let label = '';
+      if (typeof img === 'object' && (img.label || img.category || img.caption || img.title)) {
+        label = img.label || img.category || img.caption || img.title;
+      } else if (Array.isArray(rt.photoCategories) && rt.photoCategories[imgIdx]) {
+        label = rt.photoCategories[imgIdx];
+      } else if (Array.isArray(rt.photo_categories) && rt.photo_categories[imgIdx]) {
+        label = rt.photo_categories[imgIdx];
+      } else if (rt.categorizedPhotos && typeof rt.categorizedPhotos === 'object') {
+        for (const [catName, catUrls] of Object.entries(rt.categorizedPhotos)) {
+          if (Array.isArray(catUrls) && catUrls.includes(url)) {
+            label = catName;
+            break;
+          }
+        }
+      }
+
+      if (!label) {
+        const defaultRoomCats = ['Interior Kamar', 'Kamar Mandi', 'Tempat Tidur', 'Lemari / Storage'];
+        label = defaultRoomCats[imgIdx] || `Foto Kamar ${imgIdx + 1}`;
+      }
+
+      return { url, label, isRoom: true, roomName: rName };
+    }).filter(p => !!p.url);
+
     return [{
       id: rt.id || `room_${rtIdx}`,
       name: rName,
@@ -236,7 +329,8 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
       status: rt.status || (isAvail ? 'Kosong' : 'Terisi'),
       price: Number(rt.price) || Number(kost.price) || 0,
       size: rt.size || '3x3',
-      images: roomPhotos
+      images: roomPhotoItems.map(p => p.url),
+      photoItems: roomPhotoItems
     }];
   });
 
@@ -248,22 +342,35 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     ? normalizedRooms.find(r => r.id === activePhotoFilter || r.name === activePhotoFilter || r.rawName === activePhotoFilter)
     : null;
 
-  // Compute displayed images based on active filter
-  const displayedImages: string[] = (() => {
+  // Compute displayed photo items with surveyed labels based on active filter
+  const displayedPhotoItems: PhotoItem[] = (() => {
     if (activeFilteredRoom) {
-      if (activeFilteredRoom.images && activeFilteredRoom.images.length > 0) {
-        return activeFilteredRoom.images;
+      if (activeFilteredRoom.photoItems && activeFilteredRoom.photoItems.length > 0) {
+        return activeFilteredRoom.photoItems;
       }
       // If room has no specific photos, fallback to property photos
-      return propertyPhotos.length > 0 ? propertyPhotos : ['https://ruangsinggah.id/logo.png'];
+      return propertyPhotos.length > 0 ? propertyPhotos : [{ url: 'https://ruangsinggah.id/logo.png', label: 'Foto Properti', isRoom: false }];
     }
 
     // Default 'all': Property photos + all empty rooms photos combined
-    const allVacantPhotos = emptyRooms.flatMap(r => r.images);
+    const allVacantPhotos = emptyRooms.flatMap(r => r.photoItems || []);
     const combined = [...propertyPhotos, ...allVacantPhotos];
-    const uniqueCombined = Array.from(new Set(combined.filter(Boolean)));
-    return uniqueCombined.length > 0 ? uniqueCombined : (propertyPhotos.length > 0 ? propertyPhotos : ['https://ruangsinggah.id/logo.png']);
+    
+    // De-duplicate by URL
+    const seen = new Set<string>();
+    const unique: PhotoItem[] = [];
+    combined.forEach(p => {
+      if (p.url && !seen.has(p.url)) {
+        seen.add(p.url);
+        unique.push(p);
+      }
+    });
+
+    return unique.length > 0 ? unique : (propertyPhotos.length > 0 ? propertyPhotos : [{ url: 'https://ruangsinggah.id/logo.png', label: 'Foto Properti', isRoom: false }]);
   })();
+
+  const displayedImages: string[] = displayedPhotoItems.map(p => p.url);
+  const currentPhotoItem = displayedPhotoItems[currentPhoto] || displayedPhotoItems[0];
 
   const nextPhoto = () => setCurrentPhoto((prev) => (prev + 1) % (displayedImages.length || 1));
   const prevPhoto = () => setCurrentPhoto((prev) => (prev - 1 + (displayedImages.length || 1)) % (displayedImages.length || 1));
@@ -524,24 +631,28 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                 <div className="absolute bottom-6 right-6 bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/15 flex items-center gap-2">
                   <Camera size={12} className="text-orange-400" />
                   <span>{currentPhoto + 1} / {displayedImages.length} FOTO</span>
-                  {activeFilteredRoom ? (
-                    <>
-                      <span className="text-white/40">•</span>
-                      <span className="text-orange-400 font-bold">{activeFilteredRoom.name}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-white/40">•</span>
-                      <span className="text-emerald-400 font-bold">PROPERTI</span>
-                    </>
-                  )}
+                  <span className="text-white/40">•</span>
+                  <span className={currentPhotoItem?.isRoom ? "text-orange-400 font-bold" : "text-emerald-400 font-bold"}>
+                    {currentPhotoItem?.isRoom 
+                      ? (currentPhotoItem.roomName ? `${currentPhotoItem.roomName} - ${currentPhotoItem.label}` : currentPhotoItem.label)
+                      : (currentPhotoItem?.label || 'PROPERTI')}
+                  </span>
                 </div>
 
-                {/* Active Mode Tag Top Left */}
-                {activeFilteredRoom && (
-                  <div className="absolute top-6 left-6 bg-orange-500/90 backdrop-blur-md text-white px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-lg flex items-center gap-1.5">
-                    <Bed size={12} />
-                    <span>Galeri Foto {activeFilteredRoom.name}</span>
+                {/* Active Category Tag Top Left */}
+                {currentPhotoItem && (
+                  <div className="absolute top-6 left-6 bg-black/60 backdrop-blur-md text-white px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider shadow-lg border border-white/20 flex items-center gap-1.5">
+                    {currentPhotoItem.isRoom ? (
+                      <>
+                        <Bed size={13} className="text-orange-400" />
+                        <span>{currentPhotoItem.roomName ? `${currentPhotoItem.roomName} • ${currentPhotoItem.label}` : currentPhotoItem.label}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={13} className="text-orange-400" />
+                        <span>{currentPhotoItem.label}</span>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
