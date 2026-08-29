@@ -2,6 +2,48 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 201. Redesain Komprehensif & Interaktif Kartu Penyewaan Aktif Menu 'Kost Saya' (`MyKost.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan: *"tampilan kartu penyewaan kita di menu kost saya belum tampil secara kompeherensif dan interaktif"*.
+  2. Masalah spesifik yang ditemukan pada kartu hunian aktif:
+     - **Identitas Kamar Tidak Spesifik**: Hanya menampilkan badge umum `STANDARD`, tidak menampilkan nomor kamar spesifik (*Kamar 3*).
+     - **Thumbnail Tidak Representatif**: Thumbnail menampilkan diagram acak TAM SAM SOM (karena mengambil foto index 0 properti dari data uji coba) alih-alih foto kamar riil atau foto fasad bangunan.
+     - **Teks Metrik Terpotong (*Truncated*)**: Tanggal mulai dan selesai sewa terpotong elipsis (`31 Agustus ...`, `01 Oktober ...`).
+     - **Kurang Komprehensif**: Tidak ada rincian spesifikasi kamar (lantai, dimensi 2x2m, kapasitas, jenis kamar mandi), fasilitas kamar, fasilitas bersama properti, maupun alamat jalan lengkap.
+     - **Minim Interaktivitas**: Tidak ada tombol akses ke Kwitansi Digital Resmi berstempel (`DigitalReceiptModal`), tidak ada visual progress bar masa sewa, tidak ada panel ekspansi accordion detail hunian, dan belum ada fitur cepat lapor kendala fasilitas via WhatsApp resmi ke pengelola.
+- **Implementasi**:
+  * **1. Upgrade Ekstraksi Data Properti & Kamar di `fetchMyKosts` (`MyKost.tsx`)**:
+    - Kueri `properties` diperluas untuk mengambil: `address, facilities, rules, metadata, is_managed, subscription_status`.
+    - Mencocokkan `targetRoomNum` dengan array `properties.room_types` untuk memperoleh objek `currentRoom` lengkap (lantai kamar, dimensi/ukuran, fasilitas kamar, tipe kamar mandi).
+    - Ekstraksi galeri foto kamar `roomPhotos` dari `currentRoom.images` dan `currentRoom.categorized_photos`.
+    - Menentukan `displayImage` terbaik: prioritas utama foto kamar yang disewa (bukan diagram TAM SAM SOM), fallback ke foto bangunan depan berlabel `Bangunan Depan`.
+    - Menyertakan data lengkap ke objek kartu: `roomNumber`, `roomFloor`, `roomSize`, `roomFacilities`, `bathroomType`, `roomPhotos`, `isManagedKost`, `address`, `areaCity`, `propertyFacilities`, `propertyRules`.
+  * **2. Redesain Visual & Header Kartu**:
+    - Thumbnail interaktif dengan overlay badge `📸 X Foto Kamar` yang dapat diklik untuk membuka modal galeri foto kamar.
+    - Badge nomor unit mencolok: `🏷️ UNIT KAMAR 3` (oranye RuangSinggah), `TIPE STANDARD`, `⚡ Auto-Pilot` (jika dikelola KostManager), status `SEDANG DISEWA`, dan countdown sisa hari.
+    - Judul kost besar dengan pin alamat jalan lengkap (`Tamalanrea, Kota Makassar`), sub-info lantai dan ukuran, serta bintang rating terverifikasi.
+  * **3. Visual Progress Bar Masa Sewa & Metrik Anti-Truncate**:
+    - Progress bar masa sewa terhitung dinamis: menampilkan "Hari ke-X dari Y Hari (Z%)" dengan bar gradien warna oranye-kuning-emerald yang elegan.
+    - 4 kartu metrik anti-truncate: Durasi Sewa, Mulai Masuk (Check-in), Selesai Sewa (Jatuh Tempo), dan Tagihan Pokok (Status: Lunas) dengan penanggalan utuh tanpa elipsis terpotong.
+  * **4. Panel Accordion Interaktif "Detail Hunian & Fasilitas"**:
+    - Tombol ekspansi/collapse `Detail Hunian & Fasilitas` dengan animasi halus.
+    - Menampilkan 3 kolom komprehensif:
+      1. **Spesifikasi Unit**: Nomor kamar, tipe, posisi lantai, dimensi/ukuran, kamar mandi dalam/luar, dan kapasitas maksimal.
+      2. **Fasilitas Kamar & Bersama**: Badge fasilitas kamar (dengan icon vector `lucide-react`) dan fasilitas umum properti (WiFi, parkir, dll.).
+      3. **Rincian Biaya & Tata Tertib**: Tagihan sewa bulanan, status lunas, bantuan hunian 24/7, serta daftar aturan/tata tertib kost.
+  * **5. Bilah Aksi Cepat & Modal Interaktif Tambahan**:
+    - `📍 Rute Ke Kost`: Navigasi Google Maps langsung ke alamat/koordinat.
+    - `🧾 Lihat Kwitansi Digital`: Membuka `DigitalReceiptModal` resmi berstempel PT RUANG SINGGAH NUSANTARA (bisa unduh PDF / cetak / bagikan WhatsApp).
+    - `➕ Perpanjang Sewa`: Dilengkapi status proteksi ketersediaan perpanjangan sewa (H-7).
+    - `💬 Hubungi Pengelola / Pemilik`: Deteksi cerdas label `Bantuan KostManager` atau `Hubungi Pemilik`.
+    - `🚨 Lapor Kendala Kamar`: Menghubungkan langsung ke WhatsApp resmi bantuan pengelola dengan template pesan laporan kendala terstruktur otomatis.
+    - `📸 Modal Galeri Foto Kamar`: Modal preview galeri foto dokumentasi kamar & hunian.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+- **Verifikasi**:
+  - Kompilasi `npm run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, ✓ built in 26.16s, 0 error).
+
 ### 200. Eliminasi Duplikasi Kartu Penghuni, Kelengkapan Profil & Nomor Kamar, serta Sinkronisasi Status Kamar Listing Online (`adminService.ts`, `KostManagerPortal.tsx`, `index.ts`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan setelah simulasi booking hingga pembayaran:

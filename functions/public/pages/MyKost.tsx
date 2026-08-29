@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../supabase';
-import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity, DoorClosed, ChevronDown, ChevronUp, Camera, ShieldCheck, Sparkles, Building, Bed, Bath, Wifi, Maximize2, Share2, PhoneCall, HelpCircle, Layers, Wrench } from 'lucide-react';
 import { Page } from '../types';
 import { addPropertyReview, getExtraBills, settlePendingBills, cancelBookingRequest } from '../userService';
 import PaymentGateway from '../components/PaymentGateway';
@@ -185,6 +185,64 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const [selectedReceipt, setSelectedReceipt] = useState<ReceiptData | null>(null);
     const [showDigitalReceiptModal, setShowDigitalReceiptModal] = useState<boolean>(false);
 
+    // Interactive Card Details & Gallery states
+    const [expandedDetailId, setExpandedDetailId] = useState<string | null>(null);
+    const [galleryModalOpen, setGalleryModalOpen] = useState<boolean>(false);
+    const [galleryPhotos, setGalleryPhotos] = useState<string[]>([]);
+    const [galleryTitle, setGalleryTitle] = useState<string>('');
+
+    const handleOpenActiveReceipt = (kost: any) => {
+        const kMeta = kost.metadata || {};
+        const baseAmount = Number(kost.totalPrice || kMeta.total || kMeta.basePrice || 1);
+        setSelectedReceipt({
+            receiptNumber: kost.last_transaction_id ? `INV-${kost.last_transaction_id.substring(0, 8).toUpperCase()}` : (kost.id ? `INV-${kost.id.substring(0, 8).toUpperCase()}` : `INV-${Date.now().toString().slice(-8)}`),
+            paidAt: kost.updated_at || kost.created_at || new Date().toISOString(),
+            tenantName: kMeta.tenantName || kMeta.userName || user?.displayName || user?.name || 'Penghuni Kost',
+            tenantPhone: kMeta.userPhone || user?.phoneNumber || user?.phone || '',
+            propertyTitle: kost.kostName || 'Kost RuangSinggah',
+            roomNumber: kost.roomNumber || kMeta.roomNumber || kost.roomType || 'Kamar',
+            billingPeriod: kost.period || kMeta.periodLabel || 'Bulanan',
+            newPeriodStart: kost.moveInDate || kMeta.startDate || '',
+            newPeriodEnd: kost.endDate || kMeta.endDate || '',
+            baseRent: baseAmount,
+            extraFee: Number(kMeta.extraPersonFee || 0),
+            extraFeeName: Number(kMeta.extraPersonFee || 0) > 0 ? 'Biaya Tambahan Penghuni' : undefined,
+            totalAmount: baseAmount + Number(kMeta.extraPersonFee || 0),
+            paymentMethod: (kMeta.payment_method || 'QRIS / Midtrans').toUpperCase()
+        });
+        setShowDigitalReceiptModal(true);
+    };
+
+    const handleReportIssueWhatsApp = (kost: any) => {
+        const kMeta = kost.metadata || {};
+        const tenantName = kMeta.tenantName || kMeta.userName || user?.displayName || user?.name || 'Penghuni';
+        const roomName = kost.roomNumber || kMeta.roomNumber || kost.roomType || 'Kamar';
+        const propertyTitle = kost.kostName || 'Kost';
+        const adminWa = '6281527080656'; // Official KostManager / RuangSinggah Hotline
+
+        const text = encodeURIComponent(
+            `*LAPORAN KENDALA HUNIAN - RUANGSINGGAH*\n\n` +
+            `Halo Tim Bantuan KostManager RuangSinggah,\n` +
+            `Saya ingin melaporkan kendala pada hunian kost saya:\n\n` +
+            `👤 *Nama Penghuni:* ${tenantName}\n` +
+            `🏠 *Properti:* ${propertyTitle}\n` +
+            `🚪 *Unit Kamar:* ${roomName}\n` +
+            `📅 *Tanggal Lapor:* ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}\n\n` +
+            `*Rincian Kendala / Kerusakan:*\n` +
+            `[Tuliskan kendala Anda di sini, misal: Keran air bocor, WiFi mati, lampu kamar putus, dll.]\n\n` +
+            `Mohon bantuannya untuk segera ditindaklanjuti. Terima kasih!`
+        );
+
+        window.open(`https://wa.me/${adminWa}?text=${text}`, '_blank');
+    };
+
+    const handleOpenGallery = (photos: string[], title: string) => {
+        if (!photos || photos.length === 0) return;
+        setGalleryPhotos(photos);
+        setGalleryTitle(title);
+        setGalleryModalOpen(true);
+    };
+
 
 
 
@@ -364,113 +422,149 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
             if (data && data.length > 0) {
                 // Batch fetch unique properties since join might fail due to FK issues
                 const productIds = Array.from(new Set(data?.map(d => d.product_id || d.kost_id).filter(id => !!id)));
-            const { data: propertiesData } = await supabase
-                .from('properties')
-                .select('id, title, image_urls, owner_uid, city, area, additional_fee_name, additional_fee_price, additional_fee_starts_from, room_types, location')
-                .in('id', productIds);
+                const { data: propertiesData } = await supabase
+                    .from('properties')
+                    .select('id, title, address, image_urls, owner_uid, city, area, additional_fee_name, additional_fee_price, additional_fee_starts_from, room_types, location, facilities, rules, metadata, is_managed, subscription_status')
+                    .in('id', productIds);
 
-            const propMap = (propertiesData || []).reduce((acc: any, p: any) => {
-                acc[p.id] = p;
-                return acc;
-            }, {});
+                const propMap = (propertiesData || []).reduce((acc: any, p: any) => {
+                    acc[p.id] = p;
+                    return acc;
+                }, {});
 
-            const kostsData: any[] = [];
-            data?.forEach((doc) => {
-                const productType = (doc.product_type || doc.type || '').toLowerCase();
-                const isRent = ['rent', 'kost_booking', 'kost'].includes(productType) || doc.category === 'kost';
-                const statusLower = (doc.status || '').toLowerCase();
-                const isApproved = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(statusLower);
-                const isPendingApproval = statusLower === 'pending_approval';
-                const isAwaitingPayment = statusLower === 'awaiting_payment';
-                const isRejected = statusLower === 'rejected';
-                const isCancelled = statusLower === 'cancelled';
+                const kostsData: any[] = [];
+                data?.forEach((doc) => {
+                    const productType = (doc.product_type || doc.type || '').toLowerCase();
+                    const isRent = ['rent', 'kost_booking', 'kost'].includes(productType) || doc.category === 'kost';
+                    const statusLower = (doc.status || '').toLowerCase();
+                    const isApproved = ['approved', 'paid', 'selesai', 'success', 'berhasil'].includes(statusLower);
+                    const isPendingApproval = statusLower === 'pending_approval';
+                    const isAwaitingPayment = statusLower === 'awaiting_payment';
+                    const isRejected = statusLower === 'rejected';
+                    const isCancelled = statusLower === 'cancelled';
 
-                if (isRent && (isApproved || isPendingApproval || isAwaitingPayment || isRejected || isCancelled)) {
-                    let daysRem = null;
-                    const metadata = doc.metadata || {};
-                    if (metadata.endDate) {
-                        // Use a safe parsing logic similar to FORMAT_DATE but for calculation
-                        let end = new Date(metadata.endDate);
+                    if (isRent && (isApproved || isPendingApproval || isAwaitingPayment || isRejected || isCancelled)) {
+                        let daysRem = null;
+                        const metadata = doc.metadata || {};
+                        if (metadata.endDate) {
+                            // Use a safe parsing logic similar to FORMAT_DATE but for calculation
+                            let end = new Date(metadata.endDate);
 
-                        // Fallback for Indonesian locale strings
-                        if (isNaN(end.getTime()) && typeof metadata.endDate === 'string') {
-                            const months: Record<string, number> = {
-                                'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5,
-                                'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11
-                            };
-                            const parts = metadata.endDate.toLowerCase().split(' ');
-                            if (parts.length >= 3) {
-                                const day = parseInt(parts[0]);
-                                const month = months[parts[1]];
-                                const year = parseInt(parts[2]);
-                                if (!isNaN(day) && month !== undefined && !isNaN(year)) {
-                                    end = new Date(year, month, day);
+                            // Fallback for Indonesian locale strings
+                            if (isNaN(end.getTime()) && typeof metadata.endDate === 'string') {
+                                const months: Record<string, number> = {
+                                    'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5,
+                                    'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11
+                                };
+                                const parts = metadata.endDate.toLowerCase().split(' ');
+                                if (parts.length >= 3) {
+                                    const day = parseInt(parts[0]);
+                                    const month = months[parts[1]];
+                                    const year = parseInt(parts[2]);
+                                    if (!isNaN(day) && month !== undefined && !isNaN(year)) {
+                                        end = new Date(year, month, day);
+                                    }
+                                }
+                            }
+
+                            if (!isNaN(end.getTime())) {
+                                // Normalize today and end date to start of day (00:00:00) for clean day calculation
+                                const today = getCurrentDate();
+                                const tNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                                const eNorm = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+
+                                const diff = eNorm.getTime() - tNorm.getTime();
+                                daysRem = Math.ceil(diff / (1000 * 60 * 60 * 24));
+                            }
+                        }
+
+                        const prop = propMap[doc.product_id || doc.kost_id];
+                        const targetRoomNum = (metadata.roomNumber || metadata.variantName || doc.room_number || '').trim();
+                        const propRooms = prop?.room_types || [];
+                        const currentRoom = propRooms.find((rm: any) => {
+                            const rName = (rm.name || rm.roomNumber || '').trim();
+                            if (!rName && !targetRoomNum) return false;
+                            if (targetRoomNum && rName.toLowerCase() === targetRoomNum.toLowerCase()) return true;
+                            const rNumOnly = rName.replace(/^kamar\s*/i, '').trim().toLowerCase();
+                            const tNumOnly = targetRoomNum.replace(/^kamar\s*/i, '').trim().toLowerCase();
+                            if (rNumOnly && tNumOnly && rNumOnly === tNumOnly) return true;
+                            return false;
+                        }) || (propRooms.length === 1 ? propRooms[0] : null);
+
+                        let roomPhotos: string[] = [];
+                        if (currentRoom?.images && Array.isArray(currentRoom.images) && currentRoom.images.length > 0) {
+                            roomPhotos = currentRoom.images.filter(Boolean);
+                        } else if (currentRoom?.categorized_photos && typeof currentRoom.categorized_photos === 'object') {
+                            Object.values(currentRoom.categorized_photos).forEach((photos: any) => {
+                                if (Array.isArray(photos)) {
+                                    photos.forEach((p: any) => { if (typeof p === 'string' && p && !roomPhotos.includes(p)) roomPhotos.push(p); });
+                                }
+                            });
+                        }
+
+                        let displayImg = null;
+                        if (roomPhotos.length > 0) {
+                            displayImg = roomPhotos[0];
+                        } else {
+                            const rawImages = prop?.image_urls || doc.image_urls || metadata.imageUrls || [];
+                            const frontBuildingImg = rawImages.find((img: any) => {
+                                const label = (img?.label || '').toLowerCase();
+                                return label.includes('bangunan depan') || label.includes('fasad') || label.includes('depan');
+                            });
+                            const chosenImg = frontBuildingImg || rawImages[0];
+                            if (chosenImg) {
+                                const path = typeof chosenImg === 'string' ? chosenImg : (chosenImg.original || chosenImg.url || chosenImg.webp || '');
+                                if (path) {
+                                    if (path.startsWith('http')) {
+                                        displayImg = path;
+                                    } else {
+                                        const { data: { publicUrl } } = supabase.storage.from('properties').getPublicUrl(path);
+                                        displayImg = publicUrl;
+                                    }
                                 }
                             }
                         }
 
-                        if (!isNaN(end.getTime())) {
-                            // Normalize today and end date to start of day (00:00:00) for clean day calculation
-                            const today = getCurrentDate();
-                            const tNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                            const eNorm = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-
-                            const diff = eNorm.getTime() - tNorm.getTime();
-                            daysRem = Math.ceil(diff / (1000 * 60 * 60 * 24));
-                        }
+                        kostsData.push({
+                            id: doc.id,
+                            kostName: prop?.title || doc.properties?.title || doc.kost_name || metadata.kostName,
+                            kostId: prop?.id || doc.properties?.id || doc.kost_id || doc.product_id,
+                            roomType: doc.room_type || metadata.roomType,
+                            roomNumber: targetRoomNum || currentRoom?.name || currentRoom?.roomNumber || doc.room_type || metadata.roomType || 'Kamar',
+                            roomFloor: currentRoom?.floor || null,
+                            roomSize: currentRoom?.dimensions || currentRoom?.size || null,
+                            roomFacilities: currentRoom?.roomFacilities || currentRoom?.facilities || [],
+                            bathroomType: currentRoom?.bathroomType || (currentRoom?.bathroomFacilities?.length ? 'Kamar Mandi Dalam' : 'Kamar Mandi Luar'),
+                            roomPhotos: roomPhotos,
+                            isManagedKost: prop?.is_managed === true || doc.is_managed_kost === true || metadata.is_managed_kost === true || metadata.isManaged === true || metadata.managed_by === 'kostmanager',
+                            address: prop?.address || doc.address || metadata.address || '',
+                            areaCity: [prop?.area, prop?.city].filter(Boolean).join(', ') || '',
+                            propertyFacilities: prop?.facilities || [],
+                            propertyRules: prop?.rules || [],
+                            ownerUid: prop?.owner_uid || doc.owner_uid,
+                            currentRoom: currentRoom,
+                            duration: doc.duration || metadata.duration,
+                            period: (doc.period || metadata.periodLabel || 'Bulan').replace(/per\s+/i, '').replace(/bulanan/i, 'Bulan'),
+                            moveInDate: doc.move_in_date || metadata.startDate,
+                            endDate: metadata.endDate,
+                            daysRemaining: daysRem,
+                            totalPrice: (isPendingApproval || isAwaitingPayment)
+                                ? Number(doc.amount || 0)
+                                : (metadata.basePrice
+                                    ? (Number(metadata.basePrice) + Number(metadata.extraPersonFee || 0))
+                                    : (Number(doc.amount || 0) - Number(metadata.facilityFee || prop?.additional_fee_price || 0))),
+                            displayImage: displayImg,
+                            rejection_reason: metadata.rejection_reason || metadata.rejectionReason,
+                            additionalFeePrice: prop?.additional_fee_price,
+                            additionalFeeName: prop?.additional_fee_name,
+                            additionalFeeStartsFrom: prop?.additional_fee_starts_from,
+                            room_types: prop?.room_types,
+                            basePrice: prop?.price,
+                            location: prop?.location || doc.location || metadata.location,
+                            ...doc
+                        });
                     }
-
-                    let displayImg = null;
-                    const prop = propMap[doc.product_id || doc.kost_id];
-                    const rawImages = prop?.image_urls || doc.image_urls || metadata.imageUrls || [];
-
-                    if (rawImages.length > 0) {
-                        const img = rawImages[0];
-                        const path = typeof img === 'string' ? img : (img.original || img.webp || '');
-                        if (path) {
-                            if (path.startsWith('http')) {
-                                displayImg = path;
-                            } else {
-                                const { data: { publicUrl } } = supabase.storage.from('properties').getPublicUrl(path);
-                                displayImg = publicUrl;
-                            }
-                        }
-                    }
-
-                    // Fallback to fetching property image if missing in metadata
-                    if (!displayImg && (doc.kost_id || doc.product_id)) {
-                        const id = doc.kost_id || doc.product_id;
-                        // Since this is a loop, ideally we'd batch fetch, but for small counts this is okay.
-                        // Or we can just rely on the user creating a NEW booking with the updated metadata.
-                    }
-
-                    kostsData.push({
-                        id: doc.id,
-                        kostName: prop?.title || doc.properties?.title || doc.kost_name || metadata.kostName,
-                        kostId: prop?.id || doc.properties?.id || doc.kost_id || doc.product_id,
-                        roomType: doc.room_type || metadata.roomType,
-                        duration: doc.duration || metadata.duration,
-                        period: (doc.period || metadata.periodLabel || 'Bulan').replace(/per\s+/i, '').replace(/bulanan/i, 'Bulan'),
-                        moveInDate: doc.move_in_date || metadata.startDate,
-                        endDate: metadata.endDate,
-                        daysRemaining: daysRem,
-                        totalPrice: (isPendingApproval || isAwaitingPayment)
-                            ? Number(doc.amount || 0)
-                            : (metadata.basePrice
-                                ? (Number(metadata.basePrice) + Number(metadata.extraPersonFee || 0))
-                                : (Number(doc.amount || 0) - Number(metadata.facilityFee || prop?.additional_fee_price || 0))),
-                        displayImage: displayImg,
-                        rejection_reason: metadata.rejection_reason || metadata.rejectionReason,
-                        additionalFeePrice: prop?.additional_fee_price,
-                        additionalFeeName: prop?.additional_fee_name,
-                        additionalFeeStartsFrom: prop?.additional_fee_starts_from,
-                        room_types: prop?.room_types,
-                        basePrice: prop?.price,
-                        location: prop?.location || doc.location || metadata.location,
-                        ...doc
-                    });
-                }
-            });
+                });
 
             // De-duplicate by kostId to avoid showing multiple cards for the same property
             // Priority: PAID > AWAITING_PAYMENT > PENDING_APPROVAL > REJECTED/CANCELLED
@@ -1731,119 +1825,249 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                 );
                             }
 
+                            const isExpanded = expandedDetailId === kost.id;
+                            const kMeta = kost.metadata || {};
+
+                            // Lease progress bar calculation
+                            const startDateObj = parseDateSafely(kost.moveInDate || kMeta.startDate);
+                            const endDateObj = parseDateSafely(kost.endDate || kMeta.endDate);
+                            const nowObj = getCurrentDate();
+
+                            let totalLeaseDays = 30;
+                            let daysElapsed = 0;
+                            let progressPercent = 0;
+
+                            if (startDateObj && endDateObj) {
+                                const totalMs = endDateObj.getTime() - startDateObj.getTime();
+                                totalLeaseDays = Math.max(1, Math.round(totalMs / (1000 * 60 * 60 * 24)));
+                                const elapsedMs = Math.max(0, nowObj.getTime() - startDateObj.getTime());
+                                daysElapsed = Math.min(totalLeaseDays, Math.round(elapsedMs / (1000 * 60 * 60 * 24)));
+                                progressPercent = Math.min(100, Math.max(0, Math.round((daysElapsed / totalLeaseDays) * 100)));
+                            }
+
+                            const roomPhotoList = kost.roomPhotos && kost.roomPhotos.length > 0
+                                ? kost.roomPhotos
+                                : (kost.displayImage ? [kost.displayImage] : []);
+
+                            const roomFacs: string[] = kost.roomFacilities || [];
+                            const propFacs: string[] = kost.propertyFacilities || [];
+                            const propRules: string[] = kost.propertyRules || [];
+
                             return (
-                                <div key={kost.id} className="group relative bg-white rounded-[3rem] p-6 sm:p-10 border border-gray-100 shadow-xl shadow-gray-200/40 hover:shadow-2xl hover:shadow-gray-300/50 transition-all duration-700 overflow-hidden flex flex-col lg:grid lg:grid-cols-12 gap-10 sm:gap-14">
-                                    {/* Accent Background */}
-                                    <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-orange-500/5 to-transparent rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
+                                <div key={kost.id} className="group relative bg-white rounded-[2.5rem] sm:rounded-[3rem] p-6 sm:p-10 border border-gray-100 shadow-xl shadow-gray-200/50 hover:shadow-2xl hover:shadow-orange-900/10 transition-all duration-500 overflow-hidden flex flex-col gap-6 sm:gap-8">
+                                    {/* Accent Background Glow */}
+                                    <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-transparent rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
 
-                                    <div className="lg:col-span-8 flex flex-col gap-8">
-                                        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-8 sm:gap-10 text-center sm:text-left">
-                                            {/* Image Section */}
-                                            <div className="relative shrink-0 group/img">
-                                                <div className="w-48 h-36 sm:w-56 sm:h-44 bg-white rounded-[2rem] flex items-center justify-center shadow-xl shadow-orange-100 border-2 border-white transform hover:rotate-1 transition-all duration-700 overflow-hidden">
-                                                    {kost.displayImage ? (
-                                                        <img src={kost.displayImage} className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-1000" alt={kost.kostName} />
-                                                    ) : (
-                                                        <MapPin className="w-12 h-12 text-orange-200" />
-                                                    )}
-                                                </div>
-                                                <div className="absolute -bottom-3 -right-3 w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center border-2 border-orange-50 z-20">
-                                                    <span className="text-2xl animate-pulse">⚡</span>
-                                                </div>
-                                            </div>
-
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex flex-wrap justify-center sm:justify-start gap-2 mb-4">
-                                                    {isPaid && (
-                                                        <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider border flex items-center gap-1.5 ${
-                                                            (kost.daysRemaining || 0) < 0 ? 'bg-gray-50 text-gray-400 border-gray-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                                                        }`}>
-                                                            <CheckCircle className="w-3.5 h-3.5" />
-                                                            {(kost.daysRemaining || 0) < 0 ? 'SUDAH HABIS' : 'SEDANG DISEWA'}
-                                                        </span>
-                                                    )}
-
-                                                    {kost.daysRemaining !== null && isPaid && (
-                                                        <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider border flex items-center gap-1.5 ${
-                                                            kost.daysRemaining <= 7 ? 'bg-red-50 text-red-600 border-red-100 animate-pulse' : 'bg-orange-50 text-orange-600 border-orange-100'
-                                                        }`}>
-                                                            <Clock className="w-3.5 h-3.5" />
-                                                            {kost.daysRemaining < 0 ? 'Habis' : `${kost.daysRemaining} Hari Lagi`}
-                                                        </div>
-                                                    )}
-
-                                                    <span className="px-4 py-1.5 rounded-full text-[9px] font-black text-gray-500 uppercase tracking-wider bg-gray-50 border border-gray-100">
-                                                        {kost.roomType || 'Standard'}
-                                                    </span>
-                                                </div>
-
-                                                <button
-                                                    onClick={() => navigate(`${Page.DETAIL}?kostId=${kost.kostId}`)}
-                                                    className="group/title inline-flex items-center gap-3 text-3xl sm:text-4xl font-black text-gray-900 leading-tight tracking-tight hover:text-orange-600 transition-colors mb-4"
+                                    {/* Top Section: Main Content + Sidebar Actions */}
+                                    <div className="flex flex-col lg:grid lg:grid-cols-12 gap-8 sm:gap-10">
+                                        {/* Left / Main Column */}
+                                        <div className="lg:col-span-8 flex flex-col gap-6">
+                                            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 sm:gap-8 text-center sm:text-left">
+                                                {/* Interactive Image Container */}
+                                                <div 
+                                                    onClick={() => handleOpenGallery(roomPhotoList, kost.kostName || 'Kamar Kost')}
+                                                    className="relative shrink-0 group/img cursor-pointer"
+                                                    title="Klik untuk melihat foto kamar & hunian"
                                                 >
-                                                    <span className="uppercase">{kost.kostName || 'Kost Saya'}</span>
-                                                    <ChevronRight className="w-6 h-6 opacity-0 -translate-x-4 group-hover/title:opacity-100 group-hover/title:translate-x-0 transition-all text-orange-500" />
-                                                </button>
-
-                                                {/* User Rating Display (Placeholder for future) */}
-                                                <div className="flex items-center justify-center sm:justify-start gap-4">
-                                                    <div className="flex gap-0.5">
-                                                        {[1, 2, 3, 4, 5].map((s) => (
-                                                            <Star key={s} className="w-3 h-3 text-orange-300 fill-orange-300" />
-                                                        ))}
+                                                    <div className="w-48 h-36 sm:w-56 sm:h-44 bg-slate-900 rounded-[2rem] flex items-center justify-center shadow-xl shadow-orange-100 border-2 border-white transform hover:scale-[1.03] transition-all duration-500 overflow-hidden relative">
+                                                        {kost.displayImage ? (
+                                                            <img 
+                                                                src={kost.displayImage} 
+                                                                className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-700" 
+                                                                alt={kost.kostName} 
+                                                            />
+                                                        ) : (
+                                                            <MapPin className="w-12 h-12 text-orange-200" />
+                                                        )}
+                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80 group-hover/img:opacity-100 transition-opacity" />
+                                                        
+                                                        {/* Photo Count Overlay Badge */}
+                                                        <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 border border-white/20">
+                                                            <Camera className="w-3.5 h-3.5 text-orange-400" />
+                                                            <span>{roomPhotoList.length} Foto Kamar</span>
+                                                        </div>
                                                     </div>
-                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Terverifikasi RuangSinggah</span>
+                                                    <div className="absolute -bottom-2.5 -right-2.5 w-11 h-11 bg-white rounded-2xl shadow-lg flex items-center justify-center border-2 border-orange-50 z-20">
+                                                        <span className="text-xl">⚡</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Property & Room Header Info */}
+                                                <div className="flex-1 min-w-0">
+                                                    {/* Badges Bar */}
+                                                    <div className="flex flex-wrap justify-center sm:justify-start items-center gap-2 mb-3">
+                                                        {isPaid && (
+                                                            <span className={`px-3.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border flex items-center gap-1.5 ${
+                                                                (kost.daysRemaining || 0) < 0 
+                                                                    ? 'bg-gray-50 text-gray-400 border-gray-200' 
+                                                                    : 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm shadow-emerald-100'
+                                                            }`}>
+                                                                <CheckCircle className="w-3.5 h-3.5" />
+                                                                {(kost.daysRemaining || 0) < 0 ? 'SUDAH HABIS' : 'SEDANG DISEWA'}
+                                                            </span>
+                                                        )}
+
+                                                        {kost.daysRemaining !== null && isPaid && (
+                                                            <div className={`px-3.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border flex items-center gap-1.5 ${
+                                                                kost.daysRemaining <= 7 
+                                                                    ? 'bg-red-50 text-red-600 border-red-200 animate-pulse shadow-sm' 
+                                                                    : 'bg-orange-50 text-orange-600 border-orange-200'
+                                                            }`}>
+                                                                <Clock className="w-3.5 h-3.5" />
+                                                                {kost.daysRemaining < 0 ? 'Habis' : `${kost.daysRemaining} Hari Lagi`}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Specific Room Badge */}
+                                                        <span className="px-3.5 py-1 rounded-full text-[10px] font-black text-white bg-orange-500 shadow-sm shadow-orange-200 uppercase tracking-wider flex items-center gap-1.5">
+                                                            <DoorClosed className="w-3.5 h-3.5" />
+                                                            {kost.roomNumber ? `UNIT ${kost.roomNumber.toUpperCase()}` : 'KAMAR'}
+                                                        </span>
+
+                                                        <span className="px-3 py-1 rounded-full text-[9px] font-bold text-slate-700 uppercase tracking-wider bg-slate-100 border border-slate-200">
+                                                            {kost.roomType || 'Standard'}
+                                                        </span>
+
+                                                        {kost.isManagedKost && (
+                                                            <span className="px-3 py-1 rounded-full text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200 uppercase tracking-wider flex items-center gap-1">
+                                                                <Sparkles className="w-3 h-3 text-amber-500" /> Auto-Pilot
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Kost Name */}
+                                                    <button
+                                                        onClick={() => navigate(`${Page.DETAIL}?kostId=${kost.kostId}`)}
+                                                        className="group/title inline-flex items-center gap-2 text-2xl sm:text-3xl lg:text-4xl font-black text-gray-900 leading-tight tracking-tight hover:text-orange-600 transition-colors mb-2 text-left"
+                                                    >
+                                                        <span className="uppercase">{kost.kostName || 'Kost Saya'}</span>
+                                                        <ChevronRight className="w-5 h-5 opacity-0 -translate-x-2 group-hover/title:opacity-100 group-hover/title:translate-x-0 transition-all text-orange-500" />
+                                                    </button>
+
+                                                    {/* Location Details & Verification */}
+                                                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs font-semibold text-gray-500 mb-2">
+                                                        <div className="flex items-center justify-center sm:justify-start gap-1.5 text-gray-600 truncate">
+                                                            <MapPin className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                                                            <span className="truncate">{kost.address || kost.areaCity || 'Makassar'}</span>
+                                                        </div>
+                                                        {kost.roomFloor && (
+                                                            <span className="hidden sm:inline-block text-gray-300">•</span>
+                                                        )}
+                                                        {kost.roomFloor && (
+                                                            <span className="text-gray-500 font-bold">{kost.roomFloor}</span>
+                                                        )}
+                                                        {kost.roomSize && (
+                                                            <span className="hidden sm:inline-block text-gray-300">•</span>
+                                                        )}
+                                                        {kost.roomSize && (
+                                                            <span className="text-gray-500 font-bold">{kost.roomSize}</span>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex items-center justify-center sm:justify-start gap-3">
+                                                        <div className="flex gap-0.5">
+                                                            {[1, 2, 3, 4, 5].map((s) => (
+                                                                <Star key={s} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                                                            ))}
+                                                        </div>
+                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                                                            <ShieldCheck className="w-3 h-3 text-emerald-500" /> Terverifikasi RuangSinggah
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
+
+                                            {/* Visual Progress Bar: Masa Sewa */}
+                                            {isPaid && (
+                                                <div className="bg-gradient-to-r from-orange-50/70 via-amber-50/50 to-slate-50 p-4 sm:p-5 rounded-2xl border border-orange-100/80 shadow-sm flex flex-col gap-2.5">
+                                                    <div className="flex items-center justify-between text-xs">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
+                                                            <span className="font-black text-gray-800 uppercase tracking-wider text-[11px]">Masa Sewa Berjalan</span>
+                                                        </div>
+                                                        <span className="font-black text-orange-600 text-xs">
+                                                            Hari ke-{daysElapsed} dari {totalLeaseDays} Hari ({progressPercent}%)
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Track & Filled Bar */}
+                                                    <div className="w-full h-2.5 bg-gray-200/80 rounded-full overflow-hidden p-0.5 shadow-inner">
+                                                        <div 
+                                                            className="h-full bg-gradient-to-r from-orange-500 via-amber-500 to-emerald-500 rounded-full transition-all duration-1000 shadow-sm"
+                                                            style={{ width: `${Math.max(5, progressPercent)}%` }}
+                                                        />
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between text-[10px] font-bold text-gray-500 pt-0.5">
+                                                        <span>Mulai: <strong className="text-gray-800">{FORMAT_DATE(kost.moveInDate)}</strong></span>
+                                                        <span>Berakhir: <strong className="text-gray-800">{FORMAT_DATE(kost.endDate)}</strong></span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Info Grid - Modern Minimalist Cards (Anti-Truncate) */}
+                                            {isPaid && (
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
+                                                    {[
+                                                        { label: 'Durasi Sewa', value: `${kost.duration || 1} ${kost.period}`, subtext: 'Paket Sewa', icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50' },
+                                                        { label: 'Mulai Masuk', value: FORMAT_DATE(kost.moveInDate), subtext: 'Check-in', icon: FileText, color: 'text-blue-500', bg: 'bg-blue-50' },
+                                                        { label: 'Selesai Sewa', value: FORMAT_DATE(kost.endDate), subtext: 'Jatuh Tempo', icon: Calendar, color: 'text-rose-500', bg: 'bg-rose-50' },
+                                                        { label: 'Tagihan Pokok', value: FORMAT_CURRENCY(kost.totalPrice || 0), subtext: 'Status: Lunas', icon: Receipt, color: 'text-emerald-500', bg: 'bg-emerald-50' }
+                                                    ].map((item, idx) => (
+                                                        <div key={idx} className="p-3.5 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-2 hover:border-orange-200 transition-colors group/stat">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className={`w-8 h-8 ${item.bg} rounded-xl flex items-center justify-center shrink-0 group-hover/stat:scale-110 transition-transform`}>
+                                                                    <item.icon className={`w-4 h-4 ${item.color}`} />
+                                                                </div>
+                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{item.subtext}</span>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">{item.label}</p>
+                                                                <p className="text-xs sm:text-sm font-black text-gray-900 leading-snug">{item.value}</p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
 
-                                        {/* Info Grid - Modern Minimalist Cards */}
-                                        {isPaid && (
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
-                                                {[
-                                                    { label: 'Durasi', value: `${kost.duration || 1} ${kost.period}`, icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50/50' },
-                                                    { label: 'Mulai', value: FORMAT_DATE(kost.moveInDate), icon: FileText, color: 'text-blue-500', bg: 'bg-blue-50/50' },
-                                                    { label: 'Selesai', value: FORMAT_DATE(kost.endDate), icon: Calendar, color: 'text-rose-500', bg: 'bg-rose-50/50' },
-                                                    { label: 'Tagihan', value: FORMAT_CURRENCY(kost.totalPrice || 0), icon: Receipt, color: 'text-emerald-500', bg: 'bg-emerald-50/50' }
-                                                ].map((item, idx) => (
-                                                    <div key={idx} className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 hover:border-orange-200 transition-colors group/stat">
-                                                        <div className={`w-10 h-10 ${item.bg} rounded-xl flex items-center justify-center shrink-0 group-hover/stat:scale-110 transition-transform`}>
-                                                            <item.icon className={`w-5 h-5 ${item.color}`} />
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">{item.label}</p>
-                                                            <p className="text-xs font-black text-gray-900 truncate">{item.value}</p>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
+                                        {/* Right / Actions Sidebar */}
+                                        <div className="lg:col-span-4 flex flex-col gap-2.5 justify-center relative z-10 pt-6 lg:pt-0 border-t lg:border-t-0 lg:border-l border-gray-100 lg:pl-8">
+                                            {/* Rute Ke Kost */}
+                                            <button
+                                                onClick={() => {
+                                                    if (kost.location?.lat && kost.location?.lng) {
+                                                        window.open(`https://www.google.com/maps/dir/?api=1&destination=${kost.location.lat},${kost.location.lng}`, '_blank');
+                                                    } else if (kost.locationUrl) {
+                                                        window.open(kost.locationUrl, '_blank');
+                                                    } else if (kost.address) {
+                                                        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(kost.address)}`, '_blank');
+                                                    } else {
+                                                        alert('Lokasi belum tersedia');
+                                                    }
+                                                }}
+                                                className="w-full bg-gray-900 hover:bg-black text-white px-5 py-3.5 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[10px] uppercase tracking-widest shadow-md active:scale-[0.98] group/btn cursor-pointer"
+                                            >
+                                                <MapPin className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform" /> Rute Ke Kost
+                                            </button>
 
-                                    {/* Actions Sidebar */}
-                                    <div className="lg:col-span-4 flex flex-col gap-3 justify-center relative z-10 pt-6 lg:pt-0 border-t lg:border-t-0 lg:border-l border-gray-100 lg:pl-10">
-                                        <button
-                                            onClick={() => {
-                                                if (kost.location?.lat && kost.location?.lng) {
-                                                    window.open(`https://www.google.com/maps/dir/?api=1&destination=${kost.location.lat},${kost.location.lng}`, '_blank');
-                                                } else if (kost.locationUrl) {
-                                                    window.open(kost.locationUrl, '_blank');
-                                                } else {
-                                                    alert('Lokasi belum tersedia');
-                                                }
-                                            }}
-                                            className="w-full bg-gray-900 hover:bg-black text-white px-6 py-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[10px] uppercase tracking-widest shadow-lg active:scale-[0.98] group/btn"
-                                        >
-                                            <MapPin className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform" /> Rute Ke Kost
-                                        </button>
+                                            {/* Kwitansi Digital Resmi (For Paid) */}
+                                            {isPaid && (
+                                                <button
+                                                    onClick={() => handleOpenActiveReceipt(kost)}
+                                                    className="w-full bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 px-5 py-3.5 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] shadow-sm cursor-pointer"
+                                                >
+                                                    <FileText className="w-4 h-4 text-orange-600" /> Lihat Kwitansi Digital
+                                                </button>
+                                            )}
 
-                                        {isPaid && (
-                                            <>
-                                                <div className="flex flex-col gap-1.5">
+                                            {/* Perpanjang Sewa (For Paid) */}
+                                            {isPaid && (
+                                                <div className="flex flex-col gap-1">
                                                     <button
                                                         disabled={(kost.daysRemaining || 0) > 7}
                                                         onClick={() => handleOpenExtension(kost)}
-                                                        className={`w-full ${(kost.daysRemaining || 0) > 7 ? 'bg-gray-50 text-gray-400 border border-gray-100' : 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-100'} px-6 py-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] group/btn`}
+                                                        className={`w-full ${(kost.daysRemaining || 0) > 7 ? 'bg-gray-50 text-gray-400 border border-gray-100 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-100 cursor-pointer'} px-5 py-3.5 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] group/btn`}
                                                     >
                                                         <Plus className={`w-4 h-4 ${(kost.daysRemaining || 0) > 7 ? 'text-gray-300' : 'text-white'} group-hover:rotate-90 transition-transform`} /> Perpanjang Sewa
                                                     </button>
@@ -1853,83 +2077,223 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                         </p>
                                                     )}
                                                 </div>
+                                            )}
 
+                                            {/* Hubungi Pengelola / Pemilik */}
+                                            <button
+                                                onClick={() => handleOpenChat(kost)}
+                                                className="w-full bg-white hover:bg-emerald-50 text-emerald-600 border-2 border-emerald-100 px-5 py-3.5 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
+                                            >
+                                                <Smartphone className="w-4 h-4" /> {kost.isManagedKost ? 'Bantuan KostManager' : 'Hubungi Pemilik'}
+                                            </button>
+
+                                            {/* Lapor Kendala Fasilitas Kamar */}
+                                            {isPaid && (
                                                 <button
-                                                    onClick={() => handleOpenBill(kost)}
-                                                    className="w-full bg-white hover:bg-gray-50 text-gray-900 border-2 border-gray-100 px-6 py-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] group/btn"
+                                                    onClick={() => handleReportIssueWhatsApp(kost)}
+                                                    className="w-full bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-5 py-3 rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
                                                 >
-                                                    <Receipt className="w-4 h-4 text-gray-400 group-hover:-rotate-12 transition-transform" /> Lihat Tagihan
+                                                    <Wrench className="w-3.5 h-3.5 text-rose-500" /> Lapor Kendala Kamar
                                                 </button>
-                                            </>
-                                        )}
+                                            )}
 
-                                        <button
-                                            onClick={() => handleOpenChat(kost)}
-                                            className="w-full bg-white hover:bg-emerald-50 text-emerald-600 border-2 border-emerald-100 px-6 py-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98]"
-                                        >
-                                            <Smartphone className="w-4 h-4" /> Hubungi Pemilik
-                                        </button>
-
-                                        {/* Pending Actions */}
-                                        {kost.status === 'AWAITING_PAYMENT' && (
+                                            {/* Interactive Toggle: Detail Hunian & Fasilitas */}
                                             <button
-                                                onClick={() => {
-                                                    const kMeta = kost.metadata || {};
-                                                    const mDate = kost.moveInDate || kMeta.startDate || kMeta.move_in_date;
-                                                    const monthYear = mDate ? new Date(mDate).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : '';
-
-                                                    setPaymentAmount(kost.totalPrice);
-                                                    setPaymentOrderId(kost.id);
-                                                    setPaymentProductId(kost.kostId);
-                                                    setPaymentProductType('kost_booking');
-                                                    setPaymentMetadata({
-                                                        ...kMeta,
-                                                        kostId: kost.kostId,
-                                                        kostName: kost.kostName,
-                                                        roomType: kost.roomType || kMeta.roomType || '-',
-                                                        startDate: mDate,
-                                                        userName: user.displayName || user.email?.split('@')[0] || 'Customer',
-                                                        userEmail: user.email || '',
-                                                        item_details: [
-                                                            {
-                                                                id: `rent-${kost.kostId?.substring(0, 8)}`,
-                                                                price: Number(kMeta.basePrice || 0) + Number(kMeta.extraPersonFee || 0),
-                                                                quantity: 1,
-                                                                name: `Sewa Kost ${monthYear}${Number(kMeta.occupants || 1) > 1 ? ' + Extra Penghuni' : ''}`
-                                                            },
-                                                            ...(kMeta.facilityFee ? [{
-                                                                id: `facility-${kost.kostId?.substring(0, 8)}`,
-                                                                price: Number(kMeta.facilityFee),
-                                                                quantity: 1,
-                                                                name: kMeta.additionalFeeName || `Tagihan Fasilitas ${monthYear}`
-                                                            }] : [])
-                                                        ].filter(item => item.price > 0),
-                                                        tenantName: user.displayName || user.email?.split('@')[0] || 'Customer',
-                                                        propertyTitle: kost.kostName,
-                                                        roomCategory: kost.roomType || kMeta.roomType || '-',
-                                                        leaseStart: mDate,
-                                                        leaseEnd: kMeta.endDate || '-'
-                                                    });
-                                                    setShowPaymentGateway(true);
-                                                }}
-                                                className="w-full bg-orange-600 hover:bg-orange-700 text-white p-5 rounded-2xl font-black flex flex-col items-center gap-1 transition-all shadow-xl shadow-orange-200 active:scale-[0.98] animate-pulse"
+                                                onClick={() => setExpandedDetailId(isExpanded ? null : kost.id)}
+                                                className={`w-full ${isExpanded ? 'bg-slate-900 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} px-5 py-3 rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[10px] uppercase tracking-wider cursor-pointer active:scale-[0.98] mt-1`}
                                             >
-                                                <div className="flex items-center gap-2 text-xs uppercase tracking-widest">
-                                                    <Receipt className="w-4 h-4" /> Bayar Sekarang
-                                                </div>
-                                                <span className="text-[10px] opacity-70 font-bold">{FORMAT_CURRENCY(kost.totalPrice)}</span>
+                                                <Layers className="w-3.5 h-3.5" />
+                                                <span>{isExpanded ? 'Tutup Detail' : 'Detail Hunian & Fasilitas'}</span>
+                                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                             </button>
-                                        )}
 
-                                        {kost.status === 'PENDING_APPROVAL' && (
-                                            <button
-                                                onClick={() => handleCancelBooking(kost)}
-                                                className="w-full bg-white border-2 border-gray-100 hover:border-red-500 hover:bg-red-50 hover:text-red-600 text-gray-500 p-4 rounded-2xl font-black flex items-center justify-center gap-3 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] group/cancel"
-                                            >
-                                                <XCircle className="w-4 h-4 group-hover/cancel:rotate-90 transition-transform" /> Batalkan Pengajuan
-                                            </button>
-                                        )}
+                                            {/* Pending Actions: Bayar Sekarang */}
+                                            {kost.status === 'AWAITING_PAYMENT' && (
+                                                <button
+                                                    onClick={() => {
+                                                        const kMeta = kost.metadata || {};
+                                                        const mDate = kost.moveInDate || kMeta.startDate || kMeta.move_in_date;
+                                                        const monthYear = mDate ? new Date(mDate).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : '';
+
+                                                        setPaymentAmount(kost.totalPrice);
+                                                        setPaymentOrderId(kost.id);
+                                                        setPaymentProductId(kost.kostId);
+                                                        setPaymentProductType('kost_booking');
+                                                        setPaymentMetadata({
+                                                            ...kMeta,
+                                                            kostId: kost.kostId,
+                                                            kostName: kost.kostName,
+                                                            roomType: kost.roomType || kMeta.roomType || '-',
+                                                            startDate: mDate,
+                                                            userName: user.displayName || user.email?.split('@')[0] || 'Customer',
+                                                            userEmail: user.email || '',
+                                                            item_details: [
+                                                                {
+                                                                    id: `rent-${kost.kostId?.substring(0, 8)}`,
+                                                                    price: Number(kMeta.basePrice || 0) + Number(kMeta.extraPersonFee || 0),
+                                                                    quantity: 1,
+                                                                    name: `Sewa Kost ${monthYear}${Number(kMeta.occupants || 1) > 1 ? ' + Extra Penghuni' : ''}`
+                                                                },
+                                                                ...(kMeta.facilityFee ? [{
+                                                                    id: `facility-${kost.kostId?.substring(0, 8)}`,
+                                                                    price: Number(kMeta.facilityFee),
+                                                                    quantity: 1,
+                                                                    name: kMeta.additionalFeeName || `Tagihan Fasilitas ${monthYear}`
+                                                                }] : [])
+                                                            ].filter(item => item.price > 0),
+                                                            tenantName: user.displayName || user.email?.split('@')[0] || 'Customer',
+                                                            propertyTitle: kost.kostName,
+                                                            roomCategory: kost.roomType || kMeta.roomType || '-',
+                                                            leaseStart: mDate,
+                                                            leaseEnd: kMeta.endDate || '-'
+                                                        });
+                                                        setShowPaymentGateway(true);
+                                                    }}
+                                                    className="w-full bg-orange-600 hover:bg-orange-700 text-white p-4 rounded-2xl font-black flex flex-col items-center gap-1 transition-all shadow-xl shadow-orange-200 active:scale-[0.98] animate-pulse"
+                                                >
+                                                    <div className="flex items-center gap-2 text-xs uppercase tracking-widest">
+                                                        <Receipt className="w-4 h-4" /> Bayar Sekarang
+                                                    </div>
+                                                    <span className="text-[10px] opacity-70 font-bold">{FORMAT_CURRENCY(kost.totalPrice)}</span>
+                                                </button>
+                                            )}
+
+                                            {/* Pending Actions: Batalkan Pengajuan */}
+                                            {kost.status === 'PENDING_APPROVAL' && (
+                                                <button
+                                                    onClick={() => handleCancelBooking(kost)}
+                                                    className="w-full bg-white border-2 border-gray-100 hover:border-red-500 hover:bg-red-50 hover:text-red-600 text-gray-500 p-3.5 rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] group/cancel cursor-pointer"
+                                                >
+                                                    <XCircle className="w-4 h-4 group-hover/cancel:rotate-90 transition-transform" /> Batalkan Pengajuan
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
+
+                                    {/* Bottom Expandable Accordion Panel ("Detail Hunian & Fasilitas") */}
+                                    {isExpanded && (
+                                        <div className="border-t border-gray-100 pt-6 mt-2 animate-in fade-in slide-in-from-top-4 duration-500 flex flex-col gap-6">
+                                            {/* Title Banner */}
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="p-2 bg-orange-100 rounded-xl">
+                                                        <Building className="w-5 h-5 text-orange-600" />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-sm font-black text-gray-900 uppercase tracking-wider">Detail Hunian & Fasilitas Unit</h4>
+                                                        <p className="text-[11px] text-gray-400 font-medium">Informasi lengkap spesifikasi kamar, fasilitas hunian, dan peraturan kost</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleOpenGallery(roomPhotoList, kost.kostName || 'Kamar')}
+                                                    className="px-3.5 py-1.5 bg-white border border-gray-200 hover:border-orange-400 text-gray-700 text-[10px] font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                                                >
+                                                    <Camera className="w-3.5 h-3.5 text-orange-500" /> Lihat Semua Foto ({roomPhotoList.length})
+                                                </button>
+                                            </div>
+
+                                            {/* Grid 3 Columns of Details */}
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                                {/* Col 1: Spesifikasi Unit */}
+                                                <div className="p-5 bg-slate-50/70 rounded-2xl border border-slate-100 flex flex-col gap-3">
+                                                    <div className="flex items-center gap-2 text-xs font-black text-slate-800 uppercase tracking-wider">
+                                                        <DoorClosed className="w-4 h-4 text-orange-500" /> Spesifikasi Unit
+                                                    </div>
+                                                    <div className="space-y-2 text-xs">
+                                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
+                                                            <span className="text-gray-400">Nomor Kamar:</span>
+                                                            <strong className="text-gray-900">{kost.roomNumber || '-'}</strong>
+                                                        </div>
+                                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
+                                                            <span className="text-gray-400">Tipe Kamar:</span>
+                                                            <strong className="text-gray-900">{kost.roomType || 'Standard'}</strong>
+                                                        </div>
+                                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
+                                                            <span className="text-gray-400">Posisi Lantai:</span>
+                                                            <strong className="text-gray-900">{kost.roomFloor || 'Lantai 1'}</strong>
+                                                        </div>
+                                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
+                                                            <span className="text-gray-400">Dimensi / Ukuran:</span>
+                                                            <strong className="text-gray-900">{kost.roomSize || '3x3 meter'}</strong>
+                                                        </div>
+                                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
+                                                            <span className="text-gray-400">Kamar Mandi:</span>
+                                                            <strong className="text-gray-900">{kost.bathroomType || 'Kamar Mandi Luar'}</strong>
+                                                        </div>
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-gray-400">Kapasitas Maksimal:</span>
+                                                            <strong className="text-gray-900">{kost.currentRoom?.maxOccupants || 1} Orang</strong>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Col 2: Fasilitas Kamar & Bersama */}
+                                                <div className="p-5 bg-slate-50/70 rounded-2xl border border-slate-100 flex flex-col gap-3">
+                                                    <div className="flex items-center gap-2 text-xs font-black text-slate-800 uppercase tracking-wider">
+                                                        <Bed className="w-4 h-4 text-emerald-500" /> Fasilitas Kamar
+                                                    </div>
+                                                    {roomFacs.length > 0 ? (
+                                                        <div className="flex flex-wrap gap-1.5">
+                                                            {roomFacs.map((fac, fIdx) => (
+                                                                <span key={fIdx} className="px-2.5 py-1 bg-white border border-gray-200 text-gray-700 text-[11px] font-bold rounded-lg flex items-center gap-1 shadow-2xs">
+                                                                    <Check className="w-3 h-3 text-emerald-500" /> {fac}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-xs text-gray-400 italic">Standar unit hunian</p>
+                                                    )}
+
+                                                    {propFacs.length > 0 && (
+                                                        <>
+                                                            <div className="flex items-center gap-2 text-xs font-black text-slate-800 uppercase tracking-wider pt-2 border-t border-slate-200/60">
+                                                                <Building className="w-3.5 h-3.5 text-blue-500" /> Fasilitas Bersama
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {propFacs.slice(0, 6).map((pf, pfIdx) => (
+                                                                    <span key={pfIdx} className="px-2 py-0.5 bg-white border border-blue-100 text-blue-800 text-[10px] font-bold rounded-md flex items-center gap-1">
+                                                                        <Wifi className="w-2.5 h-2.5 text-blue-500" /> {typeof pf === 'string' ? pf : (pf.name || pf.label || '')}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+
+                                                {/* Col 3: Informasi Tagihan & Tata Tertib */}
+                                                <div className="p-5 bg-slate-50/70 rounded-2xl border border-slate-100 flex flex-col gap-3">
+                                                    <div className="flex items-center gap-2 text-xs font-black text-slate-800 uppercase tracking-wider">
+                                                        <Receipt className="w-4 h-4 text-amber-500" /> Rincian Biaya
+                                                    </div>
+                                                    <div className="space-y-2 text-xs">
+                                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
+                                                            <span className="text-gray-400">Sewa Pokok:</span>
+                                                            <strong className="text-gray-900">{FORMAT_CURRENCY(kost.totalPrice || 0)} / {kost.period || 'Bulan'}</strong>
+                                                        </div>
+                                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
+                                                            <span className="text-gray-400">Status Pembayaran:</span>
+                                                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 font-black text-[10px] rounded-md uppercase">LUNAS</span>
+                                                        </div>
+                                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
+                                                            <span className="text-gray-400">Bantuan Hunian:</span>
+                                                            <strong className="text-gray-900">{kost.isManagedKost ? 'KostManager 24/7' : 'Mitra Pemilik'}</strong>
+                                                        </div>
+                                                    </div>
+
+                                                    {propRules.length > 0 && (
+                                                        <div className="pt-2 border-t border-slate-200/60">
+                                                            <p className="text-[10px] font-black text-slate-800 uppercase tracking-wider mb-1.5">Tata Tertib Kost:</p>
+                                                            <ul className="text-[11px] text-gray-500 space-y-1 list-disc list-inside">
+                                                                {propRules.slice(0, 3).map((r, rIdx) => (
+                                                                    <li key={rIdx} className="truncate">{typeof r === 'string' ? r : (r.text || r.title || '')}</li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}
@@ -3944,6 +4308,67 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                 onClose={() => setShowDigitalReceiptModal(false)}
                 receipt={selectedReceipt}
             />
+
+            {/* 8. Modal Pratinjau Galeri Foto Kamar & Fasilitas */}
+            {galleryModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-3xl rounded-[2.5rem] overflow-hidden shadow-2xl border border-gray-100 flex flex-col max-h-[90vh]">
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-slate-50">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-orange-100 rounded-xl">
+                                    <Camera className="w-5 h-5 text-orange-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">{galleryTitle}</h3>
+                                    <p className="text-xs text-gray-400 font-medium">Dokumentasi foto unit kamar & fasilitas hunian ({galleryPhotos.length} foto)</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setGalleryModalOpen(false)}
+                                className="w-9 h-9 rounded-full bg-white border border-gray-200 hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors cursor-pointer"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Photo Grid / Gallery Content */}
+                        <div className="p-6 overflow-y-auto space-y-4">
+                            {galleryPhotos.length > 0 ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {galleryPhotos.map((photo, pIdx) => (
+                                        <div key={pIdx} className="group relative rounded-2xl overflow-hidden shadow-md border border-gray-100 aspect-video bg-slate-900">
+                                            <img
+                                                src={photo}
+                                                alt={`Dokumentasi kamar ${pIdx + 1}`}
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                            />
+                                            <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-2.5 py-1 rounded-lg border border-white/20">
+                                                Foto #{pIdx + 1}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-12 text-gray-400">
+                                    <Camera className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+                                    <p className="text-sm font-bold">Belum ada foto tambahan</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-4 border-t border-gray-100 bg-gray-50 text-right">
+                            <button
+                                onClick={() => setGalleryModalOpen(false)}
+                                className="px-6 py-2.5 bg-gray-900 hover:bg-black text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                            >
+                                Tutup Galeri
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <TimeSimulator />
         </div>
