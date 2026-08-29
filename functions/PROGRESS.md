@@ -2,6 +2,20 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 171. Pembersihan Teks Harga pada Chip Pilihan Nomor Kamar (`KostDetail.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta menghapus teks harga dari dalam chip nomor kamar karena menyebabkan penumpukan (*overlap*) dengan teks lantai dan mengurangi keindahan estetika.
+- **Implementasi**:
+  * **1. Pembersihan Label Harga**: Menghapus tampilan `FORMAT_CURRENCY(room.price)` dari tombol chip nomor kamar.
+  * **2. Tata Letak Minimalis & Rapi**:
+    - Baris 1: `Nomor Kamar` (misal: *Kamar 3*, *Kamar 4*, *Kamar 5*) + Indikator Status (titik hijau ketersediaan atau checkmark oranye jika aktif).
+    - Baris 2: `Lantai` (misal: *Lantai 1*, *Lantai 3*), terpusat dan lega tanpa tumpang tindih teks.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 22.32s, 0 error).
+
 ### 170. Redesain UI Nomor Kamar Menjadi Interactive Chip Grid Khusus Kamar Tersedia (`KostDetail.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna merasa tampilan dropdown native `<select>` nomor kamar pada kartu tipe kamar terlihat kaku, jelek, dan rawan terpotong.

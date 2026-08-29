@@ -1329,14 +1329,9 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                               )}
                                             </div>
                                             
-                                            <div className="flex items-center justify-between text-[9px] font-semibold">
-                                              <span className={isSelected ? 'text-orange-100' : 'text-slate-500'}>
-                                                {room.floor || 'Lt. 1'}
-                                              </span>
-                                              <span className={`font-bold ${isSelected ? 'text-white' : 'text-orange-600'}`}>
-                                                {FORMAT_CURRENCY(room.price).replace(',00', '')}
-                                              </span>
-                                            </div>
+                                            <span className={`text-[10px] font-semibold block ${isSelected ? 'text-orange-100' : 'text-slate-500'}`}>
+                                              {room.floor || 'Lantai 1'}
+                                            </span>
                                           </button>
                                         );
                                       })}
