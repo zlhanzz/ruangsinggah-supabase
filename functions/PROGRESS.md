@@ -2,6 +2,18 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 162. Pembaruan Layout Galeri & Tombol Navigasi Kamar Menjadi Flex-Wrap Responsif (`KostDetail.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar layout peletakan tombol navigasi dan thumbnail tidak menggunakan scroll menyamping yang kaku, melainkan tersusun secara berurutan dan otomatis berpindah ke bawah (wrap) jika ruang tidak mencukupi.
+- **Implementasi**:
+  * **1. Bilah Tombol Kamar Kosong Flex-Wrap**: Mengganti `overflow-x-auto` menjadi `flex flex-wrap gap-2` dengan container `rounded-3xl` yang fleksibel dan luas.
+  * **2. Thumbnail Strip Flex-Wrap**: Mengganti `overflow-x-auto` menjadi `flex flex-wrap gap-2.5` dengan thumbnail responsif.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 33.00s, 0 error).
+
 ### 161. Pemindahan Posisi Bilah Navigasi Foto Kamar Kosong ke Bawah Preview Thumbnail Carousel (`KostDetail.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar bilah tombol navigasi kamar terhadap foto dipindahkan ke bagian bawah dari preview foto (thumbnail strip) carouselnya.

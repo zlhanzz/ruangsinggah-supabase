@@ -548,12 +548,12 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
 
               {/* Thumbnails Strip (Preview Foto Carousel) */}
               {displayedImages.length > 1 && (
-                <div className="flex gap-3 overflow-x-auto pb-2 px-1 scrollbar-hide mb-4">
+                <div className="flex flex-wrap gap-2.5 mb-4">
                   {displayedImages.map((img, idx) => (
                     <button
                       key={idx}
                       onClick={() => setCurrentPhoto(idx)}
-                      className={`relative w-20 h-20 lg:w-24 lg:h-24 shrink-0 rounded-2xl overflow-hidden transition-all duration-300 cursor-pointer ${currentPhoto === idx
+                      className={`relative w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 rounded-2xl overflow-hidden transition-all duration-300 cursor-pointer ${currentPhoto === idx
                         ? 'ring-2 ring-orange-500 ring-offset-2 opacity-100 scale-95'
                         : 'opacity-50 hover:opacity-100 hover:scale-105'
                         }`}
@@ -564,13 +564,13 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                 </div>
               )}
 
-              {/* Bilah Tombol Navigasi Isolasi Foto Kamar Kosong */}
+              {/* Bilah Tombol Navigasi Isolasi Foto Kamar Kosong (Flex-Wrap Responsif) */}
               {emptyRooms.length > 0 && (
-                <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
-                  <div className="flex items-center justify-between gap-2 mb-2 px-1">
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                      <Camera size={13} className="text-orange-500" />
-                      Pilih Foto Unit Kamar Kosong ({emptyRooms.length} Kamar Tersedia):
+                <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-2xs space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                    <span className="text-[11px] font-black text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                      <Camera size={14} className="text-orange-500" />
+                      Pilih Foto Unit Kamar Kosong ({emptyRooms.length} Kamar Tersedia)
                     </span>
                     {activePhotoFilter !== 'all' && (
                       <button
@@ -579,14 +579,14 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                           setActivePhotoFilter('all');
                           setCurrentPhoto(0);
                         }}
-                        className="text-[10px] font-black text-orange-600 hover:text-orange-700 uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1"
+                        className="text-[10px] font-black text-orange-600 hover:text-orange-700 uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1 bg-orange-50 px-2.5 py-1 rounded-lg border border-orange-100"
                       >
                         Lihat Semua Foto ↺
                       </button>
                     )}
                   </div>
 
-                  <div className="flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide">
+                  <div className="flex flex-wrap gap-2 pt-0.5">
                     {/* Tombol 1: Semua Foto */}
                     <button
                       type="button"
@@ -594,7 +594,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                         setActivePhotoFilter('all');
                         setCurrentPhoto(0);
                       }}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
+                      className={`px-3.5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
                         activePhotoFilter === 'all'
                           ? 'bg-slate-900 text-white shadow-md ring-2 ring-slate-900 ring-offset-1'
                           : 'bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-100'
@@ -627,7 +627,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                               if (matchedPhys) setSelectedPhysicalRoom(matchedPhys);
                             }
                           }}
-                          className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
+                          className={`px-3.5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
                             isSelected
                               ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20 ring-2 ring-orange-500 ring-offset-1'
                               : 'bg-white text-slate-700 border border-slate-200 hover:border-orange-300 hover:bg-orange-50/30'
