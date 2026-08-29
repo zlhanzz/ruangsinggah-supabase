@@ -112,3 +112,21 @@ export async function sendEmailVerificationOtp(email: string, otp: string): Prom
   }
 }
 
+export async function notifyAdminNewChatMessage(details: {
+  customerName: string;
+  propertyTitle: string;
+  propertyAddress?: string;
+  propertyCity?: string;
+  messageSnippet: string;
+  sessionId: string;
+}) {
+  return notifyAdminTransaction(`Pesan Chat Baru dari ${details.customerName} (${details.propertyTitle})`, {
+    "Nama Calon Penyewa": details.customerName,
+    "Properti Kost": details.propertyTitle,
+    "Lokasi": `${details.propertyAddress ? details.propertyAddress + ', ' : ''}${details.propertyCity || ''}`.trim() || 'Properti Terkelola',
+    "Isi Pesan": details.messageSnippet,
+    "Aksi Cepat": "Buka menu Pesan & Chat Customer di Portal KostManager untuk membalas",
+    "Link Portal Chat": "https://ruangsinggah.id/dashboard-admin/km_chats"
+  });
+}
+

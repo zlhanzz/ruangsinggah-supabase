@@ -2,6 +2,22 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 191. Notifikasi Email Otomatis ke Admin untuk Pesan Chat Masuk (`emailService.ts`, `chatService.ts`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar sistem mengirimkan notifikasi email ke email admin secara otomatis setiap kali ada pesan chat baru masuk dari calon penyewa, agar admin/CS KostManager dapat segera merespons chat secepatnya.
+- **Implementasi**:
+  * **1. Fungsi Notifikasi Email Chat (`emailService.ts`)**:
+    - Membuat fungsi `notifyAdminNewChatMessage` yang secara dinamis mengambil seluruh email akun admin dari tabel `users`.
+    - Menyusun template email berstruktur rapi yang memuat nama calon penyewa, nama properti kost, lokasi/alamat, cuplikan pesan, waktu kirim, dan direct link cepat ke Portal CS KostManager (`https://ruangsinggah.id/dashboard-admin/km_chats`).
+  * **2. Integrasi Pemicuan Otomatis (`chatService.ts`)**:
+    - Pada fungsi `sendMessage()`, ketika `senderType === 'user'` dan ditujukan ke kost terkelola KostManager / Admin, sistem otomatis memicu pengiriman email `notifyAdminNewChatMessage()` di latar belakang tanpa memperlambat pengalaman pengguna di antarmuka chat.
+- **File Tersentuh**:
+  - `functions/public/emailService.ts`
+  - `functions/public/chatService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 28.58s, 0 error).
+
 ### 190. Penghapusan Tombol 'Cek Kamar' Non-Fungsional pada Header Chat (`KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan mengapa tombol "Cek Kamar" di header chat CS tidak merespons ketika diklik, dan menginstruksikan untuk menghapusnya jika memang tidak fungsional.

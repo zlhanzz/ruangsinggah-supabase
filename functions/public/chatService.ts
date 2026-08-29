@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { sendNotification } from './notificationService';
+import { notifyAdminNewChatMessage } from './emailService';
 
 // Primary Administrator UUID (admin@ruangsinggah.id) terdaftar di public.users
 export const SYSTEM_ADMIN_ID = '8c8b8d89-0114-4c0c-a814-27055fc777fc';
@@ -291,6 +292,35 @@ export async function sendMessage(
           sessionId: sessionId
         }
       });
+
+      // User -> Admin (KostManager / CS): Kirim Notifikasi Email Otomatis ke Admin
+      if (session.owner_id === SYSTEM_ADMIN_ID || !(session as any).owner_id) {
+        let propTitle = (session as any).property?.title;
+        let propCity = (session as any).property?.city;
+        let propAddress = (session as any).property?.address;
+
+        if (!propTitle && (session as any).property_id) {
+          const { data: propData } = await supabase
+            .from('properties')
+            .select('title, city, address')
+            .eq('id', (session as any).property_id)
+            .maybeSingle();
+          if (propData) {
+            propTitle = propData.title;
+            propCity = propData.city;
+            propAddress = propData.address;
+          }
+        }
+
+        notifyAdminNewChatMessage({
+          customerName: senderName || 'Calon Penghuni',
+          propertyTitle: propTitle || 'Kost Terkelola KostManager',
+          propertyAddress: propAddress,
+          propertyCity: propCity,
+          messageSnippet: content,
+          sessionId: sessionId
+        }).catch(emailErr => console.warn('Gagal memicu notifikasi email admin:', emailErr));
+      }
     } else if (session && senderType === 'owner') {
       // Owner -> User: Site notification only for now
       sendNotification(
