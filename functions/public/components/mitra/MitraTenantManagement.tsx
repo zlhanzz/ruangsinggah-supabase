@@ -162,6 +162,7 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                 isExpiring: daysLeft !== null && daysLeft <= 7 && daysLeft >= 0,
                 isActive: daysLeft !== null && daysLeft > 7,
                 isNoExtension: meta.noExtension === true,
+                isSurveyOccupant: meta.isSurveyOccupant === true || r.isSurveyOccupant === true,
                 billingStatus: (t.status || 'PAID').toLowerCase(),
                 relatedBills: bookings.filter(bt => 
                     (bt.type === 'tagihan_ekstra' || bt.product_type === 'tagihan_ekstra') && 
@@ -218,49 +219,51 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
         if (isNaN(sDate.getTime()) || isNaN(eDate.getTime())) return 0;
         
         const total = eDate.getTime() - sDate.getTime();
-        const now = getCurrentDate();
-        const elapsed = now.getTime() - sDate.getTime();
+        const current = getCurrentDate().getTime() - sDate.getTime();
+        
         if (total <= 0) return 100;
-        return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)));
+        return Math.min(100, Math.max(0, Math.round((current / total) * 100)));
     };
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500 w-full max-w-full">
-            {/* Header Stats */}
-            <div className="flex items-center justify-between px-1">
+        <div className="space-y-6">
+            {/* Header with Stats */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h2 className="text-xl md:text-2xl font-black text-gray-900 uppercase tracking-tight">Database Penghuni</h2>
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-1 flex items-center gap-1.5 flex-wrap">
-                        <span className="flex items-center gap-1"><Users size={12} className="text-orange-500" /> {stats.total} Total</span>
-                        <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                        <span className="text-emerald-600 font-black">{stats.activeRentals} Aktif</span>
-                        <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                        <span className="text-rose-500 font-black">{stats.expiringSoon} Tenggang</span>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mt-0.5">
+                        <span className="text-orange-500">{stats.total} Total</span> • <span className="text-emerald-600">{stats.activeRentals} Aktif</span> • <span className="text-rose-500">{stats.expiringSoon} Tenggang</span>
                     </p>
                 </div>
-                <button onClick={handleRefresh} className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-orange-500 active:scale-95 transition-all shadow-sm">
-                    <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
-                </button>
+                <div className="flex items-center gap-2">
+                    <button 
+                        onClick={handleRefresh}
+                        className="p-2.5 bg-white hover:bg-gray-50 text-gray-700 rounded-2xl border border-gray-200 shadow-sm transition-all flex items-center justify-center cursor-pointer"
+                        title="Segarkan Data"
+                    >
+                        <RefreshCw size={18} className={isRefreshing ? 'animate-spin text-orange-500' : ''} />
+                    </button>
+                </div>
             </div>
 
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-2">
-                <div className="flex-1 relative">
-                    <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            {/* Filter & Search Bar */}
+            <div className="flex flex-col md:flex-row gap-3">
+                <div className="relative flex-1">
+                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input 
-                        type="text" 
-                        placeholder="Cari nama penghuni atau kost..."
-                        className="w-full h-10 bg-white rounded-xl pl-10 pr-4 text-xs font-semibold text-gray-900 border border-gray-100 outline-none focus:border-orange-500/30 focus:ring-4 focus:ring-orange-500/5 transition-all shadow-sm"
+                        type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Cari nama penghuni atau kost..."
+                        className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-2xl text-xs font-bold focus:outline-none focus:border-orange-500 transition-all shadow-sm"
                     />
                 </div>
-                <div className="sm:w-64 relative">
-                    <Filter size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <select 
-                        className="w-full h-10 bg-white rounded-xl pl-10 pr-8 text-xs font-semibold text-gray-900 border border-gray-100 outline-none appearance-none focus:border-orange-500/30 focus:ring-4 focus:ring-orange-500/5 transition-all shadow-sm"
+                <div className="relative min-w-[200px]">
+                    <Filter size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <select
                         value={filterProperty}
                         onChange={(e) => setFilterProperty(e.target.value)}
+                        className="w-full pl-10 pr-8 py-3 bg-white border border-gray-200 rounded-2xl text-xs font-bold focus:outline-none focus:border-orange-500 transition-all shadow-sm appearance-none cursor-pointer"
                     >
                         <option value="all">Semua Properti</option>
                         {properties.map(p => (
@@ -271,39 +274,48 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                 </div>
             </div>
 
-            {/* Status Tabs */}
+            {/* Status Filter Tabs */}
             <div className="flex flex-wrap gap-2">
-                <StatusTab 
-                    active={filterStatus === 'all'} 
-                    label="Semua" 
-                    count={processedResidents.length} 
+                <button
                     onClick={() => setFilterStatus('all')}
-                    color="gray"
-                />
-                <StatusTab 
-                    active={filterStatus === 'expiring'} 
-                    label="Masa Tenggang" 
-                    count={stats.expiringSoon} 
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                        filterStatus === 'all'
+                            ? 'bg-gray-900 text-white shadow-md'
+                            : 'bg-white text-gray-600 border border-gray-100 hover:bg-gray-50'
+                    }`}
+                >
+                    Semua <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filterStatus === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600'}`}>{processedResidents.length}</span>
+                </button>
+                <button
                     onClick={() => setFilterStatus('expiring')}
-                    color="orange"
-                    icon={<Clock size={12} />}
-                />
-                <StatusTab 
-                    active={filterStatus === 'active'} 
-                    label="Sewa Aktif" 
-                    count={stats.activeRentals} 
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                        filterStatus === 'expiring'
+                            ? 'bg-orange-500 text-white shadow-md'
+                            : 'bg-white text-orange-600 border border-orange-100 hover:bg-orange-50'
+                    }`}
+                >
+                    <Clock size={12} /> Masa Tenggang <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filterStatus === 'expiring' ? 'bg-orange-600 text-white' : 'bg-orange-100 text-orange-700'}`}>{stats.expiringSoon}</span>
+                </button>
+                <button
                     onClick={() => setFilterStatus('active')}
-                    color="emerald"
-                    icon={<Zap size={12} fill="currentColor" />}
-                />
-                <StatusTab 
-                    active={filterStatus === 'no_extension'} 
-                    label="Tidak Perpanjang" 
-                    count={stats.noExtensions} 
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                        filterStatus === 'active'
+                            ? 'bg-emerald-600 text-white shadow-md'
+                            : 'bg-white text-emerald-600 border border-emerald-100 hover:bg-emerald-50'
+                    }`}
+                >
+                    <Zap size={12} fill="currentColor" /> Sewa Aktif <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filterStatus === 'active' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-700'}`}>{stats.activeRentals}</span>
+                </button>
+                <button
                     onClick={() => setFilterStatus('no_extension')}
-                    color="rose"
-                    icon={<ShieldAlert size={12} />}
-                />
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                        filterStatus === 'no_extension'
+                            ? 'bg-rose-600 text-white shadow-md'
+                            : 'bg-white text-rose-600 border border-rose-100 hover:bg-rose-50'
+                    }`}
+                >
+                    <ShieldAlert size={12} /> Tidak Perpanjang <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filterStatus === 'no_extension' ? 'bg-rose-700 text-white' : 'bg-rose-100 text-rose-700'}`}>{stats.noExtensions}</span>
+                </button>
             </div>
 
             {/* Inhabitants List */}
@@ -314,14 +326,15 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                             <Users size={32} />
                         </div>
                         <p className="text-gray-500 font-black uppercase tracking-widest text-sm">Belum ada penghuni aktif</p>
-                        <p className="text-xs text-gray-400 mt-2">Data akan muncul setelah pesanan diselesaikan (PAID)</p>
+                        <p className="text-xs text-gray-400 mt-2">Data akan muncul setelah pesanan diselesaikan (PAID) atau hasil survei kamar terisi.</p>
                     </div>
                 ) : (
                     filteredResidents.map((resident) => {
                         const daysLeft = getRemainingDays(resident.endDate);
+                        const resKey = resident.id || resident.uid;
                         
                         return (
-                            <div key={resident.uid} className="bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 mb-4 group">
+                            <div key={resKey} className="bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 mb-4 group">
                                 <div className="p-4 md:p-6">
                                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                                         
@@ -337,6 +350,9 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-center gap-2 mb-1">
                                                     <span className="text-[9px] bg-orange-50 text-orange-600 px-2 py-0.5 rounded-lg font-bold border border-orange-100 uppercase truncate max-w-[120px]">{resident.kostName}</span>
+                                                    {resident.isSurveyOccupant && (
+                                                        <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100 uppercase tracking-wider flex items-center gap-1">⭐ KOSTMANAGER</span>
+                                                    )}
                                                     {resident.isExpired ? (
                                                         <span className="text-[9px] font-bold text-white bg-rose-600 px-2 py-0.5 rounded-lg uppercase tracking-wider flex items-center gap-1"><AlertCircle size={10}/> HABIS</span>
                                                     ) : resident.isExpiring ? (
@@ -380,10 +396,10 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                                             <div className="flex items-center gap-1.5 flex-wrap">
                                                 <button 
                                                     onClick={() => handleManualPayment(resident)}
-                                                    disabled={daysLeft > 7 || isUpdating}
-                                                    title={daysLeft > 7 ? 'Tombol aktif 7 hari sebelum masa sewa berakhir' : ''}
+                                                    disabled={daysLeft !== null && daysLeft > 7 || isUpdating}
+                                                    title={daysLeft !== null && daysLeft > 7 ? 'Tombol aktif 7 hari sebelum masa sewa berakhir' : ''}
                                                     className={`px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1 shadow-sm border ${
-                                                        daysLeft > 7 
+                                                        daysLeft !== null && daysLeft > 7
                                                             ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed opacity-60' 
                                                             : 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100'
                                                     }`}
@@ -397,19 +413,27 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                                                     <File size={11} /> Tagih
                                                 </button>
                                                 <button 
-                                                    onClick={() => onStartChat?.(resident.uid, resident.kostId)}
-                                                    className="px-2.5 py-1.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100 text-[9px] font-black uppercase tracking-wider hover:bg-blue-100 transition-all flex items-center gap-1"
+                                                    onClick={() => {
+                                                        if (resident.profile.phone && resident.profile.phone !== '-') {
+                                                            const cleanPhone = resident.profile.phone.replace(/[^0-9]/g, '');
+                                                            const waPhone = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone;
+                                                            window.open(`https://wa.me/${waPhone}`, '_blank');
+                                                        } else {
+                                                            onStartChat?.(resident.uid, resident.kostId);
+                                                        }
+                                                    }}
+                                                    className="px-2.5 py-1.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100 text-[9px] font-black uppercase tracking-wider hover:bg-blue-100 transition-all flex items-center gap-1 cursor-pointer"
                                                 >
                                                     <MessageCircle size={11} /> Chat
                                                 </button>
                                             </div>
 
                                             <button 
-                                                onClick={() => toggleExpand(resident.uid)}
+                                                onClick={() => toggleExpand(resKey)}
                                                 className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 hover:text-gray-950 transition-all shrink-0"
-                                                title={expandedResidents[resident.uid] ? 'Sembunyikan Detail' : 'Tampilkan Detail'}
+                                                title={expandedResidents[resKey] ? 'Sembunyikan Detail' : 'Tampilkan Detail'}
                                             >
-                                                {expandedResidents[resident.uid] ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                                                {expandedResidents[resKey] ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                                             </button>
                                         </div>
                                     </div>

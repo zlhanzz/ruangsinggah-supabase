@@ -440,7 +440,7 @@ export async function getAdminTransactions(limitOrType?: number | string, ownerU
 
 /**
  * getResidentStatus: Fetches the current lease state for all active residents.
- * This reads from the resident_status table (Source of Truth).
+ * Reads from resident_status table AND extracts offline/survey occupants from properties.room_types.
  */
 export async function getResidentStatus(filters?: { ownerUid?: string; userId?: string } | string) {
     const { data: { user } } = await supabase.auth.getUser();
@@ -458,21 +458,43 @@ export async function getResidentStatus(filters?: { ownerUid?: string; userId?: 
 
     console.log("FETCH_RESIDENTS: Fetching for", { ownerUid, userId });
     
-    // 1. Fetch the base records first (without joins) to avoid "Relationship not found" errors
-    let query = supabase.from('resident_status').select('*');
-    
+    // 1. Fetch relevant properties (especially if ownerUid is specified, with dual-check fallback for KostManager requests)
+    let propertiesForExtraction: any[] = [];
+    let propIds: string[] = [];
+
     if (ownerUid) {
-        const { data: ownerProps } = await supabase.from('properties').select('id').eq('owner_uid', ownerUid);
-        const propIds = ownerProps?.map(p => p.id) || [];
-        if (propIds.length === 0 && ownerUid) {
+        const [propsRes, kmReqsRes] = await Promise.all([
+            supabase.from('properties').select('id, title, address, city, area, image_urls, location, price, room_types, additional_fee_name, additional_fee_price, owner_uid, created_at').eq('owner_uid', ownerUid),
+            supabase.from('kostmanager_requests').select('property_id').eq('user_id', ownerUid)
+        ]);
+
+        let combinedProps = propsRes.data || [];
+        const kmPropIds = (kmReqsRes.data || []).map(r => r.property_id).filter(Boolean);
+        if (kmPropIds.length > 0) {
+            const missingKmIds = kmPropIds.filter(id => !combinedProps.some(p => p.id === id));
+            if (missingKmIds.length > 0) {
+                const { data: kmProps } = await supabase.from('properties').select('id, title, address, city, area, image_urls, location, price, room_types, additional_fee_name, additional_fee_price, owner_uid, created_at').in('id', missingKmIds);
+                if (kmProps) combinedProps = [...combinedProps, ...kmProps];
+            }
+        }
+        propertiesForExtraction = combinedProps;
+        propIds = combinedProps.map(p => p.id);
+        
+        if (propIds.length === 0) {
             console.log("FETCH_RESIDENTS: No properties found for owner", ownerUid);
             return [];
         }
-        if (propIds.length > 0) {
-            query = query.in('kost_id', propIds);
-        }
+    } else if (!userId) {
+        // Admin view - fetch all properties to extract offline occupants as well
+        const { data: allProps } = await supabase.from('properties').select('id, title, address, city, area, image_urls, location, price, room_types, additional_fee_name, additional_fee_price, owner_uid, created_at');
+        propertiesForExtraction = allProps || [];
     }
 
+    // 2. Fetch base records from resident_status
+    let query = supabase.from('resident_status').select('*');
+    if (propIds.length > 0) {
+        query = query.in('kost_id', propIds);
+    }
     if (userId) {
         query = query.eq('user_id', userId);
     }
@@ -484,25 +506,25 @@ export async function getResidentStatus(filters?: { ownerUid?: string; userId?: 
         return [];
     }
 
-    if (!residents || residents.length === 0) return [];
+    const onlineResidents = residents || [];
 
-    // 2. Perform Manual Joins (Fetch related data in parallel)
-    const userIds = [...new Set(residents.map(r => r.user_id).filter(Boolean))];
-    const propertyIds = [...new Set(residents.map(r => r.kost_id).filter(Boolean))];
-    const trxIds = [...new Set(residents.map(r => r.last_transaction_id).filter(Boolean))];
+    // 3. Perform Manual Joins for online residents
+    const userIds = [...new Set(onlineResidents.map(r => r.user_id).filter(Boolean))];
+    const propertyIds = [...new Set([...onlineResidents.map(r => r.kost_id).filter(Boolean), ...propIds])];
+    const trxIds = [...new Set(onlineResidents.map(r => r.last_transaction_id).filter(Boolean))];
 
     const [usersRes, propsRes, trxsRes] = await Promise.all([
-        supabase.from('users').select('id, name, full_name, photo_url, phone, occupation, institution, city, address, email').in('id', userIds),
-        supabase.from('properties').select('id, title, address, city, area, image_urls, location, price, room_types, additional_fee_name, additional_fee_price').in('id', propertyIds),
-        supabase.from('transactions').select('id, amount, status, payment_method, pakasir_order_id, metadata, product_type').in('id', trxIds.filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)))
+        userIds.length > 0 ? supabase.from('users').select('id, name, full_name, photo_url, phone, occupation, institution, city, address, email').in('id', userIds) : { data: [] },
+        propertyIds.length > 0 ? supabase.from('properties').select('id, title, address, city, area, image_urls, location, price, room_types, additional_fee_name, additional_fee_price, owner_uid, created_at').in('id', propertyIds) : { data: [] },
+        trxIds.length > 0 ? supabase.from('transactions').select('id, amount, status, payment_method, pakasir_order_id, metadata, product_type').in('id', trxIds.filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))) : { data: [] }
     ]);
 
     const userMap = new Map(usersRes.data?.map(u => [u.id, u]) || []);
-    const propMap = new Map(propsRes.data?.map(p => [p.id, p]) || []);
+    const propMap = new Map((propsRes.data || propertiesForExtraction).map(p => [p.id, p]));
     const trxMap = new Map(trxsRes.data?.map(t => [t.id, t]) || []);
 
-    // 3. Assemble the data
-    const mappedData = residents.map(r => {
+    // 4. Assemble online records
+    const mappedData = onlineResidents.map(r => {
         const userData = userMap.get(r.user_id);
         const propData = propMap.get(r.kost_id);
         const trxData = trxMap.get(r.last_transaction_id);
@@ -514,9 +536,81 @@ export async function getResidentStatus(filters?: { ownerUid?: string; userId?: 
             last_transaction: trxData || null
         };
     });
-    
-    console.log(`FETCH_RESIDENTS: Assembled ${mappedData.length} records with manual joins`);
-    return mappedData;
+
+    // 5. Ekstraksi Penghuni Offline / KostManager Survey (Jika tidak mencari spesifik userId penyewa lain)
+    const offlineResidents: any[] = [];
+    if (!userId) {
+        const occupiedRoomSet = new Set(
+            mappedData.map(r => `${r.kost_id}_${String(r.room_type || '').toLowerCase().trim()}`)
+        );
+
+        const propsToCheck = propertiesForExtraction.length > 0 ? propertiesForExtraction : (propsRes.data || []);
+        
+        propsToCheck.forEach(p => {
+            const roomList = Array.isArray(p.room_types) ? p.room_types : [];
+            roomList.forEach((rt: any, rIdx: number) => {
+                const isOccupied = rt.isAvailable === false || rt.status === 'Terisi' || Boolean(rt.residentName || rt.tenantName || rt.occupant_name);
+                if (isOccupied) {
+                    const cleanRoomName = rt.name ? (String(rt.name).trim().toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${rIdx + 1}`;
+                    const roomKey = `${p.id}_${cleanRoomName.toLowerCase().trim()}`;
+                    
+                    if (!occupiedRoomSet.has(roomKey)) {
+                        const tenantName = (rt.residentName || rt.tenantName || rt.occupant_name || `Penghuni Kamar ${rt.name || rIdx + 1}`).trim();
+                        const rentPrice = Number(rt.price) || Number(rt.monthlyPrice) || (Array.isArray(rt.pricing) && rt.pricing[0]?.price) || Number(p.price) || 0;
+                        const startDate = rt.startDate || rt.leaseStartDate || rt.start_date || (p.created_at ? p.created_at.split('T')[0] : new Date().toISOString().split('T')[0]);
+                        const endDate = rt.endDate || rt.leaseEndDate || rt.end_date || '';
+
+                        offlineResidents.push({
+                            id: `survey-resident-${p.id}-${rIdx}`,
+                            user_id: p.owner_uid || ownerUid || `survey-user-${p.id}-${rIdx}`,
+                            kost_id: p.id,
+                            room_type: cleanRoomName,
+                            start_date: startDate,
+                            end_date: endDate || 'Sewa Berjalan',
+                            status: 'ACTIVE',
+                            total_months: 1,
+                            last_transaction_id: `survey-trx-${p.id}-${rIdx}`,
+                            created_at: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
+                            user: {
+                                id: `survey-user-${p.id}-${rIdx}`,
+                                name: tenantName,
+                                full_name: tenantName,
+                                phone: rt.residentPhone || rt.tenantPhone || rt.occupant_phone || '-',
+                                email: rt.residentEmail || rt.tenantEmail || '-',
+                                photo_url: rt.residentKtpUrl || '',
+                                occupation: 'Penghuni Kost',
+                                institution: '-',
+                                city: p.city || '-',
+                                address: p.address || '-'
+                            },
+                            property: p,
+                            last_transaction: {
+                                id: `survey-trx-${p.id}-${rIdx}`,
+                                amount: rentPrice,
+                                status: 'PAID',
+                                payment_method: 'CASH / Survey',
+                                metadata: {
+                                    basePrice: rentPrice,
+                                    price: rentPrice,
+                                    occupants: Number(rt.currentOccupants) || 1,
+                                    extraPersonFee: Number(rt.extraOccupantFee) || 0,
+                                    facilityAmount: 0,
+                                    platformFee: 0,
+                                    billingPeriod: rt.paymentPeriod || rt.billingPeriod || 'bulanan',
+                                    phone: rt.residentPhone || rt.tenantPhone || rt.occupant_phone || '-',
+                                    isSurveyOccupant: true
+                                }
+                            }
+                        });
+                    }
+                }
+            });
+        });
+    }
+
+    const allCombined = [...mappedData, ...offlineResidents];
+    console.log(`FETCH_RESIDENTS: Assembled ${allCombined.length} total records (${mappedData.length} online, ${offlineResidents.length} survey/offline)`);
+    return allCombined;
 }
 
 /**

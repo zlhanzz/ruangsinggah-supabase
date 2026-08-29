@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 177. Sinkronisasi Penghuni Aktif KostManager ke Database Penghuni Mitra (`adminService.ts`, `MitraTenantManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa menu **Database Penghuni** (*Penghuni Aktif*) di Dashboard Mitra menampilkan `0 TOTAL • 0 AKTIF • 0 TENGGANG - BELUM ADA PENGHUNI AKTIF`, padahal properti KostManager (*Kost Madani*) sudah memiliki unit terisi (Kamar 1 oleh **zul**, No. HP `081527080656`, sewa `28 Ags - 28 Sep 2026`, tarif `Rp 400.000/bln`, status `Terisi`).
+  2. Fungsi `getResidentStatus` sebelumnya hanya membaca tabel `resident_status` dari transaksi online dan belum mengekstrak penghuni offline/survei pendataan lapangan dari `properties.room_types`.
+- **Implementasi**:
+  * **1. Ekstraksi Dual-Source di `getResidentStatus` (`adminService.ts`)**:
+    - Mengembangkan `getResidentStatus` agar memindai seluruh kamar terisi (`rt.status === 'Terisi' || rt.isAvailable === false || Boolean(rt.residentName || rt.tenantName)`) pada `properties.room_types` milik properti mitra.
+    - Menghasilkan rekaman penghuni lengkap (nama penyewa, no. telepon, nama kamar, tarif bulanan, periode mulai & selesai sewa, status `ACTIVE`) dengan deduplikasi otomatis terhadap pesanan online.
+  * **2. Peningkatan Komponen Database Penghuni (`MitraTenantManagement.tsx`)**:
+    - Kartu penghuni kini menampilkan badge: **`⭐ KOSTMANAGER`** untuk penghuni hasil pendataan lapangan.
+    - Tombol **Chat** langsung membuka kontak WhatsApp penghuni (`https://wa.me/628xxx`) secara instan.
+    - Memperbaiki filter tab status (Semua, Masa Tenggang, Sewa Aktif, Tidak Perpanjang) dan penghitungan sisa masa sewa (*daysLeft*).
+  * **3. Sinkronisasi Metrik Beranda**:
+    - Counter penghuni aktif di Beranda Mitra dan Database Penghuni otomatis sinkron dan akurat (`1 TOTAL • 1 AKTIF`).
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/components/mitra/MitraTenantManagement.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 41.01s, 0 error).
+
 ### 176. Perbaikan ReferenceError `requestTargetPrice` pada Modal KostManager (`MitraDashboard.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Terjadi `Uncaught ReferenceError: requestTargetPrice is not defined` di `MitraDashboard.tsx:2329` pada saat me-render form pengajuan penyesuaian harga sewa KostManager karena deklarasi state terhapus saat refactoring timeline panduan cepat.
