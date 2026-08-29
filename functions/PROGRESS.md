@@ -2,6 +2,22 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 179. Proteksi Disintermediasi & Penghapusan Chat Langsung Penghuni KostManager (`MitraTenantManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna memberikan masukan proteksi bisnis krusial: pada properti KostManager, pemilik kost tidak boleh memiliki tombol chat langsung ke nomor WhatsApp penghuni untuk mencegah risiko transaksi sewa di luar aplikasi (*platform bypass / revenue leakage*).
+  2. Seluruh komunikasi seputar kamar, kendala, atau perpanjangan sewa pada properti KostManager wajib terpusat dan dikoordinasikan melalui Tim KostManager RuangSinggah.
+- **Implementasi**:
+  * **1. Penghapusan Tombol Chat Langsung Penghuni KostManager**:
+    - Tombol `💬 Chat` ke nomor WhatsApp pribadi penyewa dinonaktifkan/dihapus untuk penghuni properti KostManager.
+    - Digantikan dengan tombol koordinasi terpusat: **`💬 Hubungi Tim KM`** yang menghubungkan pemilik kost langsung ke Account Manager RuangSinggah.
+  * **2. Pelestarian Chat untuk Mitra Mandiri**:
+    - Mitra Biasa (Self-Managed) tetap memiliki tombol `💬 Chat` ke penghuni karena mengelola operasionalnya secara mandiri.
+- **File Tersentuh**:
+  - `functions/public/components/mitra/MitraTenantManagement.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 34.00s, 0 error).
+
 ### 178. Pemisahan Kendali Operasional Penghuni Mitra Biasa vs KostManager Auto-Pilot (`MitraTenantManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menyampaikan masukan arsitektur bisnis: pada properti KostManager, pemilik kost seharusnya tidak memiliki kendali penagihan manual (`$ Selesai` dan `📄 Tagih`) karena seluruh operasional harian telah diserahkan sepenuhnya ke Tim KostManager RuangSinggah (Auto-Pilot).

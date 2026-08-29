@@ -396,12 +396,21 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                                         <div className="flex items-center justify-between gap-2 border-t lg:border-t-0 pt-3 lg:pt-0 border-gray-100 w-full lg:w-auto">
                                             <div className="flex items-center gap-1.5 flex-wrap">
                                                 {isKostManager ? (
-                                                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-700 shadow-sm" title="Penagihan dan operasional ditangani 100% oleh Tim KostManager RuangSinggah">
-                                                        <ShieldCheck size={13} className="text-indigo-600 shrink-0" />
-                                                        <span className="text-[9px] font-black uppercase tracking-wider">
-                                                            Auto-Pilot Managed
-                                                        </span>
-                                                    </div>
+                                                    <>
+                                                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-700 shadow-sm" title="Penagihan dan operasional ditangani 100% oleh Tim KostManager RuangSinggah">
+                                                            <ShieldCheck size={13} className="text-indigo-600 shrink-0" />
+                                                            <span className="text-[9px] font-black uppercase tracking-wider">
+                                                                Auto-Pilot Managed
+                                                            </span>
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => window.open('https://wa.me/6281527080656', '_blank')}
+                                                            className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                                                            title="Hubungi Account Manager KostManager RuangSinggah"
+                                                        >
+                                                            <MessageCircle size={11} /> Hubungi Tim KM
+                                                        </button>
+                                                    </>
                                                 ) : (
                                                     <>
                                                         <button 
@@ -422,22 +431,22 @@ const MitraTenantManagement: React.FC<MitraTenantManagementProps> = ({
                                                         >
                                                             <File size={11} /> Tagih
                                                         </button>
+                                                        <button 
+                                                            onClick={() => {
+                                                                if (resident.profile.phone && resident.profile.phone !== '-') {
+                                                                    const cleanPhone = resident.profile.phone.replace(/[^0-9]/g, '');
+                                                                    const waPhone = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone;
+                                                                    window.open(`https://wa.me/${waPhone}`, '_blank');
+                                                                } else {
+                                                                    onStartChat?.(resident.uid, resident.kostId);
+                                                                }
+                                                            }}
+                                                            className="px-2.5 py-1.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100 text-[9px] font-black uppercase tracking-wider hover:bg-blue-100 transition-all flex items-center gap-1 cursor-pointer"
+                                                        >
+                                                            <MessageCircle size={11} /> Chat
+                                                        </button>
                                                     </>
                                                 )}
-                                                <button 
-                                                    onClick={() => {
-                                                        if (resident.profile.phone && resident.profile.phone !== '-') {
-                                                            const cleanPhone = resident.profile.phone.replace(/[^0-9]/g, '');
-                                                            const waPhone = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone;
-                                                            window.open(`https://wa.me/${waPhone}`, '_blank');
-                                                        } else {
-                                                            onStartChat?.(resident.uid, resident.kostId);
-                                                        }
-                                                    }}
-                                                    className="px-2.5 py-1.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100 text-[9px] font-black uppercase tracking-wider hover:bg-blue-100 transition-all flex items-center gap-1 cursor-pointer"
-                                                >
-                                                    <MessageCircle size={11} /> Chat
-                                                </button>
                                             </div>
 
                                             <button 
