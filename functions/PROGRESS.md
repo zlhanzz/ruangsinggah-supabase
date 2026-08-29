@@ -2,6 +2,18 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 166. Pembersihan Label Administratif '*Wajib' / '(Opsional)' pada Kategori Foto Publik (`KostDetail.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menanyakan mengapa muncul kata `*Wajib` pada caption foto (contoh: `Interior Kamar *Wajib`) dan meminta agar teks tersebut dibersihkan.
+- **Implementasi**:
+  * **1. Sanitasi String Kategori (`cleanPhotoCategoryLabel`)**: Membuat fungsi pembersih teks yang secara otomatis menghapus tag administratif formulir survei (`*Wajib`, `*WAJIB`, `(Wajib)`, `(Opsional)`, `*`).
+  * **2. Hasil Tampilan Bersih**: Menjadikan label kategori foto tampak rapi, profesional, dan elegan (contoh: `Kamar 4 • Interior Kamar` alih-alih `Kamar 4 • Interior Kamar *WAJIB`).
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 26.19s, 0 error).
+
 ### 165. Integrasi Caption & Kategori Foto Survei Dinamis pada Carousel Galeri (`KostDetail.tsx`, `userService.ts`, `types.ts`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta agar caption atau kategori foto (seperti *Bangunan Depan*, *Area Parkir*, *Koridor*, *Lingkungan*, *Interior Kamar*, *Kamar Mandi*, dll.) yang telah diinput melalui pendataan agen survey muncul secara dinamis di tampilan galeri foto.

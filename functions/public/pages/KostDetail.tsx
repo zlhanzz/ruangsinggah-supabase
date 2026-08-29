@@ -204,6 +204,18 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     roomName?: string;
   }
 
+  // Helper to sanitize survey category labels from administrative tags like *Wajib, (Opsional), etc.
+  const cleanPhotoCategoryLabel = (label: string): string => {
+    if (!label) return '';
+    return label
+      .replace(/\*wajib/gi, '')
+      .replace(/\*opsional/gi, '')
+      .replace(/\(wajib\)/gi, '')
+      .replace(/\(opsional\)/gi, '')
+      .replace(/\*/g, '')
+      .trim();
+  };
+
   // Extract all property-level photos with their surveyed category labels
   const propertyPhotos: PhotoItem[] = (kost.imageUrls || []).map((img: any, idx: number) => {
     const url = typeof img === 'string' ? img : (img?.url || img?.original || img?.thumbnail || '');
@@ -235,7 +247,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
       label = defaultCats[idx] || (idx === 0 ? 'Bangunan Depan' : `Foto Properti ${idx + 1}`);
     }
 
-    return { url, label, isRoom: false };
+    return { url, label: cleanPhotoCategoryLabel(label), isRoom: false };
   }).filter(p => !!p.url);
 
   // Normalize all individual room units and extract their photos with survey category labels
@@ -273,7 +285,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
             label = defaultRoomCats[imgIdx] || `Foto Kamar ${imgIdx + 1}`;
           }
 
-          return { url, label, isRoom: true, roomName: rName };
+          return { url, label: cleanPhotoCategoryLabel(label), isRoom: true, roomName: rName };
         }).filter(p => !!p.url);
 
         return {
@@ -317,7 +329,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
         label = defaultRoomCats[imgIdx] || `Foto Kamar ${imgIdx + 1}`;
       }
 
-      return { url, label, isRoom: true, roomName: rName };
+      return { url, label: cleanPhotoCategoryLabel(label), isRoom: true, roomName: rName };
     }).filter(p => !!p.url);
 
     return [{
