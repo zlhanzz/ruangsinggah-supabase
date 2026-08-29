@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../supabase';
-import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity, DoorClosed, ChevronDown, ChevronUp, Camera, ShieldCheck, Sparkles, Building, Bed, Bath, Wifi, Maximize2, Share2, PhoneCall, HelpCircle, Layers, Wrench } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity, ChevronDown, ChevronUp, Camera, ShieldCheck, Sparkles, Building, Bed, Bath, Wifi, Maximize2, Share2, PhoneCall, HelpCircle, Layers, Wrench } from 'lucide-react';
 import { Page } from '../types';
 import { addPropertyReview, getExtraBills, settlePendingBills, cancelBookingRequest } from '../userService';
 import PaymentGateway from '../components/PaymentGateway';
@@ -186,7 +186,6 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const [showDigitalReceiptModal, setShowDigitalReceiptModal] = useState<boolean>(false);
 
     // Interactive Card Details & Gallery states
-    const [expandedDetailId, setExpandedDetailId] = useState<string | null>(null);
     const [galleryModalOpen, setGalleryModalOpen] = useState<boolean>(false);
     const [galleryPhotos, setGalleryPhotos] = useState<string[]>([]);
     const [galleryTitle, setGalleryTitle] = useState<string>('');
@@ -657,20 +656,52 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                     daysRem = Math.ceil(diff / (1000 * 60 * 60 * 24));
                 }
 
-                // Image resolution
-                let displayImg = null;
-                const rawImages = prop.image_urls || [];
-                if (rawImages.length > 0) {
-                    const img = rawImages[0];
-                    const path = typeof img === 'string' ? img : (img.original || img.webp || '');
-                    if (path) {
-                        displayImg = path.startsWith('http') ? path : supabase.storage.from('properties').getPublicUrl(path).data.publicUrl;
-                    }
-                }
-
                 const rMeta = r.metadata || {};
                 const lastTrxMeta = (r.last_transaction || {}).metadata || {};
                 const combinedMeta = { ...lastTrxMeta, ...rMeta };
+
+                // Extract room information and photos
+                const targetRoomNum = (rMeta.roomNumber || rMeta.variantName || r.room_number || combinedMeta.roomNumber || lastTrxMeta.roomNumber || '').trim();
+                const propRooms = prop.room_types || [];
+                const currentRoom = propRooms.find((rm: any) => {
+                    const rName = (rm.name || rm.roomNumber || '').trim();
+                    if (!rName && !targetRoomNum) return false;
+                    if (targetRoomNum && rName.toLowerCase() === targetRoomNum.toLowerCase()) return true;
+                    const rNumOnly = rName.replace(/^kamar\s*/i, '').trim().toLowerCase();
+                    const tNumOnly = targetRoomNum.replace(/^kamar\s*/i, '').trim().toLowerCase();
+                    if (rNumOnly && tNumOnly && rNumOnly === tNumOnly) return true;
+                    return false;
+                }) || (propRooms.length === 1 ? propRooms[0] : null);
+
+                let roomPhotos: string[] = [];
+                if (currentRoom?.images && Array.isArray(currentRoom.images) && currentRoom.images.length > 0) {
+                    roomPhotos = currentRoom.images.filter(Boolean);
+                } else if (currentRoom?.categorized_photos && typeof currentRoom.categorized_photos === 'object') {
+                    Object.values(currentRoom.categorized_photos).forEach((photos: any) => {
+                        if (Array.isArray(photos)) {
+                            photos.forEach((p: any) => { if (typeof p === 'string' && p && !roomPhotos.includes(p)) roomPhotos.push(p); });
+                        }
+                    });
+                }
+
+                // Image resolution: Prioritize actual room photo over building diagram
+                let displayImg = null;
+                if (roomPhotos.length > 0) {
+                    displayImg = roomPhotos[0];
+                } else {
+                    const rawImages = prop.image_urls || [];
+                    const frontBuildingImg = rawImages.find((img: any) => {
+                        const label = (img?.label || '').toLowerCase();
+                        return label.includes('bangunan depan') || label.includes('fasad') || label.includes('depan');
+                    });
+                    const chosenImg = frontBuildingImg || rawImages[0];
+                    if (chosenImg) {
+                        const path = typeof chosenImg === 'string' ? chosenImg : (chosenImg.original || chosenImg.url || chosenImg.webp || '');
+                        if (path) {
+                            displayImg = path.startsWith('http') ? path : supabase.storage.from('properties').getPublicUrl(path).data.publicUrl;
+                        }
+                    }
+                }
 
                 const pendBills = (bills || []).filter(b => {
                     const bid = (b.product_id || b.kost_id || '').toString();
@@ -786,6 +817,19 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                         return lastTrx.amount || prop.price || 0;
                     })(),
                     displayImage: displayImg,
+                    roomNumber: targetRoomNum || currentRoom?.name || currentRoom?.roomNumber || r.room_type || 'Kamar 3',
+                    roomFloor: currentRoom?.floor || null,
+                    roomSize: currentRoom?.dimensions || currentRoom?.size || null,
+                    roomFacilities: currentRoom?.roomFacilities || currentRoom?.facilities || [],
+                    bathroomType: currentRoom?.bathroomType || (currentRoom?.bathroomFacilities?.length ? 'Kamar Mandi Dalam' : 'Kamar Mandi Luar'),
+                    roomPhotos: roomPhotos,
+                    isManagedKost: prop.is_managed === true || combinedMeta.is_managed_kost === true || combinedMeta.isManaged === true || combinedMeta.managed_by === 'kostmanager',
+                    address: prop.address || combinedMeta.address || '',
+                    areaCity: [prop.area, prop.city].filter(Boolean).join(', ') || '',
+                    propertyFacilities: prop.facilities || [],
+                    propertyRules: prop.rules || [],
+                    ownerUid: prop.owner_uid,
+                    currentRoom: currentRoom,
                     location: prop.location,
                     additionalFeePrice: prop.additional_fee_price,
                     additionalFeeName: prop.additional_fee_name,
@@ -1825,7 +1869,6 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                 );
                             }
 
-                            const isExpanded = expandedDetailId === kost.id;
                             const kMeta = kost.metadata || {};
 
                             // Lease progress bar calculation
@@ -1848,10 +1891,6 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                             const roomPhotoList = kost.roomPhotos && kost.roomPhotos.length > 0
                                 ? kost.roomPhotos
                                 : (kost.displayImage ? [kost.displayImage] : []);
-
-                            const roomFacs: string[] = kost.roomFacilities || [];
-                            const propFacs: string[] = kost.propertyFacilities || [];
-                            const propRules: string[] = kost.propertyRules || [];
 
                             return (
                                 <div key={kost.id} className="group relative bg-white rounded-[2.5rem] sm:rounded-[3rem] p-6 sm:p-10 border border-gray-100 shadow-xl shadow-gray-200/50 hover:shadow-2xl hover:shadow-orange-900/10 transition-all duration-500 overflow-hidden flex flex-col gap-6 sm:gap-8">
@@ -2051,16 +2090,6 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                 <MapPin className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform" /> Rute Ke Kost
                                             </button>
 
-                                            {/* Kwitansi Digital Resmi (For Paid) */}
-                                            {isPaid && (
-                                                <button
-                                                    onClick={() => handleOpenActiveReceipt(kost)}
-                                                    className="w-full bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 px-5 py-3.5 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] shadow-sm cursor-pointer"
-                                                >
-                                                    <FileText className="w-4 h-4 text-orange-600" /> Lihat Kwitansi Digital
-                                                </button>
-                                            )}
-
                                             {/* Perpanjang Sewa (For Paid) */}
                                             {isPaid && (
                                                 <div className="flex flex-col gap-1">
@@ -2096,16 +2125,6 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                     <Wrench className="w-3.5 h-3.5 text-rose-500" /> Lapor Kendala Kamar
                                                 </button>
                                             )}
-
-                                            {/* Interactive Toggle: Detail Hunian & Fasilitas */}
-                                            <button
-                                                onClick={() => setExpandedDetailId(isExpanded ? null : kost.id)}
-                                                className={`w-full ${isExpanded ? 'bg-slate-900 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} px-5 py-3 rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[10px] uppercase tracking-wider cursor-pointer active:scale-[0.98] mt-1`}
-                                            >
-                                                <Layers className="w-3.5 h-3.5" />
-                                                <span>{isExpanded ? 'Tutup Detail' : 'Detail Hunian & Fasilitas'}</span>
-                                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                                            </button>
 
                                             {/* Pending Actions: Bayar Sekarang */}
                                             {kost.status === 'AWAITING_PAYMENT' && (
@@ -2169,131 +2188,6 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                             )}
                                         </div>
                                     </div>
-
-                                    {/* Bottom Expandable Accordion Panel ("Detail Hunian & Fasilitas") */}
-                                    {isExpanded && (
-                                        <div className="border-t border-gray-100 pt-6 mt-2 animate-in fade-in slide-in-from-top-4 duration-500 flex flex-col gap-6">
-                                            {/* Title Banner */}
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2.5">
-                                                    <div className="p-2 bg-orange-100 rounded-xl">
-                                                        <Building className="w-5 h-5 text-orange-600" />
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="text-sm font-black text-gray-900 uppercase tracking-wider">Detail Hunian & Fasilitas Unit</h4>
-                                                        <p className="text-[11px] text-gray-400 font-medium">Informasi lengkap spesifikasi kamar, fasilitas hunian, dan peraturan kost</p>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    onClick={() => handleOpenGallery(roomPhotoList, kost.kostName || 'Kamar')}
-                                                    className="px-3.5 py-1.5 bg-white border border-gray-200 hover:border-orange-400 text-gray-700 text-[10px] font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                                                >
-                                                    <Camera className="w-3.5 h-3.5 text-orange-500" /> Lihat Semua Foto ({roomPhotoList.length})
-                                                </button>
-                                            </div>
-
-                                            {/* Grid 3 Columns of Details */}
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                                                {/* Col 1: Spesifikasi Unit */}
-                                                <div className="p-5 bg-slate-50/70 rounded-2xl border border-slate-100 flex flex-col gap-3">
-                                                    <div className="flex items-center gap-2 text-xs font-black text-slate-800 uppercase tracking-wider">
-                                                        <DoorClosed className="w-4 h-4 text-orange-500" /> Spesifikasi Unit
-                                                    </div>
-                                                    <div className="space-y-2 text-xs">
-                                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
-                                                            <span className="text-gray-400">Nomor Kamar:</span>
-                                                            <strong className="text-gray-900">{kost.roomNumber || '-'}</strong>
-                                                        </div>
-                                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
-                                                            <span className="text-gray-400">Tipe Kamar:</span>
-                                                            <strong className="text-gray-900">{kost.roomType || 'Standard'}</strong>
-                                                        </div>
-                                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
-                                                            <span className="text-gray-400">Posisi Lantai:</span>
-                                                            <strong className="text-gray-900">{kost.roomFloor || 'Lantai 1'}</strong>
-                                                        </div>
-                                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
-                                                            <span className="text-gray-400">Dimensi / Ukuran:</span>
-                                                            <strong className="text-gray-900">{kost.roomSize || '3x3 meter'}</strong>
-                                                        </div>
-                                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
-                                                            <span className="text-gray-400">Kamar Mandi:</span>
-                                                            <strong className="text-gray-900">{kost.bathroomType || 'Kamar Mandi Luar'}</strong>
-                                                        </div>
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="text-gray-400">Kapasitas Maksimal:</span>
-                                                            <strong className="text-gray-900">{kost.currentRoom?.maxOccupants || 1} Orang</strong>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Col 2: Fasilitas Kamar & Bersama */}
-                                                <div className="p-5 bg-slate-50/70 rounded-2xl border border-slate-100 flex flex-col gap-3">
-                                                    <div className="flex items-center gap-2 text-xs font-black text-slate-800 uppercase tracking-wider">
-                                                        <Bed className="w-4 h-4 text-emerald-500" /> Fasilitas Kamar
-                                                    </div>
-                                                    {roomFacs.length > 0 ? (
-                                                        <div className="flex flex-wrap gap-1.5">
-                                                            {roomFacs.map((fac, fIdx) => (
-                                                                <span key={fIdx} className="px-2.5 py-1 bg-white border border-gray-200 text-gray-700 text-[11px] font-bold rounded-lg flex items-center gap-1 shadow-2xs">
-                                                                    <Check className="w-3 h-3 text-emerald-500" /> {fac}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <p className="text-xs text-gray-400 italic">Standar unit hunian</p>
-                                                    )}
-
-                                                    {propFacs.length > 0 && (
-                                                        <>
-                                                            <div className="flex items-center gap-2 text-xs font-black text-slate-800 uppercase tracking-wider pt-2 border-t border-slate-200/60">
-                                                                <Building className="w-3.5 h-3.5 text-blue-500" /> Fasilitas Bersama
-                                                            </div>
-                                                            <div className="flex flex-wrap gap-1.5">
-                                                                {propFacs.slice(0, 6).map((pf, pfIdx) => (
-                                                                    <span key={pfIdx} className="px-2 py-0.5 bg-white border border-blue-100 text-blue-800 text-[10px] font-bold rounded-md flex items-center gap-1">
-                                                                        <Wifi className="w-2.5 h-2.5 text-blue-500" /> {typeof pf === 'string' ? pf : (pf.name || pf.label || '')}
-                                                                    </span>
-                                                                ))}
-                                                            </div>
-                                                        </>
-                                                    )}
-                                                </div>
-
-                                                {/* Col 3: Informasi Tagihan & Tata Tertib */}
-                                                <div className="p-5 bg-slate-50/70 rounded-2xl border border-slate-100 flex flex-col gap-3">
-                                                    <div className="flex items-center gap-2 text-xs font-black text-slate-800 uppercase tracking-wider">
-                                                        <Receipt className="w-4 h-4 text-amber-500" /> Rincian Biaya
-                                                    </div>
-                                                    <div className="space-y-2 text-xs">
-                                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
-                                                            <span className="text-gray-400">Sewa Pokok:</span>
-                                                            <strong className="text-gray-900">{FORMAT_CURRENCY(kost.totalPrice || 0)} / {kost.period || 'Bulan'}</strong>
-                                                        </div>
-                                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
-                                                            <span className="text-gray-400">Status Pembayaran:</span>
-                                                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 font-black text-[10px] rounded-md uppercase">LUNAS</span>
-                                                        </div>
-                                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
-                                                            <span className="text-gray-400">Bantuan Hunian:</span>
-                                                            <strong className="text-gray-900">{kost.isManagedKost ? 'KostManager 24/7' : 'Mitra Pemilik'}</strong>
-                                                        </div>
-                                                    </div>
-
-                                                    {propRules.length > 0 && (
-                                                        <div className="pt-2 border-t border-slate-200/60">
-                                                            <p className="text-[10px] font-black text-slate-800 uppercase tracking-wider mb-1.5">Tata Tertib Kost:</p>
-                                                            <ul className="text-[11px] text-gray-500 space-y-1 list-disc list-inside">
-                                                                {propRules.slice(0, 3).map((r, rIdx) => (
-                                                                    <li key={rIdx} className="truncate">{typeof r === 'string' ? r : (r.text || r.title || '')}</li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             );
                         })}

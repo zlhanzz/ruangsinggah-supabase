@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 202. Pembersihan Aksi Kartu Sewa Aktif & Perbaikan Foto dan Identitas Kamar (`MyKost.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta: *"hapus aja dah lihat kwitansi digital dan juga detail hunian & fasilitas"*.
+  2. Dari screenshot tampilan kartu sewa aktif di tab `AKTIF`:
+     - Tombol "Lihat Kwitansi Digital" dan toggle "Detail Hunian & Fasilitas" membuat kartu terlalu panjang dan tidak diinginkan pengguna.
+     - Accordion panel detail hunian di bagian bawah kartu sewa aktif memuat duplikasi rincian yang memenuhi layar.
+     - Thumbnail kamar pada kartu sewa aktif sebelumnya menampilkan gambar acak (diagram TAM SAM SOM) dan nomor kamar hanya tertulis label generic `KAMAR` alih-alih nomor kamar riil (*UNIT KAMAR 3*) beserta foto asli kamar.
+- **Implementasi**:
+  * **1. Pembersihan Tombol & Accordion Panel di `MyKost.tsx`**:
+    - Menghapus tombol `Lihat Kwitansi Digital` dari bilah aksi sidebar kartu sewa aktif.
+    - Menghapus tombol `Detail Hunian & Fasilitas` beserta state `expandedDetailId`.
+    - Menghapus seluruh accordion panel bawah yang memuat spesifikasi unit, rincian biaya, dan tata tertib hunian.
+    - Membersihkan icon import dan variabel yang tidak lagi digunakan (`DoorClosed`, `roomFacs`, `propFacs`, `propRules`).
+  * **2. Penyempurnaan Ekstraksi Foto & Unit Kamar Riil di `processedActive`**:
+    - Menyelaraskan ekstraksi nomor kamar `targetRoomNum` dari `r.metadata?.roomNumber || r.metadata?.variantName || r.room_number || combinedMeta.roomNumber`.
+    - Mengambil foto kamar asli `roomPhotos` dari properti `room_types` (menghindari fallback ke diagram TAM SAM SOM / foto generic).
+    - Memastikan badge nomor unit menampilkan nomor kamar asli (`UNIT KAMAR 3`).
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `walkthrough.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% dengan 0 error.
+
 ### 201. Redesain Komprehensif & Interaktif Kartu Penyewaan Aktif Menu 'Kost Saya' (`MyKost.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan: *"tampilan kartu penyewaan kita di menu kost saya belum tampil secara kompeherensif dan interaktif"*.
