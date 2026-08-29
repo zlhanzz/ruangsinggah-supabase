@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 175. Redesain & Interaktivitas Responsif "Panduan Mulai Cepat" di Dashboard Mitra (`MitraDashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan bahwa komponen **Panduan Mulai Cepat** tidak responsif dan kurang interaktif di mobile/desktop.
+  2. Ketika tombol **`[ LIHAT LISTING SAYA (POV USER) ]`** diklik, halaman listing kost terbuka di tab baru namun tampilan di dashboard tetap macet di Step 3 dan tidak berpindah ke Step 4 / Selesai karena validasi sebelumnya terkunci pada `stats.totalViews > 0` (yang masih 0 pada listing baru).
+- **Implementasi**:
+  * **1. Tracking Interaktif & Auto-Progression Step 3 ➔ Step 4**:
+    - Menambahkan state `hasViewedListing` & `tourCompleted` yang tersimpan di `localStorage` (`mitra_viewed_listing_${uid}`).
+    - Begitu mitra mengklik tombol *"Lihat Listing Saya (POV User)"*, sistem membuka halaman kost di tab baru, secara instan menandai Step 3 selesai (✓), menaikkan progress bar ke 100%, dan mengganti tombol menjadi **`🎉 Selesaikan Panduan & Buka Dashboard Penuh`**.
+  * **2. Step Interaktif yang Dapat Diklik Langsung (*Direct Navigation*)**:
+    - Seluruh langkah (1 s/d 4) kini berupa tombol kartu interaktif:
+      - **Step 1**: Langsung ke Verifikasi Identitas (Profil).
+      - **Step 2**: Langsung ke Manajemen Kost Saya.
+      - **Step 3**: Preview Halaman Listing Publik (POV User).
+      - **Step 4**: Buka Manajemen Pesanan & Dompet.
+  * **3. Progress Bar Visual Dinamis & Tombol Tutup (✕)**:
+    - Menambahkan header informatif dengan persentase penyelesaian (*misal: 3/4 Langkah • 75%*) dan progress bar bergradasi oranye-hijau.
+    - Menambahkan tombol dismiss (✕) di pojok kanan atas kartu untuk menyembunyikan panduan kapan saja.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 27.34s, 0 error).
+
 ### 174. Integrasi Listing KostManager & Penerapan Fitur Smart Auto-Pilot di Dashboard Mitra (`MitraDashboard.tsx`, `userService.ts`, `AgentDashboard.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa pada Dashboard Mitra dari kost yang terdaftar sebagai KostManager (*Kost Madani*), setelah status pendaftaran berhasil, kartu listing kost hilang dari daftar properti dan *Panduan Mulai Cepat* malah ter-reset kembali ke langkah awal (*"Mulai Upload Kost Sekarang"*), seolah-olah akun belum memiliki listing sama sekali.
