@@ -2,6 +2,21 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 203. Perbaikan Runtime Crash 'ReferenceError: DoorClosed is not defined' pada Kartu Sewa Aktif (`MyKost.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan error runtime console browser:
+     `MyKost.tsx:1962 Uncaught ReferenceError: DoorClosed is not defined at MyKost.tsx:1962:62 at Array.map (<anonymous>) at MyKost (MyKost.tsx:1825:40)`.
+  2. Masalah terjadi karena ikon `<DoorClosed />` masih digunakan pada badge nomor unit (`UNIT KAMAR 3`), tetapi namanya terhapus dari baris import `lucide-react` pada pembersihan sebelumnya.
+- **Implementasi**:
+  * Mengimpor kembali komponen vector SVG `DoorClosed` dari package `lucide-react` pada `MyKost.tsx`.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `walkthrough.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% dengan 0 error.
+  - Kartu sewa aktif unit `Kamar 3` ter-render sempurna tanpa error runtime.
+
 ### 202. Pembersihan Aksi Kartu Sewa Aktif & Perbaikan Foto dan Identitas Kamar (`MyKost.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta: *"hapus aja dah lihat kwitansi digital dan juga detail hunian & fasilitas"*.
