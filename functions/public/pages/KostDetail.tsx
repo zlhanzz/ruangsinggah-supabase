@@ -216,7 +216,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
       .trim();
   };
 
-  // Extract all property-level photos with their surveyed category labels
+  // Extract all property-level photos with their surveyed category labels (Only if present in database)
   const propertyPhotos: PhotoItem[] = (kost.imageUrls || []).map((img: any, idx: number) => {
     const url = typeof img === 'string' ? img : (img?.url || img?.original || img?.thumbnail || '');
     let label = '';
@@ -240,11 +240,6 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           break;
         }
       }
-    }
-
-    if (!label) {
-      const defaultCats = ['Bangunan Depan', 'Koridor', 'Area Parkir', 'Lingkungan'];
-      label = defaultCats[idx] || (idx === 0 ? 'Bangunan Depan' : `Foto Properti ${idx + 1}`);
     }
 
     return { url, label: cleanPhotoCategoryLabel(label), isRoom: false };
@@ -278,11 +273,6 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                 break;
               }
             }
-          }
-
-          if (!label) {
-            const defaultRoomCats = ['Interior Kamar', 'Kamar Mandi', 'Tempat Tidur', 'Lemari / Storage'];
-            label = defaultRoomCats[imgIdx] || `Foto Kamar ${imgIdx + 1}`;
           }
 
           return { url, label: cleanPhotoCategoryLabel(label), isRoom: true, roomName: rName };
@@ -324,11 +314,6 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
         }
       }
 
-      if (!label) {
-        const defaultRoomCats = ['Interior Kamar', 'Kamar Mandi', 'Tempat Tidur', 'Lemari / Storage'];
-        label = defaultRoomCats[imgIdx] || `Foto Kamar ${imgIdx + 1}`;
-      }
-
       return { url, label: cleanPhotoCategoryLabel(label), isRoom: true, roomName: rName };
     }).filter(p => !!p.url);
 
@@ -354,6 +339,10 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     ? normalizedRooms.find(r => r.id === activePhotoFilter || r.name === activePhotoFilter || r.rawName === activePhotoFilter)
     : null;
 
+  // Only show room photo navigation bar if there are valid room units with distinct room photos
+  const hasDistinctRoomPhotos = emptyRooms.some(r => r.photoItems && r.photoItems.length > 0 && r.images && r.images.length > 0);
+  const showRoomPhotoNav = emptyRooms.length > 0 && hasDistinctRoomPhotos;
+
   // Compute displayed photo items with surveyed labels based on active filter
   const displayedPhotoItems: PhotoItem[] = (() => {
     if (activeFilteredRoom) {
@@ -361,7 +350,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
         return activeFilteredRoom.photoItems;
       }
       // If room has no specific photos, fallback to property photos
-      return propertyPhotos.length > 0 ? propertyPhotos : [{ url: 'https://ruangsinggah.id/logo.png', label: 'Foto Properti', isRoom: false }];
+      return propertyPhotos.length > 0 ? propertyPhotos : [{ url: 'https://ruangsinggah.id/logo.png', label: '', isRoom: false }];
     }
 
     // Default 'all': Property photos + all empty rooms photos combined
@@ -378,7 +367,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
       }
     });
 
-    return unique.length > 0 ? unique : (propertyPhotos.length > 0 ? propertyPhotos : [{ url: 'https://ruangsinggah.id/logo.png', label: 'Foto Properti', isRoom: false }]);
+    return unique.length > 0 ? unique : (propertyPhotos.length > 0 ? propertyPhotos : [{ url: 'https://ruangsinggah.id/logo.png', label: '', isRoom: false }]);
   })();
 
   const displayedImages: string[] = displayedPhotoItems.map(p => p.url);
@@ -643,16 +632,20 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                 <div className="absolute bottom-6 right-6 bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/15 flex items-center gap-2">
                   <Camera size={12} className="text-orange-400" />
                   <span>{currentPhoto + 1} / {displayedImages.length} FOTO</span>
-                  <span className="text-white/40">•</span>
-                  <span className={currentPhotoItem?.isRoom ? "text-orange-400 font-bold" : "text-emerald-400 font-bold"}>
-                    {currentPhotoItem?.isRoom 
-                      ? (currentPhotoItem.roomName ? `${currentPhotoItem.roomName} - ${currentPhotoItem.label}` : currentPhotoItem.label)
-                      : (currentPhotoItem?.label || 'PROPERTI')}
-                  </span>
+                  {currentPhotoItem?.label ? (
+                    <>
+                      <span className="text-white/40">•</span>
+                      <span className={currentPhotoItem.isRoom ? "text-orange-400 font-bold" : "text-emerald-400 font-bold"}>
+                        {currentPhotoItem.isRoom 
+                          ? (currentPhotoItem.roomName ? `${currentPhotoItem.roomName} - ${currentPhotoItem.label}` : currentPhotoItem.label)
+                          : currentPhotoItem.label}
+                      </span>
+                    </>
+                  ) : null}
                 </div>
 
-                {/* Active Category Tag Top Left */}
-                {currentPhotoItem && (
+                {/* Active Category Tag Top Left (Only if valid label exists in database) */}
+                {currentPhotoItem && currentPhotoItem.label && (
                   <div className="absolute top-6 left-6 bg-black/60 backdrop-blur-md text-white px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider shadow-lg border border-white/20 flex items-center gap-1.5">
                     {currentPhotoItem.isRoom ? (
                       <>
@@ -687,8 +680,8 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                 </div>
               )}
 
-              {/* Bilah Tombol Navigasi Isolasi Foto Kamar Kosong (Flex-Wrap Responsif) */}
-              {emptyRooms.length > 0 && (
+              {/* Bilah Tombol Navigasi Isolasi Foto Kamar Kosong (Hanya tampil jika ada data foto spesifik unit kamar) */}
+              {showRoomPhotoNav && (
                 <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-2xs space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                     <span className="text-[11px] font-black text-slate-600 uppercase tracking-wider flex items-center gap-1.5">

@@ -2,6 +2,22 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 167. Kondisionalitas Dinamis Kategori Foto & Bilah Pilihan Kamar Murni Berbasis Database (`KostDetail.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta agar kategori foto dan bilah tombol pilihan kamar hanya ditampilkan jika kost memang memiliki data yang sesuai di database (tidak menampilkan tebakan/placeholder pada listing kost biasa yang bukan KostManager).
+- **Implementasi**:
+  * **1. Penghapusan Seluruh Fallback Kategori Tebakan**: Menghapus seluruh fallback tebakan kategori default (`defaultCats`, `defaultRoomCats`). Jika database tidak memiliki data kategori survei, label dikosongkan (`""`).
+  * **2. Kondisionalitas Floating Tag & Badge**:
+    - Floating tag kiri atas hanya dirender jika `label` foto tidak kosong.
+    - Badge kanan bawah hanya menampilkan counter foto bersih (`1 / 5 FOTO`) tanpa teks label jika properti tidak memiliki data kategori.
+  * **3. Kondisionalitas Bilah Pilihan Kamar**:
+    - Menghitung `showRoomPhotoNav = emptyRooms.length > 0 && hasDistinctRoomPhotos`. Bilah pilihan kamar hanya muncul jika unit kamar benar-benar memiliki data foto tersendiri.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 27.40s, 0 error).
+
 ### 166. Pembersihan Label Administratif '*Wajib' / '(Opsional)' pada Kategori Foto Publik (`KostDetail.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan mengapa muncul kata `*Wajib` pada caption foto (contoh: `Interior Kamar *Wajib`) dan meminta agar teks tersebut dibersihkan.
