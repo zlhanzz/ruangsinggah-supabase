@@ -182,6 +182,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [requestTab, setRequestTab] = useState<'hold' | 'price' | 'maintenance' | 'contact'>('hold');
     const [requestRoomNumber, setRequestRoomNumber] = useState('');
     const [requestNotes, setRequestNotes] = useState('');
+    const [requestTargetPrice, setRequestTargetPrice] = useState('');
     const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
 
     // --- PANDUAN MULAI CEPAT (QUICK START GUIDE) STATE ---

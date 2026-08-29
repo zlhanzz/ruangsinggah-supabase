@@ -2,6 +2,17 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 176. Perbaikan ReferenceError `requestTargetPrice` pada Modal KostManager (`MitraDashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Terjadi `Uncaught ReferenceError: requestTargetPrice is not defined` di `MitraDashboard.tsx:2329` pada saat me-render form pengajuan penyesuaian harga sewa KostManager karena deklarasi state terhapus saat refactoring timeline panduan cepat.
+- **Implementasi**:
+  - Menambahkan kembali deklarasi `const [requestTargetPrice, setRequestTargetPrice] = useState('');` ke dalam daftar state KostManager di `MitraDashboard.tsx`.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build Vite frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2527 modules transformed, ✓ built in 30.77s, 0 error).
+
 ### 175. Redesain & Interaktivitas Responsif "Panduan Mulai Cepat" di Dashboard Mitra (`MitraDashboard.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan bahwa komponen **Panduan Mulai Cepat** tidak responsif dan kurang interaktif di mobile/desktop.
