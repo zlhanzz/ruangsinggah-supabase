@@ -1750,7 +1750,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                     </div>
 
                     {/* Navigation Tabs */}
-                    <div className="bg-gray-100/50 p-1.5 rounded-[2rem] flex items-center gap-1 self-start md:self-auto border border-gray-100/80 backdrop-blur-sm">
+                    <div className="bg-gray-100/50 p-1 sm:p-1.5 rounded-2xl sm:rounded-[2rem] flex items-center justify-center gap-1 w-full sm:w-auto self-stretch sm:self-auto border border-gray-100/80 backdrop-blur-sm">
                         {[
                             {
                                 id: 'diajukan', label: 'Diajukan', count: activeKosts.filter(k => {
@@ -1765,14 +1765,14 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                             <button
                                 key={tab.id}
                                 onClick={() => handleTabChange(tab.id as any)}
-                                className={`px-6 py-3.5 rounded-[1.5rem] text-[11px] font-black uppercase tracking-[0.15em] transition-all duration-300 flex items-center gap-2.5 ${activeTab === tab.id
+                                className={`px-3 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-[1.5rem] text-[10px] sm:text-[11px] font-black uppercase tracking-[0.08em] sm:tracking-[0.15em] transition-all duration-300 flex items-center justify-center gap-1.5 sm:gap-2.5 flex-1 sm:flex-initial ${activeTab === tab.id
                                     ? 'bg-white text-orange-500 shadow-xl shadow-orange-100/50 border border-orange-100'
                                     : 'text-gray-400 hover:text-gray-600 hover:bg-white/50'
                                     }`}
                             >
                                 {tab.label}
                                 {tab.count > 0 && (
-                                    <span className={`w-5 h-5 rounded-lg flex items-center justify-center text-[9px] ${activeTab === tab.id ? 'bg-orange-100 text-orange-600' : 'bg-gray-200 text-gray-500'}`}>
+                                    <span className={`w-4 h-4 sm:w-5 sm:h-5 rounded-md sm:rounded-lg flex items-center justify-center text-[8px] sm:text-[9px] ${activeTab === tab.id ? 'bg-orange-100 text-orange-600' : 'bg-gray-200 text-gray-500'}`}>
                                         {tab.count}
                                     </span>
                                 )}
@@ -1893,22 +1893,22 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                 : (kost.displayImage ? [kost.displayImage] : []);
 
                             return (
-                                <div key={kost.id} className="group relative bg-white rounded-[2.5rem] sm:rounded-[3rem] p-6 sm:p-10 border border-gray-100 shadow-xl shadow-gray-200/50 hover:shadow-2xl hover:shadow-orange-900/10 transition-all duration-500 overflow-hidden flex flex-col gap-6 sm:gap-8">
+                                <div key={kost.id} className="group relative bg-white rounded-3xl sm:rounded-[3rem] p-4 sm:p-8 lg:p-10 border border-gray-100 shadow-xl shadow-gray-200/50 hover:shadow-2xl hover:shadow-orange-900/10 transition-all duration-500 overflow-hidden flex flex-col gap-5 sm:gap-8">
                                     {/* Accent Background Glow */}
                                     <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-transparent rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
 
                                     {/* Top Section: Main Content + Sidebar Actions */}
-                                    <div className="flex flex-col lg:grid lg:grid-cols-12 gap-8 sm:gap-10">
+                                    <div className="flex flex-col lg:grid lg:grid-cols-12 gap-6 sm:gap-10">
                                         {/* Left / Main Column */}
-                                        <div className="lg:col-span-8 flex flex-col gap-6">
-                                            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 sm:gap-8 text-center sm:text-left">
+                                        <div className="lg:col-span-8 flex flex-col gap-5 sm:gap-6">
+                                            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-8 text-center sm:text-left">
                                                 {/* Interactive Image Container */}
                                                 <div 
                                                     onClick={() => handleOpenGallery(roomPhotoList, kost.kostName || 'Kamar Kost')}
                                                     className="relative shrink-0 group/img cursor-pointer"
                                                     title="Klik untuk melihat foto kamar & hunian"
                                                 >
-                                                    <div className="w-48 h-36 sm:w-56 sm:h-44 bg-slate-900 rounded-[2rem] flex items-center justify-center shadow-xl shadow-orange-100 border-2 border-white transform hover:scale-[1.03] transition-all duration-500 overflow-hidden relative">
+                                                    <div className="w-44 h-32 sm:w-56 sm:h-44 bg-slate-900 rounded-2xl sm:rounded-[2rem] flex items-center justify-center shadow-xl shadow-orange-100 border-2 border-white transform hover:scale-[1.03] transition-all duration-500 overflow-hidden relative">
                                                         {kost.displayImage ? (
                                                             <img 
                                                                 src={kost.displayImage} 
@@ -1921,54 +1921,54 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80 group-hover/img:opacity-100 transition-opacity" />
                                                         
                                                         {/* Photo Count Overlay Badge */}
-                                                        <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 border border-white/20">
-                                                            <Camera className="w-3.5 h-3.5 text-orange-400" />
+                                                        <div className="absolute bottom-2.5 left-2.5 sm:bottom-3 sm:left-3 bg-black/60 backdrop-blur-md text-white text-[9px] sm:text-[10px] font-bold px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full flex items-center gap-1.5 border border-white/20">
+                                                            <Camera className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-orange-400" />
                                                             <span>{roomPhotoList.length} Foto Kamar</span>
                                                         </div>
                                                     </div>
-                                                    <div className="absolute -bottom-2.5 -right-2.5 w-11 h-11 bg-white rounded-2xl shadow-lg flex items-center justify-center border-2 border-orange-50 z-20">
-                                                        <span className="text-xl">⚡</span>
+                                                    <div className="absolute -bottom-2 -right-2 w-9 h-9 sm:w-11 sm:h-11 bg-white rounded-xl sm:rounded-2xl shadow-lg flex items-center justify-center border-2 border-orange-50 z-20">
+                                                        <span className="text-base sm:text-xl">⚡</span>
                                                     </div>
                                                 </div>
 
                                                 {/* Property & Room Header Info */}
-                                                <div className="flex-1 min-w-0">
+                                                <div className="flex-1 w-full min-w-0">
                                                     {/* Badges Bar */}
-                                                    <div className="flex flex-wrap justify-center sm:justify-start items-center gap-2 mb-3">
+                                                    <div className="flex flex-wrap justify-center sm:justify-start items-center gap-1.5 sm:gap-2 mb-2.5 sm:mb-3">
                                                         {isPaid && (
-                                                            <span className={`px-3.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border flex items-center gap-1.5 ${
+                                                            <span className={`px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 sm:gap-1.5 ${
                                                                 (kost.daysRemaining || 0) < 0 
                                                                     ? 'bg-gray-50 text-gray-400 border-gray-200' 
                                                                     : 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm shadow-emerald-100'
                                                             }`}>
-                                                                <CheckCircle className="w-3.5 h-3.5" />
+                                                                <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                                                                 {(kost.daysRemaining || 0) < 0 ? 'SUDAH HABIS' : 'SEDANG DISEWA'}
                                                             </span>
                                                         )}
 
                                                         {kost.daysRemaining !== null && isPaid && (
-                                                            <div className={`px-3.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border flex items-center gap-1.5 ${
+                                                            <div className={`px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 sm:gap-1.5 ${
                                                                 kost.daysRemaining <= 7 
                                                                     ? 'bg-red-50 text-red-600 border-red-200 animate-pulse shadow-sm' 
                                                                     : 'bg-orange-50 text-orange-600 border-orange-200'
                                                             }`}>
-                                                                <Clock className="w-3.5 h-3.5" />
+                                                                <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                                                                 {kost.daysRemaining < 0 ? 'Habis' : `${kost.daysRemaining} Hari Lagi`}
                                                             </div>
                                                         )}
 
                                                         {/* Specific Room Badge */}
-                                                        <span className="px-3.5 py-1 rounded-full text-[10px] font-black text-white bg-orange-500 shadow-sm shadow-orange-200 uppercase tracking-wider flex items-center gap-1.5">
-                                                            <DoorClosed className="w-3.5 h-3.5" />
+                                                        <span className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black text-white bg-orange-500 shadow-sm shadow-orange-200 uppercase tracking-wider flex items-center gap-1 sm:gap-1.5">
+                                                            <DoorClosed className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                                                             {kost.roomNumber ? `UNIT ${kost.roomNumber.toUpperCase()}` : 'KAMAR'}
                                                         </span>
 
-                                                        <span className="px-3 py-1 rounded-full text-[9px] font-bold text-slate-700 uppercase tracking-wider bg-slate-100 border border-slate-200">
+                                                        <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-bold text-slate-700 uppercase tracking-wider bg-slate-100 border border-slate-200">
                                                             {kost.roomType || 'Standard'}
                                                         </span>
 
                                                         {kost.roomFloor && (
-                                                            <span className="px-3 py-1 rounded-full text-[9px] font-bold text-slate-700 uppercase tracking-wider bg-slate-100 border border-slate-200 flex items-center gap-1">
+                                                            <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-bold text-slate-700 uppercase tracking-wider bg-slate-100 border border-slate-200 flex items-center gap-1">
                                                                 <Layers className="w-3 h-3 text-slate-500" />
                                                                 {kost.roomFloor.toLowerCase().includes('lantai') ? kost.roomFloor.toUpperCase() : `LANTAI ${kost.roomFloor.toUpperCase()}`}
                                                             </span>
@@ -1978,27 +1978,25 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                     {/* Kost Name */}
                                                     <button
                                                         onClick={() => navigate(`${Page.DETAIL}?kostId=${kost.kostId}`)}
-                                                        className="group/title inline-flex items-center gap-2 text-2xl sm:text-3xl lg:text-4xl font-black text-gray-900 leading-tight tracking-tight hover:text-orange-600 transition-colors mb-2 text-left"
+                                                        className="group/title inline-flex items-center justify-center sm:justify-start gap-2 text-xl sm:text-3xl lg:text-4xl font-black text-gray-900 leading-tight tracking-tight hover:text-orange-600 transition-colors mb-1.5 sm:mb-2 text-center sm:text-left w-full sm:w-auto"
                                                     >
                                                         <span className="uppercase">{kost.kostName || 'Kost Saya'}</span>
-                                                        <ChevronRight className="w-5 h-5 opacity-0 -translate-x-2 group-hover/title:opacity-100 group-hover/title:translate-x-0 transition-all text-orange-500" />
+                                                        <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 opacity-0 -translate-x-2 group-hover/title:opacity-100 group-hover/title:translate-x-0 transition-all text-orange-500 shrink-0" />
                                                     </button>
 
                                                     {/* Location Details & Verification */}
-                                                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs font-semibold text-gray-500 mb-2">
-                                                        <div className="flex items-center justify-center sm:justify-start gap-1.5 text-gray-600 truncate">
-                                                            <MapPin className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                                                            <span className="truncate">{kost.address || kost.areaCity || 'Makassar'}</span>
-                                                        </div>
+                                                    <div className="flex items-center justify-center sm:justify-start gap-1.5 text-gray-500 mb-2 w-full max-w-full px-1">
+                                                        <MapPin className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                                                        <span className="line-clamp-1 sm:truncate text-[11px] sm:text-xs text-gray-600 font-semibold text-center sm:text-left leading-relaxed">{kost.address || kost.areaCity || 'Makassar'}</span>
                                                     </div>
 
-                                                    <div className="flex items-center justify-center sm:justify-start gap-3">
+                                                    <div className="flex items-center justify-center sm:justify-start gap-2.5 sm:gap-3">
                                                         <div className="flex gap-0.5">
                                                             {[1, 2, 3, 4, 5].map((s) => (
-                                                                <Star key={s} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                                                                <Star key={s} className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400 fill-amber-400" />
                                                             ))}
                                                         </div>
-                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                                                        <span className="text-[8.5px] sm:text-[9px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
                                                             <ShieldCheck className="w-3 h-3 text-emerald-500" /> Terverifikasi RuangSinggah
                                                         </span>
                                                     </div>
@@ -2007,26 +2005,26 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
                                             {/* Visual Progress Bar: Masa Sewa */}
                                             {isPaid && (
-                                                <div className="bg-gradient-to-r from-orange-50/70 via-amber-50/50 to-slate-50 p-4 sm:p-5 rounded-2xl border border-orange-100/80 shadow-sm flex flex-col gap-2.5">
-                                                    <div className="flex items-center justify-between text-xs">
+                                                <div className="bg-gradient-to-r from-orange-50/70 via-amber-50/50 to-slate-50 p-3.5 sm:p-5 rounded-2xl border border-orange-100/80 shadow-sm flex flex-col gap-2 sm:gap-2.5">
+                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
                                                         <div className="flex items-center gap-2">
-                                                            <div className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
-                                                            <span className="font-black text-gray-800 uppercase tracking-wider text-[11px]">Masa Sewa Berjalan</span>
+                                                            <div className="w-2 h-2 rounded-full bg-orange-500 animate-ping shrink-0" />
+                                                            <span className="font-black text-gray-800 uppercase tracking-wider text-[10px] sm:text-[11px]">Masa Sewa Berjalan</span>
                                                         </div>
-                                                        <span className="font-black text-orange-600 text-xs">
+                                                        <span className="font-black text-orange-600 text-[11px] sm:text-xs">
                                                             Hari ke-{daysElapsed} dari {totalLeaseDays} Hari ({progressPercent}%)
                                                         </span>
                                                     </div>
 
                                                     {/* Track & Filled Bar */}
-                                                    <div className="w-full h-2.5 bg-gray-200/80 rounded-full overflow-hidden p-0.5 shadow-inner">
+                                                    <div className="w-full h-2 sm:h-2.5 bg-gray-200/80 rounded-full overflow-hidden p-0.5 shadow-inner">
                                                         <div 
                                                             className="h-full bg-gradient-to-r from-orange-500 via-amber-500 to-emerald-500 rounded-full transition-all duration-1000 shadow-sm"
                                                             style={{ width: `${Math.max(5, progressPercent)}%` }}
                                                         />
                                                     </div>
 
-                                                    <div className="flex items-center justify-between text-[10px] font-bold text-gray-500 pt-0.5">
+                                                    <div className="flex items-center justify-between text-[9px] sm:text-[10px] font-bold text-gray-500 pt-0.5">
                                                         <span>Mulai: <strong className="text-gray-800">{FORMAT_DATE(kost.moveInDate)}</strong></span>
                                                         <span>Berakhir: <strong className="text-gray-800">{FORMAT_DATE(kost.endDate)}</strong></span>
                                                     </div>
@@ -2035,23 +2033,23 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
                                             {/* Info Grid - Modern Minimalist Cards (Anti-Truncate) */}
                                             {isPaid && (
-                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 w-full">
                                                     {[
                                                         { label: 'Durasi Sewa', value: `${kost.duration || 1} ${kost.period}`, subtext: 'Paket Sewa', icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50' },
                                                         { label: 'Mulai Masuk', value: FORMAT_DATE(kost.moveInDate), subtext: 'Check-in', icon: FileText, color: 'text-blue-500', bg: 'bg-blue-50' },
                                                         { label: 'Selesai Sewa', value: FORMAT_DATE(kost.endDate), subtext: 'Jatuh Tempo', icon: Calendar, color: 'text-rose-500', bg: 'bg-rose-50' },
-                                                        { label: 'Tagihan Pokok', value: FORMAT_CURRENCY(kost.totalPrice || 0), subtext: 'Status: Lunas', icon: Receipt, color: 'text-emerald-500', bg: 'bg-emerald-50' }
+                                                        { label: 'Tagihan Pokok', value: FORMAT_CURRENCY(kost.totalPrice || 0), subtext: 'Lunas', icon: Receipt, color: 'text-emerald-500', bg: 'bg-emerald-50' }
                                                     ].map((item, idx) => (
-                                                        <div key={idx} className="p-3.5 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-2 hover:border-orange-200 transition-colors group/stat">
-                                                            <div className="flex items-center justify-between">
-                                                                <div className={`w-8 h-8 ${item.bg} rounded-xl flex items-center justify-center shrink-0 group-hover/stat:scale-110 transition-transform`}>
-                                                                    <item.icon className={`w-4 h-4 ${item.color}`} />
+                                                        <div key={idx} className="p-2.5 sm:p-3.5 bg-white rounded-xl sm:rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between gap-1.5 sm:gap-2 hover:border-orange-200 transition-colors group/stat">
+                                                            <div className="flex items-center justify-between gap-1">
+                                                                <div className={`w-7 h-7 sm:w-8 sm:h-8 ${item.bg} rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 group-hover/stat:scale-110 transition-transform`}>
+                                                                    <item.icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${item.color}`} />
                                                                 </div>
-                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{item.subtext}</span>
+                                                                <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase tracking-wider truncate">{item.subtext}</span>
                                                             </div>
                                                             <div>
-                                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">{item.label}</p>
-                                                                <p className="text-xs sm:text-sm font-black text-gray-900 leading-snug">{item.value}</p>
+                                                                <p className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-wider mb-0.5">{item.label}</p>
+                                                                <p className="text-[11px] sm:text-sm font-black text-gray-900 leading-snug truncate">{item.value}</p>
                                                             </div>
                                                         </div>
                                                     ))}
@@ -2060,7 +2058,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                         </div>
 
                                         {/* Right / Actions Sidebar */}
-                                        <div className="lg:col-span-4 flex flex-col gap-2.5 justify-center relative z-10 pt-6 lg:pt-0 border-t lg:border-t-0 lg:border-l border-gray-100 lg:pl-8">
+                                        <div className="lg:col-span-4 flex flex-col gap-2 sm:gap-2.5 justify-center relative z-10 pt-5 lg:pt-0 border-t lg:border-t-0 lg:border-l border-gray-100 lg:pl-8">
                                             {/* Rute Ke Kost */}
                                             <button
                                                 onClick={() => {
@@ -2074,7 +2072,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                         alert('Lokasi belum tersedia');
                                                     }
                                                 }}
-                                                className="w-full bg-gray-900 hover:bg-black text-white px-5 py-3.5 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[10px] uppercase tracking-widest shadow-md active:scale-[0.98] group/btn cursor-pointer"
+                                                className="w-full bg-gray-900 hover:bg-black text-white px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest shadow-md active:scale-[0.98] group/btn cursor-pointer"
                                             >
                                                 <MapPin className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform" /> Rute Ke Kost
                                             </button>
@@ -2085,7 +2083,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                     <button
                                                         disabled={(kost.daysRemaining || 0) > 7}
                                                         onClick={() => handleOpenExtension(kost)}
-                                                        className={`w-full ${(kost.daysRemaining || 0) > 7 ? 'bg-gray-50 text-gray-400 border border-gray-100 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-100 cursor-pointer'} px-5 py-3.5 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] group/btn`}
+                                                        className={`w-full ${(kost.daysRemaining || 0) > 7 ? 'bg-gray-50 text-gray-400 border border-gray-100 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-100 cursor-pointer'} px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest active:scale-[0.98] group/btn`}
                                                     >
                                                         <Plus className={`w-4 h-4 ${(kost.daysRemaining || 0) > 7 ? 'text-gray-300' : 'text-white'} group-hover:rotate-90 transition-transform`} /> Perpanjang Sewa
                                                     </button>
@@ -2100,7 +2098,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                             {/* Hubungi Pengelola / Pemilik */}
                                             <button
                                                 onClick={() => handleOpenChat(kost)}
-                                                className="w-full bg-white hover:bg-emerald-50 text-emerald-600 border-2 border-emerald-100 px-5 py-3.5 rounded-2xl font-black flex items-center justify-center gap-2.5 transition-all text-[10px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
+                                                className="w-full bg-white hover:bg-emerald-50 text-emerald-600 border-2 border-emerald-100 px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
                                             >
                                                 <Smartphone className="w-4 h-4" /> {kost.isManagedKost ? 'Bantuan KostManager' : 'Hubungi Pemilik'}
                                             </button>
@@ -2109,7 +2107,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                             {isPaid && (
                                                 <button
                                                     onClick={() => handleReportIssueWhatsApp(kost)}
-                                                    className="w-full bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-5 py-3 rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
+                                                    className="w-full bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
                                                 >
                                                     <Wrench className="w-3.5 h-3.5 text-rose-500" /> Lapor Kendala Kamar
                                                 </button>

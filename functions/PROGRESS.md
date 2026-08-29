@@ -2,6 +2,36 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 205. Optimalisasi Responsivitas UI/UX Tampilan Mobile pada Kartu Sewa Aktif (`MyKost.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna melaporkan: *"sebenarnya tampilan pc nya cukup oke, tapi kalau diubah ke tampilan mobile, ui/ux nya tidak fit ke layar, tolong lakukan penyesuaian untuk tampilan mobile agar fit dan tetap responsif"*.
+  2. Dari screenshot mobile:
+     - Badge bar meluap secara horizontal dan terpotong di kiri (`...EWA`) akibat centering flexbox.
+     - Alamat terpotong di sisi kiri (`eknik, Tamalanrea...`) akibat centering truncation bug pada child flexbox.
+     - Teks "Hari ke-0 dari 31 Hari (0%)" patah ke beberapa baris.
+     - Kartu metrik ke-4 menampilkan `STATUS: LU...` yang terpotong.
+     - Tab navigasi atas dan padding kartu terlalu memakan tempat di layar ponsel sempit (360-390px).
+- **Implementasi**:
+  * **1. Penyesuaian Tab Navigasi Atas**:
+    - Memberikan `w-full sm:w-auto`, padding responsif `px-3 sm:px-6 py-2.5 sm:py-3.5`, dan font `text-[10px] sm:text-[11px]` agar fit di layar mobile tanpa scroll horizontal.
+  * **2. Rampingkan Padding Kartu Sewa Aktif**:
+    - Mengubah `rounded-[2.5rem] sm:rounded-[3rem] p-6 sm:p-10` menjadi `rounded-3xl sm:rounded-[3rem] p-4 sm:p-8 lg:p-10`, menghemat 16px lebar layar untuk konten di ponsel.
+  * **3. Perbaikan Badges Bar & Teks Alamat Bebas Clipping**:
+    - Mengatur ukuran micro-badge `px-2.5 sm:px-3.5 py-0.5 sm:py-1`, `text-[8.5px] sm:text-[9px]`, dan `gap-1.5 sm:gap-2` sehingga badge dapat melakukan wrap secara natural tanpa terpotong di sisi kiri.
+    - Menghilangkan centering truncation bug pada container alamat dengan `w-full` dan `line-clamp-1 sm:truncate` sehingga alamat kost selalu terbaca dari karakter pertama.
+  * **4. Penyelarasan Progress Bar & 4 Kartu Metrik**:
+    - Header progress sewa dibuat responsif `flex-col sm:flex-row sm:items-center justify-between gap-1` dengan font terukur.
+    - Grid metrik menggunakan `gap-2 sm:gap-3`, padding `p-2.5 sm:p-3.5`, label status disederhanakan menjadi `Lunas` (100% bebas truncate), dan font adaptif `text-[11px] sm:text-sm`.
+  * **5. Perampingan Sidebar Aksi**:
+    - Tombol aksi mobile menggunakan padding sentuh nyaman `px-4 sm:px-5 py-3 sm:py-3.5` dan font `text-[9.5px] sm:text-[10px]`.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `walkthrough.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% dengan 0 error.
+  - Tampilan mobile fit ke layar dengan badge wrap rapi, alamat utuh, dan metrik anti-truncate.
+
 ### 204. Penyesuaian Badge Lantai dan Pembersihan Dimensi Kamar pada Kartu Sewa Aktif (`MyKost.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna meminta: *"hapus aja "auto pilot" dan ganti posisinya dengan "lantai 3". hapus juga "2x2""*.
