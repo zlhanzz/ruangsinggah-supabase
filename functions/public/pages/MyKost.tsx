@@ -11,6 +11,9 @@ import { FORMAT_CURRENCY } from '../constants';
 import { getCurrentDate, setMockDate, getMockDateStr, parseDateSafely, calculateDaysRemaining } from '../utils/timeUtils';
 import TimeSimulator from '../components/TimeSimulator';
 import { getResidentStatus, syncResidentStatus, autoSyncAllSurveys } from '../adminService';
+import DigitalReceiptModal, { ReceiptData } from '../components/DigitalReceiptModal';
+import { sendRentReceiptWhatsApp } from '../rentBillingService';
+
 
 interface MyKostProps {
     user: any;
@@ -177,6 +180,11 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const [paymentMetadata, setPaymentMetadata] = useState<any>({});
     const [includeFacilityInExtension, setIncludeFacilityInExtension] = useState(true);
     const [residentStatus, setResidentStatus] = useState<any[]>([]);
+
+    // Digital Receipt states
+    const [selectedReceipt, setSelectedReceipt] = useState<ReceiptData | null>(null);
+    const [showDigitalReceiptModal, setShowDigitalReceiptModal] = useState<boolean>(false);
+
 
 
 
@@ -2988,11 +2996,39 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                                                 }
                                                                             });
                                                                         }}
-                                                                        className="px-4 py-2 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-emerald-700 transition-all active:scale-95 shadow-sm"
+                                                                        className="px-4 py-2 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-emerald-700 transition-all active:scale-95 shadow-sm cursor-pointer"
                                                                     >
                                                                         Bayar
                                                                     </button>
                                                                 )}
+                                                                {isHistory && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setSelectedReceipt({
+                                                                                receiptNumber: item.id || `INV-${Date.now()}`,
+                                                                                paidAt: item.created_at || item.updated_at || new Date().toISOString(),
+                                                                                tenantName: user?.displayName || user?.name || 'Penghuni Kost',
+                                                                                tenantPhone: user?.phoneNumber || user?.phone || '',
+                                                                                propertyTitle: selectedKost.kostName,
+                                                                                roomNumber: selectedKost.roomType || '1',
+                                                                                billingPeriod: selectedKost.period || 'Bulanan',
+                                                                                newPeriodStart: item.dueDate || selectedKost.startDate,
+                                                                                newPeriodEnd: selectedKost.endDate,
+                                                                                baseRent: Number(item.total || selectedKost.totalPrice || 0),
+                                                                                extraFee: Number(item.penalty || 0),
+                                                                                extraFeeName: item.penalty > 0 ? 'Denda Keterlambatan' : undefined,
+                                                                                totalAmount: Number(item.total || 0),
+                                                                                paymentMethod: 'Payment Gateway / QRIS'
+                                                                            });
+                                                                            setShowDigitalReceiptModal(true);
+                                                                        }}
+                                                                        className="px-3.5 py-1.5 bg-slate-900 text-white text-[9px] font-black uppercase tracking-wider rounded-xl hover:bg-black transition-all active:scale-95 shadow-sm flex items-center gap-1 cursor-pointer"
+                                                                    >
+                                                                        <FileText className="w-3 h-3" /> Kwitansi
+                                                                    </button>
+                                                                )}
+
                                                             </div>
                                                         </div>
                                                     </div>
@@ -3294,16 +3330,56 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                             await settlePendingBills(pendingIds);
                         }
 
-                        // 2. Lease Sync is now handled exclusively by the Pakasir Webhook on the backend
-                        // to prevent race conditions and double-duration additions.
+                        // 2. Automated WhatsApp Receipt Dispatch
+                        const phone = meta?.tenantPhone || meta?.userPhone || user?.phoneNumber || user?.phone || '';
+                        const receiptNumber = paidOrderId || paymentOrderId || `INV-${Date.now()}`;
+                        
+                        if (phone) {
+                            sendRentReceiptWhatsApp({
+                                phone,
+                                tenantName: meta?.tenantName || user?.displayName || user?.name || 'Penghuni Kost',
+                                propertyTitle: selectedKost?.kostName || meta?.propertyTitle || 'Kost RuangSinggah',
+                                roomNumber: meta?.roomNumber || meta?.roomCategory || selectedKost?.roomType || '1',
+                                amount: Number(paymentAmount || 0),
+                                paymentMethod: 'Payment Gateway / QRIS',
+                                orderId: receiptNumber,
+                                paidAt: new Date().toISOString(),
+                                billingPeriod: meta?.billingPeriod || `${extensionPeriod || 1} Bulan`,
+                                newPeriodStart: meta?.newPeriodStart || meta?.startDate,
+                                newPeriodEnd: meta?.newPeriodEnd || meta?.endDate,
+                                extraFee: meta?.extraFee,
+                                extraFeeName: meta?.extraFeeName,
+                                basePrice: meta?.basePrice || meta?.baseRent
+                            }).catch(e => console.warn('WA Receipt dispatch error:', e));
+                        }
 
                         setShowPaymentGateway(false);
-                        alert('Pembayaran Berhasil! Masa sewa Anda telah diperbarui.');
+
+                        // 3. Set Receipt Data and Open Digital Receipt Modal
+                        setSelectedReceipt({
+                            receiptNumber,
+                            paidAt: new Date().toISOString(),
+                            tenantName: meta?.tenantName || user?.displayName || user?.name || 'Penghuni Kost',
+                            tenantPhone: phone,
+                            propertyTitle: selectedKost?.kostName || meta?.propertyTitle || 'Kost RuangSinggah',
+                            roomNumber: meta?.roomNumber || meta?.roomCategory || selectedKost?.roomType || '1',
+                            billingPeriod: meta?.billingPeriod || `${extensionPeriod || 1} Bulan`,
+                            newPeriodStart: meta?.newPeriodStart || meta?.startDate,
+                            newPeriodEnd: meta?.newPeriodEnd || meta?.endDate,
+                            baseRent: Number(meta?.basePrice || meta?.baseRent || paymentAmount),
+                            extraFee: Number(meta?.extraFee || 0),
+                            extraFeeName: meta?.extraFeeName,
+                            totalAmount: Number(paymentAmount || 0),
+                            paymentMethod: 'Payment Gateway / QRIS'
+                        });
+                        setShowDigitalReceiptModal(true);
+
                         fetchMyKosts();
                     }}
                     onCancel={() => setShowPaymentGateway(false)}
                 />
             )}
+
 
             {/* 6. Modal Summary Survey */}
             {showSurveySummaryModal && selectedSurvey && (
@@ -3862,9 +3938,17 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                 </div>
             )}
 
+            {/* 7. Modal Kwitansi Resmi Digital */}
+            <DigitalReceiptModal
+                isOpen={showDigitalReceiptModal}
+                onClose={() => setShowDigitalReceiptModal(false)}
+                receipt={selectedReceipt}
+            />
+
             <TimeSimulator />
         </div>
     );
 };
+
 
 export default MyKost;

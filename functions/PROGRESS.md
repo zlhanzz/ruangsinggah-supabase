@@ -2,6 +2,41 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 196. Otomasi Pengiriman Kwitansi WhatsApp & Penerbitan Kwitansi Digital Resmi Perpanjangan Sewa Lunas (`rentBillingService.ts`, `DigitalReceiptModal.tsx`, `DigitalReceiptPage.tsx`, `OrderPaymentStatus.tsx`, `MyKost.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna meminta: *"bagaimana jika perpanjangan sewa berhasil dilakukan, maka sistem akan otomatis mengirimkan kwitansinya melalui whatsapp"*.
+  2. Saat penghuni menyelesaikan pembayaran tagihan sewa (baik melalui QRIS/Transfer Midtrans maupun verifikasi admin), sistem harus otomatis menerbitkan kwitansi resmi yang sah berstempel PT RUANG SINGGAH NUSANTARA dan mengirimkannya langsung ke nomor WhatsApp penghuni.
+  3. Dibutuhkan halaman mandiri rute publik `/receipt/:orderId` agar kwitansi dapat diakses dan dicetak kapan saja langsung dari tautan pesan WhatsApp tanpa mewajibkan login ulang jika tautan valid.
+  4. Manajemen KostManager di portal admin memerlukan aksi 1-klik untuk melihat lembar kwitansi resmi atau mengirimkan ulang kwitansi via WhatsApp.
+- **Implementasi**:
+  * **1. Engine Pembuatan & Pengiriman Kwitansi WhatsApp (`rentBillingService.ts`)**:
+    - Membuat fungsi `generateRentReceiptWhatsAppMessage(params)` dengan copy template resmi: nomor kwitansi `#INV-...`, nama penghuni, properti, nomor kamar, skema sewa, periode sewa baru bersambung, total nominal bayar lunas, dan direct link `/receipt/:orderId`.
+    - Membuat fungsi `sendRentReceiptWhatsApp(params)` yang terhubung langsung ke gateway WhatsApp Supabase Edge Function (`/functions/v1/send-wa` / Meta API).
+  * **2. Komponen Modal Kwitansi Resmi Digital (`DigitalReceiptModal.tsx`)**:
+    - Format kwitansi resmi korporat berstempel legalitas PT RUANG SINGGAH NUSANTARA (NIB: 1008250025911).
+    - Desain premium dengan vector SVG murni (`lucide-react`) bebas FOUT, kartu status LUNAS/VERIFIED, rincian biaya pokok dan biaya tambahan, tombol cetak/print PDF (`window.print()`), serta tombol bagikan ke WhatsApp.
+  * **3. Halaman Kwitansi Publik Mandiri (`DigitalReceiptPage.tsx` & `App.tsx`)**:
+    - Menambahkan rute lazy-loaded `/receipt/:orderId` pada `App.tsx`.
+    - Mengambil data transaksi dari Supabase (`transactions` / `manual_invoices`) dan merender kwitansi digital secara otomatis.
+  * **4. Otomasi Konfirmasi Pembayaran (`OrderPaymentStatus.tsx` & `MyKost.tsx`)**:
+    - Pada `OrderPaymentStatus.tsx`, mendeteksi status `PAID` dan langsung memicu `sendRentReceiptWhatsApp()` secara otomatis, menyajikan kartu ringkasan sukses, tombol "Buka Kwitansi Resmi", dan tombol "Akses Kost Saya".
+    - Pada `MyKost.tsx`, callback `onPaymentSuccess` pada `PaymentGateway` memicu pengiriman kwitansi via WhatsApp dan langsung menampilkan `DigitalReceiptModal` di layar.
+    - Menambahkan tombol **"🧾 Kwitansi"** pada setiap riwayat tagihan yang telah lunas di modal tagihan kamar `MyKost.tsx`.
+  * **5. Integrasi Manajemen Tagihan di Portal Admin (`KostManagerPortal.tsx`)**:
+    - Pada tab Riwayat Pembayaran Sewa (`activeTab === 'billing'`), menambahkan tombol **"🧾 Kwitansi"** dan **"💬 Kirim WA"** pada setiap tagihan berstatus `paid`.
+    - Pada verifikasi lunas admin (`handleUpdateStatusBill`), sistem otomatis menyinkronkan perpanjangan masa sewa penghuni dan mengirimkan kwitansi resmi ke WhatsApp penyewa.
+- **File Tersentuh**:
+  - `functions/public/rentBillingService.ts`
+  - `functions/public/components/DigitalReceiptModal.tsx`
+  - `functions/public/pages/DigitalReceiptPage.tsx`
+  - `functions/public/App.tsx`
+  - `functions/public/pages/OrderPaymentStatus.tsx`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**: Build frontend `npm.cmd run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, ✓ built in 34.47s, 0 error).
+
 ### 195. Otomasi Struktur Biaya Riil Pendataan Survei & Aturan Baku Perpanjangan Sewa Bersambung (*Continuous Lease Anchor*) (`KostManagerPortal.tsx`, `rentBillingService.ts`, `ClaimKost.tsx`, `MyKost.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna menanyakan mengapa muncul angka default Rp 1.000.000 pada modal penagihan sewa padahal tidak pernah diinput saat pendataan survei oleh agen.

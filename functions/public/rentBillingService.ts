@@ -232,3 +232,80 @@ export async function sendRentBillingReminderWhatsApp(params: {
   }
 }
 
+export interface RentReceiptParams {
+  phone: string;
+  tenantName: string;
+  propertyTitle: string;
+  roomNumber: string;
+  amount: number;
+  paymentMethod?: string;
+  orderId: string;
+  paidAt?: string;
+  billingPeriod?: string;
+  newPeriodStart?: string;
+  newPeriodEnd?: string;
+  extraFee?: number;
+  extraFeeName?: string;
+  basePrice?: number;
+}
+
+/**
+ * Menyusun pesan WhatsApp Kwitansi Resmi Lunas
+ */
+export function generateRentReceiptWhatsAppMessage(params: RentReceiptParams): { message: string; receiptUrl: string } {
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://ruangsinggah.id';
+  const receiptUrl = `${origin}/receipt/${params.orderId}`;
+  
+  const formatDate = (d?: string) => {
+    if (!d || d === 'Sewa Berjalan') return '-';
+    return new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
+  const formattedPaidAt = params.paidAt 
+    ? new Date(params.paidAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) 
+    : new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  let message = `Halo Kak *${params.tenantName}*! 🎉✨\n\n` +
+    `Pembayaran perpanjangan sewa kamar Anda telah kami terima dan diverifikasi *LUNAS*:\n\n` +
+    `🧾 *No. Kwitansi:* #${(params.orderId || '').split('-').pop()?.toUpperCase() || params.orderId}\n` +
+    `🏠 *Properti:* ${params.propertyTitle}\n` +
+    `🚪 *Kamar:* No. ${params.roomNumber}\n` +
+    `📌 *Skema Sewa:* ${params.billingPeriod || 'Bulanan'}\n`;
+
+  if (params.newPeriodStart && params.newPeriodEnd) {
+    message += `🔄 *Masa Sewa Baru:* ${formatDate(params.newPeriodStart)} s/d ${formatDate(params.newPeriodEnd)}\n`;
+  }
+
+  if (params.basePrice) {
+    message += `💵 *Sewa Pokok:* ${FORMAT_CURRENCY(params.basePrice)}\n`;
+  }
+  if (params.extraFee && params.extraFee > 0) {
+    message += `➕ *${params.extraFeeName || 'Biaya Tambahan'}:* ${FORMAT_CURRENCY(params.extraFee)}\n`;
+  }
+
+  message += `💰 *Total Dibayar:* *${FORMAT_CURRENCY(params.amount)}* (LUNAS)\n` +
+    `💳 *Metode:* ${params.paymentMethod || 'Payment Gateway / QRIS'}\n` +
+    `📅 *Waktu Transaksi:* ${formattedPaidAt}\n\n` +
+    `Lembar dokumen *Kwitansi Resmi Digital* berstempel sah *PT RUANG SINGGAH NUSANTARA* dapat Anda akses dan unduh (PDF/Cetak) melalui tautan resmi berikut:\n\n` +
+    `👉 *Buka Kwitansi Resmi Lunas:* \n${receiptUrl}\n\n` +
+    `Terima kasih telah mempercayakan hunian Anda bersama RuangSinggah! 🙏✨\n` +
+    `_Manajemen KostManager - PT Ruang Singgah Nusantara_`;
+
+  return { message, receiptUrl };
+}
+
+/**
+ * Mengirimkan pesan WhatsApp kwitansi pembayaran sewa lunas ke nomor penyewa
+ */
+export async function sendRentReceiptWhatsApp(params: RentReceiptParams): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { message } = generateRentReceiptWhatsAppMessage(params);
+    const res = await sendWhatsAppText(params.phone, message);
+    return { success: res.success, error: res.error };
+  } catch (err: any) {
+    console.error('Error sending rent receipt WhatsApp:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+

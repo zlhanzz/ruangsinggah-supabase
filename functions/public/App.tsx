@@ -27,6 +27,8 @@ const Terms = lazy(() => import('./pages/Terms'));
 const Articles = lazy(() => import('./pages/Articles'));
 const KostManagerLanding = lazy(() => import('./pages/KostManagerLanding'));
 const ClaimKost = lazy(() => import('./pages/ClaimKost'));
+const DigitalReceiptPage = lazy(() => import('./pages/DigitalReceiptPage'));
+
 
 // Loading fallback
 const PageLoader = () => (
@@ -718,6 +720,7 @@ const App: React.FC = () => {
               </ProtectedRoute>
             } />
             <Route path="/claim-kost" element={<ClaimKost user={user} />} />
+            <Route path="/receipt/:orderId" element={<DigitalReceiptPage />} />
             
             <Route path={Page.LOGIN} element={
               (user && !location.search.includes('mode=recovery')) ? (

@@ -102,8 +102,11 @@ import KostManagerPropertyFormModal from './KostManagerPropertyFormModal';
 import { 
     sendRentBillingReminderWhatsApp, 
     createRentClaimToken,
-    calculateNextLeasePeriod 
+    calculateNextLeasePeriod,
+    sendRentReceiptWhatsApp
 } from '../../rentBillingService';
+import DigitalReceiptModal, { ReceiptData } from '../DigitalReceiptModal';
+
 
 
 // Helper: Normalisasi URL Foto (Handle string, object { url, label }, dsb.)
@@ -1169,6 +1172,11 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     const [isCheckingOut, setIsCheckingOut] = useState<boolean>(false);
 
     const [selectedTenantForDetail, setSelectedTenantForDetail] = useState<TenantRecord | null>(null);
+
+    // Digital Receipt Modal States
+    const [selectedReceipt, setSelectedReceipt] = useState<ReceiptData | null>(null);
+    const [showDigitalReceiptModal, setShowDigitalReceiptModal] = useState<boolean>(false);
+
 
     // Property Command Center Modals (Room Matrix & Broadcast)
     const [selectedPropForRoomMatrix, setSelectedPropForRoomMatrix] = useState<ManagedProperty | null>(null);
@@ -2287,15 +2295,63 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     };
 
     const handleUpdateStatusBill = async (id: string, status: 'issued' | 'paid' | 'cancelled') => {
-        if (!window.confirm(`Ubah status tagihan menjadi ${status}?`)) return;
+        if (!window.confirm(`Ubah status tagihan menjadi ${status === 'paid' ? 'LUNAS (Verifikasi Pembayaran)' : status}?`)) return;
         try {
             await updateManualInvoiceStatus(id, status);
-            alert('Status tagihan berhasil diperbarui');
+
+            const targetInv = invoices.find(inv => inv.id === id);
+            if (status === 'paid' && targetInv) {
+                // Auto-extend lease in resident_status if matching
+                if (targetInv.due_date && targetInv.due_date !== 'Sewa Berjalan') {
+                    const matchedTenant = tenants.find(t => 
+                        (t.user?.phone && t.user.phone.replace(/[^0-9]/g, '') === (targetInv.recipient_phone || '').replace(/[^0-9]/g, '')) ||
+                        t.user?.name === targetInv.recipient_name
+                    );
+
+                    if (matchedTenant && matchedTenant.id && !matchedTenant.id.startsWith('prop-resident-')) {
+                        const rawPeriod = matchedTenant.metadata?.billingPeriod || 'bulanan';
+                        const leaseCalc = calculateNextLeasePeriod(matchedTenant.start_date, matchedTenant.end_date, rawPeriod, 1);
+                        await supabase.from('resident_status').update({
+                            start_date: leaseCalc.newStartDate,
+                            end_date: leaseCalc.newEndDate,
+                            updated_at: new Date().toISOString()
+                        }).eq('id', matchedTenant.id);
+                    }
+                }
+
+                // Auto WhatsApp Receipt Dispatch
+                const cleanPhone = (targetInv.recipient_phone || '').replace(/[^0-9]/g, '');
+                if (cleanPhone) {
+                    const extra = Number(targetInv.total || 0) - Number(targetInv.rental_amount || 0);
+                    sendRentReceiptWhatsApp({
+                        phone: cleanPhone,
+                        tenantName: targetInv.recipient_name,
+                        propertyTitle: targetInv.kost_name,
+                        roomNumber: targetInv.notes?.match(/Kamar\s*([0-9a-zA-Z]+)/i)?.[1] || '1',
+                        amount: Number(targetInv.total),
+                        paymentMethod: 'Transfer / QRIS (Verifikasi Admin)',
+                        orderId: targetInv.id,
+                        paidAt: new Date().toISOString(),
+                        billingPeriod: 'Bulanan',
+                        newPeriodStart: targetInv.bill_date,
+                        newPeriodEnd: targetInv.due_date,
+                        extraFee: extra > 0 ? extra : 0,
+                        extraFeeName: extra > 0 ? 'Biaya Tambahan' : undefined,
+                        basePrice: Number(targetInv.rental_amount || targetInv.total)
+                    }).catch(e => console.warn('WA Receipt auto-dispatch error:', e));
+                }
+
+                alert(`🎉 Status tagihan berhasil diverifikasi LUNAS! Kwitansi resmi otomatis dikirimkan ke WhatsApp ${targetInv.recipient_name}.`);
+            } else {
+                alert('Status tagihan berhasil diperbarui');
+            }
+
             loadAllData();
         } catch (err: any) {
             alert('Gagal memperbarui status: ' + err.message);
         }
     };
+
 
     // Auto-fill bill form when tenant is selected (Struktur biaya riil tanpa hardcoded 1 Juta)
     useEffect(() => {
@@ -3964,24 +4020,91 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                 {inv.status === 'paid' ? 'Lunas' : inv.status === 'cancelled' ? 'Batal' : 'Terbit'}
                                                             </span>
                                                         </td>
-                                                        <td className="px-6 py-4 text-right space-x-2">
+                                                        <td className="px-6 py-4 text-right">
+                                                            {inv.status === 'paid' && (
+                                                                <div className="flex items-center justify-end gap-1.5">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            const extra = Number(inv.total || 0) - Number(inv.rental_amount || 0);
+                                                                            setSelectedReceipt({
+                                                                                receiptNumber: inv.id,
+                                                                                paidAt: inv.updated_at || inv.bill_date,
+                                                                                tenantName: inv.recipient_name,
+                                                                                tenantPhone: inv.recipient_phone,
+                                                                                propertyTitle: inv.kost_name,
+                                                                                roomNumber: inv.notes?.match(/Kamar\s*([0-9a-zA-Z]+)/i)?.[1] || '1',
+                                                                                billingPeriod: 'Bulanan',
+                                                                                newPeriodStart: inv.bill_date,
+                                                                                newPeriodEnd: inv.due_date,
+                                                                                baseRent: Number(inv.rental_amount || inv.total),
+                                                                                extraFee: extra > 0 ? extra : 0,
+                                                                                extraFeeName: extra > 0 ? 'Biaya Tambahan' : undefined,
+                                                                                totalAmount: Number(inv.total),
+                                                                                paymentMethod: 'Manual / Transfer / Payment Gateway'
+                                                                            });
+                                                                            setShowDigitalReceiptModal(true);
+                                                                        }}
+                                                                        className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-black text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all shadow-xs"
+                                                                        title="Buka Lembar Kwitansi Resmi"
+                                                                    >
+                                                                        <FileText size={11} /> Kwitansi
+                                                                    </button>
+
+                                                                    {inv.recipient_phone && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={async () => {
+                                                                                const extra = Number(inv.total || 0) - Number(inv.rental_amount || 0);
+                                                                                const cleanPhone = (inv.recipient_phone || '').replace(/[^0-9]/g, '');
+                                                                                const res = await sendRentReceiptWhatsApp({
+                                                                                    phone: cleanPhone,
+                                                                                    tenantName: inv.recipient_name,
+                                                                                    propertyTitle: inv.kost_name,
+                                                                                    roomNumber: inv.notes?.match(/Kamar\s*([0-9a-zA-Z]+)/i)?.[1] || '1',
+                                                                                    amount: Number(inv.total),
+                                                                                    paymentMethod: 'Transfer / QRIS (Verifikasi Admin)',
+                                                                                    orderId: inv.id,
+                                                                                    paidAt: inv.updated_at || inv.bill_date,
+                                                                                    billingPeriod: 'Bulanan',
+                                                                                    newPeriodStart: inv.bill_date,
+                                                                                    newPeriodEnd: inv.due_date,
+                                                                                    extraFee: extra > 0 ? extra : 0,
+                                                                                    extraFeeName: extra > 0 ? 'Biaya Tambahan' : undefined,
+                                                                                    basePrice: Number(inv.rental_amount || inv.total)
+                                                                                });
+                                                                                if (res.success) {
+                                                                                    alert(`🎉 Kwitansi resmi lunas berhasil dikirim ke WhatsApp ${inv.recipient_name} (+${cleanPhone})!`);
+                                                                                } else {
+                                                                                    alert(`Kirim WA kwitansi gagal: ${res.error || 'Gagal'}`);
+                                                                                }
+                                                                            }}
+                                                                            className="px-2 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all border border-emerald-200"
+                                                                            title="Kirim Ulang Kwitansi Lunas ke WhatsApp Penyewa"
+                                                                        >
+                                                                            <Share2 size={11} /> Kirim WA
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                             {inv.status === 'issued' && (
-                                                                <>
+                                                                <div className="flex items-center justify-end gap-1.5">
                                                                     <button
                                                                         onClick={() => handleUpdateStatusBill(inv.id, 'paid')}
-                                                                        className="bg-green-50 hover:bg-green-100 text-green-600 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
+                                                                        className="bg-green-50 hover:bg-green-100 text-green-600 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
                                                                     >
                                                                         Verif Lunas
                                                                     </button>
                                                                     <button
                                                                         onClick={() => handleUpdateStatusBill(inv.id, 'cancelled')}
-                                                                        className="bg-red-50 hover:bg-red-100 text-red-500 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
+                                                                        className="bg-red-50 hover:bg-red-100 text-red-500 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
                                                                     >
                                                                         Batalkan
                                                                     </button>
-                                                                </>
+                                                                </div>
                                                             )}
                                                         </td>
+
                                                     </tr>
                                                 ))}
                                         </tbody>
@@ -4977,9 +5100,21 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     </div>
                 </div>
             )}
+
+            {/* MODAL 6: DIGITAL RECEIPT MODAL */}
+            <DigitalReceiptModal
+                isOpen={showDigitalReceiptModal}
+                onClose={() => {
+                    setShowDigitalReceiptModal(false);
+                    setSelectedReceipt(null);
+                }}
+                receipt={selectedReceipt}
+            />
         </div>
     );
 };
+
+
 
 interface ManagedPropertyAddModalProps {
     onClose: () => void;

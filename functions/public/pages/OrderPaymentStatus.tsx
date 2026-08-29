@@ -3,6 +3,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import PaymentGateway from '../components/PaymentGateway';
+import { CheckCircle2, FileText, Home, ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
+import { FORMAT_CURRENCY } from '../constants';
+import { sendRentReceiptWhatsApp } from '../rentBillingService';
 
 interface OrderPaymentStatusProps {
   user: any;
@@ -18,6 +21,7 @@ const OrderPaymentStatus: React.FC<OrderPaymentStatusProps> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<any>(null);
+  const waReceiptSentRef = useRef<boolean>(false);
 
   const fetchOrder = async () => {
     if (!orderId) return null;
@@ -87,6 +91,37 @@ const OrderPaymentStatus: React.FC<OrderPaymentStatusProps> = ({ user }) => {
     return () => clearInterval(pollRef.current);
   }, [order?.id, order?.status]);
 
+  // Auto WhatsApp Receipt Dispatch on detection of PAID status
+  useEffect(() => {
+    if (order && PAID_STATUSES.includes(order.status?.toUpperCase() || '') && !waReceiptSentRef.current) {
+      const meta = order.metadata || {};
+      const phone = meta.tenantPhone || meta.userPhone || user?.phone || '';
+      if (phone && phone.length > 6) {
+        waReceiptSentRef.current = true;
+        sendRentReceiptWhatsApp({
+          phone,
+          tenantName: meta.tenantName || meta.userName || user?.name || 'Penghuni Kost',
+          propertyTitle: meta.kostName || meta.propertyTitle || 'Kost RuangSinggah',
+          roomNumber: meta.roomNumber || meta.roomType || '1',
+          amount: Number(order.amount || order.total_price || 0),
+          paymentMethod: order.payment_method || 'QRIS / Payment Gateway',
+          orderId: order.id || orderId || '',
+          paidAt: order.created_at || new Date().toISOString(),
+          billingPeriod: meta.billingPeriod || 'Bulanan',
+          newPeriodStart: meta.newPeriodStart,
+          newPeriodEnd: meta.newPeriodEnd,
+          extraFee: meta.extraFee,
+          extraFeeName: meta.extraFeeName,
+          basePrice: meta.baseRent || meta.basePrice
+        }).then(res => {
+          if (res.success) {
+            console.log('Automated WhatsApp receipt successfully dispatched to tenant!');
+          }
+        }).catch(e => console.warn('Failed automated receipt WA dispatch:', e));
+      }
+    }
+  }, [order?.status]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
@@ -100,15 +135,13 @@ const OrderPaymentStatus: React.FC<OrderPaymentStatusProps> = ({ user }) => {
       <div className="min-h-screen flex items-center justify-center bg-white px-4">
         <div className="text-center max-w-md">
           <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500">
-             <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-             </svg>
+             <AlertCircle size={40} />
           </div>
           <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight mb-2">Oops!</h2>
           <p className="text-gray-500 font-medium mb-8">{error || 'Pesanan tidak ditemukan.'}</p>
           <button 
             onClick={() => navigate('/')}
-            className="w-full bg-gray-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-orange-500 transition-all"
+            className="w-full bg-gray-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-orange-500 transition-all cursor-pointer"
           >
             Kembali ke Beranda
           </button>
@@ -119,27 +152,61 @@ const OrderPaymentStatus: React.FC<OrderPaymentStatusProps> = ({ user }) => {
 
   // Pembayaran sudah PAID
   if (PAID_STATUSES.includes(order.status?.toUpperCase() || '')) {
+    const meta = order.metadata || {};
+    const totalAmount = Number(order.amount || order.total_price || 0);
+    const cleanId = (order.id || orderId || '').split('-').pop()?.toUpperCase();
+
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white px-4">
-        <div className="text-center max-w-md">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-orange-50/40 via-white to-slate-50 px-4 py-12">
+        <div className="text-center max-w-md w-full bg-white rounded-3xl p-8 border border-emerald-100 shadow-xl shadow-emerald-500/5">
           <div className="relative mb-6">
-            <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto text-green-500 relative z-10">
-               <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-               </svg>
+            <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto relative z-10 border border-emerald-200 shadow-sm">
+               <CheckCircle2 size={42} />
             </div>
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-28 bg-green-50 rounded-full animate-ping opacity-20"></div>
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-28 bg-emerald-100/50 rounded-full animate-ping opacity-30"></div>
           </div>
-          <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight mb-2">Pembayaran Sukses!</h2>
-          <p className="text-gray-500 font-medium mb-8">
-            Tagihan ini sudah diselesaikan. Silakan cek email Anda untuk rincian produk.
+
+          <span className="text-[10px] font-black tracking-widest text-emerald-700 uppercase bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full inline-block mb-2">
+            Transaksi Terverifikasi • LUNAS
+          </span>
+          <h2 className="text-2xl font-black text-gray-900 tracking-tight mb-1">Pembayaran Berhasil!</h2>
+          <p className="text-xs text-gray-500 font-medium mb-6">
+            Terima kasih! Pembayaran sewa Anda telah kami terima dan masa sewa kamar telah otomatis diperbarui.
           </p>
-          <button 
-            onClick={() => navigate('/')}
-            className="w-full bg-gray-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-orange-500 transition-all"
-          >
-            Lanjut ke Website
-          </button>
+
+          {/* Transaction Summary Card */}
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 text-left space-y-2.5 mb-6 text-xs">
+            <div className="flex justify-between items-center text-[11px]">
+              <span className="text-gray-400 font-bold uppercase tracking-wider">No. Kwitansi</span>
+              <span className="font-mono font-black text-gray-800">#INV-{cleanId}</span>
+            </div>
+            <div className="flex justify-between items-center text-[11px]">
+              <span className="text-gray-400 font-bold uppercase tracking-wider">Properti</span>
+              <span className="font-bold text-gray-900">{meta.kostName || meta.propertyTitle || 'Kost RuangSinggah'}</span>
+            </div>
+            <div className="flex justify-between items-center text-[11px] pt-2 border-t border-slate-200">
+              <span className="text-gray-500 font-black uppercase tracking-wider">Total Dibayar</span>
+              <span className="font-black text-emerald-700 font-mono text-sm">{FORMAT_CURRENCY(totalAmount)}</span>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-2.5">
+            <button
+              type="button"
+              onClick={() => navigate(`/receipt/${order.id || orderId}`)}
+              className="w-full py-3.5 bg-slate-900 hover:bg-black text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <FileText size={15} /> Buka Kwitansi Resmi (PDF/Cetak)
+            </button>
+            <button 
+              type="button"
+              onClick={() => navigate('/my-bookings/aktif')}
+              className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Home size={15} /> Akses Kost Saya <ArrowRight size={14} />
+            </button>
+          </div>
         </div>
       </div>
     );
