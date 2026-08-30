@@ -5047,4 +5047,129 @@ export async function deleteKostManagerPackage(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// --- PROPERTY REPORTS MANAGEMENT ---
+
+export interface PropertyReportItem {
+  id: string;
+  property_id: string;
+  reporter_id?: string;
+  reporter_name: string;
+  reporter_phone: string;
+  category: string;
+  description: string;
+  evidence_urls?: string[];
+  status: 'pending' | 'reviewed' | 'resolved' | 'dismissed' | string;
+  admin_notes?: string;
+  action_taken?: string;
+  created_at: string;
+  updated_at: string;
+  propertyName?: string;
+  propertyCity?: string;
+  propertyAddress?: string;
+  ownerName?: string;
+  ownerPhone?: string;
+  ownerUid?: string;
+}
+
+export async function getPropertyReports(statusFilter?: string): Promise<PropertyReportItem[]> {
+  try {
+    let query = supabase
+      .from('property_reports')
+      .select('*, properties(id, title, namaKost, city, address, owner_uid, users(id, name, full_name, phone))')
+      .order('created_at', { ascending: false });
+
+    if (statusFilter && statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.warn('Querying property_reports table returned error, checking complaints fallback:', error.message);
+      const { data: compData, error: compErr } = await supabase
+        .from('complaints')
+        .select('*')
+        .ilike('category', '%REPORT:%')
+        .order('created_at', { ascending: false });
+
+      if (compErr || !compData) return [];
+
+      return compData.map(c => ({
+        id: c.id,
+        property_id: c.kost_id || '',
+        reporter_name: c.user_name || 'Pengguna',
+        reporter_phone: c.user_phone || '',
+        category: (c.category || '').replace('REPORT: ', ''),
+        description: (c.description || '').replace('[ADUAN LISTING] ', ''),
+        evidence_urls: c.photos || [],
+        status: c.status || 'pending',
+        admin_notes: '',
+        action_taken: '',
+        created_at: c.created_at,
+        updated_at: c.updated_at,
+        propertyName: c.kost_name || 'Kost',
+        propertyCity: '',
+        propertyAddress: '',
+        ownerName: '',
+        ownerPhone: ''
+      }));
+    }
+
+    return (data || []).map((row: any) => {
+      const prop = row.properties;
+      const owner = Array.isArray(prop?.users) ? prop?.users[0] : prop?.users;
+      return {
+        id: row.id,
+        property_id: row.property_id,
+        reporter_id: row.reporter_id,
+        reporter_name: row.reporter_name || 'Pengguna',
+        reporter_phone: row.reporter_phone || '',
+        category: row.category,
+        description: row.description,
+        evidence_urls: row.evidence_urls || [],
+        status: row.status || 'pending',
+        admin_notes: row.admin_notes || '',
+        action_taken: row.action_taken || '',
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        propertyName: prop?.title || prop?.namaKost || 'Kost',
+        propertyCity: prop?.city || '',
+        propertyAddress: prop?.address || '',
+        ownerName: owner?.name || owner?.full_name || 'Mitra',
+        ownerPhone: owner?.phone || '',
+        ownerUid: prop?.owner_uid
+      };
+    });
+  } catch (err) {
+    console.error('Failed fetching property reports:', err);
+    return [];
+  }
+}
+
+export async function updatePropertyReportStatus(
+  reportId: string, 
+  status: 'pending' | 'reviewed' | 'resolved' | 'dismissed' | string,
+  adminNotes?: string,
+  actionTaken?: string
+): Promise<void> {
+  const now = getCurrentDate().toISOString();
+  const payload: any = {
+    status,
+    updated_at: now
+  };
+  if (adminNotes !== undefined) payload.admin_notes = adminNotes;
+  if (actionTaken !== undefined) payload.action_taken = actionTaken;
+
+  const { error } = await supabase
+    .from('property_reports')
+    .update(payload)
+    .eq('id', reportId);
+
+  if (error) {
+    await supabase
+      .from('complaints')
+      .update({ status: status === 'resolved' ? 'closed' : status })
+      .eq('id', reportId);
+  }
+}
+
 

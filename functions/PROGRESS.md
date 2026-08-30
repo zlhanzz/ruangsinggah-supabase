@@ -2,6 +2,45 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 226. Sistem Pelaporan Iklan Kost oleh Pengguna & Pusat Manajemen Laporan Properti di Dashboard Admin (`KostDetail.tsx`, `PropertyManagement.tsx`, `userService.ts`, `adminService.ts`, `emailService.ts`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar pada halaman publik listing kost disediakan tombol pelaporan aduan bagi pengguna (*"kalau misalnya ada tombol pembekuan atau banned artinya kita perlu ada tombol laporkan nggak sih di tampilan listing kost dari sisi user?"*) untuk melaporkan indikasi penipuan, ketidaksesuaian data, atau pelanggaran pada listing mandiri (*Self-Listing*).
+  - Diperlukan antarmuka manajemen aduan kost di Dashboard Admin (*"okee kita perlu juga manajemen laporan kost di dashboard admin"*).
+- **Implementasi Solusi**:
+  1. **Tombol & Modal Pelaporan Pengguna Publik ([`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx))**:
+     - Menambahkan tombol *"🚩 Laporkan Iklan Ini"* di kartu sticky sidebar dan banner card pengaduan di bagian bawah detail properti.
+     - Modal interaktif pengaduan pengguna:
+       - Pilihan kategori aduan: 🚨 *Indikasi Penipuan / Minta Transfer di Luar Sistem* (`fraud`), 🏷️ *Harga atau Fasilitas Tidak Sesuai Realita* (`mismatch`), 📍 *Lokasi Titik Peta Palsu / Tidak Akurat* (`fake_location`), 🚫 *Kost Sudah Penuh / Tidak Beroperasi* (`closed_or_full`), 🔞 *Foto / Konten Tidak Pantas* (`inappropriate`), 📝 *Lainnya* (`other`).
+       - Form input rincian masalah/kronologi kendala.
+       - Form input identitas pelapor: Nama dan No. WhatsApp aktif (otomatis terisi jika user sudah login).
+       - Unggah lampiran foto bukti dengan **konversi otomatis ke WebP di sisi klien** (`compressImageToWebP`).
+  2. **Notifikasi Email Real-Time ke Admin ([`emailService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/emailService.ts))**:
+     - Fungsi `notifyAdminPropertyReport` mengirimkan email terstruktur ke seluruh admin platform via FormSubmit memuat nama properti, ID kost, kategori aduan, deskripsi laporan, nama pelapor, WhatsApp pelapor, nama pemilik, dan tautan bukti foto.
+  3. **Layanan Data Backend ([`userService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts), [`adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts))**:
+     - `uploadReportEvidence`: Unggah foto bukti WebP ke storage bucket.
+     - `submitPropertyReport`: Simpan tiket aduan ke database Supabase `property_reports` (dengan fallback ke `complaints` format `REPORT:`).
+     - `getPropertyReports`: Mengambil daftar aduan listing lengkap dengan join data relasi properti dan pemilik kost.
+     - `updatePropertyReportStatus`: Pembaruan status aduan (`pending`, `reviewed`, `resolved`, `dismissed`) beserta catatan admin dan tindakan yang diambil (*action taken*).
+  4. **Pusat Manajemen Aduan di Dashboard Admin ([`PropertyManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyManagement.tsx))**:
+     - **Kartu Statistik & Tab Baru**: Tab `🚨 Aduan Pengguna` dengan badge counter jumlah aduan *pending* yang belum ditinjau.
+     - **Badge Peringatan Properti**: Menampilkan badge merah `🚨 X Aduan` pada tabel properti utama jika listing terkait memiliki aduan aktif.
+     - **Tabel Aduan Interaktif**: Kolom Properti yang dilaporkan + tombol chat pemilik, Kategori & Kronologi masalah, Kontak Pelapor (+ tombol 1-klik chat WhatsApp pelapor), Thumbnail bukti foto (dengan modal zoom preview foto besar), dan Status penanganan.
+     - **Aksi Cepat 1-Klik**:
+       - **"Bekukan Kost Ini" (Freeze)**: Membuka modal freeze dengan alasan penalti yang otomatis terisi dari laporan user dan menandai aduan sebagai telah ditindaklanjuti (`action_taken: 'frozen'`).
+       - **"Chat Pemilik Kost (WA)"**: Menghubungi mitra pemilik kost untuk klarifikasi.
+       - **"Chat Pelapor (WA)"**: Mengonfirmasi tindak lanjut kepada pelapor.
+       - **"Tandai Selesai"** (`resolved`) dan **"Abaikan"** (`dismissed`).
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/components/admin/PropertyManagement.tsx`
+  - `functions/public/userService.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/emailService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 24.82s, 0 error).
+
 ### 225. Pusat Moderasi & Supervisi Listing Kost Masuk di Dashboard Admin (`PropertyManagement.tsx`, `adminService.ts`, `Dashboard.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna menjelaskan perubahan paradigma sistem: Sebelumnya admin menginput dan mengunggah seluruh data kost secara manual, namun sekarang listing kost diposting langsung oleh pemilik kost / mitra secara mandiri melalui dashboard mitra.

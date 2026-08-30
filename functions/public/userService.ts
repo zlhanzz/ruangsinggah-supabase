@@ -988,3 +988,85 @@ export async function incrementPropertyView(propertyId: string) {
     console.warn('View counter increment failed (non-critical):', error);
   }
 }
+
+export interface PropertyReportPayload {
+  propertyId: string;
+  propertyName?: string;
+  reporterId?: string;
+  reporterName: string;
+  reporterPhone: string;
+  category: string;
+  categoryLabel?: string;
+  description: string;
+  evidenceUrls?: string[];
+}
+
+export async function uploadReportEvidence(file: File, propertyId: string): Promise<string> {
+  try {
+    const timestamp = Date.now();
+    const cleanFileName = `report_${propertyId.substring(0, 8)}_${timestamp}.webp`;
+    const filePath = `reports/${cleanFileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('properties')
+      .upload(filePath, file, {
+        contentType: 'image/webp',
+        upsert: true
+      });
+
+    if (uploadError) {
+      console.warn('Upload to properties bucket failed, trying survey-photos fallback:', uploadError.message);
+      const { error: fallbackError } = await supabase.storage
+        .from('survey-photos')
+        .upload(filePath, file, { contentType: 'image/webp', upsert: true });
+      if (fallbackError) throw fallbackError;
+      return supabase.storage.from('survey-photos').getPublicUrl(filePath).data.publicUrl;
+    }
+
+    return supabase.storage.from('properties').getPublicUrl(filePath).data.publicUrl;
+  } catch (err: any) {
+    console.error('Failed uploading report evidence:', err);
+    throw new Error('Gagal mengunggah foto bukti: ' + (err.message || err));
+  }
+}
+
+export async function submitPropertyReport(payload: PropertyReportPayload): Promise<void> {
+  const now = getCurrentDate().toISOString();
+  
+  const insertData = {
+    property_id: payload.propertyId,
+    reporter_id: payload.reporterId || null,
+    reporter_name: payload.reporterName,
+    reporter_phone: payload.reporterPhone,
+    category: payload.category,
+    description: payload.description,
+    evidence_urls: payload.evidenceUrls || [],
+    status: 'pending',
+    created_at: now,
+    updated_at: now
+  };
+
+  const { error } = await supabase
+    .from('property_reports')
+    .insert([insertData]);
+
+  if (error) {
+    console.error('Failed inserting property report into property_reports:', error);
+    // If the table property_reports isn't created in Supabase yet, we fallback to complaints table with type 'property_report'
+    const fallbackData = {
+      user_id: payload.reporterId || null,
+      user_name: payload.reporterName,
+      user_phone: payload.reporterPhone,
+      kost_id: payload.propertyId,
+      kost_name: payload.propertyName || 'Listing Properti',
+      category: `REPORT: ${payload.category}`,
+      description: `[ADUAN LISTING] ${payload.description}`,
+      photos: payload.evidenceUrls || [],
+      status: 'pending',
+      created_at: now,
+      updated_at: now
+    };
+    const { error: fallbackErr } = await supabase.from('complaints').insert([fallbackData]);
+    if (fallbackErr) throw error;
+  }
+}

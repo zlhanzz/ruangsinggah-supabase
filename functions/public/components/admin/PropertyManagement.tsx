@@ -1,11 +1,14 @@
-import React, { useState, useMemo } from 'react';
-import { BasicPropertyInfo, updatePropertyStatus, freezeProperty, unfreezeProperty, togglePropertyVerification } from '../../adminService';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+    BasicPropertyInfo, updatePropertyStatus, freezeProperty, unfreezeProperty,
+    togglePropertyVerification, PropertyReportItem, getPropertyReports, updatePropertyReportStatus
+} from '../../adminService';
 import {
     Building2, Home, Search, Filter, Sparkles, ShieldCheck, CheckCircle2,
     AlertCircle, Clock, X, Phone, ExternalLink, Eye, Trash2, Snowflake,
     Check, MapPin, Bed, User, RefreshCcw, SlidersHorizontal, ArrowRight,
     HelpCircle, ChevronRight, AlertTriangle, ShieldAlert, ArrowLeftRight,
-    Camera, Video, BookOpen, Wifi, Map, DollarSign, Calendar
+    Camera, Video, BookOpen, Wifi, Map, DollarSign, Calendar, Flag, MessageSquare
 } from 'lucide-react';
 
 interface PropertyManagementProps {
@@ -17,7 +20,7 @@ interface PropertyManagementProps {
     onDeleteProperty: (id: string, name: string) => void;
 }
 
-type TabType = 'all' | 'kostmanager' | 'self_listing' | 'pending_draft' | 'suspended';
+type TabType = 'all' | 'kostmanager' | 'self_listing' | 'pending_draft' | 'suspended' | 'reports';
 
 const PropertyManagement: React.FC<PropertyManagementProps> = ({
     adminListings,
@@ -32,13 +35,33 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
     const [searchQuery, setSearchQuery] = useState('');
     const [typeFilter, setTypeFilter] = useState<'all' | 'Putra' | 'Putri' | 'Campur'>('all');
     const [cityFilter, setCityFilter] = useState<string>('all');
+    const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'pending' | 'resolved' | 'dismissed'>('all');
     const [isRefreshing, setIsRefreshing] = useState(false);
+
+    // ── Reports State ─────────────────────────────────────────────────────────
+    const [reports, setReports] = useState<PropertyReportItem[]>([]);
+    const [selectedEvidenceForZoom, setSelectedEvidenceForZoom] = useState<string | null>(null);
 
     // ── Action Modals State ───────────────────────────────────────────────────
     const [selectedPropertyForReview, setSelectedPropertyForReview] = useState<BasicPropertyInfo | null>(null);
     const [propertyToFreeze, setPropertyToFreeze] = useState<BasicPropertyInfo | null>(null);
     const [freezeReason, setFreezeReason] = useState('');
+    const [relatedReportIdForFreeze, setRelatedReportIdForFreeze] = useState<string | null>(null);
     const [isProcessingAction, setIsProcessingAction] = useState(false);
+
+    // Load Reports on Mount
+    const loadReportsData = async () => {
+        try {
+            const data = await getPropertyReports();
+            setReports(data);
+        } catch (e) {
+            console.error('Error loading reports:', e);
+        }
+    };
+
+    useEffect(() => {
+        loadReportsData();
+    }, []);
 
     // Dynamic unique cities for dropdown
     const availableCities = useMemo(() => {
@@ -48,6 +71,17 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
         return Array.from(new Set(cities)).sort();
     }, [adminListings]);
 
+    // Active reports count mapped by property ID
+    const pendingReportsCountMap = useMemo(() => {
+        const map: Record<string, number> = {};
+        reports.forEach(r => {
+            if (r.status === 'pending') {
+                map[r.property_id] = (map[r.property_id] || 0) + 1;
+            }
+        });
+        return map;
+    }, [reports]);
+
     // ── Metric Counters ───────────────────────────────────────────────────────
     const stats = useMemo(() => {
         const total = adminListings.length;
@@ -56,6 +90,7 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
         const publishedCount = adminListings.filter(p => p.status === 'published').length;
         const pendingOrDraftCount = adminListings.filter(p => p.status === 'draft' || p.status === 'pending_review' || !p.status).length;
         const suspendedCount = adminListings.filter(p => p.status === 'suspended').length;
+        const pendingReportsCount = reports.filter(r => r.status === 'pending').length;
 
         return {
             total,
@@ -63,9 +98,10 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
             selfCount,
             publishedCount,
             pendingOrDraftCount,
-            suspendedCount
+            suspendedCount,
+            pendingReportsCount
         };
-    }, [adminListings]);
+    }, [adminListings, reports]);
 
     // ── Filtered Listings ─────────────────────────────────────────────────────
     const filteredListings = useMemo(() => {
@@ -100,11 +136,30 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
         });
     }, [adminListings, currentTab, typeFilter, cityFilter, searchQuery]);
 
+    // ── Filtered Reports ──────────────────────────────────────────────────────
+    const filteredReports = useMemo(() => {
+        return reports.filter(r => {
+            if (reportStatusFilter !== 'all' && r.status !== reportStatusFilter) return false;
+
+            if (searchQuery.trim()) {
+                const q = searchQuery.toLowerCase();
+                const matchProp = (r.propertyName || '').toLowerCase().includes(q);
+                const matchReporter = (r.reporter_name || '').toLowerCase().includes(q);
+                const matchPhone = (r.reporter_phone || '').includes(q);
+                const matchDesc = (r.description || '').toLowerCase().includes(q);
+                const matchCat = (r.category || '').toLowerCase().includes(q);
+                if (!matchProp && !matchReporter && !matchPhone && !matchDesc && !matchCat) return false;
+            }
+
+            return true;
+        });
+    }, [reports, reportStatusFilter, searchQuery]);
+
     // ── Action Handlers ───────────────────────────────────────────────────────
     const handleRefresh = async () => {
         setIsRefreshing(true);
         try {
-            await refreshData();
+            await Promise.all([refreshData(), loadReportsData()]);
         } finally {
             setIsRefreshing(false);
         }
@@ -144,9 +199,10 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
         }
     };
 
-    const handleOpenFreeze = (prop: BasicPropertyInfo) => {
+    const handleOpenFreeze = (prop: BasicPropertyInfo, reasonPrefill = '', reportId?: string) => {
         setPropertyToFreeze(prop);
-        setFreezeReason(prop.suspendReason || '');
+        setFreezeReason(reasonPrefill || prop.suspendReason || '');
+        setRelatedReportIdForFreeze(reportId || null);
     };
 
     const handleConfirmFreeze = async () => {
@@ -159,12 +215,25 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
         setIsProcessingAction(true);
         try {
             await freezeProperty(propertyToFreeze.id, freezeReason.trim());
+            
+            // If this freeze was triggered by a user report, mark the report as resolved with action_taken
+            if (relatedReportIdForFreeze) {
+                await updatePropertyReportStatus(
+                    relatedReportIdForFreeze,
+                    'resolved',
+                    `Listing dibekukan oleh admin dengan catatan: ${freezeReason.trim()}`,
+                    'frozen'
+                );
+                await loadReportsData();
+            }
+
             await refreshData();
             if (selectedPropertyForReview?.id === propertyToFreeze.id) {
                 setSelectedPropertyForReview(prev => prev ? { ...prev, status: 'suspended', suspendReason: freezeReason.trim() } : null);
             }
             setPropertyToFreeze(null);
             setFreezeReason('');
+            setRelatedReportIdForFreeze(null);
             alert('Listing berhasil dibekukan.');
         } catch (e: any) {
             alert('Gagal membekukan listing: ' + (e.message || e));
@@ -212,7 +281,7 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
 
     const handleOpenWhatsApp = (phone?: string, kostTitle?: string, isSuspended?: boolean, reason?: string) => {
         if (!phone) {
-            alert('Nomor WhatsApp pemilik tidak tersedia.');
+            alert('Nomor WhatsApp tidak tersedia.');
             return;
         }
         let cleanPhone = phone.replace(/\D/g, '');
@@ -226,6 +295,41 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
 
         const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
         window.open(url, '_blank');
+    };
+
+    const handleWhatsAppReporter = (phone: string, kostTitle: string, category: string) => {
+        let cleanPhone = phone.replace(/\D/g, '');
+        if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+        if (!cleanPhone.startsWith('62')) cleanPhone = '62' + cleanPhone;
+
+        const message = `Halo Kak, terima kasih telah melaporkan kendala pada iklan "${kostTitle}" di RuangSinggah.id terkait "${category}". Laporan Kakak sedang kami tindaklanjuti bersama pemilik properti.`;
+        const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+        window.open(url, '_blank');
+    };
+
+    const handleUpdateReportStatus = async (reportId: string, status: string) => {
+        setIsProcessingAction(true);
+        try {
+            await updatePropertyReportStatus(reportId, status);
+            await loadReportsData();
+            alert(`Status laporan diperbarui ke ${status}.`);
+        } catch (e: any) {
+            alert('Gagal memperbarui status laporan: ' + (e.message || e));
+        } finally {
+            setIsProcessingAction(false);
+        }
+    };
+
+    const handleFreezeFromReport = (report: PropertyReportItem) => {
+        const targetProp = adminListings.find(p => p.id === report.property_id) || {
+            id: report.property_id,
+            title: report.propertyName || 'Kost',
+            namaKost: report.propertyName || 'Kost',
+            status: 'published'
+        } as BasicPropertyInfo;
+
+        const defaultReason = `[Aduan User: ${report.category}] ${report.description}`;
+        handleOpenFreeze(targetProp, defaultReason, report.id);
     };
 
     return (
@@ -251,7 +355,7 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
                         Pengawasan Kost Masuk
                     </h1>
                     <p className="text-xs text-gray-500 font-medium max-w-2xl">
-                        Pantau listing yang diposting langsung oleh para pemilik kost/mitra, tinjau kelayakan data, lakukan verifikasi, atau bekukan sementara jika ada data yang perlu direvisi.
+                        Pantau listing yang diposting langsung oleh para pemilik kost/mitra, tinjau kelayakan data, lakukan verifikasi, pantau aduan pengguna, atau bekukan sementara jika ada data yang perlu direvisi.
                     </p>
                 </div>
 
@@ -259,7 +363,7 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
                     <button
                         onClick={handleRefresh}
                         disabled={isRefreshing || loading}
-                        className="px-5 py-3 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+                        className="px-5 py-3 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
                         title="Segarkan Data"
                     >
                         <RefreshCcw size={14} className={isRefreshing || loading ? 'animate-spin' : ''} />
@@ -269,90 +373,107 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
             </div>
 
             {/* ── Stat Cards (Ringkasan Metrik) ── */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
                 {/* 1. Total Listing */}
                 <div
                     onClick={() => setCurrentTab('all')}
-                    className={`bg-white p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md ${
+                    className={`bg-white p-4 sm:p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md ${
                         currentTab === 'all' ? 'border-orange-500 ring-2 ring-orange-500/20' : 'border-gray-100'
                     }`}
                 >
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Properti</span>
-                        <div className="w-8 h-8 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center">
-                            <Building2 size={16} />
+                        <div className="w-7 h-7 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center">
+                            <Building2 size={14} />
                         </div>
                     </div>
                     <p className="text-2xl font-black text-gray-900 tracking-tight">{stats.total}</p>
-                    <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase tracking-wider">Seluruh Listing</p>
+                    <p className="text-[9px] text-gray-400 font-bold mt-1 uppercase tracking-wider">Seluruh Listing</p>
                 </div>
 
                 {/* 2. KostManager (Terverifikasi) */}
                 <div
                     onClick={() => setCurrentTab('kostmanager')}
-                    className={`bg-white p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md ${
+                    className={`bg-white p-4 sm:p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md ${
                         currentTab === 'kostmanager' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-gray-100'
                     }`}
                 >
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">KostManager</span>
-                        <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                            <Sparkles size={16} />
+                        <div className="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                            <Sparkles size={14} />
                         </div>
                     </div>
                     <p className="text-2xl font-black text-emerald-600 tracking-tight">{stats.kmCount}</p>
-                    <p className="text-[10px] text-emerald-600/80 font-bold mt-1 uppercase tracking-wider">Terverifikasi Survey</p>
+                    <p className="text-[9px] text-emerald-600/80 font-bold mt-1 uppercase tracking-wider">Terverifikasi Survey</p>
                 </div>
 
                 {/* 3. Self Listing (Mandiri) */}
                 <div
                     onClick={() => setCurrentTab('self_listing')}
-                    className={`bg-white p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md ${
+                    className={`bg-white p-4 sm:p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md ${
                         currentTab === 'self_listing' ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-gray-100'
                     }`}
                 >
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">Self Listing</span>
-                        <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                            <Home size={16} />
+                        <div className="w-7 h-7 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                            <Home size={14} />
                         </div>
                     </div>
                     <p className="text-2xl font-black text-blue-600 tracking-tight">{stats.selfCount}</p>
-                    <p className="text-[10px] text-blue-600/80 font-bold mt-1 uppercase tracking-wider">Mandiri Oleh Mitra</p>
+                    <p className="text-[9px] text-blue-600/80 font-bold mt-1 uppercase tracking-wider">Mandiri Oleh Mitra</p>
                 </div>
 
                 {/* 4. Menunggu Review / Draft */}
                 <div
                     onClick={() => setCurrentTab('pending_draft')}
-                    className={`bg-white p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md ${
+                    className={`bg-white p-4 sm:p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md ${
                         currentTab === 'pending_draft' ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-gray-100'
                     }`}
                 >
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] font-black uppercase tracking-widest text-amber-600">Draft / Review</span>
-                        <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                            <Clock size={16} />
+                        <div className="w-7 h-7 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                            <Clock size={14} />
                         </div>
                     </div>
                     <p className="text-2xl font-black text-amber-600 tracking-tight">{stats.pendingOrDraftCount}</p>
-                    <p className="text-[10px] text-amber-600/80 font-bold mt-1 uppercase tracking-wider">Belum Tayang</p>
+                    <p className="text-[9px] text-amber-600/80 font-bold mt-1 uppercase tracking-wider">Belum Tayang</p>
                 </div>
 
                 {/* 5. Dibekukan (Penalti / Revisi) */}
                 <div
                     onClick={() => setCurrentTab('suspended')}
-                    className={`bg-white p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md col-span-2 lg:col-span-1 ${
+                    className={`bg-white p-4 sm:p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md ${
                         currentTab === 'suspended' ? 'border-rose-500 ring-2 ring-rose-500/20' : 'border-gray-100'
                     }`}
                 >
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] font-black uppercase tracking-widest text-rose-600">Dibekukan</span>
-                        <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
-                            <Snowflake size={16} />
+                        <div className="w-7 h-7 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                            <Snowflake size={14} />
                         </div>
                     </div>
                     <p className="text-2xl font-black text-rose-600 tracking-tight">{stats.suspendedCount}</p>
-                    <p className="text-[10px] text-rose-600/80 font-bold mt-1 uppercase tracking-wider">Penalti / Butuh Edit</p>
+                    <p className="text-[9px] text-rose-600/80 font-bold mt-1 uppercase tracking-wider">Penalti / Revisi</p>
+                </div>
+
+                {/* 6. Laporan Pengguna (Aduan Masuk) */}
+                <div
+                    onClick={() => setCurrentTab('reports')}
+                    className={`bg-white p-4 sm:p-5 rounded-3xl border transition-all cursor-pointer shadow-sm hover:shadow-md ${
+                        currentTab === 'reports' ? 'border-red-600 ring-2 ring-red-600/20' : 'border-gray-100'
+                    }`}
+                >
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-red-600">Aduan User</span>
+                        <div className="w-7 h-7 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+                            <Flag size={14} />
+                        </div>
+                    </div>
+                    <p className="text-2xl font-black text-red-600 tracking-tight">{stats.pendingReportsCount}</p>
+                    <p className="text-[9px] text-red-600/80 font-bold mt-1 uppercase tracking-wider">Perlu Ditinjau</p>
                 </div>
             </div>
 
@@ -365,12 +486,13 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
                         { id: 'kostmanager', label: 'KostManager (Terverifikasi)', count: stats.kmCount, badgeColor: 'bg-emerald-100 text-emerald-700' },
                         { id: 'self_listing', label: 'Self Listing (Mandiri)', count: stats.selfCount, badgeColor: 'bg-blue-100 text-blue-700' },
                         { id: 'pending_draft', label: 'Draft / Belum Tayang', count: stats.pendingOrDraftCount, badgeColor: 'bg-amber-100 text-amber-700' },
-                        { id: 'suspended', label: 'Dibekukan / Penalti', count: stats.suspendedCount, badgeColor: 'bg-rose-100 text-rose-700' }
+                        { id: 'suspended', label: 'Dibekukan / Penalti', count: stats.suspendedCount, badgeColor: 'bg-rose-100 text-rose-700' },
+                        { id: 'reports', label: '🚨 Aduan Pengguna', count: stats.pendingReportsCount, badgeColor: 'bg-red-100 text-red-700 font-extrabold animate-pulse' }
                     ].map(tab => (
                         <button
                             key={tab.id}
                             onClick={() => setCurrentTab(tab.id as TabType)}
-                            className={`px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 shrink-0 ${
+                            className={`px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 shrink-0 cursor-pointer ${
                                 currentTab === tab.id
                                     ? 'bg-gray-900 text-white shadow-md'
                                     : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
@@ -388,13 +510,13 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
 
                 {/* Search & Dropdown Filters */}
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
-                    <div className="sm:col-span-6 relative">
+                    <div className={currentTab === 'reports' ? "sm:col-span-8 relative" : "sm:col-span-6 relative"}>
                         <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
                             type="text"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
-                            placeholder="Cari nama kost, pemilik, WhatsApp, atau kota..."
+                            placeholder={currentTab === 'reports' ? "Cari nama kost, pelapor, no. WA, atau kategori..." : "Cari nama kost, pemilik, WhatsApp, atau kota..."}
                             className="w-full pl-11 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-all"
                         />
                         {searchQuery && (
@@ -407,281 +529,477 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
                         )}
                     </div>
 
-                    <div className="sm:col-span-3">
-                        <select
-                            value={typeFilter}
-                            onChange={e => setTypeFilter(e.target.value as any)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-800 focus:bg-white focus:border-orange-500 outline-none transition-all cursor-pointer"
-                        >
-                            <option value="all">Tipe: Semua (Putra/Putri/Campur)</option>
-                            <option value="Putra">Kost Putra</option>
-                            <option value="Putri">Kost Putri</option>
-                            <option value="Campur">Kost Campur</option>
-                        </select>
-                    </div>
+                    {currentTab !== 'reports' ? (
+                        <>
+                            <div className="sm:col-span-3">
+                                <select
+                                    value={typeFilter}
+                                    onChange={e => setTypeFilter(e.target.value as any)}
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-800 focus:bg-white focus:border-orange-500 outline-none transition-all cursor-pointer"
+                                >
+                                    <option value="all">Tipe: Semua (Putra/Putri/Campur)</option>
+                                    <option value="Putra">Kost Putra</option>
+                                    <option value="Putri">Kost Putri</option>
+                                    <option value="Campur">Kost Campur</option>
+                                </select>
+                            </div>
 
-                    <div className="sm:col-span-3">
-                        <select
-                            value={cityFilter}
-                            onChange={e => setCityFilter(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-800 focus:bg-white focus:border-orange-500 outline-none transition-all cursor-pointer"
-                        >
-                            <option value="all">Kota: Semua Wilayah</option>
-                            {availableCities.map(city => (
-                                <option key={city} value={city}>{city}</option>
-                            ))}
-                        </select>
-                    </div>
+                            <div className="sm:col-span-3">
+                                <select
+                                    value={cityFilter}
+                                    onChange={e => setCityFilter(e.target.value)}
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-800 focus:bg-white focus:border-orange-500 outline-none transition-all cursor-pointer"
+                                >
+                                    <option value="all">Kota: Semua Wilayah</option>
+                                    {availableCities.map(city => (
+                                        <option key={city} value={city}>{city}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="sm:col-span-4">
+                            <select
+                                value={reportStatusFilter}
+                                onChange={e => setReportStatusFilter(e.target.value as any)}
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-800 focus:bg-white focus:border-orange-500 outline-none transition-all cursor-pointer"
+                            >
+                                <option value="all">Status: Semua Aduan</option>
+                                <option value="pending">Menunggu Ditinjau (Pending)</option>
+                                <option value="resolved">Telah Ditindaklanjuti (Resolved)</option>
+                                <option value="dismissed">Diabaikan / Tidak Valid (Dismissed)</option>
+                            </select>
+                        </div>
+                    )}
                 </div>
             </div>
 
-            {/* ── Table Moderasi Listing ── */}
-            <div className="bg-white border border-gray-100 rounded-[2.5rem] overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-gray-500">
-                        <thead className="bg-gray-50/80 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
-                            <tr>
-                                <th className="px-6 py-4">Informasi Kost</th>
-                                <th className="px-6 py-4">Status & Model</th>
-                                <th className="px-6 py-4">Pemilik / Mitra</th>
-                                <th className="px-6 py-4">Tarif & Kamar</th>
-                                <th className="px-6 py-4">Lokasi</th>
-                                <th className="px-6 py-4 text-right">Moderasi / Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {filteredListings.map(item => {
-                                const isKm = Boolean(item.isManaged);
-                                const isSuspended = item.status === 'suspended';
-                                const isPublished = item.status === 'published';
-                                const isDraft = item.status === 'draft' || item.status === 'pending_review' || !item.status;
-                                const firstPhoto = item.imageUrls?.[0] || 'https://via.placeholder.com/150';
-                                const totalRooms = item.roomTypes?.length || 0;
+            {/* ── TABEL 1: DAFTAR PROPERTI UTAMA (Jika tab !== 'reports') ── */}
+            {currentTab !== 'reports' && (
+                <div className="bg-white border border-gray-100 rounded-[2.5rem] overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-gray-500">
+                            <thead className="bg-gray-50/80 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                                <tr>
+                                    <th className="px-6 py-4">Informasi Kost</th>
+                                    <th className="px-6 py-4">Status & Model</th>
+                                    <th className="px-6 py-4">Pemilik / Mitra</th>
+                                    <th className="px-6 py-4">Tarif & Kamar</th>
+                                    <th className="px-6 py-4">Lokasi</th>
+                                    <th className="px-6 py-4 text-right">Moderasi / Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {filteredListings.map(item => {
+                                    const isKm = Boolean(item.isManaged);
+                                    const isSuspended = item.status === 'suspended';
+                                    const isPublished = item.status === 'published';
+                                    const isDraft = item.status === 'draft' || item.status === 'pending_review' || !item.status;
+                                    const firstPhoto = item.imageUrls?.[0] || 'https://via.placeholder.com/150';
+                                    const totalRooms = item.roomTypes?.length || 0;
+                                    const pendingReportCount = pendingReportsCountMap[item.id] || 0;
 
-                                return (
-                                    <tr key={item.id} className="hover:bg-orange-50/20 transition-colors">
-                                        {/* 1. Info Kost */}
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="relative w-14 h-14 rounded-2xl overflow-hidden bg-gray-100 shrink-0 border border-gray-100 shadow-sm">
-                                                    <img
-                                                        src={firstPhoto}
-                                                        alt={item.title || item.namaKost}
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                    {isKm && (
-                                                        <div className="absolute top-1 left-1 bg-emerald-600 text-white rounded-md p-0.5 shadow-sm" title="Terkelola KostManager">
-                                                            <Sparkles size={10} />
+                                    return (
+                                        <tr key={item.id} className="hover:bg-orange-50/20 transition-colors">
+                                            {/* 1. Info Kost */}
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="relative w-14 h-14 rounded-2xl overflow-hidden bg-gray-100 shrink-0 border border-gray-100 shadow-sm">
+                                                        <img
+                                                            src={firstPhoto}
+                                                            alt={item.title || item.namaKost}
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                        {isKm && (
+                                                            <div className="absolute top-1 left-1 bg-emerald-600 text-white rounded-md p-0.5 shadow-sm" title="Terkelola KostManager">
+                                                                <Sparkles size={10} />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <p className="font-black text-gray-900 text-sm hover:text-orange-600 transition-colors cursor-pointer" onClick={() => setSelectedPropertyForReview(item)}>
+                                                                {item.title || item.namaKost || 'Kost Tanpa Nama'}
+                                                            </p>
+                                                            {item.isVerified && (
+                                                                <span title="Terverifikasi" className="text-blue-500 inline-flex">
+                                                                    <CheckCircle2 size={14} fill="#3b82f6" className="text-white" />
+                                                                </span>
+                                                            )}
+                                                            {pendingReportCount > 0 && (
+                                                                <span
+                                                                    onClick={() => { setCurrentTab('reports'); setSearchQuery(item.title || item.namaKost || ''); }}
+                                                                    className="px-2 py-0.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-md text-[9px] font-black uppercase tracking-wider inline-flex items-center gap-1 cursor-pointer transition-colors"
+                                                                    title="Ada aduan pengguna, klik untuk melihat"
+                                                                >
+                                                                    <Flag size={10} /> {pendingReportCount} Aduan
+                                                                </span>
+                                                            )}
                                                         </div>
-                                                    )}
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md text-[10px] font-bold">
+                                                                {item.type || 'Campur'}
+                                                            </span>
+                                                            <span className="text-[11px] text-gray-400 font-medium">
+                                                                {totalRooms} Tipe Kamar
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div className="space-y-1">
-                                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                                        <p className="font-black text-gray-900 text-sm hover:text-orange-600 transition-colors cursor-pointer" onClick={() => setSelectedPropertyForReview(item)}>
-                                                            {item.title || item.namaKost || 'Kost Tanpa Nama'}
-                                                        </p>
-                                                        {item.isVerified && (
-                                                            <span title="Terverifikasi" className="text-blue-500 inline-flex">
-                                                                <CheckCircle2 size={14} fill="#3b82f6" className="text-white" />
+                                            </td>
+
+                                            {/* 2. Status & Model */}
+                                            <td className="px-6 py-4">
+                                                <div className="space-y-1.5">
+                                                    <div>
+                                                        {isPublished && (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                                                                <CheckCircle2 size={11} /> Aktif / Terbit
+                                                            </span>
+                                                        )}
+                                                        {isDraft && (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                                                                <Clock size={11} /> Draft / Pending
+                                                            </span>
+                                                        )}
+                                                        {isSuspended && (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl text-[10px] font-black uppercase tracking-wider" title={item.suspendReason}>
+                                                                <Snowflake size={11} /> Dibekukan
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md text-[10px] font-bold">
-                                                            {item.type || 'Campur'}
-                                                        </span>
-                                                        <span className="text-[11px] text-gray-400 font-medium">
-                                                            {totalRooms} Tipe Kamar
-                                                        </span>
+
+                                                    <div>
+                                                        {isKm ? (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm">
+                                                                <Sparkles size={10} /> KostManager
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-100 rounded-lg text-[9px] font-black uppercase tracking-widest">
+                                                                <Home size={10} /> Self Listing
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
-                                            </div>
-                                        </td>
+                                            </td>
 
-                                        {/* 2. Status & Model */}
-                                        <td className="px-6 py-4">
-                                            <div className="space-y-1.5">
-                                                {/* Moderation Status */}
-                                                <div>
-                                                    {isPublished && (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-[10px] font-black uppercase tracking-wider">
-                                                            <CheckCircle2 size={11} /> Aktif / Terbit
-                                                        </span>
-                                                    )}
-                                                    {isDraft && (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-[10px] font-black uppercase tracking-wider">
-                                                            <Clock size={11} /> Draft / Pending
-                                                        </span>
-                                                    )}
-                                                    {isSuspended && (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl text-[10px] font-black uppercase tracking-wider" title={item.suspendReason}>
-                                                            <Snowflake size={11} /> Dibekukan
-                                                        </span>
+                                            {/* 3. Pemilik / Mitra */}
+                                            <td className="px-6 py-4">
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <User size={13} className="text-gray-400" />
+                                                        <p className="font-bold text-gray-900 text-xs truncate max-w-[160px]">
+                                                            {item.ownerName || 'Mitra'}
+                                                        </p>
+                                                        {item.ownerVerificationStatus === 'verified' && (
+                                                            <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-1 py-0.2 rounded" title="Mitra Terverifikasi KTP">
+                                                                KTP ✓
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {(item.ownerPhone || item.omnichannelContactPhone) && (
+                                                        <button
+                                                            onClick={() => handleOpenWhatsApp(item.ownerPhone || item.omnichannelContactPhone, item.title || item.namaKost, isSuspended, item.suspendReason)}
+                                                            className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100 transition-colors cursor-pointer"
+                                                        >
+                                                            <Phone size={11} />
+                                                            <span>{item.ownerPhone || item.omnichannelContactPhone}</span>
+                                                        </button>
                                                     )}
                                                 </div>
+                                            </td>
 
-                                                {/* Model: KostManager vs Self */}
-                                                <div>
-                                                    {isKm ? (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm">
-                                                            <Sparkles size={10} /> KostManager
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-100 rounded-lg text-[9px] font-black uppercase tracking-widest">
-                                                            <Home size={10} /> Self Listing
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </td>
+                                            {/* 4. Tarif & Kamar */}
+                                            <td className="px-6 py-4">
+                                                <p className="font-black text-gray-900 text-xs">
+                                                    {FORMAT_CURRENCY(item.price || 0)}
+                                                </p>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
+                                                    Mulai / Bulan
+                                                </p>
+                                            </td>
 
-                                        {/* 3. Pemilik / Mitra */}
-                                        <td className="px-6 py-4">
-                                            <div className="space-y-1">
-                                                <div className="flex items-center gap-1.5">
-                                                    <User size={13} className="text-gray-400" />
-                                                    <p className="font-bold text-gray-900 text-xs truncate max-w-[160px]">
-                                                        {item.ownerName || 'Mitra'}
+                                            {/* 5. Lokasi */}
+                                            <td className="px-6 py-4">
+                                                <div className="space-y-0.5">
+                                                    <p className="font-bold text-gray-900 text-xs flex items-center gap-1">
+                                                        <MapPin size={11} className="text-orange-500 shrink-0" />
+                                                        {item.city || 'Kota -'}
                                                     </p>
-                                                    {item.ownerVerificationStatus === 'verified' && (
-                                                        <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-1 py-0.2 rounded" title="Mitra Terverifikasi KTP">
-                                                            KTP ✓
-                                                        </span>
-                                                    )}
+                                                    <p className="text-[11px] text-gray-400 font-medium truncate max-w-[150px]">
+                                                        {item.area || item.address || '-'}
+                                                    </p>
                                                 </div>
+                                            </td>
 
-                                                {(item.ownerPhone || item.omnichannelContactPhone) && (
+                                            {/* 6. Moderasi / Aksi */}
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                                    {/* Tinjau Detail */}
                                                     <button
-                                                        onClick={() => handleOpenWhatsApp(item.ownerPhone || item.omnichannelContactPhone, item.title || item.namaKost, isSuspended, item.suspendReason)}
-                                                        className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100 transition-colors"
+                                                        onClick={() => setSelectedPropertyForReview(item)}
+                                                        className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
+                                                        title="Tinjau Detail Properti"
                                                     >
-                                                        <Phone size={11} />
-                                                        <span>{item.ownerPhone || item.omnichannelContactPhone}</span>
+                                                        <Eye size={15} />
                                                     </button>
-                                                )}
+
+                                                    {/* Buka Halaman Publik */}
+                                                    <button
+                                                        onClick={() => window.open(`/kost/${item.id}`, '_blank')}
+                                                        className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl transition-all active:scale-95 cursor-pointer"
+                                                        title="Kunjungi Halaman Publik"
+                                                    >
+                                                        <ExternalLink size={15} />
+                                                    </button>
+
+                                                    {/* Approval / Toggle Publish */}
+                                                    {isPublished ? (
+                                                        <button
+                                                            onClick={() => handleUnpublishToDraft(item)}
+                                                            className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer"
+                                                            title="Tarik ke Draft"
+                                                        >
+                                                            Draftkan
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => handlePublish(item)}
+                                                            className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 cursor-pointer"
+                                                            title="Publikasikan Listing"
+                                                        >
+                                                            Publish
+                                                        </button>
+                                                    )}
+
+                                                    {/* Freeze / Unfreeze */}
+                                                    {isSuspended ? (
+                                                        <button
+                                                            onClick={() => handleUnfreeze(item)}
+                                                            className="px-2.5 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+                                                            title="Buka Pembekuan"
+                                                        >
+                                                            Buka Blokir
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => handleOpenFreeze(item)}
+                                                            className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition-all active:scale-95 cursor-pointer"
+                                                            title="Bekukan Listing (Penalti / Revisi)"
+                                                        >
+                                                            <Snowflake size={15} />
+                                                        </button>
+                                                    )}
+
+                                                    {/* Transfer Kepemilikan */}
+                                                    <button
+                                                        onClick={() => onTransferProperty(item)}
+                                                        className="p-2 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-xl transition-all active:scale-95 cursor-pointer"
+                                                        title="Transfer Kepemilikan ke Mitra Lain"
+                                                    >
+                                                        <ArrowLeftRight size={15} />
+                                                    </button>
+
+                                                    {/* Hapus Properti */}
+                                                    <button
+                                                        onClick={() => onDeleteProperty(item.id, item.namaKost || item.title || 'Kost')}
+                                                        className="p-2 bg-gray-50 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded-xl transition-all active:scale-95 cursor-pointer"
+                                                        title="Hapus Properti"
+                                                    >
+                                                        <Trash2 size={15} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+
+                                {filteredListings.length === 0 && (
+                                    <tr>
+                                        <td colSpan={6} className="px-6 py-16 text-center">
+                                            <div className="w-16 h-16 bg-gray-50 text-gray-300 rounded-3xl flex items-center justify-center mx-auto mb-3">
+                                                <Building2 size={32} />
                                             </div>
-                                        </td>
-
-                                        {/* 4. Tarif & Kamar */}
-                                        <td className="px-6 py-4">
-                                            <p className="font-black text-gray-900 text-xs">
-                                                {FORMAT_CURRENCY(item.price || 0)}
-                                            </p>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
-                                                Mulai / Bulan
-                                            </p>
-                                        </td>
-
-                                        {/* 5. Lokasi */}
-                                        <td className="px-6 py-4">
-                                            <div className="space-y-0.5">
-                                                <p className="font-bold text-gray-900 text-xs flex items-center gap-1">
-                                                    <MapPin size={11} className="text-orange-500 shrink-0" />
-                                                    {item.city || 'Kota -'}
-                                                </p>
-                                                <p className="text-[11px] text-gray-400 font-medium truncate max-w-[150px]">
-                                                    {item.area || item.address || '-'}
-                                                </p>
-                                            </div>
-                                        </td>
-
-                                        {/* 6. Moderasi / Aksi */}
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                                                {/* Tinjau Detail */}
-                                                <button
-                                                    onClick={() => setSelectedPropertyForReview(item)}
-                                                    className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-all shadow-sm active:scale-95"
-                                                    title="Tinjau Detail Properti"
-                                                >
-                                                    <Eye size={15} />
-                                                </button>
-
-                                                {/* Buka Halaman Publik */}
-                                                <button
-                                                    onClick={() => window.open(`/kost/${item.id}`, '_blank')}
-                                                    className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl transition-all active:scale-95"
-                                                    title="Kunjungi Halaman Publik"
-                                                >
-                                                    <ExternalLink size={15} />
-                                                </button>
-
-                                                {/* Approval / Toggle Publish */}
-                                                {isPublished ? (
-                                                    <button
-                                                        onClick={() => handleUnpublishToDraft(item)}
-                                                        className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-xs font-bold transition-all active:scale-95"
-                                                        title="Tarik ke Draft"
-                                                    >
-                                                        Draftkan
-                                                    </button>
-                                                ) : (
-                                                    <button
-                                                        onClick={() => handlePublish(item)}
-                                                        className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm active:scale-95"
-                                                        title="Publikasikan Listing"
-                                                    >
-                                                        Publish
-                                                    </button>
-                                                )}
-
-                                                {/* Freeze / Unfreeze */}
-                                                {isSuspended ? (
-                                                    <button
-                                                        onClick={() => handleUnfreeze(item)}
-                                                        className="px-2.5 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
-                                                        title="Buka Pembekuan"
-                                                    >
-                                                        Buka Blokir
-                                                    </button>
-                                                ) : (
-                                                    <button
-                                                        onClick={() => handleOpenFreeze(item)}
-                                                        className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition-all active:scale-95"
-                                                        title="Bekukan Listing (Penalti / Revisi)"
-                                                    >
-                                                        <Snowflake size={15} />
-                                                    </button>
-                                                )}
-
-                                                {/* Transfer Kepemilikan */}
-                                                <button
-                                                    onClick={() => onTransferProperty(item)}
-                                                    className="p-2 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-xl transition-all active:scale-95"
-                                                    title="Transfer Kepemilikan ke Mitra Lain"
-                                                >
-                                                    <ArrowLeftRight size={15} />
-                                                </button>
-
-                                                {/* Hapus Properti */}
-                                                <button
-                                                    onClick={() => onDeleteProperty(item.id, item.namaKost || item.title || 'Kost')}
-                                                    className="p-2 bg-gray-50 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded-xl transition-all active:scale-95"
-                                                    title="Hapus Properti"
-                                                >
-                                                    <Trash2 size={15} />
-                                                </button>
-                                            </div>
+                                            <p className="font-black text-gray-700 text-base">Tidak ada listing yang sesuai kriteria.</p>
+                                            <p className="text-xs text-gray-400 mt-1">Coba sesuaikan tab atau kata kunci pencarian Anda.</p>
                                         </td>
                                     </tr>
-                                );
-                            })}
-
-                            {filteredListings.length === 0 && (
-                                <tr>
-                                    <td colSpan={6} className="px-6 py-16 text-center">
-                                        <div className="w-16 h-16 bg-gray-50 text-gray-300 rounded-3xl flex items-center justify-center mx-auto mb-3">
-                                            <Building2 size={32} />
-                                        </div>
-                                        <p className="font-black text-gray-700 text-base">Tidak ada listing yang sesuai kriteria.</p>
-                                        <p className="text-xs text-gray-400 mt-1">Coba sesuaikan tab atau kata kunci pencarian Anda.</p>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
+            )}
+
+            {/* ── TABEL 2: DAFTAR ADUAN / LAPORAN PENGGUNA (Jika tab === 'reports') ── */}
+            {currentTab === 'reports' && (
+                <div className="bg-white border border-gray-100 rounded-[2.5rem] overflow-hidden shadow-sm space-y-4">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-gray-500">
+                            <thead className="bg-gray-50/80 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                                <tr>
+                                    <th className="px-6 py-4">Properti Dilaporkan</th>
+                                    <th className="px-6 py-4">Kategori & Masalah</th>
+                                    <th className="px-6 py-4">Data Pelapor</th>
+                                    <th className="px-6 py-4">Bukti Foto</th>
+                                    <th className="px-6 py-4">Status Aduan</th>
+                                    <th className="px-6 py-4 text-right">Aksi Penanganan</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {filteredReports.map(report => {
+                                    const isPending = report.status === 'pending';
+                                    const isResolved = report.status === 'resolved';
+                                    const isDismissed = report.status === 'dismissed';
+                                    const evidence = report.evidence_urls?.[0];
+
+                                    return (
+                                        <tr key={report.id} className="hover:bg-red-50/20 transition-colors">
+                                            {/* 1. Properti Dilaporkan */}
+                                            <td className="px-6 py-4">
+                                                <div className="space-y-1">
+                                                    <p className="font-black text-gray-900 text-sm hover:text-orange-600 transition-colors cursor-pointer" onClick={() => window.open(`/kost/${report.property_id}`, '_blank')}>
+                                                        {report.propertyName || 'Kost'}
+                                                    </p>
+                                                    <p className="text-[11px] text-gray-400 font-medium">
+                                                        {report.propertyCity || report.propertyAddress || 'Lokasi -'}
+                                                    </p>
+                                                    {report.ownerPhone && (
+                                                        <button
+                                                            onClick={() => handleOpenWhatsApp(report.ownerPhone, report.propertyName, false, `Ada aduan user terkait: ${report.description}`)}
+                                                            className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100 hover:bg-emerald-100 transition-colors cursor-pointer"
+                                                        >
+                                                            <Phone size={10} /> Chat Mitra: {report.ownerPhone}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+
+                                            {/* 2. Kategori & Masalah */}
+                                            <td className="px-6 py-4 max-w-xs">
+                                                <div className="space-y-1">
+                                                    <span className="inline-flex px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-md text-[10px] font-black uppercase tracking-wider">
+                                                        {report.category}
+                                                    </span>
+                                                    <p className="text-xs text-gray-800 font-medium leading-relaxed bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                                                        "{report.description}"
+                                                    </p>
+                                                    <span className="text-[10px] text-gray-400 block">
+                                                        {new Date(report.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                            </td>
+
+                                            {/* 3. Data Pelapor */}
+                                            <td className="px-6 py-4">
+                                                <div className="space-y-1">
+                                                    <p className="font-bold text-gray-900 text-xs">{report.reporter_name || 'Pengguna'}</p>
+                                                    {report.reporter_phone && (
+                                                        <button
+                                                            onClick={() => handleWhatsAppReporter(report.reporter_phone, report.propertyName || 'Kost', report.category)}
+                                                            className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:underline bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100 transition-colors cursor-pointer"
+                                                        >
+                                                            <Phone size={10} /> {report.reporter_phone}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+
+                                            {/* 4. Bukti Foto */}
+                                            <td className="px-6 py-4">
+                                                {evidence ? (
+                                                    <div
+                                                        onClick={() => setSelectedEvidenceForZoom(evidence)}
+                                                        className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer hover:scale-105 transition-transform shadow-sm relative group"
+                                                    >
+                                                        <img src={evidence} alt="Bukti" className="w-full h-full object-cover" />
+                                                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white">
+                                                            <Eye size={14} />
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-[11px] text-gray-400 italic">Tanpa foto</span>
+                                                )}
+                                            </td>
+
+                                            {/* 5. Status Aduan */}
+                                            <td className="px-6 py-4">
+                                                {isPending && (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                                                        <Clock size={11} /> Belum Ditinjau
+                                                    </span>
+                                                )}
+                                                {isResolved && (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                                                        <CheckCircle2 size={11} /> Ditindaklanjuti
+                                                    </span>
+                                                )}
+                                                {isDismissed && (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-600 border border-gray-200 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                                                        <X size={11} /> Diabaikan
+                                                    </span>
+                                                )}
+                                                {report.action_taken && (
+                                                    <p className="text-[9px] text-gray-400 font-bold mt-1 uppercase">Aksi: {report.action_taken}</p>
+                                                )}
+                                            </td>
+
+                                            {/* 6. Aksi Penanganan */}
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                                    {/* Bekukan Properti Langsung */}
+                                                    <button
+                                                        onClick={() => handleFreezeFromReport(report)}
+                                                        className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 flex items-center gap-1 cursor-pointer"
+                                                        title="Bekukan Listing Properti Ini"
+                                                    >
+                                                        <Snowflake size={13} /> Bekukan Kost
+                                                    </button>
+
+                                                    {/* Tandai Selesai */}
+                                                    {!isResolved && (
+                                                        <button
+                                                            onClick={() => handleUpdateReportStatus(report.id, 'resolved')}
+                                                            className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl transition-all active:scale-95 cursor-pointer"
+                                                            title="Tandai Selesai / Ditindaklanjuti"
+                                                        >
+                                                            <Check size={15} />
+                                                        </button>
+                                                    )}
+
+                                                    {/* Abaikan Laporan */}
+                                                    {!isDismissed && (
+                                                        <button
+                                                            onClick={() => handleUpdateReportStatus(report.id, 'dismissed')}
+                                                            className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-xl transition-all active:scale-95 cursor-pointer"
+                                                            title="Abaikan Laporan Ini"
+                                                        >
+                                                            <X size={15} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+
+                                {filteredReports.length === 0 && (
+                                    <tr>
+                                        <td colSpan={6} className="px-6 py-16 text-center">
+                                            <div className="w-16 h-16 bg-gray-50 text-gray-300 rounded-3xl flex items-center justify-center mx-auto mb-3">
+                                                <Flag size={32} />
+                                            </div>
+                                            <p className="font-black text-gray-700 text-base">Tidak ada aduan pengguna.</p>
+                                            <p className="text-xs text-gray-400 mt-1">Seluruh laporan yang masuk telah selesai ditindaklanjuti.</p>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
 
             {/* ── MODAL 1: TINJAUAN & SUPERVISI DETAIL LISTING ── */}
             {selectedPropertyForReview && (
@@ -766,7 +1084,7 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
                                     <p className="font-black text-gray-900 text-sm">{selectedPropertyForReview.ownerPhone || selectedPropertyForReview.omnichannelContactPhone || '-'}</p>
                                     <button
                                         onClick={() => handleOpenWhatsApp(selectedPropertyForReview.ownerPhone || selectedPropertyForReview.omnichannelContactPhone, selectedPropertyForReview.title, selectedPropertyForReview.status === 'suspended', selectedPropertyForReview.suspendReason)}
-                                        className="mt-1 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md hover:bg-emerald-100 transition-colors"
+                                        className="mt-1 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md hover:bg-emerald-100 transition-colors cursor-pointer"
                                     >
                                         <Phone size={10} /> Chat WhatsApp
                                     </button>
@@ -868,7 +1186,7 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
                             <div className="flex items-center gap-2 w-full sm:w-auto">
                                 <button
                                     onClick={() => handleToggleVerification(selectedPropertyForReview)}
-                                    className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${
+                                    className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
                                         selectedPropertyForReview.isVerified
                                             ? 'bg-blue-100 text-blue-800 hover:bg-blue-200'
                                             : 'bg-white border border-gray-200 text-gray-700 hover:bg-blue-50 hover:text-blue-600'
@@ -881,14 +1199,14 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
                                 {selectedPropertyForReview.status === 'suspended' ? (
                                     <button
                                         onClick={() => handleUnfreeze(selectedPropertyForReview)}
-                                        className="px-4 py-2.5 bg-green-600 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-green-700 transition-all flex items-center gap-1.5"
+                                        className="px-4 py-2.5 bg-green-600 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-green-700 transition-all flex items-center gap-1.5 cursor-pointer"
                                     >
                                         <Check size={14} /> Buka Pembekuan
                                     </button>
                                 ) : (
                                     <button
                                         onClick={() => handleOpenFreeze(selectedPropertyForReview)}
-                                        className="px-4 py-2.5 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-rose-100 transition-all flex items-center gap-1.5"
+                                        className="px-4 py-2.5 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-rose-100 transition-all flex items-center gap-1.5 cursor-pointer"
                                     >
                                         <Snowflake size={14} /> Bekukan Kost
                                     </button>
@@ -898,7 +1216,7 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
                             <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                                 <button
                                     onClick={() => window.open(`/kost/${selectedPropertyForReview.id}`, '_blank')}
-                                    className="px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-100 transition-all flex items-center gap-1.5"
+                                    className="px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-100 transition-all flex items-center gap-1.5 cursor-pointer"
                                 >
                                     <ExternalLink size={14} /> Halaman Publik
                                 </button>
@@ -906,14 +1224,14 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
                                 {selectedPropertyForReview.status === 'published' ? (
                                     <button
                                         onClick={() => handleUnpublishToDraft(selectedPropertyForReview)}
-                                        className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95"
+                                        className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95 cursor-pointer"
                                     >
                                         Jadikan Draft
                                     </button>
                                 ) : (
                                     <button
                                         onClick={() => handlePublish(selectedPropertyForReview)}
-                                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95"
+                                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95 cursor-pointer"
                                     >
                                         Setujui & Publikasikan
                                     </button>
@@ -955,19 +1273,35 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
 
                         <div className="flex gap-3">
                             <button
-                                onClick={() => setPropertyToFreeze(null)}
-                                className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
+                                onClick={() => { setPropertyToFreeze(null); setRelatedReportIdForFreeze(null); }}
+                                className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest transition-all cursor-pointer"
                             >
                                 Batal
                             </button>
                             <button
                                 onClick={handleConfirmFreeze}
                                 disabled={isProcessingAction || !freezeReason.trim()}
-                                className="flex-1 py-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-rose-200 active:scale-95 disabled:opacity-50"
+                                className="flex-1 py-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-rose-200 active:scale-95 disabled:opacity-50 cursor-pointer"
                             >
                                 {isProcessingAction ? 'Memproses...' : 'Bekukan Sekarang'}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── MODAL 3: ZOOM FOTO BUKTI ADUAN ── */}
+            {selectedEvidenceForZoom && (
+                <div className="fixed inset-0 z-[160] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/85 backdrop-blur-md animate-in fade-in" onClick={() => setSelectedEvidenceForZoom(null)} />
+                    <div className="relative max-w-2xl max-h-[85vh] rounded-3xl overflow-hidden z-10 shadow-2xl animate-in zoom-in-95">
+                        <img src={selectedEvidenceForZoom} alt="Bukti Aduan" className="w-full h-full object-contain" />
+                        <button
+                            onClick={() => setSelectedEvidenceForZoom(null)}
+                            className="absolute top-4 right-4 bg-black/60 hover:bg-black/90 text-white p-2 rounded-full transition-colors cursor-pointer"
+                        >
+                            <X size={18} />
+                        </button>
                     </div>
                 </div>
             )}

@@ -6,11 +6,11 @@ import { FORMAT_CURRENCY } from '../constants';
 import BookingModal from '../components/BookingModal';
 import PaymentGateway from '../components/PaymentGateway';
 import ChatWindow from '../components/ChatWindow';
-import { incrementPropertyView } from '../userService';
+import { incrementPropertyView, createBookingRequest, submitPropertyReport, uploadReportEvidence } from '../userService';
+import { notifyAdminPropertyReport } from '../emailService';
 import { getOrCreateChatSession, SYSTEM_ADMIN_ID } from '../chatService';
-import { createBookingRequest } from '../userService';
 import { supabase } from '../supabase';
-import { Bed, Home, Camera, Sparkles, CheckCircle2, ChevronDown, Layers } from 'lucide-react';
+import { Bed, Home, Camera, Sparkles, CheckCircle2, ChevronDown, Layers, Flag, ShieldAlert, AlertTriangle, X, Check, Upload, Image as ImageIcon, Send, Phone, User as UserIcon } from 'lucide-react';
 
 interface KostDetailProps {
   kost: Kost;
@@ -127,6 +127,157 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   const [showChatWindow, setShowChatWindow] = useState(false);
   const [activeChatSession, setActiveChatSession] = useState<any>(null);
   const [isSubmittingChat, setIsSubmittingChat] = useState(false);
+
+  // --- LAPOR IKLAN KOST STATES ---
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportCategory, setReportCategory] = useState<string>('fraud');
+  const [reportDescription, setReportDescription] = useState('');
+  const [reporterName, setReporterName] = useState(user?.displayName || user?.name || '');
+  const [reporterPhone, setReporterPhone] = useState(user?.phoneNumber || user?.phone || '');
+  const [reportEvidenceFile, setReportEvidenceFile] = useState<File | null>(null);
+  const [reportEvidencePreview, setReportEvidencePreview] = useState<string>('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [reportSuccess, setReportSuccess] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      if (!reporterName) setReporterName(user.displayName || user.name || '');
+      if (!reporterPhone) setReporterPhone(user.phoneNumber || user.phone || '');
+    }
+  }, [user]);
+
+  const compressImageToWebP = async (file: File, quality = 0.82, maxDimension = 1920): Promise<File> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+              (blob) => {
+                if (blob) {
+                  const newFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", {
+                    type: "image/webp",
+                    lastModified: Date.now()
+                  });
+                  resolve(newFile);
+                } else {
+                  resolve(file);
+                }
+              },
+              'image/webp',
+              quality
+            );
+          } else {
+            resolve(file);
+          }
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleEvidenceChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const compressed = await compressImageToWebP(file, 0.82, 1920);
+      setReportEvidenceFile(compressed);
+      setReportEvidencePreview(URL.createObjectURL(compressed));
+    } catch (err) {
+      console.error("Compression failed, using original:", err);
+      setReportEvidenceFile(file);
+      setReportEvidencePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleOpenReportModal = () => {
+    setReportSuccess(false);
+    setReportCategory('fraud');
+    setReportDescription('');
+    setReportEvidenceFile(null);
+    setReportEvidencePreview('');
+    setIsReportModalOpen(true);
+  };
+
+  const categoryOptions = [
+    { id: 'fraud', label: 'Indikasi Penipuan / Minta Transfer di Luar Sistem', icon: '🚨' },
+    { id: 'mismatch', label: 'Harga atau Fasilitas Tidak Sesuai Realita', icon: '🏷️' },
+    { id: 'fake_location', label: 'Lokasi Titik Peta Palsu / Tidak Akurat', icon: '📍' },
+    { id: 'closed_or_full', label: 'Kost Sudah Penuh / Tidak Beroperasi', icon: '🚫' },
+    { id: 'inappropriate', label: 'Foto / Konten Tidak Pantas', icon: '🔞' },
+    { id: 'other', label: 'Lainnya / Masalah Lain', icon: '📝' }
+  ];
+
+  const handleSubmitReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportDescription.trim()) {
+      alert("Harap tuliskan penjelasan kendala atau rincian masalah yang ditemukan.");
+      return;
+    }
+    if (!reporterPhone.trim()) {
+      alert("Harap masukkan nomor WhatsApp aktif Anda untuk konfirmasi.");
+      return;
+    }
+
+    setIsSubmittingReport(true);
+    try {
+      let evidenceUrl = '';
+      if (reportEvidenceFile) {
+        evidenceUrl = await uploadReportEvidence(reportEvidenceFile, kost.id);
+      }
+
+      const selectedCatObj = categoryOptions.find(c => c.id === reportCategory);
+      const catLabel = selectedCatObj ? `${selectedCatObj.icon} ${selectedCatObj.label}` : reportCategory;
+
+      await submitPropertyReport({
+        propertyId: kost.id,
+        propertyName: kost.title || (kost as any).namaKost || 'Kost',
+        reporterId: user?.id || user?.uid,
+        reporterName: reporterName.trim() || 'Pengguna',
+        reporterPhone: reporterPhone.trim(),
+        category: reportCategory,
+        categoryLabel: catLabel,
+        description: reportDescription.trim(),
+        evidenceUrls: evidenceUrl ? [evidenceUrl] : []
+      });
+
+      // Send async non-blocking notification to Admin email
+      notifyAdminPropertyReport({
+        propertyName: kost.title || (kost as any).namaKost || 'Kost',
+        propertyId: kost.id,
+        categoryLabel: catLabel,
+        description: reportDescription.trim(),
+        reporterName: reporterName.trim() || 'Pengguna',
+        reporterPhone: reporterPhone.trim(),
+        ownerName: (kost as any).ownerName || (kost as any).users?.name || '-',
+        evidenceUrl: evidenceUrl || '-'
+      }).catch(err => console.warn("Email alert failed (non-critical):", err));
+
+      setReportSuccess(true);
+    } catch (err: any) {
+      alert("Gagal mengirim laporan: " + (err.message || err));
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
 
   const defaultRoom: RoomType = {
     name: 'Standard Room',
@@ -1138,6 +1289,25 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
               </InfoSection>
             )}
 
+            {/* Lapor Listing Banner Card */}
+            <div className="bg-gray-50/80 rounded-3xl p-6 border border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                  <ShieldAlert size={20} />
+                </div>
+                <div className="space-y-0.5">
+                  <h4 className="font-black text-gray-900 text-sm">Menemukan Masalah pada Iklan Ini?</h4>
+                  <p className="text-xs text-gray-500">Laporkan jika ada indikasi penipuan, ketidaksesuaian harga, atau fasilitas palsu.</p>
+                </div>
+              </div>
+              <button
+                onClick={handleOpenReportModal}
+                className="px-5 py-2.5 bg-white hover:bg-rose-50 border border-gray-200 hover:border-rose-200 text-gray-700 hover:text-rose-600 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap active:scale-95 flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Flag size={13} /> Laporkan Kost
+              </button>
+            </div>
+
           </div>
 
           {/* Right Sidebar - Booking Card */}
@@ -1402,6 +1572,14 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                   >
                     {isSubmittingChat ? 'Membuka Chat...' : 'Chat Pemilik'}
                   </button>
+
+                  <button
+                    onClick={handleOpenReportModal}
+                    className="w-full text-gray-400 hover:text-rose-600 font-bold text-xs flex items-center justify-center gap-1.5 py-2 hover:bg-rose-50/50 rounded-xl transition-all cursor-pointer"
+                  >
+                    <Flag size={12} />
+                    <span>Laporkan Iklan Ini</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -1473,6 +1651,205 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           />
         );
       })()}
+
+      {/* MODAL LAPORKAN IKLAN KOST */}
+      {isReportModalOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-gray-900/70 backdrop-blur-sm animate-in fade-in" onClick={() => setIsReportModalOpen(false)} />
+          <div className="relative bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col z-10 animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-6 sm:p-7 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-rose-50/50 via-white to-white">
+              <div className="space-y-0.5">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-rose-50 text-rose-600 rounded-full text-[10px] font-black uppercase tracking-widest">
+                  <ShieldAlert size={12} />
+                  Layanan Pengaduan
+                </div>
+                <h3 className="text-xl font-black text-gray-900 tracking-tight">
+                  Laporkan Iklan Kost
+                </h3>
+                <p className="text-xs text-gray-500 font-medium truncate max-w-[280px]">
+                  {kost.title || (kost as any).namaKost}
+                </p>
+              </div>
+              <button
+                onClick={() => setIsReportModalOpen(false)}
+                className="w-9 h-9 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 sm:p-7 overflow-y-auto max-h-[75vh]">
+              {reportSuccess ? (
+                <div className="py-8 text-center space-y-4">
+                  <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
+                    <Check size={32} />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-lg font-black text-gray-900">Laporan Berhasil Terkirim!</h4>
+                    <p className="text-xs text-gray-500 max-w-xs mx-auto leading-relaxed">
+                      Terima kasih atas kepedulian Anda. Tim Moderasi RuangSinggah akan segera meninjau laporan ini dan mengambil tindakan tegas.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsReportModalOpen(false)}
+                    className="px-6 py-3 bg-gray-900 hover:bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md transition-all active:scale-95"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmitReport} className="space-y-4 text-left">
+                  {/* Pilihan Kategori */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                      Pilih Masalah Utama <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="space-y-1.5">
+                      {categoryOptions.map(cat => {
+                        const isSelected = reportCategory === cat.id;
+                        return (
+                          <div
+                            key={cat.id}
+                            onClick={() => setReportCategory(cat.id)}
+                            className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center gap-3 ${
+                              isSelected
+                                ? 'bg-rose-50/50 border-rose-400 ring-2 ring-rose-200'
+                                : 'bg-gray-50/60 hover:bg-gray-50 border-gray-200/80 text-gray-700'
+                            }`}
+                          >
+                            <span className="text-lg">{cat.icon}</span>
+                            <span className={`text-xs font-bold ${isSelected ? 'text-rose-900' : 'text-gray-700'}`}>
+                              {cat.label}
+                            </span>
+                            <input
+                              type="radio"
+                              name="reportCategory"
+                              checked={isSelected}
+                              onChange={() => setReportCategory(cat.id)}
+                              className="ml-auto accent-rose-600"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Penjelasan Detail */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                      Rincian / Kronologi Masalah <span className="text-rose-500">*</span>
+                    </label>
+                    <textarea
+                      required
+                      value={reportDescription}
+                      onChange={e => setReportDescription(e.target.value)}
+                      placeholder="Jelaskan secara singkat apa yang tidak sesuai atau kronologi masalah yang Anda alami..."
+                      className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none transition-all min-h-[90px]"
+                    />
+                  </div>
+
+                  {/* Info Pelapor (Nama & WhatsApp) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                        Nama Anda
+                      </label>
+                      <div className="relative">
+                        <UserIcon size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                          type="text"
+                          value={reporterName}
+                          onChange={e => setReporterName(e.target.value)}
+                          placeholder="Nama lengkap"
+                          className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:ring-2 focus:ring-rose-500 outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                        No. WhatsApp <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                          type="tel"
+                          required
+                          value={reporterPhone}
+                          onChange={e => setReporterPhone(e.target.value)}
+                          placeholder="08123456789"
+                          className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:ring-2 focus:ring-rose-500 outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Unggah Bukti Foto (WebP) */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                      Lampirkan Foto Bukti (Opsional)
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <label className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 flex items-center gap-2 cursor-pointer transition-all active:scale-95">
+                        <Upload size={14} />
+                        <span>{reportEvidenceFile ? 'Ganti Foto' : 'Pilih Foto Bukti'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleEvidenceChange}
+                          className="hidden"
+                        />
+                      </label>
+                      {reportEvidencePreview && (
+                        <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm shrink-0">
+                          <img src={reportEvidencePreview} alt="Bukti" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => { setReportEvidenceFile(null); setReportEvidencePreview(''); }}
+                            className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="pt-3 border-t border-gray-100 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsReportModalOpen(false)}
+                      className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmittingReport}
+                      className="flex-1 py-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-rose-200 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {isSubmittingReport ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Mengirim...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send size={14} />
+                          <span>Kirim Laporan</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
