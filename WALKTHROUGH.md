@@ -1,74 +1,70 @@
-# Walkthrough: Session-Aware Deduplikasi Booking 'Kost Saya' & Sinkronisasi Status Check-Out Portal KostManager
+# Dokumen Walkthrough: Perbaikan Kartu Pengajuan Sewa Ulang & Sinkronisasi Status Check-Out KostManager
 
-Dokumen ini merangkum perbaikan pada alur **Pengajuan Sewa Ulang (Re-booking)** di menu **"Kost Saya"** serta penyelarasan status riwayat penyewaan dan filter di **Portal KostManager**.
+Dokumen ini menjelaskan secara rinci perbaikan yang telah dilakukan untuk mengatasi masalah kartu pengajuan sewa ulang yang tidak muncul di menu "Kost Saya", serta penyelarasan status check-out pada menu "Pengajuan Sewa" di Portal KostManager.
 
 ---
 
 ## 1. Ringkasan Masalah yang Diselesaikan
 
-1. **Kartu Pengajuan Sewa Ulang Tidak Muncul di "Kost Saya"**:
-   - Setelah pengguna melakukan check-out dari suatu kost, transaksi lama berstatus `PAID` tetap tercatat di database dengan status hunian `CHECKED_OUT`.
-   - Ketika pengguna mengajukan sewa baru untuk kost tersebut, sistem membuat transaksi baru dengan status `PENDING_APPROVAL`.
-   - Di `MyKost.tsx`, fungsi deduplikasi `uniqueKosts` mengelompokkan data berdasarkan key `${kostId}_${roomType}` dan memprioritaskan transaksi lama yang bernilai status lebih tinggi (`PAID` bernilai 4 vs `PENDING_APPROVAL` bernilai 2). Akibatnya transaksi baru dibuang (*discarded*).
-2. **Status Pengajuan Lama Tetap "Lunas & Aktif" di Portal KostManager**:
-   - Di menu "Pengajuan Sewa" KostManager (`/dashboard-admin/km_bookings`), baris transaksi lama tetap berlabel badge `Lunas & Aktif` karena kode sebelumnya hanya mengecek `status === 'PAID'` tanpa memeriksa apakah penghuni tersebut telah check-out.
-3. **Data Booking Tidak Ter-Refresh Otomatis**:
-   - Tab "Pengajuan Sewa" hanya mengambil data saat mount pertama (`loadAllData()`), sehingga saat pengguna mengirim pengajuan sewa baru, data tidak langsung muncul tanpa reload halaman secara manual.
+1. **Kartu Pengajuan Sewa Ulang Tidak Muncul di "Kost Saya" (`MyKost.tsx`)**:
+   - Setelah akun dikeluarkan dari status penghuni (check-out), kartu hunian lama berhasil keluar dari tab **Aktif**.
+   - Namun, saat pengguna mencoba mengajukan sewa baru untuk uji coba, kartu pengajuan tidak muncul di menu "Kost Saya".
+   - **Penyebab**: Logika deduplikasi `uniqueKosts` di front-end mengelompokkan riwayat booking hanya berdasarkan kombinasi properti & tipe kamar (`${curr.kostId}_${curr.roomType}`). Transaksi lama berstatus `PAID` (skor prioritas 4) menimpa dan membuang (*discarded*) transaksi baru berstatus `PENDING_APPROVAL` (skor prioritas 2).
+2. **Status Booking Lama Masih "Lunas & Aktif" di Portal KostManager (`KostManagerPortal.tsx`)**:
+   - Pada menu **Pengajuan Sewa** (`km_bookings`), baris booking transaksi lama selalu menampilkan badge `Lunas & Aktif` secara statis tanpa memeriksa apakah penghuni tersebut sudah check-out (`resident_status: 'CHECKED_OUT'`).
+   - Counter KPI **Disetujui & Lunas** masih menghitung seluruh transaksi `PAID` termasuk yang sudah move-out.
+   - Admin tidak mendapatkan pembaruan data secara langsung ketika berpindah tab atau saat ada pengajuan sewa baru yang masuk di tengah sesi.
 
 ---
 
-## 2. Rincian Perubahan yang Telah Diterapkan
+## 2. Rincian Modifikasi Kode
 
-### A. Sisi Penyewa: Session-Aware Booking Deduplication (`MyKost.tsx`)
-- **Pengambilan Status Lebih Awal**:
-  Riwayat `resident_status` kini dimuat sebelum pembentukan `uniqueKosts` untuk mengidentifikasi ID transaksi dan `booking_session_id` yang telah berstatus `CHECKED_OUT`.
-- **Deduplikasi Session-Aware**:
-  Key deduplikasi kini membedakan antara sesi booking yang berbeda:
-  ```typescript
-  const sessionKey = curr.metadata?.booking_session_id 
-      ? `session_${curr.metadata.booking_session_id}` 
-      : (isInFlight ? `pending_${curr.kostId}_${(curr.roomType || '').toLowerCase()}_${curr.id}` : `history_${curr.kostId}_${(curr.roomType || '').toLowerCase()}_${curr.id}`);
-  ```
-  Dengan ini, pengajuan baru `PENDING_APPROVAL` tidak akan pernah ditelan oleh transaksi lama yang sudah check-out.
-- **Penanda `is_checked_out` & Tab Riwayat**:
-  Kartu hunian lama yang telah check-out otomatis diberi tanda `is_checked_out: true` dan dialihkan ke tab **Riwayat**, sedangkan pengajuan baru tampil rapi di tab **Diajukan**.
+### A. Halaman Penyewa (`functions/public/pages/MyKost.tsx`)
+1. **Deduplikasi Session-Aware**:
+   - Pengambilan riwayat `resident_status` dimajukan sebelum pembentukan `uniqueKosts`.
+   - Key deduplikasi kini menggunakan pembeda sesi atau penanda status:
+     - Jika memiliki `booking_session_id`, key adalah `session_${booking_session_id}`.
+     - Jika transaksi sedang berjalan (*in-flight* seperti `PENDING_APPROVAL` / `WAITING_PAYMENT`), key diisolasi per ID transaksi: `pending_${kostId}_${roomType}_${id}`.
+     - Jika transaksi sudah selesai / lampau, key menjadi `history_${kostId}_${roomType}_${id}`.
+   - Hal ini menjamin pengajuan sewa baru tidak akan pernah tertelan oleh transaksi lama.
+2. **Penandaan `is_checked_out` & Tab Riwayat**:
+   - Properti `is_checked_out` disematkan pada setiap item di `activeWithBills`.
+   - Filter dan counter tab **Riwayat** diperbarui untuk menampilkan hunian yang telah selesai sewa (check-out).
+3. **Penyempurnaan Modal Komplain**:
+   - Modal komplain dilengkapi pilihan kategori masalah (AC, Sanitasi, Listrik, WiFi, dll.), selektor tingkat urgensi (*Normal* vs *Darurat*), kompresi gambar otomatis client-side ke format WebP (sesuai aturan Aturan Baku #5), dan tombol cepat WhatsApp ke pengelola kost.
 
-### B. Sisi Admin: Penyelarasan Status Check-Out & Auto-Refresh (`KostManagerPortal.tsx`)
-- **Deteksi Otomatis Status Check-Out**:
-  Setiap booking pada tabel pengajuan sewa diperiksa terhadap data `allResidents` dan metadata transaksi. Jika penghuni terkait telah melakukan check-out (`resident_status === 'CHECKED_OUT'` atau memiliki timestamp `checkout_at`), booking ditandai dengan `is_checked_out: true`.
-- **Badge Status yang Akurat**:
-  - Sewa aktif yang lunas: `<CheckCircle2 /> Lunas & Aktif` (Hijau emerald).
-  - Sewa masa lalu yang telah keluar: `<CheckCircle2 /> Selesai (Check-Out)` (Abu-abu slate netral).
-- **Statistik & Filter Tab Pengajuan Sewa**:
-  - Kartu KPI **Disetujui & Lunas**: kini hanya menghitung penyewa yang benar-benar masih aktif (`activePaidBookings`).
-  - Menambahkan filter pill khusus: **Selesai (Check-Out)** di bilah filter pengajuan sewa.
-- **Auto-Refresh Data Latar Belakang**:
-  `loadAllData` diperbarui untuk mendukung `showSpinner: boolean`. Setiap kali admin berpindah ke tab Pengajuan Sewa (`km_bookings`), data otomatis diperbarui di latar belakang tanpa mengganggu tampilan UI.
-- **Pembaruan Metadata Saat Check-Out**:
-  Di `handleCheckoutTenant`, transaksi terkait di tabel `transactions` ikut diperbarui dengan metadata `resident_status: 'CHECKED_OUT'` dan `checkout_at`.
-
----
-
-## 3. Hasil Pengujian & Kompilasi
-
-- **Uji Kompilasi Vite & TypeScript**:
-  ```bash
-  cmd /c npm run build
-  ✓ 2531 modules transformed.
-  ✓ built in 35.53s
-  Exit code: 0 (Zero Errors)
-  ```
+### B. Portal KostManager (`functions/public/components/admin/KostManagerPortal.tsx`)
+1. **Penetapan Status `is_checked_out` pada Riwayat Booking**:
+   - Pada proses pengelompokan booking (`groupedBookingsMap`), setiap baris diperiksa silang dengan data `allResidents` dan metadata transaksi (`checkout_at`, `resident_status === 'CHECKED_OUT'`).
+2. **Penyelarasan Badge Status & KPI**:
+   - Jika transaksi berstatus `PAID` dan penghuni belum keluar ➔ Menampilkan badge hijau: `<CheckCircle2 /> Lunas & Aktif`.
+   - Jika transaksi berstatus `PAID` dan penghuni sudah check-out ➔ Menampilkan badge abu-abu netral: `<CheckCircle2 /> Selesai (Check-Out)`.
+   - Kartu KPI **Disetujui & Lunas** hanya menghitung penyewa yang masih aktif (`!b.is_checked_out`).
+3. **Tab Filter Baru & Tombol Segarkan Data**:
+   - Ditambahkan tombol filter cepat **Selesai (Check-Out)** di bilah filter pengajuan sewa.
+   - Ditambahkan tombol **Segarkan Data** dengan icon putar pada header portal untuk memudahkan pembaruan data kapan saja.
+   - Pemuatan data latar belakang (*background refresh*) aktif secara otomatis setiap kali admin berpindah tab.
+4. **Penyempurnaan `handleCheckoutTenant`**:
+   - Saat proses check-out dijalankan, selain mengosongkan unit kamar di `properties` dan `mitra_kostmanager` serta memperbarui `resident_status`, metadata transaksi terkait di tabel `transactions` juga ditandai dengan `resident_status: 'CHECKED_OUT'` dan timestamp `checkout_at`.
 
 ---
 
-## 4. Panduan Verifikasi Pengguna
+## 3. Hasil Pengujian & Verifikasi
 
-1. **Cek Menu "Kost Saya" (Sisi Penyewa)**:
-   - Buka `/my-kost` (tab **Diajukan**).
-   - Kartu pengajuan sewa baru yang baru saja diajukan (status *Menunggu Persetujuan*) kini langsung tampil.
-   - Pindah ke tab **Riwayat**: riwayat hunian sebelumnya yang telah selesai / check-out tampil tersimpan dengan rapi.
-2. **Cek Menu "Pengajuan Sewa" (Sisi Admin KostManager)**:
-   - Buka `/dashboard-admin/km_bookings`.
-   - Transaksi baru dari calon penghuni akan muncul dengan status `Menunggu Persetujuan` (dapat disetujui / di-ACC).
-   - Transaksi lama untuk kamar yang sama kini berstatus `Selesai (Check-Out)` (tidak lagi menipu sebagai "Lunas & Aktif").
-   - Filter `Lunas & Aktif` dan `Selesai (Check-Out)` dapat difilter secara terpisah dengan akurat.
+- **Kompilasi TypeScript & Vite Build Frontend**:
+  - Perintah: `npm run build` di `functions/public/`
+  - Hasil: **Lulus 100% dengan exit code 0** (0 error TypeScript).
+  - Ringkasan modul: `2531 modules transformed` dalam `49.56s`.
+
+---
+
+## 4. Panduan Verifikasi untuk Pengguna
+
+1. **Uji Pengajuan Sewa Ulang (Sisi Penyewa)**:
+   - Buka halaman **Kost Saya** (`/my-kost`).
+   - Pada tab **Aktif / Pengajuan**: Kartu pengajuan sewa baru yang baru saja diajukan kini akan tampil dengan jelas lengkap dengan status *"Menunggu Persetujuan Admin"* atau tombol instruksi pembayaran.
+   - Pada tab **Riwayat**: Sewa lama yang telah di-check-out akan muncul rapi sebagai riwayat hunian selesai.
+2. **Uji Menu Pengajuan Sewa (Sisi KostManager)**:
+   - Buka menu **Pengajuan Sewa** (`/dashboard-admin/km_bookings`) di portal admin.
+   - Klik tombol **Segarkan Data** di pojok kanan atas jika diperlukan.
+   - Transaksi sewa lama milik akun yang telah keluar kini memiliki badge **Selesai (Check-Out)**, sementara pengajuan sewa baru yang berstatus `PENDING_APPROVAL` akan muncul di tab **Menunggu Persetujuan**.

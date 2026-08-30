@@ -1,132 +1,106 @@
-# IMPLEMENTATION PLAN — Transformasi 1:1 Modal Properti Terkelola Portal KostManager Mengadopsi Flow & UI/UX Form Pendataan Lapangan Agen (`AgentDashboard.tsx`)
+# IMPLEMENTATION PLAN: Sistem Manajemen Laporan Kendala Kamar & AI Automation Forwarder ke Pemilik Kost
 
-**Tanggal Pengajuan**: 28 Agustus 2026  
-**Status**: 📌 Menunggu Persetujuan User (FASE 1)  
-**File Target**: `functions/public/components/admin/KostManagerPortal.tsx`
+Dokumen rencana kerja ini disusun sebagai **Fase 1 (Perencanaan & Pengajuan)** untuk membangun alur terpusat pelaporan kendala kamar dari sisi penghuni (`MyKost.tsx`) hingga pengelolaan operasional dan otomasi penerusan ke pemilik kost di Portal KostManager (`KostManagerPortal.tsx`).
 
 ---
 
-## 1. Analisis Masalah & Kebutuhan Pengguna
+## 1. Analisis Masalah & Kebutuhan
 
-### Latar Belakang Masalah
-- Pada iterasi sebelumnya, tampilan modal edit properti di Portal KostManager (`KostManagerPortal.tsx`) mengadopsi layout dari modal *peninjauan/audit admin* (`KostManagerManagement.tsx`). 
-- Pengguna merasa layout peninjauan tersebut kurang cocok dan membingungkan untuk alur pengeditan aktif (*interactive property editor*).
-- **Kebutuhan Pengguna**: Mengganti modal tambah/edit properti di Portal KostManager secara penuh (100%) menggunakan **tampilan visual, alur multi-step (Step 1, 2, 3), komponen input, dan flow yang ada di Form Pendataan Lapangan Agen KostManager (`AgentDashboard.tsx`) dalam skala 1:1**.
+### A. Masalah Saat Ini
+1. **Laporan Keluhan Belum Terpusat & Terstruktur**:
+   - Tombol *"Lapor Kendala Kamar"* di menu "Kost Saya" (`MyKost.tsx`) saat ini langsung membuka WhatsApp ke nomor hotline CS dengan teks template mentah.
+   - Keluhan penghuni tidak terekam dalam database sistem, tidak memiliki nomor tiket/riwayat, dan tidak dapat dipantau perkembangannya oleh penyewa maupun tim pengelola.
+2. **Ketiadaan Tab Manajemen Kendala di Portal KostManager**:
+   - Tim KostManager belum memiliki dashboard khusus untuk memantau inventaris kerusakan fasilitas, mengelompokkan urgensi (misal: pipa air bocor / mati lampu mendesak vs fasilitas pelengkap), maupun memperbarui status perbaikan (*Menunggu Tindakan*, *Sedang Dikerjakan*, *Selesai*).
+3. **Penyampaian ke Pemilik Kost Masih Manual & Rentan Terlewat**:
+   - Pemilik kost (mitra owner) membutuhkan laporan yang terstandardisasi, jelas, dan transparan mengenai unit kamar mana yang mengalami kendala, identitas penyewa, foto bukti fisik, dan rekomendasi tindak lanjut.
 
-### Perbedaan Alur Utama:
-1. **Di Dashboard Agen (`AgentDashboard.tsx`)**:
-   - Agen mengisi formulir survei 3-step lalu menekan tombol Submit yang mengirim data ke dashboard admin sebagai draft pengajuan berstatus `SUBMITTED` / `PENDING_ONBOARDING` untuk ditinjau.
-2. **Di Portal KostManager (`KostManagerPortal.tsx`)**:
-   - Pengelola/Admin menggunakan formulir 3-step yang sama persis (1:1), namun ketika tombol simpan/selesaikan diklik, **data langsung disimpan dan diupdate secara langsung (Direct Live Update)** ke database properti terkelola Supabase/Firebase tanpa alur perantara review.
-
----
-
-## 2. Dampak Perubahan File
-
-- `functions/public/components/admin/KostManagerPortal.tsx` (Perombakan modal `ManagedPropertyAddModal` dan integrasi state stepper 1:1)
-- `functions/PROGRESS.md` (Pencatatan riwayat progres entry #147 setelah eksekusi di Fase 2)
-- `WALKTHROUGH.md` (Dokumentasi walkthrough final setelah eksekusi di Fase 2)
-
----
-
-## 3. Rencana Arsitektur & Langkah-Langkah Eksekusi (1:1 Form Pendataan Agen)
-
-### Tahap 1: Sinkronisasi State & Flow Stepper 3-Langkah (Step 1, Step 2, Step 3)
-1. Menyelaraskan state form `kmListingForm` di modal `ManagedPropertyAddModal` agar memuat seluruh struktur data form survei:
-   - `kmStep` (1 = Properti, 2 = Data Kamar, 3 = Review & Selesai).
-   - `temporaryRoom` (state editor untuk kamar baru atau kamar yang sedang diedit).
-   - `activeRoomIdx`, `expandedRoomIdx`, `activePhotoIdx`.
-   - `deleteRoomConfirm` (modal konfirmasi hapus kamar).
-   - State pendukung: peta interaktif modal pop-up (`isMapModalOpen`), geocoding autocomplete landmark/kampus terdekat, dan state upload kategori foto.
-
-### Tahap 2: Implementasi STEP 1 — PROPERTI (1:1 Skala Agen)
-Mengadopsi seluruh komponen Step 1 dari `AgentDashboard.tsx`:
-1. **Profil & Kontak Properti**:
-   - Input Nama Properti Kos.
-   - Pilihan Tipe Kos (`Putra`, `Putri`, `Campur`).
-   - Input Total Jumlah Kamar target.
-   - Textarea Alamat Lengkap Real Bangunan.
-2. **Wilayah Administratif Terstruktur**:
-   - 3 Kotak Input: 🏛️ Provinsi, 🏙️ Kota/Kabupaten, 📍 Kecamatan/Area (otomatis terisi dari geocoding & dapat diedit).
-3. **Lokasi GPS & Peta Terkunci**:
-   - Frame mini-map dengan titik koordinat Lat/Lng terkunci.
-   - Tombol *Buka Peta Pop-up (Layar Penuh)* (`isMapModalOpen`) dengan pencarian Google Places autocomplete dan pin drag-and-drop.
-   - Tombol *Gunakan Lokasi Saya Saat Ini* (Geolocation API).
-4. **Fasilitas & Landmark / Kampus Terdekat**:
-   - List landmark/kampus yang sudah ditambahkan dengan koordinat.
-   - Form tambah landmark dengan 2 mode: Autocomplete Google Places atau Konversi Link Google Maps / Short link GMaps.
-5. **Fasilitas Umum Properti**:
-   - Grid checkbox fasilitas: WiFi, Dapur Bersama, Area Parkir, Ruang Tamu, CCTV, Laundry, WC Umum.
-   - **Sub-kelengkapan Dapur Bersama**: Kompor, Kulkas, Dispenser, Wastafel Cuci Piring, Peralatan Masak, Meja Makan + input kustom.
-   - **Sub-kelengkapan Area Parkir**: Parkir Motor, Parkir Mobil, Parkir Sepeda + input kustom.
-   - **Sub-kelengkapan WC Umum**: Kloset Duduk, Kloset Jongkok, Shower, Wastafel + input kustom.
-   - Input penambahan fasilitas umum kustom.
-6. **Dokumentasi Area Umum & Fasilitas Properti**:
-   - Upload foto per-area berkategori (`Tampak Depan`, `Area Parkir`, `Dapur Bersama`, `Ruang Tamu`, `Bangunan Kost`, dll.).
-   - Kompresi WebP client-side otomatis sebelum upload.
-   - Input penambahan kategori area baru.
-7. **Peraturan Kost**:
-   - List peraturan dengan textarea max 100 karakter + tombol hapus.
-   - Input penambahan peraturan baru.
-
-### Tahap 3: Implementasi STEP 2 — DATA KAMAR (1:1 Skala Agen)
-Mengadopsi seluruh sistem pengelolaan kamar dari `AgentDashboard.tsx`:
-1. **Progres Pendataan Kamar**:
-   - Banner status: `[ X / Y Kamar ]` (Kamar Terdata / Target Total Kamar).
-2. **Daftar Kamar (Accordion Cards)**:
-   - Card per kamar dengan nomor kamar, lantai, tipe kamar, badge `[ Terisi ]` (Green) vs `[ Kosong ]` (Orange), tombol Hapus Kamar dengan modal konfirmasi.
-   - Klik accordion membuka editor kamar untuk kamar tersebut.
-3. **Tombol "+ Tambah Kamar Baru"**:
-   - Membuka form `temporaryRoom` jika target jumlah kamar belum tercapai.
-4. **Editor Kamar Lengkap (`temporaryRoom` / Active Room Editor)**:
-   - **Detail Kamar**: Nomor Kamar, Dropdown Lantai (Lantai 1-4/kustom), Dropdown Tipe Kamar (Standard/Premium/Deluxe/Kustom), Dimensi Kamar (Panjang X Lebar meter).
-   - **Status Kamar**: Tombol toggle kontras `[ Terisi ]` vs `[ Kosong ]`.
-   - **Salin Konfigurasi**: Dropdown salin tarif & fasilitas dari kamar yang sudah ada sebelumnya.
-   - **Skema Tarif / Harga**: Multi-periode sewa (Bulanan, Tahunan, 6 Bulan, 3 Bulan, Mingguan, Harian) + Maks. Kapasitas Penghuni + Biaya Ekstra Orang per Bulan.
-   - **Fasilitas Kamar**: Toggle Kosongan vs Furnished + Checklist Fasilitas (Kasur, Lemari, Meja, AC, Kipas, TV, Water Heater, dll.) + Sub-kelengkapan KM Dalam (Kloset Duduk/Jongkok, Shower, Wastafel) + Sub-kelengkapan Dapur Dalam (Kompor, Kulkas, Sink, Kitchen Set) + Input tag kustom.
-   - **Biaya Bulanan Lainnya**: Nominal + Checklist cakupan (Listrik, Air, Sampah, Wifi, Parkir/Keamanan).
-   - **Dokumentasi Foto Kamar**: Kategori foto dinamis terhitung otomatis dari fasilitas aktif (Interior Kamar, KM Dalam, Dapur Dalam, dll.) + tambah kategori foto kamar kustom + WebP compression.
-   - **Informasi Penghuni (Jika Terisi)**: Nama Lengkap, Nomor HP/WhatsApp, Jenis Langganan, Tanggal Pembayaran Terakhir, Tanggal Jatuh Tempo Tagihan Berikutnya, Jumlah Penghuni Saat Ini, dan Form Anggota Penghuni Tambahan (jika > 1 orang).
-   - Tombol **"Simpan Kamar"** & **"Batal"**.
-
-### Tahap 4: Implementasi STEP 3 — REVIEW & LIVE UPDATE (1:1 Skala Agen)
-Mengadopsi review screen dari `AgentDashboard.tsx` dengan penyesuaian Live Save:
-1. **Ringkasan Profil & Lokasi Properti**:
-   - Kartu info nama kost, tipe gender, alamat lengkap, dan koordinat GPS.
-2. **Simulasi Tampilan Mobile App (Preview Phone Frame)**:
-   - Phone frame interaktif yang mensimulasikan tampilan halaman detail kost di aplikasi calon penyewa (Carousel foto, badge terverifikasi, harga mulai dari, fasilitas, deskripsi).
-3. **Ringkasan Data Kamar**:
-   - Statistik Total / Terisi / Kosong.
-   - Accordion review kamar lengkap dengan info penghuni (jika terisi), skema tarif, dan thumbnail foto kamar.
-4. **Data Mitra Pemilik**:
-   - Identitas pemilik properti, nomor WhatsApp, serta rekening bank pencairan bagi hasil.
-5. **Syarat & Ketentuan / Konfirmasi Direct Update**:
-   - Checkbox persetujuan data properti terkelola KostManager.
-6. **Tombol Aksi Final**:
-   - Tombol **"💾 Simpan Perubahan & Terbitkan Langsung (Live Update)"** yang secara langsung mengupdate record properti di Supabase tanpa perantara review status.
-
-### Tahap 5: Bottom Navigation Bar Stepper
-- Step 1: `[ Keluar ]` dan `[ Lanjut ke Step 2 ]`.
-- Step 2: `[ Kembali ke Step 1 ]` dan `[ Lanjut ke Step 3 ]` (validasi kamar lengkap sesuai total kamar).
-- Step 3: `[ Kembali ke Step 2 ]` dan `[ 💾 Simpan & Update Properti ]`.
+### B. Solusi yang Diajukan
+1. **Modal Form Lapor Kendala Kamar Interaktif di Sisi Penghuni (`MyKost.tsx`)**:
+   - Penghuni menekan tombol *"Lapor Kendala Kamar"* -> Muncul modal elegan dengan info otomatis properti & nomor unit kamar (*Kost Madani - Unit Kamar 3*).
+   - Input pilihan kategori kendala yang rapi:
+     - ❄️ *AC & Ventilasi*
+     - 💧 *Air, Keran & Sanitasi*
+     - ⚡ *Kelistrikan & Lampu*
+     - 🛏️ *Fasilitas Kamar (Kasur, Lemari, Pintu)*
+     - 📶 *WiFi & Internet*
+     - 🧹 *Kebersihan & Area Bersama*
+     - ❓ *Kendala Lainnya*
+   - Pilihan tingkat urgensi: `Normal` atau `Mendesak (Emergency)`.
+   - Deskripsi rincian kendala secara terperinci.
+   - Unggah foto bukti kerusakan dengan kompresi otomatis ke `.webp` di sisi client sebelum upload (Standard Baku Workspace Rule #5).
+   - Laporan disimpan ke tabel database `public.complaints`.
+2. **Menu Manajemen Laporan Kendala di Portal KostManager (`KostManagerPortal.tsx`)**:
+   - Menambahkan menu baru pada sidebar operasional: **`🛠️ Kendala & Pemeliharaan`** (`activeTab: 'complaints'` / `km_complaints`) lengkap dengan badge counter laporan baru (`open`).
+   - **Kartu Ringkasan KPI**:
+     - Total Laporan Masuk
+     - Menunggu Tindakan (badge oranye/merah)
+     - Sedang Ditangani / Diproses (badge biru)
+     - Selesai Diatasi (badge hijau)
+   - **Pencarian Cepat & Filter Status**: Filter berdasarkan status penanganan, pencarian nama penghuni, nama kost, nomor kamar, atau jenis kendala.
+   - **Daftar Laporan Terstruktur**:
+     - Kartu/tabel laporan menampilkan nama pelapor, link cepat WhatsApp penghuni, unit kamar, waktu lapor, badge urgensi, deskripsi lengkap, dan thumbnail foto bukti yang dapat diperbesar.
+     - Kontrol aksi: Mengubah status menjadi *Sedang Ditangani* atau *Selesai*, serta mencatat catatan admin (*admin notes*).
+3. **AI Automation & WhatsApp Forwarder ke Pemilik Kost**:
+   - Tombol cerdas **"🤖 Teruskan ke Pemilik (AI)"** pada setiap tiket kendala:
+     - Otomatis mencocokkan data properti dengan kontak pemilik (`p.owner_uid` / data kontak pengelola properti).
+     - Menghasilkan format pesan resmi terstruktur dari RuangSinggah KostManager kepada pemilik kost.
+     - Menandai tiket dengan status `Diteruskan ke Pemilik` disertai timestamp `owner_notified_at`.
+4. **Skema Database & DDL (`COMPLAINTS_DDL.sql`)**:
+   - Menyiapkan skrip SQL pembuatan tabel `public.complaints`, indeks relasi ke properti & user, serta konfigurasi Row Level Security (RLS) yang aman.
 
 ---
 
-## 4. Rencana Verifikasi & Uji Kelayakan
+## 2. Dampak Perubahan (Files to Touch)
+
+1. **[`functions/public/COMPLAINTS_DDL.sql`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/COMPLAINTS_DDL.sql)** *(File Baru)*:
+   - Skema DDL tabel `public.complaints` beserta index dan RLS policies.
+2. **[`functions/public/pages/MyKost.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx)**:
+   - Mengubah handler tombol "Lapor Kendala Kamar" agar membuka Modal Lapor Kendala.
+   - Meningkatkan tampilan modal komplain dengan auto-selected kamar, kategori kendala, badge urgensi, dan kompresi WebP.
+   - Memastikan pengiriman data ke tabel `complaints` berjalan mulus dengan error handling yang informatif.
+3. **[`functions/public/components/admin/KostManagerPortal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx)**:
+   - Menambahkan opsi tab `complaints` pada navigasi sidebar dan router internal.
+   - State data `complaintsList`, loader, fungsi fetch data dari tabel `complaints`.
+   - Komponen visual tab `complaints`: KPI cards, filter pills, search input, tabel/kartu tiket, preview foto, dan status switcher.
+   - Fitur AI-Assisted Forwarder ke WhatsApp pemilik kost dengan template pesan terstruktur resmi.
+4. **[`functions/public/pages/Dashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Dashboard.tsx)**:
+   - Mendaftarkan `km_complaints` ke union type `DashboardMenu` agar sinkron dengan routing URL admin.
+
+---
+
+## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah di-ACC)
+
+1. **Langkah 1: Penyusunan Skrip DDL Database (`COMPLAINTS_DDL.sql`)**:
+   - Menulis file DDL lengkap dengan kolom `id`, `kost_id`, `kost_name`, `room_number`, `user_id`, `user_name`, `user_phone`, `category`, `urgency`, `title`, `description`, `photo_url`, `status`, `admin_notes`, `reported_to_owner`, `owner_notified_at`, `ai_summary`, `created_at`, `updated_at`.
+2. **Langkah 2: Pembaruan Form Lapor Kendala Kamar di `MyKost.tsx`**:
+   - Menghubungkan tombol "Lapor Kendala Kamar" ke modal input modern.
+   - Menambahkan pilihan tag kategori kendala, radio tingkat urgensi, deskripsi, dan upload foto dengan konversi WebP otomatis.
+   - Menghubungkan fungsi submit ke Supabase dengan graceful fallback.
+3. **Langkah 3: Pembuatan Menu & Tampilan Manajemen Kendala di `KostManagerPortal.tsx`**:
+   - Menambahkan tab `complaints` pada sidebar navigasi dengan icon vector `lucide-react` (`<Wrench size={18} />`).
+   - Menyusun KPI statistik kendala (*Total, Menunggu Verifikasi, Sedang Diproses, Selesai*).
+   - Menyusun tabel / kartu komplain dengan rincian unit kamar, nama pelapor, waktu lapor, tag kategori, tombol chat WA penghuni, dan foto bukti.
+   - Menambahkan fungsi pembaruan status tiket (*In Progress* / *Resolved*).
+   - Menambahkan fitur *"Teruskan ke Pemilik (AI)"* yang secara cerdas merangkum kendala dan membuka WhatsApp ke nomor kontak pemilik kost.
+4. **Langkah 4: Sinkronisasi Tipe Menu di `Dashboard.tsx`**:
+   - Menambahkan `km_complaints` ke `DashboardMenu`.
+5. **Langkah 5: Kompilasi & Pengujian Kode**:
+   - Menjalankan uji build `cmd /c npm run build` di `functions/public/` (memastikan 0 error TypeScript).
+
+---
+
+## 4. Rencana Verifikasi
 
 1. **Uji Kompilasi TypeScript & Vite**:
-   - Menjalankan `npm.cmd run build` di `functions/public/` dan memastikan 0 error kompilasi.
-2. **Verifikasi Flow 3-Step**:
-   - Membuka modal Tambah/Edit Properti di Portal KostManager.
-   - Memastikan navigasi Step 1 → Step 2 → Step 3 berjalan mulus.
-3. **Verifikasi Input & Perubahan Data (Live Update)**:
-   - Mengubah data umum di Step 1 (nama, fasilitas umum, koordinat, foto area).
-   - Menambah / mengedit unit kamar di Step 2 (dimensi P×L, multi-tarif, foto kamar, data penghuni).
-   - Menyimpan di Step 3 dan memverifikasi data langsung ter-update di database dan daftar properti portal.
-
----
-
-> [!IMPORTANT]
-> **Pemberitahuan Protokol FASE 1**:
-> Dokumen ini adalah rancangan perencanaan. Tidak ada file kode yang diubah sebelum Anda menyetujui dokumen ini.
-> Silakan klik tombol **Proceed** / berikan konfirmasi **"ACC"** jika Anda menyetujui rencana kerja ini.
+   - Menjalankan `cmd /c npm run build` dan memastikan build lulus tanpa error atau peringatan type mismatch.
+2. **Verifikasi Alur Penghuni (`MyKost.tsx`)**:
+   - Buka `/my-bookings/aktif` (tab Aktif).
+   - Klik tombol **"Lapor Kendala Kamar"**.
+   - Periksa modal terbuka dengan data unit kamar yang otomatis terisi (*Unit Kamar 3 - Kost Madani*).
+   - Coba pilih kategori, isi deskripsi, unggah foto bukti, dan klik submit.
+3. **Verifikasi Alur Admin KostManager (`KostManagerPortal.tsx`)**:
+   - Buka `/dashboard-admin/km_complaints` (atau klik menu **Kendala & Pemeliharaan** pada sidebar KostManager).
+   - Periksa tiket keluhan yang dikirim penghuni muncul dengan rincian lengkap (nama, nomor WA, kamar, kategori, status *Menunggu Tindakan*).
+   - Uji tombol **"Teruskan ke Pemilik (AI)"**: pastikan ringkasan pesan terstruktur terbuat dengan rapi dan mengarah ke kontak pemilik.
+   - Uji tombol ubah status (*Sedang Ditangani* & *Tandai Selesai*).
