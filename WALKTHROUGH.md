@@ -16,16 +16,9 @@ Dokumentasi ini merangkum penyelesaian perbaikan **Fitur #223**, yaitu optimasi 
   - Menerapkan rotasi `GEMINI_KEYS` otomatis.
   - Gambar KTP langsung dianalisis di cloud via Multimodal Vision (Base64/URL), memberikan respons instan dalam **1-2 detik**.
 
-### C. Pemetaan Data Terstruktur Presisi 100%
-- AI secara akurat mengekstrak:
-  1. **NIK (16 Digit)**
-  2. **Nama Lengkap**
-  3. **Tempat Lahir & Tanggal Lahir (Format HTML `YYYY-MM-DD`)**
-  4. **Jenis Kelamin ("Pria" / "Wanita")**
-  5. **Agama**
-  6. **Pekerjaan**
-  7. **Status Perkawinan ("Single" / "Menikah")**
-  8. **Alamat Lengkap KTP**
+### C. Penyesuaian Timeout Safety (25 Detik) & Graceful Error Handling
+- Batas timeout dinaikkan menjadi 25 detik untuk mengakomodasi jaringan seluler pengguna.
+- Jika terjadi kendala jaringan atau kegagalan fungsi, sistem memberikan pesan yang ramah tanpa mengunci form dan mengizinkan pengguna untuk mengisi data secara manual.
 
 ---
 
@@ -41,7 +34,7 @@ transforming...
 ✓ 2504 modules transformed.
 rendering chunks...
 computing gzip size...
-✓ built in 22.52s
+✓ built in 26.34s
 ```
 *Hasil:* **100% Lulus (0 Error, Bundle Size berkurang, Bebas dependensi Tesseract.js)**.
 
@@ -51,16 +44,17 @@ computing gzip size...
 
 Untuk memperbarui Edge Function `analyze-ktp` pada project Supabase Anda, jalankan perintah berikut di terminal:
 
-```bash
-npx supabase functions deploy analyze-ktp --no-verify-jwt
+```cmd
+cmd /c npx supabase functions deploy analyze-ktp --no-verify-jwt
 ```
 
 ---
 
 ## 4. Panduan Pengujian bagi Pengguna
 
-1. Buka menu **Profil Saya** pada Dashboard Mitra (`/dashboard-mitra/profile`) atau Agen (`/agent/profile`).
-2. Klik tombol **"Lengkapi Profil & Verifikasi"** untuk membuka modal verifikasi identitas.
-3. Unggah foto KTP Anda:
+1. Jalankan perintah deploy Edge Function di atas.
+2. Buka menu **Profil Saya** pada Dashboard Mitra (`/dashboard-mitra/profile`) atau Agen (`/agent/profile`).
+3. Klik tombol **"Lengkapi Profil & Verifikasi"** untuk membuka modal verifikasi identitas.
+4. Unggah foto KTP Anda:
    - **Hasil**: Tulisan *"Membaca Data KTP..."* akan selesai dalam hitungan **1–2 detik**.
    - Kolom NIK, Nama Lengkap, Tempat/Tgl Lahir, Jenis Kelamin, Agama, Pekerjaan, dan Alamat KTP akan terisi otomatis secara rapi dan presisi.

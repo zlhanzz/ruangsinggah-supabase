@@ -12,7 +12,7 @@
 - **Implementasi Solusi**:
   1. **Eliminasi Tesseract.js di Frontend ([`MitraProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx), [`AgentProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx))**:
      - Menghapus dependensi dan eksekusi `Tesseract.js`.
-     - Fungsi `performOcr(imageUrl)` langsung mengirim URL gambar KTP ke Supabase Edge Function `analyze-ktp` dengan proteksi timeout 12 detik.
+     - Fungsi `performOcr(imageUrl)` langsung mengirim URL gambar KTP ke Supabase Edge Function `analyze-ktp` dengan proteksi timeout yang disesuaikan menjadi 25 detik dan graceful fallback alert.
   2. **Multi-Model Priority Cascade & Key Rotation ([`analyze-ktp/index.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/supabase/functions/analyze-ktp/index.ts))**:
      - Menerapkan prioritas model: `['gemini-3.7-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']`.
      - Menerapkan rotasi `GEMINI_KEYS` otomatis jika terjadi rate limit.

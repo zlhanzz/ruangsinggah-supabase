@@ -536,9 +536,9 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
     const performOcr = async (imageUrl: string) => {
         setIsScanning(true);
         try {
-            // Timeout guard 12 detik agar UI tidak pernah macet
+            // Timeout guard 25 detik agar tetap fleksibel untuk jaringan seluler
             const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Waktu pemindaian melebihi batas waktu')), 12000)
+                setTimeout(() => reject(new Error('Waktu pemindaian melebihi batas waktu (25 detik)')), 25000)
             );
 
             const invokePromise = supabase.functions.invoke('analyze-ktp', {
@@ -565,10 +565,12 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                 }));
                 alert('Data KTP berhasil dipindai otomatis menggunakan AI Gemini Cerdas.');
             } else {
-                console.warn('AI Extraction error or empty data:', aiErr || aiRes);
+                console.warn('AI Extraction response:', aiErr || aiRes);
+                alert('Pemindaian otomatis belum selesai atau memerlukan pembaruan fungsi. Silakan periksa atau lengkapi data profil secara manual.');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('OCR Error:', error);
+            alert('Pemindaian otomatis mengalami batas waktu. Anda dapat melanjutkan dengan mengisi data profil secara manual.');
         } finally {
             setIsScanning(false);
         }
