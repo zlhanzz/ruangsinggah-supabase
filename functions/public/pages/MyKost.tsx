@@ -520,13 +520,27 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                 const productIds = Array.from(new Set(data?.map(d => d.product_id || d.kost_id).filter(id => !!id)));
                 const { data: propertiesData } = await supabase
                     .from('properties')
-                    .select('id, title, address, image_urls, owner_uid, city, area, additional_fee_name, additional_fee_price, additional_fee_starts_from, room_types, location, facilities, rules, metadata, is_managed, subscription_status')
+                    .select('id, title, address, image_urls, owner_uid, city, area, additional_fee_name, additional_fee_price, additional_fee_starts_from, room_types, location, facilities, rules, metadata, is_managed')
                     .in('id', productIds);
 
                 const propMap = (propertiesData || []).reduce((acc: any, p: any) => {
                     acc[p.id] = p;
                     return acc;
                 }, {});
+
+                // Fallback: If any property is not found in properties table, check mitra_kostmanager
+                const missingIds = productIds.filter(id => !propMap[id]);
+                if (missingIds.length > 0) {
+                    const { data: kmProps } = await supabase
+                        .from('mitra_kostmanager')
+                        .select('id, property_id, title, address, image_urls, owner_uid, city, area, room_types, location, facilities, rules')
+                        .or(`id.in.(${missingIds.join(',')}),property_id.in.(${missingIds.join(',')})`);
+
+                    (kmProps || []).forEach((kp: any) => {
+                        if (kp.id) propMap[kp.id] = { ...kp, is_managed: true };
+                        if (kp.property_id) propMap[kp.property_id] = { ...kp, is_managed: true };
+                    });
+                }
 
                 const kostsData: any[] = [];
                 data?.forEach((doc) => {
@@ -587,13 +601,24 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                             return false;
                         }) || (propRooms.length === 1 ? propRooms[0] : null);
 
+                        const normalizePhotoUrl = (raw: any): string => {
+                            if (!raw) return '';
+                            const path = typeof raw === 'string' ? raw : (raw.url || raw.original || raw.webp || '');
+                            if (!path) return '';
+                            if (path.startsWith('http') || path.startsWith('data:')) return path;
+                            return supabase.storage.from('properties').getPublicUrl(path).data?.publicUrl || path;
+                        };
+
                         let roomPhotos: string[] = [];
                         if (currentRoom?.images && Array.isArray(currentRoom.images) && currentRoom.images.length > 0) {
-                            roomPhotos = currentRoom.images.filter(Boolean);
+                            roomPhotos = currentRoom.images.map(normalizePhotoUrl).filter(Boolean);
                         } else if (currentRoom?.categorized_photos && typeof currentRoom.categorized_photos === 'object') {
                             Object.values(currentRoom.categorized_photos).forEach((photos: any) => {
                                 if (Array.isArray(photos)) {
-                                    photos.forEach((p: any) => { if (typeof p === 'string' && p && !roomPhotos.includes(p)) roomPhotos.push(p); });
+                                    photos.forEach((p: any) => {
+                                        const url = normalizePhotoUrl(p);
+                                        if (url && !roomPhotos.includes(url)) roomPhotos.push(url);
+                                    });
                                 }
                             });
                         }
@@ -609,15 +634,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                             });
                             const chosenImg = frontBuildingImg || rawImages[0];
                             if (chosenImg) {
-                                const path = typeof chosenImg === 'string' ? chosenImg : (chosenImg.original || chosenImg.url || chosenImg.webp || '');
-                                if (path) {
-                                    if (path.startsWith('http')) {
-                                        displayImg = path;
-                                    } else {
-                                        const { data: { publicUrl } } = supabase.storage.from('properties').getPublicUrl(path);
-                                        displayImg = publicUrl;
-                                    }
-                                }
+                                displayImg = normalizePhotoUrl(chosenImg);
                             }
                         }
 

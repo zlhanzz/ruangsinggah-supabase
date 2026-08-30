@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 211. Perbaikan Preview Foto Kost & Normalisasi Foto Kamar pada Menu 'Kost Saya' (`MyKost.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa saat membuka menu "Kost Saya" (khususnya kartu pengajuan sewa Kamar 4 Kost Madani), kartu pengajuan berhasil muncul namun tidak menampilkan preview foto kost/kamar, melainkan hanya kotak placeholder dengan logo *RuangSinggah*.
+- **Akar Masalah**:
+  1. **Kegagalan Query Kolom Non-Eksisten `subscription_status`**:
+     - Pada `MyKost.tsx:523`, query batch fetching tabel `properties` menyertakan kolom `subscription_status` (`.select('..., subscription_status')`).
+     - Kolom `subscription_status` berada pada tabel `mitra`, bukan tabel `properties`. Akibatnya PostgREST melempar error `code: 42703 (column properties.subscription_status does not exist)`, menyebabkan query data properti gagal secara total (`null`).
+  2. **Efek Ketiadaan Data Properti (`propMap` Kosong)**:
+     - Karena query properti gagal, objek `prop` bernilai `undefined`, daftar kamar `prop?.room_types` tidak dapat dicocokkan, dan variabel `roomPhotos` serta `displayImg` bernilai `null`, sehingga komponen kartu otomatis jatuh ke tampilan thumbnail fallback logo *RuangSinggah*.
+- **Implementasi Solusi**:
+  1. **Koreksi Kolom Query `properties`**:
+     - Menghapus kolom non-eksisten `subscription_status` dari `.select(...)` tabel `properties` di `MyKost.tsx`.
+  2. **Penambahan Fallback `mitra_kostmanager`**:
+     - Menambahkan pengecekan cadangan ke tabel `mitra_kostmanager` untuk properti KostManager yang ID-nya tercatat khusus di tabel mitra agar `propMap` selalu lengkap 100%.
+  3. **Normalisasi URL Foto Kamar & Properti**:
+     - Menerapkan helper `normalizePhotoUrl` untuk mengubah seluruh path storage lokal menjadi URL publik Supabase yang valid secara aman (`supabase.storage.from('properties').getPublicUrl(path)`).
+     - Memastikan resolusi foto kartu memprioritaskan foto spesifik kamar target (kamar tidur/interior/kamar mandi) dan melakukan fallback anggun ke foto tampak depan gedung (*Bangunan Depan*).
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` berhasil 100% (✓ 2531 modules transformed, 34.97s, 0 error).
+  - Uji verifikasi resolusi gambar Kamar 4 Kost Madani berhasil memuat 6 foto kamar dan menyetel `displayImg` utama secara sempurna.
+
 ### 210. Session-Aware Deduplikasi Booking 'Kost Saya' & Sinkronisasi Status Check-Out Portal KostManager (`MyKost.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna melaporkan bahwa setelah akunnya dikeluarkan dari status penghuni (check-out), kartu hunian lama berhasil hilang dari tab 'Aktif'. Namun saat melakukan pengajuan sewa ulang untuk uji coba kamar baru, kartunya tidak muncul sama sekali di menu "Kost Saya".
