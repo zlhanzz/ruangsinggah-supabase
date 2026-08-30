@@ -2524,7 +2524,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                             {/* Lapor Kendala Fasilitas Kamar */}
                                             {isPaid && !kost.is_checked_out && (
                                                 <button
-                                                    onClick={() => handleReportIssueWhatsApp(kost)}
+                                                    onClick={() => handleOpenComplaint(kost)}
                                                     className="w-full bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
                                                 >
                                                     <Wrench className="w-3.5 h-3.5 text-rose-500" /> Lapor Kendala Kamar

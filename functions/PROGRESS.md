@@ -2,6 +2,65 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 216. Sistem Manajemen Laporan Kendala Penghuni di Portal KostManager & Form Lapor In-App (`MyKost.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar tombol "Lapor Kendala Kamar" pada halaman "Kost Saya" (`MyKost.tsx`) tidak langsung melempar pengguna ke nomor WhatsApp admin, melainkan menggunakan formulir in-app di dalam sistem.
+  - Pengguna meminta pembuatan menu/tab baru di Portal KostManager untuk menampung, memantau, dan mengelola seluruh tiket laporan kendala penghuni untuk semua properti terkelola.
+  - Dari portal tersebut, tim pengelola dapat memproses status komplain serta **meneruskan (*forward*) laporan kendala ke pemilik kost masing-masing** melalui WhatsApp.
+- **Implementasi Solusi**:
+  1. **Formulir Pelaporan In-App di Sisi Penghuni (`MyKost.tsx`)**:
+     - Mengalihkan tombol *"Lapor Kendala Kamar"* ke formulir modal in-app `handleOpenComplaint`.
+     - Penghuni dapat memilih kategori masalah (AC, Listrik, Air/Pipa, Kebersihan, Furnitur/Kunci, dll.), tingkat urgensi (*Normal* vs *🚨 Darurat*), judul dan rincian masalah, serta melampirkan foto bukti yang otomatis dikompresi ke WebP sebelum diunggah ke storage.
+     - Laporan tersimpan terstruktur di tabel `complaints` Supabase.
+  2. **Menu Baru '🛠️ Laporan Kendala' di Portal KostManager (`KostManagerPortal.tsx`)**:
+     - **Navigasi Sidebar**: Menambahkan tab `complaints` dengan badge counter jumlah kendala aktif (*open / in_progress*).
+     - **Ringkasan KPI**: 4 kartu statistik (Total Laporan, Menunggu Tindakan / Baru Masuk, Kendala Darurat 🚨, Telah Selesai).
+     - **Filter & Pencarian**: Filter status (*Semua, Baru Masuk, Diproses, Selesai*), filter tingkat urgensi (*Semua, Darurat, Standar*), serta pencarian real-time (nama penghuni, unit kamar, nama kost, judul/deskripsi).
+     - **Kartu Kendala Interaktif**: Menampilkan nama properti, nomor unit kamar, tanggal lapor, badge status, badge urgensi, badge kategori, deskripsi kendala, thumbnail foto bukti (dengan modal zoom preview gambar besar), dan kartu info kontak penghuni (+ tombol chat penghuni).
+     - **Fitur 1-Klik '📲 Teruskan ke Pemilik Kost (WhatsApp)'**: Menyusun draft pesan WhatsApp profesional otomatis yang ditujukan ke pemilik properti (`owner_phone`) berisi seluruh rincian laporan dan tautan foto bukti kerusakan.
+     - **Pembaruan Status Penanganan Realtime**: Tombol aksi 1-klik untuk mengubah status tiket (*Mulai Diproses*, *Tandai Selesai*, *Buka Kembali*) yang otomatis mengirimkan notifikasi status ke akun penghuni.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, 37.18s, 0 error).
+
+### 215. Sinkronisasi Transaksi Online & Perpanjangan Sewa ke Tabel Tagihan Portal KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa setelah melakukan simulasi perpanjangan sewa, riwayatnya belum muncul pada menu "Riwayat Pembayaran Sewa" di Portal KostManager (`KostManagerPortal.tsx`).
+- **Akar Masalah**:
+  - Query transaksi di `loadAllData()` sebelumnya hanya memfilter transaksi dengan kueri kaku tanpa menyertakan `product_type: 'perpanjangan_sewa'`, `sewa`, `rent`, dan `tagihan_ekstra`, serta tabel tagihan hanya membaca invoice dari tabel `manual_invoices`.
+- **Implementasi Solusi**:
+  1. **Perluasan Filter Transaksi Online**:
+     - Menyertakan seluruh transaksi online ber-`product_type` `'perpanjangan_sewa'`, `'kost_booking'`, `'sewa'`, `'rent'`, dan `'tagihan_ekstra'`.
+  2. **Pemetaan Unified Stream Invoice**:
+     - Memetakan transaksi online menjadi format `InvoiceRecord` (`onlineInvoices`) dan menggabungkannya secara terpadu (*unified stream*) dengan invoice manual via `combinedInvoicesMap`.
+  3. **Integrasi Kwitansi Digital Resmi**:
+     - Menghubungkan tombol **"🧾 Kwitansi"** dan **"💬 Kirim WA"** pada tabel tagihan lunas agar langsung membuka lembar `DigitalReceiptModal` resmi berstempel.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, 34.84s, 0 error).
+
+### 214. Peningkatan Komprehensif Modal Perpanjangan Sewa 'Kost Saya' (`MyKost.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar modal perpanjangan sewa pada menu "Kost Saya" dilengkapi informasi masa sewa sekarang, simulasi tanggal mulai baru, tanggal berakhir baru, total jangka waktu hari, dan riwayat perpanjangan sewa sebelumnya.
+- **Implementasi Solusi**:
+  1. **Navigasi 2-Tab Internal Modal**: Tab `Form Perpanjangan` dan `Riwayat Transaksi`.
+  2. **Kartu Status Masa Sewa Aktif**: Tanggal masuk, jatuh tempo saat ini, dan sisa hari tinggal.
+  3. **Live Kalkulator Timeline Perpanjangan Bersambung**: Menampilkan tanggal mulai baru, tanggal berakhir baru, dan total durasi hari bersambung (`+31 Hari`, `+92 Hari`, dsb.).
+  4. **Tabel Riwayat Perpanjangan Sewa Lunas**: Menampilkan daftar pembayaran sewa sebelumnya dengan tombol **"🧾 Lihat Kwitansi"**.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, 32.55s, 0 error).
+
 ### 213. Perbaikan Kolom Skema `end_date` & Penambahan `room_number` pada Tabel `resident_status` saat Pengajuan Sewa (`userService.ts`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna melaporkan error console saat melakukan pengajuan sewa kamar:

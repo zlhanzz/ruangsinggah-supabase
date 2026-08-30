@@ -77,7 +77,8 @@ import {
     Inbox,
     ClipboardList,
     UserCheck,
-    UserX
+    UserX,
+    Wrench
 } from 'lucide-react';
 import { KostManagerPackage } from '../../types';
 import { 
@@ -929,6 +930,26 @@ interface InvoiceRecord {
     metadata?: any;
 }
 
+export interface ComplaintRecord {
+    id: string;
+    kost_id: string;
+    kost_name: string;
+    room_number: string;
+    user_id: string;
+    user_name: string;
+    user_phone: string;
+    category: string;
+    urgency: 'NORMAL' | 'EMERGENCY' | string;
+    title: string;
+    description: string;
+    photo_url: string;
+    status: 'open' | 'in_progress' | 'resolved' | 'closed' | string;
+    admin_notes?: string;
+    created_at: string;
+    updated_at?: string;
+    property?: ManagedProperty;
+}
+
 
 // --- TENANT LIFECYCLE ENGINE TYPES & HELPERS ---
 export interface TenantLifecycleInfo {
@@ -1112,11 +1133,19 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     const [tenants, setTenants] = useState<TenantRecord[]>([]);
     const [bookings, setBookings] = useState<any[]>([]);
     const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
+    const [complaints, setComplaints] = useState<ComplaintRecord[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [ownersList, setOwnersList] = useState<{ id: string; name: string; phone: string }[]>([]);
     const [packages, setPackages] = useState<KostManagerPackage[]>([]);
     const [isAddPkgOpen, setIsAddPkgOpen] = useState(false);
     const [editingPkgId, setEditingPkgId] = useState<string | null>(null);
+
+    // Filter & Search Complaints State
+    const [complaintSearch, setComplaintSearch] = useState('');
+    const [complaintStatusFilter, setComplaintStatusFilter] = useState<'ALL' | 'open' | 'in_progress' | 'resolved'>('ALL');
+    const [complaintUrgencyFilter, setComplaintUrgencyFilter] = useState<'ALL' | 'NORMAL' | 'EMERGENCY'>('ALL');
+    const [updatingComplaintId, setUpdatingComplaintId] = useState<string | null>(null);
+    const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
 
     const [pkgForm, setPkgForm] = useState({
         duration_months: 1,
@@ -1877,6 +1906,42 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             setInvoices(finalInvoices);
             setBookings(managedBookings);
 
+            // 10. Ambil data komplain / kendala fasilitas untuk seluruh properti KostManager
+            let managedComplaints: ComplaintRecord[] = [];
+            if (allManagedIds.length > 0) {
+                const { data: rawComplaints, error: cErr } = await supabase
+                    .from('complaints')
+                    .select('*')
+                    .in('kost_id', allManagedIds)
+                    .order('created_at', { ascending: false });
+
+                if (cErr) console.warn('Warning loading complaints for KostManager:', cErr);
+
+                managedComplaints = (rawComplaints || []).map((c: any) => {
+                    const matchedProp = mappedProperties.find(p => p.id === c.kost_id);
+                    return {
+                        id: c.id,
+                        kost_id: c.kost_id,
+                        kost_name: c.kost_name || matchedProp?.title || 'Kost',
+                        room_number: c.room_number || '-',
+                        user_id: c.user_id,
+                        user_name: c.user_name || 'Penghuni',
+                        user_phone: c.user_phone || '-',
+                        category: c.category || 'Fasilitas Kamar',
+                        urgency: (c.urgency || 'NORMAL').toUpperCase(),
+                        title: c.title || 'Laporan Kendala',
+                        description: c.description || '-',
+                        photo_url: c.photo_url || '',
+                        status: (c.status || 'open').toLowerCase(),
+                        admin_notes: c.admin_notes || '',
+                        created_at: c.created_at || c.createdAt || new Date().toISOString(),
+                        updated_at: c.updated_at || c.updatedAt || c.created_at,
+                        property: matchedProp
+                    };
+                });
+            }
+            setComplaints(managedComplaints);
+
             // Load Sesi Chat KostManager
             loadChatSessions(allManagedIds);
         } catch (err) {
@@ -2108,6 +2173,93 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
         } finally {
             setIsCheckingOut(false);
         }
+    };
+
+    // --- COMPLAINTS MANAGEMENT HANDLERS ---
+    const handleUpdateComplaintStatus = async (id: string, newStatus: string) => {
+        setUpdatingComplaintId(id);
+        try {
+            const { error } = await supabase
+                .from('complaints')
+                .update({ 
+                    status: newStatus,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', id);
+
+            if (error) throw error;
+
+            const targetComplaint = complaints.find(c => c.id === id);
+            if (targetComplaint && targetComplaint.user_id) {
+                const statusLabel = newStatus === 'in_progress' 
+                    ? 'Sedang Ditangani oleh Tim Teknis' 
+                    : newStatus === 'resolved' 
+                        ? 'Telah Selesai Ditangani' 
+                        : 'Menunggu Penanganan';
+                
+                sendNotification(
+                    targetComplaint.user_id,
+                    `Status Laporan Kendala: ${statusLabel}`,
+                    `Laporan kendala Anda "${targetComplaint.title}" di ${targetComplaint.kost_name} (Kamar ${targetComplaint.room_number}) kini berstatus ${statusLabel}.`,
+                    newStatus === 'resolved' ? 'success' : 'info',
+                    { complaintId: id, kostId: targetComplaint.kost_id },
+                    '/my-kost'
+                ).catch(err => console.warn('Failed to send complaint notification:', err));
+            }
+
+            setComplaints(prev => prev.map(c => c.id === id ? { ...c, status: newStatus, updated_at: new Date().toISOString() } : c));
+        } catch (err: any) {
+            console.error('Error updating complaint status:', err);
+            alert('Gagal memperbarui status komplain: ' + err.message);
+        } finally {
+            setUpdatingComplaintId(null);
+        }
+    };
+
+    const handleForwardComplaintToOwnerWhatsApp = (complaint: ComplaintRecord) => {
+        const prop = complaint.property || properties.find(p => p.id === complaint.kost_id);
+        const rawPhone = prop?.owner_phone || prop?.omnichannel_contact_phone || '';
+        const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+
+        if (!cleanPhone) {
+            alert(`Nomor telepon pemilik properti "${complaint.kost_name}" belum terdaftar. Silakan periksa data kontak pemilik.`);
+            return;
+        }
+
+        const formattedPhone = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : (cleanPhone.startsWith('62') ? cleanPhone : '62' + cleanPhone);
+        const dateStr = new Date(complaint.created_at).toLocaleDateString('id-ID', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        const urgencyEmoji = complaint.urgency === 'EMERGENCY' ? '🚨 *DARURAT (Perlu Tindakan Cepat)*' : '🔹 *Standar (Normal)*';
+
+        const text = encodeURIComponent(
+            `*LAPORAN KENDALA FASILITAS PENGHUNI - KOSTMANAGER RUANGSINGGAH*\n\n` +
+            `Halo Bapak/Ibu Pemilik *${complaint.kost_name}*,\n` +
+            `Berikut kami teruskan laporan kendala/kerusakan dari penghuni kamar Anda:\n\n` +
+            `🏠 *Nama Kost:* ${complaint.kost_name}\n` +
+            `🚪 *Unit Kamar:* Kamar ${complaint.room_number}\n` +
+            `👤 *Nama Penghuni:* ${complaint.user_name}\n` +
+            `📱 *Kontak Penghuni:* ${complaint.user_phone || '-'}\n` +
+            `🔧 *Kategori Masalah:* ${complaint.category}\n` +
+            `⚠️ *Tingkat Urgensi:* ${urgencyEmoji}\n` +
+            `📅 *Waktu Dilaporkan:* ${dateStr}\n\n` +
+            `📌 *Pokok Masalah:*\n` +
+            `*${complaint.title}*\n\n` +
+            `📝 *Deskripsi / Rincian Kerusakan:*\n` +
+            `"${complaint.description}"\n\n` +
+            (complaint.photo_url ? `📸 *Foto Bukti Kerusakan:*\n${complaint.photo_url}\n\n` : '') +
+            `Mohon dapat dikoordinasikan atau ditindaklanjuti untuk perbaikan unit tersebut.\n` +
+            `Jika membutuhkan bantuan teknisi atau tindak lanjut dari tim operasional KostManager, silakan hubungi kami.\n\n` +
+            `_Salam hangat,_\n` +
+            `*Tim Operasional KostManager RuangSinggah.id*`
+        );
+
+        window.open(`https://wa.me/${formattedPhone}?text=${text}`, '_blank');
     };
 
     // --- QUICK OCCUPANCY MUTATION HANDLERS (ROOM MATRIX TOGGLE) ---
@@ -2838,11 +2990,13 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                         { key: 'bookings', icon: '📥', label: 'Pengajuan Sewa' },
                         { key: 'chats', icon: '💬', label: 'Pesan & Chat Customer' },
                         { key: 'tenants', icon: '👥', label: 'Penghuni' },
+                        { key: 'complaints', icon: '🛠️', label: 'Laporan Kendala' },
                         { key: 'billing', icon: '🧾', label: 'Riwayat Pembayaran Sewa' },
                         { key: 'packages', icon: '⚙️', label: 'Harga Langganan' }
                     ] as const).map(t => {
                         const unreadChatCount = chatSessions.reduce((acc, s) => acc + (s.unread_count || 0), 0);
                         const pendingBookingCount = bookings.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL').length;
+                        const activeComplaintCount = complaints.filter(c => c.status === 'open' || c.status === 'in_progress').length;
                         return (
                             <button
                                 key={t.key}
@@ -2865,6 +3019,11 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                 {t.key === 'bookings' && pendingBookingCount > 0 && (
                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === 'bookings' ? 'bg-orange-500 text-white' : 'bg-rose-500 text-white animate-pulse'}`}>
                                         {pendingBookingCount}
+                                    </span>
+                                )}
+                                {t.key === 'complaints' && activeComplaintCount > 0 && (
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === 'complaints' ? 'bg-orange-500 text-white' : 'bg-rose-500 text-white animate-pulse'}`}>
+                                        {activeComplaintCount}
                                     </span>
                                 )}
                             </button>
@@ -2893,6 +3052,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                  activeTab === 'bookings' ? 'Pengajuan Sewa Masuk' :
                                  activeTab === 'chats' ? 'Pesan & Chat Customer' :
                                  activeTab === 'tenants' ? 'Daftar Penghuni' :
+                                 activeTab === 'complaints' ? 'Laporan Kendala Penghuni' :
                                  activeTab === 'billing' ? 'Riwayat Pembayaran Sewa' : 'Harga Langganan KostManager'}
                             </h2>
                             <p className="text-xs text-gray-400 font-bold mt-1">
@@ -2901,6 +3061,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                  activeTab === 'bookings' ? 'Tinjau dan verifikasi permintaan sewa masuk dari calon penghuni sebelum pembayaran' :
                                  activeTab === 'chats' ? 'Layanan CS terpusat & konsultasi calon penyewa untuk seluruh kost terkelola' :
                                  activeTab === 'tenants' ? 'Daftar penghuni aktif beserta periode sewa dan detail kontak' :
+                                 activeTab === 'complaints' ? 'Pusat penanganan komplain, koordinasi perbaikan fasilitas, dan penerusan laporan ke pemilik kost' :
                                  activeTab === 'billing' ? 'Mencatat, memantau riwayat pembayaran sewa, dan mengelola tagihan sewa kost' :
                                  'Mengatur pilihan durasi dan harga paket langganan KostManager untuk Mitra'}
                             </p>
@@ -4804,6 +4965,380 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     })()}
 
                     {/* =========================================== */}
+                    {/* TAB: COMPLAINTS (LAPORAN KENDALA PENGHUNI) */}
+                    {/* =========================================== */}
+                    {activeTab === 'complaints' && (() => {
+                        const totalComplaints = complaints.length;
+                        const openCount = complaints.filter(c => c.status === 'open').length;
+                        const inProgressCount = complaints.filter(c => c.status === 'in_progress').length;
+                        const emergencyCount = complaints.filter(c => c.urgency === 'EMERGENCY' && c.status !== 'resolved' && c.status !== 'closed').length;
+                        const resolvedCount = complaints.filter(c => c.status === 'resolved' || c.status === 'closed').length;
+
+                        const filteredComplaints = complaints.filter(c => {
+                            // Status Filter
+                            if (complaintStatusFilter === 'open' && c.status !== 'open') return false;
+                            if (complaintStatusFilter === 'in_progress' && c.status !== 'in_progress') return false;
+                            if (complaintStatusFilter === 'resolved' && c.status !== 'resolved' && c.status !== 'closed') return false;
+
+                            // Urgency Filter
+                            if (complaintUrgencyFilter !== 'ALL' && c.urgency !== complaintUrgencyFilter) return false;
+
+                            // Search
+                            if (complaintSearch.trim()) {
+                                const q = complaintSearch.toLowerCase().trim();
+                                const inTitle = (c.title || '').toLowerCase().includes(q);
+                                const inDesc = (c.description || '').toLowerCase().includes(q);
+                                const inUser = (c.user_name || '').toLowerCase().includes(q);
+                                const inPhone = (c.user_phone || '').toLowerCase().includes(q);
+                                const inKost = (c.kost_name || '').toLowerCase().includes(q);
+                                const inRoom = (c.room_number || '').toLowerCase().includes(q);
+                                const inCat = (c.category || '').toLowerCase().includes(q);
+                                return inTitle || inDesc || inUser || inPhone || inKost || inRoom || inCat;
+                            }
+                            return true;
+                        });
+
+                        return (
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                {/* Top Stats Overview Cards */}
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shrink-0">
+                                            📋
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Laporan</p>
+                                            <p className="text-2xl font-black text-gray-900 mt-0.5">{totalComplaints}</p>
+                                            <p className="text-[10px] text-gray-500 font-bold mt-0.5">Semua Kost Terkelola</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shrink-0">
+                                            ⏳
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Menunggu Tindakan</p>
+                                            <p className="text-2xl font-black text-amber-900 mt-0.5">{openCount}</p>
+                                            <p className="text-[10px] text-amber-700 font-bold mt-0.5">Tiket Baru Masuk</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white p-5 rounded-3xl border border-rose-100 shadow-sm flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center text-xl shrink-0">
+                                            🚨
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest">Kendala Darurat</p>
+                                            <p className="text-2xl font-black text-rose-900 mt-0.5">{emergencyCount}</p>
+                                            <p className="text-[10px] text-rose-700 font-bold mt-0.5">Butuh Perbaikan Cepat</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white p-5 rounded-3xl border border-emerald-100 shadow-sm flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
+                                            ✅
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Telah Selesai</p>
+                                            <p className="text-2xl font-black text-emerald-900 mt-0.5">{resolvedCount}</p>
+                                            <p className="text-[10px] text-emerald-700 font-bold mt-0.5">Kendala Teratasi</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Filter & Search Toolbar */}
+                                <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                                    <div className="relative flex-1 max-w-md">
+                                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                        <input
+                                            type="text"
+                                            value={complaintSearch}
+                                            onChange={e => setComplaintSearch(e.target.value)}
+                                            placeholder="🔍 Cari penghuni, kamar, kost, atau kendala..."
+                                            className="w-full pl-11 pr-4 py-2.5 bg-gray-50 hover:bg-gray-100/80 focus:bg-white border border-gray-200 rounded-2xl text-xs font-bold text-gray-800 focus:outline-none focus:border-orange-500 transition-all placeholder:text-gray-400 placeholder:font-medium"
+                                        />
+                                        {complaintSearch && (
+                                            <button
+                                                onClick={() => setComplaintSearch('')}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {/* Status Filter Pills */}
+                                        <div className="inline-flex bg-gray-100 p-1 rounded-2xl text-xs font-bold">
+                                            {(['ALL', 'open', 'in_progress', 'resolved'] as const).map(st => (
+                                                <button
+                                                    key={st}
+                                                    type="button"
+                                                    onClick={() => setComplaintStatusFilter(st)}
+                                                    className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${
+                                                        complaintStatusFilter === st
+                                                            ? 'bg-white text-gray-900 shadow-xs'
+                                                            : 'text-gray-500 hover:text-gray-900'
+                                                    }`}
+                                                >
+                                                    {st === 'ALL' ? 'Semua' : st === 'open' ? `Baru (${openCount})` : st === 'in_progress' ? `Diproses (${inProgressCount})` : 'Selesai'}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Urgency Filter Pills */}
+                                        <div className="inline-flex bg-gray-100 p-1 rounded-2xl text-xs font-bold">
+                                            {(['ALL', 'EMERGENCY', 'NORMAL'] as const).map(ug => (
+                                                <button
+                                                    key={ug}
+                                                    type="button"
+                                                    onClick={() => setComplaintUrgencyFilter(ug)}
+                                                    className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${
+                                                        complaintUrgencyFilter === ug
+                                                            ? ug === 'EMERGENCY' ? 'bg-rose-600 text-white shadow-xs' : 'bg-white text-gray-900 shadow-xs'
+                                                            : 'text-gray-500 hover:text-gray-900'
+                                                    }`}
+                                                >
+                                                    {ug === 'ALL' ? 'Semua Urgensi' : ug === 'EMERGENCY' ? '🚨 Darurat' : 'Standar'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Complaints Card Grid */}
+                                {filteredComplaints.length === 0 ? (
+                                    <div className="bg-white rounded-3xl p-12 border border-gray-100 shadow-sm text-center">
+                                        <div className="w-16 h-16 bg-orange-50 text-orange-500 rounded-3xl flex items-center justify-center mx-auto mb-4 text-2xl">
+                                            ✨
+                                        </div>
+                                        <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Tidak Ada Laporan Kendala</h3>
+                                        <p className="text-xs text-gray-400 font-medium max-w-sm mx-auto mt-1">
+                                            {complaintSearch || complaintStatusFilter !== 'ALL' || complaintUrgencyFilter !== 'ALL'
+                                                ? 'Tidak ada laporan yang sesuai dengan filter pencarian Anda.'
+                                                : 'Seluruh fasilitas kost berjalan lancar dan belum ada keluhan baru dari penghuni.'}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                        {filteredComplaints.map(c => {
+                                            const isEmergency = c.urgency === 'EMERGENCY';
+                                            const isOpen = c.status === 'open';
+                                            const isInProgress = c.status === 'in_progress';
+                                            const isResolved = c.status === 'resolved' || c.status === 'closed';
+
+                                            const dateFormatted = new Date(c.created_at).toLocaleDateString('id-ID', {
+                                                day: 'numeric',
+                                                month: 'short',
+                                                year: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            });
+
+                                            return (
+                                                <div 
+                                                    key={c.id}
+                                                    className={`bg-white rounded-3xl p-6 border shadow-sm transition-all flex flex-col justify-between ${
+                                                        isEmergency && !isResolved
+                                                            ? 'border-rose-300 ring-2 ring-rose-500/10'
+                                                            : 'border-gray-100 hover:border-gray-200'
+                                                    }`}
+                                                >
+                                                    <div>
+                                                        {/* Card Header: Kost, Room, Badges */}
+                                                        <div className="flex items-start justify-between gap-3 pb-4 border-b border-gray-100">
+                                                            <div>
+                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                    <span className="bg-slate-900 text-white text-[10px] font-black px-2.5 py-1 rounded-xl uppercase tracking-wider">
+                                                                        {c.kost_name}
+                                                                    </span>
+                                                                    <span className="bg-orange-100 text-orange-700 text-[10px] font-black px-2.5 py-1 rounded-xl uppercase tracking-wider">
+                                                                        Kamar {c.room_number}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-gray-400 font-bold flex items-center gap-1">
+                                                                        <Clock size={11} /> {dateFormatted}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+                                                                    {isEmergency ? (
+                                                                        <span className="bg-rose-100 text-rose-700 border border-rose-300 text-[9px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider animate-pulse flex items-center gap-1">
+                                                                            🚨 Darurat (Urgent)
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="bg-slate-100 text-slate-600 text-[9px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                                                            Standar (Normal)
+                                                                        </span>
+                                                                    )}
+
+                                                                    <span className="bg-gray-100 text-gray-700 text-[9px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                                                        🔧 {c.category}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Status Badge */}
+                                                            <div>
+                                                                <span className={`text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wider block text-center border ${
+                                                                    isOpen ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                                                                    isInProgress ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                                    'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                                }`}>
+                                                                    {isOpen ? '⏳ Baru Masuk' : isInProgress ? '⚙️ Diproses' : '✅ Selesai'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Main Content: Title, Description, Photo */}
+                                                        <div className="py-4 space-y-3">
+                                                            <div>
+                                                                <h4 className="text-sm font-black text-gray-900 tracking-tight">
+                                                                    {c.title}
+                                                                </h4>
+                                                                <p className="text-xs text-gray-600 mt-1 leading-relaxed whitespace-pre-line bg-gray-50 p-3.5 rounded-2xl border border-gray-100">
+                                                                    {c.description}
+                                                                </p>
+                                                            </div>
+
+                                                            {/* Photo Attachment if exists */}
+                                                            {c.photo_url && (
+                                                                <div className="flex items-center gap-3">
+                                                                    <div 
+                                                                        onClick={() => setPreviewPhotoUrl(c.photo_url)}
+                                                                        className="relative w-24 h-20 rounded-2xl overflow-hidden bg-slate-900 border border-gray-200 cursor-pointer group shrink-0"
+                                                                        title="Klik untuk memperbesar foto bukti"
+                                                                    >
+                                                                        <img src={c.photo_url} alt="Bukti Kendala" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                                                            <ZoomIn size={16} />
+                                                                        </div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Foto Bukti Kerusakan</span>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setPreviewPhotoUrl(c.photo_url)}
+                                                                            className="text-xs font-black text-orange-600 hover:text-orange-700 flex items-center gap-1 mt-0.5 hover:underline cursor-pointer"
+                                                                        >
+                                                                            <Eye size={12} /> Buka Foto Lengkap
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Tenant Info Card */}
+                                                            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 flex items-center justify-between gap-3">
+                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                    <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center font-black text-xs shrink-0">
+                                                                        {(c.user_name || 'P').charAt(0)}
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-xs font-black text-gray-900 truncate">{c.user_name}</p>
+                                                                        <p className="text-[10px] text-gray-500 font-bold">{c.user_phone || '-'}</p>
+                                                                    </div>
+                                                                </div>
+                                                                {c.user_phone && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            const cleanPhone = (c.user_phone || '').replace(/[^0-9]/g, '');
+                                                                            const fPhone = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : (cleanPhone.startsWith('62') ? cleanPhone : '62' + cleanPhone);
+                                                                            const greetingText = encodeURIComponent(
+                                                                                `Halo Kak ${c.user_name},\n` +
+                                                                                `Kami dari Tim Operasional KostManager RuangSinggah terkait laporan kendala "${c.title}" di kamar ${c.room_number} ${c.kost_name}.`
+                                                                            );
+                                                                            window.open(`https://wa.me/${fPhone}?text=${greetingText}`, '_blank');
+                                                                        }}
+                                                                        className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-800 text-[10px] font-black uppercase tracking-wider border border-gray-200 transition-all flex items-center gap-1.5 shrink-0 shadow-2xs cursor-pointer"
+                                                                    >
+                                                                        <MessageSquare size={12} className="text-emerald-600" />
+                                                                        <span>Chat Penghuni</span>
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Card Actions Footer */}
+                                                    <div className="pt-4 border-t border-gray-100 space-y-2.5">
+                                                        {/* Primary Forward to Owner Button */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleForwardComplaintToOwnerWhatsApp(c)}
+                                                            className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs active:scale-[0.98] cursor-pointer"
+                                                            title="Kirim rincian kendala langsung ke WhatsApp pemilik kost"
+                                                        >
+                                                            <Phone size={13} />
+                                                            <span>📲 Teruskan ke Pemilik Kost (WhatsApp)</span>
+                                                        </button>
+
+                                                        {/* Status Change Buttons */}
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            {isOpen ? (
+                                                                <>
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={updatingComplaintId === c.id}
+                                                                        onClick={() => handleUpdateComplaintStatus(c.id, 'in_progress')}
+                                                                        className="py-2 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-wider border border-blue-200 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                                                    >
+                                                                        <Wrench size={11} />
+                                                                        <span>⚙️ Mulai Diproses</span>
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={updatingComplaintId === c.id}
+                                                                        onClick={() => handleUpdateComplaintStatus(c.id, 'resolved')}
+                                                                        className="py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-wider border border-emerald-200 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                                                    >
+                                                                        <CheckCircle2 size={11} />
+                                                                        <span>✅ Tandai Selesai</span>
+                                                                    </button>
+                                                                </>
+                                                            ) : isInProgress ? (
+                                                                <>
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={updatingComplaintId === c.id}
+                                                                        onClick={() => handleUpdateComplaintStatus(c.id, 'open')}
+                                                                        className="py-2 px-3 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 text-[10px] font-black uppercase tracking-wider border border-gray-200 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                                                    >
+                                                                        <RotateCw size={11} />
+                                                                        <span>Kembalikan ke Baru</span>
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={updatingComplaintId === c.id}
+                                                                        onClick={() => handleUpdateComplaintStatus(c.id, 'resolved')}
+                                                                        className="py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+                                                                    >
+                                                                        <CheckCircle2 size={11} />
+                                                                        <span>✅ Selesai Ditangani</span>
+                                                                    </button>
+                                                                </>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={updatingComplaintId === c.id}
+                                                                    onClick={() => handleUpdateComplaintStatus(c.id, 'in_progress')}
+                                                                    className="col-span-2 py-2 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                                                >
+                                                                    <RotateCw size={11} />
+                                                                    <span>Buka Kembali Tiket Kendala</span>
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
+
+                    {/* =========================================== */}
                     {/* TAB: BILLING                                */}
                     {/* =========================================== */}
                     {activeTab === 'billing' && (
@@ -5551,8 +6086,8 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                             </div>
                         );
                     })()}
-                </>
-            )}
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -6138,6 +6673,45 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                 }}
                 receipt={selectedReceipt}
             />
+
+            {/* MODAL 7: ZOOM PREVIEW FOTO BUKTI KERUSAKAN */}
+            {previewPhotoUrl && (
+                <div 
+                    className="fixed inset-0 bg-black/85 backdrop-blur-md z-[120] flex items-center justify-center p-4 animate-in fade-in cursor-pointer"
+                    onClick={() => setPreviewPhotoUrl(null)}
+                >
+                    <div className="relative max-w-3xl w-full max-h-[85vh] bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 bg-slate-900/90 border-b border-white/10 flex justify-between items-center text-white">
+                            <span className="text-xs font-black uppercase tracking-wider flex items-center gap-2">
+                                📸 Lampiran Foto Bukti Kendala
+                            </span>
+                            <button
+                                onClick={() => setPreviewPhotoUrl(null)}
+                                className="p-2 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+                        <div className="flex-1 p-2 flex items-center justify-center overflow-auto bg-black/40">
+                            <img 
+                                src={previewPhotoUrl} 
+                                alt="Foto Kerusakan Besar" 
+                                className="max-w-full max-h-[70vh] object-contain rounded-2xl shadow-lg" 
+                            />
+                        </div>
+                        <div className="p-3 bg-slate-900/90 border-t border-white/10 text-center">
+                            <a 
+                                href={previewPhotoUrl} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-black text-orange-400 hover:text-orange-300 uppercase tracking-wider"
+                            >
+                                <ExternalLink size={12} /> Buka Gambar Asli di Tab Baru
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
