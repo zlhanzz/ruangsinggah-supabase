@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 227. Independen Scrollbar pada Sidebar Navigasi Admin Dashboard (`Dashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar daftar menu pada sidebar navigasi admin di Dashboard Admin dapat di-scroll ke bawah secara mandiri tanpa membuat badan website atau konten utama halaman ikut ter-scroll (*"pada navigasi admin ini , bisa nggak sih scroll ke bawah tanpa harus badan websitenya atau isi web nya juga ikut scroll"*).
+- **Implementasi Solusi**:
+  1. **Penguncian Posisi & Dimensi Sidebar ([`Dashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Dashboard.tsx))**:
+     - Mengubah container `<aside>` pada `renderSidebar` menjadi `h-screen sticky top-0 z-20 hidden md:flex flex-col shrink-0`.
+     - Memberikan `shrink-0` pada container header (*Admin Panel* dan tombol *Lihat sebagai User*) agar selalu berada di posisi teratas yang nyaman diakses.
+  2. **Scroll Mandiri & Pencegahan Scroll Bocor**:
+     - Menerapkan `flex-1 overflow-y-auto overscroll-contain select-none scrollbar-thin scrollbar-thumb-gray-200 hover:scrollbar-thumb-gray-300` pada elemen `<nav>`.
+     - Properti `overscroll-contain` memastikan gesture scroll di atas sidebar tidak merambat (leak) ke document body / window.
+  3. **Penyesuaian Area Konten Utama**:
+     - Menambahkan `min-w-0` pada wrapper konten utama (`<div className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto">`) untuk mencegah horizontal layout blowout.
+- **File Tersentuh**:
+  - `functions/public/pages/Dashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `tsc` di `functions/` lulus (0 error).
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 19.78s, 0 error).
+
 ### 226. Sistem Pelaporan Iklan Kost oleh Pengguna & Pusat Manajemen Laporan Properti di Dashboard Admin (`KostDetail.tsx`, `PropertyManagement.tsx`, `userService.ts`, `adminService.ts`, `emailService.ts`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta agar pada halaman publik listing kost disediakan tombol pelaporan aduan bagi pengguna (*"kalau misalnya ada tombol pembekuan atau banned artinya kita perlu ada tombol laporkan nggak sih di tampilan listing kost dari sisi user?"*) untuk melaporkan indikasi penipuan, ketidaksesuaian data, atau pelanggaran pada listing mandiri (*Self-Listing*).

@@ -2071,8 +2071,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
 
 
     const renderSidebar = () => (
-        <aside className="w-64 bg-white border-r border-gray-200 min-h-[calc(100vh-80px)] hidden md:flex flex-col sticky top-20 z-10">
-            <div className="p-6 border-b border-gray-100">
+        <aside className="w-64 bg-white border-r border-gray-200 h-screen sticky top-0 z-20 hidden md:flex flex-col shrink-0">
+            <div className="p-6 border-b border-gray-100 shrink-0">
                 <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">
                     {isAdmin ? 'Admin Panel' : isOwner ? 'Owner Panel' : 'Agent Panel'}
                 </h2>
@@ -2088,7 +2088,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
                     </button>
                 )}
             </div>
-            <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+            <nav className="flex-1 p-4 space-y-1 overflow-y-auto overscroll-contain select-none scrollbar-thin scrollbar-thumb-gray-200 hover:scrollbar-thumb-gray-300">
                 {/* --- KATALOG UTAMA --- */}
                 <div className="pb-2">
                     <p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Katalog Utama</p>
@@ -2727,7 +2727,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, uid, user, onPageChange, on
             {/* SIDEBAR DESKTOP */}
             {(isAdmin || isOwner) && renderSidebar()}
 
-            <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+            <div className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto">
                 <div className="max-w-7xl mx-auto">
                     {loading ? (
                         <div className="text-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div></div>
