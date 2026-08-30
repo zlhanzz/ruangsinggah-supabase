@@ -6,27 +6,35 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Model priority cascade: Mulai dari model terbaru 3.7 Flash & 2.5 Flash, lalu fallback ke 2.0 / 1.5 Flash
+const CANDIDATE_MODELS = [
+  "gemini-3.7-flash",
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-1.5-pro"
+];
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const { text, imageUrl } = await req.json();
+    const { text, imageUrl, base64Image, mimeType } = await req.json();
 
     const GEMINI_KEYS_RAW = Deno.env.get('GEMINI_API_KEY') || "";
     const GEMINI_KEYS = GEMINI_KEYS_RAW.split(',').map(k => k.trim()).filter(k => k);
-    const GEMINI_API_KEY = GEMINI_KEYS[0] || "";
 
-    if (!GEMINI_API_KEY) {
+    if (GEMINI_KEYS.length === 0) {
       throw new Error("Gemini API key is not configured");
     }
 
     let contentsParts: any[] = [];
 
     const prompt = `
-Anda adalah AI pengekstrak data KTP khusus untuk RuangSinggah.id.
-Tugas Anda adalah membaca gambar KTP yang diberikan dan mengekstrak informasi terstruktur ke dalam format JSON yang bersih.
+Anda adalah AI OCR pengekstrak data KTP khusus untuk RuangSinggah.id.
+Tugas Anda adalah membaca gambar KTP yang diberikan dan mengekstrak informasi terstruktur ke dalam format JSON yang bersih dan akurat.
 
 ATURAN PENTING & KETAT:
 1. ABAIKAN NOISE LATAR BELAKANG: Gambar KTP mungkin diletakkan di atas laptop atau meja. JANGAN PERNAH mengekstrak teks stiker laptop (seperti "AMD", "RADEON", "Intel", "Ryzen", "GeForce") atau tombol keyboard (seperti "Caps Lock", "Shift", "Ctrl", "Alt", "Fn", "Space") sebagai bagian dari data KTP (misalnya jangan menjadikannya Nama atau Alamat KTP).
@@ -60,7 +68,14 @@ FORMAT OUTPUT (JSON SAJA, TANPA DEKORASI BACKTICKS / MURNI JSON):
 
     contentsParts.push({ text: prompt });
 
-    if (imageUrl) {
+    if (base64Image) {
+      contentsParts.push({
+        inlineData: {
+          mimeType: mimeType || "image/webp",
+          data: base64Image
+        }
+      });
+    } else if (imageUrl) {
       console.log(`Fetching image from URL: ${imageUrl}`);
       const imageRes = await fetch(imageUrl);
       if (!imageRes.ok) {
@@ -79,35 +94,69 @@ FORMAT OUTPUT (JSON SAJA, TANPA DEKORASI BACKTICKS / MURNI JSON):
     } else if (text) {
       contentsParts.push({ text: `DATA KTP HASIL OCR TEKS:\n${text}` });
     } else {
-      throw new Error("Missing both text and imageUrl parameters");
+      throw new Error("Missing text, imageUrl, or base64Image parameter");
     }
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: contentsParts }],
-        generationConfig: { response_mime_type: "application/json" }
-      })
-    });
+    let lastError: any = null;
+    let successfulResult: any = null;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Gemini API error ${response.status}: ${errorText}`);
+    // Model and Key cascade loop
+    outerLoop:
+    for (const model of CANDIDATE_MODELS) {
+      for (let kIdx = 0; kIdx < GEMINI_KEYS.length; kIdx++) {
+        const apiKey = GEMINI_KEYS[kIdx];
+        try {
+          console.log(`Trying Gemini model: ${model} (Key #${kIdx + 1})...`);
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: contentsParts }],
+                generationConfig: { response_mime_type: "application/json" }
+              })
+            }
+          );
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.warn(`Model ${model} with Key #${kIdx + 1} returned status ${response.status}: ${errorText}`);
+            lastError = `Gemini API error ${response.status}: ${errorText}`;
+            continue; // Coba key berikutnya atau model berikutnya
+          }
+
+          const json = await response.json();
+          const rawText = json.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+          const cleanedText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+          
+          let resultData = {};
+          try {
+            resultData = JSON.parse(cleanedText);
+          } catch (e) {
+            console.error("Failed to parse JSON from Gemini:", cleanedText);
+          }
+
+          successfulResult = {
+            success: true,
+            modelUsed: model,
+            data: resultData,
+            rawText
+          };
+          break outerLoop; // Sukses! Keluar dari loop
+        } catch (callErr) {
+          console.warn(`Fetch error with model ${model} key #${kIdx + 1}:`, callErr);
+          lastError = callErr;
+        }
+      }
     }
 
-    const json = await response.json();
-    const rawText = json.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-    const cleanedText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
-    let resultData = {};
-    try {
-      resultData = JSON.parse(cleanedText);
-    } catch (e) {
-      console.error("Failed to parse JSON from Gemini:", cleanedText);
+    if (!successfulResult) {
+      throw new Error(lastError || "All Gemini models and API keys failed");
     }
 
     return new Response(
-      JSON.stringify({ success: true, data: resultData, rawResponse: json, rawText }),
+      JSON.stringify(successfulResult),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

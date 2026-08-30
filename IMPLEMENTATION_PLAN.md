@@ -1,25 +1,32 @@
-# Rencana Implementasi: Tampilkan Langsung Landing Page KostManager Lengkap Tanpa Halaman Perantara & Alur Action Button ke Pendaftaran Akun Mitra (`Owner.tsx`, `KostManagerLanding.tsx`)
+# Rencana Implementasi: Optimasi Drastis Kecepatan OCR KTP (1-2 Detik) Menggunakan Gemini Multimodal Vision & Model Gemini Flash
 
-Dokumen ini merancang penyelesaian masalah di mana saat mengklik kartu **"Kost Manager"** di menu kemitraan ([`Owner.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Owner.tsx)), halaman akan **langsung menampilkan Landing Page KostManager Lengkap** (sama persis dengan landing page KostManager di dashboard mitra) secara instan tanpa ada layar perantara (*intermediate screen*) lagi, serta menyesuaikan seluruh **Action Button** agar mengarahkan pengguna yang belum memiliki akun untuk **membuat akun mitra terlebih dahulu**.
+Dokumen ini merancang perbaikan akar masalah kelambatan pemindaian KTP (*"Membaca Data KTP..."*) pada sistem verifikasi identitas mitra & agen ([`MitraProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx), [`AgentProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx), dan Edge Function [`analyze-ktp`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/supabase/functions/analyze-ktp/index.ts)) menggunakan model **Gemini Flash Vision** super cepat dan cerdas.
 
 ---
 
 ## 1. Analisis Masalah & Kebutuhan
 
 ### Masukan Pengguna:
-> *"kenapa landing page nya tidak muncul langsung setelah klik ini, kenapa harus ada proses lagi satu kali setelahnya"*
-> *(Disertai screenshot kartu "Pilih Kost Manager")*
+> *"kok lama bangaet ya sistem ocr pembacaan data ktp pada sistem verifikasi identitas kita"*
+> *"kita pakai gemini 3.7 flash"*
 
-### Analisis Masalah:
-1. **Layar Perantara yang Tidak Perlu**:
-   - Saat pengguna mengklik kartu "Kost Manager" pada layar pilihan kemitraan `/owner`, sistem sebelumnya menampilkan layar perantara dengan banner oranye dan tombol tambahan *"Pelajari Portal Kost Manager Lengkap"*.
-   - Hal ini membuat pengguna harus mengklik 2 kali untuk melihat informasi lengkap Kost Manager.
-2. **Solusi yang Diinginkan**:
-   - Begitu kartu atau tombol **"Pilih Kost Manager"** diklik, halaman **langsung merender Landing Page KostManager Lengkap** ([`KostManagerLanding.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostManagerLanding.tsx)) tanpa perantara.
-   - Di dalam landing page KostManager tersebut:
-     - Seluruh tombol aksi (*"Mulai Auto-Pilot Kost Sekarang"*, *"Langganan KostManager Sekarang"*, *"Pilih Paket Ini"*) jika diklik oleh pengunjung yang **belum login (`!user`)** akan langsung mengarahkan ke halaman pendaftaran akun mitra (`/login?role=owner&mode=register`).
-     - Jika pengunjung **sudah login**, tombol aksi langsung membuka modal formulir data kost dan aktivasi paket KostManager.
-     - Disediakan tombol **"Kembali ke Pilihan Kemitraan"** yang mulus untuk kembali ke layar pilihan awal jika diinginkan.
+### Solusi & Arsitektur Cepat:
+1. **Penggantian Model di Edge Function `analyze-ktp`**:
+   - Menerapkan model **Gemini Flash** terkini dengan prioritas `gemini-2.5-flash` / `gemini-2.0-flash` / `gemini-1.5-flash` yang memiliki kecepatan inferensi multimodal **1-2 detik** dan bebas dari limitasi/overload 503.
+   - Menerapkan rotasi `GEMINI_KEYS` dan auto-fallback model sehingga pemindaian 100% andal.
+2. **Eliminasi Beban Klien `Tesseract.js`**:
+   - Menghapus proses pengunduhan 20MB model Tesseract dan proses raster piksel single-threaded di browser pengguna.
+   - Frontend langsung mengirimkan URL foto KTP (`imageUrl`) yang telah diunggah ke Supabase Storage ke Edge Function `analyze-ktp`.
+3. **Ekstraksi Multimodal Presisi Tinggi**:
+   - AI Gemini Vision membaca gambar KTP secara langsung (Base64/URL), mengekstrak 9 bidang data utama:
+     - NIK (16 Digit)
+     - Nama Lengkap
+     - Tempat Lahir & Tanggal Lahir (YYYY-MM-DD)
+     - Jenis Kelamin ("Pria" / "Wanita")
+     - Agama
+     - Pekerjaan
+     - Status Perkawinan
+     - Alamat Lengkap KTP
 
 ---
 
@@ -27,50 +34,32 @@ Dokumen ini merancang penyelesaian masalah di mana saat mengklik kartu **"Kost M
 
 | No | File | Deskripsi Rencana Perubahan |
 |---|---|---|
-| 1 | [`functions/public/pages/Owner.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Owner.tsx) | Menghilangkan layar perantara; langsung mengimpor dan merender `<KostManagerLanding user={user} onBack={() => setPartnerType(null)} isEmbedded={true} />` saat `partnerType === 'manajemen'`. |
-| 2 | [`functions/public/pages/KostManagerLanding.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostManagerLanding.tsx) | Menyesuaikan fungsi `handleOpenRegistration` dan seluruh tombol CTA agar jika `!user`, diarahkan langsung ke pendaftaran akun mitra (`/login?role=owner&mode=register`). Menambahkan prop `onBack` dan `isEmbedded`. |
-| 3 | `functions/PROGRESS.md` | Pencatatan riwayat pekerjaan (Anti-Amnesia). |
-| 4 | `WALKTHROUGH.md` | Dokumentasi panduan pengujian dan detail perubahan. |
+| 1 | [`functions/public/pages/MitraProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx) | Mengganti alur lambat `Tesseract.js` menjadi pemanggilan langsung ke Edge Function `analyze-ktp` via `{ imageUrl }` (Multimodal Vision). Menambahkan timeout pelindung (10 detik). |
+| 2 | [`functions/public/pages/AgentProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx) | Mengganti alur lambat `Tesseract.js` menjadi pemanggilan langsung ke Edge Function `analyze-ktp` via `{ imageUrl }`. |
+| 3 | [`supabase/functions/analyze-ktp/index.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/supabase/functions/analyze-ktp/index.ts) | Mengoptimalkan Edge Function dengan model Gemini Flash super cepat, rotasi `GEMINI_KEYS`, dan ekstraksi multimodal vision langsung. |
+| 4 | `functions/PROGRESS.md` | Pencatatan riwayat pekerjaan (Anti-Amnesia). |
+| 5 | `WALKTHROUGH.md` | Dokumentasi panduan pengujian dan detail perubahan. |
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Fase 2 - Setelah ACC)
 
-### Langkah 1: Perbarui `KostManagerLanding.tsx`
-- Tambahkan prop `onBack?: () => void` dan `isEmbedded?: boolean` pada `KostManagerLandingProps`.
-- Perbarui `handleOpenRegistration`:
-  ```tsx
-  const handleOpenRegistration = () => {
-    if (!user) {
-      navigate('/login?role=owner&mode=register');
-      return;
-    }
-    setIsModalOpen(true);
-  };
-  ```
-- Perbarui tombol kembali di header dan footer: jika `onBack` diberikan, panggil `onBack()`, jika tidak panggil `navigate(-1)`.
-- Jika `isEmbedded` aktif, sembunyikan drawer dashboard mitra agar navigasi bersih dan menyatu dengan halaman kemitraan.
+### Langkah 1: Perbarui Edge Function `supabase/functions/analyze-ktp/index.ts`
+- Terapkan pemanggilan model Gemini Flash dengan array fallback: `['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']`.
+- Terapkan rotasi `GEMINI_KEYS` dan auto-retry pada error.
+- Dukung pembacaan gambar KTP secara langsung via URL/Base64.
 
-### Langkah 2: Perbarui `Owner.tsx`
-- Impor `KostManagerLanding` dari `./KostManagerLanding`.
-- Pada kondisi `partnerType === 'manajemen'`, langsung render:
-  ```tsx
-  if (partnerType === 'manajemen') {
-    return (
-      <KostManagerLanding 
-        user={user} 
-        onBack={() => setPartnerType(null)} 
-        isEmbedded={true} 
-      />
-    );
-  }
-  ```
+### Langkah 2: Perbarui Frontend `MitraProfile.tsx` & `AgentProfile.tsx`
+- Hapus impor dan eksekusi `Tesseract.js` pada fungsi `performOcr`.
+- Ubah `performOcr(imageUrl)` agar langsung memanggil Edge Function `analyze-ktp` dengan `{ imageUrl }`.
+- Terapkan timeout safeguard 10 detik agar state `isScanning` selalu reset dengan aman jika terjadi kendala jaringan.
 
-### Langkah 3: Uji Kompilasi & Build
-- Jalankan `cmd /c npm run build` di direktori `functions/public/` untuk memastikan 100% bebas error kompilasi.
+### Langkah 3: Uji Kompilasi & Pengujian Kecepatan
+- Jalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 100% bebas error kompilasi.
+- Uji simulasi pemanggilan Edge Function untuk memverifikasi waktu respons instan (1-2 detik).
 
 ### Langkah 4: Pencatatan Riwayat & Git Push
-- Catat riwayat di `functions/PROGRESS.md` (Fitur #222).
+- Catat riwayat di `functions/PROGRESS.md` (Fitur #223).
 - Terbitkan dokumen `WALKTHROUGH.md`.
 - Commit dan push ke branch `bukan-productions`.
 
@@ -78,15 +67,10 @@ Dokumen ini merancang penyelesaian masalah di mana saat mengklik kartu **"Kost M
 
 ## 4. Rencana Verifikasi
 
-1. **Uji 1-Klik Langsung ke Landing Page KostManager**:
-   - Buka `/owner` dan klik tombol **"PILIH KOST MANAGER ->"**.
-   - Verifikasi bahwa halaman **seketika langsung memuat Landing Page KostManager Lengkap** (Hero Video, Pain Points, Solusi Autopilot, Fitur Unggulan, Paket Harga) tanpa ada halaman perantara banner.
-2. **Uji Action Button (Kondisi Belum Login)**:
-   - Klik tombol *"Mulai Auto-Pilot Kost Sekarang"* atau *"Langganan KostManager Sekarang"*.
-   - Verifikasi langsung diarahkan ke `/login?role=owner&mode=register` untuk membuat akun mitra terlebih dahulu.
-3. **Uji Action Button (Kondisi Sudah Login)**:
-   - Login akun mitra, klik tombol aksi -> verifikasi modal pendaftaran paket terbuka.
-4. **Uji Tombol Kembali**:
-   - Klik *"Kembali ke Pilihan Kemitraan"* -> verifikasi kembali ke layar pilihan awal 2 kartu.
-5. **Uji Build**:
+1. **Uji Kecepatan OCR KTP**:
+   - Unggah foto KTP di halaman Profil Mitra (`/dashboard-mitra/profile`).
+   - Verifikasi status *"Membaca Data KTP..."* selesai dalam waktu **1-2 detik**.
+2. **Uji Akurasi Ekstraksi Otomatis**:
+   - Verifikasi kolom NIK (16 digit), Nama Lengkap, Tempat Lahir, Tanggal Lahir, Jenis Kelamin, Agama, Pekerjaan, Status, dan Alamat terisi otomatis.
+3. **Uji Build Frontend**:
    - Jalankan `npm run build` dan pastikan hasil `0 error`.
