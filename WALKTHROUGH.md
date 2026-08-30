@@ -1,36 +1,31 @@
-# Walkthrough: Transformasi Halaman Kemitraan Mitra Pemasaran ke Sistem Self-Listing Mandiri (`Owner.tsx`)
+# Walkthrough: Integrasi Langsung Landing Page KostManager Penuh & Alur Action Button Buat Akun Mitra (`Owner.tsx`, `KostManagerLanding.tsx`)
 
-Dokumentasi ini merangkum penyelesaian evaluasi dan perombakan **Fitur #221**, yaitu transformasi halaman kemitraan **Mitra Pemasaran** ([`Owner.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Owner.tsx)) dari sistem formulir manual proposal menjadi **alur Self-Listing mandiri terintegrasi penuh** dengan **Dashboard Mitra**.
+Dokumentasi ini merangkum penyelesaian perbaikan **Fitur #222**, yaitu integrasi langsung tampilan **Landing Page KostManager Penuh & Komprehensif** pada menu Kemitraan ([`Owner.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Owner.tsx)) tanpa layar perantara (*zero intermediate screens*), serta penyesuaian seluruh **Action Button** ([`KostManagerLanding.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostManagerLanding.tsx)) agar mengarahkan pengunjung yang belum memiliki akun untuk **membuat akun mitra terlebih dahulu**.
 
 ---
 
 ## 1. Ringkasan Perubahan
 
-### A. Penghapusan Formulir Manual Usang
-- Menghapus modal formulir manual pengajuan kemitraan (`mitra_requests`), MoU checklist, dan proses konvensional yang memperlambat onboarding pemilik kost.
+### A. Eliminasi Layar Perantara (1-Klik Langsung ke Landing Page Lengkap)
+- Menghapus layar banner perantara lama pada `Owner.tsx` yang sebelumnya meminta pengguna mengklik tombol *"Pelajari Portal Kost Manager Lengkap"*.
+- Begitu kartu atau tombol **"PILIH KOST MANAGER"** ditekan, halaman seketika merender komponen lengkap `<KostManagerLanding user={user} onBack={() => setPartnerType(null)} isEmbedded={true} />`.
+- Menampilkan seluruh materi lengkap KostManager:
+  - Video demo & tur interaktif
+  - Pemetaan kendala pemilik kost (*Pain Points*)
+  - Solusi pengelolaan autopilot (Survey gratis foto/video, penagihan otomatis, pemasaran medsos prioritas, laporan finansial live)
+  - Pilihan paket harga langganan
 
-### B. Alur Self-Listing Mandiri & Tombol CTA Cerdas
-- Tombol Call-to-Action (CTA) kini secara dinamis menyesuaikan status autentikasi pengguna:
-  - **Pengguna Belum Login**: Tombol CTA mengarahkan ke halaman registrasi Pemilik Kost (`/login?role=owner&mode=register`).
-  - **Pengguna Sudah Login (Role Mitra/Owner)**: Tombol CTA mengarahkan langsung ke **Dashboard Mitra** (`/dashboard-owner`) untuk langsung mengunggah & mengelola listing kamar kost.
-- Di [`Login.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Login.tsx), query params `role=owner` dan `mode=register` otomatis mengaktifkan tab form pendaftaran Pemilik Kost.
+### B. Penyesuaian Logika Action Button (Alur Registrasi Akun Mitra)
+- Pada [`KostManagerLanding.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostManagerLanding.tsx):
+  - **Jika Pengguna Belum Login (`!user`)**:
+    - Tombol CTA (*"Mulai Auto-Pilot Kost Sekarang"*, *"Langganan KostManager Sekarang"*, *"Pilih Paket Ini"*) **tidak** langsung memunculkan formulir modal kosong.
+    - Pengguna langsung diarahkan ke halaman pendaftaran akun mitra: `/login?role=owner&mode=register`.
+  - **Jika Pengguna Sudah Login**:
+    - Tombol CTA langsung membuka formulir pengisian data properti & aktivasi paket KostManager (`setIsModalOpen(true)`).
 
-### C. Pembaruan Konten Copywriting & Struktur Landing Page Modern
-1. **Layar Pilihan Kemitraan**:
-   - Memperjelas perbedaan antara **Mitra Pemasaran (Self-Listing 100% Gratis & Mandiri)** dan **Kost Manager (Autopilot Management Penuh)**.
-2. **Hero Section**:
-   - Headline baru: *"Pasang Iklan Kost Mandiri, Cepat & 100% Bebas Biaya"*.
-   - Sub-headline fokus pada kemudahan onboarding mandiri via Dashboard Mitra dan jangkauan ribuan mahasiswa.
-3. **3 Langkah Mudah Self-Listing (How It Works)**:
-   - **01. Buat Akun Mitra (1 Menit)**: Registrasi akun gratis dengan nomor WhatsApp & email aktif.
-   - **02. Input Detail & Upload Foto (Self-Listing)**: Pengisian fasilitas, harga sewa fleksibel, dan upload foto WebP otomatis.
-   - **03. Listing Tayang & Terima Booking**: Properti langsung aktif di pencarian dan siap menerima penghuni baru.
-4. **6 Fitur Unggulan Dashboard Mitra**:
-   - Self-Listing Cepat & Fleksibel, Kontrol Ketersediaan Kamar Real-Time, Kompresi Foto Otomatis WebP, Pemasaran Berbasis Radius Kampus, Notifikasi Booking Masuk, dan Badge Verifikasi Properti.
-5. **Interactive FAQ Accordion**:
-   - Menjawab pertanyaan penting seputar biaya (100% gratis awal), cara input properti, fleksibilitas harga sewa, dan perbedaan dengan Kost Manager.
-6. **Bottom Banner CTA**:
-   - Ajakan bergabung dengan tombol aksi langsung menuju Dashboard Mitra / Registrasi.
+### C. Fleksibilitas Navigasi (`onBack` & `isEmbedded`)
+- Tombol *"Kembali ke Pilihan Kemitraan"* di header & footer halaman KostManager memungkinkan pengguna kembali ke layar pemilihan 2 kartu kemitraan dengan mulus.
+- Properti `isEmbedded` otomatis menyembunyikan drawer dashboard mitra ketika halaman KostManager diakses dari menu publik.
 
 ---
 
@@ -46,18 +41,19 @@ transforming...
 ✓ 2531 modules transformed.
 rendering chunks...
 computing gzip size...
-✓ built in 33.24s
+✓ built in 22.75s
 ```
-*Hasil:* **100% Lulus (0 Error, 0 Broken Link, Bebas FOUT icon SVG pure bundle)**.
+*Hasil:* **100% Lulus (0 Error, 0 Type Mismatch, Bebas FOUT icon SVG pure bundle)**.
 
 ---
 
 ## 3. Panduan Pengujian bagi Pengguna
 
 1. Buka menu navigasi **"Mitra Kost"** (`/owner`).
-2. Pada layar pilihan kemitraan, perhatikan 2 kartu solusi: **Mitra Pemasaran** dan **Kost Manager**.
-3. Klik **"Pilih Mitra Pemasaran"**:
-   - Halaman akan memuat landing page modern Self-Listing dengan Hero baru, 3 Langkah Mudah, Fitur Dashboard Mitra, dan FAQ accordion.
-4. Uji tombol CTA **"Daftar Akun Mitra & Mulai Pasang Iklan"**:
-   - Jika belum login: Anda akan diarahkan ke halaman `/login?role=owner&mode=register` dengan tab form pendaftaran Pemilik Kost yang sudah otomatis aktif.
-   - Jika sudah login sebagai Mitra: Anda akan diarahkan langsung ke **Dashboard Mitra** (`/dashboard-owner`) untuk langsung mulai menambah properti dan kamar kost.
+2. Klik tombol **"PILIH KOST MANAGER ->"** pada kartu Kost Manager:
+   - **Hasil**: Halaman akan **seketika langsung memuat Landing Page KostManager Lengkap** (Hero, Video Player Demo, Pain Points, Solusi Autopilot, Fitur Unggulan, dan Paket Harga) tanpa ada banner atau halaman perantara lagi.
+3. Klik tombol **"Mulai Auto-Pilot Kost Sekarang"** atau **"Langganan KostManager Sekarang"**:
+   - Jika belum login: Anda akan langsung diarahkan ke halaman `/login?role=owner&mode=register` dengan tab form pendaftaran Pemilik Kost aktif.
+   - Jika sudah login sebagai Pemilik Kost: Modal formulir data properti kost dan persetujuan MoU akan terbuka untuk aktivasi paket.
+4. Klik tombol **"Kembali ke Pilihan"**:
+   - Halaman akan kembali ke layar pemilihan 2 kartu kemitraan (Mitra Pemasaran vs Kost Manager).

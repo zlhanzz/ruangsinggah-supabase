@@ -122,9 +122,11 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
 
 interface KostManagerLandingProps {
   user?: any;
+  onBack?: () => void;
+  isEmbedded?: boolean;
 }
 
-const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
+const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user, onBack, isEmbedded }) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlOrderId = searchParams.get('orderId');
@@ -293,10 +295,17 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleGoBack = () => {
+    if (onBack) {
+      onBack();
+    } else {
+      navigate(-1);
+    }
+  };
+
   const handleOpenRegistration = () => {
     if (!user) {
-      alert('Silakan masuk/login terlebih dahulu untuk berlangganan KostManager.');
-      navigate(Page.LOGIN);
+      navigate('/login?role=owner&mode=register');
       return;
     }
     setIsModalOpen(true);
@@ -464,7 +473,7 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           {/* Back & Burger Button Container */}
           <div className="mb-6 flex items-center gap-3 justify-start">
-            {isMitra && (
+            {isMitra && !isEmbedded && (
               <button
                 onClick={() => setIsSidebarOpen(true)}
                 className="inline-flex items-center justify-center p-2.5 rounded-xl bg-white hover:bg-slate-100 text-gray-700 hover:text-orange-500 border border-slate-200/60 shadow-sm active:scale-95 transition-all"
@@ -474,11 +483,11 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
               </button>
             )}
             <button
-              onClick={() => navigate(-1)}
+              onClick={handleGoBack}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-gray-600 hover:text-orange-500 font-bold text-xs uppercase tracking-wider transition-all duration-300 border border-slate-200/60 shadow-sm active:scale-95"
             >
               <ArrowLeft size={14} className="stroke-[3]" />
-              <span>Kembali</span>
+              <span>{onBack ? 'Kembali ke Pilihan' : 'Kembali'}</span>
             </button>
           </div>
 
@@ -752,11 +761,11 @@ const KostManagerLanding: React.FC<KostManagerLandingProps> = ({ user }) => {
       {/* Bottom Back Button */}
       <div className="py-12 bg-white flex justify-center border-t border-gray-100">
         <button
-          onClick={() => navigate(-1)}
+          onClick={handleGoBack}
           className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-white hover:bg-slate-50 text-gray-700 hover:text-orange-500 font-black text-sm uppercase tracking-widest transition-all duration-300 border border-gray-200 shadow-sm active:scale-95"
         >
           <ArrowLeft size={16} className="stroke-[3]" />
-          <span>Kembali ke Dashboard</span>
+          <span>{onBack ? 'Kembali ke Pilihan Kemitraan' : (isMitra ? 'Kembali ke Dashboard' : 'Kembali')}</span>
         </button>
       </div>
 

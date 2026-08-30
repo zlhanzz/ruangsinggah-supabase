@@ -28,6 +28,7 @@ import {
   FileText
 } from 'lucide-react';
 import { Page } from '../types';
+import KostManagerLanding from './KostManagerLanding';
 
 interface OwnerProps {
   user?: any;
@@ -190,40 +191,15 @@ const Owner: React.FC<OwnerProps> = ({ user }) => {
   }
 
   // =========================================================================
-  // 2. LAYAR DETAIL: KOST MANAGER (AUTOPILOT)
+  // 2. LAYAR DETAIL: KOST MANAGER (AUTOPILOT LANGSUNG)
   // =========================================================================
   if (partnerType === 'manajemen') {
     return (
-      <div className="min-h-screen bg-gray-50">
-        {/* Header Back */}
-        <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-rose-600 text-white py-12 lg:py-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-          <div className="max-w-6xl mx-auto relative z-10">
-            <button
-              onClick={() => setPartnerType(null)}
-              className="inline-flex items-center gap-2 text-white/80 hover:text-white mb-6 text-xs sm:text-sm font-black transition-colors group bg-black/20 px-4 py-2 rounded-full"
-            >
-              <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> Kembali ke Pilihan Kemitraan
-            </button>
-            <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider mb-4 border border-white/20">
-              <Building2 className="w-3.5 h-3.5" />
-              <span>Kost Manager • Solusi Pengelolaan Autopilot</span>
-            </div>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-black mb-4 tracking-tight leading-tight max-w-3xl">
-              Serahkan Manajemen Kost Anda Pada Ahlinya
-            </h1>
-            <p className="text-orange-100 text-sm sm:text-base md:text-lg max-w-2xl leading-relaxed mb-8">
-              Bebaskan waktu Anda dari rutinitas penagihan sewa, pendataan penghuni, dan keluhan teknis. Nikmati passive income dengan sistem manajemen transparan.
-            </p>
-            <button
-              onClick={() => navigate(Page.KOSTMANAGER)}
-              className="bg-white text-orange-700 px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-wider hover:bg-orange-50 transition-all shadow-xl active:scale-95 inline-flex items-center gap-2"
-            >
-              <span>Pelajari Portal Kost Manager Lengkap</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </div>
+      <KostManagerLanding
+        user={user}
+        onBack={() => setPartnerType(null)}
+        isEmbedded={true}
+      />
     );
   }
 

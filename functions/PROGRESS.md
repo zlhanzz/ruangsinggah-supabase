@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 222. Integrasi Langsung Landing Page KostManager Penuh & Alur Action Button Pendaftaran Akun Mitra (`Owner.tsx`, `KostManagerLanding.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar ketika memilih opsi "Kost Manager" pada menu Kemitraan (`/owner`), sistem langsung menampilkan landing page KostManager yang sama dengan yang ada pada dashboard mitra/portal tanpa layar perantara (*intermediate screen*).
+  - Seluruh *action button* (*"Mulai Auto-Pilot Kost Sekarang"*, *"Langganan KostManager Sekarang"*, dll.) jika diklik oleh pengunjung yang belum login tidak langsung membuka formulir pendaftaran modal mentah, melainkan diarahkan terlebih dahulu untuk **membuat akun mitra** (`/login?role=owner&mode=register`).
+- **Implementasi Solusi**:
+  1. **Integrasi Langsung 1-Klik (`Owner.tsx`)**:
+     - Menghilangkan layar banner perantara lama.
+     - Mengintegrasikan langsung `<KostManagerLanding user={user} onBack={() => setPartnerType(null)} isEmbedded={true} />` saat `partnerType === 'manajemen'`.
+  2. **Penyesuaian Action Button & Autentikasi Mitra (`KostManagerLanding.tsx`)**:
+     - Memperbarui `handleOpenRegistration` agar mendeteksi status `user`.
+     - Jika `!user`: Langsung mengarahkan ke pendaftaran akun role Pemilik Kost (`/login?role=owner&mode=register`).
+     - Jika sudah login: Membuka modal pendaftaran data kost & aktivasi paket langganan.
+  3. **Navigasi Mulus (`onBack` & `isEmbedded`)**:
+     - Mendukung navigasi kembali ke layar pemilihan kemitraan (`onBack`), serta menyembunyikan drawer dashboard mitra jika di-render secara embedded pada halaman publik.
+- **File Tersentuh**:
+  - `functions/public/pages/Owner.tsx`
+  - `functions/public/pages/KostManagerLanding.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, 22.75s, 0 error).
+
 ### 221. Transformasi Halaman Kemitraan Mitra Pemasaran ke Sistem Self-Listing Mandiri & Pembaruan Konten Landing Page Modern (`Owner.tsx`, `App.tsx`, `Login.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta evaluasi halaman kemitraan mitra pemasaran (`/owner`), di mana sistem sebelumnya masih menggunakan formulir manual proposal (`mitra_requests`), padahal platform RuangSinggah saat ini sudah memiliki sistem **Self-Listing mandiri terpadu**. Pemilik cukup membuat akun role mitra dan mengunggah properti sendiri lewat Dashboard Mitra.
