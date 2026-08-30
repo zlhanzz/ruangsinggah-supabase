@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { BasicPropertyInfo, updatePropertyStatus, freezeProperty, unfreezeProperty, togglePropertyVerification } from '../../adminService';
 import {
-    Building2, Search, Filter, Sparkles, ShieldCheck, CheckCircle2,
+    Building2, Home, Search, Filter, Sparkles, ShieldCheck, CheckCircle2,
     AlertCircle, Clock, X, Phone, ExternalLink, Eye, Trash2, Snowflake,
     Check, MapPin, Bed, User, RefreshCcw, SlidersHorizontal, ArrowRight,
     HelpCircle, ChevronRight, AlertTriangle, ShieldAlert, ArrowLeftRight,
