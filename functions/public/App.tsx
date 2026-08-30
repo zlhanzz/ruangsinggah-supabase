@@ -662,7 +662,7 @@ const App: React.FC = () => {
                 }}
               />
             } />
-            <Route path={Page.OWNER} element={<Owner />} />
+            <Route path={Page.OWNER} element={<Owner user={user} />} />
             <Route path={Page.ABOUT} element={<About />} />
             <Route path={Page.CONTACT} element={<Contact />} />
             <Route path={Page.SURVEY_SERVICE} element={

@@ -176,6 +176,14 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       setErrorMsg('');
       setSuccessMsg('✅ Akun berhasil diupgrade ke Pemilik Kost! Silakan login kembali untuk akses dashboard Mitra.');
       setSearchParams({}, { replace: true });
+    } else {
+      const roleParam = searchParams.get('role');
+      if (roleParam === 'owner' || roleParam === 'mitra') {
+        setActiveRole('owner');
+      }
+      if (mode === 'register' || mode === 'signup') {
+        setMode('REGISTER');
+      }
     }
   }, [searchParams, setSearchParams]);
 

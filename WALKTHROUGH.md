@@ -1,34 +1,36 @@
-# Walkthrough: Sistem Riwayat Tiket Kendala & Tracking Status Penanganan Real-Time (`MyKost.tsx`)
+# Walkthrough: Transformasi Halaman Kemitraan Mitra Pemasaran ke Sistem Self-Listing Mandiri (`Owner.tsx`)
 
-Dokumentasi ini merangkum penyelesaian pengembangan **Fitur #220**, yaitu implementasi antarmuka **Riwayat Tiket Kendala Penghuni** dengan navigasi 2-tab internal di dalam modal kendala pada halaman **Kost Saya** (`MyKost.tsx`).
+Dokumentasi ini merangkum penyelesaian evaluasi dan perombakan **Fitur #221**, yaitu transformasi halaman kemitraan **Mitra Pemasaran** ([`Owner.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Owner.tsx)) dari sistem formulir manual proposal menjadi **alur Self-Listing mandiri terintegrasi penuh** dengan **Dashboard Mitra**.
 
 ---
 
 ## 1. Ringkasan Perubahan
 
-### A. Navigasi 2-Tab Internal pada Modal Kendala
-- **Tab 1: 📝 Buat Laporan Baru**:
-  - Formulir komprehensif pemilihan kategori (8 kategori fasilitas), tingkat urgensi (Normal vs Darurat), judul pokok, deskripsi rinci, dan upload hingga 3 foto WebP.
-- **Tab 2: 📋 Riwayat Tiket Saya (X)**:
-  - Dilengkapi badge counter jumlah tiket kendala yang diajukan oleh penghuni.
-  - Memuat seluruh daftar tiket historis dari database Supabase (`complaints`).
+### A. Penghapusan Formulir Manual Usang
+- Menghapus modal formulir manual pengajuan kemitraan (`mitra_requests`), MoU checklist, dan proses konvensional yang memperlambat onboarding pemilik kost.
 
-### B. Auto-Switch & Kepastian Instan Pasca-Submit
-- Saat penghuni menekan tombol **"Kirim Laporan Kendala"**:
-  - Sistem mengompresi foto ke WebP dan mengunggah ke Supabase Storage.
-  - Data tersimpan ke tabel `complaints`.
-  - Formulir di-reset dan sistem secara **otomatis mengalihkan tab ke "Riwayat Tiket Saya"**.
-  - Tiket baru langsung tampil di urutan paling atas dengan status `⏳ Menunggu Tindakan`, menghilangkan segala keraguan penghuni.
+### B. Alur Self-Listing Mandiri & Tombol CTA Cerdas
+- Tombol Call-to-Action (CTA) kini secara dinamis menyesuaikan status autentikasi pengguna:
+  - **Pengguna Belum Login**: Tombol CTA mengarahkan ke halaman registrasi Pemilik Kost (`/login?role=owner&mode=register`).
+  - **Pengguna Sudah Login (Role Mitra/Owner)**: Tombol CTA mengarahkan langsung ke **Dashboard Mitra** (`/dashboard-owner`) untuk langsung mengunggah & mengelola listing kamar kost.
+- Di [`Login.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Login.tsx), query params `role=owner` dan `mode=register` otomatis mengaktifkan tab form pendaftaran Pemilik Kost.
 
-### C. Visualisasi Kartu Riwayat Tiket & Real-Time Tracking
-- **Header Kartu**: ID Tiket unik (`#TKT-XXXXXX`), tanggal dan waktu lapor, badge urgensi (`🚨 Darurat` vs `Standar`), badge kategori, dan status penanganan real-time:
-  - `⏳ Menunggu Tindakan` (Amber)
-  - `⚙️ Sedang Ditangani` (Blue pulse)
-  - `✅ Selesai` (Emerald)
-- **Konten Kendala**: Pokok kendala, deskripsi detail kerusakan dalam card kontras.
-- **Galeri Foto Bukti**: Thumbnail galeri multi-foto bukti kerusakan WebP yang dapat diklik untuk memperbesar gambar (*Modal Zoom Pratinjau*).
-- **Catatan Respon Pengelola**: Kotak informasi feedback hijau (*"💬 Catatan Respon Pengelola"*) jika pihak pengelola/teknisi telah mengisikan catatan tindakan.
-- **Empty State**: Tampilan visual menarik jika belum ada riwayat kendala (*"Belum Ada Riwayat Laporan - Kamar Anda terpantau aman dan prima!"*).
+### C. Pembaruan Konten Copywriting & Struktur Landing Page Modern
+1. **Layar Pilihan Kemitraan**:
+   - Memperjelas perbedaan antara **Mitra Pemasaran (Self-Listing 100% Gratis & Mandiri)** dan **Kost Manager (Autopilot Management Penuh)**.
+2. **Hero Section**:
+   - Headline baru: *"Pasang Iklan Kost Mandiri, Cepat & 100% Bebas Biaya"*.
+   - Sub-headline fokus pada kemudahan onboarding mandiri via Dashboard Mitra dan jangkauan ribuan mahasiswa.
+3. **3 Langkah Mudah Self-Listing (How It Works)**:
+   - **01. Buat Akun Mitra (1 Menit)**: Registrasi akun gratis dengan nomor WhatsApp & email aktif.
+   - **02. Input Detail & Upload Foto (Self-Listing)**: Pengisian fasilitas, harga sewa fleksibel, dan upload foto WebP otomatis.
+   - **03. Listing Tayang & Terima Booking**: Properti langsung aktif di pencarian dan siap menerima penghuni baru.
+4. **6 Fitur Unggulan Dashboard Mitra**:
+   - Self-Listing Cepat & Fleksibel, Kontrol Ketersediaan Kamar Real-Time, Kompresi Foto Otomatis WebP, Pemasaran Berbasis Radius Kampus, Notifikasi Booking Masuk, dan Badge Verifikasi Properti.
+5. **Interactive FAQ Accordion**:
+   - Menjawab pertanyaan penting seputar biaya (100% gratis awal), cara input properti, fleksibilitas harga sewa, dan perbedaan dengan Kost Manager.
+6. **Bottom Banner CTA**:
+   - Ajakan bergabung dengan tombol aksi langsung menuju Dashboard Mitra / Registrasi.
 
 ---
 
@@ -44,7 +46,7 @@ transforming...
 ✓ 2531 modules transformed.
 rendering chunks...
 computing gzip size...
-✓ built in 36.89s
+✓ built in 33.24s
 ```
 *Hasil:* **100% Lulus (0 Error, 0 Broken Link, Bebas FOUT icon SVG pure bundle)**.
 
@@ -52,12 +54,10 @@ computing gzip size...
 
 ## 3. Panduan Pengujian bagi Pengguna
 
-1. Buka menu **Kost Saya** (`/my-bookings/aktif` atau `/my-kost`).
-2. Klik tombol **"🚨 Lapor Kendala Kamar"** pada kartu kamar yang sedang aktif.
-3. Di bagian atas modal, perhatikan adanya 2 tab:
-   - **`📝 Buat Laporan Baru`**
-   - **`📋 Riwayat Tiket (X)`**
-4. Klik tab **"Riwayat Tiket"** untuk melihat seluruh riwayat tiket komplain Anda beserta status penanganannya (`⏳ Menunggu Tindakan`, `⚙️ Sedang Ditangani`, `✅ Selesai`).
-5. Klik salah satu foto bukti kerusakan untuk menguji modal zoom perbesaran foto.
-6. Coba buat laporan baru di tab **"Buat Laporan Baru"** dan klik **"Kirim Laporan Kendala"**:
-   - Sistem akan otomatis mengarahkan Anda ke tab **"Riwayat Tiket"** dan menampilkan tiket baru Anda di posisi paling atas!
+1. Buka menu navigasi **"Mitra Kost"** (`/owner`).
+2. Pada layar pilihan kemitraan, perhatikan 2 kartu solusi: **Mitra Pemasaran** dan **Kost Manager**.
+3. Klik **"Pilih Mitra Pemasaran"**:
+   - Halaman akan memuat landing page modern Self-Listing dengan Hero baru, 3 Langkah Mudah, Fitur Dashboard Mitra, dan FAQ accordion.
+4. Uji tombol CTA **"Daftar Akun Mitra & Mulai Pasang Iklan"**:
+   - Jika belum login: Anda akan diarahkan ke halaman `/login?role=owner&mode=register` dengan tab form pendaftaran Pemilik Kost yang sudah otomatis aktif.
+   - Jika sudah login sebagai Mitra: Anda akan diarahkan langsung ke **Dashboard Mitra** (`/dashboard-owner`) untuk langsung mulai menambah properti dan kamar kost.

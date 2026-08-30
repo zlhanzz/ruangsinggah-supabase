@@ -2,6 +2,35 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 221. Transformasi Halaman Kemitraan Mitra Pemasaran ke Sistem Self-Listing Mandiri & Pembaruan Konten Landing Page Modern (`Owner.tsx`, `App.tsx`, `Login.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta evaluasi halaman kemitraan mitra pemasaran (`/owner`), di mana sistem sebelumnya masih menggunakan formulir manual proposal (`mitra_requests`), padahal platform RuangSinggah saat ini sudah memiliki sistem **Self-Listing mandiri terpadu**. Pemilik cukup membuat akun role mitra dan mengunggah properti sendiri lewat Dashboard Mitra.
+  - Penyesuaian konten landing page agar selaras dengan fitur dan alur kerja RuangSinggah versi terkini.
+- **Implementasi Solusi**:
+  1. **Penghapusan Alur Formulir Manual Usang**:
+     - Menghapus modal formulir pendaftaran manual (`mitra_requests`), MoU checklist manual, dan form proposal yang sudah tidak relevan.
+  2. **Peralihan ke Alur Self-Listing Penuh & CTA Pintar**:
+     - **Jika Belum Login**: Tombol CTA mengarahkan pemilik kost langsung ke pendaftaran akun role Pemilik Kost (`/login?role=owner&mode=register`).
+     - **Jika Sudah Login (Mitra/Owner/User)**: Tombol CTA mengarahkan langsung ke **Dashboard Mitra** (`/dashboard-owner`) untuk langsung mulai menambah dan mengelola properti mandiri.
+     - Penyesuaian di `Login.tsx` untuk secara otomatis mengenali query param `role=owner` & `mode=register` dan membuka tab form registrasi Pemilik Kost.
+  3. **Pembaruan Konten Copywriting Landing Page Modern**:
+     - **Hero Section**: Headline *"Pasang Iklan Kost Mandiri, Cepat & 100% Bebas Biaya"*, menonjolkan jangkauan ribuan mahasiswa, upload foto WebP otomatis, dan kendali ketersediaan kamar real-time.
+     - **3 Langkah Mudah Self-Listing (How It Works)**:
+       1. *Buat Akun Mitra (1 Menit)*
+       2. *Input Detail & Upload Foto Mandiri (WebP)*
+       3. *Listing Langsung Tayang & Terima Booking*
+     - **6 Fitur Unggulan Dashboard Mitra**: Self-Listing cepat & fleksibel, kontrol kamar kosong/terisi real-time, kompresi foto otomatis WebP, pemasaran berbasis radius kampus, notifikasi booking & transaksi masuk, dan badge verifikasi properti.
+     - **Interactive FAQ Accordion**: 4 pertanyaan umum seputar biaya gratis, cara upload foto, fleksibilitas harga, dan perbedaan dengan Kost Manager.
+     - **Bottom CTA Banner**: Ajakan gabung dengan tombol langsung menuju pendaftaran/Dashboard Mitra.
+- **File Tersentuh**:
+  - `functions/public/pages/Owner.tsx`
+  - `functions/public/App.tsx`
+  - `functions/public/pages/Login.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, 33.24s, 0 error).
+
 ### 220. Sistem Riwayat Tiket Kendala & Tracking Status Penanganan Realtime di Modal Lapor Kendala (`MyKost.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna menyampaikan kekhawatiran bahwa riwayat pengiriman tiket kendala tidak dapat dilihat oleh penghuni (*"apakah riwayat tiket pengiriman atau pelaporan kendalanya tidak dapat dilihat? kalau begini bikin user ragu apakah laporannya benar benar sudah terkirim atau tidak"*).
