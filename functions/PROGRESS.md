@@ -4327,3 +4327,25 @@
 - **Verifikasi**:
   - `npm run build` di `functions/public/` berhasil 100% dengan 0 error kompilasi (`exit code: 0`).
 
+### 214. Peningkatan Komprehensif Modal Perpanjangan Sewa: Status Masa Sewa Berjalan, Simulasi Timeline Tanggal & Total Hari Bersambung, serta Tab Riwayat Perpanjangan & Kwitansi Digital (`MyKost.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pada menu perpanjangan sewa di "Kost Saya" (`MyKost.tsx`), informasi masa sewa aktif saat ini kurang lengkap (tidak ada rincian tanggal mulai masuk, tanggal berakhir saat ini, dan sisa hari).
+  2. Pengguna tidak dapat melihat simulasi tanggal jika memilih durasi perpanjangan tertentu: mulai tanggal berapa, berakhir tanggal berapa, dan berapa skala total jangka hari perpanjangan sewa tersebut.
+  3. Pengguna meminta agar dapat melihat riwayat-riwayat perpanjangan sewa sebelumnya beserta bukti pembayarannya.
+- **Implementasi & Peningkatan Sistem**:
+  * **1. Tab Switcher Internal Modal (`Form Perpanjangan` vs `Riwayat (N)`)**:
+    - Menambahkan navigasi 2-tab yang mulus dan modern pada header modal perpanjangan.
+  * **2. Kartu Status Masa Sewa Berjalan Saat Ini (Current Lease Card)**:
+    - Menampilkan unit kamar & tipe kamar, tanggal mulai masuk, tanggal jatuh tempo saat ini, dan badge sisa hari tinggal (`X Hari Tersisa`).
+  * **3. Simulasi Timeline & Kalkulasi Skala Hari Perpanjangan Realtime**:
+    - Menghitung secara otomatis tanggal mulai bersambung (H+1 setelah periode sewa saat ini), tanggal selesai baru setelah ditambah durasi $N$ bulan, dan total hari jangka sewa (`+X Hari`).
+    - Menampilkan ringkasan otomatis bahwa masa sewa akan bersambung hingga tanggal selesai baru tanpa jeda.
+  * **4. Tab Riwayat Perpanjangan Sewa & Integrasi Kwitansi Digital**:
+    - Menampilkan riwayat transaksi perpanjangan dan sewa lunas sebelumnya dengan badge status Lunas dan tombol **"🧾 Lihat Kwitansi"** yang terhubung langsung ke `DigitalReceiptModal`.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Build Vite frontend `cmd /c npm run build` di `functions/public/` lulus 100% dengan 0 error dalam 37.35s (✓ 2531 modules transformed).
+

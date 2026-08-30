@@ -221,6 +221,8 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
     // Extension form state
     const [extensionPeriod, setExtensionPeriod] = useState(1);
+    const [extensionTab, setExtensionTab] = useState<'form' | 'history'>('form');
+    const [allUserTransactions, setAllUserTransactions] = useState<any[]>([]);
     const [extensionProof, setExtensionProof] = useState<File | null>(null);
 
     // Extra bill form state
@@ -275,6 +277,29 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
             extraFeeName: Number(kMeta.extraPersonFee || 0) > 0 ? 'Biaya Tambahan Penghuni' : undefined,
             totalAmount: baseAmount + Number(kMeta.extraPersonFee || 0),
             paymentMethod: (kMeta.payment_method || 'QRIS / Midtrans').toUpperCase()
+        });
+        setShowDigitalReceiptModal(true);
+    };
+
+    const handleOpenReceiptFromHistory = (trx: any) => {
+        const tMeta = typeof trx.metadata === 'string' ? JSON.parse(trx.metadata) : (trx.metadata || {});
+        const baseAmt = Number(trx.amount || tMeta.baseRent || tMeta.basePrice || (selectedKost ? selectedKost.totalPrice : 1));
+        
+        setSelectedReceipt({
+            receiptNumber: trx.id ? `INV-${trx.id.substring(0, 8).toUpperCase()}` : `INV-${Date.now().toString().slice(-8)}`,
+            paidAt: trx.updated_at || trx.created_at || new Date().toISOString(),
+            tenantName: tMeta.tenantName || tMeta.userName || user?.displayName || user?.name || 'Penghuni Kost',
+            tenantPhone: tMeta.userPhone || tMeta.phone || user?.phoneNumber || user?.phone || '',
+            propertyTitle: (selectedKost ? selectedKost.kostName : null) || tMeta.propertyTitle || tMeta.kostName || 'Kost RuangSinggah',
+            roomNumber: (selectedKost ? selectedKost.roomNumber : null) || tMeta.roomNumber || (selectedKost ? selectedKost.roomType : null) || 'Kamar',
+            billingPeriod: (selectedKost ? selectedKost.period : null) || tMeta.periodLabel || 'Bulanan',
+            newPeriodStart: tMeta.startDate || tMeta.leaseStart || (selectedKost ? selectedKost.moveInDate : '') || '',
+            newPeriodEnd: tMeta.endDate || tMeta.leaseEnd || (selectedKost ? selectedKost.endDate : '') || '',
+            baseRent: baseAmt,
+            extraFee: Number(tMeta.extraPersonFee || 0),
+            extraFeeName: Number(tMeta.extraPersonFee || 0) > 0 ? 'Biaya Tambahan Penghuni' : undefined,
+            totalAmount: Number(trx.amount || (baseAmt + Number(tMeta.extraPersonFee || 0))),
+            paymentMethod: (tMeta.payment_method || tMeta.paymentType || 'QRIS / Midtrans').toUpperCase()
         });
         setShowDigitalReceiptModal(true);
     };
@@ -483,6 +508,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                 .or(`user_id.eq.${user.uid}${idFilter}`);
 
             if (billsErr) console.error("FETCH_BILLS_ERROR:", billsErr);
+            setAllUserTransactions(bills || []);
 
             // Merge both data sources and remove duplicates by ID or specific logic
             // Priority: resident_status has more info for active tenants, transactions for pending bookings
@@ -1273,6 +1299,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const handleOpenExtension = (kost: any) => {
         setSelectedKost(kost);
         setExtensionPeriod(1);
+        setExtensionTab('form');
         setShowExtensionModal(true);
         setShowExtraBillModal(false);
     };
@@ -2550,276 +2577,452 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                 )}
             </div>
 
-            {/* --- MODALS OVERLAY --- */}
-
             {/* 1. Modal Perpanjangan Sewa */}
-            {showExtensionModal && selectedKost && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/80 backdrop-blur-sm overflow-y-auto">
-                    <div className="bg-white rounded-[3rem] w-full max-w-lg my-auto relative shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-                        <div className="bg-orange-600 p-8 text-white relative">
-                            <button onClick={() => setShowExtensionModal(false)} className="absolute top-6 right-6 text-white/70 hover:text-white bg-black/10 hover:bg-black/20 rounded-full p-2 transition-colors">
-                                <X className="w-5 h-5" />
-                            </button>
-                            <div className="flex items-center gap-4 mb-3">
-                                <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
-                                    <Clock className="w-6 h-6 text-white" />
+            {showExtensionModal && selectedKost && (() => {
+                const nowSim = getCurrentDate();
+                const currentEnd = parseDateSafely(selectedKost.endDate) || nowSim;
+                const newStart = new Date(currentEnd);
+                const newEnd = new Date(currentEnd);
+                newEnd.setMonth(newEnd.getMonth() + extensionPeriod);
+                const diffMs = newEnd.getTime() - newStart.getTime();
+                const totalDays = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+
+                const timeline = {
+                    currentStartFormatted: FORMAT_DATE(selectedKost.moveInDate || selectedKost.startDate),
+                    currentEndFormatted: FORMAT_DATE(selectedKost.endDate),
+                    newStartFormatted: FORMAT_DATE(newStart),
+                    newEndFormatted: FORMAT_DATE(newEnd),
+                    totalDays
+                };
+
+                // Filter Riwayat Transaksi Perpanjangan / Pembayaran Sewa untuk Unit ini
+                const kid = (selectedKost.kostId || selectedKost.id || '').toString();
+                const currentResId = selectedKost.residentStatusId || selectedKost.id;
+                const currentSessionId = selectedKost.metadata?.booking_session_id;
+
+                const extensionHistoryList = (allUserTransactions || []).filter((t: any) => {
+                    const tKid = (t.product_id || t.kost_id || '').toString();
+                    const tResId = t.resident_status_id || t.metadata?.resident_status_id;
+                    const tSessionId = t.metadata?.booking_session_id;
+                    const s = (t.status || '').toLowerCase();
+                    const isPaid = ['paid', 'success', 'berhasil', 'settlement', 'capture', 'completed', 'done'].includes(s);
+
+                    const isMatch = (tKid === kid || t.metadata?.kostId === kid) &&
+                        (tResId === currentResId || (currentSessionId && tSessionId === currentSessionId) || (!tResId && !tSessionId));
+
+                    const pType = (t.product_type || t.type || '').toLowerCase();
+                    const isRentOrExt = pType === 'perpanjangan_sewa' || pType === 'kost_booking' || pType === 'rent' || pType === 'tagihan_ekstra' || (t.metadata?.billName || '').toLowerCase().includes('sewa');
+
+                    return isMatch && isPaid && isRentOrExt;
+                }).sort((a: any, b: any) => new Date(b.created_at || b.updated_at).getTime() - new Date(a.created_at || a.updated_at).getTime());
+
+                return (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/80 backdrop-blur-sm overflow-y-auto">
+                        <div className="bg-white rounded-[3rem] w-full max-w-lg my-auto relative shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+                            {/* Header Gradient */}
+                            <div className="bg-gradient-to-r from-orange-600 to-orange-500 p-7 text-white relative">
+                                <button onClick={() => setShowExtensionModal(false)} className="absolute top-6 right-6 text-white/70 hover:text-white bg-black/10 hover:bg-black/20 rounded-full p-2 transition-colors cursor-pointer">
+                                    <X className="w-5 h-5" />
+                                </button>
+                                <div className="flex items-center gap-3.5 mb-2">
+                                    <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md shrink-0">
+                                        <Clock className="w-6 h-6 text-white" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl sm:text-2xl font-black tracking-tight leading-snug">Perpanjang Masa Sewa</h3>
+                                        <p className="text-orange-100 text-xs font-bold uppercase tracking-widest">{selectedKost.kostName}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 className="text-2xl font-black tracking-tight">Perpanjang Sewa</h3>
-                                    <p className="text-orange-100/80 text-xs font-bold uppercase tracking-widest">{selectedKost.kostName}</p>
+
+                                {/* Tab Switcher: Form vs Riwayat */}
+                                <div className="flex bg-black/15 p-1 rounded-2xl mt-4 backdrop-blur-md border border-white/10">
+                                    <button
+                                        type="button"
+                                        onClick={() => setExtensionTab('form')}
+                                        className={`flex-1 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                                            extensionTab === 'form' ? 'bg-white text-orange-600 shadow-md' : 'text-white/80 hover:text-white'
+                                        }`}
+                                    >
+                                        <Plus className="w-3.5 h-3.5" /> Form Perpanjangan
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setExtensionTab('history')}
+                                        className={`flex-1 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                                            extensionTab === 'history' ? 'bg-white text-orange-600 shadow-md' : 'text-white/80 hover:text-white'
+                                        }`}
+                                    >
+                                        <Receipt className="w-3.5 h-3.5" /> Riwayat ({extensionHistoryList.length})
+                                    </button>
                                 </div>
                             </div>
-                        </div>
 
-                        <div className="p-8">
-                            <div className="space-y-8">
-                                {/* Duration Selector */}
-                                <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-4">Pilih Durasi Perpanjangan</label>
-                                    <div className="flex items-center justify-between bg-white p-2 rounded-2xl border border-gray-200">
-                                        <button
-                                            type="button"
-                                            onClick={() => setExtensionPeriod(Math.max(1, extensionPeriod - 1))}
-                                            className="w-12 h-12 flex items-center justify-center bg-gray-900 hover:bg-orange-500 text-white rounded-xl font-black text-lg transition-all active:scale-90 shadow-lg shadow-gray-200"
-                                        >
-                                            -
-                                        </button>
-                                        <div className="text-center">
-                                            <span className="text-2xl font-black text-gray-900">{extensionPeriod}</span>
-                                            <span className="text-sm font-bold text-gray-500 ml-2">Bulan</span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setExtensionPeriod(extensionPeriod + 1)}
-                                            className="w-12 h-12 flex items-center justify-center bg-gray-900 hover:bg-orange-500 text-white rounded-xl font-black text-lg transition-all active:scale-90 shadow-lg shadow-gray-200"
-                                        >
-                                            +
-                                        </button>
-                                    </div>
+                            <div className="p-6 sm:p-8 max-h-[72vh] overflow-y-auto custom-scrollbar">
+                                {/* TAB 1: FORM PERPANJANGAN */}
+                                {extensionTab === 'form' && (
+                                    <div className="space-y-6">
+                                        {/* Status Masa Sewa Berjalan Saat Ini */}
+                                        <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-5 rounded-[2rem] text-white shadow-md relative overflow-hidden border border-slate-700/50">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div>
+                                                    <div className="flex items-center gap-1.5 text-orange-400 text-[10px] font-black uppercase tracking-[0.2em]">
+                                                        <Clock className="w-3.5 h-3.5" /> Masa Sewa Berjalan
+                                                    </div>
+                                                    <p className="text-sm font-extrabold text-white mt-0.5">
+                                                        {selectedKost.roomNumber || selectedKost.roomType || 'Kamar'} • {selectedKost.roomType || 'Standard'}
+                                                    </p>
+                                                </div>
+                                                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[9px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                                    {selectedKost.daysRemaining !== null && selectedKost.daysRemaining !== undefined ? `${selectedKost.daysRemaining} Hari Tersisa` : 'Aktif'}
+                                                </span>
+                                            </div>
 
-                                    {/* Rental Packages Options */}
-                                    {(() => {
-                                        const currentRoom = (selectedKost.room_types || []).find((r: any) => r.name === selectedKost.roomType);
-                                        const availablePackages = (currentRoom?.pricing || []).filter((p: any) => p.price > 0 && !['harian', 'mingguan'].includes(p.period));
-
-                                        if (availablePackages.length === 0) return null;
-
-                                        const periodToMonths: Record<string, number> = {
-                                            'bulanan': 1,
-                                            '3bulanan': 3,
-                                            '6bulanan': 6,
-                                            'tahunan': 12
-                                        };
-
-                                        return (
-                                            <div className="mt-6">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-3">Atau Pilih Paket Hemat</label>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    {availablePackages.map((pkg: any) => {
-                                                        const meta = selectedKost.metadata || {};
-                                                        let currentEp = Number(meta.extraPersonFee || meta.extra_person_fee || meta.additionalCostPerPerson || 0);
-                                                        if (!currentEp && selectedKost.totalPrice > pkg.price) {
-                                                            currentEp = (selectedKost.totalPrice / selectedKost.duration) - pkg.price;
-                                                        }
-                                                        const displayPrice = pkg.price + (currentEp > 0 ? currentEp : 0);
-
-                                                        return (
-                                                            <button
-                                                                key={pkg.period}
-                                                                type="button"
-                                                                onClick={() => setExtensionPeriod(periodToMonths[pkg.period] || 1)}
-                                                                className={`p-4 rounded-2xl border-2 text-left transition-all group ${extensionPeriod === periodToMonths[pkg.period]
-                                                                    ? 'border-orange-500 bg-orange-50'
-                                                                    : 'border-gray-100 bg-white hover:border-orange-200'
-                                                                    }`}
-                                                            >
-                                                                <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${extensionPeriod === periodToMonths[pkg.period] ? 'text-orange-600' : 'text-gray-400'}`}>
-                                                                    Paket {
-                                                                        pkg.period === 'bulanan' ? 'Bulanan' :
-                                                                            pkg.period === '3bulanan' ? '3 Bulan' :
-                                                                                pkg.period === '6bulanan' ? '6 Bulan' :
-                                                                                    pkg.period === 'tahunan' ? 'Tahunan' : pkg.period
-                                                                    }
-                                                                </p>
-                                                                <p className="text-sm font-black text-gray-900">{FORMAT_CURRENCY(displayPrice)}</p>
-                                                            </button>
-                                                        )
-                                                    })}
+                                            <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-700/60 text-xs">
+                                                <div>
+                                                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest block mb-0.5">Mulai Masuk</span>
+                                                    <span className="font-bold text-slate-100">{timeline.currentStartFormatted}</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest block mb-0.5">Jatuh Tempo Saat Ini</span>
+                                                    <span className="font-bold text-orange-300">{timeline.currentEndFormatted}</span>
                                                 </div>
                                             </div>
-                                        );
-                                    })()}
-                                </div>
+                                        </div>
 
-                                {/* Price Breakdown */}
-                                <div className="space-y-4">
-                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] px-2">Rincian Pembayaran Perpanjangan</h4>
-                                    <div className="bg-white border-2 border-dashed border-gray-100 rounded-[2rem] p-6 space-y-4">
-                                        {(() => {
-                                            const meta = selectedKost.metadata || {};
-                                            const period = selectedKost.period?.toLowerCase() || 'bulanan';
-
-                                            // Robust extraction with number casting
-                                            let bp = Number(meta.basePrice || selectedKost.basePrice || 0);
-                                            let ep = Number(meta.extraPersonFee || meta.extra_person_fee || meta.additionalCostPerPerson || 0);
-
-                                            // Fallback for basePrice from composition
-                                            if (!bp && meta.composition?.baseRent) {
-                                                const dur = Number(meta.extensionPeriod || meta.total_months || 1);
-                                                bp = Number(meta.composition.baseRent) / dur;
-                                            }
-
-                                            // Fallback for extraPersonFee from composition
-                                            if (!ep && meta.composition?.extraPersonFee) {
-                                                const dur = Number(meta.extensionPeriod || meta.total_months || 1);
-                                                ep = Number(meta.composition.extraPersonFee) / dur;
-                                            }
-
-                                            // Derive from property config (Source of Truth)
-                                            if (selectedKost.room_types) {
-                                                const room = (selectedKost.room_types || []).find((r: any) => r.name === selectedKost.roomType);
-                                                if (room) {
-                                                    const pricing = (room.pricing || []).find((p: any) => p.period === period);
-                                                    if (pricing) bp = Number(pricing.price);
-
-                                                    const occupantsCount = Number(meta.occupants || meta.occupantsCount || meta.composition?.occupants || 1);
-                                                    const roomEp = Number(room.additionalCostPerPerson || room.extra_person_fee || room.extra_occupant_fee || 0);
-
-                                                    if (roomEp > 0 && occupantsCount > 1) {
-                                                        const periodWeights: Record<string, number> = {
-                                                            'harian': 1, 'mingguan': 7, 'bulanan': 30, '3bulanan': 90, '6bulanan': 180, 'tahunan': 360
-                                                        };
-                                                        const availablePeriods = room.pricing?.map((p: any) => p.period) || ['bulanan'];
-                                                        const lowestPeriod = availablePeriods.reduce((min: string, p: string) =>
-                                                            (periodWeights[p] || 30) < (periodWeights[min] || 30) ? p : min, availablePeriods[0]);
-
-                                                        const proportion = (periodWeights[period] || 30) / (periodWeights[lowestPeriod] || 30);
-                                                        const dynamicEp = Math.max(0, occupantsCount - 1) * Math.round(roomEp * proportion);
-                                                        if (dynamicEp > 0) ep = dynamicEp;
-                                                    }
-                                                }
-                                            }
-
-                                            if (!bp) {
-                                                bp = (Number(selectedKost.totalPrice || 0) / (Number(selectedKost.duration || 1))) - ep;
-                                                if (bp <= 0) bp = (Number(selectedKost.totalPrice || 0) / (Number(selectedKost.duration || 1)));
-                                            }
-
-                                            // [FIX] AUTO-CORRECTION: Catch extra person fee missing from meta but present in total price
-                                            if (Number(selectedKost.totalPrice) > bp && ep === 0) {
-                                                ep = Number(selectedKost.totalPrice) - bp;
-                                            }
-
-                                            const occupantsCount = Number(meta.occupants || meta.occupantsCount || meta.composition?.occupants || 1);
-
-                                            return (
-                                                <>
-                                                    <div className="flex justify-between items-center text-sm">
-                                                        <div className="flex flex-col">
-                                                            <span className="text-gray-500 font-medium">Sewa Pokok Kamar ({extensionPeriod} Bulan)</span>
-                                                        </div>
-                                                        <span className="text-gray-900 font-black">
-                                                            {FORMAT_CURRENCY(bp * extensionPeriod)}
-                                                        </span>
-                                                    </div>
-                                                    
-                                                    {ep > 0 && (
-                                                        <div className="flex justify-between items-center text-sm pt-4 border-t border-dashed border-gray-100">
-                                                            <div className="flex flex-col">
-                                                                <span className="text-gray-500 font-medium">Extra Penghuni Tambahan ({extensionPeriod} Bulan)</span>
-                                                                <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Maks. Kapasitas {occupantsCount} Orang</span>
-                                                            </div>
-                                                            <span className="text-gray-900 font-black">
-                                                                {FORMAT_CURRENCY(ep * extensionPeriod)}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </>
-                                            );
-                                        })()}
-
-                                        {selectedKost.additionalFeePrice > 0 && (() => {
-                                            // [FIX] DOUBLE PAYMENT PREVENTION LOGIC
-                                            // 1. Calculate target extension date
-                                            const nowSim = getCurrentDate();
-                                            const leaseEndDate = parseDateSafely(selectedKost.endDate) || nowSim;
-                                            const targetDate = new Date(leaseEndDate);
-                                            targetDate.setMonth(targetDate.getMonth() + 1);
-
-                                            // 2. Search for existing PAID facility bill for this specific target date
-                                            const isAlreadyPaid = (selectedKost.pendingBills || []).some((b: any) => {
-                                                const s = (b.status || '').toLowerCase();
-                                                const isPaid = ['paid', 'success', 'berhasil', 'settlement', 'capture', 'completed', 'done'].includes(s);
-                                                if (!isPaid) return false;
-
-                                                const bMeta = b.metadata || {};
-                                                const bName = (b.bill_name || b.name || bMeta.bill_name || bMeta.billName || '').toLowerCase();
-                                                const isFac = bName.includes('air') || bName.includes('listrik') || bName.includes('wifi') || bName.includes('fasilitas');
-                                                const isBundle = bName.includes('total') || bName.includes('semua') || bMeta.is_batch_split_child || bMeta.is_batch_split_parent || bMeta.is_bundled_parent;
-                                                
-                                                if (!isFac && !isBundle) return false;
-                                                
-                                                // [FIX] ROBUST DATE MATCHING
-                                                const bDate = parseDateSafely(bMeta.original_due_date || bMeta.simulated_date || b.dueDate || b.due_date || b.created_at);
-                                                let isSameMonth = bDate && bDate.getMonth() === targetDate.getMonth() && bDate.getFullYear() === targetDate.getFullYear();
-
-                                                // [NEW] NAME-BASED FALLBACK: If date doesn't match, check if the month name is in the bill name
-                                                if (!isSameMonth) {
-                                                    const monthMap: any = { 'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11, 'january': 0, 'february': 1, 'march': 2, 'may': 4, 'june': 5, 'july': 6, 'august': 7, 'october': 9, 'december': 11 };
-                                                    const targetYear = targetDate.getFullYear();
-                                                    const targetMonthIdx = targetDate.getMonth();
-                                                    
-                                                    const yearMatch = bName.match(/\d{4}/);
-                                                    const nameMonthMatch = bName.match(/(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember|january|february|march|may|june|july|august|september|october|november|december)/i);
-                                                    
-                                                    if (yearMatch && nameMonthMatch) {
-                                                        const bYear = parseInt(yearMatch[0]);
-                                                        const bMonthIdx = monthMap[nameMonthMatch[0].toLowerCase()];
-                                                        if (bYear === targetYear && bMonthIdx === targetMonthIdx) {
-                                                            isSameMonth = true;
-                                                        }
-                                                    }
-                                                }
-
-                                                return isSameMonth;
-                                            });
-
-                                            if (isAlreadyPaid && includeFacilityInExtension) {
-                                                // Auto-uncheck if already paid
-                                                setTimeout(() => setIncludeFacilityInExtension(false), 0);
-                                            }
-
-                                            return (
-                                                <div
-                                                    className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${isAlreadyPaid ? 'border-gray-200 bg-gray-100/50 cursor-not-allowed opacity-75' : (includeFacilityInExtension ? 'border-emerald-500 bg-emerald-50 shadow-lg shadow-emerald-100 cursor-pointer' : 'border-gray-100 bg-gray-50 cursor-pointer')}`}
-                                                    onClick={() => !isAlreadyPaid && setIncludeFacilityInExtension(!includeFacilityInExtension)}
+                                        {/* Duration Selector */}
+                                        <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-3">Pilih Durasi Perpanjangan</label>
+                                            <div className="flex items-center justify-between bg-white p-2 rounded-2xl border border-gray-200 shadow-xs">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setExtensionPeriod(Math.max(1, extensionPeriod - 1))}
+                                                    className="w-12 h-12 flex items-center justify-center bg-gray-900 hover:bg-orange-500 text-white rounded-xl font-black text-lg transition-all active:scale-90 shadow-lg shadow-gray-200 cursor-pointer"
                                                 >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${isAlreadyPaid ? 'bg-gray-300 text-white' : (includeFacilityInExtension ? 'bg-emerald-500 text-white' : 'bg-white border-2 border-gray-200')}`}>
-                                                            {isAlreadyPaid ? <Check className="w-4 h-4 stroke-[4]" /> : (includeFacilityInExtension && <Check className="w-4 h-4 stroke-[4]" />)}
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[10px] font-black text-gray-900 uppercase tracking-wider">
-                                                                {isAlreadyPaid ? 'Fasilitas Sudah Lunas' : 'Bayar Tagihan Fasilitas?'}
-                                                            </p>
-                                                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">
-                                                                {isAlreadyPaid ? 'Terdeteksi di Riwayat' : (selectedKost.additionalFeeName || 'Listrik, Air, Wifi')}
-                                                            </p>
+                                                    -
+                                                </button>
+                                                <div className="text-center">
+                                                    <span className="text-2xl font-black text-gray-900">{extensionPeriod}</span>
+                                                    <span className="text-sm font-bold text-gray-500 ml-2">Bulan</span>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setExtensionPeriod(extensionPeriod + 1)}
+                                                    className="w-12 h-12 flex items-center justify-center bg-gray-900 hover:bg-orange-500 text-white rounded-xl font-black text-lg transition-all active:scale-90 shadow-lg shadow-gray-200 cursor-pointer"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+
+                                            {/* Rental Packages Options */}
+                                            {(() => {
+                                                const currentRoom = (selectedKost.room_types || []).find((r: any) => r.name === selectedKost.roomType);
+                                                const availablePackages = (currentRoom?.pricing || []).filter((p: any) => p.price > 0 && !['harian', 'mingguan'].includes(p.period));
+
+                                                if (availablePackages.length === 0) return null;
+
+                                                const periodToMonths: Record<string, number> = {
+                                                    'bulanan': 1,
+                                                    '3bulanan': 3,
+                                                    '6bulanan': 6,
+                                                    'tahunan': 12
+                                                };
+
+                                                return (
+                                                    <div className="mt-5 pt-4 border-t border-gray-200/60">
+                                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-3">Atau Pilih Paket Durasi</label>
+                                                        <div className="grid grid-cols-2 gap-2.5">
+                                                            {availablePackages.map((pkg: any) => {
+                                                                const meta = selectedKost.metadata || {};
+                                                                let currentEp = Number(meta.extraPersonFee || meta.extra_person_fee || meta.additionalCostPerPerson || 0);
+                                                                if (!currentEp && selectedKost.totalPrice > pkg.price) {
+                                                                    currentEp = (selectedKost.totalPrice / selectedKost.duration) - pkg.price;
+                                                                }
+                                                                const displayPrice = pkg.price + (currentEp > 0 ? currentEp : 0);
+                                                                const isSelectedPkg = extensionPeriod === periodToMonths[pkg.period];
+
+                                                                return (
+                                                                    <button
+                                                                        key={pkg.period}
+                                                                        type="button"
+                                                                        onClick={() => setExtensionPeriod(periodToMonths[pkg.period] || 1)}
+                                                                        className={`p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                                                                            isSelectedPkg
+                                                                                ? 'border-orange-500 bg-orange-50/80 shadow-xs'
+                                                                                : 'border-gray-150 bg-white hover:border-orange-200'
+                                                                        }`}
+                                                                    >
+                                                                        <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isSelectedPkg ? 'text-orange-600' : 'text-gray-400'}`}>
+                                                                            Paket {
+                                                                                pkg.period === 'bulanan' ? 'Bulanan' :
+                                                                                    pkg.period === '3bulanan' ? '3 Bulan' :
+                                                                                        pkg.period === '6bulanan' ? '6 Bulan' :
+                                                                                            pkg.period === 'tahunan' ? 'Tahunan' : pkg.period
+                                                                            }
+                                                                        </p>
+                                                                        <p className="text-xs sm:text-sm font-black text-gray-900">{FORMAT_CURRENCY(displayPrice)}</p>
+                                                                    </button>
+                                                                );
+                                                            })}
                                                         </div>
                                                     </div>
-                                                    <span className={`text-[11px] font-black ${isAlreadyPaid ? 'text-gray-400' : 'text-emerald-600'}`}>
-                                                        {isAlreadyPaid ? 'Lunas' : `+ ${FORMAT_CURRENCY(selectedKost.additionalFeePrice)}`}
-                                                    </span>
-                                                </div>
-                                            );
-                                        })()}
+                                                );
+                                            })()}
+                                        </div>
 
-                                        <div className="flex justify-between items-center pt-2">
-                                            <span className="text-gray-900 font-black uppercase tracking-widest text-xs">Total Pembayaran</span>
-                                            <span className="text-2xl font-black text-orange-600">
+                                        {/* Live Simulation Timeline Card */}
+                                        <div className="bg-orange-50/80 p-5 rounded-[2rem] border border-orange-200/80 shadow-xs space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[10px] font-black text-orange-950 uppercase tracking-[0.2em] flex items-center gap-1.5">
+                                                    <Calendar className="w-3.5 h-3.5 text-orange-500" />
+                                                    Simulasi Periode Bersambung
+                                                </span>
+                                                <span className="text-[10px] font-black text-orange-700 bg-orange-100 px-2.5 py-0.5 rounded-full border border-orange-200">
+                                                    +{timeline.totalDays} Hari ({extensionPeriod} Bulan)
+                                                </span>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-3 bg-white p-3.5 rounded-2xl border border-orange-100 text-xs">
+                                                <div>
+                                                    <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest block mb-0.5">Mulai Bersambung</span>
+                                                    <span className="font-extrabold text-gray-800">{timeline.newStartFormatted}</span>
+                                                </div>
+                                                <div className="border-l border-orange-100 pl-3">
+                                                    <span className="text-[9px] text-orange-600 font-bold uppercase tracking-widest block mb-0.5">Jatuh Tempo Baru</span>
+                                                    <span className="font-extrabold text-orange-600">{timeline.newEndFormatted}</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-2 text-[10.5px] font-bold text-orange-900 bg-white/70 px-3.5 py-2.5 rounded-xl border border-orange-100/80">
+                                                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                                                <span>Masa tinggal Anda akan otomatis bersambung hingga <strong>{timeline.newEndFormatted}</strong> tanpa jeda.</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Price Breakdown */}
+                                        <div className="space-y-3">
+                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] px-2">Rincian Pembayaran Perpanjangan</h4>
+                                            <div className="bg-white border-2 border-dashed border-gray-100 rounded-[2rem] p-6 space-y-4">
                                                 {(() => {
                                                     const meta = selectedKost.metadata || {};
                                                     const period = selectedKost.period?.toLowerCase() || 'bulanan';
+
+                                                    let bp = Number(meta.basePrice || selectedKost.basePrice || 0);
+                                                    let ep = Number(meta.extraPersonFee || meta.extra_person_fee || meta.additionalCostPerPerson || 0);
+
+                                                    if (!bp && meta.composition?.baseRent) {
+                                                        const dur = Number(meta.extensionPeriod || meta.total_months || 1);
+                                                        bp = Number(meta.composition.baseRent) / dur;
+                                                    }
+                                                    if (!ep && meta.composition?.extraPersonFee) {
+                                                        const dur = Number(meta.extensionPeriod || meta.total_months || 1);
+                                                        ep = Number(meta.composition.extraPersonFee) / dur;
+                                                    }
+
+                                                    if (selectedKost.room_types) {
+                                                        const room = (selectedKost.room_types || []).find((r: any) => r.name === selectedKost.roomType);
+                                                        if (room) {
+                                                            const pricing = (room.pricing || []).find((p: any) => p.period === period);
+                                                            if (pricing) bp = Number(pricing.price);
+
+                                                            const occupantsCount = Number(meta.occupants || meta.occupantsCount || meta.composition?.occupants || 1);
+                                                            const roomEp = Number(room.additionalCostPerPerson || room.extra_person_fee || room.extra_occupant_fee || 0);
+
+                                                            if (roomEp > 0 && occupantsCount > 1) {
+                                                                const periodWeights: Record<string, number> = {
+                                                                    'harian': 1, 'mingguan': 7, 'bulanan': 30, '3bulanan': 90, '6bulanan': 180, 'tahunan': 360
+                                                                };
+                                                                const availablePeriods = room.pricing?.map((p: any) => p.period) || ['bulanan'];
+                                                                const lowestPeriod = availablePeriods.reduce((min: string, p: string) =>
+                                                                    (periodWeights[p] || 30) < (periodWeights[min] || 30) ? p : min, availablePeriods[0]);
+
+                                                                const proportion = (periodWeights[period] || 30) / (periodWeights[lowestPeriod] || 30);
+                                                                const dynamicEp = Math.max(0, occupantsCount - 1) * Math.round(roomEp * proportion);
+                                                                if (dynamicEp > 0) ep = dynamicEp;
+                                                            }
+                                                        }
+                                                    }
+
+                                                    if (!bp) {
+                                                        bp = (Number(selectedKost.totalPrice || 0) / (Number(selectedKost.duration || 1))) - ep;
+                                                        if (bp <= 0) bp = (Number(selectedKost.totalPrice || 0) / (Number(selectedKost.duration || 1)));
+                                                    }
+
+                                                    if (Number(selectedKost.totalPrice) > bp && ep === 0) {
+                                                        ep = Number(selectedKost.totalPrice) - bp;
+                                                    }
+
+                                                    const occupantsCount = Number(meta.occupants || meta.occupantsCount || meta.composition?.occupants || 1);
+
+                                                    return (
+                                                        <>
+                                                            <div className="flex justify-between items-center text-sm">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-gray-500 font-medium">Sewa Pokok Kamar ({extensionPeriod} Bulan)</span>
+                                                                </div>
+                                                                <span className="text-gray-900 font-black">
+                                                                    {FORMAT_CURRENCY(bp * extensionPeriod)}
+                                                                </span>
+                                                            </div>
+                                                            
+                                                            {ep > 0 && (
+                                                                <div className="flex justify-between items-center text-sm pt-4 border-t border-dashed border-gray-100">
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-gray-500 font-medium">Extra Penghuni Tambahan ({extensionPeriod} Bulan)</span>
+                                                                        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Maks. Kapasitas {occupantsCount} Orang</span>
+                                                                    </div>
+                                                                    <span className="text-gray-900 font-black">
+                                                                        {FORMAT_CURRENCY(ep * extensionPeriod)}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    );
+                                                })()}
+
+                                                {selectedKost.additionalFeePrice > 0 && (() => {
+                                                    const targetDate = new Date(currentEnd);
+                                                    targetDate.setMonth(targetDate.getMonth() + 1);
+
+                                                    const isAlreadyPaid = (selectedKost.pendingBills || []).some((b: any) => {
+                                                        const s = (b.status || '').toLowerCase();
+                                                        const isPaid = ['paid', 'success', 'berhasil', 'settlement', 'capture', 'completed', 'done'].includes(s);
+                                                        if (!isPaid) return false;
+
+                                                        const bMeta = b.metadata || {};
+                                                        const bName = (b.bill_name || b.name || bMeta.bill_name || bMeta.billName || '').toLowerCase();
+                                                        const isFac = bName.includes('air') || bName.includes('listrik') || bName.includes('wifi') || bName.includes('fasilitas');
+                                                        const isBundle = bName.includes('total') || bName.includes('semua') || bMeta.is_batch_split_child || bMeta.is_batch_split_parent || bMeta.is_bundled_parent;
+                                                        
+                                                        if (!isFac && !isBundle) return false;
+                                                        
+                                                        const bDate = parseDateSafely(bMeta.original_due_date || bMeta.simulated_date || b.dueDate || b.due_date || b.created_at);
+                                                        let isSameMonth = bDate && bDate.getMonth() === targetDate.getMonth() && bDate.getFullYear() === targetDate.getFullYear();
+
+                                                        if (!isSameMonth) {
+                                                            const monthMap: any = { 'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11, 'january': 0, 'february': 1, 'march': 2, 'may': 4, 'june': 5, 'july': 6, 'august': 7, 'october': 9, 'december': 11 };
+                                                            const targetYear = targetDate.getFullYear();
+                                                            const targetMonthIdx = targetDate.getMonth();
+                                                            
+                                                            const yearMatch = bName.match(/\d{4}/);
+                                                            const nameMonthMatch = bName.match(/(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember|january|february|march|may|june|july|august|september|october|november|december)/i);
+                                                            
+                                                            if (yearMatch && nameMonthMatch) {
+                                                                const bYear = parseInt(yearMatch[0]);
+                                                                const bMonthIdx = monthMap[nameMonthMatch[0].toLowerCase()];
+                                                                if (bYear === targetYear && bMonthIdx === targetMonthIdx) {
+                                                                    isSameMonth = true;
+                                                                }
+                                                            }
+                                                        }
+
+                                                        return isSameMonth;
+                                                    });
+
+                                                    if (isAlreadyPaid && includeFacilityInExtension) {
+                                                        setTimeout(() => setIncludeFacilityInExtension(false), 0);
+                                                    }
+
+                                                    return (
+                                                        <div
+                                                            className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${isAlreadyPaid ? 'border-gray-200 bg-gray-100/50 cursor-not-allowed opacity-75' : (includeFacilityInExtension ? 'border-emerald-500 bg-emerald-50 shadow-lg shadow-emerald-100 cursor-pointer' : 'border-gray-100 bg-gray-50 cursor-pointer')}`}
+                                                            onClick={() => !isAlreadyPaid && setIncludeFacilityInExtension(!includeFacilityInExtension)}
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${isAlreadyPaid ? 'bg-gray-300 text-white' : (includeFacilityInExtension ? 'bg-emerald-500 text-white' : 'bg-white border-2 border-gray-200')}`}>
+                                                                    {isAlreadyPaid ? <Check className="w-4 h-4 stroke-[4]" /> : (includeFacilityInExtension && <Check className="w-4 h-4 stroke-[4]" />)}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-[10px] font-black text-gray-900 uppercase tracking-wider">
+                                                                        {isAlreadyPaid ? 'Fasilitas Sudah Lunas' : 'Bayar Tagihan Fasilitas?'}
+                                                                    </p>
+                                                                    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">
+                                                                        {isAlreadyPaid ? 'Terdeteksi di Riwayat' : (selectedKost.additionalFeeName || 'Listrik, Air, Wifi')}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <span className={`text-[11px] font-black ${isAlreadyPaid ? 'text-gray-400' : 'text-emerald-600'}`}>
+                                                                {isAlreadyPaid ? 'Lunas' : `+ ${FORMAT_CURRENCY(selectedKost.additionalFeePrice)}`}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })()}
+
+                                                <div className="flex justify-between items-center pt-2">
+                                                    <span className="text-gray-900 font-black uppercase tracking-widest text-xs">Total Pembayaran</span>
+                                                    <span className="text-2xl font-black text-orange-600">
+                                                        {(() => {
+                                                            const meta = selectedKost.metadata || {};
+                                                            const period = selectedKost.period?.toLowerCase() || 'bulanan';
+                                                            let bp = Number(meta.basePrice || selectedKost.basePrice || 0);
+                                                            let ep = Number(meta.extraPersonFee || meta.extra_person_fee || meta.additionalCostPerPerson || 0);
+
+                                                            if (!bp && meta.composition?.baseRent) {
+                                                                const dur = Number(meta.extensionPeriod || meta.total_months || 1);
+                                                                bp = Number(meta.composition.baseRent) / dur;
+                                                            }
+                                                            if (!ep && meta.composition?.extraPersonFee) {
+                                                                const dur = Number(meta.extensionPeriod || meta.total_months || 1);
+                                                                ep = Number(meta.composition.extraPersonFee) / dur;
+                                                            }
+
+                                                            if (selectedKost.room_types) {
+                                                                const room = (selectedKost.room_types || []).find((r: any) => r.name === selectedKost.roomType);
+                                                                if (room) {
+                                                                    const pricing = (room.pricing || []).find((p: any) => p.period === period);
+                                                                    if (pricing) bp = Number(pricing.price);
+                                                                    const occupantsCount = Number(meta.occupants || meta.occupantsCount || meta.composition?.occupants || 1);
+                                                                    const roomEp = Number(room.additionalCostPerPerson || room.extra_person_fee || room.extra_occupant_fee || 0);
+
+                                                                    if (roomEp > 0 && occupantsCount > 1) {
+                                                                        const periodWeights: Record<string, number> = { 'harian': 1, 'mingguan': 7, 'bulanan': 30, '3bulanan': 90, '6bulanan': 180, 'tahunan': 360 };
+                                                                        const availablePeriods = room.pricing?.map((p: any) => p.period) || ['bulanan'];
+                                                                        const lowestPeriod = availablePeriods.reduce((min: string, p: string) => (periodWeights[p] || 30) < (periodWeights[min] || 30) ? p : min, availablePeriods[0]);
+                                                                        const proportion = (periodWeights[period] || 30) / (periodWeights[lowestPeriod] || 30);
+                                                                        const dynamicEp = Math.max(0, occupantsCount - 1) * Math.round(roomEp * proportion);
+                                                                        if (dynamicEp > 0) ep = dynamicEp;
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            if (!bp) {
+                                                                bp = (Number(selectedKost.totalPrice || 0) / (Number(selectedKost.duration || 1))) - ep;
+                                                                if (bp <= 0) bp = (Number(selectedKost.totalPrice || 0) / (Number(selectedKost.duration || 1)));
+                                                            }
+
+                                                            if (Number(selectedKost.totalPrice) > bp && ep === 0) {
+                                                                ep = Number(selectedKost.totalPrice) - bp;
+                                                            }
+
+                                                            const monthlyFacility = Number(selectedKost.additionalFeePrice || 0);
+                                                            const total = ((bp + ep) * extensionPeriod) + (includeFacilityInExtension ? monthlyFacility : 0);
+                                                            return FORMAT_CURRENCY(total);
+                                                        })()}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex gap-3 items-start">
+                                            <span className="text-base">⚡</span>
+                                            <p className="text-[11px] text-blue-800 font-medium leading-relaxed">
+                                                Pembayaran sewa pokok akan memperpanjang masa tinggal Anda. Tagihan fasilitas dapat dibayar sekaligus atau terpisah melalui menu Tagihan.
+                                            </p>
+                                        </div>
+
+                                        <div className="pt-2 flex gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowExtensionModal(false)}
+                                                className="flex-1 py-4 text-gray-500 font-black uppercase text-[11px] tracking-widest hover:bg-gray-50 rounded-2xl transition-colors border border-gray-200 cursor-pointer"
+                                            >
+                                                Batal
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const meta = selectedKost.metadata || {};
+                                                    const period = selectedKost.period?.toLowerCase() || 'bulanan';
+
                                                     let bp = Number(meta.basePrice || selectedKost.basePrice || 0);
                                                     let ep = Number(meta.extraPersonFee || meta.extra_person_fee || meta.additionalCostPerPerson || 0);
 
@@ -2856,216 +3059,208 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                         if (bp <= 0) bp = (Number(selectedKost.totalPrice || 0) / (Number(selectedKost.duration || 1)));
                                                     }
 
-                                                    // [FIX] AUTO-CORRECTION: Catch extra person fee missing from meta but present in total price
-                                                    if (Number(selectedKost.totalPrice) > bp && ep === 0) {
-                                                        ep = Number(selectedKost.totalPrice) - bp;
+                                                    if (selectedKost.totalPrice > bp && ep === 0) {
+                                                        ep = selectedKost.totalPrice - bp;
                                                     }
 
                                                     const monthlyFacility = Number(selectedKost.additionalFeePrice || 0);
                                                     const total = ((bp + ep) * extensionPeriod) + (includeFacilityInExtension ? monthlyFacility : 0);
-                                                    return FORMAT_CURRENCY(total);
-                                                })()}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
 
-                                <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex gap-3 items-start">
-                                    <span className="text-base">⚡</span>
-                                    <p className="text-[11px] text-blue-800 font-medium leading-relaxed">
-                                        Pembayaran sewa pokok akan memperpanjang masa tinggal Anda. Tagihan fasilitas dapat dibayar sekaligus atau terpisah melalui menu Tagihan.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="mt-10 flex gap-4">
-                                <button type="button" onClick={() => setShowExtensionModal(false)} className="flex-1 py-4 text-gray-500 font-black uppercase text-[11px] tracking-widest hover:bg-gray-50 rounded-2xl transition-colors border border-gray-100">Batal</button>
-                                <button
-                                    onClick={() => {
-                                        const meta = selectedKost.metadata || {};
-                                        const period = selectedKost.period?.toLowerCase() || 'bulanan';
-
-                                        // Robust extraction with number casting
-                                        let bp = Number(meta.basePrice || selectedKost.basePrice || 0);
-                                        let ep = Number(meta.extraPersonFee || meta.extra_person_fee || meta.additionalCostPerPerson || 0);
-
-                                        if (!bp && meta.composition?.baseRent) {
-                                            const dur = Number(meta.extensionPeriod || meta.total_months || 1);
-                                            bp = Number(meta.composition.baseRent) / dur;
-                                        }
-                                        if (!ep && meta.composition?.extraPersonFee) {
-                                            const dur = Number(meta.extensionPeriod || meta.total_months || 1);
-                                            ep = Number(meta.composition.extraPersonFee) / dur;
-                                        }
-
-                                        if (selectedKost.room_types) {
-                                            const room = (selectedKost.room_types || []).find((r: any) => r.name === selectedKost.roomType);
-                                            if (room) {
-                                                const pricing = (room.pricing || []).find((p: any) => p.period === period);
-                                                if (pricing) bp = Number(pricing.price);
-                                                const occupantsCount = Number(meta.occupants || meta.occupantsCount || meta.composition?.occupants || 1);
-                                                const roomEp = Number(room.additionalCostPerPerson || room.extra_person_fee || room.extra_occupant_fee || 0);
-
-                                                if (roomEp > 0 && occupantsCount > 1) {
-                                                    const periodWeights: Record<string, number> = { 'harian': 1, 'mingguan': 7, 'bulanan': 30, '3bulanan': 90, '6bulanan': 180, 'tahunan': 360 };
-                                                    const availablePeriods = room.pricing?.map((p: any) => p.period) || ['bulanan'];
-                                                    const lowestPeriod = availablePeriods.reduce((min: string, p: string) => (periodWeights[p] || 30) < (periodWeights[min] || 30) ? p : min, availablePeriods[0]);
-                                                    const proportion = (periodWeights[period] || 30) / (periodWeights[lowestPeriod] || 30);
-                                                    const dynamicEp = Math.max(0, occupantsCount - 1) * Math.round(roomEp * proportion);
-                                                    if (dynamicEp > 0) ep = dynamicEp;
-                                                }
-                                            }
-                                        }
-
-                                        if (!bp) {
-                                            bp = (Number(selectedKost.totalPrice || 0) / (Number(selectedKost.duration || 1))) - ep;
-                                            if (bp <= 0) bp = (Number(selectedKost.totalPrice || 0) / (Number(selectedKost.duration || 1)));
-                                        }
-
-                                        // [FIX] AUTO-CORRECTION: Catch extra person fee missing from meta but present in total price
-                                        if (selectedKost.totalPrice > bp && ep === 0) {
-                                            ep = selectedKost.totalPrice - bp;
-                                        }
-
-                                        const monthlyFacility = Number(selectedKost.additionalFeePrice || 0);
-                                        const total = ((bp + ep) * extensionPeriod) + (includeFacilityInExtension ? monthlyFacility : 0);
-
-                                        // Generate Month Year Label for Extension
-                                        // [FIX] Correct Month Label: Use the NEXT month after lease ends for the label
-                                        const nowSim = getCurrentDate();
-                                        const leaseEndDate = parseDateSafely(selectedKost.endDate) || nowSim;
-                                        
-                                        // Start with the day after lease ends
-                                        const targetDate = new Date(leaseEndDate);
-                                        targetDate.setMonth(targetDate.getMonth() + 1); // [FIX] Shift to NEXT month label
-                                        
-                                        const monthYear = targetDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-
-                                        // [FIX] Explicit Name with Month and Duration
-                                        const billNameStr = `Sewa Kost ${monthYear} (${extensionPeriod} Bulan)`;
-
-                                        // [FIX] SEARCH FOR EXISTING FACILITY BILL: If checking facility, try to find its ID in DB
-                                        let existingFacilityId = null;
-                                        if (includeFacilityInExtension) {
-                                            // Priority 1: Bill matching the TARGET month (next month)
-                                            // Priority 2: Any ACTIVE facility bill (current month/arrears)
-                                            const bills = selectedKost.pendingBills || [];
-                                            const facilityBills = bills.filter((b: any) => {
-                                                const bMeta = b.metadata || {};
-                                                const bName = (b.bill_name || b.name || bMeta.bill_name || bMeta.billName || '').toLowerCase();
-                                                const isFac = bName.includes('air') || bName.includes('listrik') || bName.includes('wifi') || bName.includes('fasilitas');
-                                                const s = (b.status || '').toLowerCase();
-                                                const isUnpaid = !['paid', 'success', 'berhasil', 'settlement', 'capture', 'completed', 'done'].includes(s);
-                                                return isFac && isUnpaid;
-                                            });
-
-                                            const targetMatch = facilityBills.find((b: any) => {
-                                                const bMeta = b.metadata || {};
-                                                const bName = (b.bill_name || b.name || bMeta.bill_name || bMeta.billName || '').toLowerCase();
-                                                
-                                                // [FIX] ROBUST DATE MATCHING (Consistent with isAlreadyPaid logic)
-                                                const bDate = parseDateSafely(bMeta.original_due_date || bMeta.simulated_date || b.dueDate || b.due_date || b.created_at);
-                                                let isSameMonth = bDate && bDate.getMonth() === targetDate.getMonth() && bDate.getFullYear() === targetDate.getFullYear();
-
-                                                if (!isSameMonth) {
-                                                    const monthMap: any = { 'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11, 'january': 0, 'february': 1, 'march': 2, 'may': 4, 'june': 5, 'july': 6, 'august': 7, 'october': 9, 'december': 11 };
-                                                    const targetYear = targetDate.getFullYear();
-                                                    const targetMonthIdx = targetDate.getMonth();
+                                                    const targetDate = new Date(currentEnd);
+                                                    targetDate.setMonth(targetDate.getMonth() + 1);
                                                     
-                                                    const yearMatch = bName.match(/\d{4}/);
-                                                    const nameMonthMatch = bName.match(/(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember|january|february|march|may|june|july|august|september|october|november|december)/i);
-                                                    
-                                                    if (yearMatch && nameMonthMatch) {
-                                                        const bYear = parseInt(yearMatch[0]);
-                                                        const bMonthIdx = monthMap[nameMonthMatch[0].toLowerCase()];
-                                                        if (bYear === targetYear && bMonthIdx === targetMonthIdx) {
-                                                            isSameMonth = true;
+                                                    const monthYear = targetDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+                                                    const billNameStr = `Sewa Kost ${monthYear} (${extensionPeriod} Bulan)`;
+
+                                                    let existingFacilityId = null;
+                                                    if (includeFacilityInExtension) {
+                                                        const bills = selectedKost.pendingBills || [];
+                                                        const facilityBills = bills.filter((b: any) => {
+                                                            const bMeta = b.metadata || {};
+                                                            const bName = (b.bill_name || b.name || bMeta.bill_name || bMeta.billName || '').toLowerCase();
+                                                            const isFac = bName.includes('air') || bName.includes('listrik') || bName.includes('wifi') || bName.includes('fasilitas');
+                                                            const s = (b.status || '').toLowerCase();
+                                                            const isUnpaid = !['paid', 'success', 'berhasil', 'settlement', 'capture', 'completed', 'done'].includes(s);
+                                                            return isFac && isUnpaid;
+                                                        });
+
+                                                        const targetMatch = facilityBills.find((b: any) => {
+                                                            const bMeta = b.metadata || {};
+                                                            const bName = (b.bill_name || b.name || bMeta.bill_name || bMeta.billName || '').toLowerCase();
+                                                            
+                                                            const bDate = parseDateSafely(bMeta.original_due_date || bMeta.simulated_date || b.dueDate || b.due_date || b.created_at);
+                                                            let isSameMonth = bDate && bDate.getMonth() === targetDate.getMonth() && bDate.getFullYear() === targetDate.getFullYear();
+
+                                                            if (!isSameMonth) {
+                                                                const monthMap: any = { 'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11, 'january': 0, 'february': 1, 'march': 2, 'may': 4, 'june': 5, 'july': 6, 'august': 7, 'october': 9, 'december': 11 };
+                                                                const targetYear = targetDate.getFullYear();
+                                                                const targetMonthIdx = targetDate.getMonth();
+                                                                
+                                                                const yearMatch = bName.match(/\d{4}/);
+                                                                const nameMonthMatch = bName.match(/(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember|january|february|march|may|june|july|august|september|october|november|december)/i);
+                                                                
+                                                                if (yearMatch && nameMonthMatch) {
+                                                                    const bYear = parseInt(yearMatch[0]);
+                                                                    const bMonthIdx = monthMap[nameMonthMatch[0].toLowerCase()];
+                                                                    if (bYear === targetYear && bMonthIdx === targetMonthIdx) {
+                                                                        isSameMonth = true;
+                                                                    }
+                                                                }
+                                                            }
+                                                            return isSameMonth;
+                                                        });
+
+                                                        const bestMatch = targetMatch || facilityBills[0];
+
+                                                        if (bestMatch) {
+                                                            existingFacilityId = bestMatch.id;
+                                                            console.log("FOUND_MATCHING_FACILITY_BILL:", existingFacilityId, bestMatch.bill_name);
                                                         }
                                                     }
-                                                }
-                                                return isSameMonth;
-                                            });
 
-                                            const bestMatch = targetMatch || facilityBills[0]; // Fallback to any active facility bill
-
-                                            if (bestMatch) {
-                                                existingFacilityId = bestMatch.id;
-                                                console.log("FOUND_MATCHING_FACILITY_BILL:", existingFacilityId, bestMatch.bill_name);
-                                            }
-                                        }
-
-                                        handleStartPayment(total, selectedKost.kostId, 'perpanjangan_sewa', {
-                                            extensionPeriod,
-                                            masa_sewa_hari: extensionPeriod * 30,
-                                            extensionType: 'manual_extension',
-                                            includeFacility: includeFacilityInExtension,
-                                            facilityAmount: includeFacilityInExtension ? monthlyFacility : 0,
-                                            kostName: selectedKost.kostName,
-                                            startDate: selectedKost.endDate,
-                                            roomType: selectedKost.roomType,
-                                            originalTransactionId: selectedKost.id,
-                                            occupants: Number(meta.occupants || meta.occupantsCount || meta.composition?.occupants || 1),
-                                            basePrice: bp,
-                                            extraPersonFee: ep,
-                                            booking_session_id: meta.booking_session_id || selectedKost.metadata?.booking_session_id,
-                                            resident_status_id: selectedKost.id,
-                                            bill_name: billNameStr,
-                                            billName: billNameStr,
-                                            original_due_date: targetDate.toISOString(),
-                                            composition: {
-                                                baseRent: bp * extensionPeriod,
-                                                extraPersonFee: ep * extensionPeriod,
-                                                facilityFee: includeFacilityInExtension ? monthlyFacility : 0,
-                                                occupants: Number(meta.occupants || meta.occupantsCount || meta.composition?.occupants || 1)
-                                            },
-                                            existing_facility_id: existingFacilityId, // [CRITICAL] Link to existing active bill
-                                            item_details: [
-                                                {
-                                                    id: `rent-ext-${selectedKost.kostId?.substring(0, 8)}`,
-                                                    price: (bp + ep) * extensionPeriod,
-                                                    quantity: 1,
-                                                    name: `${billNameStr}${Number(meta.occupants || 1) > 1 ? ' +Extra' : ''}`.substring(0, 50),
-                                                    metadata: {
-                                                        original_due_date: targetDate.toISOString(),
+                                                    handleStartPayment(total, selectedKost.kostId, 'perpanjangan_sewa', {
+                                                        extensionPeriod,
+                                                        masa_sewa_hari: timeline.totalDays,
+                                                        extensionType: 'manual_extension',
+                                                        includeFacility: includeFacilityInExtension,
+                                                        facilityAmount: includeFacilityInExtension ? monthlyFacility : 0,
+                                                        kostName: selectedKost.kostName,
+                                                        startDate: selectedKost.endDate,
+                                                        roomType: selectedKost.roomType,
+                                                        originalTransactionId: selectedKost.id,
+                                                        occupants: Number(meta.occupants || meta.occupantsCount || meta.composition?.occupants || 1),
+                                                        basePrice: bp,
+                                                        extraPersonFee: ep,
+                                                        booking_session_id: meta.booking_session_id || selectedKost.metadata?.booking_session_id,
+                                                        resident_status_id: selectedKost.id,
                                                         bill_name: billNameStr,
                                                         billName: billNameStr,
-                                                        isRent: true,
-                                                        simulated_date: getCurrentDate().toISOString() // [NEW] Item-level simulator date
-                                                    }
-                                                },
-                                                ...(includeFacilityInExtension && monthlyFacility > 0 ? [{
-                                                    id: existingFacilityId || `facility-ext-${selectedKost.kostId?.substring(0, 8)}`,
-                                                    price: monthlyFacility,
-                                                    quantity: 1,
-                                                    name: (selectedKost.additionalFeeName || `Tagihan Fasilitas (${monthYear})`).substring(0, 50),
-                                                    metadata: {
                                                         original_due_date: targetDate.toISOString(),
-                                                        bill_name: selectedKost.additionalFeeName || `Tagihan air listrik wifi (${monthYear})`,
-                                                        billName: selectedKost.additionalFeeName || `Tagihan air listrik wifi (${monthYear})`,
-                                                        isRent: false,
-                                                        product_type: 'tagihan_ekstra',
-                                                        simulated_date: getCurrentDate().toISOString() // [CRITICAL] Item-level sync
-                                                    }
-                                                }] : [])
-                                            ],
-                                            tenantName: user.displayName || user.email?.split('@')[0] || 'Customer',
-                                            propertyTitle: selectedKost.kostName,
-                                            roomCategory: selectedKost.roomType,
-                                            leaseStart: selectedKost.endDate,
-                                            leaseEnd: '-',
-                                            isManualExtension: true, // [NEW] Explicit flag for backend trust
-                                            simulated_date: getCurrentDate().toISOString() // [CRITICAL] Parent-level sync
-                                        });
-                                    }}
-                                    className="flex-[2] py-4 bg-gray-900 hover:bg-orange-600 text-white font-black uppercase text-[11px] tracking-[0.2em] rounded-2xl shadow-2xl shadow-gray-200 transition-all active:scale-95"
-                                >
-                                    Bayar Perpanjangan
-                                </button>
+                                                        composition: {
+                                                            baseRent: bp * extensionPeriod,
+                                                            extraPersonFee: ep * extensionPeriod,
+                                                            facilityFee: includeFacilityInExtension ? monthlyFacility : 0,
+                                                            occupants: Number(meta.occupants || meta.occupantsCount || meta.composition?.occupants || 1)
+                                                        },
+                                                        existing_facility_id: existingFacilityId,
+                                                        item_details: [
+                                                            {
+                                                                id: `rent-ext-${selectedKost.kostId?.substring(0, 8)}`,
+                                                                price: (bp + ep) * extensionPeriod,
+                                                                quantity: 1,
+                                                                name: `${billNameStr}${Number(meta.occupants || 1) > 1 ? ' +Extra' : ''}`.substring(0, 50),
+                                                                metadata: {
+                                                                    original_due_date: targetDate.toISOString(),
+                                                                    bill_name: billNameStr,
+                                                                    billName: billNameStr,
+                                                                    isRent: true,
+                                                                    simulated_date: getCurrentDate().toISOString()
+                                                                }
+                                                            },
+                                                            ...(includeFacilityInExtension && monthlyFacility > 0 ? [{
+                                                                id: existingFacilityId || `facility-ext-${selectedKost.kostId?.substring(0, 8)}`,
+                                                                price: monthlyFacility,
+                                                                quantity: 1,
+                                                                name: (selectedKost.additionalFeeName || `Tagihan Fasilitas (${monthYear})`).substring(0, 50),
+                                                                metadata: {
+                                                                    original_due_date: targetDate.toISOString(),
+                                                                    bill_name: selectedKost.additionalFeeName || `Tagihan air listrik wifi (${monthYear})`,
+                                                                    billName: selectedKost.additionalFeeName || `Tagihan air listrik wifi (${monthYear})`,
+                                                                    isRent: false,
+                                                                    product_type: 'tagihan_ekstra',
+                                                                    simulated_date: getCurrentDate().toISOString()
+                                                                }
+                                                            }] : [])
+                                                        ],
+                                                        tenantName: user.displayName || user.email?.split('@')[0] || 'Customer',
+                                                        propertyTitle: selectedKost.kostName,
+                                                        roomCategory: selectedKost.roomType,
+                                                        leaseStart: selectedKost.endDate,
+                                                        leaseEnd: '-',
+                                                        isManualExtension: true,
+                                                        simulated_date: getCurrentDate().toISOString()
+                                                    });
+                                                }}
+                                                className="flex-[2] py-4 bg-orange-600 hover:bg-orange-700 text-white font-black uppercase text-[11px] tracking-[0.15em] rounded-2xl shadow-xl shadow-orange-200 transition-all active:scale-95 cursor-pointer"
+                                            >
+                                                Bayar Perpanjangan
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* TAB 2: RIWAYAT PERPANJANGAN SEBELUMNYA */}
+                                {extensionTab === 'history' && (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between px-1">
+                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Riwayat Pembayaran & Perpanjangan</span>
+                                            <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
+                                                {extensionHistoryList.length} Transaksi Selesai
+                                            </span>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            {extensionHistoryList.map((trx: any) => {
+                                                const tMeta = typeof trx.metadata === 'string' ? JSON.parse(trx.metadata) : (trx.metadata || {});
+                                                const isExt = (trx.product_type || trx.type || '').toLowerCase() === 'perpanjangan_sewa';
+                                                const billTitle = tMeta.billName || tMeta.bill_name || (isExt ? `Perpanjangan Sewa (${tMeta.extensionPeriod || 1} Bulan)` : `Sewa Kamar (${trx.period || 'Bulanan'})`);
+                                                
+                                                return (
+                                                    <div key={trx.id} className="p-4 rounded-2xl bg-white border border-gray-150 hover:border-orange-200 shadow-xs transition-all flex flex-col gap-3">
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <div className="flex items-start gap-3">
+                                                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isExt ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                                                    <Receipt className="w-4 h-4" />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-xs font-black text-gray-900 leading-snug">{billTitle}</p>
+                                                                    <p className="text-[10px] text-gray-400 font-bold mt-0.5">
+                                                                        {FORMAT_DATE(trx.created_at || trx.updated_at)} • #INV-{trx.id.substring(0, 8).toUpperCase()}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <span className="text-[9px] font-extrabold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full shrink-0">
+                                                                Lunas
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-xs">
+                                                            <div>
+                                                                <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest block">Total Bayar</span>
+                                                                <span className="font-black text-gray-900">{FORMAT_CURRENCY(trx.amount || 0)}</span>
+                                                            </div>
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleOpenReceiptFromHistory(trx)}
+                                                                className="px-3.5 py-1.5 bg-slate-900 hover:bg-black text-white text-[9.5px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                                            >
+                                                                <FileText className="w-3.5 h-3.5 text-orange-400" /> Lihat Kwitansi
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+
+                                            {extensionHistoryList.length === 0 && (
+                                                <div className="p-8 bg-gray-50 rounded-[2rem] border border-gray-100 text-center space-y-2">
+                                                    <div className="w-12 h-12 bg-orange-100/70 text-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
+                                                        <Calendar className="w-6 h-6" />
+                                                    </div>
+                                                    <p className="text-xs font-black text-gray-900 uppercase tracking-tight">Belum Ada Riwayat Perpanjangan</p>
+                                                    <p className="text-[11px] text-gray-500 max-w-xs mx-auto leading-relaxed">
+                                                        Ini adalah periode sewa aktif pertama Anda. Riwayat perpanjangan dan kwitansinya akan otomatis tersimpan di sini.
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* 2. Modal Tagihan Tambahan (Invoice Style) */}
             {showExtraBillModal && selectedKost && (
