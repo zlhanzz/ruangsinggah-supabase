@@ -2,6 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 213. Perbaikan Kolom Skema `end_date` & Penambahan `room_number` pada Tabel `resident_status` saat Pengajuan Sewa (`userService.ts`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan error console saat melakukan pengajuan sewa kamar:
+    `userService.ts:364 Error creating resident status: {code: 'PGRST204', details: null, hint: null, message: "Could not find the 'endDate' column of 'resident_status' in the schema cache"}`.
+- **Akar Masalah**:
+  - Pada fungsi `createBookingRequest` di `userService.ts`, payload insert record awal `resident_status` secara keliru menggunakan penamaan properti camelCase `endDate` alih-alih snake_case `end_date`.
+  - Kolom fisik pada tabel PostgreSQL Supabase `resident_status` adalah `end_date`, sehingga PostgREST menolak request dengan kode `PGRST204`.
+- **Implementasi Solusi**:
+  1. **Koreksi Kolom `end_date`**:
+     - Mengubah properti payload dari `endDate` menjadi `end_date`.
+  2. **Kelengkapan `room_number`**:
+     - Menyertakan kolom `room_number` (`bookingData.metadata?.roomNumber || bookingData.metadata?.variantName || null`) agar unit kamar yang diajukan langsung terpetakan sejak status `PENDING`.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, 1m 2s, 0 error).
+
 ### 212. Penyelarasan Scroll & Sticky Section Booking Desktop vs Mobile pada Halaman Detail Kost (`KostDetail.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna melaporkan bahwa setelah penambahan scroll internal pada card booking di tampilan desktop, saat diakses dari tampilan mobile pengguna kesulitan untuk melakukan scroll balik ke atas setelah mencapai section booking karena sentuhan jari terperangkap (*scroll trapped*) di dalam kontainer booking.

@@ -349,8 +349,9 @@ export async function createBookingRequest(bookingData: {
         kost_id: bookingData.productId,
         status: 'PENDING', // Will be activated on payment
         start_date: bookingData.metadata?.startDate || getCurrentDate().toISOString().split('T')[0],
-        endDate: bookingData.metadata?.endDate || getCurrentDate().toISOString().split('T')[0],
+        end_date: bookingData.metadata?.endDate || getCurrentDate().toISOString().split('T')[0],
         room_type: bookingData.metadata?.roomType || '-',
+        room_number: bookingData.metadata?.roomNumber || bookingData.metadata?.variantName || null,
         metadata: {
             ...bookingData.metadata,
             booking_session_id: bookingSessionId,
