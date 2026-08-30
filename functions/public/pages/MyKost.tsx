@@ -3903,7 +3903,12 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-black tracking-tight">Layanan Tiket Kendala & Perbaikan</h3>
-                                    <p className="text-red-100 text-xs font-medium">{selectedKost.kostName || selectedKost.name} &bull; Kamar {selectedKost.roomNumber || selectedKost.room_number || selectedKost.roomType || '-'}</p>
+                                    <p className="text-red-100 text-xs font-medium">
+                                        {selectedKost.kostName || selectedKost.name} &bull; {(() => {
+                                            const r = (selectedKost.roomNumber || selectedKost.room_number || selectedKost.roomType || '-').toString().trim();
+                                            return r.toLowerCase().startsWith('kamar') ? r : `Kamar ${r}`;
+                                        })()}
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -4066,11 +4071,11 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                             </div>
 
                             {/* Tombol Aksi */}
-                            <div className="space-y-2 pt-2">
+                            <div className="pt-2">
                                 <button
                                     type="submit"
                                     disabled={isSubmitting}
-                                    className="w-full py-3.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-rose-200 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                                    className="w-full py-4 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-rose-200 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
                                 >
                                     {isSubmitting ? (
                                         <>
@@ -4083,15 +4088,6 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                             <span>Kirim Laporan Kendala</span>
                                         </>
                                     )}
-                                </button>
-                                
-                                <button
-                                    type="button"
-                                    onClick={() => handleReportIssueWhatsApp(selectedKost)}
-                                    className="w-full py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-black text-xs uppercase tracking-wider rounded-2xl border border-emerald-200 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
-                                >
-                                    <Phone className="w-4 h-4 text-emerald-600" />
-                                    <span>Butuh Cepat? Hubungi Admin via WhatsApp</span>
                                 </button>
                             </div>
                         </form>

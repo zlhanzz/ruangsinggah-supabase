@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 218. Penghapusan Tombol Hotline WhatsApp pada Modal Lapor Kendala & Perapian Label Kamar (`MyKost.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar tombol hotline WhatsApp di bagian bawah modal formulir pelaporan kendala dihilangkan (*"tidak usah ada tombol wa nggak sih"*), agar seluruh alur pelaporan 100% terpusat dan terdata via tiket in-app ke Portal KostManager tanpa bypass ke WhatsApp admin.
+  - Sub-header unit kamar sebelumnya menampilkan duplikasi kata (*"Kamar Kamar 3"*).
+- **Implementasi Solusi**:
+  1. **Penghapusan Tombol Hotline WhatsApp**:
+     - Menghapus tombol *"BUTUH CEPAT? HUBUNGI ADMIN VIA WHATSAPP"* pada `showComplaintModal` di `MyKost.tsx`.
+     - Bagian bawah formulir kini hanya memuat satu tombol aksi utama yang tegas: **"KIRIM LAPORAN KENDALA"**.
+  2. **Perapian Label Unit Kamar**:
+     - Memperbaiki formatting string nomor kamar pada header modal agar selalu bersih (*"Kamar 3"* alih-alih *"Kamar Kamar 3"*).
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, 38.63s, 0 error).
+
 ### 217. Perbaikan Import Ikon `Phone` dari `lucide-react` pada Modal Lapor Kendala (`MyKost.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Error runtime console: `Uncaught ReferenceError: Phone is not defined at MyKost (MyKost.tsx:4093:38)`.

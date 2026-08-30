@@ -1,16 +1,18 @@
-# Walkthrough: Perbaikan ReferenceError `Phone` di Modal Lapor Kendala (`MyKost.tsx`)
+# Walkthrough: Penghapusan Tombol Hotline WhatsApp pada Modal Lapor Kendala & Perapian Label Kamar (`MyKost.tsx`)
 
-Dokumentasi ini merangkum perbaikan **Fitur #217**, yaitu penyelesaian error runtime `ReferenceError: Phone is not defined` pada modal pelaporan kendala in-app di halaman **Kost Saya** (`MyKost.tsx`).
+Dokumentasi ini merangkum penyelesaian perbaikan **Fitur #218**, yaitu penghapusan tombol hotline WhatsApp pada formulir pelaporan kendala kamar di halaman **Kost Saya** (`MyKost.tsx`) dan perapian label nomor kamar di sub-header modal.
 
 ---
 
-## 1. Ringkasan Masalah & Perbaikan
+## 1. Ringkasan Perubahan
 
-- **Error**: `Uncaught ReferenceError: Phone is not defined at MyKost (MyKost.tsx:4093:38)`.
-- **Akar Masalah**:
-  - Komponen icon `<Phone />` digunakan pada tombol alternatif hotline WhatsApp di baris 4093, namun belum diimpor dari package `lucide-react`.
-- **Solusi yang Diterapkan**:
-  - Menambahkan `Phone` ke dalam daftar import destructuring `lucide-react` pada baris 4 [`MyKost.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx#L4).
+### A. Penghapusan Tombol Hotline WhatsApp
+- **Sebelum**: Terdapat tombol hijau *"BUTUH CEPAT? HUBUNGI ADMIN VIA WHATSAPP"* di bawah tombol kirim laporan kendala.
+- **Sesudah**: Tombol tersebut telah dihapus sepenuhnya. Formulir kini hanya menyediakan tombol tunggal yang solid: **"KIRIM LAPORAN KENDALA"**. Seluruh alur pelaporan terpusat dan terdata rapi ke dalam tabel `complaints` di database serta termonitor di Portal KostManager.
+
+### B. Perapian Label Nomor Kamar di Sub-Header Modal
+- **Sebelum**: Teks sub-header menampilkan pengulangan kata: *"kost madani • Kamar Kamar 3"*.
+- **Sesudah**: Teks dinormalisasi secara otomatis menjadi: *"kost madani • Kamar 3"*.
 
 ---
 
@@ -26,7 +28,7 @@ transforming...
 ✓ 2531 modules transformed.
 rendering chunks...
 computing gzip size...
-✓ built in 37.80s
+✓ built in 38.63s
 ```
 *Hasil:* **100% Lulus (0 Error, 0 Broken Link, Bebas FOUT icon SVG pure bundle)**.
 
@@ -35,6 +37,7 @@ computing gzip size...
 ## 3. Panduan Pengujian bagi Pengguna
 
 1. Buka menu **Kost Saya** (`/my-bookings/aktif` atau `/my-kost`).
-2. Klik tombol **"🚨 Lapor Kendala Kamar"** pada kartu kamar yang sedang aktif.
-3. Verifikasi bahwa modal formulir pelaporan kendala kamar terbuka secara instan tanpa error console.
-4. Periksa tombol hijau di bagian bawah formulir: *"Butuh Cepat? Hubungi Admin via WhatsApp"* — ikon telepon vector SVG ter-render rapi dan berfungsi normal.
+2. Klik tombol **"🚨 Lapor Kendala Kamar"** pada kartu hunian aktif.
+3. Periksa header modal: label kamar kini rapi (*"Kamar 3"*).
+4. Periksa bagian bawah modal: hanya terdapat tombol utama **"KIRIM LAPORAN KENDALA"** tanpa tombol WhatsApp.
+5. Isi data komplain dan klik tombol kirim — tiket langsung tersimpan ke sistem dan muncul di Portal KostManager.
