@@ -636,17 +636,30 @@ export async function settlePendingBills(billIds: string[]) {
   }
 }
 
-export async function cancelBookingRequest(transactionId: string) {
+export async function cancelBookingRequest(transactionId: string, sessionId?: string) {
   try {
+    const nowIso = getCurrentDate().toISOString();
     const { error } = await supabase
       .from('transactions')
       .update({ 
         status: 'CANCELLED',
-        updated_at: getCurrentDate().toISOString() 
+        updated_at: nowIso 
       })
       .eq('id', transactionId);
 
     if (error) throw error;
+
+    if (sessionId) {
+      // Also cancel any split or companion bills belonging to the same booking session
+      await supabase
+        .from('transactions')
+        .update({ 
+          status: 'CANCELLED',
+          updated_at: nowIso 
+        })
+        .filter('metadata->>booking_session_id', 'eq', sessionId);
+    }
+
     return { success: true };
   } catch (error) {
     console.error('Error cancelling booking request:', error);
