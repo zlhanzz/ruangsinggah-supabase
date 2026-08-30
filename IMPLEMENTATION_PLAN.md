@@ -1,106 +1,69 @@
-# IMPLEMENTATION PLAN: Timer Countdown Scarcity & Hangus Otomatis (Auto-Expire) Pengajuan Sewa Kost
+# IMPLEMENTATION PLAN: Perbaikan Layout & Redesain Responsif Kartu Pengajuan Sewa (Countdown 24 Jam)
 
-Dokumen ini berisi rencana implementasi untuk menerapkan **Live Timer Countdown (Strategi Scarcity / Urgensi)** pada kartu pengajuan sewa di halaman **Kost Saya** serta sistem **Hangus Otomatis (Auto-Expire)** jika pembayaran tidak diselesaikan dalam 1x24 jam.
-
----
-
-## 1. Analisis Kebutuhan & Konsep Scarcity
-
-### A. Strategi Scarcity & Urgensi Visual
-1. **Live Scarcity Countdown Banner**:
-   - Calon penyewa yang telah disetujui pengajuannya (`AWAITING_PAYMENT`) akan melihat banner/kotak hitung mundur waktu pembayaran yang **berdetak secara live per detik** (`Jam : Menit : Detik`).
-   - Teks persuasif psikologi kelangkaan (Scarcity):
-     > *"⚡ Segera selesaikan pembayaran! Kamar ini hanya di-hold untuk Anda selama waktu tersisa sebelum dilepas kembali ke calon penyewa lain."*
-   - Desain visual menonjol:
-     - Badge digital countdown dengan visual jam berkedip lembut (`animate-pulse`).
-     - Indikator warna dinamis:
-       - **Kuning/Oranye** (> 6 jam tersisa): Waktu normal.
-       - **Merah Berdenyut** (≤ 6 jam tersisa): *"Waktu Hampir Habis! Prioritas kamar akan segera dibatalkan"*.
-2. **Transisi Otomatis Saat Timer Habis (00:00:00)**:
-   - Ketika countdown menyentuh `00:00:00`, kartu secara otomatis bertransisi ke mode **"Pengajuan Hangus / Kedaluwarsa"**.
-   - Tombol **"BAYAR SEKARANG"** ditutup dan digantikan tombol **"Ajukan Ulang Sewa"**.
-   - Kartu dialihkan ke tab **Riwayat**, dan status transaksi di database Supabase disinkronkan ke `'EXPIRED'`.
+Dokumen ini berisi rencana perbaikan dan penyempurnaan UI/UX kartu pengajuan sewa pada menu **Kost Saya** (`MyKost.tsx`) agar kembali rapi, proporsional, elegan, dan 100% responsif di semua resolusi layar (Mobile, Tablet, Desktop).
 
 ---
 
-## 2. Dampak Perubahan File
+## 1. Analisis Masalah & Penyebab Layout Rusak
 
-1. **[`functions/public/pages/MyKost.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx)**:
-   - Membuat komponen / hook timer lokal (`useLiveCountdown`) yang berdetak setiap 1 detik menghitung sisa waktu terhadap `deadlineTime` (24 jam dari waktu persetujuan/transaksi).
-   - Menambahkan blok visual **Scarcity Countdown Box** di atas tombol `BAYAR SEKARANG` pada kartu pengajuan di tab **Diajukan**.
-   - Menambahkan state dan styling kartu **Hangus (Expired)** dengan tombol **Ajukan Ulang**.
-   - Sinkronisasi otomatis ke Supabase saat terdeteksi kedaluwarsa.
-2. **[`functions/public/components/admin/KostManagerPortal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx)**:
-   - Menampilkan badge **`Hangus (Kedaluwarsa)`** pada baris booking yang telah melewati 24 jam belum dibayar.
-   - Mengosongkan reservasi kamar agar unit kamar tetap tersedia di katalog publik.
-3. **[`functions/public/userService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts)**:
-   - Helper `expireBookingTransaction` untuk memperbarui status transaksi dan status penghuni menjadi `'EXPIRED'`.
+Berdasarkan inspeksi kode dan tangkapan layar yang dilampirkan:
 
----
-
-## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah Persetujuan)
-
-### Langkah 1: Utilitas Waktu & Database (`userService.ts`)
-- Menetapkan `BOOKING_EXPIRY_HOURS = 24`.
-- Membuat fungsi `expireBookingTransaction(trxId)` untuk meng-update `transactions` dan `resident_status`.
-
-### Langkah 2: Komponen Live Ticking Timer & UI Scarcity di `MyKost.tsx`
-- Menambahkan state timer `currentTime` yang ter-update per detik atau hook countdown.
-- Merender blok **Scarcity Countdown Card** di kartu pengajuan sewa:
-  ```tsx
-  {/* Scarcity Countdown Card */}
-  <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-orange-200/80 rounded-2xl p-3.5 space-y-2">
-      <div className="flex items-center justify-between text-orange-800">
-          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider">
-              <Clock className="w-3.5 h-3.5 text-orange-600 animate-pulse" /> Sisa Waktu Pembayaran
-          </div>
-          <span className="text-[9px] font-bold text-orange-600 bg-orange-100/80 px-2 py-0.5 rounded-full">
-              Kamar Di-Hold
-          </span>
-      </div>
-      <div className="flex items-center justify-center gap-1.5 font-mono text-center">
-          <div className="bg-white px-2.5 py-1.5 rounded-xl border border-orange-200 shadow-sm font-black text-sm text-gray-900">
-              {hours} <span className="text-[8px] font-sans text-gray-400 block font-normal">JAM</span>
-          </div>
-          <span className="font-bold text-orange-500">:</span>
-          <div className="bg-white px-2.5 py-1.5 rounded-xl border border-orange-200 shadow-sm font-black text-sm text-gray-900">
-              {minutes} <span className="text-[8px] font-sans text-gray-400 block font-normal">MENIT</span>
-          </div>
-          <span className="font-bold text-orange-500">:</span>
-          <div className="bg-white px-2.5 py-1.5 rounded-xl border border-orange-200 shadow-sm font-black text-sm text-rose-600 animate-pulse">
-              {seconds} <span className="text-[8px] font-sans text-gray-400 block font-normal">DETIK</span>
-          </div>
-      </div>
-      <p className="text-[8.5px] font-medium text-gray-500 text-center leading-tight">
-          Selesaikan pembayaran sebelum waktu habis agar kamar tidak dilepas ke pemesan lain.
-      </p>
-  </div>
-  ```
-
-### Langkah 3: Penanganan Kondisi Expired (Hangus)
-- Ketika waktu habis (`isExpired`):
-  - Kartu menampilkan badge merah: `Pengajuan Hangus / Waktu Habis`.
-  - Tombol aksi: `Ajukan Ulang Sewa` (redirect ke detail kost).
-  - Pindah ke tab **Riwayat** secara otomatis.
-
-### Langkah 4: Penyelarasan di Portal KostManager (`KostManagerPortal.tsx`)
-- Status pengajuan yang melewati 24 jam ditampilkan sebagai `Hangus (Kedaluwarsa)`.
-
-### Langkah 5: Kompilasi & Verifikasi Build
-- Jalankan `npm run build` di `functions/public/` (0 error).
-- Catat di `functions/PROGRESS.md` dan terbitkan `WALKTHROUGH.md`.
-- Push ke branch non-production `bukan-productions`.
+1. **Tag HTML Unclosed (Missing `</div>`) pada Pembungkus Gambar**:
+   - Pada baris ~2117 `MyKost.tsx`, tag pembungkus gambar (`<div className="relative shrink-0 group/img cursor-pointer">`) kehilangan tag penutup `</div>`.
+   - **Dampaknya**: Seluruh elemen judul kost, lokasi, dan deretan badge status ikut tertelan masuk ke dalam div gambar. Akibatnya, banner countdown batas waktu pembayaran terdorong ke kanan menjadi *sibling* sejajar dengan gambar, sehingga memecah struktur grid secara total.
+2. **Hirarki Tombol Aksi Rusak & Menumpuk Raksasa di Bawah**:
+   - Karena struktur grid rusak, kolom aksi kanan (`lg:col-span-4`) terlempar ke bagian bawah kartu. Tiga tombol aksi (*Rute Ke Kost*, *Bantuan KostManager*, *Bayar Sekarang*) menjadi balok raksasa memanjang penuh yang tidak proporsional dan meninggalkan ruang kosong (*whitespace*) yang aneh.
+3. **Fallback Foto Kamar Menjadi Kotak Hitam Kosong ("0 Foto Kamar")**:
+   - Ketika pengajuan sewa baru dibuat untuk unit kamar yang belum memiliki foto spesifik kamar (`kost.displayImage`), sistem langsung menampilkan kotak hitam pekat dengan ikon kecil, bukan mengambil fallback foto utama properti/gedung kost (`kost.image` atau `kost.property?.images`).
+4. **Desain Banner Countdown Kurang Terintegrasi**:
+   - Komponen countdown batas waktu 24 jam belum memiliki penataan layout yang menyatu dengan estetika kartu utama, sehingga saat dirender terlihat kaku dan mengganggu tata letak informasi inti properti.
 
 ---
 
-## 4. Rencana Verifikasi
+## 2. Rencana Solusi & Redesain UI/UX
 
-1. **Uji Tampilan & Detak Timer (Live Ticking)**:
-   - Buka `/my-bookings/diajukan` di browser.
-   - Periksa apakah blok Scarcity Countdown muncul dengan format `[Jam] : [Menit] : [Detik]` yang berdetak setiap detik.
-2. **Uji Simulasi Waktu Menggunakan `TimeSimulator`**:
-   - Buka widget `TimeSimulator` di pojok kanan bawah.
-   - Majukan waktu +1 hari / +2 hari.
-   - Periksa kartu langsung berubah menjadi **Hangus (Waktu Habis)** dan tombol berubah menjadi **Ajukan Ulang Sewa**.
-3. **Uji Admin Portal**:
-   - Buka `/dashboard-admin/km_bookings`, pastikan booking yang lewat waktu memiliki badge **Hangus**.
+### A. Perbaikan Struktur Flex & Grid
+- Menutup tag `</div>` pembungkus gambar secara presisi.
+- Mengembalikan struktur 2 kolom grid standar:
+  - **Kolom Kiri (`lg:col-span-8`)**: Foto Kamar/Kost (kiri) + Header Info (Kanan: Badges, Judul Kost, Lokasi, Rating).
+  - **Banner Countdown 24 Jam**: Ditempatkan sebagai banner full-width elegan di dalam kartu dengan glassmorphism/soft gradient, menyatu dengan visual progress bar sewa.
+  - **Kolom Kanan (`lg:col-span-4`)**: Action Sidebar yang proporsional dan rapi (Tombol *Bayar Sekarang* sebagai Primary CTA bergradien oranye, tombol *Bantuan KostManager* via WhatsApp/Chat, dan tombol *Rute Ke Kost*).
+
+### B. Smart Fallback Foto Properti / Kamar
+- Menerapkan hierarki pencarian foto kamar yang cerdas:
+  `kost.roomPhotos?.[0]` ➔ `kost.displayImage` ➔ `kost.property?.images?.[0]` ➔ `kost.image` ➔ default placeholder ilustrasi RuangSinggah.
+- Menjamin tidak ada lagi kotak hitam kosong yang merusak tampilan kartu.
+
+### C. Redesain Countdown Timer yang Elegan & Responsif
+- **Header Countdown**: Icon jam dengan pulse lembut, judul *"BATAS WAKTU PEMBAYARAN"*, dan keterangan batas waktu WITA.
+- **Timer Digits Display**: Kotak digit modern font monospaced (Jam : Menit : Detik) dengan background kontras halus dan badge label mikro.
+- **Status Urgensi Otomatis**: Jika sisa waktu < 2 jam, banner otomatis bertransisi ke warna aksen *rose/red alert* dengan animasi denyut perhatian.
+- **Full Responsif**: Pada layar HP (< 640px), elemen countdown tertata vertikal/kompak yang rapi tanpa overflow; pada tablet/desktop tertata horizontal mewah.
+
+---
+
+## 3. Dampak Perubahan (Files to Touch)
+
+- `functions/public/pages/MyKost.tsx`
+
+---
+
+## 4. Langkah-Langkah Eksekusi
+
+1. **Langkah 1: Restrukturisasi HTML & Perbaikan Tag `</div>`**
+   - Membuka `functions/public/pages/MyKost.tsx` dan memperbaiki penutupan tag pembungkus gambar di baris ~2090–2130.
+2. **Langkah 2: Smart Image & Photo Resolution**
+   - Mengambil fallback foto gedung kost jika foto spesifik tipe kamar belum tersedia pada objek booking baru.
+3. **Langkah 3: Redesain Komponen Countdown & Status Pembayaran**
+   - Mempercantik banner countdown batas waktu pembayaran 24 jam dengan styling modern, responsif, dan terintegrasi mulus.
+4. **Langkah 4: Restorasi Action Sidebar & CTA Hierarchy**
+   - Menata ulang tombol aksi kanan (`Bayar Sekarang`, `Bantuan KostManager`, `Rute Ke Kost`) agar pas di kolom kanan desktop dan adaptif di mobile.
+5. **Langkah 5: Verifikasi Kompilasi & Build**
+   - Menjalankan `npm run build` di `functions/public/` untuk memastikan 0 error kompilasi TypeScript.
+
+---
+
+## 5. Rencana Verifikasi
+
+- **Verifikasi Kompilasi**: `cmd /c npm run build` (wajib exit code 0).
+- **Verifikasi Layout Visual**: Memastikan tampilan kartu di layar desktop, tablet, dan mobile kembali rapi, proporsional, foto kost tampil indah, countdown terlihat mewah, dan tombol aksi tersusun sempurna.

@@ -2073,49 +2073,66 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                 daysElapsed = Math.min(totalLeaseDays, Math.round(elapsedMs / (1000 * 60 * 60 * 24)));
                                 progressPercent = Math.min(100, Math.max(0, Math.round((daysElapsed / totalLeaseDays) * 100)));
                             }
+                            const heroImage = (kost.roomPhotos && kost.roomPhotos[0]) 
+                                || kost.displayImage 
+                                || (kost.image_urls && (typeof kost.image_urls[0] === 'string' ? kost.image_urls[0] : kost.image_urls[0]?.url)) 
+                                || (kost.images && kost.images[0]) 
+                                || kost.image 
+                                || (kost.properties?.image_urls && (typeof kost.properties.image_urls[0] === 'string' ? kost.properties.image_urls[0] : kost.properties.image_urls[0]?.url))
+                                || (kost.properties?.images && kost.properties.images[0])
+                                || '';
 
-                            const roomPhotoList = kost.roomPhotos && kost.roomPhotos.length > 0
+                            const roomPhotoList = (kost.roomPhotos && kost.roomPhotos.length > 0)
                                 ? kost.roomPhotos
-                                : (kost.displayImage ? [kost.displayImage] : []);
+                                : (heroImage ? [heroImage] : []);
+
+                            const expiry = getBookingExpiryInfo(kost);
+                            const isExpiredBooking = expiry.isExpired || (kost.status || '').toUpperCase() === 'EXPIRED';
+                            const isAwaitingPayment = (kost.status || '').toUpperCase() === 'AWAITING_PAYMENT' && !isExpiredBooking;
 
                             return (
-                                <div key={kost.id} className="group relative bg-white rounded-3xl sm:rounded-[3rem] p-4 sm:p-8 lg:p-10 border border-gray-100 shadow-xl shadow-gray-200/50 hover:shadow-2xl hover:shadow-orange-900/10 transition-all duration-500 overflow-hidden flex flex-col gap-5 sm:gap-8">
+                                <div key={kost.id} className="group relative bg-white rounded-3xl sm:rounded-[3rem] p-5 sm:p-8 lg:p-10 border border-gray-100 shadow-xl shadow-gray-200/50 hover:shadow-2xl hover:shadow-orange-900/10 transition-all duration-500 overflow-hidden flex flex-col gap-6 sm:gap-8">
                                     {/* Accent Background Glow */}
                                     <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-transparent rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
 
                                     {/* Top Section: Main Content + Sidebar Actions */}
-                                    <div className="flex flex-col lg:grid lg:grid-cols-12 gap-6 sm:gap-10">
+                                    <div className="flex flex-col lg:grid lg:grid-cols-12 gap-6 sm:gap-8 items-start">
                                         {/* Left / Main Column */}
-                                        <div className="lg:col-span-8 flex flex-col gap-5 sm:gap-6">
-                                            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-8 text-center sm:text-left">
+                                        <div className="lg:col-span-8 flex flex-col gap-5 sm:gap-6 w-full">
+                                            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-7 text-center sm:text-left">
                                                 {/* Interactive Image Container */}
                                                 <div 
-                                                    onClick={() => handleOpenGallery(roomPhotoList, kost.kostName || 'Kamar Kost')}
+                                                    onClick={() => heroImage && handleOpenGallery(roomPhotoList, kost.kostName || 'Kamar Kost')}
                                                     className="relative shrink-0 group/img cursor-pointer"
                                                     title="Klik untuk melihat foto kamar & hunian"
                                                 >
-                                                    <div className="w-44 h-32 sm:w-56 sm:h-44 bg-slate-900 rounded-2xl sm:rounded-[2rem] flex items-center justify-center shadow-xl shadow-orange-100 border-2 border-white transform hover:scale-[1.03] transition-all duration-500 overflow-hidden relative">
-                                                        {kost.displayImage ? (
+                                                    <div className="w-48 h-36 sm:w-56 sm:h-44 bg-slate-900 rounded-2xl sm:rounded-[2rem] flex items-center justify-center shadow-xl shadow-orange-100/70 border-2 border-white transform hover:scale-[1.02] transition-all duration-500 overflow-hidden relative">
+                                                        {heroImage ? (
                                                             <img 
-                                                                src={kost.displayImage} 
-                                                                className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-700" 
+                                                                src={heroImage} 
+                                                                className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-700" 
                                                                 alt={kost.kostName} 
                                                             />
                                                         ) : (
-                                                            <MapPin className="w-12 h-12 text-orange-200" />
+                                                            <div className="flex flex-col items-center justify-center gap-1.5 p-4 text-center">
+                                                                <Building className="w-10 h-10 text-orange-300/80" />
+                                                                <span className="text-[10px] font-bold text-slate-300">RuangSinggah</span>
+                                                            </div>
                                                         )}
                                                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80 group-hover/img:opacity-100 transition-opacity" />
                                                         
                                                         {/* Photo Count Overlay Badge */}
                                                         <div className="absolute bottom-2.5 left-2.5 sm:bottom-3 sm:left-3 bg-black/60 backdrop-blur-md text-white text-[9px] sm:text-[10px] font-bold px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full flex items-center gap-1.5 border border-white/20">
                                                             <Camera className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-orange-400" />
-                                                            <span>{roomPhotoList.length} Foto Kamar</span>
+                                                            <span>{roomPhotoList.length > 0 ? `${roomPhotoList.length} Foto` : 'Kost'}</span>
                                                         </div>
                                                     </div>
                                                     <div className="absolute -bottom-2 -right-2 w-9 h-9 sm:w-11 sm:h-11 bg-white rounded-xl sm:rounded-2xl shadow-lg flex items-center justify-center border-2 border-orange-50 z-20">
                                                         <span className="text-base sm:text-xl">⚡</span>
                                                     </div>
-                                                                           {/* Property & Room Header Info */}
+                                                </div>
+
+                                                {/* Property & Room Header Info */}
                                                 <div className="flex-1 w-full min-w-0">
                                                     {/* Badges Bar */}
                                                     <div className="flex flex-wrap justify-center sm:justify-start items-center gap-1.5 sm:gap-2 mb-2.5 sm:mb-3">
@@ -2142,26 +2159,17 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                             </span>
                                                         )}
 
-                                                        {(() => {
-                                                            const expiry = getBookingExpiryInfo(kost);
-                                                            const isExpiredBooking = expiry.isExpired || (kost.status || '').toUpperCase() === 'EXPIRED';
-                                                            
-                                                            if ((kost.status || '').toUpperCase() === 'AWAITING_PAYMENT' && !isExpiredBooking) {
-                                                                return (
-                                                                    <span className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 sm:gap-1.5 bg-orange-50 text-orange-600 border-orange-200 animate-pulse shadow-sm">
-                                                                        <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-orange-500" /> MENUNGGU PEMBAYARAN
-                                                                    </span>
-                                                                );
-                                                            }
-                                                            if (isExpiredBooking) {
-                                                                return (
-                                                                    <span className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 sm:gap-1.5 bg-rose-50 text-rose-600 border-rose-200 shadow-sm">
-                                                                        <XCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-500" /> HANGUS (WAKTU HABIS)
-                                                                    </span>
-                                                                );
-                                                            }
-                                                            return null;
-                                                        })()}
+                                                        {isAwaitingPayment && (
+                                                            <span className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 sm:gap-1.5 bg-orange-50 text-orange-600 border-orange-200 animate-pulse shadow-sm">
+                                                                <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-orange-500" /> MENUNGGU PEMBAYARAN
+                                                            </span>
+                                                        )}
+
+                                                        {isExpiredBooking && (
+                                                            <span className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 sm:gap-1.5 bg-rose-50 text-rose-600 border-rose-200 shadow-sm">
+                                                                <XCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-500" /> HANGUS (WAKTU HABIS)
+                                                            </span>
+                                                        )}
 
                                                         {kost.daysRemaining !== null && isPaid && !kost.is_checked_out && (
                                                             <div className={`px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 sm:gap-1.5 ${
@@ -2221,60 +2229,68 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                             </div>
 
                                             {/* Real-time Countdown Banner for AWAITING_PAYMENT */}
-                                            {(() => {
-                                                const expiry = getBookingExpiryInfo(kost);
-                                                const isExpiredBooking = expiry.isExpired || (kost.status || '').toUpperCase() === 'EXPIRED';
-                                                
-                                                if ((kost.status || '').toUpperCase() === 'AWAITING_PAYMENT' && !isExpiredBooking) {
-                                                    return (
-                                                        <div className={`p-4 sm:p-5 rounded-2xl sm:rounded-3xl border flex flex-col sm:flex-row items-center justify-between gap-4 ${expiry.isUrgent ? 'bg-rose-50/90 border-rose-200 text-rose-950 shadow-sm' : 'bg-orange-50/90 border-orange-200 text-orange-950 shadow-sm'}`}>
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${expiry.isUrgent ? 'bg-rose-500 text-white animate-pulse' : 'bg-orange-500 text-white'}`}>
-                                                                    <Clock className="w-5 h-5" />
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-[11px] font-black uppercase tracking-wider">Batas Waktu Pembayaran (1x24 Jam)</p>
-                                                                    <p className="text-xs font-semibold opacity-80 mt-0.5">
-                                                                        {expiry.deadlineDate ? `Batas: ${expiry.deadlineDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}, ${String(expiry.deadlineDate.getHours()).padStart(2, '0')}:${String(expiry.deadlineDate.getMinutes()).padStart(2, '0')} WITA` : 'Segera selesaikan pembayaran untuk mengamankan kamar.'}
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-center gap-1.5 bg-white px-4 py-2 rounded-2xl shadow-sm border border-gray-100 font-mono text-sm font-black">
-                                                                <div className="flex flex-col items-center">
-                                                                    <span className="text-orange-600 text-base leading-none">{String(expiry.hours).padStart(2, '0')}</span>
-                                                                    <span className="text-[8px] font-sans text-gray-400 font-bold uppercase">Jam</span>
-                                                                </div>
-                                                                <span className="text-gray-300 font-sans pb-1">:</span>
-                                                                <div className="flex flex-col items-center">
-                                                                    <span className="text-orange-600 text-base leading-none">{String(expiry.minutes).padStart(2, '0')}</span>
-                                                                    <span className="text-[8px] font-sans text-gray-400 font-bold uppercase">Mnt</span>
-                                                                </div>
-                                                                <span className="text-gray-300 font-sans pb-1">:</span>
-                                                                <div className="flex flex-col items-center">
-                                                                    <span className="text-orange-600 text-base leading-none">{String(expiry.seconds).padStart(2, '0')}</span>
-                                                                    <span className="text-[8px] font-sans text-gray-400 font-bold uppercase">Dtk</span>
-                                                                </div>
-                                                            </div>
+                                            {isAwaitingPayment && (
+                                                <div className={`p-4 sm:p-5 rounded-2xl sm:rounded-3xl border flex flex-col sm:flex-row items-center justify-between gap-4 transition-all ${
+                                                    expiry.isUrgent 
+                                                        ? 'bg-gradient-to-r from-rose-50 via-red-50 to-orange-50 border-rose-200 text-rose-950 shadow-md shadow-rose-100/50' 
+                                                        : 'bg-gradient-to-r from-orange-50/90 via-amber-50/70 to-orange-50/90 border-orange-200 text-orange-950 shadow-sm'
+                                                }`}>
+                                                    <div className="flex items-center gap-3.5 w-full sm:w-auto">
+                                                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${
+                                                            expiry.isUrgent ? 'bg-rose-500 text-white animate-pulse' : 'bg-orange-500 text-white'
+                                                        }`}>
+                                                            <Clock className="w-5 h-5" />
                                                         </div>
-                                                    );
-                                                }
-                                                if (isExpiredBooking) {
-                                                    return (
-                                                        <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border bg-rose-50/80 border-rose-200 text-rose-900 flex items-center gap-3.5 shadow-sm">
-                                                            <div className="w-10 h-10 rounded-2xl bg-rose-500 text-white flex items-center justify-center shrink-0">
-                                                                <AlertCircle className="w-5 h-5" />
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <p className="text-[11px] font-black uppercase tracking-wider">Batas Waktu Pembayaran</p>
+                                                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/80 border border-orange-200/80 text-orange-700">1x24 Jam</span>
                                                             </div>
-                                                            <div>
-                                                                <p className="text-xs font-black uppercase tracking-wider">Pengajuan Sewa Telah Hangus</p>
-                                                                <p className="text-xs font-medium text-rose-700/90 mt-0.5 leading-relaxed">
-                                                                    Batas waktu pembayaran 24 jam telah berakhir. Unit kamar telah otomatis dilepaskan kembali ke sistem. Anda dapat mengajukan sewa ulang kapan saja.
-                                                                </p>
-                                                            </div>
+                                                            <p className="text-xs font-semibold opacity-85 mt-0.5">
+                                                                {expiry.deadlineDate ? `Batas: ${expiry.deadlineDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}, ${String(expiry.deadlineDate.getHours()).padStart(2, '0')}:${String(expiry.deadlineDate.getMinutes()).padStart(2, '0')} WITA` : 'Segera selesaikan pembayaran untuk mengamankan kamar.'}
+                                                            </p>
                                                         </div>
-                                                    );
-                                                }
-                                                return null;
-                                            })()}
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-2xl shadow-sm border border-orange-100/80 font-mono text-sm font-black w-full sm:w-auto justify-center">
+                                                        <div className="flex flex-col items-center min-w-[32px]">
+                                                            <span className={`text-base leading-none font-extrabold ${expiry.isUrgent ? 'text-rose-600' : 'text-orange-600'}`}>
+                                                                {String(expiry.hours).padStart(2, '0')}
+                                                            </span>
+                                                            <span className="text-[8px] font-sans text-gray-400 font-bold uppercase mt-0.5">Jam</span>
+                                                        </div>
+                                                        <span className="text-gray-300 font-sans pb-1 font-bold">:</span>
+                                                        <div className="flex flex-col items-center min-w-[32px]">
+                                                            <span className={`text-base leading-none font-extrabold ${expiry.isUrgent ? 'text-rose-600' : 'text-orange-600'}`}>
+                                                                {String(expiry.minutes).padStart(2, '0')}
+                                                            </span>
+                                                            <span className="text-[8px] font-sans text-gray-400 font-bold uppercase mt-0.5">Mnt</span>
+                                                        </div>
+                                                        <span className="text-gray-300 font-sans pb-1 font-bold">:</span>
+                                                        <div className="flex flex-col items-center min-w-[32px]">
+                                                            <span className={`text-base leading-none font-extrabold ${expiry.isUrgent ? 'text-rose-600' : 'text-orange-600'}`}>
+                                                                {String(expiry.seconds).padStart(2, '0')}
+                                                            </span>
+                                                            <span className="text-[8px] font-sans text-gray-400 font-bold uppercase mt-0.5">Dtk</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Expired Booking Banner */}
+                                            {isExpiredBooking && (
+                                                <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border bg-rose-50/80 border-rose-200 text-rose-900 flex items-center gap-3.5 shadow-sm">
+                                                    <div className="w-10 h-10 rounded-2xl bg-rose-500 text-white flex items-center justify-center shrink-0">
+                                                        <AlertCircle className="w-5 h-5" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-black uppercase tracking-wider">Pengajuan Sewa Telah Hangus</p>
+                                                        <p className="text-xs font-medium text-rose-700/90 mt-0.5 leading-relaxed">
+                                                            Batas waktu pembayaran 24 jam telah berakhir. Unit kamar telah otomatis dilepaskan kembali ke sistem. Anda dapat mengajukan sewa ulang kapan saja.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
 
                                             {/* Visual Progress Bar: Masa Sewa */}
                                             {isPaid && !kost.is_checked_out && (
@@ -2331,7 +2347,97 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                         </div>
 
                                         {/* Right / Actions Sidebar */}
-                                        <div className="lg:col-span-4 flex flex-col gap-2 sm:gap-2.5 justify-center relative z-10 pt-5 lg:pt-0 border-t lg:border-t-0 lg:border-l border-gray-100 lg:pl-8">
+                                        <div className="lg:col-span-4 flex flex-col gap-2.5 sm:gap-3 justify-center relative z-10 w-full pt-5 lg:pt-0 border-t lg:border-t-0 lg:border-l border-gray-100 lg:pl-8">
+                                            {/* Primary Action: Bayar Sekarang (Top Priority when AWAITING_PAYMENT) */}
+                                            {isAwaitingPayment && (
+                                                <button
+                                                    onClick={() => {
+                                                        const kMeta = kost.metadata || {};
+                                                        const mDate = kost.moveInDate || kMeta.startDate || kMeta.move_in_date;
+                                                        const monthYear = mDate ? new Date(mDate).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : '';
+
+                                                        setPaymentAmount(kost.totalPrice);
+                                                        setPaymentOrderId(kost.id);
+                                                        setPaymentProductId(kost.kostId);
+                                                        setPaymentProductType('kost_booking');
+                                                        setPaymentMetadata({
+                                                            ...kMeta,
+                                                            kostId: kost.kostId,
+                                                            kostName: kost.kostName,
+                                                            roomType: kost.roomType || kMeta.roomType || '-',
+                                                            startDate: mDate,
+                                                            userName: user.displayName || user.email?.split('@')[0] || 'Customer',
+                                                            userEmail: user.email || '',
+                                                            item_details: [
+                                                                {
+                                                                    id: `rent-${kost.kostId?.substring(0, 8)}`,
+                                                                    price: Number(kMeta.basePrice || 0) + Number(kMeta.extraPersonFee || 0),
+                                                                    quantity: 1,
+                                                                    name: `Sewa Kost ${monthYear}${Number(kMeta.occupants || 1) > 1 ? ' + Extra Penghuni' : ''}`
+                                                                },
+                                                                ...(kMeta.facilityFee ? [{
+                                                                    id: `facility-${kost.kostId?.substring(0, 8)}`,
+                                                                    price: Number(kMeta.facilityFee),
+                                                                    quantity: 1,
+                                                                    name: kMeta.additionalFeeName || `Tagihan Fasilitas ${monthYear}`
+                                                                }] : [])
+                                                            ].filter(item => item.price > 0),
+                                                            tenantName: user.displayName || user.email?.split('@')[0] || 'Customer',
+                                                            propertyTitle: kost.kostName,
+                                                            roomCategory: kost.roomType || kMeta.roomType || '-',
+                                                            leaseStart: mDate,
+                                                            leaseEnd: kMeta.endDate || '-'
+                                                        });
+                                                        setShowPaymentGateway(true);
+                                                    }}
+                                                    className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white p-3.5 sm:p-4 rounded-xl sm:rounded-2xl font-black flex flex-col items-center justify-center gap-1 transition-all shadow-lg shadow-orange-500/25 active:scale-[0.98] cursor-pointer group/pay"
+                                                >
+                                                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider">
+                                                        <Receipt className="w-4 h-4 text-white group-hover:scale-110 transition-transform" /> 
+                                                        <span>Bayar Sekarang</span>
+                                                    </div>
+                                                    <span className="text-[11px] font-black text-orange-100 tracking-tight">{FORMAT_CURRENCY(kost.totalPrice)}</span>
+                                                </button>
+                                            )}
+
+                                            {/* Action for Expired Booking */}
+                                            {isExpiredBooking && (
+                                                <button
+                                                    onClick={() => navigate(`${Page.DETAIL}?kostId=${kost.kostId}`)}
+                                                    className="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest shadow-md active:scale-[0.98] cursor-pointer"
+                                                >
+                                                    <RotateCcw className="w-4 h-4" /> Ajukan Sewa Ulang
+                                                </button>
+                                            )}
+
+                                            {/* Action for Checked-Out Booking */}
+                                            {(kost.is_checked_out || (kost.status || '').toUpperCase() === 'CHECKED_OUT') && (
+                                                <button
+                                                    onClick={() => navigate(`${Page.DETAIL}?kostId=${kost.kostId}`)}
+                                                    className="w-full bg-gray-900 hover:bg-black text-white px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest shadow-md active:scale-[0.98] cursor-pointer"
+                                                >
+                                                    <RotateCcw className="w-4 h-4 text-orange-400" /> Sewa Lagi
+                                                </button>
+                                            )}
+
+                                            {/* Perpanjang Sewa (For Paid) */}
+                                            {isPaid && !kost.is_checked_out && (
+                                                <div className="flex flex-col gap-1 w-full">
+                                                    <button
+                                                        disabled={(kost.daysRemaining || 0) > 7}
+                                                        onClick={() => handleOpenExtension(kost)}
+                                                        className={`w-full ${(kost.daysRemaining || 0) > 7 ? 'bg-gray-50 text-gray-400 border border-gray-100 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-100 cursor-pointer'} px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest active:scale-[0.98] group/btn`}
+                                                    >
+                                                        <Plus className={`w-4 h-4 ${(kost.daysRemaining || 0) > 7 ? 'text-gray-300' : 'text-white'} group-hover:rotate-90 transition-transform`} /> Perpanjang Sewa
+                                                    </button>
+                                                    {(kost.daysRemaining || 0) > 7 && (
+                                                        <p className="text-[8px] font-bold text-gray-400 text-center uppercase tracking-[0.15em]">
+                                                            Tersedia dlm {(kost.daysRemaining || 0) - 7} hari
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+
                                             {/* Rute Ke Kost */}
                                             <button
                                                 onClick={() => {
@@ -2349,24 +2455,6 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                             >
                                                 <MapPin className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform" /> Rute Ke Kost
                                             </button>
-
-                                            {/* Perpanjang Sewa (For Paid) */}
-                                            {isPaid && !kost.is_checked_out && (
-                                                <div className="flex flex-col gap-1">
-                                                    <button
-                                                        disabled={(kost.daysRemaining || 0) > 7}
-                                                        onClick={() => handleOpenExtension(kost)}
-                                                        className={`w-full ${(kost.daysRemaining || 0) > 7 ? 'bg-gray-50 text-gray-400 border border-gray-100 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-100 cursor-pointer'} px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest active:scale-[0.98] group/btn`}
-                                                    >
-                                                        <Plus className={`w-4 h-4 ${(kost.daysRemaining || 0) > 7 ? 'text-gray-300' : 'text-white'} group-hover:rotate-90 transition-transform`} /> Perpanjang Sewa
-                                                    </button>
-                                                    {(kost.daysRemaining || 0) > 7 && (
-                                                        <p className="text-[8px] font-bold text-gray-400 text-center uppercase tracking-[0.15em]">
-                                                            Tersedia dlm {(kost.daysRemaining || 0) - 7} hari
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            )}
 
                                             {/* Hubungi Pengelola / Pemilik */}
                                             <button
@@ -2386,93 +2474,6 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                 </button>
                                             )}
 
-                                            {/* Action for Expired Booking */}
-                                            {(() => {
-                                                const expiry = getBookingExpiryInfo(kost);
-                                                const isExpiredBooking = expiry.isExpired || (kost.status || '').toUpperCase() === 'EXPIRED';
-                                                
-                                                if (isExpiredBooking) {
-                                                    return (
-                                                        <button
-                                                            onClick={() => navigate(`${Page.DETAIL}?kostId=${kost.kostId}`)}
-                                                            className="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest shadow-md active:scale-[0.98] cursor-pointer"
-                                                        >
-                                                            <RotateCcw className="w-4 h-4" /> Ajukan Sewa Ulang
-                                                        </button>
-                                                    );
-                                                }
-                                                return null;
-                                            })()}
-
-                                            {/* Action for Checked-Out Booking */}
-                                            {(kost.is_checked_out || (kost.status || '').toUpperCase() === 'CHECKED_OUT') && (
-                                                <button
-                                                    onClick={() => navigate(`${Page.DETAIL}?kostId=${kost.kostId}`)}
-                                                    className="w-full bg-gray-900 hover:bg-black text-white px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest shadow-md active:scale-[0.98] cursor-pointer"
-                                                >
-                                                    <RotateCcw className="w-4 h-4 text-orange-400" /> Sewa Lagi
-                                                </button>
-                                            )}
-
-                                            {/* Pending Actions: Bayar Sekarang */}
-                                            {(() => {
-                                                const expiry = getBookingExpiryInfo(kost);
-                                                const isExpiredBooking = expiry.isExpired || (kost.status || '').toUpperCase() === 'EXPIRED';
-                                                
-                                                if (kost.status === 'AWAITING_PAYMENT' && !isExpiredBooking) {
-                                                    return (
-                                                        <button
-                                                            onClick={() => {
-                                                                const kMeta = kost.metadata || {};
-                                                                const mDate = kost.moveInDate || kMeta.startDate || kMeta.move_in_date;
-                                                                const monthYear = mDate ? new Date(mDate).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : '';
-
-                                                                setPaymentAmount(kost.totalPrice);
-                                                                setPaymentOrderId(kost.id);
-                                                                setPaymentProductId(kost.kostId);
-                                                                setPaymentProductType('kost_booking');
-                                                                setPaymentMetadata({
-                                                                    ...kMeta,
-                                                                    kostId: kost.kostId,
-                                                                    kostName: kost.kostName,
-                                                                    roomType: kost.roomType || kMeta.roomType || '-',
-                                                                    startDate: mDate,
-                                                                    userName: user.displayName || user.email?.split('@')[0] || 'Customer',
-                                                                    userEmail: user.email || '',
-                                                                    item_details: [
-                                                                        {
-                                                                            id: `rent-${kost.kostId?.substring(0, 8)}`,
-                                                                            price: Number(kMeta.basePrice || 0) + Number(kMeta.extraPersonFee || 0),
-                                                                            quantity: 1,
-                                                                            name: `Sewa Kost ${monthYear}${Number(kMeta.occupants || 1) > 1 ? ' + Extra Penghuni' : ''}`
-                                                                        },
-                                                                        ...(kMeta.facilityFee ? [{
-                                                                            id: `facility-${kost.kostId?.substring(0, 8)}`,
-                                                                            price: Number(kMeta.facilityFee),
-                                                                            quantity: 1,
-                                                                            name: kMeta.additionalFeeName || `Tagihan Fasilitas ${monthYear}`
-                                                                        }] : [])
-                                                                    ].filter(item => item.price > 0),
-                                                                    tenantName: user.displayName || user.email?.split('@')[0] || 'Customer',
-                                                                    propertyTitle: kost.kostName,
-                                                                    roomCategory: kost.roomType || kMeta.roomType || '-',
-                                                                    leaseStart: mDate,
-                                                                    leaseEnd: kMeta.endDate || '-'
-                                                                });
-                                                                setShowPaymentGateway(true);
-                                                            }}
-                                                            className="w-full bg-orange-600 hover:bg-orange-700 text-white p-4 rounded-2xl font-black flex flex-col items-center gap-1 transition-all shadow-xl shadow-orange-200 active:scale-[0.98] animate-pulse cursor-pointer"
-                                                        >
-                                                            <div className="flex items-center gap-2 text-xs uppercase tracking-widest">
-                                                                <Receipt className="w-4 h-4" /> Bayar Sekarang
-                                                            </div>
-                                                            <span className="text-[10px] opacity-70 font-bold">{FORMAT_CURRENCY(kost.totalPrice)}</span>
-                                                        </button>
-                                                    );
-                                                }
-                                                return null;
-                                            })()}
-
                                             {/* Pending Actions: Batalkan Pengajuan */}
                                             {kost.status === 'PENDING_APPROVAL' && (
                                                 <button
@@ -2482,7 +2483,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                     <XCircle className="w-4 h-4 group-hover/cancel:rotate-90 transition-transform" /> Batalkan Pengajuan
                                                 </button>
                                             )}
-                                        </div>                         </div>
+                                        </div>
                                     </div>
                                 </div>
                             );
