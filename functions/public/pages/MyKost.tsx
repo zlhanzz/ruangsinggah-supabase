@@ -377,8 +377,9 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
             const combinedData = [...(statusData || [])];
 
             // Add transactions that are not already linked to a resident_status (to avoid duplicates)
+            const activeResidentsOnly = (statusData || []).filter((r: any) => (r.status || 'ACTIVE').toUpperCase() === 'ACTIVE');
             const linkedTrxIds = new Set(statusData?.map((r: any) => r.transaction_id).filter(Boolean));
-            const activeKostIds = new Set(statusData?.map((r: any) => r.kost_id).filter(Boolean));
+            const activeKostIds = new Set(activeResidentsOnly.map((r: any) => r.kost_id).filter(Boolean));
 
             (bills || []).forEach((trx: any) => {
                 const trxId = trx.id;
@@ -633,7 +634,9 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
             const statusRecords = await getResidentStatus({ userId: user.uid });
 
             // Map resident status to match the UI expectations of activeKosts
-            const processedActive = statusRecords.map(r => {
+            // HANYA sertakan data yang berstatus ACTIVE untuk hunian berjalan di tab Aktif
+            const activeStatusRecords = (statusRecords || []).filter(r => (r.status || 'ACTIVE').toUpperCase() === 'ACTIVE');
+            const processedActive = activeStatusRecords.map(r => {
                 const prop = r.property || {};
                 const lastTrx = r.last_transaction || {};
 
@@ -1663,7 +1666,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
         if (activeTab === 'diajukan') return isPending || s === 'REJECTED' || s === 'CANCELLED';
 
         if (activeTab === 'riwayat') {
-            if (s === 'REJECTED' || s === 'CANCELLED') return true;
+            if (s === 'REJECTED' || s === 'CANCELLED' || s === 'CHECKED_OUT' || s === 'COMPLETED') return true;
             if (!isPaid) return false;
             if (!kost.endDate) return false;
             const eDate = new Date(kost.endDate);

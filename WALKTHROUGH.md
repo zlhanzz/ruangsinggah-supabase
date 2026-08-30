@@ -1,68 +1,73 @@
-# WALKTHROUGH — Perbaikan RLS Violations `notifications` & Penyelarasan Sub-Label KostManager
+# Walkthrough: Perbaikan Fitur Kosongkan Unit Kamar (Check-Out) & Sinkronisasi Hunian
 
-**Tanggal Selesai**: 30 Agustus 2026  
-**Entry PROGRESS.md**: #208  
-**Branch**: `bukan-productions`
+Dokumen ini merangkum perbaikan pada fitur **"Kosongkan Unit Kamar" (Move-Out / Check-Out)** di Portal KostManager, sinkronisasi status kamar pada database, serta pembaruan tampilan di menu **"Kost Saya"** dari sisi penyewa.
 
 ---
 
-## 1. Ringkasan Masalah & Perbaikan
+## 1. Masalah yang Diselesaikan
 
-### A. Error RLS Policy pada `notifications`
-- **Gejala**:
-  Saat pengguna mengirim pesan obrolan, console browser menampilkan error:
-  ```text
-  notificationService.ts:40
-   Notification insertion failed: new row violates row-level security policy for table "notifications"
-  ```
-- **Akar Masalah**:
-  Tabel `notifications` mengizinkan `INSERT` untuk semua orang (`WITH CHECK (true)`), namun membatasi `SELECT` hanya untuk pemilik record yang sedang login (`USING (auth.uid() = user_id)`). Fungsi `sendNotification` sebelumnya memanggil `.insert([...]).select().single()`. Pemanggilan `.select()` memicu query SELECT balik ke PostgreSQL untuk row yang `user_id`-nya adalah lawan bicara/mitra/admin, sehingga PostgREST membatalkannya dengan error kode `42501`.
-- **Solusi**:
-  Menghapus chaining `.select().single()` pada `sendNotification()` di `functions/public/notificationService.ts` sehingga PostgREST hanya mengeksekusi operasi `INSERT` murni.
-
-### B. Sub-Label Kontak di Jendela Chat
-- **Gejala**:
-  Header obrolan pada properti terkelola menampilkan teks: `kost madani • TIM KOSTMANAGER (PEMILIK)`.
-- **Solusi**:
-  Menyelaraskan logika penentuan label di `ChatWindow.tsx` agar kontak dengan tipe `admin`, `manager`, atau bernama mengandung `KostManager` menampilkan label **`TIM KOSTMANAGER (PENGELOLA RESMI)`**.
+1. **Tombol "Kosongkan Unit Kamar" Tidak Berfungsi**:
+   - Di modal check-out KostManager, saat tombol *"Kosongkan Unit Kamar"* ditekan, kamar tidak berubah menjadi kosong dan status penyewaan penghuni tidak terputus.
+   - **Akar Masalah**:
+     - Logika matching kamar di `handleCheckoutTenant` hanya mengecek `rName === tenant.room_type` (`"Standard" !== "Kamar 3"`).
+     - Nama penghuni `tenant.user?.name` tidak terisi lengkap pada record online sehingga loop gagal menemukan kamar yang harus dikosongkan.
+     - Fungsi tidak melakukan mutasi status pada tabel `resident_status`.
+     - Tabel `mitra_kostmanager` tidak ikut disinkronkan.
+2. **Hunian Masih Muncul di Menu "Kost Saya" Sisi Penghuni**:
+   - Halaman `MyKost.tsx` memetakan seluruh record `resident_status` ke tab *Aktif* tanpa memeriksa apakah record tersebut masih aktif (`status === 'ACTIVE'`).
 
 ---
 
-## 2. File yang Diubah
+## 2. Perubahan yang Dilakukan
 
-1. **[`functions/public/notificationService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/notificationService.ts)**:
-   - Mengubah `supabase.from('notifications').insert([...]).select().single()` menjadi `supabase.from('notifications').insert([...])`.
-   - Mengembalikan `{ success: true }` jika tidak ada error.
-2. **[`functions/public/components/ChatWindow.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/ChatWindow.tsx)**:
-   - Memperluas interface `ChatWindowProps`: `contactType?: 'owner' | 'caretaker' | 'admin' | 'manager'`.
-   - Menghasilkan label dinamis `Pengelola Resmi` untuk KostManager.
-3. **[`functions/PROGRESS.md`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md)**:
-   - Mencatat progres pekerjaan pada Entry #208.
+### A. Perbaikan Logika Check-Out di Portal KostManager (`KostManagerPortal.tsx`)
+- **Pencocokan Kamar Multi-Kriteria yang Presisi**:
+  Pencocokan kamar target kini memeriksa:
+  - Kecocokan nomor/nama kamar: `tenant.room_number`, `tenant.metadata?.roomNumber`, `tenant.metadata?.variantName`.
+  - Normalisasi nama kamar (misal `"Kamar 3"` vs `"3"`).
+  - Kecocokan nama penyewa: `tenant.user?.name`, `tenant.metadata?.userName`, `tenant.metadata?.tenantName`.
+- **Pengosongan Unit Kamar Secara Menyeluruh**:
+  Unit kamar yang cocok di-reset menjadi:
+  - `status: 'Kosong'`
+  - `isAvailable: true`
+  - `residentName: ''`, `residentPhone: ''`, `startDate: ''`, `endDate: ''`
+- **Sinkronisasi Ganda (`properties` & `mitra_kostmanager`)**:
+  Array `room_types` yang sudah diperbarui langsung disimpan ke tabel `properties` dan disinkronkan ke tabel `mitra_kostmanager`.
+- **Pembaruan Status Sewa di `resident_status`**:
+  Jika record sewa berasal dari tabel `resident_status`, status diubah menjadi `'CHECKED_OUT'` disertai catatan serah terima (`checkout_notes`) dan waktu pengosongan (`checkout_at`).
+- **Filter Penghuni Aktif**:
+  Daftar penghuni di Portal KostManager (`managedResidents`) disaring agar hanya menampilkan status `'ACTIVE'`.
+
+### B. Sinkronisasi Tampilan di Sisi Penghuni (`MyKost.tsx`)
+- Tab **Aktif** (`processedActive`) kini hanya menyertakan hunian yang berstatus `'ACTIVE'`.
+- Penyewa yang telah di-checkout (`CHECKED_OUT` / `COMPLETED`) tidak lagi muncul di tab hunian aktif, melainkan otomatis masuk ke tab **Riwayat**.
 
 ---
 
 ## 3. Hasil Pengujian & Kompilasi
 
-### Uji Build Vite
-```bash
-> ruangsinggah.id@0.0.0 build
-> vite build
-
-vite v6.4.1 building for production...
-transforming...
-✓ 2531 modules transformed.
-rendering chunks...
-computing gzip size...
-✓ built in 34.06s (Exit code 0)
-```
-- 0 error TypeScript
-- 0 warning kompilasi fatal
+- **Uji Kompilasi Vite**:
+  ```bash
+  cmd /c npm run build
+  ✓ 2531 modules transformed.
+  ✓ built in 1m 1s (exit code 0)
+  ```
+  Tidak ada error tipe (*zero TypeScript errors*).
 
 ---
 
-## 4. Panduan Verifikasi Pengguna
+## 4. Panduan Verifikasi bagi Pengguna
 
-1. Buka kembali halaman obrolan di menu **Kost Saya** (`/my-bookings/aktif`) pada kartu sewa Kost Madani.
-2. Perhatikan sub-label di header chat: kini tertulis rapi dan profesional sebagai **`TIM KOSTMANAGER (PENGELOLA RESMI)`**.
-3. Kirimkan pesan obrolan (misal: *"Halo kak"*).
-4. Buka Console DevTools (F12): pesan terkirim seketika, dan pesan error `Notification insertion failed: new row violates row-level security policy for table "notifications"` sudah tidak muncul lagi.
+1. **Buka Portal KostManager**:
+   - Masuk ke tab **Daftar Penghuni** pada properti yang dikelola.
+   - Pilih penghuni pada unit kamar tertentu (misalnya *Kamar 3*).
+   - Klik tombol titik tiga (opsi) lalu pilih **Proses Check-Out**.
+   - Masukkan catatan serah terima (opsional) lalu klik **Kosongkan Unit Kamar**.
+2. **Verifikasi di Portal KostManager**:
+   - Penghuni tersebut akan otomatis keluar dari daftar penghuni aktif.
+   - Pada tab **Daftar Kamar / Tingkat Hunian**, unit kamar (misal *Kamar 3*) kini berstatus **Kosong** (hijau/tersedia).
+3. **Verifikasi di Halaman "Kost Saya" (Sisi Penghuni)**:
+   - Login dengan akun penghuni yang telah di-checkout.
+   - Buka menu **Kost Saya** -> Tab **Aktif**.
+   - Kartu hunian kost tersebut sudah tidak muncul di tab *Aktif*.
+   - Buka Tab **Riwayat**: Catatan sewa masa lalu kini tampil di tab riwayat penyewaan.

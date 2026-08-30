@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabase';
 import { FORMAT_CURRENCY } from '../../constants';
+import { sendNotification } from '../../notificationService';
 import { 
     Users, 
     Calendar, 
@@ -1548,7 +1549,9 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             // 6. Ambil data resident_status (penyewa online dari DB)
             const allResidents = await getResidentStatus();
             const managedPropIds = props?.map(p => p.id) || [];
-            const managedResidents: TenantRecord[] = (allResidents || []).filter((r: any) => managedPropIds.includes(r.kost_id)).map((r: any) => {
+            const managedResidents: TenantRecord[] = (allResidents || [])
+                .filter((r: any) => managedPropIds.includes(r.kost_id) && (r.status || 'ACTIVE').toUpperCase() === 'ACTIVE')
+                .map((r: any) => {
                 const prop = props.find(p => p.id === r.kost_id);
                 const rentPrice = Number(r.metadata?.basePrice) || Number(r.metadata?.price) || Number(r.last_transaction?.amount) || Number(prop?.price) || 0;
                 return {
@@ -1890,11 +1893,30 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             const prop = properties.find(p => p.id === tenant.kost_id);
             if (!prop) throw new Error('Data properti tidak ditemukan');
 
-            // Update room_types di database: kosongkan kamar
+            // 1. Ambil seluruh penanda kamar & identitas penghuni target
+            const targetRoomNum = (tenant.metadata?.roomNumber || tenant.room_number || tenant.metadata?.variantName || '').trim();
+            const targetTenantName = (tenant.user?.name || tenant.metadata?.tenantName || tenant.metadata?.userName || tenant.metadata?.residentName || '').trim();
+            const targetPhone = (tenant.user?.phone || tenant.metadata?.phone || tenant.metadata?.userPhone || tenant.metadata?.residentPhone || '').replace(/[^0-9]/g, '');
+            const targetRoomType = (tenant.room_type || '').trim();
+
+            const targetCleanNum = targetRoomNum.replace(/^kamar\s*/i, '').trim().toLowerCase();
+
+            // 2. Update room_types di database: kosongkan kamar
             const currentRooms = Array.isArray(prop.room_types) ? [...prop.room_types] : [];
+
             const newRooms = currentRooms.map((rt: any, idx: number) => {
-                const rName = rt.name ? (String(rt.name).trim().toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${idx + 1}`;
-                if (rName.toLowerCase() === tenant.room_type?.toLowerCase() || rt.residentName === tenant.user?.name) {
+                const rtName = (rt.name || rt.roomNumber || `Kamar ${idx + 1}`).trim();
+                const rtCleanNum = rtName.replace(/^kamar\s*/i, '').trim().toLowerCase();
+                const rtResidentName = (rt.residentName || rt.tenantName || '').trim().toLowerCase();
+                const rtResidentPhone = (rt.residentPhone || rt.tenantPhone || '').replace(/[^0-9]/g, '');
+
+                const isNumberMatch = targetCleanNum && rtCleanNum && targetCleanNum === rtCleanNum;
+                const isFullNameMatch = targetRoomNum && rtName.toLowerCase() === targetRoomNum.toLowerCase();
+                const isNameMatch = targetTenantName && rtResidentName && rtResidentName === targetTenantName.toLowerCase();
+                const isPhoneMatch = targetPhone && rtResidentPhone && rtResidentPhone === targetPhone;
+                const isTypeOnlyMatch = !targetRoomNum && targetRoomType && (rt.type || '').toLowerCase() === targetRoomType.toLowerCase() && (rt.status === 'Terisi' || !rt.isAvailable);
+
+                if (isNumberMatch || isFullNameMatch || isNameMatch || isPhoneMatch || isTypeOnlyMatch) {
                     return {
                         ...rt,
                         status: 'Kosong',
@@ -1908,6 +1930,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                 return rt;
             });
 
+            // 3. Simpan perubahan ke properties table
             const { error: pErr } = await supabase
                 .from('properties')
                 .update({ 
@@ -1918,7 +1941,58 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
 
             if (pErr) throw pErr;
 
-            alert(`✅ Proses check-out selesai! Unit ${tenant.room_type} di "${prop.title}" kini kembali KOSONG dan siap dipasarkan.`);
+            // 4. Sinkronkan ke mitra_kostmanager table jika ada
+            await supabase
+                .from('mitra_kostmanager')
+                .update({
+                    room_types: newRooms,
+                    updated_at: new Date().toISOString()
+                })
+                .or(`property_id.eq.${prop.id},id.eq.${prop.id}`);
+
+            // 5. Update tabel resident_status menjadi CHECKED_OUT
+            if (tenant.id && !tenant.id.startsWith('prop-resident-') && !tenant.id.startsWith('survey-resident-')) {
+                await supabase
+                    .from('resident_status')
+                    .update({
+                        status: 'CHECKED_OUT',
+                        updated_at: new Date().toISOString(),
+                        metadata: {
+                            ...(tenant.metadata || {}),
+                            checkout_at: new Date().toISOString(),
+                            checkout_notes: checkoutNotes || 'Check-out selesai via Portal KostManager'
+                        }
+                    })
+                    .eq('id', tenant.id);
+            } else if (tenant.user_id && tenant.kost_id) {
+                await supabase
+                    .from('resident_status')
+                    .update({
+                        status: 'CHECKED_OUT',
+                        updated_at: new Date().toISOString(),
+                        metadata: {
+                            ...(tenant.metadata || {}),
+                            checkout_at: new Date().toISOString(),
+                            checkout_notes: checkoutNotes || 'Check-out selesai via Portal KostManager'
+                        }
+                    })
+                    .match({ kost_id: tenant.kost_id, user_id: tenant.user_id, status: 'ACTIVE' });
+            }
+
+            // 6. Kirim notifikasi in-app ke penyewa jika memiliki user_id valid
+            if (tenant.user_id && !tenant.user_id.startsWith('survey-user-')) {
+                sendNotification(
+                    tenant.user_id,
+                    'Check-Out Selesai',
+                    `Unit kamar Anda di "${prop.title}" telah berhasil dikosongkan dan masa sewa telah selesai. Terima kasih!`,
+                    'info',
+                    { kostId: prop.id, checkoutAt: new Date().toISOString() },
+                    '/my-kost'
+                ).catch(err => console.warn('Failed to send checkout notification:', err));
+            }
+
+            const roomLabel = targetRoomNum || tenant.room_type || 'Unit Kamar';
+            alert(`✅ Proses check-out selesai! Unit ${roomLabel} di "${prop.title}" kini kembali KOSONG dan status penyewa telah diselesaikan.`);
             setSelectedTenantForCheckout(null);
             setCheckoutNotes('');
             await loadAllData();
@@ -4458,7 +4532,9 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                     </div>
                                                     <div>
                                                         <h3 className="text-base font-black text-rose-950 uppercase tracking-tight">Proses Check-Out Penghuni</h3>
-                                                        <p className="text-[10px] text-rose-700 font-bold">{selectedTenantForCheckout.user?.name} - {selectedTenantForCheckout.room_type}</p>
+                                                        <p className="text-[10px] text-rose-700 font-bold">
+                                                            {selectedTenantForCheckout.user?.name || selectedTenantForCheckout.metadata?.tenantName || selectedTenantForCheckout.metadata?.userName || selectedTenantForCheckout.metadata?.residentName || 'Penghuni'} - {(selectedTenantForCheckout.metadata?.roomNumber || selectedTenantForCheckout.room_number || selectedTenantForCheckout.metadata?.variantName || selectedTenantForCheckout.room_type || 'Unit Kamar')} {selectedTenantForCheckout.room_type && selectedTenantForCheckout.room_type !== (selectedTenantForCheckout.metadata?.roomNumber || selectedTenantForCheckout.room_number || selectedTenantForCheckout.metadata?.variantName) ? `(${selectedTenantForCheckout.room_type})` : ''}
+                                                        </p>
                                                     </div>
                                                 </div>
                                                 <button
@@ -4476,7 +4552,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                         Perhatian Pelepasan Unit Kamar
                                                     </p>
                                                     <p className="text-amber-800 text-[11px] leading-relaxed">
-                                                        Setelah proses check-out dikonfirmasi, unit <strong>{selectedTenantForCheckout.room_type}</strong> di <strong>{selectedTenantForCheckout.property?.title}</strong> akan otomatis diubah statusnya menjadi <strong>KOSONG (Tersedia)</strong> dan siap dipasarkan ke pencari kost baru.
+                                                        Setelah proses check-out dikonfirmasi, unit <strong>{(selectedTenantForCheckout.metadata?.roomNumber || selectedTenantForCheckout.room_number || selectedTenantForCheckout.metadata?.variantName || selectedTenantForCheckout.room_type || 'Kamar')}</strong> di <strong>{selectedTenantForCheckout.property?.title}</strong> akan otomatis diubah statusnya menjadi <strong>KOSONG (Tersedia)</strong> dan siap dipasarkan ke pencari kost baru.
                                                     </p>
                                                 </div>
 

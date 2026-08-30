@@ -2,6 +2,32 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 209. Perbaikan Fitur Kosongkan Unit Kamar (Check-Out / Move-Out) & Sinkronisasi Status Hunian Portal KostManager (`KostManagerPortal.tsx`, `MyKost.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa saat menekan tombol "Kosongkan Unit Kamar" di modal proses check-out penghuni pada Portal KostManager, tidak terjadi perubahan apa pun. Status penyewaan masih tetap muncul di tab hunian aktif menu "Kost Saya" dari sisi penghuni dan status kamar di sistem masih tetap terisi.
+- **Akar Masalah**:
+  1. **Kegagalan Matching Kamar**: Di `KostManagerPortal.tsx`, `handleCheckoutTenant` hanya membandingkan `rName.toLowerCase() === tenant.room_type?.toLowerCase() || rt.residentName === tenant.user?.name`. Karena `tenant.room_type` berisi `"Standard"` dan `rName` adalah `"Kamar 1"`, `"Kamar 2"`, dsb., serta `tenant.user?.name` tidak selalu terisi, loop kamar tidak pernah cocok dengan unit target (`"Kamar 3"`).
+  2. **Tabel `resident_status` Tidak Diperbarui**: Fungsi check-out sama sekali tidak mengupdate baris database pada tabel `resident_status`, membiarkan status tetap `'ACTIVE'`.
+  3. **Tabel `mitra_kostmanager` Tidak Disinkronkan**: Snapshot `room_types` di tabel `mitra_kostmanager` tidak ikut dibersihkan saat check-out.
+  4. **Filter Tab Aktif di `MyKost.tsx`**: Tab 'Aktif' di halaman "Kost Saya" memetakan `statusRecords` tanpa memeriksa apakah statusnya masih `'ACTIVE'`.
+- **Implementasi Solusi**:
+  1. **Perbaikan Multi-Matching & Pembersihan Kamar di `KostManagerPortal.tsx`**:
+     - Memperbaiki `handleCheckoutTenant` dengan mekanisme pencocokan kamar komprehensif (`cleanRoomName` vs `tenant.room_number`, `tenant.metadata?.roomNumber`, `tenant.metadata?.variantName`, atau kecocokan nama penghuni `tenant.user?.name` / `tenant.metadata?.userName` / `tenant.metadata?.tenantName`).
+     - Mengubah status kamar target menjadi `Kosong`, `isAvailable: true`, dan mengosongkan `residentName`, `residentPhone`, `startDate`, `endDate`.
+     - Menyinkronkan perubahan `room_types` secara instan ke tabel `properties` dan `mitra_kostmanager`.
+     - Memperbarui tabel `resident_status` menjadi `status: 'CHECKED_OUT'` dengan timestamp `checkout_at` dan `checkout_notes`.
+     - Memfilter `managedResidents` agar hanya memuat record berstatus `'ACTIVE'`, sehingga penghuni yang telah di-checkout otomatis hilang dari daftar aktif.
+  2. **Penyelarasan Tampilan Penyewa di `MyKost.tsx`**:
+     - Menyaring `activeStatusRecords` di mana hanya record berstatus `'ACTIVE'` yang masuk ke dalam `processedActive` untuk tab hunian aktif.
+     - Menyaring `activeResidentsOnly` sehingga transaksi sewa lama tidak lagi terblokir dan otomatis berpindah ke tab 'Riwayat' (`CHECKED_OUT` / `COMPLETED`).
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `walkthrough.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` berhasil 100% (✓ 2531 modules transformed, 1m 1s, exit code 0).
+
 ### 208. Perbaikan RLS Violations 'notifications' & Penyelarasan Sub-Label KostManager (`notificationService.ts`, `ChatWindow.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   1. Pengguna melaporkan error console saat mengirim pesan obrolan:
