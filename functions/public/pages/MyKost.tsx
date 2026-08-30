@@ -98,6 +98,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const [activeKosts, setActiveKosts] = useState<any[]>([]);
     const [surveyRequests, setSurveyRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState<'diajukan' | 'aktif' | 'riwayat'>('diajukan');
     const [nowTick, setNowTick] = useState<number>(() => getCurrentDate().getTime());
 
@@ -393,6 +394,12 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
     const handleOpenChat = async (kost: any) => {
         if (!user) return;
+        const currentUid = user.uid || (user as any).id;
+        if (!currentUid) {
+            console.error('No valid user ID found for chat');
+            alert('Gagal membuka chat: Pengguna belum login atau sesi telah kedaluwarsa.');
+            return;
+        }
         try {
             setIsSubmitting(true);
 
@@ -411,11 +418,11 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
             const targetOwnerId = isManaged ? SYSTEM_ADMIN_ID : (propData?.owner_uid || SYSTEM_ADMIN_ID);
 
             const session = await getOrCreateChatSession(
-                user.uid,
+                currentUid,
                 targetOwnerId,
                 kost.kostId || null,
-                user.displayName || user.name || user.email?.split('@')[0] || 'Penghuni',
-                user.photoURL || user.avatar_url || ''
+                user.displayName || (user as any).name || user.email?.split('@')[0] || 'Penghuni',
+                user.photoURL || (user as any).avatar_url || ''
             );
 
             setActiveChatSession({
@@ -425,9 +432,9 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                 contactType: isManaged ? 'admin' : (propData?.omnichannel_contact_type || 'owner')
             });
             setShowChatWindow(true);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to open chat:', error);
-            alert('Gagal membuka chat. Pastikan koneksi internet stabil atau hubungi sistem admin RuangSinggah.');
+            alert(`Gagal membuka chat: ${error?.message || 'Pastikan koneksi internet stabil atau hubungi sistem admin RuangSinggah.'}`);
         } finally {
             setIsSubmitting(false);
         }

@@ -1,64 +1,68 @@
-# Rencana Implementasi: Perbaikan Preview Foto Kost & Kamar di Menu "Kost Saya"
+# 📋 Rencana Implementasi: Perbaikan ReferenceError `setIsSubmitting` & Pembukaan Chat Bantuan KostManager (Kost Saya)
 
-Dokumen perencanaan ini dibuat untuk menganalisis dan memperbaiki masalah preview foto kost / kamar yang tidak muncul (hanya menampilkan logo/placeholder *RuangSinggah*) pada kartu pengajuan sewa di halaman **Kost Saya** (`MyKost.tsx`).
-
----
-
-## 1. Analisis Masalah & Akar Penyebab
-
-### Gejala Masalah:
-- Pada halaman **Kost Saya** (`/my-kost`), khususnya tab **Diajukan** (seperti pengajuan sewa Kost Madani Kamar 4), kartu pengajuan berhasil muncul dengan status *"Menunggu Pembayaran"*, namun thumbnail foto kost/kamar tidak menampilkan gambar properti/kamar yang sebenarnya, melainkan hanya kotak gelap dengan logo/ikon *RuangSinggah* dan teks *"Kost"*.
-
-### Akar Masalah (Root Cause):
-1. **Kegagalan Query Tabel `properties` Akibat Kolom Non-Eksisten (`subscription_status`)**:
-   - Di [MyKost.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx#L521-L524), terdapat query batch fetching properti:
-     ```typescript
-     const { data: propertiesData } = await supabase
-         .from('properties')
-         .select('id, title, address, image_urls, owner_uid, city, area, additional_fee_name, additional_fee_price, additional_fee_starts_from, room_types, location, facilities, rules, metadata, is_managed, subscription_status')
-         .in('id', productIds);
-     ```
-   - Kolom `subscription_status` berada pada tabel `mitra`, **bukan pada tabel `properties`**.
-   - Akibatnya, Supabase mengembalikan error PostgreSQL: `code: 42703, message: column properties.subscription_status does not exist`.
-   - Query tersebut gagal secara total (`propertiesData = null`), sehingga `propMap` bernilai objek kosong `{}`.
-2. **Dampak Ikutan**:
-   - Objek `prop` bernilai `undefined`.
-   - `prop?.room_types` dan `prop?.image_urls` tidak ditemukan.
-   - Variabel `roomPhotos` menjadi `[]` dan `displayImg` bernilai `null`.
-   - Komponen fallback thumbnail otomatis menampilkan placeholder ikon *RuangSinggah*.
+Dokumen ini berisi analisis tepat berdasarkan temuan stack trace error browser dan rencana eksekusi perbaikan tombol **"Bantuan KostManager"** pada menu **Kost Saya** (`MyKost.tsx`).
 
 ---
 
-## 2. Dampak Perubahan
+## 1. Analisis Masalah (Penyebab Pasti dari Stack Trace)
 
-File yang akan disentuh:
-- [functions/public/pages/MyKost.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx):
-  - Memperbaiki string query `.select(...)` pada tabel `properties` dengan menghapus kolom non-eksisten `subscription_status`.
-  - Menambahkan *fallback* pencarian ke tabel `mitra_kostmanager` apabila properti dikelola khusus KostManager dan belum termuat.
-  - Memperkuat mekanisme ekstraksi foto kamar (`roomPhotos`) dan foto properti (`image_urls`) agar mendukung path storage lokal maupun URL publik Supabase secara tangguh (*resilient*).
+### 🔍 Temuan Stack Trace Browser
+```text
+MyKost.tsx:429 Failed to open chat: ReferenceError: setIsSubmitting is not defined
+    at handleOpenChat (MyKost.tsx:397:13)
+    at onClick (MyKost.tsx:2478:64)
+MyKost.tsx:432 Uncaught (in promise) ReferenceError: setIsSubmitting is not defined
+    at handleOpenChat (MyKost.tsx:432:13)
+```
+
+### ⚙️ Akar Masalah (Root Cause)
+1. **Deklarasi State `isSubmitting` Hilang / Tidak Didefinisikan di `MyKost.tsx`**:
+   - Di dalam `MyKost.tsx`, fungsi `handleOpenChat` (baris 397 & 432), `handleCancelBooking` (baris 442 & 450), submit rating (baris 1301), perpanjangan sewa (baris 1324), komplain (baris 1441), dan tombol aksi modal menggunakan `isSubmitting` dan `setIsSubmitting`.
+   - Namun, deklarasi `const [isSubmitting, setIsSubmitting] = useState(false);` tidak ada di daftar React state hook komponen `MyKost`.
+   - Akibatnya, begitu tombol **"Bantuan KostManager"** diklik, JavaScript langsung melempar `ReferenceError: setIsSubmitting is not defined`.
+   - Blok `catch (error)` menangkap error ini dan menampilkan dialog bawaan: *"Gagal membuka chat. Pastikan koneksi internet stabil atau hubungi sistem admin RuangSinggah."*.
+   - Kemudian blok `finally` memanggil `setIsSubmitting(false)` yang kembali melempar `Uncaught ReferenceError`.
+
+2. **Ketahanan Layanan Chat di [`chatService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/chatService.ts)**:
+   - Selain memperbaiki state di `MyKost.tsx`, kita juga mengoptimalkan `ensureUserProfileExists` agar memeriksa keberadaan user di database publik sebelum mencoba upsert, sehingga pembukaan chat selalu 100% instan dan bebas dari kendala RLS.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah Persetujuan)
+## 2. Dampak Perubahan File
 
-1. **Langkah 1: Perbaikan Query Properti di `MyKost.tsx`**
-   - Hapus kolom `subscription_status` dari `.select(...)` tabel `properties`.
-   - Tambahkan *fallback query* ke tabel `mitra_kostmanager` jika terdapat properti KostManager yang ID-nya tercatat khusus di tabel mitra.
+| File | Perubahan yang Dilakukan |
+| :--- | :--- |
+| [`functions/public/pages/MyKost.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx) | Menambahkan deklarasi `const [isSubmitting, setIsSubmitting] = useState(false);` di state declarations, serta merapikan fallback user ID pada `handleOpenChat`. |
+| [`functions/public/chatService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/chatService.ts) | Mengoptimalkan `ensureUserProfileExists` untuk memeriksa user yang sudah terdaftar (`select id from users`) agar proses pembuatan/pembukaan sesi chat instan dan stabil. |
 
-2. **Langkah 2: Optimasi Resolusi URL Gambar Kamar & Properti**
-   - Pastikan setiap item URL di `roomPhotos` dan `image_urls` dinormalisasi dengan benar (mendukung objek `{ url, original, webp }`, string publik `https://...`, maupun path storage lokal).
-   - Memastikan `heroImage` pada komponen kartu dapat memilih foto kamar utama (Interior Kamar / Tempat Tidur / Kamar Mandi) atau foto depan gedung (*Bangunan Depan*) secara presisi.
+---
 
-3. **Langkah 3: Kompilasi & Pengujian**
-   - Jalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 0 error TypeScript.
-   - Catat progres pekerjaan ke `functions/PROGRESS.md` (Entry #211).
-   - Buat dan sajikan dokumen `WALKTHROUGH.md`.
-   - Lakukan commit dan push ke remote branch `bukan-productions` sesuai aturan baku.
+## 3. Langkah-Langkah Eksekusi (Fase 2)
+
+### Langkah 1: Tambahkan State `isSubmitting` di `MyKost.tsx`
+- Menambahkan `const [isSubmitting, setIsSubmitting] = useState(false);` pada baris ~103 bersama state loading lainnya.
+
+### Langkah 2: Sempurnakan `handleOpenChat` di `MyKost.tsx`
+- Pastikan resolusi user UID lengkap (`user.uid || user.id`).
+- Tangani target KostManager (`SYSTEM_ADMIN_ID`).
+- Log error detail dengan `error?.message || error`.
+
+### Langkah 3: Optimasi `ensureUserProfileExists` di `chatService.ts`
+- Tambahkan fast-path pengecekan profil user di database publik.
+
+### Langkah 4: Verifikasi & Build
+- Jalankan `npm run build` di `functions/public/` (pastikan 0 error).
+- Catat ke `functions/PROGRESS.md` (Entry #212).
+- Sajikan `WALKTHROUGH.md` dan push commit ke branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-- **Verifikasi Skrip/Simulasi**: Menjalankan simulasi query `fetchMyKosts` di terminal untuk memastikan `propertiesData` sukses di-load dan `displayImg` / `roomPhotos` menghasilkan URL foto Kamar 4 / Foto Bangunan Kost Madani.
-- **Uji Kompilasi**: `npm run build` berhasil tanpa error.
-- **Verifikasi Visual UI**: Membuka halaman **Kost Saya** tab **Diajukan** dan memastikan kartu Kost Madani menampilkan foto kamar / properti yang jernih dan tajam dengan badge jumlah foto yang sesuai.
+1. **Uji Klik Tombol Bantuan KostManager**:
+   - Klik tombol **"Bantuan KostManager"** pada kartu pengajuan sewa Kamar 4.
+   - Pastikan modal jendela chat (`ChatWindow`) langsung terbuka tanpa melempar ReferenceError.
+2. **Uji Pengiriman Pesan Chat**:
+   - Kirim pesan di dalam chat window dan verifikasi pesan terkirim real-time.
+3. **Uji Kompilasi TypeScript**:
+   - Jalankan `npm run build` dan pastikan lulus 100%.
