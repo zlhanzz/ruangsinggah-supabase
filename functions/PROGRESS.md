@@ -2,6 +2,20 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 217. Perbaikan Import Ikon `Phone` dari `lucide-react` pada Modal Lapor Kendala (`MyKost.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Error runtime console: `Uncaught ReferenceError: Phone is not defined at MyKost (MyKost.tsx:4093:38)`.
+- **Akar Masalah**:
+  - Komponen `<Phone />` digunakan pada tombol hotline bantuan WhatsApp alternatif di dalam modal pelaporan kendala in-app, namun belum dimasukkan ke dalam daftar import destructuring `lucide-react` di baris 4 `MyKost.tsx`.
+- **Implementasi Solusi**:
+  - Menambahkan `Phone` ke daftar import `lucide-react` di `MyKost.tsx`.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, 37.80s, 0 error).
+
 ### 216. Sistem Manajemen Laporan Kendala Penghuni di Portal KostManager & Form Lapor In-App (`MyKost.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta agar tombol "Lapor Kendala Kamar" pada halaman "Kost Saya" (`MyKost.tsx`) tidak langsung melempar pengguna ke nomor WhatsApp admin, melainkan menggunakan formulir in-app di dalam sistem.

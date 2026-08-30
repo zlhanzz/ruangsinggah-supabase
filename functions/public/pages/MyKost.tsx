@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../supabase';
-import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, CheckCircle2, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity, DoorClosed, ChevronDown, ChevronUp, Camera, ShieldCheck, Building, Bed, Bath, Wifi, Maximize2, Share2, PhoneCall, HelpCircle, Layers, Wrench, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, CheckCircle2, Smartphone, Phone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity, DoorClosed, ChevronDown, ChevronUp, Camera, ShieldCheck, Building, Bed, Bath, Wifi, Maximize2, Share2, PhoneCall, HelpCircle, Layers, Wrench, RotateCcw } from 'lucide-react';
 import { Page } from '../types';
 import { addPropertyReview, getExtraBills, settlePendingBills, cancelBookingRequest, expireBookingTransaction, BOOKING_EXPIRY_HOURS } from '../userService';
 import PaymentGateway from '../components/PaymentGateway';
