@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../supabase';
-import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, CheckCircle2, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity, DoorClosed, ChevronDown, ChevronUp, Camera, ShieldCheck, Building, Bed, Bath, Wifi, Maximize2, Share2, PhoneCall, HelpCircle, Layers, Wrench } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, CheckCircle2, Smartphone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity, DoorClosed, ChevronDown, ChevronUp, Camera, ShieldCheck, Building, Bed, Bath, Wifi, Maximize2, Share2, PhoneCall, HelpCircle, Layers, Wrench, RotateCcw } from 'lucide-react';
 import { Page } from '../types';
-import { addPropertyReview, getExtraBills, settlePendingBills, cancelBookingRequest } from '../userService';
+import { addPropertyReview, getExtraBills, settlePendingBills, cancelBookingRequest, expireBookingTransaction, BOOKING_EXPIRY_HOURS } from '../userService';
 import PaymentGateway from '../components/PaymentGateway';
 import ChatWindow from '../components/ChatWindow';
 import { notifyAdminTransaction } from '../emailService';
@@ -98,8 +98,70 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const [activeKosts, setActiveKosts] = useState<any[]>([]);
     const [surveyRequests, setSurveyRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState<'diajukan' | 'aktif' | 'riwayat'>('diajukan');
+    const [nowTick, setNowTick] = useState<number>(() => getCurrentDate().getTime());
+
+    // Live 1-second interval for real-time scarcity countdown ticker
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setNowTick(getCurrentDate().getTime());
+        }, 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    // Helper: Hitung Batas Waktu & Sisa Waktu Pembayaran (1x24 Jam)
+    const getBookingExpiryInfo = (kost: any) => {
+        const s = (kost?.status || '').toUpperCase();
+        if (s === 'EXPIRED') {
+            return { isExpired: true, remainingMs: 0, hours: 0, minutes: 0, seconds: 0, isUrgent: true, deadlineDate: null };
+        }
+        if (s !== 'AWAITING_PAYMENT') {
+            return { isExpired: false, remainingMs: 0, hours: 0, minutes: 0, seconds: 0, isUrgent: false, deadlineDate: null };
+        }
+        
+        // Base time: approved_at > updated_at > created_at
+        const kMeta = typeof kost.metadata === 'string' ? JSON.parse(kost.metadata) : (kost.metadata || {});
+        const baseTimeStr = kost.updated_at || kost.approved_at || kMeta.approved_at || kost.created_at || kMeta.createdAt;
+        const baseTime = baseTimeStr ? new Date(baseTimeStr).getTime() : 0;
+        const deadline = baseTime + (BOOKING_EXPIRY_HOURS * 60 * 60 * 1000); // 24 jam
+        const now = getCurrentDate().getTime();
+        const remainingMs = deadline - now;
+        const isExpired = baseTime > 0 && remainingMs <= 0;
+        const safeMs = Math.max(0, remainingMs);
+        const hours = Math.floor(safeMs / (1000 * 60 * 60));
+        const minutes = Math.floor((safeMs % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((safeMs % (1000 * 60)) / 1000);
+        const isUrgent = hours < 6; // Urgent when < 6 hours remaining
+
+        return {
+            isExpired,
+            remainingMs: safeMs,
+            hours,
+            minutes,
+            seconds,
+            isUrgent,
+            deadlineDate: baseTime > 0 ? new Date(deadline) : null
+        };
+    };
+
+    // Auto-sync status EXPIRED to database if any booking has exceeded its payment window
+    useEffect(() => {
+        if (!activeKosts || activeKosts.length === 0) return;
+        activeKosts.forEach(async (kost) => {
+            const s = (kost.status || '').toUpperCase();
+            if (s === 'AWAITING_PAYMENT') {
+                const expiry = getBookingExpiryInfo(kost);
+                if (expiry.isExpired && kost.id) {
+                    try {
+                        await expireBookingTransaction(kost.id, kost.resident_status_id);
+                    } catch (err) {
+                        console.error("Auto-expire failed:", err);
+                    }
+                }
+            }
+        });
+    }, [nowTick, activeKosts]);
+
 
     // Sync state with URL
     useEffect(() => {
@@ -1505,6 +1567,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
         'SURVEYING': 'bg-cyan-50 text-cyan-600 border-cyan-100',
         'SUBMITTED': 'bg-emerald-50 text-emerald-600 border-emerald-100',
         'COMPLETED': 'bg-green-50 text-green-600 border-green-100',
+        'EXPIRED': 'bg-rose-50 text-rose-600 border-rose-100',
         'CANCELLED': 'bg-gray-50 text-gray-400 border-gray-100'
     };
     const STATUS_LABEL: any = {
@@ -1515,6 +1578,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
         'SURVEYING': 'Sedang Survey',
         'SUBMITTED': 'Laporan Terkirim ✓',
         'COMPLETED': 'Survey Selesai ✓',
+        'EXPIRED': 'Hangus (Waktu Habis)',
         'CANCELLED': 'Dibatalkan'
     };
 
@@ -1766,13 +1830,18 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
     const filteredKosts = activeTab === 'aktif' ? residentStatus : activeKosts.filter(kost => {
         const s = (kost.status || '').toUpperCase();
+        const expiryInfo = getBookingExpiryInfo(kost);
+        const isExpired = expiryInfo.isExpired || s === 'EXPIRED';
         const isPaid = ['APPROVED', 'PAID', 'SELESAI', 'SUCCESS', 'BERHASIL'].includes(s);
         const isPending = ['PENDING_APPROVAL', 'AWAITING_PAYMENT', 'PENDING'].includes(s);
 
-        if (activeTab === 'diajukan') return isPending || s === 'REJECTED' || s === 'CANCELLED';
+        if (activeTab === 'diajukan') {
+            if (isExpired) return false;
+            return isPending || s === 'REJECTED' || s === 'CANCELLED';
+        }
 
         if (activeTab === 'riwayat') {
-            if (s === 'REJECTED' || s === 'CANCELLED' || s === 'CHECKED_OUT' || s === 'COMPLETED' || kost.is_checked_out) return true;
+            if (isExpired || s === 'EXPIRED' || s === 'REJECTED' || s === 'CANCELLED' || s === 'CHECKED_OUT' || s === 'COMPLETED' || kost.is_checked_out) return true;
             if (!isPaid) return false;
             if (!kost.endDate) return false;
             const eDate = new Date(kost.endDate);
@@ -1785,8 +1854,9 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
             'AWAITING_PAYMENT': 1,
             'PENDING_APPROVAL': 2,
             'PENDING': 2,
-            'REJECTED': 3,
-            'CANCELLED': 4
+            'EXPIRED': 3,
+            'REJECTED': 4,
+            'CANCELLED': 5
         };
         const sA = (a.status || '').toUpperCase();
         const sB = (b.status || '').toUpperCase();
@@ -1856,6 +1926,8 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                             {
                                 id: 'diajukan', label: 'Diajukan', count: activeKosts.filter(k => {
                                     const s = (k.status || '').toUpperCase();
+                                    const expiryInfo = getBookingExpiryInfo(k);
+                                    if (expiryInfo.isExpired || s === 'EXPIRED') return false;
                                     const isPending = ['PENDING_APPROVAL', 'AWAITING_PAYMENT', 'PENDING'].includes(s);
                                     return isPending || s === 'REJECTED' || s === 'CANCELLED';
                                 }).length + surveyOrdersTabMap.diajukan
@@ -1866,6 +1938,8 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                 label: 'Riwayat', 
                                 count: activeKosts.filter(k => {
                                     const s = (k.status || '').toUpperCase();
+                                    const expiryInfo = getBookingExpiryInfo(k);
+                                    if (expiryInfo.isExpired || s === 'EXPIRED') return true;
                                     const isPaid = ['APPROVED', 'PAID', 'SELESAI', 'SUCCESS', 'BERHASIL'].includes(s);
                                     if (s === 'REJECTED' || s === 'CANCELLED' || s === 'CHECKED_OUT' || s === 'COMPLETED' || k.is_checked_out) return true;
                                     if (!isPaid || !k.endDate) return false;
@@ -2041,13 +2115,11 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                     <div className="absolute -bottom-2 -right-2 w-9 h-9 sm:w-11 sm:h-11 bg-white rounded-xl sm:rounded-2xl shadow-lg flex items-center justify-center border-2 border-orange-50 z-20">
                                                         <span className="text-base sm:text-xl">⚡</span>
                                                     </div>
-                                                </div>
-
-                                                {/* Property & Room Header Info */}
+                                                                           {/* Property & Room Header Info */}
                                                 <div className="flex-1 w-full min-w-0">
                                                     {/* Badges Bar */}
                                                     <div className="flex flex-wrap justify-center sm:justify-start items-center gap-1.5 sm:gap-2 mb-2.5 sm:mb-3">
-                                                        {isPaid && (
+                                                        {isPaid && !kost.is_checked_out && (
                                                             <span className={`px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 sm:gap-1.5 ${
                                                                 (kost.daysRemaining || 0) < 0 
                                                                     ? 'bg-gray-50 text-gray-400 border-gray-200' 
@@ -2058,7 +2130,40 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                             </span>
                                                         )}
 
-                                                        {kost.daysRemaining !== null && isPaid && (
+                                                        {(kost.is_checked_out || (kost.status || '').toUpperCase() === 'CHECKED_OUT') && (
+                                                            <span className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 sm:gap-1.5 bg-slate-100 text-slate-600 border-slate-200 shadow-sm">
+                                                                <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-500" /> SELESAI (CHECK-OUT)
+                                                            </span>
+                                                        )}
+
+                                                        {(kost.status || '').toUpperCase() === 'PENDING_APPROVAL' && (
+                                                            <span className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 sm:gap-1.5 bg-amber-50 text-amber-700 border-amber-200 shadow-sm">
+                                                                <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500" /> MENUNGGU PERSETUJUAN
+                                                            </span>
+                                                        )}
+
+                                                        {(() => {
+                                                            const expiry = getBookingExpiryInfo(kost);
+                                                            const isExpiredBooking = expiry.isExpired || (kost.status || '').toUpperCase() === 'EXPIRED';
+                                                            
+                                                            if ((kost.status || '').toUpperCase() === 'AWAITING_PAYMENT' && !isExpiredBooking) {
+                                                                return (
+                                                                    <span className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 sm:gap-1.5 bg-orange-50 text-orange-600 border-orange-200 animate-pulse shadow-sm">
+                                                                        <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-orange-500" /> MENUNGGU PEMBAYARAN
+                                                                    </span>
+                                                                );
+                                                            }
+                                                            if (isExpiredBooking) {
+                                                                return (
+                                                                    <span className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 sm:gap-1.5 bg-rose-50 text-rose-600 border-rose-200 shadow-sm">
+                                                                        <XCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-500" /> HANGUS (WAKTU HABIS)
+                                                                    </span>
+                                                                );
+                                                            }
+                                                            return null;
+                                                        })()}
+
+                                                        {kost.daysRemaining !== null && isPaid && !kost.is_checked_out && (
                                                             <div className={`px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-[8.5px] sm:text-[9px] font-black uppercase tracking-wider border flex items-center gap-1 sm:gap-1.5 ${
                                                                 kost.daysRemaining <= 7 
                                                                     ? 'bg-red-50 text-red-600 border-red-200 animate-pulse shadow-sm' 
@@ -2115,8 +2220,64 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                 </div>
                                             </div>
 
+                                            {/* Real-time Countdown Banner for AWAITING_PAYMENT */}
+                                            {(() => {
+                                                const expiry = getBookingExpiryInfo(kost);
+                                                const isExpiredBooking = expiry.isExpired || (kost.status || '').toUpperCase() === 'EXPIRED';
+                                                
+                                                if ((kost.status || '').toUpperCase() === 'AWAITING_PAYMENT' && !isExpiredBooking) {
+                                                    return (
+                                                        <div className={`p-4 sm:p-5 rounded-2xl sm:rounded-3xl border flex flex-col sm:flex-row items-center justify-between gap-4 ${expiry.isUrgent ? 'bg-rose-50/90 border-rose-200 text-rose-950 shadow-sm' : 'bg-orange-50/90 border-orange-200 text-orange-950 shadow-sm'}`}>
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${expiry.isUrgent ? 'bg-rose-500 text-white animate-pulse' : 'bg-orange-500 text-white'}`}>
+                                                                    <Clock className="w-5 h-5" />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-[11px] font-black uppercase tracking-wider">Batas Waktu Pembayaran (1x24 Jam)</p>
+                                                                    <p className="text-xs font-semibold opacity-80 mt-0.5">
+                                                                        {expiry.deadlineDate ? `Batas: ${expiry.deadlineDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}, ${String(expiry.deadlineDate.getHours()).padStart(2, '0')}:${String(expiry.deadlineDate.getMinutes()).padStart(2, '0')} WITA` : 'Segera selesaikan pembayaran untuk mengamankan kamar.'}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 bg-white px-4 py-2 rounded-2xl shadow-sm border border-gray-100 font-mono text-sm font-black">
+                                                                <div className="flex flex-col items-center">
+                                                                    <span className="text-orange-600 text-base leading-none">{String(expiry.hours).padStart(2, '0')}</span>
+                                                                    <span className="text-[8px] font-sans text-gray-400 font-bold uppercase">Jam</span>
+                                                                </div>
+                                                                <span className="text-gray-300 font-sans pb-1">:</span>
+                                                                <div className="flex flex-col items-center">
+                                                                    <span className="text-orange-600 text-base leading-none">{String(expiry.minutes).padStart(2, '0')}</span>
+                                                                    <span className="text-[8px] font-sans text-gray-400 font-bold uppercase">Mnt</span>
+                                                                </div>
+                                                                <span className="text-gray-300 font-sans pb-1">:</span>
+                                                                <div className="flex flex-col items-center">
+                                                                    <span className="text-orange-600 text-base leading-none">{String(expiry.seconds).padStart(2, '0')}</span>
+                                                                    <span className="text-[8px] font-sans text-gray-400 font-bold uppercase">Dtk</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                if (isExpiredBooking) {
+                                                    return (
+                                                        <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border bg-rose-50/80 border-rose-200 text-rose-900 flex items-center gap-3.5 shadow-sm">
+                                                            <div className="w-10 h-10 rounded-2xl bg-rose-500 text-white flex items-center justify-center shrink-0">
+                                                                <AlertCircle className="w-5 h-5" />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs font-black uppercase tracking-wider">Pengajuan Sewa Telah Hangus</p>
+                                                                <p className="text-xs font-medium text-rose-700/90 mt-0.5 leading-relaxed">
+                                                                    Batas waktu pembayaran 24 jam telah berakhir. Unit kamar telah otomatis dilepaskan kembali ke sistem. Anda dapat mengajukan sewa ulang kapan saja.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
+
                                             {/* Visual Progress Bar: Masa Sewa */}
-                                            {isPaid && (
+                                            {isPaid && !kost.is_checked_out && (
                                                 <div className="bg-gradient-to-r from-orange-50/70 via-amber-50/50 to-slate-50 p-3.5 sm:p-5 rounded-2xl border border-orange-100/80 shadow-sm flex flex-col gap-2 sm:gap-2.5">
                                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
                                                         <div className="flex items-center gap-2">
@@ -2190,7 +2351,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                             </button>
 
                                             {/* Perpanjang Sewa (For Paid) */}
-                                            {isPaid && (
+                                            {isPaid && !kost.is_checked_out && (
                                                 <div className="flex flex-col gap-1">
                                                     <button
                                                         disabled={(kost.daysRemaining || 0) > 7}
@@ -2216,7 +2377,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                             </button>
 
                                             {/* Lapor Kendala Fasilitas Kamar */}
-                                            {isPaid && (
+                                            {isPaid && !kost.is_checked_out && (
                                                 <button
                                                     onClick={() => handleReportIssueWhatsApp(kost)}
                                                     className="w-full bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 transition-all text-[9px] uppercase tracking-widest active:scale-[0.98] cursor-pointer"
@@ -2225,56 +2386,92 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                 </button>
                                             )}
 
-                                            {/* Pending Actions: Bayar Sekarang */}
-                                            {kost.status === 'AWAITING_PAYMENT' && (
-                                                <button
-                                                    onClick={() => {
-                                                        const kMeta = kost.metadata || {};
-                                                        const mDate = kost.moveInDate || kMeta.startDate || kMeta.move_in_date;
-                                                        const monthYear = mDate ? new Date(mDate).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : '';
+                                            {/* Action for Expired Booking */}
+                                            {(() => {
+                                                const expiry = getBookingExpiryInfo(kost);
+                                                const isExpiredBooking = expiry.isExpired || (kost.status || '').toUpperCase() === 'EXPIRED';
+                                                
+                                                if (isExpiredBooking) {
+                                                    return (
+                                                        <button
+                                                            onClick={() => navigate(`${Page.DETAIL}?kostId=${kost.kostId}`)}
+                                                            className="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest shadow-md active:scale-[0.98] cursor-pointer"
+                                                        >
+                                                            <RotateCcw className="w-4 h-4" /> Ajukan Sewa Ulang
+                                                        </button>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
 
-                                                        setPaymentAmount(kost.totalPrice);
-                                                        setPaymentOrderId(kost.id);
-                                                        setPaymentProductId(kost.kostId);
-                                                        setPaymentProductType('kost_booking');
-                                                        setPaymentMetadata({
-                                                            ...kMeta,
-                                                            kostId: kost.kostId,
-                                                            kostName: kost.kostName,
-                                                            roomType: kost.roomType || kMeta.roomType || '-',
-                                                            startDate: mDate,
-                                                            userName: user.displayName || user.email?.split('@')[0] || 'Customer',
-                                                            userEmail: user.email || '',
-                                                            item_details: [
-                                                                {
-                                                                    id: `rent-${kost.kostId?.substring(0, 8)}`,
-                                                                    price: Number(kMeta.basePrice || 0) + Number(kMeta.extraPersonFee || 0),
-                                                                    quantity: 1,
-                                                                    name: `Sewa Kost ${monthYear}${Number(kMeta.occupants || 1) > 1 ? ' + Extra Penghuni' : ''}`
-                                                                },
-                                                                ...(kMeta.facilityFee ? [{
-                                                                    id: `facility-${kost.kostId?.substring(0, 8)}`,
-                                                                    price: Number(kMeta.facilityFee),
-                                                                    quantity: 1,
-                                                                    name: kMeta.additionalFeeName || `Tagihan Fasilitas ${monthYear}`
-                                                                }] : [])
-                                                            ].filter(item => item.price > 0),
-                                                            tenantName: user.displayName || user.email?.split('@')[0] || 'Customer',
-                                                            propertyTitle: kost.kostName,
-                                                            roomCategory: kost.roomType || kMeta.roomType || '-',
-                                                            leaseStart: mDate,
-                                                            leaseEnd: kMeta.endDate || '-'
-                                                        });
-                                                        setShowPaymentGateway(true);
-                                                    }}
-                                                    className="w-full bg-orange-600 hover:bg-orange-700 text-white p-4 rounded-2xl font-black flex flex-col items-center gap-1 transition-all shadow-xl shadow-orange-200 active:scale-[0.98] animate-pulse"
+                                            {/* Action for Checked-Out Booking */}
+                                            {(kost.is_checked_out || (kost.status || '').toUpperCase() === 'CHECKED_OUT') && (
+                                                <button
+                                                    onClick={() => navigate(`${Page.DETAIL}?kostId=${kost.kostId}`)}
+                                                    className="w-full bg-gray-900 hover:bg-black text-white px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black flex items-center justify-center gap-2 sm:gap-2.5 transition-all text-[9.5px] sm:text-[10px] uppercase tracking-widest shadow-md active:scale-[0.98] cursor-pointer"
                                                 >
-                                                    <div className="flex items-center gap-2 text-xs uppercase tracking-widest">
-                                                        <Receipt className="w-4 h-4" /> Bayar Sekarang
-                                                    </div>
-                                                    <span className="text-[10px] opacity-70 font-bold">{FORMAT_CURRENCY(kost.totalPrice)}</span>
+                                                    <RotateCcw className="w-4 h-4 text-orange-400" /> Sewa Lagi
                                                 </button>
                                             )}
+
+                                            {/* Pending Actions: Bayar Sekarang */}
+                                            {(() => {
+                                                const expiry = getBookingExpiryInfo(kost);
+                                                const isExpiredBooking = expiry.isExpired || (kost.status || '').toUpperCase() === 'EXPIRED';
+                                                
+                                                if (kost.status === 'AWAITING_PAYMENT' && !isExpiredBooking) {
+                                                    return (
+                                                        <button
+                                                            onClick={() => {
+                                                                const kMeta = kost.metadata || {};
+                                                                const mDate = kost.moveInDate || kMeta.startDate || kMeta.move_in_date;
+                                                                const monthYear = mDate ? new Date(mDate).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : '';
+
+                                                                setPaymentAmount(kost.totalPrice);
+                                                                setPaymentOrderId(kost.id);
+                                                                setPaymentProductId(kost.kostId);
+                                                                setPaymentProductType('kost_booking');
+                                                                setPaymentMetadata({
+                                                                    ...kMeta,
+                                                                    kostId: kost.kostId,
+                                                                    kostName: kost.kostName,
+                                                                    roomType: kost.roomType || kMeta.roomType || '-',
+                                                                    startDate: mDate,
+                                                                    userName: user.displayName || user.email?.split('@')[0] || 'Customer',
+                                                                    userEmail: user.email || '',
+                                                                    item_details: [
+                                                                        {
+                                                                            id: `rent-${kost.kostId?.substring(0, 8)}`,
+                                                                            price: Number(kMeta.basePrice || 0) + Number(kMeta.extraPersonFee || 0),
+                                                                            quantity: 1,
+                                                                            name: `Sewa Kost ${monthYear}${Number(kMeta.occupants || 1) > 1 ? ' + Extra Penghuni' : ''}`
+                                                                        },
+                                                                        ...(kMeta.facilityFee ? [{
+                                                                            id: `facility-${kost.kostId?.substring(0, 8)}`,
+                                                                            price: Number(kMeta.facilityFee),
+                                                                            quantity: 1,
+                                                                            name: kMeta.additionalFeeName || `Tagihan Fasilitas ${monthYear}`
+                                                                        }] : [])
+                                                                    ].filter(item => item.price > 0),
+                                                                    tenantName: user.displayName || user.email?.split('@')[0] || 'Customer',
+                                                                    propertyTitle: kost.kostName,
+                                                                    roomCategory: kost.roomType || kMeta.roomType || '-',
+                                                                    leaseStart: mDate,
+                                                                    leaseEnd: kMeta.endDate || '-'
+                                                                });
+                                                                setShowPaymentGateway(true);
+                                                            }}
+                                                            className="w-full bg-orange-600 hover:bg-orange-700 text-white p-4 rounded-2xl font-black flex flex-col items-center gap-1 transition-all shadow-xl shadow-orange-200 active:scale-[0.98] animate-pulse cursor-pointer"
+                                                        >
+                                                            <div className="flex items-center gap-2 text-xs uppercase tracking-widest">
+                                                                <Receipt className="w-4 h-4" /> Bayar Sekarang
+                                                            </div>
+                                                            <span className="text-[10px] opacity-70 font-bold">{FORMAT_CURRENCY(kost.totalPrice)}</span>
+                                                        </button>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
 
                                             {/* Pending Actions: Batalkan Pengajuan */}
                                             {kost.status === 'PENDING_APPROVAL' && (
@@ -2285,7 +2482,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                                     <XCircle className="w-4 h-4 group-hover/cancel:rotate-90 transition-transform" /> Batalkan Pengajuan
                                                 </button>
                                             )}
-                                        </div>
+                                        </div>                         </div>
                                     </div>
                                 </div>
                             );

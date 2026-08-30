@@ -1,106 +1,106 @@
-# IMPLEMENTATION PLAN: Sistem Manajemen Laporan Kendala Kamar & AI Automation Forwarder ke Pemilik Kost
+# IMPLEMENTATION PLAN: Timer Countdown Scarcity & Hangus Otomatis (Auto-Expire) Pengajuan Sewa Kost
 
-Dokumen rencana kerja ini disusun sebagai **Fase 1 (Perencanaan & Pengajuan)** untuk membangun alur terpusat pelaporan kendala kamar dari sisi penghuni (`MyKost.tsx`) hingga pengelolaan operasional dan otomasi penerusan ke pemilik kost di Portal KostManager (`KostManagerPortal.tsx`).
-
----
-
-## 1. Analisis Masalah & Kebutuhan
-
-### A. Masalah Saat Ini
-1. **Laporan Keluhan Belum Terpusat & Terstruktur**:
-   - Tombol *"Lapor Kendala Kamar"* di menu "Kost Saya" (`MyKost.tsx`) saat ini langsung membuka WhatsApp ke nomor hotline CS dengan teks template mentah.
-   - Keluhan penghuni tidak terekam dalam database sistem, tidak memiliki nomor tiket/riwayat, dan tidak dapat dipantau perkembangannya oleh penyewa maupun tim pengelola.
-2. **Ketiadaan Tab Manajemen Kendala di Portal KostManager**:
-   - Tim KostManager belum memiliki dashboard khusus untuk memantau inventaris kerusakan fasilitas, mengelompokkan urgensi (misal: pipa air bocor / mati lampu mendesak vs fasilitas pelengkap), maupun memperbarui status perbaikan (*Menunggu Tindakan*, *Sedang Dikerjakan*, *Selesai*).
-3. **Penyampaian ke Pemilik Kost Masih Manual & Rentan Terlewat**:
-   - Pemilik kost (mitra owner) membutuhkan laporan yang terstandardisasi, jelas, dan transparan mengenai unit kamar mana yang mengalami kendala, identitas penyewa, foto bukti fisik, dan rekomendasi tindak lanjut.
-
-### B. Solusi yang Diajukan
-1. **Modal Form Lapor Kendala Kamar Interaktif di Sisi Penghuni (`MyKost.tsx`)**:
-   - Penghuni menekan tombol *"Lapor Kendala Kamar"* -> Muncul modal elegan dengan info otomatis properti & nomor unit kamar (*Kost Madani - Unit Kamar 3*).
-   - Input pilihan kategori kendala yang rapi:
-     - ❄️ *AC & Ventilasi*
-     - 💧 *Air, Keran & Sanitasi*
-     - ⚡ *Kelistrikan & Lampu*
-     - 🛏️ *Fasilitas Kamar (Kasur, Lemari, Pintu)*
-     - 📶 *WiFi & Internet*
-     - 🧹 *Kebersihan & Area Bersama*
-     - ❓ *Kendala Lainnya*
-   - Pilihan tingkat urgensi: `Normal` atau `Mendesak (Emergency)`.
-   - Deskripsi rincian kendala secara terperinci.
-   - Unggah foto bukti kerusakan dengan kompresi otomatis ke `.webp` di sisi client sebelum upload (Standard Baku Workspace Rule #5).
-   - Laporan disimpan ke tabel database `public.complaints`.
-2. **Menu Manajemen Laporan Kendala di Portal KostManager (`KostManagerPortal.tsx`)**:
-   - Menambahkan menu baru pada sidebar operasional: **`🛠️ Kendala & Pemeliharaan`** (`activeTab: 'complaints'` / `km_complaints`) lengkap dengan badge counter laporan baru (`open`).
-   - **Kartu Ringkasan KPI**:
-     - Total Laporan Masuk
-     - Menunggu Tindakan (badge oranye/merah)
-     - Sedang Ditangani / Diproses (badge biru)
-     - Selesai Diatasi (badge hijau)
-   - **Pencarian Cepat & Filter Status**: Filter berdasarkan status penanganan, pencarian nama penghuni, nama kost, nomor kamar, atau jenis kendala.
-   - **Daftar Laporan Terstruktur**:
-     - Kartu/tabel laporan menampilkan nama pelapor, link cepat WhatsApp penghuni, unit kamar, waktu lapor, badge urgensi, deskripsi lengkap, dan thumbnail foto bukti yang dapat diperbesar.
-     - Kontrol aksi: Mengubah status menjadi *Sedang Ditangani* atau *Selesai*, serta mencatat catatan admin (*admin notes*).
-3. **AI Automation & WhatsApp Forwarder ke Pemilik Kost**:
-   - Tombol cerdas **"🤖 Teruskan ke Pemilik (AI)"** pada setiap tiket kendala:
-     - Otomatis mencocokkan data properti dengan kontak pemilik (`p.owner_uid` / data kontak pengelola properti).
-     - Menghasilkan format pesan resmi terstruktur dari RuangSinggah KostManager kepada pemilik kost.
-     - Menandai tiket dengan status `Diteruskan ke Pemilik` disertai timestamp `owner_notified_at`.
-4. **Skema Database & DDL (`COMPLAINTS_DDL.sql`)**:
-   - Menyiapkan skrip SQL pembuatan tabel `public.complaints`, indeks relasi ke properti & user, serta konfigurasi Row Level Security (RLS) yang aman.
+Dokumen ini berisi rencana implementasi untuk menerapkan **Live Timer Countdown (Strategi Scarcity / Urgensi)** pada kartu pengajuan sewa di halaman **Kost Saya** serta sistem **Hangus Otomatis (Auto-Expire)** jika pembayaran tidak diselesaikan dalam 1x24 jam.
 
 ---
 
-## 2. Dampak Perubahan (Files to Touch)
+## 1. Analisis Kebutuhan & Konsep Scarcity
 
-1. **[`functions/public/COMPLAINTS_DDL.sql`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/COMPLAINTS_DDL.sql)** *(File Baru)*:
-   - Skema DDL tabel `public.complaints` beserta index dan RLS policies.
-2. **[`functions/public/pages/MyKost.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx)**:
-   - Mengubah handler tombol "Lapor Kendala Kamar" agar membuka Modal Lapor Kendala.
-   - Meningkatkan tampilan modal komplain dengan auto-selected kamar, kategori kendala, badge urgensi, dan kompresi WebP.
-   - Memastikan pengiriman data ke tabel `complaints` berjalan mulus dengan error handling yang informatif.
-3. **[`functions/public/components/admin/KostManagerPortal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx)**:
-   - Menambahkan opsi tab `complaints` pada navigasi sidebar dan router internal.
-   - State data `complaintsList`, loader, fungsi fetch data dari tabel `complaints`.
-   - Komponen visual tab `complaints`: KPI cards, filter pills, search input, tabel/kartu tiket, preview foto, dan status switcher.
-   - Fitur AI-Assisted Forwarder ke WhatsApp pemilik kost dengan template pesan terstruktur resmi.
-4. **[`functions/public/pages/Dashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Dashboard.tsx)**:
-   - Mendaftarkan `km_complaints` ke union type `DashboardMenu` agar sinkron dengan routing URL admin.
+### A. Strategi Scarcity & Urgensi Visual
+1. **Live Scarcity Countdown Banner**:
+   - Calon penyewa yang telah disetujui pengajuannya (`AWAITING_PAYMENT`) akan melihat banner/kotak hitung mundur waktu pembayaran yang **berdetak secara live per detik** (`Jam : Menit : Detik`).
+   - Teks persuasif psikologi kelangkaan (Scarcity):
+     > *"⚡ Segera selesaikan pembayaran! Kamar ini hanya di-hold untuk Anda selama waktu tersisa sebelum dilepas kembali ke calon penyewa lain."*
+   - Desain visual menonjol:
+     - Badge digital countdown dengan visual jam berkedip lembut (`animate-pulse`).
+     - Indikator warna dinamis:
+       - **Kuning/Oranye** (> 6 jam tersisa): Waktu normal.
+       - **Merah Berdenyut** (≤ 6 jam tersisa): *"Waktu Hampir Habis! Prioritas kamar akan segera dibatalkan"*.
+2. **Transisi Otomatis Saat Timer Habis (00:00:00)**:
+   - Ketika countdown menyentuh `00:00:00`, kartu secara otomatis bertransisi ke mode **"Pengajuan Hangus / Kedaluwarsa"**.
+   - Tombol **"BAYAR SEKARANG"** ditutup dan digantikan tombol **"Ajukan Ulang Sewa"**.
+   - Kartu dialihkan ke tab **Riwayat**, dan status transaksi di database Supabase disinkronkan ke `'EXPIRED'`.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah di-ACC)
+## 2. Dampak Perubahan File
 
-1. **Langkah 1: Penyusunan Skrip DDL Database (`COMPLAINTS_DDL.sql`)**:
-   - Menulis file DDL lengkap dengan kolom `id`, `kost_id`, `kost_name`, `room_number`, `user_id`, `user_name`, `user_phone`, `category`, `urgency`, `title`, `description`, `photo_url`, `status`, `admin_notes`, `reported_to_owner`, `owner_notified_at`, `ai_summary`, `created_at`, `updated_at`.
-2. **Langkah 2: Pembaruan Form Lapor Kendala Kamar di `MyKost.tsx`**:
-   - Menghubungkan tombol "Lapor Kendala Kamar" ke modal input modern.
-   - Menambahkan pilihan tag kategori kendala, radio tingkat urgensi, deskripsi, dan upload foto dengan konversi WebP otomatis.
-   - Menghubungkan fungsi submit ke Supabase dengan graceful fallback.
-3. **Langkah 3: Pembuatan Menu & Tampilan Manajemen Kendala di `KostManagerPortal.tsx`**:
-   - Menambahkan tab `complaints` pada sidebar navigasi dengan icon vector `lucide-react` (`<Wrench size={18} />`).
-   - Menyusun KPI statistik kendala (*Total, Menunggu Verifikasi, Sedang Diproses, Selesai*).
-   - Menyusun tabel / kartu komplain dengan rincian unit kamar, nama pelapor, waktu lapor, tag kategori, tombol chat WA penghuni, dan foto bukti.
-   - Menambahkan fungsi pembaruan status tiket (*In Progress* / *Resolved*).
-   - Menambahkan fitur *"Teruskan ke Pemilik (AI)"* yang secara cerdas merangkum kendala dan membuka WhatsApp ke nomor kontak pemilik kost.
-4. **Langkah 4: Sinkronisasi Tipe Menu di `Dashboard.tsx`**:
-   - Menambahkan `km_complaints` ke `DashboardMenu`.
-5. **Langkah 5: Kompilasi & Pengujian Kode**:
-   - Menjalankan uji build `cmd /c npm run build` di `functions/public/` (memastikan 0 error TypeScript).
+1. **[`functions/public/pages/MyKost.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx)**:
+   - Membuat komponen / hook timer lokal (`useLiveCountdown`) yang berdetak setiap 1 detik menghitung sisa waktu terhadap `deadlineTime` (24 jam dari waktu persetujuan/transaksi).
+   - Menambahkan blok visual **Scarcity Countdown Box** di atas tombol `BAYAR SEKARANG` pada kartu pengajuan di tab **Diajukan**.
+   - Menambahkan state dan styling kartu **Hangus (Expired)** dengan tombol **Ajukan Ulang**.
+   - Sinkronisasi otomatis ke Supabase saat terdeteksi kedaluwarsa.
+2. **[`functions/public/components/admin/KostManagerPortal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx)**:
+   - Menampilkan badge **`Hangus (Kedaluwarsa)`** pada baris booking yang telah melewati 24 jam belum dibayar.
+   - Mengosongkan reservasi kamar agar unit kamar tetap tersedia di katalog publik.
+3. **[`functions/public/userService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts)**:
+   - Helper `expireBookingTransaction` untuk memperbarui status transaksi dan status penghuni menjadi `'EXPIRED'`.
+
+---
+
+## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah Persetujuan)
+
+### Langkah 1: Utilitas Waktu & Database (`userService.ts`)
+- Menetapkan `BOOKING_EXPIRY_HOURS = 24`.
+- Membuat fungsi `expireBookingTransaction(trxId)` untuk meng-update `transactions` dan `resident_status`.
+
+### Langkah 2: Komponen Live Ticking Timer & UI Scarcity di `MyKost.tsx`
+- Menambahkan state timer `currentTime` yang ter-update per detik atau hook countdown.
+- Merender blok **Scarcity Countdown Card** di kartu pengajuan sewa:
+  ```tsx
+  {/* Scarcity Countdown Card */}
+  <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-orange-200/80 rounded-2xl p-3.5 space-y-2">
+      <div className="flex items-center justify-between text-orange-800">
+          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider">
+              <Clock className="w-3.5 h-3.5 text-orange-600 animate-pulse" /> Sisa Waktu Pembayaran
+          </div>
+          <span className="text-[9px] font-bold text-orange-600 bg-orange-100/80 px-2 py-0.5 rounded-full">
+              Kamar Di-Hold
+          </span>
+      </div>
+      <div className="flex items-center justify-center gap-1.5 font-mono text-center">
+          <div className="bg-white px-2.5 py-1.5 rounded-xl border border-orange-200 shadow-sm font-black text-sm text-gray-900">
+              {hours} <span className="text-[8px] font-sans text-gray-400 block font-normal">JAM</span>
+          </div>
+          <span className="font-bold text-orange-500">:</span>
+          <div className="bg-white px-2.5 py-1.5 rounded-xl border border-orange-200 shadow-sm font-black text-sm text-gray-900">
+              {minutes} <span className="text-[8px] font-sans text-gray-400 block font-normal">MENIT</span>
+          </div>
+          <span className="font-bold text-orange-500">:</span>
+          <div className="bg-white px-2.5 py-1.5 rounded-xl border border-orange-200 shadow-sm font-black text-sm text-rose-600 animate-pulse">
+              {seconds} <span className="text-[8px] font-sans text-gray-400 block font-normal">DETIK</span>
+          </div>
+      </div>
+      <p className="text-[8.5px] font-medium text-gray-500 text-center leading-tight">
+          Selesaikan pembayaran sebelum waktu habis agar kamar tidak dilepas ke pemesan lain.
+      </p>
+  </div>
+  ```
+
+### Langkah 3: Penanganan Kondisi Expired (Hangus)
+- Ketika waktu habis (`isExpired`):
+  - Kartu menampilkan badge merah: `Pengajuan Hangus / Waktu Habis`.
+  - Tombol aksi: `Ajukan Ulang Sewa` (redirect ke detail kost).
+  - Pindah ke tab **Riwayat** secara otomatis.
+
+### Langkah 4: Penyelarasan di Portal KostManager (`KostManagerPortal.tsx`)
+- Status pengajuan yang melewati 24 jam ditampilkan sebagai `Hangus (Kedaluwarsa)`.
+
+### Langkah 5: Kompilasi & Verifikasi Build
+- Jalankan `npm run build` di `functions/public/` (0 error).
+- Catat di `functions/PROGRESS.md` dan terbitkan `WALKTHROUGH.md`.
+- Push ke branch non-production `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-1. **Uji Kompilasi TypeScript & Vite**:
-   - Menjalankan `cmd /c npm run build` dan memastikan build lulus tanpa error atau peringatan type mismatch.
-2. **Verifikasi Alur Penghuni (`MyKost.tsx`)**:
-   - Buka `/my-bookings/aktif` (tab Aktif).
-   - Klik tombol **"Lapor Kendala Kamar"**.
-   - Periksa modal terbuka dengan data unit kamar yang otomatis terisi (*Unit Kamar 3 - Kost Madani*).
-   - Coba pilih kategori, isi deskripsi, unggah foto bukti, dan klik submit.
-3. **Verifikasi Alur Admin KostManager (`KostManagerPortal.tsx`)**:
-   - Buka `/dashboard-admin/km_complaints` (atau klik menu **Kendala & Pemeliharaan** pada sidebar KostManager).
-   - Periksa tiket keluhan yang dikirim penghuni muncul dengan rincian lengkap (nama, nomor WA, kamar, kategori, status *Menunggu Tindakan*).
-   - Uji tombol **"Teruskan ke Pemilik (AI)"**: pastikan ringkasan pesan terstruktur terbuat dengan rapi dan mengarah ke kontak pemilik.
-   - Uji tombol ubah status (*Sedang Ditangani* & *Tandai Selesai*).
+1. **Uji Tampilan & Detak Timer (Live Ticking)**:
+   - Buka `/my-bookings/diajukan` di browser.
+   - Periksa apakah blok Scarcity Countdown muncul dengan format `[Jam] : [Menit] : [Detik]` yang berdetak setiap detik.
+2. **Uji Simulasi Waktu Menggunakan `TimeSimulator`**:
+   - Buka widget `TimeSimulator` di pojok kanan bawah.
+   - Majukan waktu +1 hari / +2 hari.
+   - Periksa kartu langsung berubah menjadi **Hangus (Waktu Habis)** dan tombol berubah menjadi **Ajukan Ulang Sewa**.
+3. **Uji Admin Portal**:
+   - Buka `/dashboard-admin/km_bookings`, pastikan booking yang lewat waktu memiliki badge **Hangus**.

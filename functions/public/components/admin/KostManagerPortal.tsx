@@ -3080,15 +3080,24 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                         ))}
                                     </div>
 
-                                    <div className="relative w-full sm:w-72">
-                                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                        <input
-                                            type="text"
-                                            placeholder="Cari pemohon, kost, unit, No. WA..."
-                                            value={bookingSearch}
-                                            onChange={e => setBookingSearch(e.target.value)}
-                                            className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-                                        />
+                                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                                        <div className="relative flex-1 sm:w-72">
+                                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <input
+                                                type="text"
+                                                placeholder="Cari pemohon, kost, unit, No. WA..."
+                                                value={bookingSearch}
+                                                onChange={e => setBookingSearch(e.target.value)}
+                                                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={() => loadAllData(false)}
+                                            className="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-xl text-slate-600 hover:text-slate-900 transition-all cursor-pointer shrink-0"
+                                            title="Muat Ulang Data Pengajuan"
+                                        >
+                                            <RotateCw size={15} className={loading ? 'animate-spin' : ''} />
+                                        </button>
                                     </div>
                                 </div>
 

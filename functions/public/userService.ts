@@ -521,6 +521,64 @@ export async function updateBookingStatus(transactionId: string, status: 'PAID' 
   }
 }
 
+export const BOOKING_EXPIRY_HOURS = 24;
+
+export async function expireBookingTransaction(transactionId: string, residentStatusId?: string): Promise<void> {
+  try {
+    const nowIso = getCurrentDate().toISOString();
+    
+    // 1. Update main transaction
+    await supabase
+      .from('transactions')
+      .update({ 
+        status: 'EXPIRED', 
+        updated_at: nowIso 
+      })
+      .eq('id', transactionId);
+
+    // Also expire bundled child transactions if any
+    try {
+      await supabase
+        .from('transactions')
+        .update({ 
+          status: 'EXPIRED', 
+          updated_at: nowIso 
+        })
+        .eq('metadata->>parent_order_id', transactionId);
+    } catch (_) {}
+
+    // 2. Update resident_status
+    if (residentStatusId) {
+      await supabase
+        .from('resident_status')
+        .update({ 
+          status: 'EXPIRED', 
+          updated_at: nowIso 
+        })
+        .eq('id', residentStatusId);
+    } else {
+      const { data: trx } = await supabase
+        .from('transactions')
+        .select('resident_status_id')
+        .eq('id', transactionId)
+        .maybeSingle();
+
+      if (trx?.resident_status_id) {
+        await supabase
+          .from('resident_status')
+          .update({ 
+            status: 'EXPIRED', 
+            updated_at: nowIso 
+          })
+          .eq('id', trx.resident_status_id);
+      }
+    }
+  } catch (error) {
+    console.error('Error expiring booking transaction:', error);
+  }
+}
+
+
 export async function createStandaloneBill(billData: {
   userId: string;
   productId: string;
