@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 228. Penyesuaian Copywriting Fitur Pelaporan Menjadi "Laporkan Properti" (`KostDetail.tsx`, `userService.ts`, `emailService.ts`, `PropertyManagement.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar istilah "iklan" dihilangkan pada fitur pelaporan kost, dan cukup menggunakan terminologi yang lebih formal dan tepat: **"Laporkan Properti"** (*"btw pada pelaporan kost, tidak usah pakai kata kata iklan. cukup dengan kata laporkan properti"*).
+- **Implementasi Solusi**:
+  1. **Halaman Detail Properti ([`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx))**:
+     - Tombol sticky aksi diubah dari *"Laporkan Iklan Ini"* menjadi **"Laporkan Properti"**.
+     - Banner bawah diubah dari *"Menemukan Masalah pada Iklan Ini?"* menjadi **"Menemukan Masalah pada Properti Ini?"**.
+     - Tombol pada banner bawah diubah dari *"Laporkan Kost"* menjadi **"Laporkan Properti"**.
+     - Header modal popup diubah dari *"Laporkan Iklan Kost"* menjadi **"Laporkan Properti"**.
+  2. **Layanan Data & Notifikasi Email Admin ([`userService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts), [`emailService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/emailService.ts))**:
+     - Subjek notifikasi email admin diubah menjadi `🚨 Aduan Properti Masuk: [Nama Properti]`.
+     - Fallback title pada database keluhan diubah menjadi `[Laporan Properti] [Nama Kost]`.
+  3. **Pesan WhatsApp Follow-Up Admin ([`PropertyManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyManagement.tsx))**:
+     - Teks pesan WhatsApp konfirmasi ke pelapor disesuaikan menjadi *"...melaporkan kendala pada properti..."*.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/userService.ts`
+  - `functions/public/emailService.ts`
+  - `functions/public/components/admin/PropertyManagement.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 22.34s, 0 error).
+
 ### 227. Independen Scrollbar pada Sidebar Navigasi Admin Dashboard (`Dashboard.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta agar daftar menu pada sidebar navigasi admin di Dashboard Admin dapat di-scroll ke bawah secara mandiri tanpa membuat badan website atau konten utama halaman ikut ter-scroll (*"pada navigasi admin ini , bisa nggak sih scroll ke bawah tanpa harus badan websitenya atau isi web nya juga ikut scroll"*).

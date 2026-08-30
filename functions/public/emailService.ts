@@ -170,7 +170,7 @@ export async function notifyAdminPropertyReport(details: {
   ownerName?: string;
   evidenceUrl?: string;
 }) {
-  return notifyAdminTransaction(`🚨 Aduan Iklan Kost Masuk: ${details.propertyName}`, {
+  return notifyAdminTransaction(`🚨 Aduan Properti Masuk: ${details.propertyName}`, {
     "Nama Properti": details.propertyName,
     "ID Properti": details.propertyId,
     "Kategori Aduan": details.categoryLabel,

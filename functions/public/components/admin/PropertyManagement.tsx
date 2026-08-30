@@ -302,7 +302,7 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
         if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
         if (!cleanPhone.startsWith('62')) cleanPhone = '62' + cleanPhone;
 
-        const message = `Halo Kak, terima kasih telah melaporkan kendala pada iklan "${kostTitle}" di RuangSinggah.id terkait "${category}". Laporan Kakak sedang kami tindaklanjuti bersama pemilik properti.`;
+        const message = `Halo Kak, terima kasih telah melaporkan kendala pada properti "${kostTitle}" di RuangSinggah.id terkait "${category}". Laporan Kakak sedang kami tindaklanjuti bersama pemilik properti.`;
         const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
         window.open(url, '_blank');
     };

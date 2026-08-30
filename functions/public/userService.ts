@@ -1059,7 +1059,7 @@ export async function submitPropertyReport(payload: PropertyReportPayload): Prom
       user_phone: payload.reporterPhone,
       kost_id: payload.propertyId,
       kost_name: payload.propertyName || 'Listing Properti',
-      title: `[Laporan Iklan] ${payload.propertyName || 'Kost'}`,
+      title: `[Laporan Properti] ${payload.propertyName || 'Kost'}`,
       category: `REPORT: ${payload.category}`,
       description: `[ADUAN LISTING] ${payload.description}`,
       photo_url: payload.evidenceUrls?.[0] || null,

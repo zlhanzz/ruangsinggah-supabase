@@ -1296,7 +1296,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                   <ShieldAlert size={20} />
                 </div>
                 <div className="space-y-0.5">
-                  <h4 className="font-black text-gray-900 text-sm">Menemukan Masalah pada Iklan Ini?</h4>
+                  <h4 className="font-black text-gray-900 text-sm">Menemukan Masalah pada Properti Ini?</h4>
                   <p className="text-xs text-gray-500">Laporkan jika ada indikasi penipuan, ketidaksesuaian harga, atau fasilitas palsu.</p>
                 </div>
               </div>
@@ -1304,7 +1304,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                 onClick={handleOpenReportModal}
                 className="px-5 py-2.5 bg-white hover:bg-rose-50 border border-gray-200 hover:border-rose-200 text-gray-700 hover:text-rose-600 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap active:scale-95 flex items-center gap-1.5 shadow-sm cursor-pointer"
               >
-                <Flag size={13} /> Laporkan Kost
+                <Flag size={13} /> Laporkan Properti
               </button>
             </div>
 
@@ -1578,7 +1578,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                     className="w-full text-gray-400 hover:text-rose-600 font-bold text-xs flex items-center justify-center gap-1.5 py-2 hover:bg-rose-50/50 rounded-xl transition-all cursor-pointer"
                   >
                     <Flag size={12} />
-                    <span>Laporkan Iklan Ini</span>
+                    <span>Laporkan Properti</span>
                   </button>
                 </div>
               </div>
@@ -1652,7 +1652,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
         );
       })()}
 
-      {/* MODAL LAPORKAN IKLAN KOST */}
+      {/* MODAL LAPORKAN PROPERTI */}
       {isReportModalOpen && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-gray-900/70 backdrop-blur-sm animate-in fade-in" onClick={() => setIsReportModalOpen(false)} />
@@ -1665,7 +1665,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                   Layanan Pengaduan
                 </div>
                 <h3 className="text-xl font-black text-gray-900 tracking-tight">
-                  Laporkan Iklan Kost
+                  Laporkan Properti
                 </h3>
                 <p className="text-xs text-gray-500 font-medium truncate max-w-[280px]">
                   {kost.title || (kost as any).namaKost}
