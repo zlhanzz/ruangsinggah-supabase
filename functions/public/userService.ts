@@ -1051,7 +1051,7 @@ export async function submitPropertyReport(payload: PropertyReportPayload): Prom
     .insert([insertData]);
 
   if (error) {
-    console.error('Failed inserting property report into property_reports:', error);
+    console.warn('Inserting into property_reports table returned notice/fallback:', error.message);
     // If the table property_reports isn't created in Supabase yet, we fallback to complaints table with type 'property_report'
     const fallbackData = {
       user_id: payload.reporterId || null,
@@ -1059,14 +1059,18 @@ export async function submitPropertyReport(payload: PropertyReportPayload): Prom
       user_phone: payload.reporterPhone,
       kost_id: payload.propertyId,
       kost_name: payload.propertyName || 'Listing Properti',
+      title: `[Laporan Iklan] ${payload.propertyName || 'Kost'}`,
       category: `REPORT: ${payload.category}`,
       description: `[ADUAN LISTING] ${payload.description}`,
-      photos: payload.evidenceUrls || [],
-      status: 'pending',
+      photo_url: payload.evidenceUrls?.[0] || null,
+      status: 'open',
       created_at: now,
       updated_at: now
     };
     const { error: fallbackErr } = await supabase.from('complaints').insert([fallbackData]);
-    if (fallbackErr) throw error;
+    if (fallbackErr) {
+      console.error('Fallback insert into complaints also failed:', fallbackErr);
+      throw error;
+    }
   }
 }
