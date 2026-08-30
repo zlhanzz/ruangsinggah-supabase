@@ -8,7 +8,7 @@ import { getCurrentDate } from './utils/timeUtils';
 export interface BasicPropertyInfo extends Partial<Kost> {
   id: string;
   namaKost: string;
-  status: 'draft' | 'published';
+  status: 'draft' | 'published' | 'suspended' | string;
   address: string;
   area: string;
   imageUrls: string[];
@@ -17,6 +17,12 @@ export interface BasicPropertyInfo extends Partial<Kost> {
   tiktokUrl?: string;
   ownerName?: string;
   ownerRole?: string;
+  ownerPhone?: string;
+  ownerEmail?: string;
+  ownerVerificationStatus?: string;
+  suspendReason?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AdminTransaction {
@@ -266,14 +272,14 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
 
   const isAdmin = await checkIfUserIsAdmin(user.id);
 
-  let query = supabase.from('properties').select('*, users(name, full_name, role)');
+  let query = supabase.from('properties').select('*, users(id, name, full_name, role, phone, email, verification_status)');
   if (ownerUid) {
     query = query.eq('owner_uid', ownerUid);
   } else if (!isAdmin) {
     query = query.eq('owner_uid', user.id);
   }
 
-  const { data, error } = await query;
+  const { data, error } = await query.order('created_at', { ascending: false });
   if (error) throw error;
   if (!data) return [];
 
@@ -290,12 +296,19 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
 
     const ownerData = Array.isArray(row.users) ? row.users[0] : row.users;
     const isSystemId = ['super_admin_id', 'admin-system-id'].includes(row.owner_uid?.toLowerCase());
+    const isManaged = Boolean(row.is_managed);
+
+    let suspendReason = '';
+    if (row.metadata) {
+      const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata;
+      suspendReason = meta?.suspend_reason || meta?.suspendReason || '';
+    }
 
     return {
       id: row.id,
-      namaKost: row.title || row.namaKost,
-      status: row.status,
-      address: row.address,
+      namaKost: row.title || row.namaKost || 'Kost Tanpa Nama',
+      status: row.status || 'draft',
+      address: row.address || '',
       imageUrls: images,
       videoUrls: videos,
       instagramUrl: row.instagram_url || '',
@@ -308,13 +321,13 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
       title: row.title,
       description: row.description,
       location: row.location,
-      facilities: row.facilities,
-      roomTypes: row.room_types,
-      rules: row.rules,
-      campuses: row.campuses,
-      publicFacilities: row.public_facilities,
-      isVerified: row.is_verified,
-      isManaged: row.is_managed,
+      facilities: row.facilities || [],
+      roomTypes: row.room_types || [],
+      rules: row.rules || [],
+      campuses: row.campuses || [],
+      publicFacilities: row.public_facilities || [],
+      isVerified: isManaged ? true : Boolean(row.is_verified),
+      isManaged: isManaged,
       omnichannelContactName: row.omnichannel_contact_name,
       omnichannelContactPhone: row.omnichannel_contact_phone,
       additionalFeePrice: row.additional_fee_price,
@@ -322,7 +335,13 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
       additionalFeeStartsFrom: row.additional_fee_starts_from,
       ownerName: ownerData?.name || ownerData?.full_name || (isSystemId ? 'Super Admin' : `Tanpa Pemilik (${row.owner_uid?.substring(0,8)}...)`),
       ownerRole: ownerData?.role || (isSystemId ? 'admin' : 'owner'),
-      } as BasicPropertyInfo;
+      ownerPhone: ownerData?.phone || row.omnichannel_contact_phone || '',
+      ownerEmail: ownerData?.email || '',
+      ownerVerificationStatus: ownerData?.verification_status || 'unverified',
+      suspendReason: suspendReason,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    } as BasicPropertyInfo;
   });
 }
 
@@ -2112,13 +2131,17 @@ export async function updatePropertyWithMedia(
   await syncPropertyRooms(propertyId);
 }
 
-export async function updatePropertyStatus(propertyId: string, newStatus: 'draft' | 'published'): Promise<void> {
+export async function updatePropertyStatus(
+  propertyId: string, 
+  newStatus: 'draft' | 'published' | 'suspended' | string,
+  reason?: string
+): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Tidak ada admin yang login.');
 
   const { data: existing, error: fetchError } = await supabase
     .from('properties')
-    .select('owner_uid')
+    .select('owner_uid, metadata')
     .eq('id', propertyId)
     .single();
 
@@ -2128,9 +2151,45 @@ export async function updatePropertyStatus(propertyId: string, newStatus: 'draft
   const isAdmin = await checkIfUserIsAdmin(user.id);
   if (!isOwner && !isAdmin) throw new Error('Anda tidak memiliki izin.');
 
+  const currentMeta = typeof existing.metadata === 'string' ? JSON.parse(existing.metadata) : (existing.metadata || {});
+  const updatedMeta = {
+    ...currentMeta,
+    ...(reason !== undefined ? { suspend_reason: reason } : {})
+  };
+
   const { error } = await supabase
     .from('properties')
-    .update({ status: newStatus, updated_at: getCurrentDate().toISOString() })
+    .update({ 
+      status: newStatus, 
+      metadata: updatedMeta,
+      updated_at: getCurrentDate().toISOString() 
+    })
+    .eq('id', propertyId);
+
+  if (error) throw error;
+}
+
+export async function freezeProperty(propertyId: string, reason: string): Promise<void> {
+  return updatePropertyStatus(propertyId, 'suspended', reason);
+}
+
+export async function unfreezeProperty(propertyId: string): Promise<void> {
+  return updatePropertyStatus(propertyId, 'published', '');
+}
+
+export async function togglePropertyVerification(propertyId: string, isVerified: boolean): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Tidak ada admin yang login.');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Hanya admin yang dapat mengubah status verifikasi.');
+
+  const { error } = await supabase
+    .from('properties')
+    .update({ 
+      is_verified: isVerified, 
+      updated_at: getCurrentDate().toISOString() 
+    })
     .eq('id', propertyId);
 
   if (error) throw error;

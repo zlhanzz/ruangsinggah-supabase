@@ -2,6 +2,52 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 225. Pusat Moderasi & Supervisi Listing Kost Masuk di Dashboard Admin (`PropertyManagement.tsx`, `adminService.ts`, `Dashboard.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna menjelaskan perubahan paradigma sistem: Sebelumnya admin menginput dan mengunggah seluruh data kost secara manual, namun sekarang listing kost diposting langsung oleh pemilik kost / mitra secara mandiri melalui dashboard mitra.
+  - Admin kini bertindak sebagai **pengawas & supervisor moderasi** untuk memantau kelayakan listing yang masuk, membedakan Self Listing (Mandiri) vs KostManager (Terverifikasi survey langsung), memverifikasi data, atau **membekukan (*suspend / freeze*) sementara** jika ada indikasi penalti atau data yang perlu direvisi oleh mitra.
+- **Implementasi Solusi**:
+  1. **Komponen Modular Pusat Moderasi ([`PropertyManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyManagement.tsx))**:
+     - **Kartu Statistik Pengawasan**: Total Properti, KostManager (Terverifikasi), Self Listing (Mandiri), Draft / Belum Tayang, dan Dibekukan (Penalti / Butuh Edit).
+     - **Filter Tab Navigasi**:
+       - `Semua Properti`
+       - `KostManager (Terverifikasi)` (Otomatis terverifikasi karena dikunjungi agen survey)
+       - `Self Listing (Mandiri)`
+       - `Draft / Belum Tayang`
+       - `Dibekukan / Penalti`
+     - **Pencarian Cepat & Filter Multi-Kriteria**: Pencarian instan (nama kost, nama pemilik, WhatsApp, kota, area, alamat), filter tipe (Semua, Putra, Putri, Campur), dan dropdown wilayah kota dinamis.
+     - **Tabel Moderasi Interaktif**:
+       - Kolom foto thumbnail WebP, nama kost, tipe, total tipe kamar, badge status terbit/draft/dibekukan, dan badge model (KostManager vs Self Listing).
+       - Info Pemilik/Mitra: Nama pemilik, badge verifikasi KTP, dan tombol 1-klik chat WhatsApp pemilik.
+       - Tarif & Kamar: Rentang harga sewa terendah.
+       - Lokasi: Kota, kecamatan/area, dan alamat.
+     - **Aksi Cepat Moderasi**:
+       - **Publikasikan / Draftkan**: Tombol 1-klik mengubah status keterbitan di katalog publik.
+       - **Bekukan Listing (Suspend / Freeze)**: Modal input alasan pembekuan/catatan penalti dan pengalihan status ke `suspended`.
+       - **Buka Pembekuan (Unfreeze)**: Memulihkan listing kembali aktif setelah data diperbaiki.
+       - **Centang Biru Toggle**: Mengatur status verifikasi terpercaya.
+       - **Transfer Kepemilikan**: Memindahkan hak kelola listing ke akun mitra lain.
+       - **Kunjungi Halaman Publik**: Tautan langsung ke halaman detail `/kost/:id`.
+       - **Hapus Listing**: Penghapusan aman dengan konfirmasi modal.
+  2. **Modal Tinjauan & Supervisi Komprehensif ([`PropertyManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyManagement.tsx))**:
+     - Membuka lembar inspeksi mendalam: Galeri foto/video kost, profil pemilik/mitra + WhatsApp, deskripsi lengkap, daftar kamar & skema harga sewa (harian, mingguan, bulanan, tahunan), fasilitas kamar & kamar mandi, fasilitas umum gedung, peraturan kost, dan koordinat peta.
+     - Banner peringatan khusus jika listing sedang dalam status dibekukan disertai alasan penalti/revisi.
+     - Tombol moderasi lengkap di dalam modal footer.
+  3. **Backend Service Helper ([`adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts))**:
+     - Memperbarui `getAdminProperties` untuk mengambil relasi data profil pemilik (`users: phone, email, verification_status`), status `suspended`, catatan `suspendReason`, dan status KostManager.
+     - Menambahkan fungsi `freezeProperty(propertyId, reason)`, `unfreezeProperty(propertyId)`, dan `togglePropertyVerification(propertyId, isVerified)`.
+  4. **Pembersihan & Integrasi ([`Dashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Dashboard.tsx))**:
+     - Mengintegrasikan `<PropertyManagement />` pada menu `activeMenu === 'properties'`.
+     - Menghapus form modal manual 6-step inline (~100 baris kode peninggalan lama) sehingga arsitektur kode dashboard admin menjadi sangat bersih dan modular.
+- **File Tersentuh**:
+  - `functions/public/components/admin/PropertyManagement.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/public/pages/Dashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 24.77s, 0 error).
+
 ### 224. Notifikasi Email Otomatis ke Admin Saat Ada Pengajuan Verifikasi Identitas Mitra & Agen Baru (`emailService.ts`, `MitraProfile.tsx`, `AgentProfile.tsx`, `Profile.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta agar setiap kali ada pengajuan verifikasi identitas (KTP) yang masuk, baik dari calon mitra (pemilik kost) maupun calon agen pemasaran, sistem secara otomatis mengirimkan notifikasi email ke email admin.

@@ -1,55 +1,65 @@
-# Walkthrough: Notifikasi Email Otomatis ke Admin pada Pengajuan Verifikasi Identitas Mitra & Agen (`emailService.ts`, `MitraProfile.tsx`, `AgentProfile.tsx`, `Profile.tsx`)
+# WALKTHROUGH - Fitur #225: Penyesuaian & Redesain Sistem Manajemen Listing Admin Menjadi Pusat Moderasi & Supervisi Properti Masuk
 
-Dokumentasi ini merangkum penyelesaian implementasi **Fitur #224**, yaitu pengiriman notifikasi email otomatis ke admin setiap kali ada pengajuan verifikasi identitas (KTP) baru yang masuk dari calon mitra (pemilik kost) maupun calon agen pemasaran.
-
----
-
-## 1. Ringkasan Perubahan
-
-### A. Helper Notifikasi Email Terstruktur (`emailService.ts`)
-- Menambahkan fungsi [`notifyAdminIdentityVerification`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/emailService.ts) yang secara dinamis mengambil seluruh alamat email admin aktif dari tabel `users` (dengan fallback `sulhan77777@gmail.com`).
-- Format email memuat:
-  1. **Subjek**: `Transaksi Baru - Pengajuan Verifikasi Identitas (Calon Mitra / Calon Agen)!`
-  2. **Tipe Akun**: *"Calon Mitra / Pemilik Kost"* atau *"Calon Agen Pemasaran"*.
-  3. **Nama Lengkap**: Sesuai KTP / Profil.
-  4. **Email Akun & Nomor WhatsApp**.
-  5. **Nomor NIK KTP & Alamat Sesuai KTP**.
-  6. **Tautan Foto KTP**: Untuk pratinjau instan foto dokumen KTP.
-  7. **ID Pengguna & Tautan Langsung ke Dashboard Verifikasi Admin**.
-
-### B. Integrasi Pengiriman pada Form Pengajuan
-- **Mitra Profile ([`MitraProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx))**:
-  - Saat calon mitra melengkapi formulir dan menyimpan data verifikasi KTP (`user_verifications` status `'pending'`), sistem secara otomatis mengirimkan email notifikasi ke admin.
-- **Agent Profile ([`AgentProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx))**:
-  - Saat calon agen melengkapi formulir dan mengajukan data verifikasi KTP, sistem secara otomatis mengirimkan email notifikasi ke admin.
-- **Profile Umum ([`Profile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Profile.tsx))**:
-  - Jika agen memperbarui berkas verifikasi identitas di halaman profil pengguna, sistem juga memicu email notifikasi ke admin.
+## Ringkasan Perubahan
+Penyesuaian sistem manajemen properti admin dari era lama (input formulir manual) menjadi **Pusat Moderasi & Supervisi Listing Masuk** (*Property Supervision & Moderation Center*). Listing kost kini dikelola langsung oleh mitra/pemilik kost, dan Admin bertindak sebagai supervisor pengawas untuk meninjau kelayakan data, membedakan KostManager (Terverifikasi survey) vs Self Listing (Mandiri), memverifikasi listing, serta membekukan (*suspend/freeze*) listing jika terindikasi penalti atau perlu perbaikan data oleh mitra.
 
 ---
 
-## 2. Hasil Pengujian & Kompilasi
+## Daftar File yang Diubah & Dibuat
 
-### Uji Build Frontend (Vite)
-```bash
-> ruangsinggah.id@0.0.0 build
-> vite build
+1. **[`PropertyManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyManagement.tsx)** *(File Baru)*:
+   - Komponen modular antarmuka supervisi dan moderasi listing admin.
+   - **5 Kartu Statistik**: Total Properti, KostManager (Terverifikasi), Self Listing (Mandiri), Draft / Belum Tayang, dan Dibekukan (Penalti / Butuh Edit).
+   - **5 Tab Navigasi Moderasi**: `Semua Properti`, `KostManager (Terverifikasi)`, `Self Listing (Mandiri)`, `Draft / Belum Tayang`, dan `Dibekukan / Penalti`.
+   - **Pencarian Multi-Parameter**: Cari instan berdasarkan nama kost, nama pemilik, nomor WhatsApp, kota, area/kecamatan, dan alamat.
+   - **Filter Dropdown**: Tipe (Semua, Putra, Putri, Campur) dan Filter Kota dinamis.
+   - **Tabel Moderasi Interaktif**: Menampilkan thumbnail WebP, nama kost, tipe, status publikasi, badge KostManager vs Self Listing, data pemilik/mitra + badge KTP, tombol WhatsApp pemilik 1-klik, tarif bulanan termurah, dan lokasi.
+   - **Aksi Cepat Moderasi**:
+     - *Publish / Unpublish to Draft*.
+     - *Bekukan Listing (Suspend / Freeze)* dengan modal input alasan penalti/catatan revisi.
+     - *Buka Pembekuan (Unfreeze)*.
+     - *Toggle Centang Biru (Terverifikasi)*.
+     - *Transfer Kepemilikan* ke akun mitra lain.
+     - *Kunjungi Halaman Publik* (`/kost/:id`).
+     - *Hapus Properti* dengan konfirmasi modal.
+   - **Modal Tinjauan & Inspeksi Lengkap**: Menampilkan galeri foto/video, deskripsi, rincian tipe kamar & skema harga sewa, fasilitas umum, peraturan kost, titik lokasi peta, profil pemilik, dan tombol moderasi.
 
-vite v6.4.1 building for production...
-transforming...
-✓ 2504 modules transformed.
-rendering chunks...
-computing gzip size...
-✓ built in 25.55s
-```
-*Hasil:* **100% Lulus (0 Error)**.
+2. **[`adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts)**:
+   - Memperbarui `BasicPropertyInfo` untuk memuat relasi data pemilik (`ownerPhone`, `ownerEmail`, `ownerVerificationStatus`), status `suspended`, `suspendReason`, dan `isManaged`.
+   - Menambahkan helper moderasi: `updatePropertyStatus(propertyId, status, reason)`, `freezeProperty(propertyId, reason)`, `unfreezeProperty(propertyId)`, dan `togglePropertyVerification(propertyId, isVerified)`.
+
+3. **[`Dashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Dashboard.tsx)**:
+   - Mengintegrasikan `<PropertyManagement />` pada sub-view `activeMenu === 'properties'`.
+   - Membersihkan modal formulir manual redundan era lama sehingga kode dashboard admin menjadi ringkas, modular, dan terstruktur rapi.
+
+4. **[`functions/PROGRESS.md`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md)**:
+   - Dokumentasi riwayat Fitur #225.
 
 ---
 
-## 3. Panduan Pengujian bagi Pengguna
+## Hasil Pengujian & Verifikasi
 
-1. Buka halaman **Profil Mitra** (`/dashboard-mitra/profile`) atau **Profil Agen** (`/agent/profile`).
-2. Klik tombol **"Lengkapi Profil & Verifikasi"**.
-3. Masukkan data profil, unggah foto KTP, dan klik **"Simpan Profil"**.
-4. **Hasil**:
-   - Data verifikasi tersimpan dengan status `pending`.
-   - Admin akan menerima email pemberitahuan yang berisi detail lengkap nama calon mitra/agen, nomor WhatsApp, nomor KTP, alamat, dan tautan foto KTP untuk ditinjau.
+### 1. Kompilasi Build Frontend (Vite & TypeScript)
+- Perintah: `npm run build` di direktori `functions/public/`
+- Hasil: **Lulus 100% (0 error)**
+- Log build:
+  ```
+  ✓ 2505 modules transformed.
+  ✓ built in 24.77s
+  ```
+
+---
+
+## Panduan Pengujian Fitur untuk User
+
+1. Buka Dashboard Admin di menu **Kelola Kost / Properti** (`/dashboard` -> `properties`).
+2. Periksa **5 Kartu Statistik** di bagian atas (Total Properti, KostManager, Self Listing, Draft/Review, Dibekukan).
+3. Uji perpindahan tab navigasi:
+   - Tab **KostManager (Terverifikasi)** untuk melihat kost terkelola auto-pilot.
+   - Tab **Self Listing (Mandiri)** untuk melihat listing yang diunggah mandiri oleh mitra.
+   - Tab **Dibekukan / Penalti** untuk melihat listing yang sedang ditangguhkan.
+4. Uji tombol aksi:
+   - Klik ikon **Mata (Eye)** untuk membuka Modal Tinjauan Lengkap (foto, kamar, fasilitas, pemilik).
+   - Klik tombol **Snowflake (Bekukan)** pada listing untuk membekukan properti dengan memasukkan alasan revisi.
+   - Klik tombol **Buka Blokir** pada listing yang dibekukan untuk mengaktifkannya kembali.
+   - Klik tombol **Chat WhatsApp** pada kolom Pemilik untuk menghubungi pemilik kost secara langsung dengan template pesan otomatis.
