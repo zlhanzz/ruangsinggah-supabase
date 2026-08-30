@@ -533,7 +533,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
         securityOtpRefs.current[focusIndex]?.focus();
     };
 
-    const performOcr = async (imageUrl: string) => {
+    const performOcr = async (imageUrl: string, base64Image?: string) => {
         setIsScanning(true);
         try {
             // Timeout guard 25 detik agar tetap fleksibel untuk jaringan seluler
@@ -542,7 +542,11 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
             );
 
             const invokePromise = supabase.functions.invoke('analyze-ktp', {
-                body: { imageUrl: imageUrl }
+                body: { 
+                    imageUrl: imageUrl,
+                    base64Image: base64Image,
+                    mimeType: 'image/webp'
+                }
             });
 
             const res: any = await Promise.race([invokePromise, timeoutPromise]);
@@ -600,6 +604,20 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
             const fileName = `${uid}-${Math.random()}_${baseName}.webp`;
             const filePath = `ktp/${fileName}`;
 
+            // Baca base64 dari processedFile secara lokal untuk transfer instan
+            let base64String = '';
+            try {
+                const arrayBuffer = await processedFile.arrayBuffer();
+                const bytes = new Uint8Array(arrayBuffer);
+                let binary = '';
+                for (let i = 0; i < bytes.byteLength; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                base64String = btoa(binary);
+            } catch (b64Err) {
+                console.warn('Gagal membaca base64 lokal:', b64Err);
+            }
+
             const { error: uploadError } = await supabase.storage
                 .from('survey-photos')
                 .upload(filePath, processedFile, {
@@ -613,7 +631,7 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
                 .getPublicUrl(filePath);
 
             setFormData(prev => ({ ...prev, ktp_photo_url: publicUrl }));
-            performOcr(publicUrl);
+            performOcr(publicUrl, base64String);
         } catch (error) {
             console.error('Error uploading KTP:', error);
         } finally {

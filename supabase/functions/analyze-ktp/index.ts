@@ -6,9 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Model priority cascade: Mulai dari model terbaru 3.7 Flash & 2.5 Flash, lalu fallback ke 2.0 / 1.5 Flash
+// Model priority cascade: Prioritaskan model flash aktif yang terbukti stabil & super cepat
 const CANDIDATE_MODELS = [
-  "gemini-3.7-flash",
   "gemini-2.5-flash",
   "gemini-2.0-flash",
   "gemini-1.5-flash",
@@ -123,7 +122,11 @@ FORMAT OUTPUT (JSON SAJA, TANPA DEKORASI BACKTICKS / MURNI JSON):
             const errorText = await response.text();
             console.warn(`Model ${model} with Key #${kIdx + 1} returned status ${response.status}: ${errorText}`);
             lastError = `Gemini API error ${response.status}: ${errorText}`;
-            continue; // Coba key berikutnya atau model berikutnya
+            if (response.status === 404) {
+              // Model tidak ditemukan di API, langsung lanjut ke model berikutnya tanpa buang waktu
+              break;
+            }
+            continue; // Coba key berikutnya jika status non-404 (misal 429 atau 503)
           }
 
           const json = await response.json();
