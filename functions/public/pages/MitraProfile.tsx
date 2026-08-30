@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { User, ShieldCheck, MapPin, Phone, ChevronRight, LogOut, Upload, BadgeCheck, AlertCircle, Clock, Search, X, Mail, Calendar, Gift } from 'lucide-react';
 import { sendWhatsAppTemplate } from '../whatsappService';
+import { notifyAdminIdentityVerification } from '../emailService';
 
 interface MitraProfileProps {
     uid: string;
@@ -689,7 +690,9 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
             };
 
             // Process Verification if fields are provided
+            let isNewVerificationSubmission = false;
             if (formData.ktp_photo_url && formData.ktp_number && formData.verification_status !== 'verified') {
+                isNewVerificationSubmission = true;
                 updates.verification_status = 'pending';
                 const { error: verifErr } = await supabase.from('user_verifications').upsert({
                     user_id: uid,
@@ -705,6 +708,19 @@ const MitraProfile: React.FC<MitraProfileProps> = ({ uid, user: initialUser, onB
 
             const { error: userErr } = await supabase.from('users').update(updates).eq('id', uid);
             if (userErr) throw userErr;
+
+            if (isNewVerificationSubmission) {
+                notifyAdminIdentityVerification({
+                    role: 'mitra',
+                    name: formData.display_name,
+                    email: initialUser?.email || formData.email,
+                    phone: formData.phone,
+                    ktp_number: formData.ktp_number,
+                    ktp_address: formData.ktp_address,
+                    ktp_photo_url: formData.ktp_photo_url,
+                    userId: uid
+                }).catch(err => console.warn('Failed to notify admin via email:', err));
+            }
 
             // Save referral code to mitra table if not set initially and provided now
             if (!hasInitialReferral && formData.referred_by && formData.referred_by.trim() !== '') {

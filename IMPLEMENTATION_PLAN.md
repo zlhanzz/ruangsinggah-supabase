@@ -1,59 +1,60 @@
-# Rencana Implementasi: Optimasi Kecepatan Ekstraksi KTP Instan (Direct Base64 & Fast Model Cascade)
+# Rencana Implementasi: Notifikasi Email ke Admin pada Pengajuan Verifikasi Identitas (`MitraProfile.tsx`, `AgentProfile.tsx`, `emailService.ts`)
 
-Dokumen ini merancang penyelesaian tuntas agar pemindaian OCR data KTP berjalan dalam **1,0 – 1,5 detik** tanpa risiko timeout.
-
----
-
-## 1. Analisis Masalah & Temuan Diagnostik
-
-Setelah dilakukan pengujian mendalam pada Edge Function `analyze-ktp`, ditemukan 2 penyebab utama mengapa terjadi *timeout 25 detik*:
-1. **Looping Retry Model 404**:
-   - Model `gemini-3.7-flash` belum terdaftar sebagai identifier resmi pada endpoint API `v1beta`.
-   - Ketika model pertama mengembalikan error `404 Not Found`, sistem lama mencoba mengulang model yang sama pada 3 API Key berbeda (`Key #1, #2, #3`), membuang waktu ~15-20 detik sebelum berpindah ke model yang valid (`gemini-2.5-flash`).
-2. **Double Network Hop (Fetch Storage URL)**:
-   - Ketika frontend mengirimkan `imageUrl`, Edge Function harus melakukan HTTP `fetch(imageUrl)` sekunder ke Supabase Storage. Jika ada latensi propagasi CDN Storage, proses ini memakan waktu tambahan.
+Dokumen ini merancang implementasi pengiriman notifikasi email otomatis ke seluruh admin setiap kali ada pengajuan verifikasi identitas (KTP) baru yang masuk dari calon mitra (pemilik kost) maupun calon agen.
 
 ---
 
-## 2. Solusi & Dampak Perubahan
+## 1. Analisis Kebutuhan
 
-### A. Fast Model Cascade & Smart 404 Break (`analyze-ktp/index.ts`)
-- Memprioritaskan model resmi yang terbukti aktif dan super cepat: `["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]`.
-- Jika sebuah model mengembalikan status `404`, sistem langsung melakukan `break` ke model berikutnya **seketika (0ms delay)** tanpa mencoba API Key lain untuk model yang sama.
-
-### B. Direct Client-Side Base64 Transfer (`MitraProfile.tsx` & `AgentProfile.tsx`)
-- Saat user memilih foto KTP dan file dikonversi ke WebP, frontend membaca file WebP lokal menjadi `base64Image` (via `FileReader`) dan mengirimkannya langsung ke Edge Function bersamaan dengan `imageUrl`.
-- Edge Function langsung memproses bytes `base64Image` secara instan **tanpa perlu mendownload ulang dari Storage**.
+### Kebutuhan:
+- Ketika calon mitra atau calon agen menyelesaikan pengisian profil dan mengunggah dokumen KTP untuk verifikasi identitas (`verification_status: 'pending'`), sistem harus segera mengirimkan notifikasi email ke email admin.
+- Email notifikasi harus memuat rincian lengkap agar admin dapat langsung meninjau data tanpa tertunda:
+  1. **Tipe Akun / Role**: Calon Mitra / Pemilik Kost atau Calon Agen Pemasaran.
+  2. **Nama Lengkap**: Sesuai KTP / Profil.
+  3. **Email & Nomor WhatsApp**: Untuk keperluan kontak / koordinasi.
+  4. **Nomor NIK KTP & Alamat KTP**.
+  5. **Tautan Foto KTP**: Untuk pratinjau instan.
+  6. **ID Pengguna & Tautan Langsung ke Dashboard Verifikasi Admin**.
 
 ---
 
-## 3. Dampak Perubahan File
+## 2. Dampak Perubahan File
 
 | No | File | Deskripsi Rencana Perubahan |
 |---|---|---|
-| 1 | [`supabase/functions/analyze-ktp/index.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/supabase/functions/analyze-ktp/index.ts) | Model list: `gemini-2.5-flash` utama, smart break 404, prioritas Base64 vision. |
-| 2 | [`functions/public/pages/MitraProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx) | Baca WebP ke Base64 lokal dan kirim ke `performOcr(publicUrl, base64Image)`. |
-| 3 | [`functions/public/pages/AgentProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx) | Baca WebP ke Base64 lokal dan kirim ke `performOcr(publicUrl, base64Image)`. |
-| 4 | `functions/PROGRESS.md` | Pencatatan riwayat (Anti-Amnesia). |
-| 5 | `WALKTHROUGH.md` | Dokumentasi pengujian dan perintah deploy. |
+| 1 | [`functions/public/emailService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/emailService.ts) | Menambahkan fungsi `notifyAdminIdentityVerification` yang mengirimkan email berformat profesional ke seluruh admin terdaftar secara dinamis (via FormSubmit / gateway). |
+| 2 | [`functions/public/pages/MitraProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx) | Memanggil `notifyAdminIdentityVerification` saat mitra mengajukan verifikasi identitas KTP. |
+| 3 | [`functions/public/pages/AgentProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx) | Memanggil `notifyAdminIdentityVerification` saat agen mengajukan verifikasi identitas KTP. |
+| 4 | [`functions/public/pages/Profile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Profile.tsx) | Memanggil `notifyAdminIdentityVerification` jika agen memperbarui berkas verifikasi dari halaman profil umum. |
+| 5 | `functions/PROGRESS.md` | Pencatatan riwayat (Anti-Amnesia) Fitur #224. |
+| 6 | `WALKTHROUGH.md` | Dokumentasi pengujian dan verifikasi. |
 
 ---
 
-## 4. Langkah Eksekusi (Fase 2 - Setelah ACC)
+## 3. Langkah-Langkah Eksekusi (Fase 2 - Setelah ACC)
 
-1. **Perbarui `supabase/functions/analyze-ktp/index.ts`**:
-   - Pasang `gemini-2.5-flash` di urutan pertama.
-   - Tambahkan `if (response.status === 404) break;` untuk eliminasi retry sia-sia.
-2. **Perbarui `MitraProfile.tsx` & `AgentProfile.tsx`**:
-   - Baca file WebP lokal ke Base64 dan sertakan pada pemanggilan Edge Function.
-3. **Uji Kompilasi Build**:
-   - Jalankan `cmd /c npm run build` di `functions/public/`.
-4. **Deploy Edge Function & Git Push**:
-   - Berikan perintah deploy Supabase CLI untuk dieksekusi pengguna.
-   - Commit dan push ke branch `bukan-productions`.
+### Langkah 1: Buat Fungsi Helper Notifikasi Email di `emailService.ts`
+- Implementasikan `notifyAdminIdentityVerification` dengan format payload email terstruktur (Tipe Akun, Nama, Email, WhatsApp, NIK, Alamat KTP, Foto KTP, Link Dashboard).
+
+### Langkah 2: Integrasikan ke Handler Submit di `MitraProfile.tsx` & `AgentProfile.tsx`
+- Pasang pemicu notifikasi saat `user_verifications` di-upsert dengan status `'pending'`.
+
+### Langkah 3: Uji Kompilasi & Pengujian
+- Jalankan `cmd /c npm run build` di `functions/public/` untuk memastikan lulus 100% (0 error).
+- Simulasikan pengiriman email notifikasi via unit test script.
+
+### Langkah 4: Pencatatan Riwayat & Git Push
+- Catat riwayat di `functions/PROGRESS.md` (Fitur #224).
+- Terbitkan dokumen `WALKTHROUGH.md`.
+- Commit dan push ke branch `bukan-productions`.
 
 ---
 
-## 5. Rencana Verifikasi
-- Pengujian langsung via node scratch script untuk memastikan respon AI kembali dalam **< 1.5 detik**.
-- Pengujian upload KTP di browser Mitra & Agen.
+## 4. Rencana Verifikasi
+
+1. **Uji Build**:
+   - `npm run build` berhasil tanpa error kompilasi TypeScript/Vite.
+2. **Uji Pengiriman Email**:
+   - Menjalankan simulasi submit verifikasi dan memastikan payload email terkirim ke alamat email admin terdaftar (`adminEmails`).
+3. **Uji Alur UI**:
+   - Memastikan proses penyimpanan profil di UI tetap responsif (notifikasi email berjalan secara *non-blocking* di latar belakang).

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { User, ShieldCheck, MapPin, Phone, ChevronRight, LogOut, Upload, BadgeCheck, AlertCircle, Clock, X, Mail, Calendar, Gift } from 'lucide-react';
 import { sendWhatsAppTemplate } from '../whatsappService';
+import { notifyAdminIdentityVerification } from '../emailService';
 
 interface AgentProfileProps {
     uid: string;
@@ -613,7 +614,9 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
             };
 
             // Process Verification if fields are provided
+            let isNewVerificationSubmission = false;
             if (formData.ktp_photo_url && formData.ktp_number && formData.verification_status !== 'verified') {
+                isNewVerificationSubmission = true;
                 updates.verification_status = 'pending';
                 const { error: verifErr } = await supabase.from('user_verifications').upsert({
                     user_id: uid,
@@ -629,6 +632,19 @@ const AgentProfile: React.FC<AgentProfileProps> = ({ uid, onEditModeChange }) =>
 
             const { error: userErr } = await supabase.from('users').update(updates).eq('id', uid);
             if (userErr) throw userErr;
+
+            if (isNewVerificationSubmission) {
+                notifyAdminIdentityVerification({
+                    role: 'agent',
+                    name: formData.display_name,
+                    email: formData.email,
+                    phone: formData.phone,
+                    ktp_number: formData.ktp_number,
+                    ktp_address: formData.ktp_address,
+                    ktp_photo_url: formData.ktp_photo_url,
+                    userId: uid
+                }).catch(err => console.warn('Failed to notify admin via email:', err));
+            }
 
             window.dispatchEvent(new Event('RS_USER_UPDATED'));
             setIsEditing(false);

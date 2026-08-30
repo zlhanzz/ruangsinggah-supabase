@@ -130,3 +130,34 @@ export async function notifyAdminNewChatMessage(details: {
   });
 }
 
+export async function notifyAdminIdentityVerification(details: {
+  role: 'mitra' | 'agent' | 'user' | string;
+  name: string;
+  email?: string;
+  phone?: string;
+  ktp_number?: string;
+  ktp_address?: string;
+  ktp_photo_url?: string;
+  userId: string;
+}) {
+  const roleLabel = details.role === 'mitra' 
+    ? 'Calon Mitra / Pemilik Kost' 
+    : details.role === 'agent' 
+    ? 'Calon Agen Pemasaran' 
+    : 'Pengguna';
+
+  return notifyAdminTransaction(`Pengajuan Verifikasi Identitas (${roleLabel})`, {
+    "Tipe Akun": roleLabel,
+    "Nama Lengkap": details.name || 'Belum diisi',
+    "Email Akun": details.email || 'Belum diisi',
+    "Nomor WhatsApp": details.phone || 'Belum diisi',
+    "Nomor NIK KTP": details.ktp_number || 'Belum diisi',
+    "Alamat Sesuai KTP": details.ktp_address || 'Belum diisi',
+    "Tautan Foto KTP": details.ktp_photo_url || '-',
+    "ID Pengguna": details.userId,
+    "Petunjuk Admin": "Silakan buka Dashboard Admin untuk memeriksa dan menyetujui verifikasi berkas identitas ini.",
+    "Link Dashboard Verifikasi": "https://ruangsinggah.id/dashboard"
+  });
+}
+
+

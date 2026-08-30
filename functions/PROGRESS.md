@@ -2,6 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 224. Notifikasi Email Otomatis ke Admin Saat Ada Pengajuan Verifikasi Identitas Mitra & Agen Baru (`emailService.ts`, `MitraProfile.tsx`, `AgentProfile.tsx`, `Profile.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar setiap kali ada pengajuan verifikasi identitas (KTP) yang masuk, baik dari calon mitra (pemilik kost) maupun calon agen pemasaran, sistem secara otomatis mengirimkan notifikasi email ke email admin.
+- **Implementasi Solusi**:
+  1. **Helper Notifikasi Email Terstruktur ([`emailService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/emailService.ts))**:
+     - Menambahkan fungsi `notifyAdminIdentityVerification` yang mengirimkan email berformat profesional via FormSubmit ke seluruh admin yang terdaftar di database `users` (dengan fallback email `sulhan77777@gmail.com`).
+     - Payload email mencakup: Tipe Akun (Calon Mitra / Calon Agen), Nama Lengkap, Email Akun, Nomor WhatsApp, NIK KTP, Alamat KTP, Tautan Foto KTP, ID Pengguna, dan Tautan Langsung ke Dashboard Verifikasi Admin.
+  2. **Integrasi Pemicu Notifikasi pada Profil ([`MitraProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx), [`AgentProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx), [`Profile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Profile.tsx))**:
+     - Saat pengguna menyimpan profil dan mengajukan data KTP (`user_verifications` status `'pending'`), fungsi `notifyAdminIdentityVerification` langsung dipicu secara asynchronous (non-blocking) di latar belakang sehingga UI pengguna tetap instan.
+- **File Tersentuh**:
+  - `functions/public/emailService.ts`
+  - `functions/public/pages/MitraProfile.tsx`
+  - `functions/public/pages/AgentProfile.tsx`
+  - `functions/public/pages/Profile.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2504 modules transformed, 25.55s, 0 error).
+
 ### 223. Optimasi Drastis Kecepatan OCR KTP (1-2 Detik) dengan Gemini Multimodal Vision, Direct Base64 Transfer, & Eliminasi Tesseract.js Browser (`MitraProfile.tsx`, `AgentProfile.tsx`, `analyze-ktp`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna melaporkan proses pemindaian OCR data KTP pada modal verifikasi identitas mitra & agen sangat lambat dan sering macet (*"kok lama bangaet ya sistem ocr pembacaan data ktp pada sistem verifikasi identitas kita"*).
