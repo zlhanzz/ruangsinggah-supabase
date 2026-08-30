@@ -5075,7 +5075,16 @@ export async function getPropertyReports(statusFilter?: string): Promise<Propert
   try {
     let query = supabase
       .from('property_reports')
-      .select('*, properties(id, title, namaKost, city, address, owner_uid, users(id, name, full_name, phone))')
+      .select(`
+        *,
+        properties (
+          id,
+          title,
+          city,
+          address,
+          owner_uid
+        )
+      `)
       .order('created_at', { ascending: false });
 
     if (statusFilter && statusFilter !== 'all') {
@@ -5100,13 +5109,13 @@ export async function getPropertyReports(statusFilter?: string): Promise<Propert
         reporter_phone: c.user_phone || '',
         category: (c.category || '').replace('REPORT: ', ''),
         description: (c.description || '').replace('[ADUAN LISTING] ', ''),
-        evidence_urls: c.photos || [],
+        evidence_urls: c.photos || (c.photo_url ? [c.photo_url] : []),
         status: c.status || 'pending',
         admin_notes: '',
         action_taken: '',
         created_at: c.created_at,
         updated_at: c.updated_at,
-        propertyName: c.kost_name || 'Kost',
+        propertyName: c.kost_name || c.title || 'Kost',
         propertyCity: '',
         propertyAddress: '',
         ownerName: '',
@@ -5114,9 +5123,26 @@ export async function getPropertyReports(statusFilter?: string): Promise<Propert
       }));
     }
 
-    return (data || []).map((row: any) => {
+    if (!data || data.length === 0) return [];
+
+    // Collect unique owner_uids to batch fetch user details
+    const ownerUids = Array.from(new Set(data.map((r: any) => r.properties?.owner_uid).filter(Boolean)));
+    const ownerMap: Record<string, any> = {};
+
+    if (ownerUids.length > 0) {
+      const { data: usersData } = await supabase
+        .from('users')
+        .select('id, name, full_name, phone, email')
+        .in('id', ownerUids);
+
+      (usersData || []).forEach(u => {
+        ownerMap[u.id] = u;
+      });
+    }
+
+    return data.map((row: any) => {
       const prop = row.properties;
-      const owner = Array.isArray(prop?.users) ? prop?.users[0] : prop?.users;
+      const owner = prop?.owner_uid ? ownerMap[prop.owner_uid] : null;
       return {
         id: row.id,
         property_id: row.property_id,
@@ -5131,7 +5157,7 @@ export async function getPropertyReports(statusFilter?: string): Promise<Propert
         action_taken: row.action_taken || '',
         created_at: row.created_at,
         updated_at: row.updated_at,
-        propertyName: prop?.title || prop?.namaKost || 'Kost',
+        propertyName: prop?.title || 'Kost',
         propertyCity: prop?.city || '',
         propertyAddress: prop?.address || '',
         ownerName: owner?.name || owner?.full_name || 'Mitra',
