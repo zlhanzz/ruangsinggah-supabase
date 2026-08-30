@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../supabase';
-import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, CheckCircle2, Smartphone, Phone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity, DoorClosed, ChevronDown, ChevronUp, Camera, ShieldCheck, Building, Bed, Bath, Wifi, Maximize2, Share2, PhoneCall, HelpCircle, Layers, Wrench, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin, Receipt, Upload, Plus, MessageSquare, AlertCircle, FileText, X, Star, CheckCircle, CheckCircle2, Smartphone, Phone, Calendar, Search, Heart, ChevronRight, XCircle, Zap, Check, Activity, DoorClosed, ChevronDown, ChevronUp, Camera, ShieldCheck, Building, Bed, Bath, Wifi, Maximize2, Share2, PhoneCall, HelpCircle, Layers, Wrench, RotateCcw, ZoomIn, Eye } from 'lucide-react';
 import { Page } from '../types';
 import { addPropertyReview, getExtraBills, settlePendingBills, cancelBookingRequest, expireBookingTransaction, BOOKING_EXPIRY_HOURS } from '../userService';
 import PaymentGateway from '../components/PaymentGateway';
@@ -230,7 +230,11 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const [billAmount, setBillAmount] = useState('');
     const [billProof, setBillProof] = useState<File | null>(null);
 
-    // Complaint form state (Multi-Photo up to 3 WebP)
+    // Complaint form & history state (Multi-Photo up to 3 WebP)
+    const [complaintModalTab, setComplaintModalTab] = useState<'form' | 'history'>('form');
+    const [myComplaints, setMyComplaints] = useState<any[]>([]);
+    const [loadingComplaints, setLoadingComplaints] = useState<boolean>(false);
+    const [previewComplaintPhotoUrl, setPreviewComplaintPhotoUrl] = useState<string | null>(null);
     const [complaintTitle, setComplaintTitle] = useState('');
     const [complaintDesc, setComplaintDesc] = useState('');
     const [complaintCategory, setComplaintCategory] = useState('AC & Ventilasi');
@@ -1310,6 +1314,33 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
         setShowExtensionModal(false);
     };
 
+    const fetchMyComplaints = async (kostId?: string) => {
+        if (!user?.uid) return;
+        setLoadingComplaints(true);
+        try {
+            let query = supabase
+                .from('complaints')
+                .select('*')
+                .eq('user_id', user.uid)
+                .order('created_at', { ascending: false });
+
+            if (kostId) {
+                query = query.eq('kost_id', kostId);
+            }
+
+            const { data, error } = await query;
+            if (!error && data) {
+                setMyComplaints(data);
+            } else if (error) {
+                console.warn('[fetchMyComplaints error]', error);
+            }
+        } catch (err) {
+            console.warn('[fetchMyComplaints catch]', err);
+        } finally {
+            setLoadingComplaints(false);
+        }
+    };
+
     const handleOpenComplaint = (kost: any) => {
         setSelectedKost(kost);
         setComplaintTitle('');
@@ -1318,9 +1349,11 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
         setComplaintUrgency('NORMAL');
         setComplaintPhotos([]);
         setComplaintPhotoPreviews([]);
+        setComplaintModalTab('form');
         setShowComplaintModal(true);
         setShowExtraBillModal(false);
         setShowExtensionModal(false);
+        fetchMyComplaints(kost.kostId || kost.id);
     };
 
     const handleAddComplaintPhotos = (files: FileList | null) => {
@@ -1556,13 +1589,14 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
             if (dbError) throw dbError;
 
             alert('Laporan kendala berhasil dikirim! Pengelola kost dan tim teknis akan segera menindaklanjuti.');
-            setShowComplaintModal(false);
             setComplaintPhotos([]);
             setComplaintPhotoPreviews([]);
             setComplaintTitle('');
             setComplaintDesc('');
             setComplaintCategory('AC & Ventilasi');
             setComplaintUrgency('NORMAL');
+            await fetchMyComplaints(selectedKost.kostId || selectedKost.id);
+            setComplaintModalTab('history');
         } catch (err: any) {
             console.error('[submitComplaint Error]', err);
             alert(`Terjadi kesalahan saat mengirim komplain: ${err.message || 'Silakan coba lagi.'}`);
@@ -3908,19 +3942,19 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
 
 
-            {/* 3. Modal Komplain Modern & Terstruktur */}
+            {/* 3. Modal Komplain Modern & Terstruktur dengan 2-Tab Navigation */}
             {showComplaintModal && selectedKost && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-950/80 backdrop-blur-md overflow-y-auto">
                     <div className="bg-white rounded-[2.5rem] w-full max-w-xl my-auto relative shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 max-h-[92vh] flex flex-col">
                         {/* Header */}
-                        <div className="bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 p-6 text-white relative">
+                        <div className="bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 p-6 text-white relative shrink-0">
                             <button 
                                 onClick={() => setShowComplaintModal(false)} 
-                                className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/20 hover:bg-black/30 rounded-full p-2.5 transition-all active:scale-95"
+                                className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/20 hover:bg-black/30 rounded-full p-2.5 transition-all active:scale-95 z-10"
                             >
                                 <X className="w-5 h-5" />
                             </button>
-                            <div className="flex items-center gap-3.5 mb-2">
+                            <div className="flex items-center gap-3.5 mb-3">
                                 <div className="w-11 h-11 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-inner">
                                     <MessageSquare className="w-5 h-5 text-white" />
                                 </div>
@@ -3934,191 +3968,393 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                     </p>
                                 </div>
                             </div>
-                        </div>
 
-                        {/* Form Body */}
-                        <form onSubmit={submitComplaint} className="p-6 md:p-8 space-y-5 overflow-y-auto flex-1 custom-scrollbar">
-                            {/* Kategori Kendala */}
-                            <div>
-                                <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider block mb-2">
-                                    Kategori Fasilitas / Masalah
-                                </label>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                    {[
-                                        { label: 'AC & Ventilasi', icon: '❄️' },
-                                        { label: 'Pipa & Sanitasi', icon: '🚿' },
-                                        { label: 'Listrik & Lampu', icon: '💡' },
-                                        { label: 'Furnitur & Kasur', icon: '🛏️' },
-                                        { label: 'WiFi & Internet', icon: '📶' },
-                                        { label: 'Kebersihan', icon: '🧹' },
-                                        { label: 'Kunci & Keamanan', icon: '🚪' },
-                                        { label: 'Lainnya', icon: '❓' }
-                                    ].map((cat) => (
-                                        <button
-                                            key={cat.label}
-                                            type="button"
-                                            onClick={() => setComplaintCategory(cat.label)}
-                                            className={`p-2.5 rounded-2xl border text-left flex flex-col items-center justify-center gap-1 transition-all ${
-                                                complaintCategory === cat.label
-                                                    ? 'bg-rose-50 border-rose-500 text-rose-700 shadow-sm ring-2 ring-rose-500/20 font-black'
-                                                    : 'bg-gray-50 border-gray-200/80 text-gray-600 hover:bg-gray-100 font-bold'
-                                            }`}
-                                        >
-                                            <span className="text-lg">{cat.icon}</span>
-                                            <span className="text-[10px] leading-tight text-center">{cat.label}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Tingkat Urgensi */}
-                            <div>
-                                <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider block mb-2">
-                                    Tingkat Kepentingan (Urgensi)
-                                </label>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setComplaintUrgency('NORMAL')}
-                                        className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition-all ${
-                                            complaintUrgency === 'NORMAL'
-                                                ? 'bg-blue-50 border-blue-500 text-blue-800 shadow-sm ring-2 ring-blue-500/20'
-                                                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                                        }`}
-                                    >
-                                        <div className={`w-3.5 h-3.5 rounded-full ${complaintUrgency === 'NORMAL' ? 'bg-blue-600' : 'bg-gray-300'}`} />
-                                        <div>
-                                            <p className="text-xs font-black">Standar (Normal)</p>
-                                            <p className="text-[10px] text-gray-500">Penanganan berkala 1-2 hari</p>
-                                        </div>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setComplaintUrgency('EMERGENCY')}
-                                        className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition-all ${
-                                            complaintUrgency === 'EMERGENCY'
-                                                ? 'bg-rose-50 border-rose-500 text-rose-800 shadow-sm ring-2 ring-rose-500/20'
-                                                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                                        }`}
-                                    >
-                                        <div className={`w-3.5 h-3.5 rounded-full ${complaintUrgency === 'EMERGENCY' ? 'bg-rose-600 animate-pulse' : 'bg-gray-300'}`} />
-                                        <div>
-                                            <p className="text-xs font-black text-rose-700">🚨 Darurat (Urgent)</p>
-                                            <p className="text-[10px] text-rose-600 font-medium">Air mati total / korsleting</p>
-                                        </div>
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Judul Kendala */}
-                            <div>
-                                <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider block mb-1.5">
-                                    Pokok Kendala
-                                </label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={complaintTitle}
-                                    onChange={(e) => setComplaintTitle(e.target.value)}
-                                    placeholder="Contoh: AC Kamar Menetes atau Lampu Kamar Mati"
-                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-bold text-gray-800 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all placeholder:text-gray-400 placeholder:font-normal"
-                                />
-                            </div>
-
-                            {/* Detail Masalah */}
-                            <div>
-                                <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider block mb-1.5">
-                                    Deskripsi & Lokasi Kerusakan
-                                </label>
-                                <textarea
-                                    rows={3}
-                                    required
-                                    value={complaintDesc}
-                                    onChange={(e) => setComplaintDesc(e.target.value)}
-                                    placeholder="Jelaskan secara rinci kondisi kerusakan, sejak kapan terjadi, atau kapan teknisi boleh masuk..."
-                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-medium text-gray-800 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none resize-none transition-all placeholder:text-gray-400"
-                                ></textarea>
-                            </div>
-
-                            {/* Upload Foto (Maksimal 3 Foto) */}
-                            <div>
-                                <div className="flex items-center justify-between mb-1.5">
-                                    <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider">
-                                        Foto Bukti Kerusakan (Maks 3 Foto)
-                                    </label>
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100">
-                                        {complaintPhotos.length} / 3 Foto
-                                    </span>
-                                </div>
-
-                                {/* Preview Grid & Add Slot */}
-                                <div className="grid grid-cols-3 gap-2.5">
-                                    {complaintPhotoPreviews.map((preview, idx) => (
-                                        <div key={idx} className="relative rounded-2xl overflow-hidden border border-gray-200 aspect-square bg-slate-900 flex items-center justify-center group shadow-sm">
-                                            <img src={preview} alt={`Bukti ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRemoveComplaintPhoto(idx)}
-                                                className="absolute top-1.5 right-1.5 bg-rose-600/90 hover:bg-rose-600 text-white p-1 rounded-full shadow-md transition-all active:scale-90"
-                                                title="Hapus foto ini"
-                                            >
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
-                                            <div className="absolute bottom-1.5 left-1.5 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded-md text-[9px] font-bold text-white">
-                                                Foto {idx + 1}
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                    {complaintPhotos.length < 3 && (
-                                        <label className={`cursor-pointer block border-2 border-dashed border-gray-200 hover:border-rose-400 hover:bg-rose-50/40 rounded-2xl p-2.5 transition-all text-gray-500 flex flex-col items-center justify-center gap-1 aspect-square ${complaintPhotos.length === 0 ? 'col-span-3 aspect-auto py-6' : ''}`}>
-                                            <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center shadow-sm text-rose-500">
-                                                <Camera className="w-4 h-4" />
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="text-[11px] font-black text-gray-700">
-                                                    {complaintPhotos.length === 0 ? 'Pilih / Ambil Foto Kerusakan' : '+ Tambah Foto'}
-                                                </p>
-                                                <p className="text-[9px] text-gray-400">
-                                                    {complaintPhotos.length === 0 ? 'Bisa pilih hingga 3 foto (WebP Otomatis)' : `Sisa ${3 - complaintPhotos.length} foto lagi`}
-                                                </p>
-                                            </div>
-                                            <input
-                                                type="file"
-                                                className="hidden"
-                                                accept="image/*"
-                                                multiple
-                                                onChange={(e) => {
-                                                    handleAddComplaintPhotos(e.target.files);
-                                                    e.target.value = '';
-                                                }}
-                                            />
-                                        </label>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Tombol Aksi */}
-                            <div className="pt-2">
+                            {/* 2-Tab Navigation */}
+                            <div className="flex bg-black/20 p-1 rounded-2xl mt-1">
                                 <button
-                                    type="submit"
-                                    disabled={isSubmitting}
-                                    className="w-full py-4 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-rose-200 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                                    type="button"
+                                    onClick={() => setComplaintModalTab('form')}
+                                    className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                                        complaintModalTab === 'form'
+                                            ? 'bg-white text-rose-700 shadow-md shadow-black/10'
+                                            : 'text-white/80 hover:text-white hover:bg-white/10'
+                                    }`}
                                 >
-                                    {isSubmitting ? (
-                                        <>
-                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            <span>Mengirim Laporan...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <CheckCircle2 className="w-4 h-4" />
-                                            <span>Kirim Laporan Kendala</span>
-                                        </>
-                                    )}
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>Buat Laporan Baru</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setComplaintModalTab('history');
+                                        fetchMyComplaints(selectedKost.kostId || selectedKost.id);
+                                    }}
+                                    className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                                        complaintModalTab === 'history'
+                                            ? 'bg-white text-rose-700 shadow-md shadow-black/10'
+                                            : 'text-white/80 hover:text-white hover:bg-white/10'
+                                    }`}
+                                >
+                                    <Clock className="w-3.5 h-3.5" />
+                                    <span>Riwayat Tiket ({myComplaints.length})</span>
                                 </button>
                             </div>
-                        </form>
+                        </div>
+
+                        {/* TAB 1: FORM PENGIRIMAN */}
+                        {complaintModalTab === 'form' && (
+                            <form onSubmit={submitComplaint} className="p-6 md:p-8 space-y-5 overflow-y-auto flex-1 custom-scrollbar">
+                                {/* Kategori Kendala */}
+                                <div>
+                                    <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider block mb-2">
+                                        Kategori Fasilitas / Masalah
+                                    </label>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                        {[
+                                            { label: 'AC & Ventilasi', icon: '❄️' },
+                                            { label: 'Pipa & Sanitasi', icon: '🚿' },
+                                            { label: 'Listrik & Lampu', icon: '💡' },
+                                            { label: 'Furnitur & Kasur', icon: '🛏️' },
+                                            { label: 'WiFi & Internet', icon: '📶' },
+                                            { label: 'Kebersihan', icon: '🧹' },
+                                            { label: 'Kunci & Keamanan', icon: '🚪' },
+                                            { label: 'Lainnya', icon: '❓' }
+                                        ].map((cat) => (
+                                            <button
+                                                key={cat.label}
+                                                type="button"
+                                                onClick={() => setComplaintCategory(cat.label)}
+                                                className={`p-2.5 rounded-2xl border text-left flex flex-col items-center justify-center gap-1 transition-all ${
+                                                    complaintCategory === cat.label
+                                                        ? 'bg-rose-50 border-rose-500 text-rose-700 shadow-sm ring-2 ring-rose-500/20 font-black'
+                                                        : 'bg-gray-50 border-gray-200/80 text-gray-600 hover:bg-gray-100 font-bold'
+                                                }`}
+                                            >
+                                                <span className="text-lg">{cat.icon}</span>
+                                                <span className="text-[10px] leading-tight text-center">{cat.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Tingkat Urgensi */}
+                                <div>
+                                    <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider block mb-2">
+                                        Tingkat Kepentingan (Urgensi)
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setComplaintUrgency('NORMAL')}
+                                            className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition-all ${
+                                                complaintUrgency === 'NORMAL'
+                                                    ? 'bg-blue-50 border-blue-500 text-blue-800 shadow-sm ring-2 ring-blue-500/20'
+                                                    : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            <div className={`w-3.5 h-3.5 rounded-full ${complaintUrgency === 'NORMAL' ? 'bg-blue-600' : 'bg-gray-300'}`} />
+                                            <div>
+                                                <p className="text-xs font-black">Standar (Normal)</p>
+                                                <p className="text-[10px] text-gray-500">Penanganan berkala 1-2 hari</p>
+                                            </div>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setComplaintUrgency('EMERGENCY')}
+                                            className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition-all ${
+                                                complaintUrgency === 'EMERGENCY'
+                                                    ? 'bg-rose-50 border-rose-500 text-rose-800 shadow-sm ring-2 ring-rose-500/20'
+                                                    : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            <div className={`w-3.5 h-3.5 rounded-full ${complaintUrgency === 'EMERGENCY' ? 'bg-rose-600 animate-pulse' : 'bg-gray-300'}`} />
+                                            <div>
+                                                <p className="text-xs font-black text-rose-700">🚨 Darurat (Urgent)</p>
+                                                <p className="text-[10px] text-rose-600 font-medium">Air mati total / korsleting</p>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Judul Kendala */}
+                                <div>
+                                    <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider block mb-1.5">
+                                        Pokok Kendala
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={complaintTitle}
+                                        onChange={(e) => setComplaintTitle(e.target.value)}
+                                        placeholder="Contoh: AC Kamar Menetes atau Lampu Kamar Mati"
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-bold text-gray-800 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all placeholder:text-gray-400 placeholder:font-normal"
+                                    />
+                                </div>
+
+                                {/* Detail Masalah */}
+                                <div>
+                                    <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider block mb-1.5">
+                                        Deskripsi & Lokasi Kerusakan
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        required
+                                        value={complaintDesc}
+                                        onChange={(e) => setComplaintDesc(e.target.value)}
+                                        placeholder="Jelaskan secara rinci kondisi kerusakan, sejak kapan terjadi, atau kapan teknisi boleh masuk..."
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-medium text-gray-800 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none resize-none transition-all placeholder:text-gray-400"
+                                    ></textarea>
+                                </div>
+
+                                {/* Upload Foto (Maksimal 3 Foto) */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider">
+                                            Foto Bukti Kerusakan (Maks 3 Foto)
+                                        </label>
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100">
+                                            {complaintPhotos.length} / 3 Foto
+                                        </span>
+                                    </div>
+
+                                    {/* Preview Grid & Add Slot */}
+                                    <div className="grid grid-cols-3 gap-2.5">
+                                        {complaintPhotoPreviews.map((preview, idx) => (
+                                            <div key={idx} className="relative rounded-2xl overflow-hidden border border-gray-200 aspect-square bg-slate-900 flex items-center justify-center group shadow-sm">
+                                                <img src={preview} alt={`Bukti ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveComplaintPhoto(idx)}
+                                                    className="absolute top-1.5 right-1.5 bg-rose-600/90 hover:bg-rose-600 text-white p-1 rounded-full shadow-md transition-all active:scale-90"
+                                                    title="Hapus foto ini"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                                <div className="absolute bottom-1.5 left-1.5 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded-md text-[9px] font-bold text-white">
+                                                    Foto {idx + 1}
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        {complaintPhotos.length < 3 && (
+                                            <label className={`cursor-pointer block border-2 border-dashed border-gray-200 hover:border-rose-400 hover:bg-rose-50/40 rounded-2xl p-2.5 transition-all text-gray-500 flex flex-col items-center justify-center gap-1 aspect-square ${complaintPhotos.length === 0 ? 'col-span-3 aspect-auto py-6' : ''}`}>
+                                                <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center shadow-sm text-rose-500">
+                                                    <Camera className="w-4 h-4" />
+                                                </div>
+                                                <div className="text-center">
+                                                    <p className="text-[11px] font-black text-gray-700">
+                                                        {complaintPhotos.length === 0 ? 'Pilih / Ambil Foto Kerusakan' : '+ Tambah Foto'}
+                                                    </p>
+                                                    <p className="text-[9px] text-gray-400">
+                                                        {complaintPhotos.length === 0 ? 'Bisa pilih hingga 3 foto (WebP Otomatis)' : `Sisa ${3 - complaintPhotos.length} foto lagi`}
+                                                    </p>
+                                                </div>
+                                                <input
+                                                    type="file"
+                                                    className="hidden"
+                                                    accept="image/*"
+                                                    multiple
+                                                    onChange={(e) => {
+                                                        handleAddComplaintPhotos(e.target.files);
+                                                        e.target.value = '';
+                                                    }}
+                                                />
+                                            </label>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Tombol Aksi */}
+                                <div className="pt-2">
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmitting}
+                                        className="w-full py-4 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-rose-200 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                <span>Mengirim Laporan...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CheckCircle2 className="w-4 h-4" />
+                                                <span>Kirim Laporan Kendala</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+
+                        {/* TAB 2: RIWAYAT TIKET SAYA */}
+                        {complaintModalTab === 'history' && (
+                            <div className="p-6 md:p-8 space-y-4 overflow-y-auto flex-1 custom-scrollbar bg-slate-50/50">
+                                {loadingComplaints ? (
+                                    <div className="py-12 text-center space-y-3">
+                                        <div className="w-8 h-8 border-3 border-rose-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                                        <p className="text-xs font-bold text-gray-500">Memuat riwayat tiket...</p>
+                                    </div>
+                                ) : myComplaints.length === 0 ? (
+                                    <div className="py-12 px-4 text-center bg-white rounded-3xl border border-dashed border-gray-200 space-y-3 shadow-sm">
+                                        <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
+                                            <ShieldCheck className="w-7 h-7" />
+                                        </div>
+                                        <h4 className="text-sm font-black text-gray-800">Belum Ada Riwayat Laporan</h4>
+                                        <p className="text-xs text-gray-500 max-w-xs mx-auto">
+                                            Fasilitas kamar Anda terpantau aman dan prima! Jika ada kendala, silakan laporkan melalui tab formulir.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() => setComplaintModalTab('form')}
+                                            className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-rose-200 active:scale-95 inline-flex items-center gap-1.5"
+                                        >
+                                            <Plus size={14} /> Buat Laporan Sekarang
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3.5">
+                                        {myComplaints.map((c: any) => {
+                                            // Helper to parse multiple photos safely
+                                            const photoList = (() => {
+                                                if (!c.photo_url) return [];
+                                                const trimmed = c.photo_url.trim();
+                                                if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                                                    try {
+                                                        const parsed = JSON.parse(trimmed);
+                                                        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+                                                    } catch {}
+                                                }
+                                                if (trimmed.includes('|||')) {
+                                                    return trimmed.split('|||').map((s: string) => s.trim()).filter(Boolean);
+                                                }
+                                                return [trimmed];
+                                            })();
+
+                                            const isOpen = c.status === 'open';
+                                            const isInProgress = c.status === 'in_progress';
+                                            const isResolved = c.status === 'resolved' || c.status === 'closed';
+                                            const isEmergency = c.urgency === 'EMERGENCY';
+                                            const dateFormatted = new Date(c.created_at).toLocaleDateString('id-ID', {
+                                                day: 'numeric',
+                                                month: 'short',
+                                                year: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            });
+
+                                            return (
+                                                <div key={c.id} className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm space-y-3 transition-all hover:border-gray-200">
+                                                    {/* Header Card */}
+                                                    <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-3">
+                                                        <div>
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="text-[10px] font-black font-mono px-2 py-0.5 rounded-lg bg-gray-100 text-gray-700">
+                                                                    #TKT-{c.id.substring(0, 6).toUpperCase()}
+                                                                </span>
+                                                                <span className="text-[11px] font-bold text-gray-400 flex items-center gap-1">
+                                                                    <Clock size={11} /> {dateFormatted}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                                                                {isEmergency ? (
+                                                                    <span className="bg-rose-100 text-rose-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
+                                                                        🚨 Darurat
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="bg-slate-100 text-slate-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                                                        Standar
+                                                                    </span>
+                                                                )}
+                                                                <span className="bg-gray-100 text-gray-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                                                    {c.category}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Status Badge */}
+                                                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-xl uppercase tracking-wider border shrink-0 ${
+                                                            isOpen ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                                                            isInProgress ? 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse' :
+                                                            'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                        }`}>
+                                                            {isOpen ? '⏳ Menunggu Tindakan' : isInProgress ? '⚙️ Sedang Ditangani' : '✅ Selesai'}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Pokok & Deskripsi */}
+                                                    <div>
+                                                        <h4 className="text-xs font-black text-gray-900">{c.title}</h4>
+                                                        <p className="text-xs text-gray-600 mt-1 leading-relaxed whitespace-pre-line bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                                                            {c.description}
+                                                        </p>
+                                                    </div>
+
+                                                    {/* Galeri Foto Bukti */}
+                                                    {photoList.length > 0 && (
+                                                        <div className="space-y-1.5 pt-1">
+                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">
+                                                                Foto Bukti ({photoList.length} Foto WebP)
+                                                            </span>
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                {photoList.map((url: string, idx: number) => (
+                                                                    <div
+                                                                        key={idx}
+                                                                        onClick={() => setPreviewComplaintPhotoUrl(url)}
+                                                                        className="relative w-16 h-16 rounded-2xl overflow-hidden bg-slate-900 border border-gray-200 cursor-pointer group shrink-0 shadow-sm"
+                                                                        title="Klik untuk memperbesar"
+                                                                    >
+                                                                        <img src={url} alt={`Bukti ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                                                            <ZoomIn size={14} />
+                                                                        </div>
+                                                                        <div className="absolute bottom-1 left-1 bg-black/70 backdrop-blur-md px-1 py-0.2 rounded text-[7px] font-bold text-white">
+                                                                            {idx + 1}
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Respon Pengelola / Admin Notes */}
+                                                    {c.admin_notes && (
+                                                        <div className="bg-emerald-50/80 p-3.5 rounded-2xl border border-emerald-200/80 space-y-1">
+                                                            <span className="text-[10px] font-black text-emerald-800 uppercase tracking-wider block">
+                                                                💬 Catatan Respon Pengelola
+                                                            </span>
+                                                            <p className="text-xs text-emerald-900 font-medium leading-relaxed">
+                                                                {c.admin_notes}
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Zoom Foto Kendala */}
+            {previewComplaintPhotoUrl && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="relative max-w-2xl max-h-[85vh] flex flex-col items-center">
+                        <button
+                            onClick={() => setPreviewComplaintPhotoUrl(null)}
+                            className="absolute -top-12 right-0 bg-white/20 hover:bg-white/40 text-white rounded-full p-2.5 transition-all shadow-lg active:scale-95"
+                            title="Tutup Pratinjau"
+                        >
+                            <X className="w-6 h-6" />
+                        </button>
+                        <img
+                            src={previewComplaintPhotoUrl}
+                            alt="Preview Bukti Kerusakan"
+                            className="max-h-[80vh] w-auto max-w-full rounded-2xl shadow-2xl object-contain border border-white/10"
+                        />
                     </div>
                 </div>
             )}

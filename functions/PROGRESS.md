@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 220. Sistem Riwayat Tiket Kendala & Tracking Status Penanganan Realtime di Modal Lapor Kendala (`MyKost.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna menyampaikan kekhawatiran bahwa riwayat pengiriman tiket kendala tidak dapat dilihat oleh penghuni (*"apakah riwayat tiket pengiriman atau pelaporan kendalanya tidak dapat dilihat? kalau begini bikin user ragu apakah laporannya benar benar sudah terkirim atau tidak"*).
+- **Implementasi Solusi**:
+  1. **Navigasi 2-Tab Internal pada Modal Layanan Tiket Kendala**:
+     - Menghadirkan segmented control tab modern:
+       - **Tab 1: 📝 Buat Laporan Baru** (Formulir pengajuan komplain dengan opsi kategori, urgensi, deskripsi, dan upload multi-foto hingga 3 foto WebP).
+       - **Tab 2: 📋 Riwayat Tiket Saya (X)** (Menampilkan daftar seluruh tiket kendala yang pernah diajukan penghuni dengan counter jumlah tiket real-time).
+  2. **Auto-Switch & Kepastian Instan Pasca-Submit**:
+     - Begitu penghuni menekan tombol *Kirim Laporan Kendala*, data dikompresi ke WebP dan disimpan ke database, formulir di-reset, dan sistem **secara otomatis mengalihkan penghuni ke Tab 2 (Riwayat Tiket)**.
+     - Tiket yang baru saja dikirim langsung muncul di posisi teratas dengan status `⏳ Menunggu Tindakan`, memberikan kepastian 100% kepada pengguna bahwa laporannya telah tersimpan aman.
+  3. **Visualisasi Kartu Tiket Lengkap & Tracking Status**:
+     - Menampilkan ID Tiket (`#TKT-XXXXXX`), tanggal dan jam lapor.
+     - Badge Kategori (AC, Air, Listrik, Furnitur, WiFi, Kebersihan, Keamanan, Lainnya).
+     - Badge Tingkat Urgensi (`🚨 Darurat` vs `Standar`).
+     - Badge Status Real-Time (`⏳ Menunggu Tindakan`, `⚙️ Sedang Ditangani`, `✅ Selesai`).
+     - Deskripsi rincian kendala dalam kotak card rapi.
+     - Galeri thumbnail foto bukti WebP dengan fitur klik untuk memperbesar (zoom modal pratinjau).
+     - Kotak tanggapan pengelola (`💬 Catatan Respon Pengelola`) jika pengelola/teknisi telah memberikan feedback tindak lanjut.
+     - Empty state ramah jika belum ada komplain: *"Belum Ada Riwayat Laporan - Kamar Anda terpantau aman dan prima!"*.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, 36.89s, 0 error).
+
 ### 219. Fitur Unggah Multi-Foto (Hingga 3 Foto) Bukti Kendala dengan Kompresi Otomatis WebP & Galeri di Portal KostManager (`MyKost.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta agar formulir pelaporan kendala dapat mengunggah lebih dari 1 foto (maksimal 3 foto) bukti kerusakan (*"tolong agar bisa upload lebih dari 1 foto, bisa 3 okeelah"*).
