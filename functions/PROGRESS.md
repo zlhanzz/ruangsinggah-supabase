@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 219. Fitur Unggah Multi-Foto (Hingga 3 Foto) Bukti Kendala dengan Kompresi Otomatis WebP & Galeri di Portal KostManager (`MyKost.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar formulir pelaporan kendala dapat mengunggah lebih dari 1 foto (maksimal 3 foto) bukti kerusakan (*"tolong agar bisa upload lebih dari 1 foto, bisa 3 okeelah"*).
+  - Memastikan seluruh foto yang diunggah dikonversi dan disimpan dalam format modern **`.webp`** (*"dan juga pastikan masuk ke database kita dalam bentuk webp"*).
+- **Implementasi Solusi**:
+  1. **Unggah Multi-Foto Hingga 3 Foto di Sisi Penghuni (`MyKost.tsx`)**:
+     - Mengubah state menjadi `complaintPhotos: File[]` dan `complaintPhotoPreviews: string[]` dengan batasan maksimal 3 foto.
+     - Menyediakan grid pratinjau thumbnail interaktif dengan badge penomoran (*Foto 1*, *Foto 2*, *Foto 3*), tombol hapus per foto (*X*), dan slot dinamis *"+ Tambah Foto"* selama jumlah foto `< 3`.
+     - Mendukung pemilihan multi-file sekaligus (`multiple`) maupun penambahan satu per satu.
+  2. **Jaminan Kompresi Wajib WebP (Client-Side Compression)**:
+     - Mengiterasi setiap file foto melalui `compressImageToWebP(rawFile, 0.82, 1920)` sebelum dikirim ke Supabase Storage (`complaints` bucket atau fallback `documents`).
+     - Menyimpan file berekstensi `.webp` dengan MIME type `image/webp`.
+     - Menyimpan payload terstruktur pada kolom `photo_url` (JSON array string jika multi-foto atau string URL jika 1 foto).
+  3. **Penyelarasan Galeri Multi-Foto & WhatsApp Forwarding di Portal KostManager (`KostManagerPortal.tsx`)**:
+     - Menambahkan helper `extractComplaintPhotos(photoUrl)` untuk mem-parse format URL tunggal maupun JSON array string secara fleksibel.
+     - Merender galeri thumbnail multi-foto (hingga 3 foto) pada setiap kartu tiket kendala, lengkap dengan indikator nomor foto dan fitur klik untuk memperbesar (zoom modal `previewPhotoUrl`).
+     - Memperbarui generator pesan *"Teruskan ke Pemilik Kost (WhatsApp)"* agar secara rapi merinci seluruh URL foto WebP yang dilampirkan penghuni.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2531 modules transformed, 38.47s, 0 error).
+
 ### 218. Penghapusan Tombol Hotline WhatsApp pada Modal Lapor Kendala & Perapian Label Kamar (`MyKost.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta agar tombol hotline WhatsApp di bagian bawah modal formulir pelaporan kendala dihilangkan (*"tidak usah ada tombol wa nggak sih"*), agar seluruh alur pelaporan 100% terpusat dan terdata via tiket in-app ke Portal KostManager tanpa bypass ke WhatsApp admin.

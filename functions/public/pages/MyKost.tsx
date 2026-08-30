@@ -230,13 +230,13 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
     const [billAmount, setBillAmount] = useState('');
     const [billProof, setBillProof] = useState<File | null>(null);
 
-    // Complaint form state
+    // Complaint form state (Multi-Photo up to 3 WebP)
     const [complaintTitle, setComplaintTitle] = useState('');
     const [complaintDesc, setComplaintDesc] = useState('');
     const [complaintCategory, setComplaintCategory] = useState('AC & Ventilasi');
     const [complaintUrgency, setComplaintUrgency] = useState<'NORMAL' | 'EMERGENCY'>('NORMAL');
-    const [complaintPhoto, setComplaintPhoto] = useState<File | null>(null);
-    const [complaintPhotoPreview, setComplaintPhotoPreview] = useState<string>('');
+    const [complaintPhotos, setComplaintPhotos] = useState<File[]>([]);
+    const [complaintPhotoPreviews, setComplaintPhotoPreviews] = useState<string[]>([]);
 
     const [recommendations, setRecommendations] = useState<any[]>([]);
 
@@ -1316,11 +1316,29 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
         setComplaintDesc('');
         setComplaintCategory('AC & Ventilasi');
         setComplaintUrgency('NORMAL');
-        setComplaintPhoto(null);
-        setComplaintPhotoPreview('');
+        setComplaintPhotos([]);
+        setComplaintPhotoPreviews([]);
         setShowComplaintModal(true);
         setShowExtraBillModal(false);
         setShowExtensionModal(false);
+    };
+
+    const handleAddComplaintPhotos = (files: FileList | null) => {
+        if (!files || files.length === 0) return;
+        const remainingSlots = 3 - complaintPhotos.length;
+        if (remainingSlots <= 0) {
+            alert('Maksimal 3 foto bukti kerusakan.');
+            return;
+        }
+        const selectedFiles = Array.from(files).slice(0, remainingSlots);
+        const newPreviews = selectedFiles.map(f => URL.createObjectURL(f));
+        setComplaintPhotos(prev => [...prev, ...selectedFiles]);
+        setComplaintPhotoPreviews(prev => [...prev, ...newPreviews]);
+    };
+
+    const handleRemoveComplaintPhoto = (index: number) => {
+        setComplaintPhotos(prev => prev.filter((_, i) => i !== index));
+        setComplaintPhotoPreviews(prev => prev.filter((_, i) => i !== index));
     };
 
     const handleOpenRating = (kost: any) => {
@@ -1475,43 +1493,48 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
         }
         setIsSubmitting(true);
 
-        let photoUrl = '';
+        const uploadedPhotoUrls: string[] = [];
         try {
-            if (complaintPhoto) {
-                // Rule #5: Compress to WebP before upload
-                const webpFile = await compressImageToWebP(complaintPhoto, 0.82, 1920);
-                const fileName = `${user.uid}/${Date.now()}_complaint_${Math.random().toString(36).substring(2, 7)}.webp`;
+            if (complaintPhotos.length > 0) {
+                for (let i = 0; i < complaintPhotos.length; i++) {
+                    const rawFile = complaintPhotos[i];
+                    // Rule #5: Compress to WebP before upload (Client-Side Compression)
+                    const webpFile = await compressImageToWebP(rawFile, 0.82, 1920);
+                    const fileName = `${user.uid}/${Date.now()}_complaint_${i}_${Math.random().toString(36).substring(2, 7)}.webp`;
 
-                let { error: uploadError } = await supabase.storage
-                    .from('complaints')
-                    .upload(fileName, webpFile, {
-                        contentType: 'image/webp',
-                        upsert: true
-                    });
-
-                if (uploadError) {
-                    console.warn('[Storage complaints error, fallback to documents]', uploadError);
-                    const { error: fallbackErr } = await supabase.storage
-                        .from('documents')
-                        .upload(`complaints/${fileName}`, webpFile, {
+                    let { error: uploadError } = await supabase.storage
+                        .from('complaints')
+                        .upload(fileName, webpFile, {
                             contentType: 'image/webp',
                             upsert: true
                         });
-                    if (fallbackErr) {
-                        console.error('[Storage fallback error]', fallbackErr);
+
+                    if (uploadError) {
+                        console.warn('[Storage complaints error, fallback to documents]', uploadError);
+                        const { error: fallbackErr } = await supabase.storage
+                            .from('documents')
+                            .upload(`complaints/${fileName}`, webpFile, {
+                                contentType: 'image/webp',
+                                upsert: true
+                            });
+                        if (!fallbackErr) {
+                            const { data: { publicUrl } } = supabase.storage
+                                .from('documents')
+                                .getPublicUrl(`complaints/${fileName}`);
+                            uploadedPhotoUrls.push(publicUrl);
+                        }
                     } else {
                         const { data: { publicUrl } } = supabase.storage
-                            .from('documents')
-                            .getPublicUrl(`complaints/${fileName}`);
-                        photoUrl = publicUrl;
+                            .from('complaints')
+                            .getPublicUrl(fileName);
+                        uploadedPhotoUrls.push(publicUrl);
                     }
-                } else {
-                    const { data: { publicUrl } } = supabase.storage
-                        .from('complaints')
-                        .getPublicUrl(fileName);
-                    photoUrl = publicUrl;
                 }
             }
+
+            const primaryPhotoPayload = uploadedPhotoUrls.length === 1
+                ? uploadedPhotoUrls[0]
+                : (uploadedPhotoUrls.length > 1 ? JSON.stringify(uploadedPhotoUrls) : '');
 
             const { error: dbError } = await supabase.from('complaints').insert([{
                 kost_id: selectedKost.kostId || selectedKost.id,
@@ -1524,7 +1547,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                 urgency: complaintUrgency,
                 title: complaintTitle.trim(),
                 description: complaintDesc.trim(),
-                photo_url: photoUrl,
+                photo_url: primaryPhotoPayload,
                 status: 'open',
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
@@ -1534,8 +1557,8 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
             alert('Laporan kendala berhasil dikirim! Pengelola kost dan tim teknis akan segera menindaklanjuti.');
             setShowComplaintModal(false);
-            setComplaintPhoto(null);
-            setComplaintPhotoPreview('');
+            setComplaintPhotos([]);
+            setComplaintPhotoPreviews([]);
             setComplaintTitle('');
             setComplaintDesc('');
             setComplaintCategory('AC & Ventilasi');
@@ -4017,57 +4040,62 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                 ></textarea>
                             </div>
 
-                            {/* Upload Foto */}
+                            {/* Upload Foto (Maksimal 3 Foto) */}
                             <div>
-                                <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider block mb-1.5">
-                                    Foto Bukti Kerusakan (Opsional)
-                                </label>
-                                {complaintPhotoPreview ? (
-                                    <div className="relative rounded-2xl overflow-hidden border border-gray-200 group aspect-video max-h-48 bg-slate-900 flex items-center justify-center">
-                                        <img src={complaintPhotoPreview} alt="Preview Bukti" className="w-full h-full object-contain" />
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setComplaintPhoto(null);
-                                                setComplaintPhotoPreview('');
-                                            }}
-                                            className="absolute top-2 right-2 bg-rose-600 text-white p-1.5 rounded-full shadow-lg hover:bg-rose-700 transition-all"
-                                            title="Hapus foto"
-                                        >
-                                            <X className="w-4 h-4" />
-                                        </button>
-                                        <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg text-[10px] font-bold text-white">
-                                            Format WebP Dioptimalkan
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider">
+                                        Foto Bukti Kerusakan (Maks 3 Foto)
+                                    </label>
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100">
+                                        {complaintPhotos.length} / 3 Foto
+                                    </span>
+                                </div>
+
+                                {/* Preview Grid & Add Slot */}
+                                <div className="grid grid-cols-3 gap-2.5">
+                                    {complaintPhotoPreviews.map((preview, idx) => (
+                                        <div key={idx} className="relative rounded-2xl overflow-hidden border border-gray-200 aspect-square bg-slate-900 flex items-center justify-center group shadow-sm">
+                                            <img src={preview} alt={`Bukti ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveComplaintPhoto(idx)}
+                                                className="absolute top-1.5 right-1.5 bg-rose-600/90 hover:bg-rose-600 text-white p-1 rounded-full shadow-md transition-all active:scale-90"
+                                                title="Hapus foto ini"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                            <div className="absolute bottom-1.5 left-1.5 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded-md text-[9px] font-bold text-white">
+                                                Foto {idx + 1}
+                                            </div>
                                         </div>
-                                    </div>
-                                ) : (
-                                    <label className="cursor-pointer block">
-                                        <div className="flex flex-col items-center justify-center gap-2 p-4 bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl hover:border-rose-400 hover:bg-rose-50/50 transition-all text-gray-500 group">
-                                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform text-rose-500">
-                                                <Camera className="w-5 h-5" />
+                                    ))}
+
+                                    {complaintPhotos.length < 3 && (
+                                        <label className={`cursor-pointer block border-2 border-dashed border-gray-200 hover:border-rose-400 hover:bg-rose-50/40 rounded-2xl p-2.5 transition-all text-gray-500 flex flex-col items-center justify-center gap-1 aspect-square ${complaintPhotos.length === 0 ? 'col-span-3 aspect-auto py-6' : ''}`}>
+                                            <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center shadow-sm text-rose-500">
+                                                <Camera className="w-4 h-4" />
                                             </div>
                                             <div className="text-center">
-                                                <p className="text-xs font-black text-gray-700">Pilih / Ambil Foto Kerusakan</p>
-                                                <p className="text-[10px] text-gray-400">JPG, PNG, atau WebP (otomatis dikompresi)</p>
+                                                <p className="text-[11px] font-black text-gray-700">
+                                                    {complaintPhotos.length === 0 ? 'Pilih / Ambil Foto Kerusakan' : '+ Tambah Foto'}
+                                                </p>
+                                                <p className="text-[9px] text-gray-400">
+                                                    {complaintPhotos.length === 0 ? 'Bisa pilih hingga 3 foto (WebP Otomatis)' : `Sisa ${3 - complaintPhotos.length} foto lagi`}
+                                                </p>
                                             </div>
-                                        </div>
-                                        <input 
-                                            type="file" 
-                                            className="hidden" 
-                                            accept="image/*" 
-                                            onChange={(e) => {
-                                                const file = e.target.files?.[0] || null;
-                                                setComplaintPhoto(file);
-                                                if (file) {
-                                                    const url = URL.createObjectURL(file);
-                                                    setComplaintPhotoPreview(url);
-                                                } else {
-                                                    setComplaintPhotoPreview('');
-                                                }
-                                            }} 
-                                        />
-                                    </label>
-                                )}
+                                            <input
+                                                type="file"
+                                                className="hidden"
+                                                accept="image/*"
+                                                multiple
+                                                onChange={(e) => {
+                                                    handleAddComplaintPhotos(e.target.files);
+                                                    e.target.value = '';
+                                                }}
+                                            />
+                                        </label>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Tombol Aksi */}

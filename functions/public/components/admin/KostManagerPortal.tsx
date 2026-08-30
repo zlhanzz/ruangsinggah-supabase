@@ -2216,6 +2216,22 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
         }
     };
 
+    // Helper to safely extract 1 to N photo URLs from complaint.photo_url (supports string URL or JSON array)
+    const extractComplaintPhotos = (photoUrl?: string): string[] => {
+        if (!photoUrl) return [];
+        const trimmed = photoUrl.trim();
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) return parsed.filter(Boolean);
+            } catch {}
+        }
+        if (trimmed.includes('|||')) {
+            return trimmed.split('|||').map(s => s.trim()).filter(Boolean);
+        }
+        return [trimmed];
+    };
+
     const handleForwardComplaintToOwnerWhatsApp = (complaint: ComplaintRecord) => {
         const prop = complaint.property || properties.find(p => p.id === complaint.kost_id);
         const rawPhone = prop?.owner_phone || prop?.omnichannel_contact_phone || '';
@@ -2236,6 +2252,12 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
         });
 
         const urgencyEmoji = complaint.urgency === 'EMERGENCY' ? '🚨 *DARURAT (Perlu Tindakan Cepat)*' : '🔹 *Standar (Normal)*';
+        const photoList = extractComplaintPhotos(complaint.photo_url);
+        const photoSection = photoList.length > 0
+            ? (photoList.length === 1
+                ? `📸 *Foto Bukti Kerusakan (WebP):*\n${photoList[0]}\n\n`
+                : `📸 *Foto Bukti Kerusakan (${photoList.length} Foto WebP):*\n` + photoList.map((url, idx) => `• Foto ${idx + 1}: ${url}`).join('\n') + '\n\n')
+            : '';
 
         const text = encodeURIComponent(
             `*LAPORAN KENDALA FASILITAS PENGHUNI - KOSTMANAGER RUANGSINGGAH*\n\n` +
@@ -2252,7 +2274,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             `*${complaint.title}*\n\n` +
             `📝 *Deskripsi / Rincian Kerusakan:*\n` +
             `"${complaint.description}"\n\n` +
-            (complaint.photo_url ? `📸 *Foto Bukti Kerusakan:*\n${complaint.photo_url}\n\n` : '') +
+            photoSection +
             `Mohon dapat dikoordinasikan atau ditindaklanjuti untuk perbaikan unit tersebut.\n` +
             `Jika membutuhkan bantuan teknisi atau tindak lanjut dari tim operasional KostManager, silakan hubungi kami.\n\n` +
             `_Salam hangat,_\n` +
@@ -5200,31 +5222,36 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                 </p>
                                                             </div>
 
-                                                            {/* Photo Attachment if exists */}
-                                                            {c.photo_url && (
-                                                                <div className="flex items-center gap-3">
-                                                                    <div 
-                                                                        onClick={() => setPreviewPhotoUrl(c.photo_url)}
-                                                                        className="relative w-24 h-20 rounded-2xl overflow-hidden bg-slate-900 border border-gray-200 cursor-pointer group shrink-0"
-                                                                        title="Klik untuk memperbesar foto bukti"
-                                                                    >
-                                                                        <img src={c.photo_url} alt="Bukti Kendala" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
-                                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                                                                            <ZoomIn size={16} />
+                                                            {/* Photo Attachments (Multi-Foto Gallery up to 3 WebP) */}
+                                                            {(() => {
+                                                                const photoList = extractComplaintPhotos(c.photo_url);
+                                                                if (photoList.length === 0) return null;
+                                                                return (
+                                                                    <div className="space-y-1.5 pt-1">
+                                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">
+                                                                            Foto Bukti Kerusakan ({photoList.length} Foto WebP)
+                                                                        </span>
+                                                                        <div className="flex items-center gap-2.5 flex-wrap">
+                                                                            {photoList.map((url, idx) => (
+                                                                                <div 
+                                                                                    key={idx}
+                                                                                    onClick={() => setPreviewPhotoUrl(url)}
+                                                                                    className="relative w-20 h-20 rounded-2xl overflow-hidden bg-slate-900 border border-gray-200 cursor-pointer group shrink-0 shadow-sm"
+                                                                                    title={`Klik untuk memperbesar Foto ${idx + 1}`}
+                                                                                >
+                                                                                    <img src={url} alt={`Bukti ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                                                                        <ZoomIn size={16} />
+                                                                                    </div>
+                                                                                    <div className="absolute bottom-1 left-1 bg-black/70 backdrop-blur-md px-1.5 py-0.5 rounded text-[8px] font-bold text-white">
+                                                                                        Foto {idx + 1}
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
                                                                         </div>
                                                                     </div>
-                                                                    <div>
-                                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Foto Bukti Kerusakan</span>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setPreviewPhotoUrl(c.photo_url)}
-                                                                            className="text-xs font-black text-orange-600 hover:text-orange-700 flex items-center gap-1 mt-0.5 hover:underline cursor-pointer"
-                                                                        >
-                                                                            <Eye size={12} /> Buka Foto Lengkap
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            )}
+                                                                );
+                                                            })()}
 
                                                             {/* Tenant Info Card */}
                                                             <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 flex items-center justify-between gap-3">
