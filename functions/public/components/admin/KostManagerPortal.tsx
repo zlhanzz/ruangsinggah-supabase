@@ -1177,7 +1177,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     const [tenantSearch, setTenantSearch] = useState('');
     const [invoiceSearch, setInvoiceSearch] = useState('');
     const [bookingSearch, setBookingSearch] = useState('');
-    const [bookingStatusFilter, setBookingStatusFilter] = useState<'ALL' | 'PENDING_APPROVAL' | 'AWAITING_PAYMENT' | 'PAID' | 'REJECTED'>('ALL');
+    const [bookingStatusFilter, setBookingStatusFilter] = useState<'ALL' | 'PENDING_APPROVAL' | 'AWAITING_PAYMENT' | 'PAID' | 'CHECKED_OUT' | 'REJECTED'>('ALL');
     const [isProcessingBooking, setIsProcessingBooking] = useState(false);
     const [selectedPropForTenants, setSelectedPropForTenants] = useState<ManagedProperty | null>(null);
     const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
@@ -1432,8 +1432,8 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
 
 
     // --- FETCH DATA ---
-    const loadAllData = async () => {
-        setLoading(true);
+    const loadAllData = async (showSpinner: boolean = true) => {
+        if (showSpinner) setLoading(true);
         try {
             // Load packages first so it doesn't get blocked by early returns
             const pkgs = await getKostManagerPackages();
@@ -1738,18 +1738,32 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
 
                     const matchedProp = mappedProperties.find(p => p.id === b.product_id);
 
+                    const isCheckedOutBooking = Boolean(
+                        bMeta.checkout_at || 
+                        bMeta.resident_status === 'CHECKED_OUT' ||
+                        (allResidents || []).some((r: any) => 
+                            ((r.last_transaction_id && (r.last_transaction_id === b.id || r.last_transaction_id === trueParentId)) || 
+                             (bMeta.booking_session_id && r.metadata?.booking_session_id === bMeta.booking_session_id)) && 
+                            (r.status || '').toUpperCase() === 'CHECKED_OUT'
+                        )
+                    );
+
                     if (!groupedBookingsMap.has(trueParentId)) {
                         groupedBookingsMap.set(trueParentId, {
                             ...b,
                             property: matchedProp || { id: b.product_id, title: bMeta.kostName || 'Kost', price: b.amount },
                             metadata: bMeta,
                             all_transactions: [b],
-                            total_amount: Number(b.amount || 0)
+                            total_amount: Number(b.amount || 0),
+                            is_checked_out: isCheckedOutBooking
                         });
                     } else {
                         const existing = groupedBookingsMap.get(trueParentId);
                         existing.all_transactions.push(b);
                         existing.total_amount += Number(b.amount || 0);
+                        if (isCheckedOutBooking) {
+                            existing.is_checked_out = true;
+                        }
                         if (['kost_booking', 'rent', 'sewa'].includes(b.product_type)) {
                             existing.id = b.id;
                             existing.product_type = b.product_type;
@@ -1810,8 +1824,13 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
     };
 
     useEffect(() => {
-        loadAllData();
+        loadAllData(true);
     }, []);
+
+    // Auto-refresh background data saat berpindah tab
+    useEffect(() => {
+        loadAllData(false);
+    }, [activeTab]);
 
     
     // Handler: Perpanjang Masa Sewa Penghuni
@@ -1977,6 +1996,29 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                         }
                     })
                     .match({ kost_id: tenant.kost_id, user_id: tenant.user_id, status: 'ACTIVE' });
+            }
+
+            // 5b. Update transaksi sewa terkait agar ditandai CHECKED_OUT
+            const targetTrxId = tenant.last_transaction_id || tenant.metadata?.last_transaction_id;
+            if (targetTrxId) {
+                const { data: curTrx } = await supabase
+                    .from('transactions')
+                    .select('metadata')
+                    .eq('id', targetTrxId)
+                    .maybeSingle();
+
+                await supabase
+                    .from('transactions')
+                    .update({
+                        updated_at: new Date().toISOString(),
+                        metadata: {
+                            ...(curTrx?.metadata || {}),
+                            checkout_at: new Date().toISOString(),
+                            resident_status: 'CHECKED_OUT',
+                            checkout_notes: checkoutNotes || 'Check-out selesai via Portal KostManager'
+                        }
+                    })
+                    .eq('id', targetTrxId);
             }
 
             // 6. Kirim notifikasi in-app ke penyewa jika memiliki user_id valid
@@ -2779,24 +2821,36 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
             <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
                 <div className="max-w-7xl mx-auto space-y-6">
                     {/* Header */}
-                    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-                        <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">
-                            {activeTab === 'overview' ? 'Ringkasan Operasional' :
-                             activeTab === 'properties' ? 'Properti Terkelola' :
-                             activeTab === 'bookings' ? 'Pengajuan Sewa Masuk' :
-                             activeTab === 'chats' ? 'Pesan & Chat Customer' :
-                             activeTab === 'tenants' ? 'Daftar Penghuni' :
-                             activeTab === 'billing' ? 'Riwayat Pembayaran Sewa' : 'Harga Langganan KostManager'}
-                        </h2>
-                        <p className="text-xs text-gray-400 font-bold mt-1">
-                            {activeTab === 'overview' ? 'Analisis okupansi, tagihan, dan status auto-pilot aktif' :
-                             activeTab === 'properties' ? 'Kelola detail kamar, kapasitas, dan status pemasaran properti' :
-                             activeTab === 'bookings' ? 'Tinjau dan verifikasi permintaan sewa masuk dari calon penghuni sebelum pembayaran' :
-                             activeTab === 'chats' ? 'Layanan CS terpusat & konsultasi calon penyewa untuk seluruh kost terkelola' :
-                             activeTab === 'tenants' ? 'Daftar penghuni aktif beserta periode sewa dan detail kontak' :
-                             activeTab === 'billing' ? 'Mencatat, memantau riwayat pembayaran sewa, dan mengelola tagihan sewa kost' :
-                             'Mengatur pilihan durasi dan harga paket langganan KostManager untuk Mitra'}
-                        </p>
+                    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">
+                                {activeTab === 'overview' ? 'Ringkasan Operasional' :
+                                 activeTab === 'properties' ? 'Properti Terkelola' :
+                                 activeTab === 'bookings' ? 'Pengajuan Sewa Masuk' :
+                                 activeTab === 'chats' ? 'Pesan & Chat Customer' :
+                                 activeTab === 'tenants' ? 'Daftar Penghuni' :
+                                 activeTab === 'billing' ? 'Riwayat Pembayaran Sewa' : 'Harga Langganan KostManager'}
+                            </h2>
+                            <p className="text-xs text-gray-400 font-bold mt-1">
+                                {activeTab === 'overview' ? 'Analisis okupansi, tagihan, dan status auto-pilot aktif' :
+                                 activeTab === 'properties' ? 'Kelola detail kamar, kapasitas, dan status pemasaran properti' :
+                                 activeTab === 'bookings' ? 'Tinjau dan verifikasi permintaan sewa masuk dari calon penghuni sebelum pembayaran' :
+                                 activeTab === 'chats' ? 'Layanan CS terpusat & konsultasi calon penyewa untuk seluruh kost terkelola' :
+                                 activeTab === 'tenants' ? 'Daftar penghuni aktif beserta periode sewa dan detail kontak' :
+                                 activeTab === 'billing' ? 'Mencatat, memantau riwayat pembayaran sewa, dan mengelola tagihan sewa kost' :
+                                 'Mengatur pilihan durasi dan harga paket langganan KostManager untuk Mitra'}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => loadAllData()}
+                            disabled={loading}
+                            className="px-4 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black uppercase tracking-wider transition-all active:scale-95 flex items-center gap-2 self-start sm:self-auto cursor-pointer disabled:opacity-50"
+                            title="Segarkan data operasional"
+                        >
+                            <RotateCw size={14} className={loading ? 'animate-spin' : ''} />
+                            <span>Segarkan Data</span>
+                        </button>
                     </div>
 
 
@@ -2903,14 +2957,17 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     {activeTab === 'bookings' && (() => {
                         const pendingBookings = bookings.filter(b => (b.status || '').toUpperCase() === 'PENDING_APPROVAL');
                         const awaitingPaymentBookings = bookings.filter(b => (b.status || '').toUpperCase() === 'AWAITING_PAYMENT');
-                        const paidBookings = bookings.filter(b => ['PAID', 'COMPLETED'].includes((b.status || '').toUpperCase()));
+                        const activePaidBookings = bookings.filter(b => ['PAID', 'COMPLETED'].includes((b.status || '').toUpperCase()) && !b.is_checked_out);
+                        const checkedOutBookings = bookings.filter(b => b.is_checked_out || Boolean(b.metadata?.checkout_at || b.metadata?.resident_status === 'CHECKED_OUT'));
                         const rejectedBookings = bookings.filter(b => ['REJECTED', 'CANCELLED'].includes((b.status || '').toUpperCase()));
 
                         const filteredList = bookings.filter(b => {
                             const s = (b.status || '').toUpperCase();
+                            const isCo = b.is_checked_out || Boolean(b.metadata?.checkout_at || b.metadata?.resident_status === 'CHECKED_OUT');
                             if (bookingStatusFilter === 'PENDING_APPROVAL' && s !== 'PENDING_APPROVAL') return false;
                             if (bookingStatusFilter === 'AWAITING_PAYMENT' && s !== 'AWAITING_PAYMENT') return false;
-                            if (bookingStatusFilter === 'PAID' && !['PAID', 'COMPLETED'].includes(s)) return false;
+                            if (bookingStatusFilter === 'PAID' && (!['PAID', 'COMPLETED'].includes(s) || isCo)) return false;
+                            if (bookingStatusFilter === 'CHECKED_OUT' && !isCo) return false;
                             if (bookingStatusFilter === 'REJECTED' && !['REJECTED', 'CANCELLED'].includes(s)) return false;
 
                             if (bookingSearch.trim()) {
@@ -2972,8 +3029,8 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                             <span className={`text-[10px] font-black uppercase tracking-wider ${bookingStatusFilter === 'PAID' ? 'text-emerald-100' : 'text-slate-400'}`}>Disetujui & Lunas</span>
                                             <span className="text-xl">✅</span>
                                         </div>
-                                        <p className="text-3xl font-black">{paidBookings.length}</p>
-                                        <p className={`text-[10px] font-bold mt-1 ${bookingStatusFilter === 'PAID' ? 'text-emerald-100' : 'text-emerald-600'}`}>Penghuni Aktif Berhasil</p>
+                                        <p className="text-3xl font-black">{activePaidBookings.length}</p>
+                                        <p className={`text-[10px] font-bold mt-1 ${bookingStatusFilter === 'PAID' ? 'text-emerald-100' : 'text-emerald-600'}`}>Penghuni Aktif</p>
                                     </button>
 
                                     <button
@@ -3000,7 +3057,8 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                             { key: 'ALL', label: 'Semua Pengajuan', count: bookings.length },
                                             { key: 'PENDING_APPROVAL', label: 'Menunggu Persetujuan', count: pendingBookings.length },
                                             { key: 'AWAITING_PAYMENT', label: 'Menunggu Bayar', count: awaitingPaymentBookings.length },
-                                            { key: 'PAID', label: 'Lunas', count: paidBookings.length },
+                                            { key: 'PAID', label: 'Lunas & Aktif', count: activePaidBookings.length },
+                                            { key: 'CHECKED_OUT', label: 'Selesai (Check-Out)', count: checkedOutBookings.length },
                                             { key: 'REJECTED', label: 'Ditolak', count: rejectedBookings.length }
                                         ].map(f => (
                                             <button
@@ -3159,9 +3217,14 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                             <CreditCard size={11} /> Menunggu Pembayaran
                                                                         </span>
                                                                     )}
-                                                                    {isPaid && (
+                                                                    {isPaid && !b.is_checked_out && (
                                                                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
                                                                             <CheckCircle2 size={11} /> Lunas & Aktif
+                                                                        </span>
+                                                                    )}
+                                                                    {isPaid && b.is_checked_out && (
+                                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
+                                                                            <CheckCircle2 size={11} /> Selesai (Check-Out)
                                                                         </span>
                                                                     )}
                                                                     {isRejected && (
@@ -3240,7 +3303,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                             </button>
                                                                         )}
 
-                                                                        {isPaid && (
+                                                                        {isPaid && !b.is_checked_out && (
                                                                             <button
                                                                                 type="button"
                                                                                 onClick={() => setActiveTab('tenants')}
@@ -3249,6 +3312,11 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                                 <Users size={12} />
                                                                                 <span>Penghuni</span>
                                                                             </button>
+                                                                        )}
+                                                                        {isPaid && b.is_checked_out && (
+                                                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1 bg-slate-50 border border-slate-100 rounded-lg">
+                                                                                Selesai
+                                                                            </span>
                                                                         )}
                                                                     </div>
                                                                 </td>

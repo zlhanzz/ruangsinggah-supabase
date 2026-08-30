@@ -558,7 +558,22 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                     }
                 });
 
-            // De-duplicate by kostId to avoid showing multiple cards for the same property
+            // Fetch actual resident status (Source of Truth for Aktif tab & Checkout recognition)
+            const statusRecords = await getResidentStatus({ userId: user.uid });
+            const checkedOutSessionIds = new Set(
+                (statusRecords || [])
+                    .filter((r: any) => (r.status || '').toUpperCase() === 'CHECKED_OUT')
+                    .map((r: any) => r.metadata?.booking_session_id)
+                    .filter(Boolean)
+            );
+            const checkedOutTrxIds = new Set(
+                (statusRecords || [])
+                    .filter((r: any) => (r.status || '').toUpperCase() === 'CHECKED_OUT')
+                    .flatMap((r: any) => [r.last_transaction_id, ...(r.metadata?.processed_transactions || [])])
+                    .filter(Boolean)
+            );
+
+            // De-duplicate by session or lifecycle so that in-flight applications are NEVER overwritten by past paid leases
             // Priority: PAID > AWAITING_PAYMENT > PENDING_APPROVAL > REJECTED/CANCELLED
             const statusPriority: Record<string, number> = {
                 'paid': 4, 'approved': 4, 'selesai': 4, 'success': 4, 'berhasil': 4,
@@ -569,26 +584,31 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
 
             const uniqueKosts = Object.values(kostsData.reduce((acc: Record<string, any>, curr: any) => {
                 const statusLower = (curr.status || '').toLowerCase();
-                // Group by kostId + roomType to show the single "best" status for that specific lease
-                const uniqueKey = `${curr.kostId}_${(curr.roomType || '').toLowerCase()}`;
+                const isInFlight = ['pending_approval', 'awaiting_payment', 'pending'].includes(statusLower);
 
-                if (!acc[uniqueKey]) {
-                    acc[uniqueKey] = curr;
+                // Group split transactions by booking_session_id if present
+                // Distinguish between in-flight applications and separate historical transactions
+                const sessionKey = curr.metadata?.booking_session_id 
+                    ? `session_${curr.metadata.booking_session_id}` 
+                    : (isInFlight ? `pending_${curr.kostId}_${(curr.roomType || '').toLowerCase()}_${curr.id}` : `history_${curr.kostId}_${(curr.roomType || '').toLowerCase()}_${curr.id}`);
+
+                if (!acc[sessionKey]) {
+                    acc[sessionKey] = curr;
                 } else {
-                    const existingStatus = (acc[uniqueKey].status || '').toLowerCase();
+                    const existingStatus = (acc[sessionKey].status || '').toLowerCase();
                     const currentStatus = (curr.status || '').toLowerCase();
 
                     const pExisting = statusPriority[existingStatus] || 0;
                     const pCurrent = statusPriority[currentStatus] || 0;
 
                     if (pCurrent > pExisting) {
-                        acc[uniqueKey] = curr;
+                        acc[sessionKey] = curr;
                     } else if (pCurrent === pExisting) {
                         // If priority is same, take the latest one
-                        const tExisting = new Date(acc[uniqueKey].created_at || 0).getTime();
+                        const tExisting = new Date(acc[sessionKey].created_at || 0).getTime();
                         const tCurrent = new Date(curr.created_at || 0).getTime();
                         if (tCurrent > tExisting) {
-                            acc[uniqueKey] = curr;
+                            acc[sessionKey] = curr;
                         }
                     }
                 }
@@ -604,6 +624,11 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
             });
 
             const activeWithBills = uniqueKosts.map(k => {
+                const isCheckedOutResident = checkedOutTrxIds.has(k.id) || 
+                    (k.metadata?.booking_session_id && checkedOutSessionIds.has(k.metadata.booking_session_id)) ||
+                    k.metadata?.resident_status === 'CHECKED_OUT' ||
+                    Boolean(k.metadata?.checkout_at);
+
                 const pendBills = filteredBills.filter(b => {
                     const bid = (b.product_id || b.kost_id || '').toString();
                     const kid = (k.kostId || '').toString();
@@ -627,11 +652,13 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                     const s = (b.status || '').toLowerCase();
                     return !['paid', 'success', 'berhasil', 'settlement', 'capture', 'completed', 'done'].includes(s);
                 }).reduce((acc, b) => acc + (b.amount || 0), 0);
-                return { ...k, pendingBills: pendBills, totalPendingBills: totalPend };
+                return { 
+                    ...k, 
+                    is_checked_out: isCheckedOutResident,
+                    pendingBills: pendBills, 
+                    totalPendingBills: totalPend 
+                };
             });
-
-            // Fetch actual resident status (Source of Truth for Aktif tab)
-            const statusRecords = await getResidentStatus({ userId: user.uid });
 
             // Map resident status to match the UI expectations of activeKosts
             // HANYA sertakan data yang berstatus ACTIVE untuk hunian berjalan di tab Aktif
@@ -1666,7 +1693,7 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
         if (activeTab === 'diajukan') return isPending || s === 'REJECTED' || s === 'CANCELLED';
 
         if (activeTab === 'riwayat') {
-            if (s === 'REJECTED' || s === 'CANCELLED' || s === 'CHECKED_OUT' || s === 'COMPLETED') return true;
+            if (s === 'REJECTED' || s === 'CANCELLED' || s === 'CHECKED_OUT' || s === 'COMPLETED' || kost.is_checked_out) return true;
             if (!isPaid) return false;
             if (!kost.endDate) return false;
             const eDate = new Date(kost.endDate);
@@ -1755,7 +1782,18 @@ const MyKost: React.FC<MyKostProps> = ({ user }) => {
                                 }).length + surveyOrdersTabMap.diajukan
                             },
                             { id: 'aktif', label: 'Aktif', count: residentStatus.length + surveyOrdersTabMap.aktif },
-                            { id: 'riwayat', label: 'Riwayat', count: surveyOrdersTabMap.riwayat }
+                            { 
+                                id: 'riwayat', 
+                                label: 'Riwayat', 
+                                count: activeKosts.filter(k => {
+                                    const s = (k.status || '').toUpperCase();
+                                    const isPaid = ['APPROVED', 'PAID', 'SELESAI', 'SUCCESS', 'BERHASIL'].includes(s);
+                                    if (s === 'REJECTED' || s === 'CANCELLED' || s === 'CHECKED_OUT' || s === 'COMPLETED' || k.is_checked_out) return true;
+                                    if (!isPaid || !k.endDate) return false;
+                                    const eDate = new Date(k.endDate);
+                                    return !isNaN(eDate.getTime()) && getCurrentDate() > eDate;
+                                }).length + surveyOrdersTabMap.riwayat 
+                            }
                         ].map((tab) => (
                             <button
                                 key={tab.id}

@@ -2,6 +2,39 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 210. Session-Aware Deduplikasi Booking 'Kost Saya' & Sinkronisasi Status Check-Out Portal KostManager (`MyKost.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa setelah akunnya dikeluarkan dari status penghuni (check-out), kartu hunian lama berhasil hilang dari tab 'Aktif'. Namun saat melakukan pengajuan sewa ulang untuk uji coba kamar baru, kartunya tidak muncul sama sekali di menu "Kost Saya".
+  - Di saat yang sama, pada menu "Pengajuan Sewa" di Portal KostManager (`/dashboard-admin/km_bookings`), status booking lama pengguna masih tercatat sebagai "Lunas & Aktif" dan pengajuan sewa baru belum ter-refresh otomatis.
+- **Akar Masalah**:
+  1. **Deduplikasi `uniqueKosts` Tidak Session-Aware di `MyKost.tsx`**:
+     - Reducer `uniqueKosts` mengelompokkan riwayat booking pengguna berdasarkan key kaku `${curr.kostId}_${curr.roomType}` dan memprioritaskan transaksi berdasarkan skor status (`PAID` bernilai 4 vs `PENDING_APPROVAL` bernilai 2).
+     - Ketika pengguna mengajukan sewa baru untuk unit kost yang sama dengan status `PENDING_APPROVAL`, transaksi baru tersebut dianggap kalah prioritas dan dibuang (*discarded*) oleh transaksi masa lalu yang berstatus `PAID`. Akibatnya, kartu pengajuan sewa baru tidak pernah dirender di layar.
+  2. **Status Statis "Lunas & Aktif" pada Riwayat Booking Portal KostManager**:
+     - Pada tabel pengajuan sewa KostManager (`KostManagerPortal.tsx`), baris booking dengan status `PAID` selalu dirender dengan badge "Lunas & Aktif" tanpa memeriksa apakah penghuni dari transaksi tersebut sudah melakukan check-out (`resident_status === 'CHECKED_OUT'`).
+  3. **Data Booking Tidak Ter-Refresh Otomatis Saat Berpindah Tab**:
+     - Data operasional hanya dimuat sekali saat inisialisasi awal portal (`loadAllData()`), sehingga pengajuan sewa baru yang masuk di tengah sesi admin tidak langsung terlihat tanpa reload browser penuh.
+- **Implementasi Solusi**:
+  1. **Deduplikasi Session-Aware di `MyKost.tsx`**:
+     - Mengambil riwayat `resident_status` lebih awal untuk memetakan ID transaksi dan sesi booking yang telah berstatus `CHECKED_OUT`.
+     - Memperbaiki pembentukan key deduplikasi: transaksi yang sedang berjalan (*in-flight*) atau transaksi dari sesi berbeda kini diisolasi menggunakan key `booking_session_id` atau ID unik pengajuan, sehingga transaksi baru `PENDING_APPROVAL` tidak akan pernah tertimpa oleh transaksi masa lalu.
+     - Menyematkan penanda `is_checked_out` ke dalam item kartu dan memperbarui filter serta counter tab 'Riwayat' agar hunian yang telah selesai sewa tampil rapi di tab Riwayat.
+  2. **Penyelarasan Status Check-Out & Filter di Portal KostManager (`KostManagerPortal.tsx`)**:
+     - Memeriksa penanda `is_checked_out` pada setiap item booking dengan mencocokkan data penghuni dan metadata transaksi.
+     - Pada tabel pengajuan sewa: membedakan badge `Lunas & Aktif` (untuk penghuni yang masih aktif) dan badge `Selesai (Check-Out)` berlatar netral (untuk sewa masa lalu yang telah move-out).
+     - Memperbarui counter kartu KPI `Disetujui & Lunas` agar hanya menghitung penyewa aktif (`activePaidBookings`).
+     - Menambahkan tab filter `Selesai (Check-Out)` di bilah filter pengajuan sewa dan tombol "Segarkan Data" dengan icon putar di header portal KostManager.
+     - Menambahkan auto-refresh latar belakang (*background refresh*) saat berpindah antar tab di portal KostManager.
+  3. **Penyempurnaan `handleCheckoutTenant`**:
+     - Saat proses check-out dilakukan dari portal, metadata transaksi terkait di tabel `transactions` ikut diperbarui dengan `resident_status: 'CHECKED_OUT'` dan timestamp `checkout_at`.
+- **File Tersentuh**:
+  - `functions/public/pages/MyKost.tsx`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `walkthrough.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` berhasil 100% (✓ 2531 modules transformed, 35.53s, 0 error).
+
 ### 209. Perbaikan Fitur Kosongkan Unit Kamar (Check-Out / Move-Out) & Sinkronisasi Status Hunian Portal KostManager (`KostManagerPortal.tsx`, `MyKost.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna melaporkan bahwa saat menekan tombol "Kosongkan Unit Kamar" di modal proses check-out penghuni pada Portal KostManager, tidak terjadi perubahan apa pun. Status penyewaan masih tetap muncul di tab hunian aktif menu "Kost Saya" dari sisi penghuni dan status kamar di sistem masih tetap terisi.
