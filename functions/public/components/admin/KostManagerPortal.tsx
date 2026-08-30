@@ -925,6 +925,8 @@ interface InvoiceRecord {
     total: number;
     status: 'issued' | 'paid' | 'cancelled';
     created_at: string;
+    updated_at?: string;
+    metadata?: any;
 }
 
 
@@ -1708,17 +1710,59 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                 return false;
             });
 
-            // 9. Ambil data pengajuan sewa (Booking Requests) untuk properti KostManager
+            // 9. Ambil data pengajuan sewa & seluruh transaksi sewa online (Booking, Sewa, Perpanjangan, Tagihan Ekstra) untuk properti KostManager
             let managedBookings: any[] = [];
+            let onlineInvoices: InvoiceRecord[] = [];
+
             if (allManagedIds.length > 0) {
                 const { data: rawBookings, error: bErr } = await supabase
                     .from('transactions')
                     .select('*, user:user_id(id, name, phone, email)')
                     .in('product_id', allManagedIds)
-                    .in('product_type', ['kost_booking', 'sewa', 'rent', 'tagihan_ekstra'])
+                    .in('product_type', ['kost_booking', 'sewa', 'rent', 'tagihan_ekstra', 'perpanjangan_sewa'])
                     .order('created_at', { ascending: false });
 
                 if (bErr) console.warn('Warning loading bookings for KostManager:', bErr);
+
+                // Pemetaan transaksi online menjadi entri tagihan / invoice resmi
+                onlineInvoices = (rawBookings || []).map((trx: any) => {
+                    const bMeta = typeof trx.metadata === 'string' ? JSON.parse(trx.metadata) : (trx.metadata || {});
+                    const matchedProp = mappedProperties.find(p => p.id === trx.product_id);
+                    const s = (trx.status || '').toLowerCase();
+                    const isPaid = ['paid', 'success', 'berhasil', 'settlement', 'capture', 'completed', 'done'].includes(s);
+                    const isCancelled = ['cancelled', 'expire', 'expired', 'failed', 'batal', 'rejected'].includes(s);
+                    const mappedStatus: 'paid' | 'cancelled' | 'issued' = isPaid ? 'paid' : (isCancelled ? 'cancelled' : 'issued');
+
+                    const isExt = (trx.product_type || '').toLowerCase() === 'perpanjangan_sewa';
+                    const roomLabel = bMeta.roomNumber || bMeta.room_number || bMeta.variantName || (trx.room_type ? trx.room_type.replace(/^kamar\s*/i, '') : '');
+                    const billTitle = bMeta.billName || bMeta.bill_name || (
+                        isExt 
+                            ? `Perpanjangan Sewa (${bMeta.extensionPeriod || 1} Bulan)${roomLabel ? ` - Kamar ${roomLabel}` : ''}`
+                            : (roomLabel ? `Sewa Kamar ${roomLabel}` : 'Sewa Kost Online')
+                    );
+
+                    return {
+                        id: trx.id,
+                        bill_number: bMeta.order_id || bMeta.bill_number || `INV-${(trx.id || '').substring(0, 8).toUpperCase()}`,
+                        bill_date: trx.created_at || new Date().toISOString(),
+                        due_date: bMeta.original_due_date || bMeta.newPeriodEnd || bMeta.endDate || bMeta.leaseEnd || trx.created_at || new Date().toISOString(),
+                        category: 'sewa',
+                        recipient_name: trx.user?.name || bMeta.tenantName || bMeta.userName || bMeta.residentName || 'Penyewa',
+                        recipient_phone: trx.user?.phone || bMeta.userPhone || bMeta.phone || bMeta.residentPhone || '-',
+                        recipient_address: bMeta.address || matchedProp?.address || '',
+                        kost_name: matchedProp?.title || bMeta.kostName || bMeta.propertyTitle || 'Kost RuangSinggah',
+                        rental_amount: Number(bMeta.basePrice || bMeta.baseRent || trx.amount || 0),
+                        commission_percent: 0,
+                        commission_amount: 0,
+                        items: bMeta.item_details || [],
+                        notes: billTitle,
+                        total: Number(trx.amount || 0),
+                        status: mappedStatus,
+                        created_at: trx.created_at || new Date().toISOString(),
+                        updated_at: trx.updated_at || trx.created_at,
+                        metadata: bMeta
+                    };
+                });
 
                 // Grouping split transactions (Rent + Facility) into one parent booking
                 const groupedBookingsMap = new Map<string, any>();
@@ -1815,9 +1859,22 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     }));
             }
 
+            // Gabungkan invoice manual dan transaksi online (deduplikasi per ID unik)
+            const combinedInvoicesMap = new Map<string, InvoiceRecord>();
+            (rentInvoices || []).forEach(inv => combinedInvoicesMap.set(inv.id, inv));
+            (onlineInvoices || []).forEach(inv => {
+                if (!combinedInvoicesMap.has(inv.id)) {
+                    combinedInvoicesMap.set(inv.id, inv);
+                }
+            });
+
+            const finalInvoices = Array.from(combinedInvoicesMap.values()).sort(
+                (a, b) => new Date(b.bill_date || b.created_at).getTime() - new Date(a.bill_date || a.created_at).getTime()
+            );
+
             setProperties(mappedProperties);
             setTenants(combinedTenants);
-            setInvoices(rentInvoices);
+            setInvoices(finalInvoices);
             setBookings(managedBookings);
 
             // Load Sesi Chat KostManager
@@ -4825,13 +4882,14 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                         type="button"
                                                                         onClick={() => {
                                                                             const extra = Number(inv.total || 0) - Number(inv.rental_amount || 0);
+                                                                            const roomNum = inv.metadata?.roomNumber || inv.metadata?.room_number || inv.notes?.match(/Kamar\s*([0-9a-zA-Z]+)/i)?.[1] || '1';
                                                                             setSelectedReceipt({
                                                                                 receiptNumber: inv.id,
                                                                                 paidAt: inv.updated_at || inv.bill_date,
                                                                                 tenantName: inv.recipient_name,
                                                                                 tenantPhone: inv.recipient_phone,
                                                                                 propertyTitle: inv.kost_name,
-                                                                                roomNumber: inv.notes?.match(/Kamar\s*([0-9a-zA-Z]+)/i)?.[1] || '1',
+                                                                                roomNumber: roomNum,
                                                                                 billingPeriod: 'Bulanan',
                                                                                 newPeriodStart: inv.bill_date,
                                                                                 newPeriodEnd: inv.due_date,
@@ -4839,7 +4897,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                                 extraFee: extra > 0 ? extra : 0,
                                                                                 extraFeeName: extra > 0 ? 'Biaya Tambahan' : undefined,
                                                                                 totalAmount: Number(inv.total),
-                                                                                paymentMethod: 'Manual / Transfer / Payment Gateway'
+                                                                                paymentMethod: 'Midtrans / Transfer / QRIS'
                                                                             });
                                                                             setShowDigitalReceiptModal(true);
                                                                         }}

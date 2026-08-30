@@ -4349,3 +4349,24 @@
 - **Verifikasi**:
   - Build Vite frontend `cmd /c npm run build` di `functions/public/` lulus 100% dengan 0 error dalam 37.35s (✓ 2531 modules transformed).
 
+### 215. Integrasi & Sinkronisasi Riwayat Pembayaran Sewa & Perpanjangan Sewa Online pada Portal KostManager (`KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna telah melakukan simulasi perpanjangan sewa (atau pembayaran sewa online), namun tabel "Riwayat Pembayaran Sewa" pada Portal KostManager (`/dashboard-admin/km_billing`) masih kosong (0 data).
+  2. Tab penagihan sebelumnya hanya membaca tagihan manual dari `getManualInvoices()`, sehingga transaksi online (booking awal, perpanjangan sewa, tagihan ekstra) di tabel `transactions` tidak terpantau.
+  3. Query `transactions` pada KostManager sebelumnya belum menyertakan filter `product_type: 'perpanjangan_sewa'`.
+- **Implementasi & Solusi Presisi**:
+  * **1. Perluasan Filter Query Transaksi**:
+    - Menyertakan `'perpanjangan_sewa'` bersama `'kost_booking'`, `'sewa'`, `'rent'`, dan `'tagihan_ekstra'` pada pemuatan transaksi properti KostManager di `loadAllData`.
+  * **2. Pemetaan Komprehensif Transaksi Online ke Format Tagihan / Invoices (`onlineInvoices`)**:
+    - Mengonversi data transaksi online menjadi entri invoice standar dengan ID Invoice, nama penyewa, nomor WhatsApp, nama kost & unit kamar, tanggal tagihan, jatuh tempo baru, nominal lunas, dan badge status `paid` / `issued` / `cancelled`.
+  * **3. Penggabungan & Deduplikasi Riwayat Penagihan Terpadu**:
+    - Menggabungkan data tagihan manual dan seluruh transaksi online sewa, dideduplikasi berdasarkan ID unik, dan diurutkan secara kronologis (dari transaksi terbaru).
+  * **4. Aksi Kwitansi Digital Resmi & Integrasi WhatsApp**:
+    - Menyelaraskan tombol **"🧾 Kwitansi"** dan tombol **WhatsApp Kwitansi** di tabel agar langsung membuka `DigitalReceiptModal` resmi berstempel dan mengirim rincian kwitansi ke nomor WhatsApp penyewa.
+- **File Tersentuh**:
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` berhasil 100% dengan 0 error dalam 34.84s (✓ 2531 modules transformed).
+

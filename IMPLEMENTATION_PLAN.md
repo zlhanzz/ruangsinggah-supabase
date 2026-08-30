@@ -1,52 +1,46 @@
-# Rencana Implementasi: Peningkatan Komprehensif Modal Perpanjangan Sewa pada Menu 'Kost Saya' (`MyKost.tsx`)
+# Rencana Implementasi: Integrasi & Sinkronisasi Riwayat Pembayaran Sewa / Perpanjangan Sewa Online pada Portal KostManager (`KostManagerPortal.tsx`)
 
-Dokumen ini merancang peningkatan informasi dan fitur pada modal **Perpanjang Sewa** agar menyajikan rincian masa sewa saat ini, kalkulasi presisi timeline perpanjangan baru (tanggal mulai bersambung, tanggal selesai baru, dan total skala hari), serta tab riwayat perpanjangan sewa sebelumnya beserta akses kwitansi digital.
+Dokumen ini menganalisis akar masalah dan menyusun rencana perbaikan agar seluruh transaksi pembayaran sewa online, simulasi perpanjangan sewa, serta tagihan kamar pada properti kelolaan KostManager otomatis tampil secara lengkap pada menu **"Riwayat Pembayaran Sewa"** (`/dashboard-admin/km_billing`).
 
 ---
 
-## 1. Analisis Masalah & Kebutuhan Pengguna
+## 1. Analisis Masalah & Akar Penyebab (Root Cause)
 
-### Kebutuhan Pengguna:
-1. **Informasi Masa Sewa Sekarang Kurang Rinci**:
-   - Modal saat ini langsung menyajikan pemilih durasi tanpa menampilkan informasi status masa sewa aktif penyewa (unit kamar, tanggal mulai masuk, tanggal berakhir saat ini, dan sisa hari masa tinggal).
-2. **Ketiadaan Simulasi Tanggal & Skala Hari Perpanjangan**:
-   - Penyewa tidak mengetahui secara pasti: jika memperpanjang $N$ bulan, perpanjangan tersebut **mulai tanggal berapa**, **berakhir tanggal berapa**, dan **berapa total jangka hari sewanya**.
-3. **Ketiadaan Akses Riwayat Perpanjangan Sewa Sebelumnya**:
-   - Penyewa ingin dapat melihat riwayat transaksi perpanjangan sewa yang pernah dilakukan untuk hunian tersebut beserta status pelunasan dan bukti kwitansi digitalnya.
+### Gejala Masalah:
+- Pengguna telah melakukan simulasi perpanjangan sewa (atau pembayaran sewa online), namun tabel **"Riwayat Pembayaran Sewa"** di Portal KostManager (`/dashboard-admin/km_billing`) masih kosong melompong (0 data).
+
+### Akar Penyebab:
+1. **Pemuatan Data Tagihan Terisolasi Hanya pada Tabel Manual**:
+   - Pada fungsi `loadAllData` di [`KostManagerPortal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx#L1698-L1710), state `invoices` sebelumnya **hanya memuat data dari fungsi `getManualInvoices()`** (tabel `invoices`).
+   - Tabel `invoices` ini hanya terisi jika admin menekan tombol manual *"➕ Terbitkan Tagihan Sewa"*.
+2. **Transaksi Online & Perpanjangan Sewa Tersimpan di Tabel `transactions`**:
+   - Setiap kali penyewa melakukan pembayaran booking sewa, perpanjangan sewa (`product_type: 'perpanjangan_sewa'`), atau pelunasan tagihan fasilitas, data tersimpan secara otomatis di tabel **`transactions`**.
+   - Karena transaksi dari tabel `transactions` belum dimapping ke dalam daftar `invoices`, maka tabel "Riwayat Pembayaran Sewa" di portal tidak pernah menampilkan pembayaran sewa online tersebut.
+3. **Filter `product_type` di Query Transaksi Belum Menyertakan `perpanjangan_sewa`**:
+   - Filter query `transactions` pada `KostManagerPortal.tsx` baris 1718 sebelumnya hanya membatasi `['kost_booking', 'sewa', 'rent', 'tagihan_ekstra']` tanpa menyertakan tipe `'perpanjangan_sewa'`.
 
 ---
 
 ## 2. Solusi yang Direncanakan
 
-Melakukan pembaruan komprehensif pada komponen modal **Perpanjang Sewa** di [`MyKost.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx):
-
-### A. Navigasi Tab Internal Modal:
-- Menambahkan switcher 2 tab responsif:
-  - `[ ➕ FORM PERPANJANGAN ]`: Formulir pengajuan perpanjangan sewa dengan rincian timeline dan biaya.
-  - `[ 📜 RIWAYAT PERPANJANGAN (N) ]`: Daftar riwayat perpanjangan dan pembayaran sewa masa lalu.
-
-### B. Kartu Informasi Masa Sewa Saat Ini (Current Lease Card):
-- Menampilkan kartu status hunian aktif:
-  - **Identitas Unit**: Nama Kost, Tipe Kamar, dan Nomor Unit (`Unit Kamar X`).
-  - **Rentang Masa Sewa Berjalan**: Tanggal Mulai Masuk s/d Tanggal Berakhir Saat Ini (format bahasa Indonesia lengkap).
-  - **Sisa Hari Masa Tinggal**: Badge sisa hari aktif (`X Hari Tersisa`).
-
-### C. Live Timeline & Skala Hari Perpanjangan Baru:
-- Berdasarkan durasi yang dipilih (`extensionPeriod` 1 bulan, 2 bulan, 3 bulan, 6 bulan, 12 bulan):
-  - **Tanggal Mulai Perpanjangan**: Tanggal bersambung dari masa sewa saat ini (`selectedKost.endDate`).
-  - **Tanggal Selesai Baru**: Tanggal jatuh tempo akhir yang baru setelah ditambah $N$ bulan.
-  - **Total Skala Hari**: Jumlah total hari tambahan yang dihitung secara presisi dari selisih tanggal (misal: `31 Hari (1 Bulan)` / `92 Hari (3 Bulan)` / `365 Hari (1 Tahun)`).
-  - **Visual Timeline Bar**: Indikator alur perpanjangan bersambung (*Seamless Continuity*).
-
-### D. Tab Riwayat Perpanjangan Sewa Sebelumnya:
-- Menampilkan daftar seluruh transaksi pembayaran sewa / perpanjangan hunian yang telah lunas (`PAID` / `SETTLED`).
-- Setiap riwayat memuat:
-  - Nama periode tagihan / invoice (misal: `Sewa Kost Oktober 2026 (1 Bulan)`).
-  - Tanggal pembayaran lunas & metode bayar.
-  - Total nominal pembayaran.
-  - Badge status hijau `Lunas & Terverifikasi`.
-  - Tombol **"🧾 Lihat Kwitansi"** yang terhubung langsung ke `DigitalReceiptModal` resmi berstempel PT RUANG SINGGAH NUSANTARA.
-- Jika belum pernah melakukan perpanjangan (masih periode awal sewa), disajikan empty state yang informatif.
+1. **Perluas Filter Transaksi Properti Terkelola**:
+   - Memastikan query `transactions` menyertakan `product_type` `'perpanjangan_sewa'`, `'kost_booking'`, `'sewa'`, `'rent'`, dan `'tagihan_ekstra'`.
+2. **Transformasi & Sinkronisasi Otomatis Transaksi Online ke Format `InvoiceRecord`**:
+   - Memetakan setiap transaksi sewa online menjadi format invoice standar:
+     - `bill_number`: `#INV-{id}` atau nomor invoice transaksi.
+     - `recipient_name`: Nama penyewa / pemesan.
+     - `recipient_phone`: Nomor WhatsApp penyewa.
+     - `kost_name`: Nama properti kost kelolaan.
+     - `bill_date`: Tanggal transaksi dibuat/dibayar.
+     - `due_date`: Tanggal jatuh tempo sewa yang diperpanjang.
+     - `total`: Nominal transaksi yang dibayarkan.
+     - `status`: `paid` jika transaksi lunas (`PAID`/`SETTLEMENT`/`SUCCESS`), `issued` jika pending, `cancelled` jika batal/expired.
+     - `notes`: Rincian perpanjangan (misal: *Perpanjangan Sewa (1 Bulan) - Kamar 3*).
+3. **Penggabungan Terpadu (Unified Invoices List)**:
+   - Menggabungkan data tagihan manual dari `getManualInvoices()` dan seluruh riwayat transaksi sewa online dari `transactions`.
+   - Mengurutkan data secara kronologis (dari transaksi terbaru).
+4. **Dukungan Kwitansi Digital & WhatsApp**:
+   - Memastikan tombol **"🧾 Kwitansi"** dan **"Kirim Kwitansi WA"** di baris tabel dapat langsung dibuka dan mencetak kwitansi resmi PT RUANG SINGGAH NUSANTARA untuk transaksi perpanjangan sewa online tersebut.
 
 ---
 
@@ -54,37 +48,34 @@ Melakukan pembaruan komprehensif pada komponen modal **Perpanjang Sewa** di [`My
 
 | No | File | Deskripsi Perubahan |
 |---|---|---|
-| 1 | [`functions/public/pages/MyKost.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx) | Mengupgrade modal Perpanjangan Sewa dengan kartu status masa sewa aktif, kalkulator live timeline tanggal & jangka hari baru, switcher tab riwayat, dan integrasi kwitansi perpanjangan lampau. |
-| 2 | `functions/PROGRESS.md` | Pencatatan riwayat penambahan fitur (Anti-Amnesia). |
+| 1 | [`functions/public/components/admin/KostManagerPortal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx) | Menambahkan `'perpanjangan_sewa'` pada filter transaksi, mengintegrasikan transaksi online sewa ke dalam state `invoices`, dan menyelaraskan aksi kwitansi digital. |
+| 2 | `functions/PROGRESS.md` | Pencatatan riwayat penambahan fitur #215 (Anti-Amnesia). |
 | 3 | `WALKTHROUGH.md` | Penerbitan dokumentasi walkthrough hasil pengujian. |
 
 ---
 
 ## 4. Langkah-Langkah Eksekusi (Fase 2 - Setelah ACC)
 
-1. **Langkah 1: Tambahkan State Navigasi Tab pada Modal Perpanjangan di `MyKost.tsx`**
-   - Menambahkan state `extensionActiveTab: 'form' | 'history'` (default `'form'`).
-2. **Langkah 2: Susun Kartu Status Masa Sewa Saat Ini & Kalkulator Timeline Realtime**
-   - Membuat helper perhitungan tanggal bersambung: `calculateExtensionTimeline(endDate, extensionPeriod)`.
-   - Mengembalikan `startDateFormatted`, `endDateFormatted`, dan `totalDays`.
-   - Menyajikan tampilan timeline yang elegan dengan icon vector SVG `lucide-react` (`Calendar`, `Clock`, `ArrowRight`, `ShieldCheck`).
-3. **Langkah 3: Bangun Tab Riwayat Perpanjangan Sewa & Integrasi Kwitansi Digital**
-   - Memfilter transaksi sewa lunas dari `selectedKost.pendingBills` / riwayat transaksi kost terkait.
-   - Menghubungkan tombol "Lihat Kwitansi" ke `setSelectedReceipt` dan `setShowDigitalReceiptModal(true)`.
-4. **Langkah 4: Uji Kompilasi & Build**
-   - Menjalankan `cmd /c npm run build` di direktori `functions/public/` untuk memastikan 0 error kompilasi.
-5. **Langkah 5: Dokumentasi & Git Push**
-   - Mencatat progres ke `functions/PROGRESS.md` dan membuat `WALKTHROUGH.md`.
-   - Melakukan `git commit` dan `git push` ke branch `bukan-productions`.
+1. **Langkah 1: Perbarui Query & Mapping Data di `loadAllData` (`KostManagerPortal.tsx`)**
+   - Sertakan `perpanjangan_sewa` pada query `transactions`.
+   - Bangun pemetaan `onlineTrxInvoices` dari seluruh transaksi sewa milik properti KostManager terkelola.
+2. **Langkah 2: Gabungkan & Deduplikasi Invoices**
+   - Gabungkan `rentInvoices` manual dan `onlineTrxInvoices`.
+   - Set ke state `setInvoices(combinedInvoices)`.
+3. **Langkah 3: Uji Kompilasi & Build**
+   - Jalankan `cmd /c npm run build` di direktori `functions/public/` untuk memastikan 0 error kompilasi.
+4. **Langkah 4: Dokumentasi & Git Push**
+   - Catat di `functions/PROGRESS.md` dan terbitkan `WALKTHROUGH.md`.
+   - Lakukan `git commit` dan `git push origin bukan-productions`.
 
 ---
 
 ## 5. Rencana Verifikasi
 
-- **Verifikasi Status Masa Sewa Saat Ini**:
-  - Memastikan tanggal mulai masuk, tanggal berakhir saat ini, dan sisa hari tampil jelas pada modal perpanjangan.
-- **Verifikasi Kalkulasi Timeline Perpanjangan Baru**:
-  - Saat mengubah durasi (misal 1 bulan -> 3 bulan), tanggal mulai, tanggal selesai baru, dan total jumlah hari (+92 Hari) ter-update secara instan dan akurat.
-- **Verifikasi Tab Riwayat Perpanjangan**:
-  - Saat tab "Riwayat Perpanjangan" diklik, riwayat transaksi sewa masa lalu muncul lengkap dengan rincian biaya, tanggal lunas, dan tombol kwitansi digital yang dapat dibuka.
-- **Verifikasi Build**: `npm run build` lulus 100% dengan 0 error.
+- **Verifikasi Tampilan Tabel Riwayat Pembayaran Sewa**:
+  - Buka `/dashboard-admin/km_billing`.
+  - Pastikan transaksi perpanjangan sewa (dan pembayaran sewa online lainnya) muncul secara otomatis di tabel tanpa perlu diterbitkan manual.
+- **Verifikasi Kwitansi**:
+  - Klik tombol **"Kwitansi"** pada baris transaksi perpanjangan sewa dan pastikan modal kwitansi digital muncul lengkap dengan stempel dan detail periode baru.
+- **Verifikasi Build**:
+  - `npm run build` lulus 100% dengan 0 error.
