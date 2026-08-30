@@ -1,70 +1,55 @@
-# 🚀 WALKTHROUGH - Perbaikan Preview Foto Kost & Normalisasi Foto Kamar pada Menu 'Kost Saya'
+# Walkthrough: Penyelarasan Scroll & Sticky Section Booking (Desktop vs Mobile)
 
-Dokumen ini menjelaskan perbaikan masalah di mana kartu pengajuan sewa baru di menu **"Kost Saya"** tidak menampilkan foto kost/kamar dan hanya memunculkan thumbnail placeholder logo *RuangSinggah*.
-
----
-
-## 📌 Masalah yang Ditemukan
-Saat pengguna mengajukan sewa baru (misal *Kamar 4 - Kost Madani*):
-1. Kartu pengajuan sewa berhasil muncul di tab **"Diajukan"** pada menu *Kost Saya*.
-2. Namun thumbnail foto pada kartu pengajuan tidak memuat foto kamar/properti, melainkan hanya menampilkan kotak placeholder abu-abu dengan teks logo **"RuangSinggah"**.
+Dokumen ini mendokumentasikan implementasi dan hasil verifikasi penyesuaian perilaku *scroll* dan *sticky* pada card booking halaman detail kost ([`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx)).
 
 ---
 
-## 🔍 Akar Masalah
-1. **Kegagalan Query Kolom Non-Eksisten `subscription_status`**:
-   - Pada `MyKost.tsx:523`, query batch fetching tabel `properties` menyertakan kolom `subscription_status` (`.select('..., subscription_status')`).
-   - Di skema Supabase, kolom `subscription_status` berada pada tabel `mitra`, **bukan** pada tabel `properties`.
-   - PostgREST mengembalikan pesan error `code: 42703 (column properties.subscription_status does not exist)`, menyebabkan pemanggilan data properti gagal secara total (`null`).
-2. **Kegagalan Resolusi Foto Kamar (`displayImg` & `roomPhotos`)**:
-   - Karena data properti gagal dimuat (`propMap` kosong), komponen tidak dapat mencocokkan `prop.room_types` untuk Kamar 4.
-   - Variabel `roomPhotos` dan `displayImg` menjadi kosong (`null`), sehingga sistem beralih ke rendering placeholder logo default.
+## 1. Daftar Perubahan
 
----
+### A. Penyelarasan Responsive Breakpoint pada Sidebar Booking (`KostDetail.tsx`)
+- Mengisolasi properti `sticky`, batas tinggi `max-h-[calc(100vh-5.5rem)]`, `overflow-y-auto`, dan `overscroll-contain` agar **hanya aktif pada breakpoint desktop** (`lg:` $\ge 1024\text{px}$).
+- **Di Desktop (`lg:` ke atas)**:
+  - Sidebar booking tetap bersifat *sticky* (`lg:sticky lg:top-20`) dan memiliki scroll internal mandiri (`lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:overscroll-contain`) dengan scrollbar ramping oranye (`lg:scrollbar-thin lg:scrollbar-thumb-orange-200`).
+  - Pengguna desktop dapat menggulir seluruh form booking di kolom kanan tanpa menggerakkan konten di sebelah kiri.
+- **Di Mobile (`< lg` / Ponsel & Tablet)**:
+  - Pembatasan tinggi dinonaktifkan (`max-h-none`), *overflow* bernilai *visible*, dan posisi bersifat normal (*static*).
+  - Gestur sentuh jari (*touch swipe*) pengguna ponsel dapat menggulir halaman secara alami ke bawah maupun ke atas tanpa terperangkap di dalam card booking (*Zero Scroll Trapping*).
 
-## 🛠️ Perubahan yang Dilakukan
-
-### 1. Perbaikan Batch Query Properti & Fallback Mitra KostManager ([`MyKost.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx))
-- Menghapus kolom non-eksisten `subscription_status` dari query `properties`:
-  ```typescript
-  const { data: propertiesData, error: propErr } = await supabase
-      .from('properties')
-      .select('id, title, address, image_urls, owner_uid, city, area, additional_fee_name, additional_fee_price, additional_fee_starts_from, room_types, location, facilities, rules, metadata, is_managed')
-      .in('id', productIds);
-  ```
-- Menambahkan fallback query ke tabel `mitra_kostmanager` untuk properti mitra yang ID-nya terdaftar di tabel mitra KostManager, sehingga data `properties` selalu lengkap 100%.
-
-### 2. Normalisasi URL Foto Storage ke Public Supabase CDN URL
-- Menggunakan helper `normalizePhotoUrl` untuk mengubah storage path mentah (`kostmanager/rooms/...`) menjadi URL publik Supabase yang valid.
-- Memastikan foto kamar tidur/kamar mandi spesifik (`room.images`) diprioritaskan sebagai `displayImg` dan `roomPhotos`, dengan fallback otomatis ke foto tampak depan gedung (*Bangunan Depan*).
-
----
-
-## 🧪 Hasil Verifikasi & Pengujian
-
-### 1. Pengujian Query Publik Supabase (Kamar 4 Kost Madani)
-```text
-✓ Query Status: Error: null
-✓ Prop title: kost madani
-✓ Room count: 5
-✓ Kamar 4 photos count: 6
-✓ Kamar 4 first photo: https://sgcmnsnokrztocnhxnqm.supabase.co/storage/v1/object/public/properties/kostmanager/rooms/1787760033891_0/1787760034691_politeknik_negeri_Ujungpangang.webp
+```diff
+           {/* Right Sidebar - Booking Card */}
+           <div className="relative">
+-            <div className="sticky top-20">
+-              <div className="bg-white rounded-[2rem] lg:rounded-[2.5rem] p-6 lg:p-7 border border-gray-100 shadow-xl shadow-gray-100/50 max-h-[calc(100vh-5.5rem)] overflow-y-auto overscroll-contain pr-4 lg:pr-5 scrollbar-thin scrollbar-thumb-orange-200">
++            <div className="lg:sticky lg:top-20">
++              <div className="bg-white rounded-[2rem] lg:rounded-[2.5rem] p-5 sm:p-6 lg:p-7 border border-gray-100 shadow-xl shadow-gray-100/50 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-5 lg:scrollbar-thin lg:scrollbar-thumb-orange-200">
+                 <div className="mb-6">
 ```
 
-### 2. Pengujian Kompilasi Frontend
-- Perintah: `npm run build` di `functions/public/`
-- Hasil: **100% SUKSES (0 error)**
-  ```text
-  ✓ 2531 modules transformed.
-  ✓ built in 34.97s
-  ```
+---
+
+## 2. Hasil Pengujian & Kompilasi
+
+Kompilasi build produksi Vite (`functions/public/`):
+```text
+> vite build
+✓ 2531 modules transformed.
+✓ built in 19.87s
+Status: 0 errors / Lulus 100%
+```
 
 ---
 
-## 📲 Panduan Pengujian bagi Pengguna
+## 3. Panduan Pengujian untuk Pengguna (User Testing Guide)
 
-1. Buka browser dan arahkan ke menu **"Kost Saya"** (`/my-kost` atau klik tombol *Kost Saya* di navbar).
-2. Periksa kartu pengajuan sewa untuk **Kamar 4 - Kost Madani**:
-   - Foto kamar tidur/kamar kost kini **langsung tampil jernih** pada thumbnail kartu.
-   - Badge jumlah foto (misal `📸 6 Foto`) tampil di pojok kanan foto.
-   - Saat kartu diklik, modal rincian sewa menyajikan galeri foto kamar lengkap beserta rincian fasilitas dan status pengajuan.
+### Skenario 1: Pengujian Tampilan Mobile (Ponsel / Layar < 1024px)
+1. Buka browser di perangkat ponsel atau gunakan mode responsive DevTools (misal ukuran 375px atau 412px).
+2. Kunjungi halaman detail kost (misal Kost Madani atau properti lainnya).
+3. Gulir ke bawah hingga masuk ke card booking (area pilihan kamar, fasilitas, dan tombol ajukan sewa).
+4. Lakukan gestur sentuh / *swipe* ke atas dari area mana saja di dalam card booking:
+   - **Ekspektasi**: Layar langsung bergulir kembali ke atas dengan mulus menuju galeri foto dan informasi kost tanpa tersendat atau terjebak di dalam card.
+
+### Skenario 2: Pengujian Tampilan Desktop (Layar $\ge$ 1024px)
+1. Buka halaman detail kost di browser desktop.
+2. Perhatikan kolom kanan (card booking):
+   - Card booking tetap *sticky* mengikuti layar saat konten sebelah kiri digulir.
+   - Jika daftar kamar / pilihan durasi panjang, arahkan kursor ke dalam card dan lakukan *mouse wheel scroll*. Card booking dapat di-scroll internal secara mandiri tanpa merusak tata letak halaman utama.

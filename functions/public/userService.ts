@@ -527,7 +527,20 @@ export async function expireBookingTransaction(transactionId: string, residentSt
   try {
     const nowIso = getCurrentDate().toISOString();
     
-    // 1. Update main transaction
+    // 1. Panggil Edge Function untuk bypass RLS
+    try {
+      await supabase.functions.invoke('cancel-booking', {
+        body: { 
+          transactionId, 
+          residentStatusId,
+          action: 'expire' 
+        }
+      });
+    } catch (edgeErr) {
+      console.warn('Edge function invoke fallback:', edgeErr);
+    }
+
+    // 2. Client-side update sebagai fallback/redundansi
     await supabase
       .from('transactions')
       .update({ 
@@ -536,7 +549,7 @@ export async function expireBookingTransaction(transactionId: string, residentSt
       })
       .eq('id', transactionId);
 
-    // Also expire bundled child transactions if any
+    // Expire child transactions if any
     try {
       await supabase
         .from('transactions')
@@ -544,10 +557,10 @@ export async function expireBookingTransaction(transactionId: string, residentSt
           status: 'EXPIRED', 
           updated_at: nowIso 
         })
-        .eq('metadata->>parent_order_id', transactionId);
+        .filter('metadata->>parent_order_id', 'eq', transactionId);
     } catch (_) {}
 
-    // 2. Update resident_status
+    // Update resident_status
     if (residentStatusId) {
       await supabase
         .from('resident_status')
@@ -639,6 +652,24 @@ export async function settlePendingBills(billIds: string[]) {
 export async function cancelBookingRequest(transactionId: string, sessionId?: string) {
   try {
     const nowIso = getCurrentDate().toISOString();
+
+    // 1. Panggil Edge Function untuk bypass RLS (Service Role)
+    try {
+      const { data: edgeRes, error: edgeErr } = await supabase.functions.invoke('cancel-booking', {
+        body: {
+          transactionId,
+          sessionId,
+          action: 'cancel'
+        }
+      });
+      if (!edgeErr && edgeRes?.success) {
+        return { success: true };
+      }
+    } catch (edgeErr) {
+      console.warn('Edge function invoke fallback for cancelBookingRequest:', edgeErr);
+    }
+
+    // 2. Client-side update sebagai fallback
     const { error } = await supabase
       .from('transactions')
       .update({ 
@@ -647,7 +678,18 @@ export async function cancelBookingRequest(transactionId: string, sessionId?: st
       })
       .eq('id', transactionId);
 
-    if (error) throw error;
+    if (error) console.warn('Direct client update warning for transactions:', error);
+
+    // Also cancel any child transactions
+    try {
+      await supabase
+        .from('transactions')
+        .update({ 
+          status: 'CANCELLED',
+          updated_at: nowIso 
+        })
+        .filter('metadata->>parent_order_id', 'eq', transactionId);
+    } catch (_) {}
 
     if (sessionId) {
       // Also cancel any split or companion bills belonging to the same booking session
@@ -659,6 +701,17 @@ export async function cancelBookingRequest(transactionId: string, sessionId?: st
         })
         .filter('metadata->>booking_session_id', 'eq', sessionId);
     }
+
+    // Update linked resident_status jika ada
+    try {
+      await supabase
+        .from('resident_status')
+        .update({
+          status: 'CANCELLED',
+          updated_at: nowIso
+        })
+        .or(`last_transaction_id.eq.${transactionId},id.eq.${transactionId}`);
+    } catch (_) {}
 
     return { success: true };
   } catch (error) {

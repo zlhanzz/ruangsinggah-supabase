@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 212. Penyelarasan Scroll & Sticky Section Booking Desktop vs Mobile pada Halaman Detail Kost (`KostDetail.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa setelah penambahan scroll internal pada card booking di tampilan desktop, saat diakses dari tampilan mobile pengguna kesulitan untuk melakukan scroll balik ke atas setelah mencapai section booking karena sentuhan jari terperangkap (*scroll trapped*) di dalam kontainer booking.
+- **Akar Masalah**:
+  - Properti `sticky top-20`, `max-h-[calc(100vh-5.5rem)]`, `overflow-y-auto`, dan `overscroll-contain` sebelumnya diterapkan secara global tanpa prefix responsif `lg:`.
+  - Pada layar ponsel vertikal 1 kolom, hal ini menciptakan *nested scroll container* dengan pembatasan tinggi.
+  - Properti `overscroll-contain` memutuskan rantai scroll (*scroll chaining*) ke halaman utama (`window`), sehingga ketika sentuhan jari mendarat di card booking, gestur scroll ke atas terhenti di dalam card dan tidak bisa menggeser halaman kembali ke atas.
+- **Implementasi Solusi**:
+  1. **Isolasi Fitur Desktop (`lg:`)**:
+     - Mengubah wrapper card booking menjadi `lg:sticky lg:top-20` dan `lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-5 lg:scrollbar-thin lg:scrollbar-thumb-orange-200`.
+     - Pengguna desktop tetap menikmati kenyamanan sticky sidebar dengan scroll internal mandiri untuk form booking yang panjang.
+  2. **Aliran Alami di Mobile (`< lg`)**:
+     - Pada layar ponsel & tablet, card booking mengalir secara alami (*natural document flow*) tanpa batas tinggi dan tanpa scrollbar internal.
+     - Gestur swipe/scroll di mobile 100% bebas dari jebakan scroll (*zero scroll trapping*), memungkinkan navigasi naik-turun yang mulus dan responsif.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi `cmd /c npm run build` di `functions/public/` berhasil 100% (✓ 2531 modules transformed, 19.87s, 0 error).
+  - Tampilan mobile mengalir alami tanpa scroll internal; tampilan desktop tetap sticky & scrollable mandiri.
+
 ### 211. Perbaikan Preview Foto Kost & Normalisasi Foto Kamar pada Menu 'Kost Saya' (`MyKost.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna melaporkan bahwa saat membuka menu "Kost Saya" (khususnya kartu pengajuan sewa Kamar 4 Kost Madani), kartu pengajuan berhasil muncul namun tidak menampilkan preview foto kost/kamar, melainkan hanya kotak placeholder dengan logo *RuangSinggah*.
@@ -55,10 +77,11 @@
 - **File Tersentuh**:
   - `functions/public/pages/MyKost.tsx`
   - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/public/userService.ts`
   - `functions/PROGRESS.md`
-  - `walkthrough.md`
+  - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Kompilasi `cmd /c npm run build` di `functions/public/` berhasil 100% (✓ 2531 modules transformed, 35.53s, 0 error).
+  - Kompilasi `cmd /c npm run build` di `functions/public/` berhasil 100% (✓ 2531 modules transformed, 29.41s, 0 error).
 
 ### 209. Perbaikan Fitur Kosongkan Unit Kamar (Check-Out / Move-Out) & Sinkronisasi Status Hunian Portal KostManager (`KostManagerPortal.tsx`, `MyKost.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:

@@ -1741,11 +1741,18 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                     const isCheckedOutBooking = Boolean(
                         bMeta.checkout_at || 
                         bMeta.resident_status === 'CHECKED_OUT' ||
-                        (allResidents || []).some((r: any) => 
-                            ((r.last_transaction_id && (r.last_transaction_id === b.id || r.last_transaction_id === trueParentId)) || 
-                             (bMeta.booking_session_id && r.metadata?.booking_session_id === bMeta.booking_session_id)) && 
-                            (r.status || '').toUpperCase() === 'CHECKED_OUT'
-                        )
+                        (allResidents || []).some((r: any) => {
+                            if ((r.status || '').toUpperCase() !== 'CHECKED_OUT') return false;
+                            const isExactTrx = (r.last_transaction_id && (r.last_transaction_id === b.id || r.last_transaction_id === trueParentId)) ||
+                                              (bMeta.booking_session_id && r.metadata?.booking_session_id === bMeta.booking_session_id);
+                            if (isExactTrx) return true;
+
+                            // Fallback jika id transaksi tidak tercatat di resident_status lama: periksa user, kost, dan waktu pembuatan booking sebelum checkout
+                            const isSameUserKost = r.user_id && r.user_id === b.user_id && r.kost_id === b.product_id;
+                            const checkoutTime = new Date(r.metadata?.checkout_at || r.updated_at || 0).getTime();
+                            const bookingTime = new Date(b.created_at || 0).getTime();
+                            return isSameUserKost && checkoutTime > 0 && bookingTime > 0 && bookingTime <= checkoutTime;
+                        })
                     );
 
                     if (!groupedBookingsMap.has(trueParentId)) {

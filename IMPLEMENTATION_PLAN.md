@@ -1,71 +1,88 @@
-# Rencana Implementasi: Penambahan Tombol Batalkan Pengajuan pada Status 'Menunggu Pembayaran' & 'Menunggu Persetujuan' di Menu Kost Saya
+# Rencana Implementasi: Penyelarasan Scroll & Sticky Section Booking (Desktop vs Mobile) pada Halaman Detail Kost
 
-Dokumen ini menganalisis penyebab hilangnya tombol pembatalan pengajuan sewa ketika status sudah disetujui (Menunggu Pembayaran) dan menyusun langkah perbaikan sistematis.
+Dokumen ini menganalisis penyebab terperangkapnya gestur scroll (*scroll trapping*) pada section booking di tampilan mobile dan merumuskan solusi penyesuaian yang efektif untuk desktop maupun mobile pada [`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx).
 
 ---
 
 ## 1. Analisis Masalah
 
-### Kondisi Saat Ini:
-1. Pada menu **"Kost Saya"** ([`MyKost.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx)), tombol **"Batalkan Pengajuan"** saat ini dipasang dengan kondisi kaku:
-   ```tsx
-   {kost.status === 'PENDING_APPROVAL' && (
-       <button onClick={() => handleCancelBooking(kost)} ...>
-           <XCircle /> Batalkan Pengajuan
-       </button>
-   )}
-   ```
-2. Ketika pengajuan sewa telah disetujui oleh admin/pengelola KostManager, status pengajuan otomatis berpindah dari `PENDING_APPROVAL` ke `AWAITING_PAYMENT` ("MENUNGGU PEMBAYARAN" dengan batas waktu pembayaran 1x24 jam).
-3. Karena statusnya adalah `AWAITING_PAYMENT`, pengecekan `kost.status === 'PENDING_APPROVAL'` bernilai `false`. Akibatnya:
-   - Kartu hanya menampilkan tombol: **"BAYAR SEKARANG"**, **"RUTE KE KOST"**, dan **"BANTUAN KOSTMANAGER"**.
-   - Tombol **"Batalkan Pengajuan"** hilang dari kartu, sehingga calon penghuni tidak dapat membatalkan pengajuan jika berubah pikiran sebelum melakukan pembayaran.
+### Kondisi & Masalah Saat Ini:
+1. **Perubahan Sebelumnya untuk Desktop**:
+   - Di tampilan desktop (`lg`), section booking ditempatkan di sidebar kolom kanan. Agar form booking yang panjang (pilihan tipe kamar, chip nomor kamar, pilihan durasi sewa, fasilitas kamar, dan tombol booking) tidak meluap ke bawah layar dan tetap nyaman diakses, kontainer booking diberikan pembatasan tinggi dan scroll internal:
+     ```tsx
+     <div className="sticky top-20">
+       <div className="bg-white rounded-[2rem] lg:rounded-[2.5rem] p-6 lg:p-7 border border-gray-100 shadow-xl shadow-gray-100/50 max-h-[calc(100vh-5.5rem)] overflow-y-auto overscroll-contain pr-4 lg:pr-5 scrollbar-thin scrollbar-thumb-orange-200">
+     ```
+2. **Efek Negatif pada Tampilan Mobile (< lg)**:
+   - Karena class `sticky top-20`, `max-h-[calc(100vh-5.5rem)]`, `overflow-y-auto`, dan `overscroll-contain` diaplikasikan secara global (tanpa modifier responsif `lg:`):
+     - **Scroll Trapping (Terjebak Scroll)**: Pada layar mobile vertikal 1 kolom, ketika pengguna menggulir ke bawah hingga masuk ke section booking, sentuhan jari (*touch swipe*) langsung ditangkap oleh kontainer internal booking.
+     - **Overscroll Contain**: Properti `overscroll-contain` secara eksplisit memutus rantai scroll (*scroll chaining*) ke halaman utama (`window`). Akibatnya, saat pengguna ingin menggeser layar kembali ke atas untuk melihat galeri foto atau informasi properti, gestur swipe tertahan di dalam card booking dan **tidak bisa kembali ke atas**.
+     - **Sticky Berlebih di Mobile**: Posisi `sticky top-20` di mobile membuat card booking menempel canggung di layar ponsel saat pengguna scrolling.
 
 ---
 
 ## 2. Solusi yang Direncanakan
 
-1. **Perluasan Kondisi Tombol "Batalkan Pengajuan" di [`MyKost.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx)**:
-   - Menampilkan tombol **"Batalkan Pengajuan"** untuk semua transaksi sewa yang masih dalam tahap pengajuan aktif (`PENDING_APPROVAL`, `AWAITING_PAYMENT`, `PENDING`), selama pembayaran belum diselesaikan dan belum kedaluwarsa.
-   - Memberikan styling yang konsisten, bersih, dan elegan dengan tombol konfirmasi peringatan sebelum membatalkan.
+Melakukan pemisahan perilaku CSS murni berbasis responsive breakpoint Tailwind (`lg:`):
 
-2. **Dukungan Pembatalan Berbasis Sesi di [`userService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts)**:
-   - Memperbarui `cancelBookingRequest(transactionId, sessionId)` agar jika transaksi memiliki `booking_session_id`, seluruh transaksi tagihan pecahan/pendamping dalam sesi yang sama ikut ditandai berstatus `CANCELLED`.
-   - Mengembalikan data kartu yang dibatalkan ke tab **"Riwayat"** (dengan label status *Dibatalkan*), menjaga tab *Diajukan* tetap bersih.
+1. **Untuk Tampilan Desktop (`lg:` dan layar lebar $\ge 1024\text{px}$)**:
+   - **Sticky Sidebar Aktif**: Menggunakan `lg:sticky lg:top-20`.
+   - **Scroll Internal Mandiri**: Mempertahankan `lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-5 lg:scrollbar-thin lg:scrollbar-thumb-orange-200`.
+   - **Manfaat**: Pengguna desktop tetap dapat menggulir form booking panjang di sidebar kanan secara mandiri dengan mouse wheel tanpa merusak tata letak konten utama di sisi kiri.
 
-3. **Sinkronisasi Otomatis ke Portal KostManager**:
-   - Status transaksi otomatis berubah menjadi `CANCELLED`.
-   - Di Portal KostManager (`/dashboard-admin/km_bookings`), baris pengajuan sewa langsung berlabel **`Dibatalkan Calon Penghuni`** pada tab filter *Ditolak / Batal*.
+2. **Untuk Tampilan Mobile (`< lg` / layar ponsel & tablet $< 1024\text{px}$)**:
+   - **Aliran Alami (Natural Document Flow)**: Menonaktifkan pembatasan tinggi internal dan scrollbar (`max-h-none overflow-visible overscroll-auto static lg:relative`).
+   - **Bebas Scroll Trap (Zero Friction)**: Mengalirkan section booking sebagai bagian utuh dari halaman vertikal mobile. Pengguna dapat dengan leluasa menyentuh dan menggulir ke bawah maupun kembali ke atas menuju foto dan deskripsi kost tanpa pernah tersangkut.
+   - **Padding Responsif**: Mengoptimalkan padding card agar pas di layar HP (`p-5 sm:p-6 lg:p-7`).
 
 ---
 
 ## 3. Dampak Perubahan File
 
-| No | File | Perubahan yang Akan Dilakukan |
+| No | File | Deskripsi Perubahan |
 |---|---|---|
-| 1 | [`functions/public/pages/MyKost.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MyKost.tsx) | Mengaktifkan tombol *Batalkan Pengajuan* untuk status `PENDING_APPROVAL` & `AWAITING_PAYMENT`, serta meneruskan `booking_session_id` ke handler pembatalan. |
-| 2 | [`functions/public/userService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts) | Menambahkan parameter opsional `sessionId` pada `cancelBookingRequest` untuk membatalkan seluruh transaksi dalam 1 sesi booking secara tuntas. |
-| 3 | `functions/PROGRESS.md` & `WALKTHROUGH.md` | Pencatatan riwayat progres & penerbitan walkthrough pengujian. |
+| 1 | [`functions/public/pages/KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx) | Menyelaraskan class wrapper booking card agar sifat `sticky`, `max-h`, `overflow-y-auto`, dan `overscroll-contain` hanya aktif di breakpoint desktop (`lg:`), sedangkan di mobile bersifat natural document flow (`overflow-visible`, `max-h-none`). |
+| 2 | `functions/PROGRESS.md` | Pencatatan riwayat pekerjaan ke progress log utama (Anti-Amnesia). |
+| 3 | `WALKTHROUGH.md` | Penerbitan dokumentasi walkthrough hasil pengujian. |
 
 ---
 
-## 4. Langkah-Langkah Eksekusi (Fase 2)
+## 4. Langkah-Langkah Eksekusi (Fase 2 - Setelah ACC)
 
-1. **Langkah 1: Modifikasi `userService.ts`**
-   - Update `cancelBookingRequest` untuk membatalkan transaksi utama dan transaksi dengan `booking_session_id` yang sama.
-2. **Langkah 2: Modifikasi `MyKost.tsx`**
-   - Perbarui kondisi tombol *Batalkan Pengajuan* di sidebar aksi kartu sewa.
-   - Panggil `cancelBookingRequest(kost.id, kost.metadata?.booking_session_id)` dan segarkan data list `fetchMyKosts()`.
-3. **Langkah 3: Uji Kompilasi & Build**
-   - Menjalankan `npm run build` di `functions/public/` untuk memastikan 0 error kompilasi TypeScript.
-4. **Langkah 4: Pencatatan Progres & Git Push**
-   - Mencatat ke `functions/PROGRESS.md` dan `WALKTHROUGH.md`.
-   - Melakukan `git commit` dan `git push` ke branch `bukan-productions`.
+1. **Langkah 1: Modifikasi Wrapper Sidebar Booking di `KostDetail.tsx`**
+   - Mengubah wrapper kolom kanan:
+     - Dari:
+       ```tsx
+       {/* Right Sidebar - Booking Card */}
+       <div className="relative">
+         <div className="sticky top-20">
+           <div className="bg-white rounded-[2rem] lg:rounded-[2.5rem] p-6 lg:p-7 border border-gray-100 shadow-xl shadow-gray-100/50 max-h-[calc(100vh-5.5rem)] overflow-y-auto overscroll-contain pr-4 lg:pr-5 scrollbar-thin scrollbar-thumb-orange-200">
+       ```
+     - Menjadi:
+       ```tsx
+       {/* Right Sidebar - Booking Card */}
+       <div className="relative">
+         <div className="lg:sticky lg:top-20">
+           <div className="bg-white rounded-[2rem] lg:rounded-[2.5rem] p-5 sm:p-6 lg:p-7 border border-gray-100 shadow-xl shadow-gray-100/50 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-5 lg:scrollbar-thin lg:scrollbar-thumb-orange-200">
+       ```
+
+2. **Langkah 2: Uji Kompilasi & Build**
+   - Menjalankan perintah `npm run build` di direktori `functions/public/` untuk memastikan tidak ada error syntax maupun kompilasi TypeScript.
+
+3. **Langkah 3: Dokumentasi & Git Push**
+   - Mencatat ke `functions/PROGRESS.md` dan membuat `WALKTHROUGH.md`.
+   - Melakukan `git commit` dan `git push` ke branch `bukan-productions` sesuai aturan baku workspace.
 
 ---
 
 ## 5. Rencana Verifikasi
 
-- **Verifikasi UI**: Memastikan tombol "Batalkan Pengajuan" muncul di bawah tombol "Bantuan KostManager" pada tab "Diajukan" saat status "Menunggu Pembayaran".
-- **Verifikasi Alur Pembatalan**: Saat tombol diklik dan dikonfirmasi, status booking di Supabase berubah menjadi `CANCELLED` dan kartu berpindah ke tab "Riwayat".
-- **Verifikasi Portal KostManager**: Memastikan status booking di `/dashboard-admin/km_bookings` berubah menjadi *Dibatalkan Calon Penghuni*.
-- **Verifikasi Build**: `npm run build` lulus 100% tanpa error.
+- **Verifikasi Mobile Viewport (< 1024px)**:
+  - Buka halaman detail kost di mobile browser / simulasi DevTools (ukuran 360px - 430px).
+  - Gulir ke bawah hingga section booking.
+  - Lakukan gestur scroll kembali ke atas: halaman harus langsung menggulir ke atas dengan lancar tanpa hambatan dan tanpa terjebak di dalam card booking.
+- **Verifikasi Desktop Viewport ($\ge$ 1024px)**:
+  - Buka halaman detail kost di desktop browser.
+  - Pastikan card booking tetap berada di sidebar kanan dalam mode `sticky`.
+  - Jika pilihan kamar atau variasi durasi panjang, arahkan mouse ke card booking dan pastikan card tetap dapat di-scroll internal secara mandiri tanpa merusak halaman utama.
+- **Verifikasi Build**: `npm run build` lulus 100% dengan 0 error.
