@@ -3717,30 +3717,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 </div>
             </div>
 
-            {/* Restored Draft Notice Banner */}
-            {restoredDraftInfo && !isEditing && (
-                <div className="mx-5 mt-3 p-3 bg-gradient-to-r from-amber-50/90 to-orange-50/90 border border-amber-200/80 rounded-2xl flex items-center justify-between gap-3 shrink-0 shadow-xs">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="w-8 h-8 rounded-xl bg-orange-500/10 text-orange-600 flex items-center justify-center shrink-0">
-                            <FileText size={16} />
-                        </span>
-                        <div className="min-w-0">
-                            <p className="text-xs font-black text-gray-800 truncate">Melanjutkan Draft Pengisian</p>
-                            <p className="text-[10px] font-bold text-gray-500 truncate">
-                                Progres sebelumnya tersimpan otomatis • Langkah {step + 1} ({activeSteps[step]?.label})
-                            </p>
-                        </div>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={handleClearDraft}
-                        className="px-3 py-1.5 bg-white border border-gray-200 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 rounded-xl text-[11px] font-bold text-gray-600 transition-all shrink-0 shadow-xs flex items-center gap-1.5"
-                    >
-                        <RotateCcw size={12} />
-                        <span>Mulai Baru</span>
-                    </button>
-                </div>
-            )}
+
 
             {/* Error Banner */}
             {error && (

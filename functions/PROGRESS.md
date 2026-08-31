@@ -2,6 +2,22 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 247. Penghapusan Banner Notifikasi Draft Pengisian (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Banner kuning "Melanjutkan Draft Pengisian | Progres sebelumnya tersimpan otomatis | [Mulai Baru]" memakan ruang vertikal yang cukup besar tepat di atas form data.
+  - Pengguna merasa banner tersebut mengganggu dan meminta untuk dihapus agar formulir terlihat lebih lega dan rapi.
+- **Implementasi Solusi**:
+  1. **Pembersihan Layout Modal**:
+     - Menghapus blok render `Restored Draft Notice Banner` dari modal `KostFormMitra.tsx`.
+     - Status penyimpanan draft tetap terwakili secara elegan oleh badge kecil `Draft Aktif` di header modal di samping judul tanpa memakan ruang vertikal.
+     - Mekanisme auto-save draft ke localStorage tetap berjalan normal di latar belakang tanpa mengganggu kenyamanan pengguna.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 28.08s, 0 error).
+
 ### 246. Format Otomatis Pemisah Ribuan Titik (.) pada Input Harga Kamar (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pada formulir pengisian harga sewa dan biaya tambahan, nominal angka tampil menyatu tanpa pemisah ribuan (contoh: `500000`, `50000`), sehingga menyulitkan mitra membaca apakah nilai tersebut puluhan ribu, ratusan ribu, atau jutaan.
