@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Kost, RoomType, PricingPeriod } from '../types';
 import { addPropertyWithMedia, updatePropertyWithMedia } from '../adminService';
 import { findNearbyCuratedLandmarks } from '../constants/curatedLandmarks';

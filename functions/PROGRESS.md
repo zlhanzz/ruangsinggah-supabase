@@ -16,6 +16,7 @@
      - Tombol "+ TAMBAH" di header "Kost Saya" kini mengaktifkan mode `isStartingFresh = true`, sehingga murni membuka form pendaftaran baru yang bersih dari langkah 0 tanpa menimpa/memaksa membuka draft yang belum selesai.
   3. **Penyelarasan Komponen Form (`KostFormMitra.tsx`)**:
      - Menambahkan prop `freshStart?: boolean`.
+     - Memperbaiki import `useMemo` dari package `'react'` untuk mencegah ReferenceError saat inisialisasi draft key.
      - Menambahkan dispatch browser event `window.dispatchEvent(new Event('kost_draft_updated'))` saat auto-save, saat draft dibersihkan manual, dan saat properti berhasil dipublikasikan.
 - **File Tersentuh**:
   - `functions/public/pages/MitraDashboard.tsx`
