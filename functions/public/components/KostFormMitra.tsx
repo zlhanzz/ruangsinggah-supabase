@@ -962,6 +962,122 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         );
     };
 
+    const [isScanningLandmarks, setIsScanningLandmarks] = useState(false);
+    const landmarkScanAbortRef = useRef<number>(0);
+
+    const detectNearbyLandmarks = useCallback((centerLat: number, centerLng: number) => {
+        const google = (window as any).google;
+        if (!google?.maps?.places?.PlacesService) return;
+
+        const scanId = Date.now();
+        landmarkScanAbortRef.current = scanId;
+        setIsScanningLandmarks(true);
+
+        const tempDiv = document.createElement('div');
+        const service = new google.maps.places.PlacesService(tempDiv);
+        const centerLatLng = new google.maps.LatLng(centerLat, centerLng);
+
+        const getKm = (pLat: number, pLng: number) => {
+            return calculateDistance(centerLat, centerLng, pLat, pLng);
+        };
+
+        // 1. Scan Kampus & Universitas (radius 4.5 KM)
+        const scanCampuses = new Promise<any[]>((resolve) => {
+            service.nearbySearch(
+                {
+                    location: centerLatLng,
+                    radius: 4500,
+                    type: 'university'
+                },
+                (results: any[], status: string) => {
+                    if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+                        const parsed = results
+                            .filter(p => p.name && p.geometry?.location)
+                            .map(p => {
+                                const pLat = p.geometry.location.lat();
+                                const pLng = p.geometry.location.lng();
+                                const km = getKm(pLat, pLng);
+                                return {
+                                    name: p.name,
+                                    lat: pLat,
+                                    lng: pLng,
+                                    distance: `± ${km} KM`,
+                                    kmVal: km,
+                                    transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                                    isLiveGoogleApi: true
+                                };
+                            })
+                            .sort((a, b) => a.kmVal - b.kmVal)
+                            .slice(0, 4);
+                        resolve(parsed);
+                    } else {
+                        resolve([]);
+                    }
+                }
+            );
+        });
+
+        // 2. Scan Fasilitas Umum (Mall, RS, Stasiun, Halte, Terminal, Pasar)
+        const scanFacilities = new Promise<any[]>((resolve) => {
+            service.nearbySearch(
+                {
+                    location: centerLatLng,
+                    radius: 3500,
+                    keyword: 'mall|rumah sakit|stasiun|terminal|supermarket|pasar'
+                },
+                (results: any[], status: string) => {
+                    if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+                        const parsed = results
+                            .filter(p => p.name && p.geometry?.location)
+                            .map(p => {
+                                const pLat = p.geometry.location.lat();
+                                const pLng = p.geometry.location.lng();
+                                const km = getKm(pLat, pLng);
+                                return {
+                                    name: p.name,
+                                    lat: pLat,
+                                    lng: pLng,
+                                    distance: `± ${km} KM`,
+                                    kmVal: km,
+                                    transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                                    isLiveGoogleApi: true
+                                };
+                            })
+                            .sort((a, b) => a.kmVal - b.kmVal)
+                            .slice(0, 4);
+                        resolve(parsed);
+                    } else {
+                        resolve([]);
+                    }
+                }
+            );
+        });
+
+        Promise.all([scanCampuses, scanFacilities]).then(([campusesList, facilitiesList]) => {
+            if (landmarkScanAbortRef.current !== scanId) return;
+            setIsScanningLandmarks(false);
+
+            const combinedList = [...campusesList];
+            facilitiesList.forEach(fac => {
+                if (!combinedList.some(c => c.name.toLowerCase() === fac.name.toLowerCase())) {
+                    combinedList.push(fac);
+                }
+            });
+
+            if (combinedList.length > 0) {
+                setForm(prev => ({
+                    ...prev,
+                    campuses: combinedList.map(({ kmVal, ...item }) => item),
+                    publicFacilities: facilitiesList.map(({ kmVal, ...item }) => item)
+                }));
+            }
+        }).catch(() => {
+            if (landmarkScanAbortRef.current === scanId) {
+                setIsScanningLandmarks(false);
+            }
+        });
+    }, []);
+
     // ── location ───────────────────────────────────────────────────────────────
     const handleLocationChange = useCallback((lat: number, lng: number, address: string, city?: string, area?: string, province?: string) => {
         setForm(prev => {
@@ -971,7 +1087,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             if (province) updates.province = province;
             return { ...prev, ...updates };
         });
-    }, []);
+
+        // Trigger deteksi landmark & kampus terdekat otomatis
+        if (lat && lng) {
+            detectNearbyLandmarks(lat, lng);
+        }
+    }, [detectNearbyLandmarks]);
 
     // ── image handling ─────────────────────────────────────────────────────────
     const handleImages = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1191,13 +1312,20 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     </Field>
 
                     {managementOption !== 'kostmanager' && (
-                        <Field label="Dekat Kampus / Fasilitas Umum" hint="Tambahkan lokasi penting di sekitar kost">
-                            <div className="space-y-2">
+                        <Field label="Dekat Kampus & Landmark Terdekat" hint="Otomatis terdeteksi dari titik Google Maps, bisa diedit atau ditambah manual">
+                            <div className="space-y-3">
+                                {isScanningLandmarks && (
+                                    <div className="flex items-center gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200/80 rounded-2xl text-amber-800 text-xs font-bold animate-pulse">
+                                        <Loader2 size={16} className="text-amber-500 animate-spin shrink-0" />
+                                        <span>Memindai kampus, rumah sakit, mall, & fasilitas terdekat dari Google Maps...</span>
+                                    </div>
+                                )}
+
                                 {(form.campuses || []).map((c, i) => (
-                                    <div key={i} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-gray-50 p-2 rounded-xl border border-gray-100">
+                                    <div key={i} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-gray-50 p-2.5 rounded-2xl border border-gray-100 transition-all hover:border-orange-200">
                                         <div className="flex-1 space-y-2 w-full">
                                             <div className="flex gap-2 w-full">
-                                                <Input placeholder="Nama kampus/fasilitas (Cth: IPB)" value={c.name}
+                                                <Input placeholder="Nama kampus/landmark (Cth: UNHAS / RS Wahidin)" value={c.name}
                                                     onChange={e => { const a = [...(form.campuses||[])]; a[i]={...a[i],name:e.target.value}; upd('campuses',a); }} 
                                                     className="w-full"
                                                 />
@@ -1207,7 +1335,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                     disabled={isSearchingFacility[`campuses-${i}`]}
                                                     className="bg-orange-500 text-white px-3 py-2 rounded-xl text-[10px] sm:text-xs font-bold shrink-0 hover:bg-orange-600 disabled:opacity-50"
                                                 >
-                                                    {isSearchingFacility[`campuses-${i}`] ? 'Mencari...' : 'Cari Koordinat'}
+                                                    {isSearchingFacility[`campuses-${i}`] ? 'Mencari...' : 'Cari'}
                                                 </button>
                                                 <button 
                                                     type="button" 
@@ -1226,7 +1354,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                     const moto = Math.ceil((km / 30) * 60) + 2;
                                                     const car = Math.ceil((km / 20) * 60) + 5;
                                                     return (
-                                                        <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-100 w-full mt-2">
+                                                        <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-2 rounded-xl border border-gray-100 w-full mt-2">
                                                             <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-2">Estimasi Waktu:</span>
                                                             <div className="flex items-center gap-3 text-xs font-bold text-gray-600">
                                                                 <span className="flex items-center gap-1">🚶 {walk} Mnt</span>
@@ -1247,17 +1375,30 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 className="!w-24 sm:!w-32 shrink-0" 
                                             />
                                             <button type="button" onClick={() => upd('campuses',(form.campuses||[]).filter((_,idx)=>idx!==i))}
-                                                className="p-3 text-rose-400 hover:bg-rose-100 bg-white rounded-xl shrink-0">
+                                                className="p-3 text-rose-400 hover:bg-rose-100 bg-white rounded-xl shrink-0"
+                                                title="Hapus Landmark Ini">
                                                 <Trash2 size={16}/>
                                             </button>
                                         </div>
                                     </div>
                                 ))}
-                                <button type="button"
-                                    onClick={() => upd('campuses',[...(form.campuses||[]),{name:'',distance:'',transportMode:'walk'}])}
-                                    className="w-full h-10 border-2 border-dashed border-gray-200 rounded-2xl text-xs font-bold text-gray-400 hover:border-orange-300 hover:text-orange-400 transition-colors flex items-center justify-center gap-2">
-                                    <Plus size={14} /> Tambah Kampus / Fasilitas Terdekat
-                                </button>
+
+                                <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                                    <button type="button"
+                                        onClick={() => upd('campuses',[...(form.campuses||[]),{name:'',distance:'',transportMode:'walk'}])}
+                                        className="flex-1 h-10 border-2 border-dashed border-gray-200 rounded-2xl text-xs font-bold text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors flex items-center justify-center gap-2">
+                                        <Plus size={14} /> Tambah Landmark / Kampus Manual
+                                    </button>
+
+                                    {form.location?.lat && form.location?.lng && (
+                                        <button type="button"
+                                            onClick={() => detectNearbyLandmarks(form.location!.lat, form.location!.lng)}
+                                            disabled={isScanningLandmarks}
+                                            className="h-10 px-4 bg-orange-50 border border-orange-200 rounded-2xl text-xs font-bold text-orange-600 hover:bg-orange-100 transition-colors flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50">
+                                            <Sparkles size={14} /> Pindai Ulang Landmark
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         </Field>
                     )}

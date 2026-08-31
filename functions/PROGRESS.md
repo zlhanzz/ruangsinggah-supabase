@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 231. Deteksi Otomatis Kampus & Landmark Terdekat via Google Places API (`KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar sistem mengadopsi fitur otomatisasi seperti Mamikos, di mana saat titik lokasi kost ditetapkan dan dikonfirmasi di peta, landmark terdekat (seperti kampus, mall, rumah sakit, stasiun, terminal) otomatis terdeteksi dan langsung muncul tanpa perlu klik manual lagi (*"pakai deteksi landmark otomatis aja, tapi nggk usah di klik secara manual lagi, langsung aja ketika titik lokasi kost sudah di tetapkan dan dikonfirmasi maka semuanya akan muncul secara otomatis juga"*).
+- **Implementasi Solusi**:
+  1. **Integrasi Google Maps Places API (`nearbySearch`) ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - Mengembangkan fungsi `detectNearbyLandmarks(lat, lng)` yang langsung terpanggil secara otomatis setiap kali koordinat kost berubah di `handleLocationChange`.
+     - Memindai secara paralel:
+       - **Kampus / Universitas** (`type: 'university'`, radius 4.5 KM) -> otomatis mengisi top 4 kampus terdekat.
+       - **Fasilitas Umum & Landmark Publik** (Mall, RS, Stasiun, Terminal, Supermarket, Pasar, radius 3.5 KM) -> otomatis mengisi top 4 fasilitas publik terdekat.
+  2. **Kalkulasi Jarak Presisi & Penentuan Moda Transportasi**:
+     - Menghitung jarak garis lurus geografis secara akurat (`± X.X KM`).
+     - Menentukan moda transportasi default (Jalan Kaki jika $\le 1.0\text{ KM}$, Motor jika $> 1.0\text{ KM}$).
+     - Menghitung otomatis estimasi waktu tempuh (Jalan Kaki, Motor, Mobil) dan mengaktifkan tombol rute Google Maps terintegrasi di halaman detail properti.
+  3. **UI / UX Status Indikator & Kontrol Fleksibel**:
+     - Menampilkan banner loading animasi `isScanningLandmarks` (*"Memindai kampus, rumah sakit, mall, & fasilitas terdekat dari Google Maps..."*).
+     - Menyediakan tombol tambah manual dan tombol *"✨ Pindai Ulang Landmark"* bagi mitra.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 32.24s, 0 error).
+
 ### 230. Perbaikan Parser Geocoding Wilayah Indonesia & Input Lengkap Provinsi, Kota/Kabupaten, Kecamatan (`KostFormMitra.tsx`, `userService.ts`, `types.ts`, `Dashboard.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna mengirimkan tangkapan layar form input lokasi kost di mana field Kota terisi *"Kecamatan Tamalanrea"* sedangkan field Kecamatan kosong, serta data provinsi belum tampil dan terindeks dengan baik (*"pada bagian ini di menu pengimputan atau deteksi otomatis terkait provinsi, kabupaten/kota, dan kecamatan. yang ada pada dashboard mitra, belum tampil dengan baik, dan belum terindeks dengan baik ketika setelah melakukan penambahan titik lokasi"*).
