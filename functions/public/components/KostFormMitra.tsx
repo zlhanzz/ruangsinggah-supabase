@@ -1050,8 +1050,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         setActiveMapPicker(null);
     };
 
-    const [isSearchingFacility, setIsSearchingFacility] = useState<Record<string, boolean>>({});
-
     const searchFacilityCoordinates = (field: 'campuses' | 'publicFacilities', index: number, name: string) => {
         if (!name) return;
         const stateKey = `${field}-${index}`;
@@ -1063,8 +1061,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             return;
         }
         const geocoder = new gw.maps.Geocoder();
+        const cityContext = form.city ? `, ${form.city}` : '';
+        const provinceContext = form.province ? `, ${form.province}` : '';
+        const queryAddress = `${name}${cityContext}${provinceContext}, Indonesia`;
+        
         geocoder.geocode(
-            { address: name + ', Indonesia', componentRestrictions: { country: 'ID' } },
+            { address: queryAddress, componentRestrictions: { country: 'ID' } },
             (results: any[], status: string) => {
                 if (status === 'OK' && results && results.length > 0) {
                     const loc = results[0].geometry.location;
@@ -1079,10 +1081,32 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
                     arr[index] = { ...arr[index], lat, lng, distance: distString };
                     upd(field, arr);
+                    setIsSearchingFacility(prev => ({ ...prev, [stateKey]: false }));
                 } else {
-                    alert('Lokasi tidak ditemukan di peta. Coba setel nama yang lebih spesifik.');
+                    // Fallback search tanpa context kota jika terlalu spesifik
+                    geocoder.geocode(
+                        { address: name + ', Indonesia', componentRestrictions: { country: 'ID' } },
+                        (fallbackResults: any[], fallbackStatus: string) => {
+                            if (fallbackStatus === 'OK' && fallbackResults && fallbackResults.length > 0) {
+                                const loc = fallbackResults[0].geometry.location;
+                                const lat = loc.lat(), lng = loc.lng();
+                                const arr = [...(form[field] || [])];
+                                
+                                let distString = arr[index].distance;
+                                if (form.location && form.location.lat) {
+                                    const km = calculateDistance(form.location.lat, form.location.lng, lat, lng);
+                                    distString = `± ${km} KM`;
+                                }
+
+                                arr[index] = { ...arr[index], lat, lng, distance: distString };
+                                upd(field, arr);
+                            } else {
+                                alert('Lokasi tidak ditemukan di peta. Coba setel nama yang lebih spesifik.');
+                            }
+                            setIsSearchingFacility(prev => ({ ...prev, [stateKey]: false }));
+                        }
+                    );
                 }
-                setIsSearchingFacility(prev => ({ ...prev, [stateKey]: false }));
             }
         );
     };
