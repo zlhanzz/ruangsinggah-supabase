@@ -1693,7 +1693,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     .slice(0, 3);
             });
 
-        // 4. Scan Fasilitas Harian Mikro: Minimarket / Supermarket Terdekat (Radius 2 KM)
+        // 4. Scan Fasilitas Harian Mikro: Minimarket Terdekat (Radius 2 KM - Tepat 1 Terdekat)
         const scanMinimarket = performSearch({
             location: centerLatLng,
             radius: 2000,
@@ -1716,10 +1716,10 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     };
                 })
                 .sort((a, b) => a.kmVal - b.kmVal)
-                .slice(0, 2);
+                .slice(0, 1);
         });
 
-        // 5. Scan Fasilitas Harian Mikro: Laundry Kiloan Terdekat (Radius 2 KM)
+        // 5. Scan Fasilitas Harian Mikro: Laundry Kiloan Terdekat (Radius 2 KM - Tepat 1 Terdekat)
         const scanLaundry = performSearch({
             location: centerLatLng,
             radius: 2000,
@@ -1745,7 +1745,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 .slice(0, 1);
         });
 
-        // 6. Scan Fasilitas Harian Mikro: Masjid / Musholla Terdekat (Radius 2 KM)
+        // 6. Scan Fasilitas Harian Mikro: Masjid / Musholla Terdekat (Radius 2 KM - Tepat 1 Terdekat)
         const scanMosque = performSearch({
             location: centerLatLng,
             radius: 2000,
@@ -1772,7 +1772,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 .slice(0, 1);
         });
 
-        // 7. Scan Fasilitas Harian Mikro: Gereja Terdekat (Radius 3.5 KM)
+        // 7. Scan Fasilitas Harian Mikro: Gereja Terdekat (Radius 3.5 KM - Tepat 1 Terdekat)
         const scanChurch = performSearch({
             location: centerLatLng,
             radius: 3500,
@@ -1799,7 +1799,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 .slice(0, 1);
         });
 
-        // 8. Scan Fasilitas Vital: SPBU / Pom Bensin Terdekat (Radius 3.5 KM)
+        // 8. Scan Fasilitas Vital: SPBU / Pom Bensin Terdekat (Radius 3.5 KM - Tepat 1 Terdekat)
         const scanGasStation = performSearch({
             location: centerLatLng,
             radius: 3500,
@@ -1826,89 +1826,25 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 .slice(0, 1);
         });
 
-        // 9. Scan Fasilitas Medis: Rumah Sakit Terdekat (Hanya jika belum ada di curated master)
-        const hasCuratedHospital = curatedOthers.some(o => o.name.toLowerCase().includes('rs') || o.name.toLowerCase().includes('rumah sakit'));
-        const scanHospitalFallback = hasCuratedHospital
-            ? Promise.resolve([])
-            : performSearch({
-                location: centerLatLng,
-                radius: 5000,
-                type: 'hospital',
-                keyword: 'rumah sakit|rsup|rsud|klinik'
-            }).then(results => {
-                return results
-                    .filter(p => p.name && p.geometry?.location)
-                    .map(p => {
-                        const pLat = p.geometry.location.lat();
-                        const pLng = p.geometry.location.lng();
-                        const km = getKm(pLat, pLng);
-                        return {
-                            name: p.name,
-                            lat: pLat,
-                            lng: pLng,
-                            distance: `± ${km} KM`,
-                            kmVal: km,
-                            transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
-                            isLiveGoogleApi: true
-                        };
-                    })
-                    .sort((a, b) => a.kmVal - b.kmVal)
-                    .slice(0, 1);
-            });
-
-        // 10. Scan Mall Terdekat (Hanya jika belum ada di curated master)
-        const hasCuratedMall = curatedOthers.some(o => o.name.toLowerCase().includes('mall') || o.name.toLowerCase().includes('park') || o.name.toLowerCase().includes('square'));
-        const scanMallFallback = hasCuratedMall
-            ? Promise.resolve([])
-            : performSearch({
-                location: centerLatLng,
-                radius: 7000,
-                type: 'shopping_mall',
-                keyword: 'mall|plaza|square|trade center'
-            }).then(results => {
-                return results
-                    .filter(p => p.name && p.geometry?.location)
-                    .map(p => {
-                        const pLat = p.geometry.location.lat();
-                        const pLng = p.geometry.location.lng();
-                        const km = getKm(pLat, pLng);
-                        return {
-                            name: p.name,
-                            lat: pLat,
-                            lng: pLng,
-                            distance: `± ${km} KM`,
-                            kmVal: km,
-                            transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
-                            isLiveGoogleApi: true
-                        };
-                    })
-                    .sort((a, b) => a.kmVal - b.kmVal)
-                    .slice(0, 1);
-            });
-
         Promise.all([
             scanCampusesFallback,
             scanMinimarket,
             scanLaundry,
             scanMosque,
             scanChurch,
-            scanGasStation,
-            scanHospitalFallback,
-            scanMallFallback
-        ]).then(([fallbackCampuses, minimarketList, laundryList, mosqueList, churchList, gasStationList, fallbackHospitals, fallbackMalls]) => {
+            scanGasStation
+        ]).then(([fallbackCampuses, minimarketList, laundryList, mosqueList, churchList, gasStationList]) => {
             if (landmarkScanAbortRef.current !== scanId) return;
             setIsScanningLandmarks(false);
 
-            // 1. Kampus Terdekat (Jika ada Master Dataset, 100% MURNI DARI MASTER DATASET TANPA BERCAMPUR DENGAN GOOGLE PLACES!)
+            // 1. Kampus Terdekat (Murni Master Data jika tersedia)
             const finalCampuses = curatedCampuses.length > 0 
                 ? [...curatedCampuses] 
                 : [...fallbackCampuses];
 
-            // 2. Gabungkan fasilitas harian mikro & anchor regional
+            // 2. Gabungkan fasilitas: Master Data (Mall, RS, CBD) + 5 Fasilitas Harian Mikro Terdekat (Maks 1 per tipe)
             const finalFacilities = [
                 ...curatedOthers,
-                ...fallbackMalls,
-                ...fallbackHospitals,
                 ...minimarketList,
                 ...laundryList,
                 ...gasStationList,

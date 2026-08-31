@@ -2,23 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 236. Deteksi Mikro SPBU & Gereja Terdekat pada Sistem Landmark (`KostFormMitra.tsx`) (Agustus 2026)
+### 236. Pemurnian Deteksi Mikro & Isolasi 1 Landmark Terdekat per Tipe Fasilitas Harian (`KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
-  - Pengguna ingin agar sistem pencarian mikro tidak hanya memindai minimarket (Indomaret/Alfamart), laundry, dan masjid, tetapi juga otomatis mencari **SPBU (Pom Bensin) terdekat** dan tempat ibadah lain seperti **Gereja terdekat**.
+  - Pengguna menemukan duplikasi tipe bangunan yang sama (misal 2 Alfamart sekaligus di radius dekat) dan menginginkan agar scan mikro hanya mengambil 1 titik terdekat per tipe bangunan.
+  - Pengguna juga mengoreksi bahwa Mall dan Rumah Sakit sudah terdaftar lengkap di Master Data, sehingga tidak perlu dipindai di scan mikro dinamis.
 - **Implementasi Solusi**:
-  1. **Deteksi SPBU Terdekat (`scanGasStation`)**:
-     - Memindai fasilitas SPBU Pertamina/Shell/BP (`type: 'gas_station'`, keyword `'spbu|pertamina|shell|bp|pom bensin'`) dalam radius 3.5 KM.
-  2. **Pemisahan Deteksi Tempat Ibadah (`scanMosque` & `scanChurch`)**:
-     - `scanMosque`: Memindai masjid/musholla terdekat dalam radius 2 KM.
-     - `scanChurch`: Memindai gereja/katedral terdekat (`type: 'church'`, keyword `'gereja|church|katedral|gki|gbi|hkbp|gpdi'`) dalam radius 3.5 KM.
-  3. **Integrasi Rute Nyata Google Maps**:
-     - SPBU, Gereja, dan Masjid terdekat langsung digabungkan ke daftar fasilitas publik form mitra dan dihitung estimasi waktu nyata Google Maps (🚶 Jalan Kaki, 🏍️ Motor, 🚗 Mobil).
+  1. **Penghapusan Scan Fallback Mall & Rumah Sakit**:
+     - Menghapus `scanHospitalFallback` dan `scanMallFallback` dari pemindaian mikro dinamis, mengembalikan Mall dan RS murni dan eksklusif dikelola oleh Master Data (`curatedLandmarks.ts`).
+  2. **Isolasi 1 Titik Terdekat per Tipe Fasilitas Mikro (Anti-Duplikasi)**:
+     - **Minimarket**: Dibatasi strictly `.slice(0, 1)` (hanya 1 minimarket paling dekat yang diambil).
+     - **Laundry**: Strictly `.slice(0, 1)` (1 laundry terdekat).
+     - **SPBU**: Strictly `.slice(0, 1)` (1 SPBU terdekat).
+     - **Masjid / Musholla**: Strictly `.slice(0, 1)` (1 masjid terdekat).
+     - **Gereja**: Strictly `.slice(0, 1)` (1 gereja terdekat).
+  3. **Integritas Master Data**:
+     - Aturan pembatasan tunggal ini murni untuk scan mikro lingkungan, sementara Master Data tetap fleksibel menampilkan seluruh kampus dan fasilitas regional strategis dalam radius jangkauan.
 - **File Tersentuh**:
   - `functions/public/components/KostFormMitra.tsx`
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 34.51s, 0 error).
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 31.61s, 0 error).
 
 ### 235. Audit & Sinkronisasi Menyeluruh 270 Landmark Nasional Se-Indonesia via Google Maps Places API Resmi (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
