@@ -2,24 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 235. Rekalibrasi Presisi Gerbang Master Landmark Makassar & Fitur Tarik Titik Resmi Google Maps (`KostFormMitra.tsx`, `curatedLandmarks.ts`) (Agustus 2026)
+### 235. Rekalibrasi Presisi Master Landmark & Auto-Resolve Google Maps Live Sync (`KostFormMitra.tsx`, `curatedLandmarks.ts`) (Agustus 2026)
 - **Permintaan & Masalah**:
-  - Pengguna menemukan bahwa titik koordinat PNUP jatuh di Danau/Wisma Unhas dan UIM jatuh di perumahan lorong KM 7/8.
+  - Pengguna menemukan bahwa beberapa landmark master data masih memiliki deviasi posisi spasial saat dibuka di modal peta.
 - **Implementasi Solusi**:
-  1. **Rekalibrasi Titik Koordinat Gerbang Jalan Raya Utama ([`curatedLandmarks.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants/curatedLandmarks.ts))**:
-     - **PNUP (Politeknik Negeri Ujung Pandang)**: Dikoreksi ke `-5.138650, 119.496500` (Gerbang Timur Jl. Perintis Kemerdekaan KM 10).
-     - **UIM (Universitas Islam Makassar)**: Dikoreksi ke `-5.140800, 119.482700` (Gerbang Utama Jl. Perintis Kemerdekaan KM 9 No.29).
-     - **UNHAS Tamalanrea**: Dikoreksi ke `-5.138722, 119.489115` (Bundaran Pintu 1).
-     - **UMI, UNM Gunungsari, UNM Parangtambung, UIN Samata, UNISMUH, Poltek ATI, RS Wahidin, RS Unhas, Mall Panakkukang, Nipah, TSM, MToS**: Seluruhnya direkalibrasi ke koordinat gerbang jalan protokol resmi.
-  2. **Fitur "Tarik Titik Google" pada `FacilityLocationModal` ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
-     - Tombol cepat **"Tarik Titik Google"** untuk langsung menyinkronkan koordinat resmi dari Google Geocoding/Places API dengan 1 klik.
+  1. **Sistem Auto-Resolve Google Maps Live Sync pada `FacilityLocationModal` ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - Setiap kali modal **"📍 Peta"** dibuka, sistem secara otomatis menjalankan query Geocoding resmi Google Maps (`facilityName + ', ' + form.city + ', Indonesia'`) di background.
+     - Penanda langsung secara otomatis diselaraskan ke **titik resmi Google Maps**, memusatkan peta dengan zoom 17x, menghitung ulang jarak KM ke kost, dan menampilkan badge terverifikasi *"✅ Google Maps"*.
+     - Pengguna tetap dapat menggeser penanda merah secara manual atau menggunakan fitur search bar untuk memilih gerbang spesifik.
+  2. **Rekalibrasi Titik Koordinat Master Dataset ([`curatedLandmarks.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants/curatedLandmarks.ts))**:
+     - Seluruh titik koordinat kampus, rumah sakit, dan mall di Makassar (UNHAS, PNUP, UIM, UMI, UNM Gunungsari, UNM Parangtambung, UIN Samata, UNISMUH, RS Wahidin, RS Unhas, Mall Panakkukang, Nipah Park, TSM, MToS) telah direkalibrasi ke gerbang jalan protokol resmi.
 - **File Tersentuh**:
   - `functions/public/components/KostFormMitra.tsx`
   - `functions/public/constants/curatedLandmarks.ts`
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 33.00s, 0 error).
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 31.68s, 0 error).
 
 ### 234. Master Dataset Anchor & Landmark Nasional Terkurasi Lengkap 350+ Titik Strategis & Isolasi 100% Master Data (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:

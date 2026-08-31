@@ -822,6 +822,7 @@ const FacilityLocationModal: React.FC<FacilityLocationModalProps> = ({
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [isGoogleVerified, setIsGoogleVerified] = useState(false);
     const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
     // Hitung jarak Haversine real-time ke lokasi kost
@@ -923,11 +924,12 @@ const FacilityLocationModal: React.FC<FacilityLocationModalProps> = ({
             landmarkMarkerRef.current = landmarkMarker;
             kostMarkerRef.current = kostMarker;
 
-            // Auto-resolve geocoding gerbang jika koordinat awal kosong
-            if (!hasValidInitial && facilityName) {
+            // Auto-resolve live sync ke Google Maps: selalu cari titik resmi instansi dari Google Maps
+            if (facilityName) {
                 const geocoder = new google.maps.Geocoder();
+                const cleanName = facilityName.replace(/\s*\(.*?\)\s*/g, ' ').trim();
                 const cityCtx = cityName ? `, ${cityName}` : '';
-                const queryStr = `${facilityName}${cityCtx}, Indonesia`;
+                const queryStr = `${cleanName}${cityCtx}, Indonesia`;
                 geocoder.geocode({ address: queryStr, componentRestrictions: { country: 'ID' } }, (results: any[], status: string) => {
                     if (status === 'OK' && results && results.length > 0) {
                         const loc = results[0].geometry.location;
@@ -937,6 +939,7 @@ const FacilityLocationModal: React.FC<FacilityLocationModalProps> = ({
                         map.setCenter({ lat: plat, lng: plng });
                         map.setZoom(17);
                         updatePolyline(plat, plng);
+                        setIsGoogleVerified(true);
                     }
                 });
             }
@@ -1059,7 +1062,14 @@ const FacilityLocationModal: React.FC<FacilityLocationModalProps> = ({
                             <MapPin size={20} />
                         </div>
                         <div>
-                            <h3 className="font-black text-gray-900 text-sm leading-tight line-clamp-1">{facilityName || 'Tentukan Titik Gerbang Landmark'}</h3>
+                            <div className="flex items-center gap-2">
+                                <h3 className="font-black text-gray-900 text-sm leading-tight line-clamp-1">{facilityName || 'Tentukan Titik Gerbang Landmark'}</h3>
+                                {isGoogleVerified && (
+                                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full flex items-center gap-1 shrink-0">
+                                        <Check size={12} /> Google Maps
+                                    </span>
+                                )}
+                            </div>
                             <p className="text-[11px] text-gray-500 font-medium mt-0.5">Geser penanda merah atau cari gerbang spesifik di peta</p>
                         </div>
                     </div>
