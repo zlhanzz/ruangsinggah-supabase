@@ -2,23 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 235. Rekalibrasi Presisi Master Landmark & Auto-Resolve Google Maps Live Sync (`KostFormMitra.tsx`, `curatedLandmarks.ts`) (Agustus 2026)
+### 235. Sinkronisasi Massal Titik Koordinat Asli Seluruh Master Landmark Nasional via OpenStreetMap API (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
-  - Pengguna menemukan bahwa beberapa landmark master data masih memiliki deviasi posisi spasial saat dibuka di modal peta.
+  - Pengguna membutuhkan titik lokasi koordinat asli (Point of Interest / POI) dari setiap landmark yang ada di master data persis seperti saat dicari di peta.
 - **Implementasi Solusi**:
-  1. **Sistem Auto-Resolve Google Maps Live Sync pada `FacilityLocationModal` ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
-     - Setiap kali modal **"📍 Peta"** dibuka, sistem secara otomatis menjalankan query Geocoding resmi Google Maps (`facilityName + ', ' + form.city + ', Indonesia'`) di background.
-     - Penanda langsung secara otomatis diselaraskan ke **titik resmi Google Maps**, memusatkan peta dengan zoom 17x, menghitung ulang jarak KM ke kost, dan menampilkan badge terverifikasi *"✅ Google Maps"*.
-     - Pengguna tetap dapat menggeser penanda merah secara manual atau menggunakan fitur search bar untuk memilih gerbang spesifik.
-  2. **Rekalibrasi Titik Koordinat Master Dataset ([`curatedLandmarks.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants/curatedLandmarks.ts))**:
-     - Seluruh titik koordinat kampus, rumah sakit, dan mall di Makassar (UNHAS, PNUP, UIM, UMI, UNM Gunungsari, UNM Parangtambung, UIN Samata, UNISMUH, RS Wahidin, RS Unhas, Mall Panakkukang, Nipah Park, TSM, MToS) telah direkalibrasi ke gerbang jalan protokol resmi.
+  1. **Sinkronisasi Massal Koordinat Asli via OpenStreetMap API ([`curatedLandmarks.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants/curatedLandmarks.ts))**:
+     - Menjalankan automated lookup engine ke OpenStreetMap Nominatim API untuk seluruh daftar kampus, mall, rumah sakit, dan kawasan industri di Indonesia.
+     - Sebanyak 161+ titik koordinat berhasil disinkronkan secara presisi dengan akurasi 6 digit desimal (misal: UNHAS Tamalanrea `-5.132566, 119.488455`, PNUP `-5.129211, 119.481763`, UIM `-5.140639, 119.481089`, UMI `-5.136881, 119.447893`, MP `-5.157094, 119.446393`, dll.).
+  2. **Pembersihan Modal & Dukungan Input Presisi Manual ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - Menonaktifkan geocoding otomatis liar latar belakang agar modal peta 100% mematuhi koordinat master data asli.
+     - Menyediakan input teks Latitude & Longitude interaktif langsung di footer modal.
 - **File Tersentuh**:
-  - `functions/public/components/KostFormMitra.tsx`
   - `functions/public/constants/curatedLandmarks.ts`
+  - `functions/public/components/KostFormMitra.tsx`
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 31.68s, 0 error).
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 31.42s, 0 error).
 
 ### 234. Master Dataset Anchor & Landmark Nasional Terkurasi Lengkap 350+ Titik Strategis & Isolasi 100% Master Data (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
