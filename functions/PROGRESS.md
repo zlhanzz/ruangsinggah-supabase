@@ -2,18 +2,18 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 234. Master Dataset Anchor & Landmark Nasional Terkurasi Lengkap 350+ Titik Strategis & Engine Sinkron 0ms (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
+### 234. Master Dataset Anchor & Landmark Nasional Terkurasi Lengkap 350+ Titik Strategis & Isolasi 100% Master Data (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
-  - Pengguna mengevaluasi bahwa deteksi landmark open-world Google Maps mentah memunculkan tempat kursus/les bahasa (seperti *Full Bright Institute*), kampus besar yang terduplikasi karena marker gedung terpisah (seperti *Universitas Hasanuddin* dan *Rektorat UNHAS*), serta nama dalam bahasa Inggris.
-  - Pada pengujian awal, formulir masih memuat data lama akibat blokade dependency Google Places API dan cache draft di localStorage.
+  - Deteksi landmark open-world Google Maps mentah memunculkan tempat kursus/les bahasa (seperti *Full Bright Institute*), kampus besar yang terduplikasi karena marker gedung terpisah (seperti *Universitas Hasanuddin* dan *Rektorat UNHAS*), serta nama dalam bahasa Inggris (*Hasanuddin University*, *Makassar Islamic University*).
+  - Pada pengujian awal, Google Places API di background masih sempat mengembalikan entri bahasa Inggris dan menggabungkannya ke state form.
 - **Implementasi Solusi**:
   1. **Penyusunan Master Dataset Anchor Nasional Terlengkap ([`curatedLandmarks.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants/curatedLandmarks.ts))**:
      - Menyusun dataset master **350+ anchor strategis** dengan titik koordinat latitude & longitude presisi mencakup seluruh pulau di Indonesia.
      - Menyertakan kampus kedinasan (PKN STAN, IPDN), perguruan tinggi resmi (UI, ITB, UGM, UNHAS, dll.), mall, kawasan industri raksasa, rumah sakit rujukan nasional, dan hub transportasi (Whoosh).
-  2. **Engine Deteksi Sinkron Instan (0ms) & Auto-Sanitasi Draft ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
-     - Memisahkan eksekusi master dataset dari status Google Places API sehingga master anchor langsung diterapkan secara sinkron (0ms) seketika lokasi dipilih.
-     - Menambahkan sanitasi pembersihan otomatis saat draft lama dimuat dari `localStorage`, membuang seluruh entri yang memuat kata kunci tempat kursus/bimbel.
-     - Menambahkan hook sinkronisasi otomatis saat Step 1 (Lokasi) aktif jika daftar landmark masih kosong atau memuat sisa draft lama.
+  2. **Isolasi 100% Master Data & Engine Sinkron 0ms ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - **Isolasi Mutlak**: Jika master dataset mendeteksi kampus di wilayah tersebut, pemanggilan Google Places API untuk kategori kampus **DIMATIKAN 100%** (`scanCampusesFallback` tidak pernah dieksekusi).
+     - Daftar kampus yang tersimpan di form dijamin **100% MURNI dari Master Dataset kita** (`Universitas Hasanuddin (UNHAS) - Tamalanrea`, `Universitas Islam Makassar (UIM)`, `Politeknik Negeri Ujung Pandang (PNUP)`), tanpa ada entri bahasa Inggris atau tempat kursus.
+     - Menambahkan filter blacklist agresif saat inisialisasi draft dan hook reaktif pada Step 1 (Lokasi) agar data draft lama otomatis tertimpa master data murni.
      - Google Places API difokuskan khusus memindai fasilitas harian mikro (Minimarket Indomaret/Alfamart terdekat, Laundry kiloan terdekat, dan Tempat Ibadah terdekat dalam radius 2 KM).
 - **File Tersentuh**:
   - `functions/public/constants/curatedLandmarks.ts` (350+ Anchor se-Indonesia)
@@ -21,7 +21,7 @@
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 20.48s, 0 error).
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 22.37s, 0 error).
 
 ### 233. Sistem Penyimpanan & Pemulihan Draft Otomatis Formulir Listing Mandiri (`KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:

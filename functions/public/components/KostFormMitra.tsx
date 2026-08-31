@@ -1097,9 +1097,10 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             'bimbel', 'bimbingan belajar', 'les ', 'kursus', 'training', 'kumon', 'gandhi',
             'study club', 'daycare', 'kindergarten', 'paud', 'tk ', 'taman kanak',
             'sd ', 'smp ', 'sma ', 'smk ', 'madrasah', 'driving school', 'kursus mengemudi',
-            'english course', 'lpk ', 'balai latihan', 'rektorat', 'fakultas', 'dekanat',
+            'english', 'course', 'language', 'center', 'lpk ', 'balai latihan', 'rektorat', 'fakultas', 'dekanat',
             'prodi', 'jurusan', 'pintu ', 'gate ', 'danau ', 'gedung ', 'hall ', 'auditorium',
-            'asrama', 'rusunawa', 'kantin', 'parkiran', 'full bright'
+            'asrama', 'rusunawa', 'kantin', 'parkiran', 'full bright', 'hasanuddin university',
+            'makassar islamic university', 'indonesia muslim university'
         ];
         return blacklist.some(b => lower.includes(b));
     }, []);
@@ -1140,7 +1141,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 isLiveGoogleApi: true
             }));
 
-        // LANGSUNG PERBARUI STATE FORM SECARA SINKRON (0ms)
+        // LANGSUNG PERBARUI STATE FORM SECARA SINKRON (0ms) DENGAN MASTER DATA MURNI
         const initialCombined = [...curatedCampuses, ...curatedOthers];
         if (initialCombined.length > 0) {
             setForm(prev => ({
@@ -1180,16 +1181,22 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             });
         };
 
-        // 3. Scan Kampus Fallback (Hanya jika belum ada kampus di curated master data)
-        const scanCampusesFallback = curatedCampuses.length >= 2 
+        // 3. Scan Kampus Fallback: HANYA JIKA TIDAK ADA SAMA SEKALI KAMPUS DI MASTER DATASET
+        const scanCampusesFallback = curatedCampuses.length > 0 
             ? Promise.resolve([]) 
             : performSearch({
                 location: centerLatLng,
                 radius: 7000,
                 type: 'university'
             }).then(results => {
+                const validKeywords = ['universitas', 'institut', 'politeknik', 'stie', 'stikes', 'uin', 'iain', 'stmik', 'sekolah tinggi', 'akademi'];
                 return results
-                    .filter(p => p.name && p.geometry?.location && !isInvalidCampus(p.name))
+                    .filter(p => {
+                        if (!p.name || !p.geometry?.location) return false;
+                        const lower = p.name.toLowerCase();
+                        const hasValidKeyword = validKeywords.some(k => lower.includes(k));
+                        return hasValidKeyword && !isInvalidCampus(p.name);
+                    })
                     .map(p => {
                         const pLat = p.geometry.location.lat();
                         const pLng = p.geometry.location.lng();
@@ -1362,19 +1369,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             if (landmarkScanAbortRef.current !== scanId) return;
             setIsScanningLandmarks(false);
 
-            // 1. Gabungkan kampus (Curated master diprioritaskan utama)
-            const finalCampuses = [...curatedCampuses];
-            fallbackCampuses.forEach(fc => {
-                const isAlreadyPresent = finalCampuses.some(c => 
-                    c.name.toLowerCase().includes(fc.name.toLowerCase()) || 
-                    fc.name.toLowerCase().includes(c.name.toLowerCase())
-                );
-                if (!isAlreadyPresent) {
-                    finalCampuses.push(fc);
-                }
-            });
+            // 1. Kampus Terdekat (Jika ada Master Dataset, 100% MURNI DARI MASTER DATASET TANPA BERCAMPUR DENGAN GOOGLE PLACES!)
+            const finalCampuses = curatedCampuses.length > 0 
+                ? [...curatedCampuses] 
+                : [...fallbackCampuses];
 
-            // 2. Gabungkan fasilitas harian & anchor regional
+            // 2. Gabungkan fasilitas harian mikro & anchor regional
             const finalFacilities = [
                 ...curatedOthers,
                 ...fallbackMalls,
@@ -1426,11 +1426,15 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         }
     }, [detectNearbyLandmarks]);
 
-    // Auto-sync master landmarks saat step lokasi aktif jika campuses kosong atau memuat data sampah
+    // Auto-sync master landmarks saat step lokasi aktif jika campuses kosong atau memuat data sampah / bahasa Inggris
     useEffect(() => {
         if (step === 1 && form.location?.lat && form.location?.lng) {
             const currentCampuses = form.campuses || [];
-            const hasGarbage = currentCampuses.some(c => isInvalidCampus(c.name));
+            const hasGarbage = currentCampuses.some(c => 
+                isInvalidCampus(c.name) || 
+                c.name.toLowerCase().includes('university') ||
+                c.name.toLowerCase().includes('full bright')
+            );
             if (currentCampuses.length === 0 || hasGarbage) {
                 detectNearbyLandmarks(form.location.lat, form.location.lng);
             }
