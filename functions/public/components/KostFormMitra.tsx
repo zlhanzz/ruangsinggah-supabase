@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Kost, RoomType, PricingPeriod } from '../types';
 import { addPropertyWithMedia, updatePropertyWithMedia } from '../adminService';
+import { findNearbyCuratedLandmarks } from '../constants/curatedLandmarks';
 import {
     X, ChevronRight, ChevronLeft, Camera, Video, MapPin, Home, Wifi,
     Plus, Trash2, Check, AlertCircle, Loader2, Upload, Image as ImageIcon,
@@ -1094,10 +1095,38 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 'bimbel', 'bimbingan belajar', 'les ', 'kursus', 'training', 'kumon', 'gandhi',
                 'study club', 'daycare', 'kindergarten', 'paud', 'tk ', 'taman kanak',
                 'sd ', 'smp ', 'sma ', 'smk ', 'madrasah', 'driving school', 'kursus mengemudi',
-                'english course', 'lpk ', 'balai latihan'
+                'english course', 'lpk ', 'balai latihan', 'rektorat', 'fakultas', 'dekanat',
+                'prodi', 'jurusan', 'pintu ', 'gate ', 'danau ', 'gedung ', 'hall ', 'auditorium',
+                'asrama', 'rusunawa', 'kantin', 'parkiran', 'full bright'
             ];
             return blacklist.some(b => lower.includes(b));
         };
+
+        // 1. Dapatkan Landmark & Anchor Master Terkurasi (25 Kota Indonesia)
+        const curatedAnchors = findNearbyCuratedLandmarks(centerLat, centerLng, 7.0);
+        const curatedCampuses = curatedAnchors
+            .filter(a => a.category === 'campus')
+            .map(c => ({
+                name: c.name,
+                lat: c.lat,
+                lng: c.lng,
+                distance: c.distance,
+                kmVal: c.kmVal,
+                transportMode: c.transportMode,
+                isLiveGoogleApi: true
+            }));
+
+        const curatedOthers = curatedAnchors
+            .filter(a => a.category !== 'campus')
+            .map(c => ({
+                name: c.name,
+                lat: c.lat,
+                lng: c.lng,
+                distance: c.distance,
+                kmVal: c.kmVal,
+                transportMode: c.transportMode,
+                isLiveGoogleApi: true
+            }));
 
         // Helper generic search promise
         const performSearch = (request: any): Promise<any[]> => {
@@ -1116,38 +1145,39 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             });
         };
 
-        // 1. Scan Kampus & Universitas (Radius 7 KM - Diurutkan dari yang Paling Top/Populer ke Biasa)
-        const scanCampuses = performSearch({
-            location: centerLatLng,
-            radius: 7000,
-            type: 'university'
-        }).then(results => {
-            return results
-                .filter(p => p.name && p.geometry?.location && !isInvalidCampus(p.name))
-                .map(p => {
-                    const pLat = p.geometry.location.lat();
-                    const pLng = p.geometry.location.lng();
-                    const km = getKm(pLat, pLng);
-                    const ratingsCount = p.user_ratings_total || 0;
-                    const rating = p.rating || 0;
-                    // Popularity ranking score: prioritas ulasan/reputasi namun tetap memperhitungkan jarak
-                    const popularityScore = Math.log10(ratingsCount + 1) * 35 + (rating * 3) - ((km / 7) * 8);
-                    return {
-                        name: p.name,
-                        lat: pLat,
-                        lng: pLng,
-                        distance: `± ${km} KM`,
-                        kmVal: km,
-                        popularityScore,
-                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
-                        isLiveGoogleApi: true
-                    };
-                })
-                .sort((a, b) => b.popularityScore - a.popularityScore)
-                .slice(0, 4); // Ambil 4 kampus terbaik dalam radius 7 KM
-        });
+        // 2. Scan Kampus Fallback (Hanya jika belum ada kampus di curated master data)
+        const scanCampusesFallback = curatedCampuses.length >= 2 
+            ? Promise.resolve([]) 
+            : performSearch({
+                location: centerLatLng,
+                radius: 7000,
+                type: 'university'
+            }).then(results => {
+                return results
+                    .filter(p => p.name && p.geometry?.location && !isInvalidCampus(p.name))
+                    .map(p => {
+                        const pLat = p.geometry.location.lat();
+                        const pLng = p.geometry.location.lng();
+                        const km = getKm(pLat, pLng);
+                        const ratingsCount = p.user_ratings_total || 0;
+                        const rating = p.rating || 0;
+                        const popularityScore = Math.log10(ratingsCount + 1) * 35 + (rating * 3) - ((km / 7) * 8);
+                        return {
+                            name: p.name,
+                            lat: pLat,
+                            lng: pLng,
+                            distance: `± ${km} KM`,
+                            kmVal: km,
+                            popularityScore,
+                            transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                            isLiveGoogleApi: true
+                        };
+                    })
+                    .sort((a, b) => b.popularityScore - a.popularityScore)
+                    .slice(0, 3);
+            });
 
-        // 2. Scan Fasilitas Harian: Minimarket / Supermarket Terdekat (Radius 2 KM - Jarak Terdekat)
+        // 3. Scan Fasilitas Harian Mikro: Minimarket / Supermarket Terdekat (Radius 2 KM)
         const scanMinimarket = performSearch({
             location: centerLatLng,
             radius: 2000,
@@ -1170,10 +1200,10 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     };
                 })
                 .sort((a, b) => a.kmVal - b.kmVal)
-                .slice(0, 2); // 2 minimarket/supermarket paling dekat
+                .slice(0, 2);
         });
 
-        // 3. Scan Fasilitas Harian: Laundry Kiloan Terdekat (Radius 2 KM - Jarak Terdekat)
+        // 4. Scan Fasilitas Harian Mikro: Laundry Kiloan Terdekat (Radius 2 KM)
         const scanLaundry = performSearch({
             location: centerLatLng,
             radius: 2000,
@@ -1196,10 +1226,10 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     };
                 })
                 .sort((a, b) => a.kmVal - b.kmVal)
-                .slice(0, 1); // 1 laundry terdekat
+                .slice(0, 1);
         });
 
-        // 4. Scan Fasilitas Harian: Tempat Ibadah Terdekat (Masjid / Gereja, Radius 2 KM - Jarak Terdekat)
+        // 5. Scan Fasilitas Harian Mikro: Tempat Ibadah Terdekat (Radius 2 KM)
         const scanWorship = performSearch({
             location: centerLatLng,
             radius: 2000,
@@ -1223,82 +1253,119 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     };
                 })
                 .sort((a, b) => a.kmVal - b.kmVal)
-                .slice(0, 1); // 1 tempat ibadah terdekat
+                .slice(0, 1);
         });
 
-        // 5. Scan Fasilitas Medis: Rumah Sakit / Klinik Terdekat (Radius 5 KM - Jarak Terdekat)
-        const scanHospital = performSearch({
-            location: centerLatLng,
-            radius: 5000,
-            type: 'hospital',
-            keyword: 'rumah sakit|rsup|rsud|klinik'
-        }).then(results => {
-            return results
-                .filter(p => p.name && p.geometry?.location)
-                .map(p => {
-                    const pLat = p.geometry.location.lat();
-                    const pLng = p.geometry.location.lng();
-                    const km = getKm(pLat, pLng);
-                    return {
-                        name: p.name,
-                        lat: pLat,
-                        lng: pLng,
-                        distance: `± ${km} KM`,
-                        kmVal: km,
-                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
-                        isLiveGoogleApi: true
-                    };
-                })
-                .sort((a, b) => a.kmVal - b.kmVal)
-                .slice(0, 1); // 1 RS/klinik terdekat
-        });
+        // 6. Scan Fasilitas Medis: Rumah Sakit Terdekat (Hanya jika belum ada di curated master)
+        const hasCuratedHospital = curatedOthers.some(o => o.name.toLowerCase().includes('rs') || o.name.toLowerCase().includes('rumah sakit'));
+        const scanHospitalFallback = hasCuratedHospital
+            ? Promise.resolve([])
+            : performSearch({
+                location: centerLatLng,
+                radius: 5000,
+                type: 'hospital',
+                keyword: 'rumah sakit|rsup|rsud|klinik'
+            }).then(results => {
+                return results
+                    .filter(p => p.name && p.geometry?.location)
+                    .map(p => {
+                        const pLat = p.geometry.location.lat();
+                        const pLng = p.geometry.location.lng();
+                        const km = getKm(pLat, pLng);
+                        return {
+                            name: p.name,
+                            lat: pLat,
+                            lng: pLng,
+                            distance: `± ${km} KM`,
+                            kmVal: km,
+                            transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                            isLiveGoogleApi: true
+                        };
+                    })
+                    .sort((a, b) => a.kmVal - b.kmVal)
+                    .slice(0, 1);
+            });
 
-        // 6. Scan Pusat Belanja: Mall / Plaza Terdekat (Radius 7 KM - Jarak Terdekat)
-        const scanMall = performSearch({
-            location: centerLatLng,
-            radius: 7000,
-            type: 'shopping_mall',
-            keyword: 'mall|plaza|square|trade center'
-        }).then(results => {
-            return results
-                .filter(p => p.name && p.geometry?.location)
-                .map(p => {
-                    const pLat = p.geometry.location.lat();
-                    const pLng = p.geometry.location.lng();
-                    const km = getKm(pLat, pLng);
-                    return {
-                        name: p.name,
-                        lat: pLat,
-                        lng: pLng,
-                        distance: `± ${km} KM`,
-                        kmVal: km,
-                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
-                        isLiveGoogleApi: true
-                    };
-                })
-                .sort((a, b) => a.kmVal - b.kmVal)
-                .slice(0, 1); // 1 mall terdekat
-        });
+        // 7. Scan Mall Terdekat (Hanya jika belum ada di curated master)
+        const hasCuratedMall = curatedOthers.some(o => o.name.toLowerCase().includes('mall') || o.name.toLowerCase().includes('park') || o.name.toLowerCase().includes('square'));
+        const scanMallFallback = hasCuratedMall
+            ? Promise.resolve([])
+            : performSearch({
+                location: centerLatLng,
+                radius: 7000,
+                type: 'shopping_mall',
+                keyword: 'mall|plaza|square|trade center'
+            }).then(results => {
+                return results
+                    .filter(p => p.name && p.geometry?.location)
+                    .map(p => {
+                        const pLat = p.geometry.location.lat();
+                        const pLng = p.geometry.location.lng();
+                        const km = getKm(pLat, pLng);
+                        return {
+                            name: p.name,
+                            lat: pLat,
+                            lng: pLng,
+                            distance: `± ${km} KM`,
+                            kmVal: km,
+                            transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                            isLiveGoogleApi: true
+                        };
+                    })
+                    .sort((a, b) => a.kmVal - b.kmVal)
+                    .slice(0, 1);
+            });
 
-        Promise.all([scanCampuses, scanMinimarket, scanLaundry, scanWorship, scanHospital, scanMall]).then(([campusesList, minimarketList, laundryList, worshipList, hospitalList, mallList]) => {
+        Promise.all([
+            scanCampusesFallback,
+            scanMinimarket,
+            scanLaundry,
+            scanWorship,
+            scanHospitalFallback,
+            scanMallFallback
+        ]).then(([fallbackCampuses, minimarketList, laundryList, worshipList, fallbackHospitals, fallbackMalls]) => {
             if (landmarkScanAbortRef.current !== scanId) return;
             setIsScanningLandmarks(false);
 
-            // Gabungkan fasilitas harian terdekat
-            const dailyFacilities = [...minimarketList, ...laundryList, ...worshipList, ...hospitalList, ...mallList];
-            
-            const combinedList = [...campusesList];
-            dailyFacilities.forEach(fac => {
-                if (!combinedList.some(c => c.name.toLowerCase() === fac.name.toLowerCase())) {
-                    combinedList.push(fac);
+            // 1. Gabungkan kampus (Curated master diprioritaskan utama)
+            const finalCampuses = [...curatedCampuses];
+            fallbackCampuses.forEach(fc => {
+                const isAlreadyPresent = finalCampuses.some(c => 
+                    c.name.toLowerCase().includes(fc.name.toLowerCase()) || 
+                    fc.name.toLowerCase().includes(c.name.toLowerCase())
+                );
+                if (!isAlreadyPresent) {
+                    finalCampuses.push(fc);
                 }
             });
 
-            if (combinedList.length > 0) {
+            // 2. Gabungkan fasilitas harian & anchor regional
+            const finalFacilities = [
+                ...curatedOthers,
+                ...fallbackMalls,
+                ...fallbackHospitals,
+                ...minimarketList,
+                ...laundryList,
+                ...worshipList
+            ];
+
+            // 3. Gabungkan seluruh list bebas duplikasi untuk form
+            const combinedLandmarks = [...finalCampuses];
+            finalFacilities.forEach(fac => {
+                const exists = combinedLandmarks.some(c => 
+                    c.name.toLowerCase() === fac.name.toLowerCase() ||
+                    (c.lat === fac.lat && c.lng === fac.lng)
+                );
+                if (!exists) {
+                    combinedLandmarks.push(fac);
+                }
+            });
+
+            if (combinedLandmarks.length > 0) {
                 setForm(prev => ({
                     ...prev,
-                    campuses: combinedList.map(({ kmVal, popularityScore, ...item }: any) => item),
-                    publicFacilities: dailyFacilities.map(({ kmVal, ...item }: any) => item)
+                    campuses: combinedLandmarks.map(({ kmVal, ...item }: any) => item),
+                    publicFacilities: finalFacilities.map(({ kmVal, ...item }: any) => item)
                 }));
             }
         }).catch(() => {

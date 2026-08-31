@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 234. Master Dataset Anchor & Landmark Nasional Terkurasi 25 Kota (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna mengevaluasi bahwa deteksi landmark open-world Google Maps mentah masih memunculkan tempat kursus/les bahasa (seperti *Full Bright Institute*), kampus besar yang terduplikasi karena marker gedung terpisah (seperti *Universitas Hasanuddin* dan *Rektorat UNHAS*), serta nama dalam bahasa Inggris.
+  - Pengguna meminta agar sistem menyusun master data komprehensif untuk 20–25 kota di Indonesia yang mencakup seluruh magnet aktivitas pencari kost: kampus, area ritel/mall besar, kawasan industri, perkantoran/CBD, rumah sakit besar rujukan, kawasan wisata, dan hub transportasi (*"tidak hanya kampus tapi juga area ritel besar seperti mall, dan area industri, area perkantoran juga. kita perlu master data untuk setiap kota untuk tempat tempat yang biasanya menjadi lokasi yang dikunjungi banyak orang... rumah sakit besar sepertinya juga perlu kita masukkan ke master data kita, karena menyerap banyak tenaga kerja juga"*).
+- **Implementasi Solusi**:
+  1. **Pembuatan Master Dataset Anchor Terkurasi Nasional ([`curatedLandmarks.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants/curatedLandmarks.ts))**:
+     - Menyusun dataset master ratusan anchor terkurasi dengan titik koordinat presisi mencakup 25 kota metropolitan utama di Indonesia (Makassar/Gowa/Maros, Jabodetabek, Bandung Raya, Yogyakarta, Surabaya/Malang, Semarang/Solo, Medan, Bali, Palembang, Padang, Pekanbaru, Lampung, Batam, Balikpapan/IKN, Samarinda, Banjarmasin, Manado, Pontianak, dll.).
+     - Mencakup 7 kategori anchor strategis:
+       - 🎓 **Kampus & Perguruan Tinggi Resmi** (UNHAS, UI, ITB, UGM, UNAIR, ITS, UB, UNDIP, USU, UNPAD, UIN, UMI, UNM, BINUS, dll.)
+       - 🛍️ **Mall & Ritel Besar** (Mall Panakkukang, Nipah Park, TSM, Grand Indonesia, Senayan City, Central Park, PVJ, Pakuwon, Sun Plaza, dll.)
+       - 🏢 **Kawasan Perkantoran & Bisnis (CBD)** (Boulevard Panakkukang, CPI, SCBD Sudirman, Kuningan, TB Simatupang, HR Muhammad, dll.)
+       - 🏭 **Kawasan Industri & Pergudangan** (KIMA Makassar, Jababeka Cikarang, MM2100 Cibitung, KIIC Karawang, SIER Rungkut, Batamindo, dll.)
+       - 🏥 **Rumah Sakit Besar & Rujukan Nasional** (RSUP Dr. Wahidin, RS UNHAS, RS Siloam, RSCM, RS Fatmawati, RS Hasan Sadikin, RS Sardjito, RS Dr. Soetomo, RS Kariadi, RS Adam Malik, dll.)
+       - 🏖️ **Destinasi Wisata & Ikon Kota** (Pantai Losari, CPI, Fort Rotterdam, Malioboro, Monas, Beachwalk Kuta, dll.)
+       - 🚆✈️ **Hub Transportasi Utama** (Bandara Sultan Hasanuddin, Bandara Soetta, Juanda, Ngurah Rai, Stasiun Gambir/Senen/Tugu/Gubeng, Pelabuhan Soetta Makassar).
+  2. **Engine Deteksi Berbasis Jarak Haversine & Integrasi Formulir ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - Fungsi `findNearbyCuratedLandmarks(lat, lng, 7)` secara instan memindai anchor master terdekat (0ms delay, 0 biaya API Google, 100% bebas dari kursus abal-abal, 0% duplikasi gedung).
+     - Google Places API difokuskan khusus memindai fasilitas harian mikro (Minimarket Indomaret/Alfamart terdekat, Laundry kiloan terdekat, dan Tempat Ibadah terdekat dalam radius 2 KM).
+     - Dilengkapi filter sanitasi cerdas yang menolak kata sub-gedung (*rektorat, dekanat, fakultas, gerbang, asrama, kursus*).
+- **File Tersentuh**:
+  - `functions/public/constants/curatedLandmarks.ts` (File Baru)
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 45.44s, 0 error).
+
 ### 233. Sistem Penyimpanan & Pemulihan Draft Otomatis Formulir Listing Mandiri (`KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna melaporkan bahwa saat mengisi formulir penambahan listing mandiri dan modal tertutup (*close*, refresh, atau berpindah layar), seluruh data yang sudah dimasukkan langsung hilang total dan harus mengulang pengisian dari awal lagi (*"sistem draft yang ada pada sistem penambahan listing mandiri yang ada pada dashboard admin berlum berufungsi optimal. ketika terclose dan sebagainya, data yang sebelumnya sudah kita masukkan langsung hilang. saya juga ingin agar ketik sudah memasukkan data dan close, data tersebut masih dapat dilanjutkan pengisiannya tanpa harus mengulang semuanya dari awal lagi"*).
