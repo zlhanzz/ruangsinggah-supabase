@@ -2231,6 +2231,17 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             onChange={e => upd('description', e.target.value)}
                         />
                     </Field>
+
+                    <Field label="Fasilitas Umum Kost" hint="Pilih fasilitas bersama yang tersedia di properti Anda">
+                        <FacilityInput
+                            selected={form.facilities || []}
+                            presets={BUILDING_FACILITIES}
+                            onToggle={toggleFacility}
+                            onAdd={addCustomFacility}
+                            onRemove={removeCustomFacility}
+                            placeholder="Tambah fasilitas umum lainnya (Cth: Kolam Renang, Rooftop, Gym)..."
+                        />
+                    </Field>
                 </div>
             );
 

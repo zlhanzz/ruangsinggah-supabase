@@ -2,6 +2,23 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 239. Penambahan Input Fasilitas Umum pada Wizard Flow 1 (`KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna ingin input fasilitas umum kost tersedia langsung di Wizard Flow 1 (Langkah 1: Info Dasar) agar mitra dapat langsung memilih fasilitas bersama tanpa harus menunggu langkah belakang.
+- **Implementasi Solusi**:
+  1. **Integrasi Komponen Fasilitas Umum di Flow 1 (`KostFormMitra.tsx`)**:
+     - Menambahkan komponen `FacilityInput` pada `case 0:` tepat di bawah field `Deskripsi Kost`.
+     - Menyajikan pilihan preset fasilitas umum kost: WiFi, Parkir Motor, Parkir Mobil, CCTV, AC, Laundry, Dapur Bersama, Ruang Tamu, Mushola, Jemuran, Kulkas Bersama, Water Heater, Cleaning Service, Security 24 Jam, Akses 24 Jam, dan Lift.
+     - Menyediakan input tambah fasilitas kustom (misal: Kolam Renang, Rooftop, Gym, dll.).
+  2. **Sinkronisasi Data**:
+     - Pilihan fasilitas terikat langsung ke `form.facilities: string[]`, tersimpan otomatis di draft `localStorage`, dan dikirim ke Supabase database.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 28.53s, 0 error).
+
 ### 238. Pengkategorian Foto Properti Terstruktur & Penghapusan Input Video (`KostFormMitra.tsx`, `adminService.ts`, `KostDetail.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna ingin input foto kost di formulir mitra tidak lagi bercampur dalam satu kotak tanpa kategori.
