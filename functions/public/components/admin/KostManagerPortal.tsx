@@ -737,8 +737,10 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
                 const addressStr = result.formatted_address;
                 const components = result.address_components || [];
                 const getComp = (type: string) => components.find((c: any) => c.types.includes(type))?.long_name || '';
-                const city = getComp('locality') || getComp('administrative_area_level_2') || getComp('administrative_area_level_1');
-                const area = getComp('sublocality_level_1') || getComp('sublocality') || getComp('neighborhood');
+                const rawCity = getComp('administrative_area_level_2') || getComp('locality') || getComp('administrative_area_level_1');
+                const rawArea = getComp('administrative_area_level_3') || getComp('sublocality_level_1') || getComp('sublocality') || getComp('neighborhood');
+                const city = rawCity.replace(/^(Kota\s+Administrasi\s+|Kota\s+|Kabupaten\s+|Kab\.\s+)/i, '').trim();
+                const area = rawArea.replace(/^(Kecamatan\s+|Kec\.\s+)/i, '').trim();
                 setSearchQuery(addressStr);
                 onLocationChange(latVal, lngVal, addressStr, city, area);
             } else {
@@ -804,8 +806,10 @@ const LocationPicker: React.FC<{ lat: number; lng: number; onLocationChange: (la
                 marker.setPosition({ lat: newLat, lng: newLng });
                 const components = place.address_components || [];
                 const getComp = (type: string) => components.find((c: any) => c.types.includes(type))?.long_name || '';
-                const city = getComp('locality') || getComp('administrative_area_level_2') || getComp('administrative_area_level_1');
-                const area = getComp('sublocality_level_1') || getComp('sublocality') || getComp('neighborhood');
+                const rawCity = getComp('administrative_area_level_2') || getComp('locality') || getComp('administrative_area_level_1');
+                const rawArea = getComp('administrative_area_level_3') || getComp('sublocality_level_1') || getComp('sublocality') || getComp('neighborhood');
+                const city = rawCity.replace(/^(Kota\s+Administrasi\s+|Kota\s+|Kabupaten\s+|Kab\.\s+)/i, '').trim();
+                const area = rawArea.replace(/^(Kecamatan\s+|Kec\.\s+)/i, '').trim();
                 setSearchQuery(place.formatted_address || '');
                 onLocationChange(newLat, newLng, place.formatted_address || '', city, area);
             });

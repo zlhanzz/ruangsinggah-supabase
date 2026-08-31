@@ -86,6 +86,7 @@ export interface Kost {
   updatedAt?: string;
 
   // App specific fields
+  province?: string;
   city: string;
   area: string;
   type: 'Putra' | 'Putri' | 'Campur';

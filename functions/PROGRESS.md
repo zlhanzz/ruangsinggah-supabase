@@ -2,6 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 230. Perbaikan Parser Geocoding Wilayah Indonesia & Input Lengkap Provinsi, Kota/Kabupaten, Kecamatan (`KostFormMitra.tsx`, `userService.ts`, `types.ts`, `Dashboard.tsx`, `KostManagerPortal.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna mengirimkan tangkapan layar form input lokasi kost di mana field Kota terisi *"Kecamatan Tamalanrea"* sedangkan field Kecamatan kosong, serta data provinsi belum tampil dan terindeks dengan baik (*"pada bagian ini di menu pengimputan atau deteksi otomatis terkait provinsi, kabupaten/kota, dan kecamatan. yang ada pada dashboard mitra, belum tampil dengan baik, dan belum terindeks dengan baik ketika setelah melakukan penambahan titik lokasi"*).
+- **Implementasi Solusi**:
+  1. **Parser Wilayah Indonesia Presisi (`extractIndonesianLocationComponents`)**:
+     - Memperbaiki hierarki ekstraksi Google Maps Geocoder:
+       - **Provinsi (`province`)**: Diekstrak dari `administrative_area_level_1` (misal: *Sulawesi Selatan*, *DKI Jakarta*, *Jawa Barat*, *DI Yogyakarta*).
+       - **Kabupaten / Kota (`city`)**: Diekstrak secara prioritas dari `administrative_area_level_2` (misal: *Makassar*, *Jakarta Selatan*, *Bandung*, *Sleman*).
+       - **Kecamatan / Area (`area`)**: Diekstrak dari `administrative_area_level_3` (format kecamatan Google Maps di Indonesia) / `sublocality` dan dibersihkan dari awalan *"Kecamatan "* sehingga menjadi *Tamalanrea*, *Tebet*, *Coblong*, dll.
+  2. **Penyempurnaan Form Lokasi Step 1 ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - Menghadirkan struktur input wilayah yang komprehensif:
+       - **Grid 2 Kolom**: Field **Provinsi** dan Field **Kota / Kabupaten \***.
+       - Field **Kecamatan / Area**.
+       - Field **Alamat Lengkap**.
+     - Semua field terisi otomatis saat memilih titik peta / GPS / pencarian, dan tetap dapat diedit manual oleh mitra.
+  3. **Penyelarasan Tipe Data & Mapping Layanan ([`types.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/types.ts), [`userService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts))**:
+     - Menambahkan properti `province?: string;` pada interface `Kost`.
+     - Memastikan `getPublishedProperties` dan `getOwnerProperties` memetakan `province`, `city`, dan `area` secara presisi ke objek `Kost`.
+  4. **Standardisasi di Dashboard Admin & Portal ([`Dashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Dashboard.tsx), [`KostManagerPortal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx))**:
+     - Menyamakan prioritas ekstraksi kota (`administrative_area_level_2`) dan kecamatan (`administrative_area_level_3`) di seluruh panel admin dan portal.
+- **File Tersentuh**:
+  - `functions/public/types.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/public/userService.ts`
+  - `functions/public/pages/Dashboard.tsx`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 32.96s, 0 error).
+
 ### 229. Tombol Deteksi Lokasi GPS Otomatis pada Formulir Penetapan Lokasi Kost (`KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna mengirimkan tangkapan layar formulir *Tambah Kost Baru* (Langkah 2: Pilih Lokasi di Peta) dan meminta agar disediakan tombol langsung untuk menggunakan lokasi GPS perangkat saat ini secara instan (*"pada penetapan lokasi, belum ada tombol untuk menggunakan lokasi sekarang secara langsung, yang berdasarkan lokasi gps"*).

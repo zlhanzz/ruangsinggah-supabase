@@ -51,7 +51,7 @@ const periodLabels: Record<string, string> = {
 
 const initialForm: Partial<Kost> = {
     title: '', description: '', type: 'Campur', status: 'published',
-    city: '', area: '', address: '',
+    province: '', city: '', area: '', address: '',
     location: { lat: -6.2088, lng: 106.8456 },
     imageUrls: [], videoUrls: [],
     instagramUrl: '', tiktokUrl: '',
@@ -104,7 +104,7 @@ const ChipToggle: React.FC<{ label: string; active: boolean; onClick: () => void
 const MapPicker: React.FC<{
     lat: number;
     lng: number;
-    onLocationChange: (lat: number, lng: number, address: string, city?: string, area?: string) => void;
+    onLocationChange: (lat: number, lng: number, address: string, city?: string, area?: string, province?: string) => void;
 }> = ({ lat, lng, onLocationChange }) => {
     const mapRef = useRef<HTMLDivElement>(null);
     const mapInstance = useRef<any>(null);
@@ -243,17 +243,77 @@ const MapPicker: React.FC<{
         setIsMapModalOpen(false);
     };
 
-    const extractCityArea = (components: any[]) => {
-        let city = '', area = '';
+    const extractIndonesianLocationComponents = (components: any[]) => {
+        let province = '';
+        let city = '';
+        let area = '';
+        let subdistrict = '';
+
         for (const comp of components) {
-            const types = comp.types || [];
-            if (types.includes('administrative_area_level_2') && !city) city = comp.long_name;
-            if (types.includes('administrative_area_level_3') && !city) city = comp.long_name;
-            if (types.includes('sublocality_level_1') && !area) area = comp.long_name;
-            if (types.includes('sublocality') && !area) area = comp.long_name;
-            if (types.includes('locality') && !city) city = comp.long_name;
+            const types: string[] = comp.types || [];
+
+            // 1. PROVINSI (administrative_area_level_1)
+            if (types.includes('administrative_area_level_1') && !province) {
+                province = comp.long_name || comp.short_name || '';
+            }
+
+            // 2. KABUPATEN / KOTA (administrative_area_level_2)
+            if (types.includes('administrative_area_level_2') && !city) {
+                city = comp.long_name || '';
+            }
+
+            // 3. KECAMATAN (administrative_area_level_3 atau sublocality_level_1 atau sublocality)
+            if (types.includes('administrative_area_level_3') && !area) {
+                area = comp.long_name || '';
+            }
+            if (types.includes('sublocality_level_1') && !subdistrict) {
+                subdistrict = comp.long_name || '';
+            }
+            if (types.includes('sublocality') && !subdistrict) {
+                subdistrict = comp.long_name || '';
+            }
         }
-        return { city, area };
+
+        // Fallback jika area belum terisi dari level 3
+        if (!area && subdistrict) {
+            area = subdistrict;
+        }
+
+        // Fallback untuk kota jika level 2 tidak ada tapi ada locality
+        if (!city) {
+            const localityComp = components.find((c: any) => c.types?.includes('locality'));
+            if (localityComp && localityComp.long_name !== area) {
+                city = localityComp.long_name;
+            }
+        }
+
+        // Standardisasi nama Kota / Kabupaten:
+        let cleanCity = city;
+        if (cleanCity) {
+            cleanCity = cleanCity.replace(/^(Kota\s+Administrasi\s+|Kota\s+|Kabupaten\s+|Kab\.\s+)/i, '').trim();
+        }
+
+        // Standardisasi nama Kecamatan / Area:
+        let cleanArea = area;
+        if (cleanArea) {
+            cleanArea = cleanArea.replace(/^(Kecamatan\s+|Kec\.\s+)/i, '').trim();
+        }
+
+        // Standardisasi nama Provinsi:
+        let cleanProvince = province;
+        if (cleanProvince) {
+            cleanProvince = cleanProvince.replace(/^(Daerah Khusus Ibukota\s+|Daerah Istimewa\s+)/i, (match) => {
+                if (match.toLowerCase().includes('ibukota')) return 'DKI ';
+                if (match.toLowerCase().includes('istimewa')) return 'DI ';
+                return '';
+            }).trim();
+        }
+
+        return {
+            province: cleanProvince,
+            city: cleanCity,
+            area: cleanArea
+        };
     };
 
     const reverseGeocode = useCallback((lat: number, lng: number) => {
@@ -268,8 +328,8 @@ const MapPicker: React.FC<{
             (results: any[], status: string) => {
                 if (status === 'OK' && results && results.length > 0) {
                     const addr = results[0].formatted_address;
-                    const { city, area } = extractCityArea(results[0].address_components || []);
-                    onLocationChange(lat, lng, addr, city, area);
+                    const { city, area, province } = extractIndonesianLocationComponents(results[0].address_components || []);
+                    onLocationChange(lat, lng, addr, city, area, province);
                     setSearchQuery(addr);
                 } else {
                     onLocationChange(lat, lng, `${lat.toFixed(6)}, ${lng.toFixed(6)}`);
@@ -394,8 +454,8 @@ const MapPicker: React.FC<{
                     const loc = results[0].geometry.location;
                     const plat = loc.lat(), plng = loc.lng();
                     const addr = results[0].formatted_address;
-                    const { city, area } = extractCityArea(results[0].address_components || []);
-                    onLocationChange(plat, plng, addr, city, area);
+                    const { city, area, province } = extractIndonesianLocationComponents(results[0].address_components || []);
+                    onLocationChange(plat, plng, addr, city, area, province);
                     if (markerInstance.current && mapInstance.current) {
                         markerInstance.current.setPosition({ lat: plat, lng: plng });
                         mapInstance.current.setCenter({ lat: plat, lng: plng });
@@ -903,14 +963,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     };
 
     // ── location ───────────────────────────────────────────────────────────────
-    const handleLocationChange = useCallback((lat: number, lng: number, address: string, city?: string, area?: string) => {
+    const handleLocationChange = useCallback((lat: number, lng: number, address: string, city?: string, area?: string, province?: string) => {
         setForm(prev => {
             const updates: Partial<Kost> = { location: { lat, lng }, address };
-            if (city && !prev.city) updates.city = city.replace('Kota ', '').replace('Kabupaten ', '');
-            if (area && !prev.area) updates.area = area.replace('Kecamatan ', '');
-            // Auto overwrite city and area anyway to keep it synced with map if map moved
-            if (city) updates.city = city.replace('Kota ', '').replace('Kabupaten ', '');
-            if (area) updates.area = area.replace('Kecamatan ', '');
+            if (city) updates.city = city;
+            if (area) updates.area = area;
+            if (province) updates.province = province;
             return { ...prev, ...updates };
         });
     }, []);
@@ -1107,19 +1165,28 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         />
                     </Field>
 
-                    <Field label="Kota" required hint="Isi manual jika tidak otomatis terdeteksi">
-                        <Input placeholder="Contoh: Jakarta Selatan"
-                            value={form.city || ''} onChange={e => upd('city', e.target.value)}
-                            icon={<MapPin size={16} />} />
-                    </Field>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <Field label="Provinsi" hint="Otomatis terdeteksi dari titik peta">
+                            <Input placeholder="Contoh: Sulawesi Selatan / DKI Jakarta"
+                                value={form.province || ''} onChange={e => upd('province', e.target.value)}
+                                icon={<MapPin size={16} className="text-orange-500" />} />
+                        </Field>
 
-                    <Field label="Kecamatan / Area">
-                        <Input placeholder="Contoh: Tebet, Mampang, Setiabudi"
-                            value={form.area || ''} onChange={e => upd('area', e.target.value)} />
+                        <Field label="Kota / Kabupaten" required hint="Contoh: Makassar, Jakarta Selatan">
+                            <Input placeholder="Contoh: Makassar / Jakarta Selatan"
+                                value={form.city || ''} onChange={e => upd('city', e.target.value)}
+                                icon={<MapPin size={16} className="text-orange-500" />} />
+                        </Field>
+                    </div>
+
+                    <Field label="Kecamatan / Area" hint="Contoh: Tamalanrea, Tebet, Coblong">
+                        <Input placeholder="Contoh: Tamalanrea, Tebet, Coblong"
+                            value={form.area || ''} onChange={e => upd('area', e.target.value)}
+                            icon={<MapPin size={16} className="text-gray-400" />} />
                     </Field>
 
                     <Field label="Alamat Lengkap" hint="Otomatis terisi dari peta, bisa diedit manual">
-                        <Textarea rows={3} placeholder="Jl. Tebet Utara No. 22A, RT 005/RW 003..."
+                        <Textarea rows={3} placeholder="Jl. Perintis Kemerdekaan KM 10, Tamalanrea..."
                             value={form.address || ''} onChange={e => upd('address', e.target.value)} />
                     </Field>
 
