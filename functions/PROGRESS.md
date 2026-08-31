@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 240. Penataan Ulang Urutan Wizard Formulir Mitra: Pemindahan Menu Foto ke Langkah 5 (`KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna memutuskan untuk membatalkan peletakan fasilitas umum pada Wizard Flow 1 (mengembalikan Info Dasar bersih seperti semula).
+  - Menu input foto properti yang semula berada di Langkah 3 digeser ke bagian hampir terakhir (Langkah 5 / Wizard Flow 5).
+- **Implementasi Solusi**:
+  1. **Pembersihan Info Dasar (Langkah 1)**:
+     - Menghapus input fasilitas umum dari `case 0:`.
+     - Langkah 1 kembali murni berisi Nama Kost, Tipe Kost, dan Deskripsi Kost.
+  2. **Penataan Ulang Urutan STEPS & renderStep()**:
+     - **Langkah 1 (Flow 1)**: Info Dasar (`id: 'info'`, icon `Home`)
+     - **Langkah 2 (Flow 2)**: Lokasi Kost (`id: 'location'`, icon `MapPin`)
+     - **Langkah 3 (Flow 3)**: Fasilitas Gedung & Biaya Tambahan (`id: 'facilities'`, icon `Wifi`)
+     - **Langkah 4 (Flow 4)**: Tipe Kamar & Harga (`id: 'rooms'`, icon `Check`)
+     - **Langkah 5 (Flow 5)**: Foto Properti Berkategori Terstruktur (`id: 'media'`, icon `Camera`)
+     - **Langkah 6 (Flow 6)**: Peraturan Kost (`id: 'rules'`, icon `BookOpen`)
+  3. **Manfaat Alur Baru**:
+     - Fasilitas kost dan kamar sudah terdata lengkap terlebih dahulu pada Langkah 3 & 4 sebelum mitra mengunggah foto di Langkah 5, sehingga dokumentasi foto area dan kamar menjadi jauh lebih terarah dan relevan.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 22.93s, 0 error).
+
 ### 239. Penambahan Input Fasilitas Umum pada Wizard Flow 1 (`KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna ingin input fasilitas umum kost tersedia langsung di Wizard Flow 1 (Langkah 1: Info Dasar) agar mitra dapat langsung memilih fasilitas bersama tanpa harus menunggu langkah belakang.
