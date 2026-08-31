@@ -1050,6 +1050,8 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         setActiveMapPicker(null);
     };
 
+    const [isSearchingFacility, setIsSearchingFacility] = useState<Record<string, boolean>>({});
+
     const searchFacilityCoordinates = (field: 'campuses' | 'publicFacilities', index: number, name: string) => {
         if (!name) return;
         const stateKey = `${field}-${index}`;

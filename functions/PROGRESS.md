@@ -5,10 +5,12 @@
 ### 235. Rekalibrasi Presisi Koordinat Gerbang Utama Master Landmark & Geocoding Cerdas Berbasis Konteks Kota (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna melaporkan bahwa saat landmark master data dibuka di modal peta (**"📍 Peta"**), sebagian titik koordinat meleset dari gerbang atau lokasi riilnya akibat offset angka desimal perkiraan.
+  - Sempat muncul `ReferenceError: isSearchingFacility is not defined` akibat posisi deklarasi state loading tombol geocoding.
 - **Implementasi Solusi**:
   1. **Rekalibrasi Titik Koordinat Gerbang Utama ([`curatedLandmarks.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants/curatedLandmarks.ts))**:
      - Mengoreksi seluruh titik koordinat landmark di Makassar (Pintu 1 UNHAS Tamalanrea, Kampus Gowa, UIM KM 9, UMI KM 5, Menara Phinisi UNM, dll.) dan kota-kota strategis nasional ke koordinat gerbang utama riil Google Maps.
-  2. **Peningkatan Fungsionalitas Tombol "Cari" Geocoding ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+  2. **Peningkatan Fungsionalitas Tombol "Cari" Geocoding & Perbaikan State ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - Menempatkan deklarasi state `isSearchingFacility` secara aman dan mengaitkannya ke indikator loading tombol geocoding.
      - Fungsi `searchFacilityCoordinates` kini menyertakan konteks kota (`form.city`) dan provinsi (`form.province`) untuk query geocoding yang 100% akurat.
      - Modal **"📍 Peta"** memusatkan titik pada koordinat presisi landmark dan menghitung ulang jarak Haversine ke kost saat marker digeser.
 - **File Tersentuh**:
@@ -17,7 +19,7 @@
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 23.27s, 0 error).
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 21.37s, 0 error).
 
 ### 234. Master Dataset Anchor & Landmark Nasional Terkurasi Lengkap 350+ Titik Strategis & Isolasi 100% Master Data (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
