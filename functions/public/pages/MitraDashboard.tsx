@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../supabase';
 import KostFormMitra from '../components/KostFormMitra';
@@ -15,9 +15,9 @@ import {
 } from 'recharts';
 import { 
     Zap, Home, ClipboardList, Wallet, User, Users, Compass,
-    Plus, Edit, Eye, Check, MessageSquare, Search, Filter, MoreHorizontal, ArrowUpRight,
+    Plus, Edit, Eye, Check, MessageSquare, Search, Filter, MoreHorizontal, ArrowUpRight, ArrowRight,
     Clock, LogOut, Bell, ChevronRight, TrendingUp, Menu, X, Landmark, CreditCard, Save,
-    Briefcase, GraduationCap, Heart, MapPin, Trash2,
+    Briefcase, GraduationCap, Heart, MapPin, Trash2, FileText,
     Bed, Lock, Send, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, Phone
 } from 'lucide-react';
 import MitraProfile from './MitraProfile';
@@ -150,6 +150,59 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [stats, setStats] = useState({ totalRevenue: 0, availableBalance: 0, pendingApprovals: 0, totalViews: 1240, ctr: 4.2, activeTenants: 0 });
     const [showKostForm, setShowKostForm] = useState(false);
     const [editingKost, setEditingKost] = useState<Partial<Kost> | null>(null);
+    const [isStartingFresh, setIsStartingFresh] = useState(false);
+    const draftStorageKey = useMemo(() => uid ? `kost_form_draft_${uid}` : 'kost_form_draft_guest', [uid]);
+    const [activeDraft, setActiveDraft] = useState<{
+        form: Partial<Kost>;
+        step: number;
+        managementOption?: string;
+        lastSaved?: string;
+    } | null>(null);
+
+    const checkDraft = useCallback(() => {
+        try {
+            const raw = localStorage.getItem(draftStorageKey);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.form && (parsed.form.title || parsed.form.address || parsed.form.price || parsed.step > 0 || (parsed.form.roomTypes && parsed.form.roomTypes.length > 0))) {
+                    setActiveDraft(parsed);
+                    return;
+                }
+            }
+        } catch {}
+        setActiveDraft(null);
+    }, [draftStorageKey]);
+
+    useEffect(() => {
+        checkDraft();
+        const handleDraftSync = () => checkDraft();
+        window.addEventListener('kost_draft_updated', handleDraftSync);
+        window.addEventListener('storage', handleDraftSync);
+        return () => {
+            window.removeEventListener('kost_draft_updated', handleDraftSync);
+            window.removeEventListener('storage', handleDraftSync);
+        };
+    }, [checkDraft]);
+
+    const handleDeleteDraft = (e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        if (window.confirm('Apakah Anda yakin ingin menghapus draft pendaftaran kost ini? Data formulir yang belum disimpan akan dibersihkan.')) {
+            try {
+                localStorage.removeItem(draftStorageKey);
+                setActiveDraft(null);
+                window.dispatchEvent(new Event('kost_draft_updated'));
+            } catch {}
+        }
+    };
+
+    const handleResumeDraft = () => {
+        if (checkVerification()) {
+            setEditingKost(null);
+            setIsStartingFresh(false);
+            setShowKostForm(true);
+        }
+    };
+
     const [dynamicChartData, setDynamicChartData] = useState<any[]>(CHART_DATA);
     const [kmRequests, setKmRequests] = useState<any[]>([]);
 
@@ -1272,22 +1325,101 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h3 className="font-black text-gray-900 text-lg">Kost Saya</h3>
-                                    <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-widest">{properties.length} Properti Aktif</p>
+                                    <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-widest">
+                                        {properties.length} Properti Aktif {activeDraft ? '• 1 Draft Belum Selesai' : ''}
+                                    </p>
                                 </div>
                                 <button
                                     onClick={() => { 
                                         if (checkVerification()) {
                                             setEditingKost(null); 
+                                            setIsStartingFresh(true); 
                                             setShowKostForm(true); 
                                         }
                                     }}
-                                    className="h-11 px-5 bg-orange-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 flex items-center gap-2 active:scale-95 transition-transform cursor-pointer"
+                                    className="h-11 px-5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 flex items-center gap-2 active:scale-95 transition-transform cursor-pointer"
                                 >
                                     <Plus size={16} strokeWidth={3} /> Tambah
                                 </button>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                                {/* ── KARTU DRAFT KHUSUS (DAPAT DILANJUTKAN KAPAN SAJA) ── */}
+                                {activeDraft && (
+                                    <div className="bg-white rounded-3xl border-2 border-dashed border-amber-300 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group flex flex-col justify-between relative bg-gradient-to-b from-amber-50/40 via-white to-white">
+                                        <div className="relative h-52 bg-gradient-to-br from-amber-100 via-orange-50 to-amber-100/60 flex items-center justify-center overflow-hidden border-b border-amber-100">
+                                            {activeDraft.form?.imageUrls && activeDraft.form.imageUrls.length > 0 ? (
+                                                <img src={activeDraft.form.imageUrls[0] as string} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-90" alt="" />
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-2 text-amber-700/80 p-6 text-center">
+                                                    <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center border border-amber-200 text-amber-500">
+                                                        <FileText size={28} />
+                                                    </div>
+                                                    <span className="text-[11px] font-black uppercase tracking-widest text-amber-800">Draft Belum Selesai</span>
+                                                </div>
+                                            )}
+                                            
+                                            {/* Top Left: Step Info */}
+                                            <div className="absolute top-4 left-4">
+                                                <span className="px-3 py-1 bg-black/65 backdrop-blur-md text-white rounded-full text-[9px] font-black uppercase tracking-widest border border-white/20 flex items-center gap-1.5">
+                                                    <Sparkles size={11} className="text-amber-400" /> Langkah {(activeDraft.step || 0) + 1} dari 6
+                                                </span>
+                                            </div>
+
+                                            {/* Top Right: Status Badge */}
+                                            <div className="absolute top-4 right-4">
+                                                <span className="px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-500 text-white shadow-md border border-amber-400 flex items-center gap-1.5 animate-pulse">
+                                                    <Clock size={12} /> Draft
+                                                </span>
+                                            </div>
+
+                                            <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-white">
+                                                <span className="text-[10px] font-bold bg-black/50 backdrop-blur-xs px-2.5 py-0.5 rounded-lg border border-white/10 text-amber-100">
+                                                    Tersimpan Otomatis
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-5 flex-1 flex flex-col justify-between">
+                                            <div>
+                                                <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1.5">
+                                                    ● Form Dalam Pengisian
+                                                </div>
+                                                <h4 className="font-black text-gray-900 uppercase tracking-tight truncate group-hover:text-orange-500 transition-colors text-base">
+                                                    {activeDraft.form?.title || '(Draft Kost Tanpa Judul)'}
+                                                </h4>
+                                                <p className="text-xs font-bold text-gray-400 mt-1 flex items-center gap-1 uppercase tracking-widest truncate">
+                                                    <MapPin size={12} className="text-amber-500 shrink-0" />
+                                                    {activeDraft.form?.address || activeDraft.form?.city || 'Lokasi belum ditentukan'}
+                                                </p>
+                                                <div className="mt-4 p-3 bg-amber-50/80 rounded-2xl border border-amber-200/60 text-xs">
+                                                    <p className="text-[11px] text-amber-900 font-semibold leading-relaxed">
+                                                        Pengisian kost ini belum selesai. Klik <strong>Lanjutkan Edit</strong> untuk melengkapi data dan menayangkan kost Anda ke publik.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* Action Buttons */}
+                                            <div className="flex gap-2 mt-5 pt-3 border-t border-amber-100">
+                                                <button
+                                                    onClick={handleResumeDraft}
+                                                    className="flex-1 h-11 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer"
+                                                >
+                                                    <ArrowRight size={15} /> Lanjutkan Edit
+                                                </button>
+                                                <button
+                                                    onClick={handleDeleteDraft}
+                                                    className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors shadow-sm cursor-pointer"
+                                                    title="Hapus Draft"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Properti Aktif */}
                                 {properties.map(p => {
                                     const isKm = Boolean(p.isManaged);
                                     const totalRooms = p.roomTypes?.length || 0;
@@ -1417,6 +1549,31 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                         </div>
                                     );
                                 })}
+
+                                {/* Empty State if no properties and no draft */}
+                                {properties.length === 0 && !activeDraft && (
+                                    <div className="col-span-full py-16 px-4 text-center bg-gray-50/60 border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center">
+                                        <div className="w-16 h-16 rounded-3xl bg-orange-100/60 text-orange-600 flex items-center justify-center mb-4">
+                                            <Home size={30} />
+                                        </div>
+                                        <h4 className="text-base font-black text-gray-800 uppercase tracking-tight">Belum Ada Kost yang Didaftarkan</h4>
+                                        <p className="text-xs text-gray-500 font-medium max-w-sm mt-1 mb-5">
+                                            Mulai daftarkan properti kost Anda untuk menjangkau ribuan calon penyewa di RuangSinggah.
+                                        </p>
+                                        <button
+                                            onClick={() => {
+                                                if (checkVerification()) {
+                                                    setEditingKost(null);
+                                                    setIsStartingFresh(true);
+                                                    setShowKostForm(true);
+                                                }
+                                            }}
+                                            className="h-11 px-6 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md shadow-orange-500/20 flex items-center gap-2 active:scale-95 transition-transform cursor-pointer"
+                                        >
+                                            <Plus size={16} strokeWidth={3} /> Daftarkan Kost Pertama
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -1854,8 +2011,9 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                 <KostFormMitra
                     user={user}
                     editingKost={editingKost}
-                    onClose={() => { setShowKostForm(false); setEditingKost(null); }}
-                    onSuccess={() => { setShowKostForm(false); setEditingKost(null); loadData(); }}
+                    freshStart={isStartingFresh}
+                    onClose={() => { setShowKostForm(false); setEditingKost(null); setIsStartingFresh(false); checkDraft(); }}
+                    onSuccess={() => { setShowKostForm(false); setEditingKost(null); setIsStartingFresh(false); checkDraft(); loadData(); }}
                 />
             )}
             

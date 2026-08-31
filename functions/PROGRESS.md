@@ -2,7 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 236. Pemurnian Deteksi Mikro & Isolasi 1 Landmark Terdekat per Tipe Fasilitas Harian (`KostFormMitra.tsx`) (Agustus 2026)
+### 237. Kartu Draft Properti Otomatis & Pemisahan Tombol Tambah Baru (`MitraDashboard.tsx`, `KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna ingin agar sistem draft otomatis tidak menyembunyikan progres pengisian di dalam tombol Tambah Kost saya.
+  - Setiap kali ada proses pengisian kost yang belum selesai, sistem harus membuat **sebuah kartu draft khusus** di halaman "Kost Saya" yang dapat dilanjutkan pengeditannya kapan saja.
+- **Implementasi Solusi**:
+  1. **Kartu Draft Visual di Grid "Kost Saya" (`MitraDashboard.tsx`)**:
+     - Membaca state draft tersimpan (`activeDraft`) secara instan dan reaktif via event listener `kost_draft_updated` dan `storage`.
+     - Merender kartu bertema draft dengan border dashed amber (`border-amber-300 bg-amber-50/40`), badge `● DRAFT`, info langkah terisi (Langkah X dari 6), nama kost, dan lokasi.
+     - Tombol **"Lanjutkan Edit"** (`handleResumeDraft`): Membuka form modal langsung melanjutkan draft pengisian tersebut.
+     - Tombol **"Hapus Draft"** (`handleDeleteDraft`): Menghapus draft dari penyimpanan dan membersihkan kartu draft secara instan.
+  2. **Pemisahan Tombol "+ TAMBAH" (Fresh Start)**:
+     - Tombol "+ TAMBAH" di header "Kost Saya" kini mengaktifkan mode `isStartingFresh = true`, sehingga murni membuka form pendaftaran baru yang bersih dari langkah 0 tanpa menimpa/memaksa membuka draft yang belum selesai.
+  3. **Penyelarasan Komponen Form (`KostFormMitra.tsx`)**:
+     - Menambahkan prop `freshStart?: boolean`.
+     - Menambahkan dispatch browser event `window.dispatchEvent(new Event('kost_draft_updated'))` saat auto-save, saat draft dibersihkan manual, dan saat properti berhasil dipublikasikan.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 36.48s, 0 error).
 - **Permintaan & Masalah**:
   - Pengguna menemukan duplikasi tipe bangunan yang sama (misal 2 Alfamart sekaligus di radius dekat) dan menginginkan agar scan mikro hanya mengambil 1 titik terdekat per tipe bangunan.
   - Pengguna juga mengoreksi bahwa Mall dan Rumah Sakit sudah terdaftar lengkap di Master Data, sehingga tidak perlu dipindai di scan mikro dinamis.

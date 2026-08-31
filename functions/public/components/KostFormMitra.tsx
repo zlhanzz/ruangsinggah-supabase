@@ -1196,13 +1196,20 @@ const FacilityInput: React.FC<{
 const getDraftStorageKey = (userId?: string) => `ruangsinggah_kost_form_draft_${userId || 'default'}`;
 
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
-const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClose, onSuccess }) => {
-    const isEditing = !!editingKost?.id;
-    const storageKey = getDraftStorageKey(user?.id || user?.uid);
+interface KostFormMitraProps {
+    user: User | null;
+    editingKost: Kost | null;
+    onClose: () => void;
+    onSuccess: () => void;
+    freshStart?: boolean;
+}
 
-    // Initial state loader with Draft support
-    const [step, setStep] = useState<number>(() => {
-        if (isEditing) return 0;
+const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClose, onSuccess, freshStart = false }) => {
+    const isEditing = Boolean(editingKost);
+    const storageKey = useMemo(() => user?.id ? `kost_form_draft_${user.id}` : 'kost_form_draft_guest', [user?.id]);
+
+    const [step, setStep] = useState(() => {
+        if (isEditing || freshStart) return 0;
         try {
             const savedDraft = localStorage.getItem(storageKey);
             if (savedDraft) {
@@ -1217,6 +1224,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
     const [managementOption, setManagementOption] = useState<'none' | 'self' | 'kostmanager'>(() => {
         if (editingKost) return editingKost.managed_by || 'self';
+        if (freshStart) return 'self';
         try {
             const savedDraft = localStorage.getItem(storageKey);
             if (savedDraft) {
@@ -1228,7 +1236,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     });
 
     const [restoredDraftInfo, setRestoredDraftInfo] = useState<{ savedAt?: string } | null>(() => {
-        if (isEditing) return null;
+        if (isEditing || freshStart) return null;
         try {
             const savedDraft = localStorage.getItem(storageKey);
             if (savedDraft) {
@@ -1243,6 +1251,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
     const [form, setForm] = useState<Partial<Kost>>(() => {
         if (editingKost) return { ...initialForm, ...editingKost };
+        if (freshStart) return initialForm;
         try {
             const savedDraft = localStorage.getItem(storageKey);
             if (savedDraft) {
@@ -1303,6 +1312,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         lastSaved: new Date().toISOString()
                     };
                     localStorage.setItem(storageKey, JSON.stringify(payload));
+                    window.dispatchEvent(new Event('kost_draft_updated'));
                 }
             } catch (err) {
                 console.warn('Gagal menyimpan draft kost ke localStorage:', err);
@@ -1316,6 +1326,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     const handleClearDraft = () => {
         try {
             localStorage.removeItem(storageKey);
+            window.dispatchEvent(new Event('kost_draft_updated'));
         } catch {}
         setForm(initialForm);
         setStep(0);
@@ -2043,6 +2054,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 // Clear draft after successful creation
                 try {
                     localStorage.removeItem(storageKey);
+                    window.dispatchEvent(new Event('kost_draft_updated'));
                 } catch {}
             }
             onSuccess();
