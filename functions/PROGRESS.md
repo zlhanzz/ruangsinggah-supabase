@@ -2,6 +2,27 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 229. Tombol Deteksi Lokasi GPS Otomatis pada Formulir Penetapan Lokasi Kost (`KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna mengirimkan tangkapan layar formulir *Tambah Kost Baru* (Langkah 2: Pilih Lokasi di Peta) dan meminta agar disediakan tombol langsung untuk menggunakan lokasi GPS perangkat saat ini secara instan (*"pada penetapan lokasi, belum ada tombol untuk menggunakan lokasi sekarang secara langsung, yang berdasarkan lokasi gps"*).
+- **Implementasi Solusi**:
+  1. **Tombol Aksi Utama Gradien Oranye ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - Menghadirkan tombol khusus berlabel **"📍 Gunakan Lokasi Saya Sekarang (GPS)"** yang mencolok di antara kolom pencarian dan peta mini.
+     - Dilengkapi indikator state `isLocating` dengan animasi spinner `Loader2` dan teks *"Mendeteksi Lokasi GPS Anda..."*.
+  2. **Floating Quick Button di Viewport Peta**:
+     - Menambahkan floating action button (FAB) GPS di pojok kiri atas peta mini dan tombol GPS di modal pop-up peta fullscreen dengan akurasi tinggi (`enableHighAccuracy: true`, `timeout: 12000`).
+  3. **Auto Zoom & Reverse-Geocoding Instan**:
+     - Otomatis memindahkan marker, memusatkan peta (*center/panTo*), dan memperbesar zoom ke level jalanan (*zoom 17*).
+     - Menjalankan *reverse-geocoding* Google Maps Geocoder untuk otomatis mengisi field **Kota**, **Kecamatan / Area**, dan **Alamat Lengkap** tanpa perlu mengetik manual.
+  4. **Pembersihan Icon Ligature ke Pure `lucide-react` SVG**:
+     - Mengganti sisa icon font HTML ligature (`material-symbols-outlined`) pada dialog konfirmasi lokasi menjadi pure bundled vector SVG (`Crosshair`, `CheckCircle2`, `MapPin`) untuk mencegah FOUT.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 49.09s, 0 error).
+
 ### 228. Penyesuaian Copywriting Fitur Pelaporan Menjadi "Laporkan Properti" (`KostDetail.tsx`, `userService.ts`, `emailService.ts`, `PropertyManagement.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta agar istilah "iklan" dihilangkan pada fitur pelaporan kost, dan cukup menggunakan terminologi yang lebih formal dan tepat: **"Laporkan Properti"** (*"btw pada pelaporan kost, tidak usah pakai kata kata iklan. cukup dengan kata laporkan properti"*).

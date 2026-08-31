@@ -4,7 +4,8 @@ import { addPropertyWithMedia, updatePropertyWithMedia } from '../adminService';
 import {
     X, ChevronRight, ChevronLeft, Camera, Video, MapPin, Home, Wifi,
     Plus, Trash2, Check, AlertCircle, Loader2, Upload, Image as ImageIcon,
-    Phone, BookOpen, DollarSign, Search, Navigation, ShieldCheck, User, Maximize2
+    Phone, BookOpen, DollarSign, Search, Navigation, ShieldCheck, User, Maximize2,
+    Crosshair, CheckCircle2, Sparkles, LocateFixed
 } from 'lucide-react';
 
 interface KostFormMitraProps {
@@ -113,10 +114,11 @@ const MapPicker: React.FC<{
     const [isSearching, setIsSearching] = useState(false);
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Fullscreen Pop-up Map States & Refs
     const [isMapModalOpen, setIsMapModalOpen] = useState(false);
     const [pendingLocationChange, setPendingLocationChange] = useState<{ lat: number; lng: number } | null>(null);
     const [modalTempLocation, setModalTempLocation] = useState<{ lat: number; lng: number }>({ lat, lng });
+    const [isLocating, setIsLocating] = useState(false);
+    const [isLocatingModal, setIsLocatingModal] = useState(false);
     const modalMapRef = useRef<HTMLDivElement>(null);
     const modalMapInstance = useRef<any>(null);
     const modalMarkerInstance = useRef<any>(null);
@@ -241,7 +243,6 @@ const MapPicker: React.FC<{
         setIsMapModalOpen(false);
     };
 
-    // Helper: extract city and area from Google geocoder address_components
     const extractCityArea = (components: any[]) => {
         let city = '', area = '';
         for (const comp of components) {
@@ -276,6 +277,36 @@ const MapPicker: React.FC<{
             }
         );
     }, [onLocationChange]);
+
+    const handleCurrentLocation = () => {
+        if (!navigator.geolocation) {
+            alert('Browser Anda tidak mendukung deteksi lokasi otomatis.');
+            return;
+        }
+        setIsLocating(true);
+        navigator.geolocation.getCurrentPosition(
+            pos => {
+                const plat = pos.coords.latitude;
+                const plng = pos.coords.longitude;
+                reverseGeocode(plat, plng);
+                if (markerInstance.current && mapInstance.current) {
+                    markerInstance.current.setPosition({ lat: plat, lng: plng });
+                    mapInstance.current.setCenter({ lat: plat, lng: plng });
+                    mapInstance.current.setZoom(17);
+                }
+                setIsLocating(false);
+            },
+            err => {
+                setIsLocating(false);
+                let msg = 'Gagal mendeteksi lokasi GPS.';
+                if (err.code === 1) msg = 'Izin akses lokasi ditolak oleh browser. Silakan aktifkan izin lokasi di pengaturan browser Anda.';
+                else if (err.code === 2) msg = 'Sinyal GPS / posisi perangkat tidak dapat ditentukan.';
+                else if (err.code === 3) msg = 'Waktu permintaan lokasi GPS habis (timeout). Silakan coba kembali.';
+                alert(msg);
+            },
+            { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+        );
+    };
 
     useEffect(() => {
         if (!mapRef.current || mapInstance.current) return;
@@ -375,20 +406,8 @@ const MapPicker: React.FC<{
         );
     };
 
-    const handleCurrentLocation = () => {
-        if (!navigator.geolocation) return;
-        navigator.geolocation.getCurrentPosition(pos => {
-            reverseGeocode(pos.coords.latitude, pos.coords.longitude);
-            if (markerInstance.current && mapInstance.current) {
-                markerInstance.current.setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-                mapInstance.current.setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-            }
-        });
-    };
-
     return (
         <div className="space-y-3">
-            {/* Search bar */}
             <div className="relative">
                 <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
@@ -401,13 +420,13 @@ const MapPicker: React.FC<{
                 <button
                     type="button"
                     onClick={handleCurrentLocation}
-                    title="Gunakan lokasi saat ini"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-500 hover:bg-orange-100 transition-colors"
+                    disabled={isLocating}
+                    title="Gunakan lokasi saya sekarang (GPS)"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-500 hover:bg-orange-100 transition-colors disabled:opacity-50 cursor-pointer"
                 >
-                    <Navigation size={14} />
+                    {isLocating ? <Loader2 size={14} className="animate-spin text-orange-500" /> : <Crosshair size={14} />}
                 </button>
 
-                {/* Search results dropdown */}
                 {(isSearching || searchResults.length > 0) && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-2xl border border-gray-200 shadow-xl z-50 overflow-hidden">
                         {isSearching ? (
@@ -430,21 +449,49 @@ const MapPicker: React.FC<{
                 )}
             </div>
 
-            {/* Map */}
+            <button
+                type="button"
+                onClick={handleCurrentLocation}
+                disabled={isLocating}
+                className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs rounded-2xl shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-75 cursor-pointer"
+            >
+                {isLocating ? (
+                    <>
+                        <Loader2 size={16} className="animate-spin" />
+                        <span>Mendeteksi Lokasi GPS Anda...</span>
+                    </>
+                ) : (
+                    <>
+                        <Crosshair size={16} className="text-white" />
+                        <span>Gunakan Lokasi Saya Sekarang (GPS)</span>
+                    </>
+                )}
+            </button>
+
             <div className="relative rounded-3xl overflow-hidden border border-gray-200 shadow-sm group">
                 <div ref={mapRef} style={{ height: 280, width: '100%', zIndex: 0, touchAction: 'none' }} />
                 
-                {/* Fullscreen Button */}
                 <button
                     type="button"
                     onClick={() => {
                         setModalTempLocation({ lat, lng });
                         setIsMapModalOpen(true);
                     }}
-                    className="absolute top-3 right-3 z-10 bg-white/95 backdrop-blur-sm hover:bg-white text-gray-800 text-xs font-bold px-3 py-2 rounded-xl border border-gray-200 shadow-md flex items-center gap-1.5 transition-all active:scale-95"
+                    className="absolute top-3 right-3 z-10 bg-white/95 backdrop-blur-sm hover:bg-white text-gray-800 text-xs font-bold px-3 py-2 rounded-xl border border-gray-200 shadow-md flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                 >
                     <Maximize2 size={14} className="text-orange-500" />
                     <span>Perbesar Peta (Pop-up)</span>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={handleCurrentLocation}
+                    disabled={isLocating}
+                    title="Kunci titik ke lokasi GPS saya"
+                    className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-sm hover:bg-white text-orange-600 text-xs font-bold p-2.5 rounded-xl border border-gray-200 shadow-md flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer disabled:opacity-60"
+                >
+                    {isLocating ? <Loader2 size={14} className="animate-spin text-orange-500" /> : <Crosshair size={14} className="text-orange-500" />}
+                    <span className="hidden sm:inline">Lokasi Saya</span>
                 </button>
 
                 <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm rounded-xl px-3 py-1.5 text-[10px] font-bold text-gray-500 border border-gray-100">
@@ -452,12 +499,10 @@ const MapPicker: React.FC<{
                 </div>
             </div>
 
-            {/* Fullscreen Map Picker Pop-up Modal */}
             {isMapModalOpen && (
                 <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-md flex flex-col justify-center items-center p-2 sm:p-4 md:p-6 animate-fadeIn">
                     <div className="bg-white w-full max-w-4xl h-[92vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-100 relative">
                         
-                        {/* Modal Header */}
                         <div className="bg-white border-b border-gray-100 px-5 py-3.5 flex justify-between items-center shrink-0">
                             <div className="flex items-center gap-2.5">
                                 <div className="w-9 h-9 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-500 shrink-0">
@@ -471,13 +516,12 @@ const MapPicker: React.FC<{
                             <button
                                 type="button"
                                 onClick={() => setIsMapModalOpen(false)}
-                                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center transition-colors"
+                                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center transition-colors cursor-pointer"
                             >
                                 <X size={16} />
                             </button>
                         </div>
 
-                        {/* Modal Search Bar & Quick GPS */}
                         <div className="p-3 bg-slate-50 border-b border-gray-100 flex flex-col sm:flex-row gap-2 relative z-20 shrink-0">
                             <div className="relative flex-1">
                                 <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -489,7 +533,6 @@ const MapPicker: React.FC<{
                                     className="w-full h-10 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-900 pl-9 pr-4 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
                                 />
                                 
-                                {/* Modal Search Dropdown */}
                                 {(isSearchingModalMap || modalSearchResults.length > 0) && (
                                     <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200 shadow-xl z-50 overflow-hidden max-h-52 overflow-y-auto divide-y divide-gray-50">
                                         {isSearchingModalMap ? (
@@ -516,8 +559,13 @@ const MapPicker: React.FC<{
                             <button
                                 type="button"
                                 onClick={() => {
-                                    if (navigator.geolocation) {
-                                        navigator.geolocation.getCurrentPosition(pos => {
+                                    if (!navigator.geolocation) {
+                                        alert('Browser Anda tidak mendukung deteksi lokasi otomatis.');
+                                        return;
+                                    }
+                                    setIsLocatingModal(true);
+                                    navigator.geolocation.getCurrentPosition(
+                                        pos => {
                                             const plat = pos.coords.latitude, plng = pos.coords.longitude;
                                             setModalTempLocation({ lat: plat, lng: plng });
                                             if (modalMarkerInstance.current && modalMapInstance.current) {
@@ -525,21 +573,39 @@ const MapPicker: React.FC<{
                                                 modalMapInstance.current.setCenter({ lat: plat, lng: plng });
                                                 modalMapInstance.current.setZoom(17);
                                             }
-                                        }, err => alert('Gagal mendapatkan GPS: ' + err.message));
-                                    }
+                                            setIsLocatingModal(false);
+                                        },
+                                        err => {
+                                            setIsLocatingModal(false);
+                                            let msg = 'Gagal mendeteksi lokasi GPS.';
+                                            if (err.code === 1) msg = 'Izin akses lokasi ditolak oleh browser. Silakan aktifkan izin lokasi di pengaturan browser Anda.';
+                                            else if (err.code === 2) msg = 'Sinyal GPS / posisi perangkat tidak dapat ditentukan.';
+                                            else if (err.code === 3) msg = 'Waktu permintaan lokasi GPS habis (timeout).';
+                                            alert(msg);
+                                        },
+                                        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+                                    );
                                 }}
-                                className="h-10 px-3.5 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shrink-0 whitespace-nowrap"
+                                disabled={isLocatingModal}
+                                className="h-10 px-3.5 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shrink-0 whitespace-nowrap cursor-pointer disabled:opacity-60"
                             >
-                                <Navigation size={14} />
-                                Lokasi GPS Saya
+                                {isLocatingModal ? (
+                                    <>
+                                        <Loader2 size={14} className="animate-spin text-orange-500" />
+                                        <span>Mendeteksi GPS...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Crosshair size={14} />
+                                        <span>Lokasi GPS Saya</span>
+                                    </>
+                                )}
                             </button>
                         </div>
 
-                        {/* Modal Map Viewport */}
                         <div className="relative flex-1 w-full bg-gray-100">
                             <div ref={modalMapRef} className="w-full h-full" style={{ touchAction: 'none' }} />
 
-                            {/* Floating Coordinate Readout */}
                             <div className="absolute bottom-4 left-4 right-4 sm:right-auto bg-white/95 backdrop-blur-sm rounded-2xl p-3 border border-gray-200 shadow-lg z-10 flex items-center justify-between gap-4">
                                 <div className="flex items-center gap-2">
                                     <MapPin size={18} className="text-orange-500" />
@@ -553,19 +619,18 @@ const MapPicker: React.FC<{
                             </div>
                         </div>
 
-                        {/* Modal Footer Actions */}
-                        <div className="bg-white border-t border-gray-100 p-3.5 sm:px-6 flex items-center justify-end gap-3 shrink-0">
+                        <div className="p-4 bg-white border-t border-gray-100 flex justify-end gap-2.5 shrink-0">
                             <button
                                 type="button"
                                 onClick={() => setIsMapModalOpen(false)}
-                                className="px-5 py-2.5 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+                                className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-xs font-bold hover:bg-gray-50 transition-colors"
                             >
                                 Batal
                             </button>
                             <button
                                 type="button"
                                 onClick={handleConfirmModalLocation}
-                                className="px-6 py-2.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-xl shadow-lg shadow-orange-500/20 transition-all flex items-center gap-1.5 active:scale-95"
+                                className="px-6 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black shadow-lg shadow-orange-500/20 flex items-center gap-2 transition-all active:scale-95"
                             >
                                 <Check size={16} />
                                 Kunci & Gunakan Lokasi Ini
@@ -575,14 +640,12 @@ const MapPicker: React.FC<{
                 </div>
             )}
 
-            {/* Graphical Location Change Confirmation Modal */}
             {pendingLocationChange && (
                 <div className="fixed inset-0 z-[100000] bg-slate-950/80 backdrop-blur-md flex justify-center items-center p-4 animate-fadeIn">
                     <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-gray-100 p-6 flex flex-col items-center text-center relative">
                         
-                        {/* Animated Icon Header */}
                         <div className="w-16 h-16 rounded-full bg-orange-50 border border-orange-200 flex items-center justify-center text-orange-500 mb-4 shadow-inner relative">
-                            <span className="material-symbols-outlined text-3xl animate-bounce" style={{ fontVariationSettings: '"FILL" 1' }}>edit_location_alt</span>
+                            <MapPin size={28} className="animate-bounce text-orange-500" />
                             <div className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 rounded-full border-2 border-white flex items-center justify-center text-white text-[10px] font-black">!</div>
                         </div>
 
@@ -591,7 +654,6 @@ const MapPicker: React.FC<{
                             Peta tersentuh atau diklik. Apakah Anda yakin ingin memindahkan koordinat lokasi kost ke titik baru ini?
                         </p>
 
-                        {/* Coordinate Comparison Box */}
                         <div className="w-full bg-slate-50 border border-gray-200/80 rounded-2xl p-3.5 mb-6 text-left space-y-2.5">
                             <div className="flex justify-between items-center text-xs">
                                 <span className="text-gray-400 font-bold text-[10px] uppercase tracking-wider">Lokasi Saat Ini</span>
@@ -602,7 +664,7 @@ const MapPicker: React.FC<{
                             <div className="border-t border-dashed border-gray-200" />
                             <div className="flex justify-between items-center text-xs">
                                 <span className="text-orange-600 font-black text-[10px] uppercase tracking-wider flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-xs">near_me</span>
+                                    <Crosshair size={13} />
                                     Titik Baru (Dipilih)
                                 </span>
                                 <span className="font-mono font-black text-orange-600 bg-orange-100/70 px-2 py-0.5 rounded-md text-[11px]">
@@ -611,12 +673,11 @@ const MapPicker: React.FC<{
                             </div>
                         </div>
 
-                        {/* Action Buttons */}
                         <div className="grid grid-cols-2 gap-3 w-full">
                             <button
                                 type="button"
                                 onClick={() => setPendingLocationChange(null)}
-                                className="w-full py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all active:scale-95"
+                                className="w-full py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all active:scale-95 cursor-pointer"
                             >
                                 Batal (Tetap)
                             </button>
@@ -633,9 +694,9 @@ const MapPicker: React.FC<{
                                     }
                                     setPendingLocationChange(null);
                                 }}
-                                className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs rounded-xl shadow-lg shadow-orange-500/25 transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                                className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs rounded-xl shadow-lg shadow-orange-500/25 transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
                             >
-                                <span className="material-symbols-outlined text-sm">check_circle</span>
+                                <CheckCircle2 size={15} />
                                 Ya, Ubah Lokasi
                             </button>
                         </div>
