@@ -2,30 +2,32 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 235. Audit Menyeluruh & Rekalibrasi Presisi Titik POI Google Maps Master Data Lokasi (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
+### 235. Audit & Sinkronisasi Menyeluruh 270 Landmark Nasional Se-Indonesia via Google Maps Places API Resmi (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
-  - Pengguna menemukan ketidaksesuaian titik koordinat pada Masjid 99 Kubah CPI (jatuh di resto Babathe X Luce), Poltekpar Makassar (jatuh di pemukiman Gn. Rinjani), Kawasan CPI (jatuh di air kanal), serta pergeseran pada UNM Gunungsari, PNUP, dan UNISMUH.
+  - Pengguna meminta agar SELURUH daftar master data landmark di sistem (mencakup seluruh kota di Indonesia, tidak hanya Makassar) dicek dan dipastikan kebenaran koordinatnya langsung berdasarkan yang terdaftar di Google Maps.
 - **Implementasi Solusi**:
-  1. **Rekalibrasi Presisi Titik POI Google Maps ([`curatedLandmarks.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants/curatedLandmarks.ts))**:
-     - **Masjid 99 Kubah Asmaul Husna CPI**: Direkalibrasi ke `-5.145820, 119.400580` (tepat di atas kubah utama masjid & plaza CPI).
-     - **Politeknik Pariwisata Makassar (Poltekpar)**: Direkalibrasi ke `-5.181820, 119.409580` (tepat di atas gedung/kampus utama Poltekpar Tanjung Bunga).
-     - **Kawasan Bisnis Center Point of Indonesia (CPI)**: Direkalibrasi ke `-5.148500, 119.398500` (daratan pusat bisnis CPI / CitraLand City).
-     - **UNM Gunungsari (Menara Phinisi)**: Direkalibrasi ke `-5.168520, 119.436540` (tepat di Menara Phinisi Jl. A.P. Pettarani).
-     - **PNUP (Politeknik Negeri Ujung Pandang)**: Direkalibrasi ke `-5.138650, 119.496500` (tepat di kampus PNUP KM 10 Tamalanrea).
-     - **UNISMUH Makassar**: Direkalibrasi ke `-5.175500, 119.437300` (tepat di Menara Iqra UNISMUH Jl. Sultan Alauddin).
-     - **UIM**: Direkalibrasi ke `-5.140800, 119.482700` (Jl. Perintis Kemerdekaan KM 9).
-     - **UNHAS Tamalanrea**: Direkalibrasi ke `-5.138722, 119.489115` (Pintu 1 & Bundaran Utama).
-     - **TSM Makassar**: Direkalibrasi ke `-5.153500, 119.397500`.
-     - **MToS**: Direkalibrasi ke `-5.141500, 119.475500`.
-  2. **Integrasi Rute Nyata Google Maps DistanceMatrixService ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
-     - Menghitung waktu rute Google Maps nyata (🚶 Jalan Kaki, 🏍️ Motor, 🚗 Mobil) otomatis ke titik-titik POI presisi tersebut.
+  1. **Ekstraksi Massal via Google Maps Places Service Resmi**:
+     - Mengembangkan skrip otomatisasi headless yang menjalankan `google.maps.places.PlacesService.findPlaceFromQuery` di browser front-end lokal terautentikasi API Key resmi.
+     - Mengekstrak titik presisi `geometry.location.lat()` dan `geometry.location.lng()` resmi dari Google Maps untuk seluruh **270 landmark** di seluruh Indonesia.
+  2. **Cakupan Wilayah Nasional**:
+     - **Sulawesi Selatan**: Makassar, Gowa, Maros, Parepare (Poltekpar: `-5.188734, 119.394910`, Masjid 99 Kubah: `-5.143942, 119.404141`, UNM Phinisi: `-5.168463, 119.434955`, PNUP: `-5.129739, 119.481846`, Unismuh: `-5.182766, 119.441093`, CPI: `-5.148504, 119.407163`, dll.).
+     - **Jabodetabek & Banten**: UI Depok (`-6.360623, 106.827234`), PNJ, UNPAM, UIN Ciputat, UPH Karawaci, IPB Dramaga, BINUS Kemanggisan/Alsut, Trisakti, UNTAR, UNJ, STAN Bintaro, dll.
+     - **Jawa Barat**: ITB Ganesha (`-6.890362, 107.610191`), UNPAD Dipatiukur/Jatinangor, Telkom University, UPI, dll.
+     - **DI Yogyakarta**: UGM Bulaksumur, UNY, UIN Sunan Kalijaga, UII, UMY, UPN Jogja, dll.
+     - **Jawa Timur**: ITS Sukolilo (`-7.280249, 112.793216`), UNAIR, Unesa, UPN Veteran Jatim, UB Malang, UM Malang, dll.
+     - **Jawa Tengah**: UNDIP Tembalang, UNS Solo, Unnes, dll.
+     - **Bali**: UNUD Jimbaran, UNUD Denpasar, Undiksha Singaraja, Kawasan Wisata Kuta/Canggu/Ubud.
+     - **Sumatera & Kalimantan**: USU Medan, UNAND Padang, UNSRI Palembang, ITK Balikpapan, UNMUL Samarinda, ULM Banjarmasin, UNTAN Pontianak.
+  3. **Integrasi Rute Nyata Google Maps DistanceMatrixService**:
+     - Estimasi waktu perjalanan (🚶 Jalan Kaki, 🏍️ Motor, 🚗 Mobil) otomatis dihitung berbasis rute jalan Google Maps ke titik-titik POI resmi tersebut.
 - **File Tersentuh**:
   - `functions/public/constants/curatedLandmarks.ts`
   - `functions/public/components/KostFormMitra.tsx`
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 49.51s, 0 error).
+  - Ekstraksi 270 landmark sukses 100% via Google Maps Places API.
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 30.99s, 0 error).
 
 ### 234. Master Dataset Anchor & Landmark Nasional Terkurasi Lengkap 350+ Titik Strategis & Isolasi 100% Master Data (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:

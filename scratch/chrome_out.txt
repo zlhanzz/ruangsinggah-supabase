@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html><head>
+    <title>Google Places Coordinates Extractor</title>
+<script type="text/javascript" charset="UTF-8" src="https://maps.googleapis.com/maps-api-v3/api/js/66/2d/geocoder.js"></script><script type="text/javascript" charset="UTF-8" src="https://maps.googleapis.com/maps/api/js/AuthenticationService.Authenticate?1shttp%3A%2F%2Flocalhost%3A5173%2Ftest_geo.html&amp;4sAIzaSyBAsdbPynnAWSRZ_1iQ3hmoCUAnq5VrV7c&amp;8b0&amp;callback=_xdc_._bqo0ad&amp;key=AIzaSyBAsdbPynnAWSRZ_1iQ3hmoCUAnq5VrV7c&amp;token=44948"></script><script type="text/javascript" charset="UTF-8" src="https://maps.googleapis.com/maps/api/place/js/PlaceService.FindPlaceFromText?1sPoliteknik%20Pariwisata%20Makassar&amp;2e2&amp;3m0&amp;5m2&amp;3m1&amp;1sname%2Cgeometry%2Cformatted_address&amp;6m2&amp;1sen-US&amp;2e1&amp;r_url=http%3A%2F%2Flocalhost%3A5173%2Ftest_geo.html&amp;callback=_xdc_._b2nxb0&amp;key=AIzaSyBAsdbPynnAWSRZ_1iQ3hmoCUAnq5VrV7c&amp;token=109553"></script><script type="text/javascript" charset="UTF-8" src="https://maps.googleapis.com/maps/api/place/js/PlaceService.FindPlaceFromText?1sPoliteknik%20Pariwisata%20Negeri%20Makassar&amp;2e2&amp;3m0&amp;5m2&amp;3m1&amp;1sname%2Cgeometry%2Cformatted_address&amp;6m2&amp;1sen-US&amp;2e1&amp;r_url=http%3A%2F%2Flocalhost%3A5173%2Ftest_geo.html&amp;callback=_xdc_._dxbc9z&amp;key=AIzaSyBAsdbPynnAWSRZ_1iQ3hmoCUAnq5VrV7c&amp;token=48150"></script><script type="text/javascript" charset="UTF-8" src="https://maps.googleapis.com/maps/api/place/js/PlaceService.FindPlaceFromText?1sMasjid%2099%20Kubah%20Makassar&amp;2e2&amp;3m0&amp;5m2&amp;3m1&amp;1sname%2Cgeometry%2Cformatted_address&amp;6m2&amp;1sen-US&amp;2e1&amp;r_url=http%3A%2F%2Flocalhost%3A5173%2Ftest_geo.html&amp;callback=_xdc_._xj4iqe&amp;key=AIzaSyBAsdbPynnAWSRZ_1iQ3hmoCUAnq5VrV7c&amp;token=83745"></script><script type="text/javascript" charset="UTF-8" src="https://maps.googleapis.com/maps/api/place/js/PlaceService.FindPlaceFromText?1sMasjid%20Kubah%2099%20Asmaul%20Husna%20CPI%20Makassar&amp;2e2&amp;3m0&amp;5m2&amp;3m1&amp;1sname%2Cgeometry%2Cformatted_address&amp;6m2&amp;1sen-US&amp;2e1&amp;r_url=http%3A%2F%2Flocalhost%3A5173%2Ftest_geo.html&amp;callback=_xdc_._vgkypk&amp;key=AIzaSyBAsdbPynnAWSRZ_1iQ3hmoCUAnq5VrV7c&amp;token=52821"></script><script type="text/javascript" charset="UTF-8" src="https://maps.googleapis.com/maps/api/place/js/PlaceService.FindPlaceFromText?1sCenter%20Point%20of%20Indonesia%20Makassar&amp;2e2&amp;3m0&amp;5m2&amp;3m1&amp;1sname%2Cgeometry%2Cformatted_address&amp;6m2&amp;1sen-US&amp;2e1&amp;r_url=http%3A%2F%2Flocalhost%3A5173%2Ftest_geo.html&amp;callback=_xdc_._9cnfb5&amp;key=AIzaSyBAsdbPynnAWSRZ_1iQ3hmoCUAnq5VrV7c&amp;token=75140"></script><script type="text/javascript" charset="UTF-8" src="https://maps.googleapis.com/maps/api/place/js/PlaceService.FindPlaceFromText?1sMenara%20Phinisi%20UNM%20Makassar&amp;2e2&amp;3m0&amp;5m2&amp;3m1&amp;1sname%2Cgeometry%2Cformatted_address&amp;6m2&amp;1sen-US&amp;2e1&amp;r_url=http%3A%2F%2Flocalhost%3A5173%2Ftest_geo.html&amp;callback=_xdc_._bh6veg&amp;key=AIzaSyBAsdbPynnAWSRZ_1iQ3hmoCUAnq5VrV7c&amp;token=52797"></script><script type="text/javascript" charset="UTF-8" src="https://maps.googleapis.com/maps/api/place/js/PlaceService.FindPlaceFromText?1sPoliteknik%20Negeri%20Ujung%20Pandang%20Tamalanrea&amp;2e2&amp;3m0&amp;5m2&amp;3m1&amp;1sname%2Cgeometry%2Cformatted_address&amp;6m2&amp;1sen-US&amp;2e1&amp;r_url=http%3A%2F%2Flocalhost%3A5173%2Ftest_geo.html&amp;callback=_xdc_._1161qu&amp;key=AIzaSyBAsdbPynnAWSRZ_1iQ3hmoCUAnq5VrV7c&amp;token=19630"></script><script type="text/javascript" charset="UTF-8" src="https://maps.googleapis.com/maps/api/place/js/PlaceService.FindPlaceFromText?1sUniversitas%20Muhammadiyah%20Makassar%20Alauddin&amp;2e2&amp;3m0&amp;5m2&amp;3m1&amp;1sname%2Cgeometry%2Cformatted_address&amp;6m2&amp;1sen-US&amp;2e1&amp;r_url=http%3A%2F%2Flocalhost%3A5173%2Ftest_geo.html&amp;callback=_xdc_._o2drz&amp;key=AIzaSyBAsdbPynnAWSRZ_1iQ3hmoCUAnq5VrV7c&amp;token=122366"></script><script type="text/javascript" charset="UTF-8" src="https://maps.googleapis.com/maps/api/place/js/PlaceService.FindPlaceFromText?1sUniversitas%20Hasanuddin%20Pintu%201&amp;2e2&amp;3m0&amp;5m2&amp;3m1&amp;1sname%2Cgeometry%2Cformatted_address&amp;6m2&amp;1sen-US&amp;2e1&amp;r_url=http%3A%2F%2Flocalhost%3A5173%2Ftest_geo.html&amp;callback=_xdc_._jk3f6w&amp;key=AIzaSyBAsdbPynnAWSRZ_1iQ3hmoCUAnq5VrV7c&amp;token=62202"></script><script type="text/javascript" charset="UTF-8" src="https://maps.googleapis.com/maps/api/place/js/PlaceService.FindPlaceFromText?1sUniversitas%20Muslim%20Indonesia%20Urip%20Sumoharjo&amp;2e2&amp;3m0&amp;5m2&amp;3m1&amp;1sname%2Cgeometry%2Cformatted_address&amp;6m2&amp;1sen-US&amp;2e1&amp;r_url=http%3A%2F%2Flocalhost%3A5173%2Ftest_geo.html&amp;callback=_xdc_._57r6og&amp;key=AIzaSyBAsdbPynnAWSRZ_1iQ3hmoCUAnq5VrV7c&amp;token=7590"></script><script type="text/javascript" charset="UTF-8" src="https://maps.googleapis.com/maps/api/place/js/PlaceService.FindPlaceFromText?1sTrans%20Studio%20Mall%20Makassar&amp;2e2&amp;3m0&amp;5m2&amp;3m1&amp;1sname%2Cgeometry%2Cformatted_address&amp;6m2&amp;1sen-US&amp;2e1&amp;r_url=http%3A%2F%2Flocalhost%3A5173%2Ftest_geo.html&amp;callback=_xdc_._te31sy&amp;key=AIzaSyBAsdbPynnAWSRZ_1iQ3hmoCUAnq5VrV7c&amp;token=101171"></script><script type="text/javascript" charset="UTF-8" src="https://maps.googleapis.com/maps/api/place/js/PlaceService.FindPlaceFromText?1sMakassar%20Town%20Square%20Perintis&amp;2e2&amp;3m0&amp;5m2&amp;3m1&amp;1sname%2Cgeometry%2Cformatted_address&amp;6m2&amp;1sen-US&amp;2e1&amp;r_url=http%3A%2F%2Flocalhost%3A5173%2Ftest_geo.html&amp;callback=_xdc_._3hvba&amp;key=AIzaSyBAsdbPynnAWSRZ_1iQ3hmoCUAnq5VrV7c&amp;token=44617"></script></head>
+<body>
+    <h1>Google Places Extractor</h1>
+    <div id="status">COMPLETE</div>
+    <pre id="output">{<br>  "Politeknik Pariwisata Makassar": {<br>    "name": "Politeknik Pariwisata Negeri Makassar",<br>    "address": "Jl. Gn. Rinjani Jl. Metro Tj. Bunga No.1, Tj. Merdeka, Kec. Tamalate, Kota Makassar, Sulawesi Selatan 90224, Indonesia",<br>    "lat": -5.188734,<br>    "lng": 119.3949098,<br>    "method": "findPlaceFromQuery"<br>  },<br>  "Politeknik Pariwisata Negeri Makassar": {<br>    "name": "Politeknik Pariwisata Negeri Makassar",<br>    "address": "Jl. Gn. Rinjani Jl. Metro Tj. Bunga No.1, Tj. Merdeka, Kec. Tamalate, Kota Makassar, Sulawesi Selatan 90224, Indonesia",<br>    "lat": -5.188734,<br>    "lng": 119.3949098,<br>    "method": "findPlaceFromQuery"<br>  },<br>  "Masjid 99 Kubah Makassar": {<br>    "name": "Masjid Kubah 99 Asmaul Husna",<br>    "address": "Jl. H. Bau No.36, Kunjung Mae, Kec. Mariso, Kota Makassar, Sulawesi Selatan 90125, Indonesia",<br>    "lat": -5.143942099999999,<br>    "lng": 119.4041411,<br>    "method": "findPlaceFromQuery"<br>  },<br>  "Masjid Kubah 99 Asmaul Husna CPI Makassar": {<br>    "name": "Masjid Kubah 99 Asmaul Husna",<br>    "address": "Jl. H. Bau No.36, Kunjung Mae, Kec. Mariso, Kota Makassar, Sulawesi Selatan 90125, Indonesia",<br>    "lat": -5.143942099999999,<br>    "lng": 119.4041411,<br>    "method": "findPlaceFromQuery"<br>  },<br>  "Center Point of Indonesia Makassar": {<br>    "name": "Centre Point of Indonesia (CPI)",<br>    "address": "VC24+HVV, Jl. Metro Tj. Bunga, Kota Makassar, Sulawesi Selatan 90112, Indonesia",<br>    "lat": -5.148503799999999,<br>    "lng": 119.4071628,<br>    "method": "findPlaceFromQuery"<br>  },<br>  "Menara Phinisi UNM Makassar": {<br>    "name": "Menara Phinisi UNM",<br>    "address": "RCJM+MR9, Jl. A. P. Pettarani, Tidung, Kec. Rappocini, Kota Makassar, Sulawesi Selatan 90222, Indonesia",<br>    "lat": -5.1683299,<br>    "lng": 119.434623,<br>    "method": "findPlaceFromQuery"<br>  },<br>  "Politeknik Negeri Ujung Pandang Tamalanrea": {<br>    "name": "PNUP Politeknik Negeri Ujung Pandang",<br>    "address": "Jl. Politeknik, Tamalanrea Indah, Kec. Tamalanrea, Kota Makassar, Sulawesi Selatan 90245, Indonesia",<br>    "lat": -5.129739,<br>    "lng": 119.4818458,<br>    "method": "findPlaceFromQuery"<br>  },<br>  "Universitas Muhammadiyah Makassar Alauddin": {<br>    "name": "Universitas Muhammadiyah Makassar (Unismuh Makassar)",<br>    "address": "Jl. Sultan Alauddin No.259, Gn. Sari, Kec. Rappocini, Kota Makassar, Sulawesi Selatan 90221, Indonesia",<br>    "lat": -5.182766399999999,<br>    "lng": 119.4410929,<br>    "method": "findPlaceFromQuery"<br>  },<br>  "Universitas Hasanuddin Pintu 1": {<br>    "name": "Hasanuddin University",<br>    "address": "Jl. Perintis Kemerdekaan No.10, Tamalanrea Indah, Kec. Tamalanrea, Kota Makassar, Sulawesi Selatan 90245, Indonesia",<br>    "lat": -5.1341871,<br>    "lng": 119.4880786,<br>    "method": "findPlaceFromQuery"<br>  },<br>  "Universitas Muslim Indonesia Urip Sumoharjo": {<br>    "name": "Universitas Muslim Indonesia",<br>    "address": "Jl. Urip Sumoharjo No.km.5, Panaikang, Kec. Panakkukang, Kota Makassar, Sulawesi Selatan 90231, Indonesia",<br>    "lat": -5.136254699999999,<br>    "lng": 119.4478299,<br>    "method": "findPlaceFromQuery"<br>  },<br>  "Trans Studio Mall Makassar": {<br>    "name": "Trans Studio Mall Makassar",<br>    "address": "Jl. Metro Tj. Bunga, Maccini Sombala, Kec. Tamalate, Kota Makassar, Sulawesi Selatan 90224, Indonesia",<br>    "lat": -5.1592364,<br>    "lng": 119.3942716,<br>    "method": "findPlaceFromQuery"<br>  },<br>  "Makassar Town Square Perintis": {<br>    "name": "Makassar Town Square",<br>    "address": "Jl. Perintis Kemerdekaan No.26, Tamalanrea Jaya, Kec. Tamalanrea, Kota Makassar, Sulawesi Selatan 90245, Indonesia",<br>    "lat": -5.1449118,<br>    "lng": 119.475336,<br>    "method": "findPlaceFromQuery"<br>  }<br>}</pre>
+
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBAsdbPynnAWSRZ_1iQ3hmoCUAnq5VrV7c&amp;libraries=places"></script>
+    <script>
+        window.addEventListener('load', async () => {
+            const statusEl = document.getElementById('status');
+            const outputEl = document.getElementById('output');
+            statusEl.innerText = "Google Maps Loaded! Querying...";
+
+            const placesService = new google.maps.places.PlacesService(document.createElement('div'));
+            const geocoder = new google.maps.Geocoder();
+
+            const queries = [
+                "Politeknik Pariwisata Makassar",
+                "Politeknik Pariwisata Negeri Makassar",
+                "Masjid 99 Kubah Makassar",
+                "Masjid Kubah 99 Asmaul Husna CPI Makassar",
+                "Center Point of Indonesia Makassar",
+                "Menara Phinisi UNM Makassar",
+                "Politeknik Negeri Ujung Pandang Tamalanrea",
+                "Universitas Muhammadiyah Makassar Alauddin",
+                "Universitas Hasanuddin Pintu 1",
+                "Universitas Muslim Indonesia Urip Sumoharjo",
+                "Trans Studio Mall Makassar",
+                "Makassar Town Square Perintis"
+            ];
+
+            const results = {};
+
+            for (const q of queries) {
+                await new Promise((resolve) => {
+                    placesService.findPlaceFromQuery({
+                        query: q,
+                        fields: ['name', 'geometry', 'formatted_address']
+                    }, (res, status) => {
+                        if (status === google.maps.places.PlacesServiceStatus.OK && res && res[0]) {
+                            const p = res[0];
+                            results[q] = {
+                                name: p.name,
+                                address: p.formatted_address,
+                                lat: p.geometry.location.lat(),
+                                lng: p.geometry.location.lng(),
+                                method: 'findPlaceFromQuery'
+                            };
+                            resolve();
+                        } else {
+                            geocoder.geocode({ address: q + ", Makassar" }, (gRes, gStatus) => {
+                                if (gStatus === 'OK' && gRes && gRes[0]) {
+                                    results[q] = {
+                                        name: gRes[0].formatted_address,
+                                        lat: gRes[0].geometry.location.lat(),
+                                        lng: gRes[0].geometry.location.lng(),
+                                        method: 'geocoder'
+                                    };
+                                } else {
+                                    results[q] = { error: status + ' / ' + gStatus };
+                                }
+                                resolve();
+                            });
+                        }
+                    });
+                });
+                await new Promise(r => setTimeout(r, 400));
+            }
+
+            statusEl.innerText = "COMPLETE";
+            outputEl.innerText = JSON.stringify(results, null, 2);
+            window.__GEO_RESULTS__ = results;
+            console.log("===RESULT_PAYLOAD_START===");
+            console.log(JSON.stringify(results));
+            console.log("===RESULT_PAYLOAD_END===");
+        });
+    </script>
+
+
+</body></html>
