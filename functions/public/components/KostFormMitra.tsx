@@ -6,7 +6,7 @@ import {
     X, ChevronRight, ChevronLeft, Camera, Video, MapPin, Home, Wifi,
     Plus, Trash2, Check, AlertCircle, Loader2, Upload, Image as ImageIcon,
     Phone, BookOpen, DollarSign, Search, Navigation, ShieldCheck, User, Maximize2,
-    Crosshair, CheckCircle2, Sparkles, LocateFixed, FileText, RotateCcw, Save
+    Crosshair, CheckCircle2, Sparkles, LocateFixed, FileText, RotateCcw, Save, Droplets
 } from 'lucide-react';
 
 interface KostFormMitraProps {
@@ -49,6 +49,31 @@ const periodWeights: Record<string, number> = {
 const periodLabels: Record<string, string> = {
     'harian': 'Harian', 'mingguan': 'Mingguan', 'bulanan': 'Bulanan', '3bulanan': '3 Bulan', '6bulanan': '6 Bulan', 'tahunan': 'Tahunan'
 };
+
+interface PublicPhotoCategoryDef {
+    id: string;
+    label: string;
+    desc: string;
+    required?: boolean;
+}
+
+const PUBLIC_PHOTO_CATEGORIES: PublicPhotoCategoryDef[] = [
+    { id: 'Bangunan Depan', label: 'Bangunan Depan (Fasad)', desc: 'Tampak depan gedung & jalan akses (Cover Utama)', required: true },
+    { id: 'Koridor', label: 'Koridor & Akses Masuk', desc: 'Lorong antar kamar, tangga, atau pintu masuk utama' },
+    { id: 'Area Parkir', label: 'Area Parkir', desc: 'Tempat parkir motor atau mobil penghuni' },
+    { id: 'Dapur Bersama', label: 'Dapur Bersama', desc: 'Area memasak bersama, wastafel, & kompor' },
+    { id: 'Ruang Tamu', label: 'Ruang Tamu & Bersama', desc: 'Ruang santai atau ruang tamu penerima kunjungan' },
+    { id: 'WC Umum', label: 'WC Umum / Luar', desc: 'Kamar mandi luar untuk fasilitas bersama' },
+    { id: 'Lingkungan', label: 'Lingkungan Sekitar', desc: 'Suasana jalan dan lingkungan di sekitar kost' },
+    { id: 'Fasilitas Lainnya', label: 'Fasilitas & Area Lainnya', desc: 'Rooftop, tempat jemuran, pos keamanan, dll.' },
+];
+
+interface NewPhotoItem {
+    id: string;
+    file: File;
+    preview: string;
+    category: string;
+}
 
 const initialForm: Partial<Kost> = {
     title: '', description: '', type: 'Campur', status: 'published',
@@ -1281,14 +1306,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         return initialForm;
     });
 
-    const [newImageFiles, setNewImageFiles] = useState<File[]>([]);
-    const [newVideoFiles, setNewVideoFiles] = useState<File[]>([]);
-    const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+    const [newPhotoItems, setNewPhotoItems] = useState<NewPhotoItem[]>([]);
+    const [customCategories, setCustomCategories] = useState<string[]>([]);
+    const [newCategoryInput, setNewCategoryInput] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [tempRule, setTempRule] = useState('');
-    const imageInputRef = useRef<HTMLInputElement>(null);
-    const videoInputRef = useRef<HTMLInputElement>(null);
     const isInitialMount = useRef(true);
 
     // Auto-save draft to localStorage whenever form, step, or managementOption changes
@@ -1923,27 +1946,93 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         }
     }, [step, form.location?.lat, form.location?.lng, detectNearbyLandmarks, isInvalidCampus]);
 
-    // ── image handling ─────────────────────────────────────────────────────────
-    const handleImages = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
-        setNewImageFiles(prev => [...prev, ...files]);
-        files.forEach(f => {
+    // ── image handling (categorized & client-side webp) ─────────────────────────
+    const compressImageToWebP = async (file: File, quality = 0.82, maxDimension = 1920): Promise<File> => {
+        return new Promise((resolve) => {
+            if (!file.type.startsWith('image/')) return resolve(file);
             const reader = new FileReader();
-            reader.onload = ev => setImagePreviews(prev => [...prev, ev.target?.result as string]);
-            reader.readAsDataURL(f);
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    let { width, height } = img;
+                    if (width > maxDimension || height > maxDimension) {
+                        if (width > height) {
+                            height = Math.round((height * maxDimension) / width);
+                            width = maxDimension;
+                        } else {
+                            width = Math.round((width * maxDimension) / height);
+                            height = maxDimension;
+                        }
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return resolve(file);
+                    ctx.drawImage(img, 0, 0, width, height);
+                    canvas.toBlob((blob) => {
+                        if (!blob) return resolve(file);
+                        const newFileName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
+                        const webpFile = new File([blob], newFileName, { type: "image/webp" });
+                        resolve(webpFile);
+                    }, "image/webp", quality);
+                };
+                img.onerror = () => resolve(file);
+                img.src = e.target?.result as string;
+            };
+            reader.onerror = () => resolve(file);
+            reader.readAsDataURL(file);
         });
     };
-    const removeNewImage = (i: number) => {
-        setNewImageFiles(prev => prev.filter((_, idx) => idx !== i));
-        setImagePreviews(prev => prev.filter((_, idx) => idx !== i));
-    };
-    const removeExistingImage = (url: any) => {
-        upd('imageUrls', (form.imageUrls || []).filter(u => u !== url));
+
+    const handleCategoryFilesUpload = async (category: string, files: FileList | File[] | null) => {
+        if (!files) return;
+        const fileArr = Array.from(files);
+        if (fileArr.length === 0) return;
+
+        const newItems: NewPhotoItem[] = [];
+        for (const file of fileArr) {
+            try {
+                const webpFile = await compressImageToWebP(file);
+                const preview = URL.createObjectURL(webpFile);
+                newItems.push({
+                    id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                    file: webpFile,
+                    preview,
+                    category
+                });
+            } catch (err) {
+                console.error("Error compressing image:", err);
+                const preview = URL.createObjectURL(file);
+                newItems.push({
+                    id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                    file,
+                    preview,
+                    category
+                });
+            }
+        }
+        setNewPhotoItems(prev => [...prev, ...newItems]);
     };
 
-    const handleVideos = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
-        setNewVideoFiles(prev => [...prev, ...files]);
+    const removeNewPhotoItem = (id: string) => {
+        setNewPhotoItems(prev => {
+            const target = prev.find(p => p.id === id);
+            if (target) {
+                try { URL.revokeObjectURL(target.preview); } catch {}
+            }
+            return prev.filter(p => p.id !== id);
+        });
+    };
+
+    const removeExistingImage = (targetUrl: any) => {
+        const cur = form.imageUrls || [];
+        const filtered = cur.filter((u: any) => {
+            const src = typeof u === 'string' ? u : (u?.original || u?.url);
+            const targetSrc = typeof targetUrl === 'string' ? targetUrl : (targetUrl?.original || targetUrl?.url);
+            return src !== targetSrc;
+        });
+        upd('imageUrls', filtered);
     };
 
     // ── facilities ─────────────────────────────────────────────────────────────
@@ -2040,17 +2129,57 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 omnichannelContactType: 'owner'
             };
 
+            // Susun urutan foto: Bangunan Depan selalu di urutan paling awal (Cover Utama)
+            const sortedNewItems = [...newPhotoItems].sort((a, b) => {
+                if (a.category === 'Bangunan Depan' && b.category !== 'Bangunan Depan') return -1;
+                if (a.category !== 'Bangunan Depan' && b.category === 'Bangunan Depan') return 1;
+                return 0;
+            });
+
+            const uploadPayload = sortedNewItems.map(item => ({
+                file: item.file,
+                label: item.category,
+                category: item.category
+            }));
+
+            const existingImagesWithLabels = (form.imageUrls || []).map((img: any, idx: number) => {
+                const url = typeof img === 'string' ? img : (img?.original || img?.url || '');
+                const label = typeof img === 'object' && (img?.label || img?.category)
+                    ? (img.label || img.category)
+                    : (Array.isArray(form.photoCategories) && form.photoCategories[idx] ? form.photoCategories[idx] : (idx === 0 ? 'Bangunan Depan' : 'Fasilitas Lainnya'));
+                return { original: url, url, label, category: label };
+            }).sort((a: any, b: any) => {
+                if (a.label === 'Bangunan Depan' && b.label !== 'Bangunan Depan') return -1;
+                if (a.label !== 'Bangunan Depan' && b.label === 'Bangunan Depan') return 1;
+                return 0;
+            });
+
+            const totalPhotos = existingImagesWithLabels.length + uploadPayload.length;
+            if (totalPhotos < 1) {
+                setError('Mohon unggah minimal 1 foto kost (terutama Bangunan Depan / Fasad).');
+                setStep(2);
+                setSubmitting(false);
+                return;
+            }
+
+            const allPhotoCategories = Array.from(new Set([
+                ...existingImagesWithLabels.map((img: any) => img.label),
+                ...sortedNewItems.map(item => item.category)
+            ]));
+
             const data = { 
                 ...form, 
                 ...contactUpdates, 
+                imageUrls: existingImagesWithLabels,
+                photoCategories: allPhotoCategories,
                 price: finalPrice, 
                 managed_by: managementOption 
             };
             
             if (isEditing && editingKost?.id) {
-                await updatePropertyWithMedia(editingKost.id, data, newImageFiles, newVideoFiles);
+                await updatePropertyWithMedia(editingKost.id, data, uploadPayload, []);
             } else {
-                await addPropertyWithMedia({ ...data, isVerified: false }, newImageFiles, newVideoFiles);
+                await addPropertyWithMedia({ ...data, isVerified: false }, uploadPayload, []);
                 // Clear draft after successful creation
                 try {
                     localStorage.removeItem(storageKey);
@@ -2266,59 +2395,221 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 </div>
             );
 
-            // ── STEP 2: Media ──────────────────────────────────────────────────
-            case 2: return (
-                <div className="space-y-6">
-                    <Field label="Foto Kost" required hint="Upload minimal 3 foto terbaik. Foto pertama akan jadi cover.">
-                        {(form.imageUrls || []).length > 0 && (
-                            <div className="grid grid-cols-3 gap-2 mb-3">
-                                {(form.imageUrls || []).map((url, i) => {
-                                    const src = typeof url === 'string' ? url : (url as any).original;
-                                    return (
-                                        <div key={i} className="relative aspect-square rounded-2xl overflow-hidden border border-gray-100 group">
-                                            <img src={src} className="w-full h-full object-cover" alt="" />
-                                            {i === 0 && <span className="absolute top-1 left-1 bg-orange-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full">COVER</span>}
-                                            <button type="button" onClick={() => removeExistingImage(url)}
-                                                className="absolute top-1 right-1 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <X size={12} />
-                                            </button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                        {imagePreviews.length > 0 && (
-                            <div className="grid grid-cols-3 gap-2 mb-3">
-                                {imagePreviews.map((src, i) => (
-                                    <div key={i} className="relative aspect-square rounded-2xl overflow-hidden border-2 border-orange-200 group">
-                                        <img src={src} className="w-full h-full object-cover" alt="" />
-                                        <span className="absolute bottom-1 left-1 bg-orange-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full">BARU</span>
-                                        <button type="button" onClick={() => removeNewImage(i)}
-                                            className="absolute top-1 right-1 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center">
-                                            <X size={12} />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                        <input ref={imageInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleImages} />
-                        <button type="button" onClick={() => imageInputRef.current?.click()}
-                            className="w-full h-20 border-2 border-dashed border-orange-200 rounded-3xl flex flex-col items-center justify-center gap-1 hover:bg-orange-50 hover:border-orange-400 transition-all text-orange-400">
-                            <Camera size={22} />
-                            <span className="text-xs font-bold">Pilih Foto dari Galeri</span>
-                        </button>
-                    </Field>
+            // ── STEP 2: Foto Berkategori Terstruktur ─────────────────────────
+            case 2: {
+                const combinedCategories = [
+                    ...PUBLIC_PHOTO_CATEGORIES,
+                    ...customCategories.map(c => ({ id: c, label: c, desc: `Foto area ${c} properti` }))
+                ];
 
-                    <Field label="Video Kost" hint="Opsional — video tur singkat meningkatkan minat calon penyewa">
-                        <input ref={videoInputRef} type="file" multiple accept="video/*" className="hidden" onChange={handleVideos} />
-                        <button type="button" onClick={() => videoInputRef.current?.click()}
-                            className="w-full h-20 border-2 border-dashed border-orange-200 rounded-3xl flex flex-col items-center justify-center gap-1 hover:bg-orange-50 hover:border-orange-400 transition-all text-orange-400">
-                            <Video size={22} />
-                            <span className="text-xs font-bold">Pilih Video dari Galeri</span>
-                        </button>
-                    </Field>
-                </div>
-            );
+                const existingWithCats = (form.imageUrls || []).map((img: any, idx: number) => {
+                    const src = typeof img === 'string' ? img : (img?.original || img?.url || '');
+                    let cat = 'Bangunan Depan';
+                    if (typeof img === 'object' && (img.label || img.category)) {
+                        cat = img.label || img.category;
+                    } else if (Array.isArray(form.photoCategories) && form.photoCategories[idx]) {
+                        cat = form.photoCategories[idx];
+                    } else if (idx > 0) {
+                        cat = 'Fasilitas Lainnya';
+                    }
+                    return { src, cat, raw: img, idx };
+                }).filter(p => !!p.src);
+
+                const totalAllPhotos = existingWithCats.length + newPhotoItems.length;
+                const hasFrontCover = existingWithCats.some(p => p.cat === 'Bangunan Depan') || newPhotoItems.some(p => p.category === 'Bangunan Depan');
+
+                return (
+                    <div className="space-y-6">
+                        {/* Header Ringkasan Media */}
+                        <div className="bg-gradient-to-br from-orange-50 via-amber-50/50 to-white p-4 sm:p-5 rounded-3xl border border-orange-200/80 shadow-xs">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <Camera className="w-5 h-5 text-orange-600" />
+                                        <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">
+                                            Dokumentasi Foto Properti
+                                        </h3>
+                                    </div>
+                                    <p className="text-xs text-gray-600 mt-1">
+                                        Unggah foto sesuai kategorinya agar calon penyewa mendapatkan visualisasi akurat &amp; terpercaya.
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="px-3 py-1 bg-white border border-orange-200 text-orange-600 rounded-full text-xs font-black shadow-xs">
+                                        📸 {totalAllPhotos} Foto Terpilih
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Status Cover Alert */}
+                            {!hasFrontCover && (
+                                <div className="mt-3 flex items-center gap-2 bg-amber-100/70 border border-amber-300/80 text-amber-900 text-xs px-3 py-2 rounded-xl">
+                                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                                    <span><strong>Perhatian:</strong> Mohon unggah minimal 1 foto pada <strong>Bangunan Depan (Fasad)</strong> untuk dijadikan foto Cover Utama kost Anda.</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Daftar Kategori Foto Terstruktur */}
+                        <div className="space-y-4">
+                            {combinedCategories.map(cat => {
+                                const currentCatExisting = existingWithCats.filter(p => p.cat === cat.id);
+                                const currentCatNew = newPhotoItems.filter(p => p.category === cat.id);
+                                const catPhotosCount = currentCatExisting.length + currentCatNew.length;
+                                const isFront = cat.id === 'Bangunan Depan';
+
+                                return (
+                                    <div 
+                                        key={cat.id} 
+                                        className={`p-4 sm:p-5 rounded-3xl border transition-all ${
+                                            catPhotosCount > 0 
+                                                ? 'bg-white border-orange-200 shadow-xs' 
+                                                : isFront 
+                                                    ? 'bg-orange-50/20 border-dashed border-orange-300' 
+                                                    : 'bg-white border-gray-200/80'
+                                        }`}
+                                    >
+                                        <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                                            <div className="flex items-start gap-2.5">
+                                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                                                    isFront ? 'bg-orange-500 text-white' : 'bg-orange-100 text-orange-600'
+                                                }`}>
+                                                    {isFront ? <Home size={16} /> :
+                                                     cat.id === 'Koridor' ? <Navigation size={16} /> :
+                                                     cat.id === 'Area Parkir' ? <MapPin size={16} /> :
+                                                     cat.id === 'WC Umum' ? <Droplets size={16} /> :
+                                                     cat.id === 'Lingkungan' ? <Sparkles size={16} /> :
+                                                     <Camera size={16} />}
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs sm:text-sm font-black text-gray-900">
+                                                            {cat.label}
+                                                        </span>
+                                                        {isFront && (
+                                                            <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[9px] font-black uppercase rounded-md tracking-wider">
+                                                                Cover Utama
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[11px] text-gray-500 mt-0.5">
+                                                        {cat.desc}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                                                catPhotosCount > 0 
+                                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                                    : isFront 
+                                                        ? 'bg-amber-100 text-amber-800' 
+                                                        : 'bg-gray-100 text-gray-400'
+                                            }`}>
+                                                {catPhotosCount} Foto
+                                            </span>
+                                        </div>
+
+                                        {/* Grid Foto Kategori Ini */}
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                            {/* Existing Photos */}
+                                            {currentCatExisting.map((p, idx) => (
+                                                <div key={`existing-${idx}`} className="aspect-square rounded-2xl overflow-hidden border border-gray-200 relative group bg-gray-50">
+                                                    <img src={p.src} alt={cat.label} className="w-full h-full object-cover" />
+                                                    {isFront && idx === 0 && (
+                                                        <span className="absolute top-1.5 left-1.5 bg-orange-500 text-white text-[8px] font-black px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
+                                                            Cover
+                                                        </span>
+                                                    )}
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => removeExistingImage(p.raw)}
+                                                        className="absolute top-1.5 right-1.5 bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
+                                                        title="Hapus foto ini"
+                                                    >
+                                                        &times;
+                                                    </button>
+                                                    <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white font-bold text-center truncate">
+                                                        {cat.id}
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                            {/* New Uploaded Photos */}
+                                            {currentCatNew.map((item) => (
+                                                <div key={item.id} className="aspect-square rounded-2xl overflow-hidden border-2 border-orange-400 relative group bg-gray-50 shadow-xs animate-in zoom-in-95 duration-200">
+                                                    <img src={item.preview} alt={cat.label} className="w-full h-full object-cover" />
+                                                    <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
+                                                        Baru
+                                                    </span>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => removeNewPhotoItem(item.id)}
+                                                        className="absolute top-1.5 right-1.5 bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
+                                                        title="Hapus foto ini"
+                                                    >
+                                                        &times;
+                                                    </button>
+                                                    <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white font-bold text-center truncate">
+                                                        {cat.id}
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                            {/* Dropzone Upload Button for this Category */}
+                                            <label className="aspect-square border-2 border-dashed border-orange-200 hover:border-orange-500 bg-orange-50/40 hover:bg-orange-50/80 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all gap-1.5 p-3 text-center group">
+                                                <input 
+                                                    type="file" 
+                                                    multiple 
+                                                    accept="image/*" 
+                                                    className="hidden" 
+                                                    onChange={e => {
+                                                        handleCategoryFilesUpload(cat.id, e.target.files);
+                                                        e.target.value = '';
+                                                    }} 
+                                                />
+                                                <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                    <Plus size={18} />
+                                                </div>
+                                                <span className="text-[11px] font-black text-orange-600 group-hover:underline">
+                                                    + Tambah Foto
+                                                </span>
+                                                <span className="text-[9px] text-gray-400 font-medium">
+                                                    Pilih dari Galeri
+                                                </span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Tambah Kategori Kustom Tambahan */}
+                        <div className="bg-gray-50/80 p-4 rounded-2xl border border-gray-200 flex flex-col sm:flex-row gap-2.5 items-center">
+                            <input 
+                                type="text"
+                                placeholder="Tambah kategori foto lainnya (Cth: Rooftop, Kolam Renang, Balkon)..."
+                                value={newCategoryInput}
+                                onChange={e => setNewCategoryInput(e.target.value)}
+                                className="w-full h-10 px-3.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-800 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 font-medium"
+                            />
+                            <button 
+                                type="button"
+                                onClick={() => {
+                                    const trimmed = newCategoryInput.trim();
+                                    if (!trimmed) return;
+                                    if (!customCategories.includes(trimmed) && !PUBLIC_PHOTO_CATEGORIES.some(c => c.id.toLowerCase() === trimmed.toLowerCase())) {
+                                        setCustomCategories(prev => [...prev, trimmed]);
+                                    }
+                                    setNewCategoryInput('');
+                                }}
+                                className="w-full sm:w-auto h-10 px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider shrink-0 transition-all cursor-pointer"
+                            >
+                                + Kategori
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
 
             // ── STEP 3: Fasilitas Gedung ───────────────────────────────────────
             case 3: return (

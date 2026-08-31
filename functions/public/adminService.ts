@@ -1904,8 +1904,8 @@ export async function deleteResidentStatus(residentId: string): Promise<void> {
 
 export async function addPropertyWithMedia(
   kostData: Partial<Kost>,
-  imageFiles: File[],
-  videoFiles: File[]
+  imageFiles: (File | { file: File; label?: string; category?: string })[],
+  videoFiles: File[] = []
 ): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Anda harus login.');
@@ -1916,18 +1916,31 @@ export async function addPropertyWithMedia(
   // Generate a temporary ID for Storage path (will be overwritten with DB-generated UUID)
   const tempId = crypto.randomUUID();
 
-  const existingImages = (kostData.imageUrls || []).map((url: any) =>
-    typeof url === 'string' ? { original: url } : url
-  );
+  const existingImages = (kostData.imageUrls || []).map((url: any) => {
+    if (typeof url === 'string') return { original: url, url };
+    return {
+      original: url.original || url.url || '',
+      url: url.url || url.original || '',
+      ...(url.label ? { label: url.label } : {}),
+      ...(url.category ? { category: url.category } : {})
+    };
+  });
   const existingVideos = (kostData.videoUrls || []).map((url: any) =>
     typeof url === 'string' ? { original: url } : url
   );
 
-  // Upload new images
-  const newImageObjects: ImageUrlObject[] = [];
-  for (const file of imageFiles) {
-    const url = await uploadFileToStorage(file, 'properties', `${user.id}/${tempId}/images/original`);
-    newImageObjects.push({ original: url });
+  // Upload new images with category label support
+  const newImageObjects: any[] = [];
+  for (const item of imageFiles) {
+    const rawFile = (item && 'file' in item) ? item.file : (item as File);
+    const label = (item && 'label' in item) ? (item.label || item.category) : undefined;
+    const webpFile = await convertToWebP(rawFile);
+    const url = await uploadFileToStorage(webpFile, 'properties', `${user.id}/${tempId}/images/original`);
+    newImageObjects.push({ 
+      original: url, 
+      url, 
+      ...(label ? { label } : {}) 
+    });
   }
 
   // Upload new videos
@@ -1936,6 +1949,26 @@ export async function addPropertyWithMedia(
     const url = await uploadFileToStorage(file, 'properties', `${user.id}/${tempId}/videos/original`);
     newVideoObjects.push({ original: url });
   }
+
+  const allImages = [...existingImages, ...newImageObjects];
+  const derivedPhotoCategories = kostData.photoCategories && kostData.photoCategories.length > 0
+    ? kostData.photoCategories
+    : allImages.map((img: any) => img.label || '');
+
+  const derivedCategorizedPhotos = (kostData.categorizedPhotos && Object.keys(kostData.categorizedPhotos).length > 0)
+    ? kostData.categorizedPhotos
+    : (() => {
+        const catMap: Record<string, string[]> = {};
+        allImages.forEach((img: any) => {
+          const cat = img.label || 'Foto Properti';
+          const u = img.original || img.url;
+          if (u) {
+            if (!catMap[cat]) catMap[cat] = [];
+            catMap[cat].push(u);
+          }
+        });
+        return catMap;
+      })();
 
   // Insert into Supabase (PostgreSQL)
   const { data: inserted, error } = await supabase
@@ -1952,7 +1985,9 @@ export async function addPropertyWithMedia(
       area: kostData.area || '',
       metadata: {
         ...(kostData.metadata || {}),
-        province: kostData.province || ''
+        province: kostData.province || '',
+        photo_categories: derivedPhotoCategories,
+        categorized_photos: derivedCategorizedPhotos
       },
       type: kostData.type,
       property_type: kostData.type, // Map the type specifically for Supabase DB
@@ -1961,7 +1996,9 @@ export async function addPropertyWithMedia(
       is_managed: kostData.isManaged ?? false,
       rating: Number(kostData.rating || 0),
       location: kostData.location,
-      image_urls: [...existingImages, ...newImageObjects],
+      image_urls: allImages,
+      photo_categories: derivedPhotoCategories,
+      categorized_photos: derivedCategorizedPhotos,
       video_urls: [...existingVideos, ...newVideoObjects],
       instagram_url: kostData.instagramUrl || '',
       tiktok_url: kostData.tiktokUrl || '',
@@ -1986,7 +2023,6 @@ export async function addPropertyWithMedia(
     throw new Error(error.message);
   }
 
-  if (error) throw error;
   await syncPropertyRooms(inserted.id);
   return inserted.id;
 }
@@ -1994,8 +2030,8 @@ export async function addPropertyWithMedia(
 export async function updatePropertyWithMedia(
   propertyId: string,
   kostData: Partial<Kost>,
-  newImageFiles: File[],
-  newVideoFiles: File[]
+  newImageFiles: (File | { file: File; label?: string; category?: string })[],
+  newVideoFiles: File[] = []
 ): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Anda harus login.');
@@ -2015,7 +2051,9 @@ export async function updatePropertyWithMedia(
   const currentImageObjects = existing.image_urls || [];
   const currentVideoObjects = existing.video_urls || [];
 
-  const keptImageStrings = kostData.imageUrls || [];
+  const keptImageStrings = (kostData.imageUrls || []).map((img: any) => 
+    typeof img === 'string' ? img : (img?.original || img?.url || '')
+  );
   const keptVideoStrings = kostData.videoUrls || [];
 
   // Determine deletions
@@ -2024,14 +2062,19 @@ export async function updatePropertyWithMedia(
       keptUrl === imgObj.original ||
       keptUrl === imgObj.webp ||
       keptUrl === imgObj.thumbnail ||
-      keptUrl === imgObj
+      keptUrl === imgObj ||
+      keptUrl === imgObj.url
     );
     return !isKept;
   });
 
   const videosToDelete = currentVideoObjects.filter((vidObj: any) => {
-    const url = typeof vidObj === 'string' ? vidObj : vidObj.original;
-    return !keptVideoStrings.includes(url);
+    const isKept = keptVideoStrings.some(keptUrl =>
+      keptUrl === vidObj.original ||
+      keptUrl === vidObj.webp ||
+      keptUrl === vidObj
+    );
+    return !isKept;
   });
 
   // Delete removed files from Storage
@@ -2050,26 +2093,44 @@ export async function updatePropertyWithMedia(
     })
   ]);
 
-  // Filter kept objects
-  const finalImageObjects = currentImageObjects.filter((imgObj: any) => {
-    return keptImageStrings.some(keptUrl =>
-      keptUrl === imgObj.original ||
-      keptUrl === imgObj.webp ||
-      keptUrl === imgObj.thumbnail ||
-      keptUrl === imgObj
-    );
-  });
+  // Filter kept objects and sync labels from kostData.imageUrls if updated
+  const finalImageObjects = (kostData.imageUrls && kostData.imageUrls.length > 0)
+    ? kostData.imageUrls.map((img: any) => {
+        if (typeof img === 'string') return { original: img, url: img };
+        return {
+          original: img.original || img.url || '',
+          url: img.url || img.original || '',
+          ...(img.label ? { label: img.label } : {}),
+          ...(img.category ? { category: img.category } : {})
+        };
+      })
+    : currentImageObjects.filter((imgObj: any) => {
+        return keptImageStrings.some(keptUrl =>
+          keptUrl === imgObj.original ||
+          keptUrl === imgObj.webp ||
+          keptUrl === imgObj.thumbnail ||
+          keptUrl === imgObj ||
+          keptUrl === imgObj.url
+        );
+      });
 
   const finalVideoObjects = currentVideoObjects.filter((vidObj: any) => {
     const url = typeof vidObj === 'string' ? vidObj : vidObj.original;
     return keptVideoStrings.includes(url);
   });
 
-  // Upload new files
-  const newImageObjects: ImageUrlObject[] = [];
-  for (const file of newImageFiles) {
-    const url = await uploadFileToStorage(file, 'properties', `${user.id}/${propertyId}/images/original`);
-    newImageObjects.push({ original: url });
+  // Upload new files with category label support
+  const newImageObjects: any[] = [];
+  for (const item of newImageFiles) {
+    const rawFile = (item && 'file' in item) ? item.file : (item as File);
+    const label = (item && 'label' in item) ? (item.label || item.category) : undefined;
+    const webpFile = await convertToWebP(rawFile);
+    const url = await uploadFileToStorage(webpFile, 'properties', `${user.id}/${propertyId}/images/original`);
+    newImageObjects.push({ 
+      original: url, 
+      url, 
+      ...(label ? { label } : {}) 
+    });
   }
 
   const newVideoObjects: VideoUrlObject[] = [];
@@ -2079,6 +2140,26 @@ export async function updatePropertyWithMedia(
   }
 
   const targetOwnerUid = (isAdmin && kostData.ownerUid) ? kostData.ownerUid : existing.owner_uid;
+  const allImages = [...finalImageObjects, ...newImageObjects];
+
+  const derivedPhotoCategories = kostData.photoCategories && kostData.photoCategories.length > 0
+    ? kostData.photoCategories
+    : allImages.map((img: any) => img.label || '');
+
+  const derivedCategorizedPhotos = (kostData.categorizedPhotos && Object.keys(kostData.categorizedPhotos).length > 0)
+    ? kostData.categorizedPhotos
+    : (() => {
+        const catMap: Record<string, string[]> = {};
+        allImages.forEach((img: any) => {
+          const cat = img.label || 'Foto Properti';
+          const u = img.original || img.url;
+          if (u) {
+            if (!catMap[cat]) catMap[cat] = [];
+            catMap[cat].push(u);
+          }
+        });
+        return catMap;
+      })();
 
   const { error: updateError } = await supabase
     .from('properties')
@@ -2095,7 +2176,9 @@ export async function updatePropertyWithMedia(
       metadata: {
         ...(existing.metadata || {}),
         ...(kostData.metadata || {}),
-        ...(kostData.province !== undefined ? { province: kostData.province } : {})
+        ...(kostData.province !== undefined ? { province: kostData.province } : {}),
+        photo_categories: derivedPhotoCategories,
+        categorized_photos: derivedCategorizedPhotos
       },
       type: kostData.type,
       property_type: kostData.type, // Sync added column
@@ -2104,7 +2187,9 @@ export async function updatePropertyWithMedia(
       is_managed: kostData.isManaged,
       rating: Number(kostData.rating || 0),
       location: kostData.location,
-      image_urls: [...finalImageObjects, ...newImageObjects],
+      image_urls: allImages,
+      photo_categories: derivedPhotoCategories,
+      categorized_photos: derivedCategorizedPhotos,
       video_urls: [...finalVideoObjects, ...newVideoObjects],
       instagram_url: kostData.instagramUrl,
       tiktok_url: kostData.tiktokUrl,

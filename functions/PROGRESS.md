@@ -2,6 +2,42 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 238. Pengkategorian Foto Properti Terstruktur & Penghapusan Input Video (`KostFormMitra.tsx`, `adminService.ts`, `KostDetail.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna ingin input foto kost di formulir mitra tidak lagi bercampur dalam satu kotak tanpa kategori.
+  - Bagian "Video Kost" dihapus total dari langkah media agar form lebih bersih dan ringan.
+  - Setiap input foto dibagi ke dalam beberapa kategori area properti (seperti pada pendataan KostManager di Dashboard Agen).
+  - Kategori foto wajib terhubung dengan database Supabase agar otomatis tampil sebagai caption/kategori di sisi tampilan calon penyewa (`KostDetail.tsx`).
+- **Implementasi Solusi**:
+  1. **Penghapusan Input Video Kost (`KostFormMitra.tsx`)**:
+     - Menghapus input "Video Kost", state `newVideoFiles`, dan `videoInputRef` dari Langkah 3 (Foto).
+  2. **Pengkategorian Foto Terstruktur di Formulir Mitra (`KostFormMitra.tsx`)**:
+     - Menerapkan kategori area properti standar:
+       - 🏢 **Bangunan Depan (Fasad)** *(Wajib, otomatis menjadi Cover Utama)*
+       - 🚪 **Koridor & Akses Masuk**
+       - 🅿️ **Area Parkir (Motor/Mobil)**
+       - 🍳 **Dapur Bersama**
+       - 🛋️ **Ruang Tamu & Bersama**
+       - 🚿 **WC Umum / Kamar Mandi Luar**
+       - 🌿 **Lingkungan Sekitar**
+       - 📸 **Fasilitas & Area Lainnya**
+       - Fitur tambah kategori kustom (misal: Rooftop, Kolam Renang, Balkon).
+     - Kotak upload / dropzone terpisah per kategori dengan thumbnail preview, badge kategori/cover, dan tombol hapus individual.
+     - Kompresi client-side otomatis ke WebP (`compressImageToWebP`) sebelum dikirim ke server (mematuhi RULE 5).
+     - Prioritas penataan foto: foto "Bangunan Depan" dijamin selalu diatur pada index 0 sebagai cover utama properti.
+  3. **Integrasi Database & Kompatibilitas Sisi User (`adminService.ts`, `KostDetail.tsx`)**:
+     - `addPropertyWithMedia` dan `updatePropertyWithMedia` kini memproses payload berkategori:
+       - Menyimpan objek terstruktur `{ original: url, url: url, label: categoryName }` di kolom `image_urls`.
+       - Menyimpan array `photo_categories` dan objek mapping `categorized_photos` di tabel `properties` serta `metadata`.
+     - Tampilan calon penyewa di `KostDetail.tsx` langsung membaca `img.label` dan `photoCategories` sehingga caption/kategori foto otomatis muncul di galeri foto publik.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 38.28s, 0 error).
+
 ### 237. Kartu Draft Properti Otomatis & Pemisahan Tombol Tambah Baru (`MitraDashboard.tsx`, `KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna ingin agar sistem draft otomatis tidak menyembunyikan progres pengisian di dalam tombol Tambah Kost saya.
