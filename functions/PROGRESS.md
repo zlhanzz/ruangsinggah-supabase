@@ -2,6 +2,32 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 242. Redesain Total UI/UX Tipe Kamar & Harga (Langkah 3) dengan Preset Terstandarisasi & Periode Sewa Fleksibel (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - UI/UX formulir penambahan tipe kamar dirasa kurang menarik, membingungkan, kaku, dan kurang responsif.
+  - Tampilan 6 kotak periode harga sewa (`Harian`, `Mingguan`, `Bulanan`, `3 Bulan`, `6 Bulan`, `Tahunan`) sekaligus dengan nilai `Rp 0` membuat layar semrawut dan membingungkan pemilik properti.
+  - Input nama tipe kamar bebas berpotensi membuat data tidak konsisten; pengguna meminta disediakan tombol pilihan nama terstandarisasi seperti `Standard`, `VIP`, `Premium`, `Exclusive`, `Deluxe`.
+  - Penegasan skema periode sewa: `Bulanan` adalah default utama yang aktif otomatis, dengan opsi mengaktifkan periode lainnya sesuai kebutuhan.
+- **Implementasi Solusi**:
+  1. **Preset Nama Tipe Kamar Terstandarisasi**:
+     - Menambahkan tombol chip pilihan cepat: `Standard`, `Deluxe`, `VIP`, `Premium`, `Exclusive`, serta opsi `+ Kustom`.
+     - Klik pada chip langsung menetapkan nama tipe kamar secara instan; kolom teks kustom hanya muncul jika memilih kustom atau ingin menambahkan catatan spesifik.
+  2. **Preset Ukuran Kamar & Grid Responsif**:
+     - Pilihan cepat ukuran dimensi kamar (`3x3 m`, `3x4 m`, `4x4 m`, `4x5 m`) plus input fleksibel berikon `Maximize2`.
+  3. **Kapasitas Sentuh-Cepat & Ketersediaan Unit**:
+     - Tombol kapasitas touch-friendly (`1 Orang`, `2 Orang`, `3 Orang`).
+     - Stepper ketersediaan unit kamar yang bersih (`- [ 1 Kamar ] +`).
+     - Biaya tambahan orang ekstra hanya muncul secara kontekstual jika kapasitas > 1 orang.
+  4. **Skema Tarif Sewa Fleksibel (Bebas dari Kotak Rp 0 Menumpuk)**:
+     - Deretan chips toggle periode sewa yang ditawarkan (`[✓ Bulanan]` aktif otomatis + pilihan `Harian`, `Mingguan`, `3 Bulan`, `6 Bulan`, `Tahunan`).
+     - Hanya periode yang dicentang yang menampilkan kartu input harga dengan format `Rp` yang lega dan kontras. Periode yang tidak aktif tidak akan membebani layar.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 23.46s, 0 error).
+
 ### 241. Pertukaran Urutan Wizard Kamar (Langkah 3) & Fasilitas (Langkah 4) dengan Fasilitas & Foto Kamar Dinamis (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Kebutuhan**:
   - Menggeser menu **Tipe Kamar** menjadi **Langkah 3** (Wizard Flow 3) dan **Fasilitas** menjadi **Langkah 4** (Wizard Flow 4).
