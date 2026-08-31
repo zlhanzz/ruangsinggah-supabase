@@ -2,24 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 235. Rekalibrasi Presisi Koordinat Gerbang Utama Master Landmark & Geocoding Cerdas Berbasis Konteks Kota (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
+### 235. Dedicated FacilityLocationModal, Rekalibrasi Presisi Gerbang Master Landmark & Geocoding Cerdas (`KostFormMitra.tsx`, `curatedLandmarks.ts`) (Agustus 2026)
 - **Permintaan & Masalah**:
-  - Pengguna melaporkan bahwa saat landmark master data dibuka di modal peta (**"📍 Peta"**), sebagian titik koordinat meleset dari gerbang atau lokasi riilnya akibat offset angka desimal perkiraan.
-  - Sempat muncul `ReferenceError: isSearchingFacility is not defined` akibat posisi deklarasi state loading tombol geocoding.
+  - Pengguna melaporkan bahwa saat landmark dibuka di modal peta (**"📍 Peta"**), sebagian titik koordinat meleset dari gerbang atau lokasi riilnya akibat komponen form alamat lama dan offset koordinat.
 - **Implementasi Solusi**:
-  1. **Rekalibrasi Titik Koordinat Gerbang Utama ([`curatedLandmarks.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants/curatedLandmarks.ts))**:
-     - Mengoreksi seluruh titik koordinat landmark di Makassar (Pintu 1 UNHAS Tamalanrea, Kampus Gowa, UIM KM 9, UMI KM 5, Menara Phinisi UNM, dll.) dan kota-kota strategis nasional ke koordinat gerbang utama riil Google Maps.
-  2. **Peningkatan Fungsionalitas Tombol "Cari" Geocoding & Perbaikan State ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
-     - Menempatkan deklarasi state `isSearchingFacility` secara aman dan mengaitkannya ke indikator loading tombol geocoding.
-     - Fungsi `searchFacilityCoordinates` kini menyertakan konteks kota (`form.city`) dan provinsi (`form.province`) untuk query geocoding yang 100% akurat.
-     - Modal **"📍 Peta"** memusatkan titik pada koordinat presisi landmark dan menghitung ulang jarak Haversine ke kost saat marker digeser.
+  1. **Dedicated `FacilityLocationModal` Berbasis Dual-Marker & Live Gerbang Auto-Centering ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - Membangun komponen modal peta khusus fasilitas yang terisolasi dari form alamat kost utama.
+     - **Dual Marker Visual**: Menampilkan marker **Kost Acuan 🏠** dan marker **Landmark Draggable 📍** dengan garis jarak Polyline real-time.
+     - **Search Bar Gerbang/Tempat di Peta**: Autocomplete Google Places di dalam modal untuk mencari nama pintu/gerbang/gedung spesifik (misal: *Pintu 1 UNHAS*, *Pintu 2*, *Lobby Mall*) dan langsung mengunci koordinat.
+     - **Auto-Resolve Geocoding**: Jika landmark belum memiliki koordinat valid, sistem otomatis melakukan geocoding presisi Google Maps berpusat di kota kost saat modal dibuka.
+     - Menggeser penanda atau mengklik peta langsung menghitung ulang jarak Haversine (KM) ke titik kost secara real-time.
+  2. **Rekalibrasi Titik Koordinat Gerbang Utama ([`curatedLandmarks.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants/curatedLandmarks.ts))**:
+     - Mengoreksi seluruh titik koordinat landmark di Makassar dan kota-kota strategis nasional ke koordinat gerbang utama riil Google Maps.
 - **File Tersentuh**:
-  - `functions/public/constants/curatedLandmarks.ts`
   - `functions/public/components/KostFormMitra.tsx`
+  - `functions/public/constants/curatedLandmarks.ts`
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 21.37s, 0 error).
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 22.27s, 0 error).
 
 ### 234. Master Dataset Anchor & Landmark Nasional Terkurasi Lengkap 350+ Titik Strategis & Isolasi 100% Master Data (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:

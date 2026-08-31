@@ -780,6 +780,336 @@ const MapPicker: React.FC<{
     );
 };
 
+// ── Dedicated Facility Location Modal (Peta Gerbang Landmark Presisi) ─────────
+interface FacilityLocationModalProps {
+    facilityName: string;
+    initialLat?: number;
+    initialLng?: number;
+    kostLat?: number;
+    kostLng?: number;
+    cityName?: string;
+    provinceName?: string;
+    onSave: (lat: number, lng: number) => void;
+    onClose: () => void;
+}
+
+const FacilityLocationModal: React.FC<FacilityLocationModalProps> = ({
+    facilityName,
+    initialLat,
+    initialLng,
+    kostLat,
+    kostLng,
+    cityName,
+    onSave,
+    onClose
+}) => {
+    // Fallback koordinat awal: gunakan initial jika ada, atau pusat kost
+    const hasValidInitial = typeof initialLat === 'number' && typeof initialLng === 'number' && (initialLat !== 0 || initialLng !== 0);
+    const defaultLat = hasValidInitial ? initialLat! : (kostLat || -5.1343);
+    const defaultLng = hasValidInitial ? initialLng! : (kostLng || 119.4870);
+
+    const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number }>({
+        lat: defaultLat,
+        lng: defaultLng
+    });
+
+    const mapContainerRef = useRef<HTMLDivElement>(null);
+    const mapObjRef = useRef<any>(null);
+    const landmarkMarkerRef = useRef<any>(null);
+    const kostMarkerRef = useRef<any>(null);
+    const polylineRef = useRef<any>(null);
+
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Hitung jarak Haversine real-time ke lokasi kost
+    const currentDistanceKm = (kostLat && kostLng) 
+        ? (() => {
+            const R = 6371;
+            const dLat = (selectedLocation.lat - kostLat) * Math.PI / 180;
+            const dLon = (selectedLocation.lng - kostLng) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(kostLat * Math.PI / 180) * Math.cos(selectedLocation.lat * Math.PI / 180) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return parseFloat((R * c).toFixed(1));
+        })()
+        : null;
+
+    const updatePolyline = (targetLat: number, targetLng: number) => {
+        if (!polylineRef.current || !kostLat || !kostLng) return;
+        polylineRef.current.setPath([
+            { lat: kostLat, lng: kostLng },
+            { lat: targetLat, lng: targetLng }
+        ]);
+    };
+
+    useEffect(() => {
+        if (!mapContainerRef.current) return;
+        const google = (window as any).google;
+        if (!google?.maps) return;
+
+        try {
+            const map = new google.maps.Map(mapContainerRef.current, {
+                center: { lat: defaultLat, lng: defaultLng },
+                zoom: 17,
+                mapTypeControl: true,
+                streetViewControl: true,
+                fullscreenControl: false,
+                zoomControl: true,
+                gestureHandling: 'greedy',
+            });
+
+            // Marker Landmark (Draggable)
+            const landmarkMarker = new google.maps.Marker({
+                position: { lat: defaultLat, lng: defaultLng },
+                map,
+                draggable: true,
+                title: facilityName || 'Titik Gerbang / Gedung Landmark',
+                animation: google.maps.Animation.DROP,
+            });
+
+            // Marker Kost Acuan (Jika ada)
+            let kostMarker = null;
+            if (kostLat && kostLng) {
+                kostMarker = new google.maps.Marker({
+                    position: { lat: kostLat, lng: kostLng },
+                    map,
+                    draggable: false,
+                    title: 'Lokasi Kost Anda'
+                });
+
+                const polyline = new google.maps.Polyline({
+                    path: [
+                        { lat: kostLat, lng: kostLng },
+                        { lat: defaultLat, lng: defaultLng }
+                    ],
+                    geodesic: true,
+                    strokeColor: '#f97316',
+                    strokeOpacity: 0.8,
+                    strokeWeight: 3,
+                    map: map
+                });
+                polylineRef.current = polyline;
+            }
+
+            landmarkMarker.addListener('drag', () => {
+                const pos = landmarkMarker.getPosition();
+                if (pos) {
+                    setSelectedLocation({ lat: pos.lat(), lng: pos.lng() });
+                    updatePolyline(pos.lat(), pos.lng());
+                }
+            });
+
+            landmarkMarker.addListener('dragend', () => {
+                const pos = landmarkMarker.getPosition();
+                if (pos) {
+                    setSelectedLocation({ lat: pos.lat(), lng: pos.lng() });
+                    updatePolyline(pos.lat(), pos.lng());
+                }
+            });
+
+            map.addListener('click', (e: any) => {
+                const clickLat = e.latLng.lat();
+                const clickLng = e.latLng.lng();
+                landmarkMarker.setPosition({ lat: clickLat, lng: clickLng });
+                setSelectedLocation({ lat: clickLat, lng: clickLng });
+                updatePolyline(clickLat, clickLng);
+            });
+
+            mapObjRef.current = map;
+            landmarkMarkerRef.current = landmarkMarker;
+            kostMarkerRef.current = kostMarker;
+
+            // Auto-resolve geocoding gerbang jika koordinat awal kosong
+            if (!hasValidInitial && facilityName) {
+                const geocoder = new google.maps.Geocoder();
+                const cityCtx = cityName ? `, ${cityName}` : '';
+                const queryStr = `${facilityName}${cityCtx}, Indonesia`;
+                geocoder.geocode({ address: queryStr, componentRestrictions: { country: 'ID' } }, (results: any[], status: string) => {
+                    if (status === 'OK' && results && results.length > 0) {
+                        const loc = results[0].geometry.location;
+                        const plat = loc.lat(), plng = loc.lng();
+                        setSelectedLocation({ lat: plat, lng: plng });
+                        landmarkMarker.setPosition({ lat: plat, lng: plng });
+                        map.setCenter({ lat: plat, lng: plng });
+                        map.setZoom(17);
+                        updatePolyline(plat, plng);
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("FacilityMap init error:", e);
+        }
+
+        return () => {
+            if (mapObjRef.current) {
+                (window as any).google?.maps?.event?.clearInstanceListeners(mapObjRef.current);
+                mapObjRef.current = null;
+                landmarkMarkerRef.current = null;
+                kostMarkerRef.current = null;
+                polylineRef.current = null;
+            }
+        };
+    }, []);
+
+    // Pencarian gerbang / tempat di dalam modal
+    const handleModalSearch = (text: string) => {
+        setSearchQuery(text);
+        if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+        if (text.length < 3) { setSearchResults([]); return; }
+        searchDebounceRef.current = setTimeout(() => {
+            setIsSearching(true);
+            try {
+                const gw = (window as any).google;
+                if (!gw?.maps?.places?.AutocompleteService) { setIsSearching(false); return; }
+                const svc = new gw.maps.places.AutocompleteService();
+                const bounds = mapObjRef.current?.getBounds();
+                svc.getPlacePredictions(
+                    {
+                        input: text,
+                        componentRestrictions: { country: 'id' },
+                        bounds: bounds || undefined,
+                        types: ['establishment', 'geocode']
+                    },
+                    (predictions: any[], status: string) => {
+                        if (status === gw.maps.places.PlacesServiceStatus.OK && predictions) {
+                            setSearchResults(predictions);
+                        } else {
+                            setSearchResults([]);
+                        }
+                        setIsSearching(false);
+                    }
+                );
+            } catch {
+                setSearchResults([]);
+                setIsSearching(false);
+            }
+        }, 400);
+    };
+
+    const selectSearchResult = (result: any) => {
+        setSearchQuery(result.description || result.structured_formatting?.main_text || '');
+        setSearchResults([]);
+        const gw = (window as any).google;
+        if (!gw?.maps?.Geocoder) return;
+        const geocoder = new gw.maps.Geocoder();
+        geocoder.geocode({ placeId: result.place_id }, (results: any[], status: string) => {
+            if (status === 'OK' && results && results.length > 0) {
+                const loc = results[0].geometry.location;
+                const plat = loc.lat(), plng = loc.lng();
+                setSelectedLocation({ lat: plat, lng: plng });
+                if (landmarkMarkerRef.current && mapObjRef.current) {
+                    landmarkMarkerRef.current.setPosition({ lat: plat, lng: plng });
+                    mapObjRef.current.setCenter({ lat: plat, lng: plng });
+                    mapObjRef.current.setZoom(17);
+                    updatePolyline(plat, plng);
+                }
+            }
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 z-[120000] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-gray-950/80 backdrop-blur-md" onClick={onClose}></div>
+            <div className="bg-white max-w-2xl w-full rounded-3xl overflow-hidden shadow-2xl relative z-10 animate-in zoom-in-95 duration-200 flex flex-col h-[580px] max-h-[90vh]">
+                {/* Header */}
+                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                            <MapPin size={20} />
+                        </div>
+                        <div>
+                            <h3 className="font-black text-gray-900 text-sm leading-tight line-clamp-1">{facilityName || 'Tentukan Titik Gerbang Landmark'}</h3>
+                            <p className="text-[11px] text-gray-500 font-medium mt-0.5">Geser penanda merah atau cari gerbang spesifik di peta</p>
+                        </div>
+                    </div>
+                    <button type="button" onClick={onClose} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 rounded-xl text-gray-400 hover:text-red-500 transition-colors">
+                        <X size={16} />
+                    </button>
+                </div>
+
+                {/* Search in modal */}
+                <div className="p-3 bg-slate-50 border-b border-gray-100 relative z-20 shrink-0">
+                    <div className="relative">
+                        <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder={`Cari gerbang / gedung spesifik (Cth: Pintu 1 ${facilityName || ''})...`}
+                            value={searchQuery}
+                            onChange={e => handleModalSearch(e.target.value)}
+                            className="w-full h-10 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-900 pl-9 pr-4 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
+                        />
+                        {(isSearching || searchResults.length > 0) && (
+                            <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200 shadow-xl z-50 overflow-hidden max-h-48 overflow-y-auto divide-y divide-gray-50">
+                                {isSearching ? (
+                                    <p className="p-3 text-xs font-bold text-gray-400 flex items-center gap-2">
+                                        <Loader2 size={14} className="animate-spin" /> Mencari tempat di peta...
+                                    </p>
+                                ) : (
+                                    searchResults.map((r: any, i: number) => (
+                                        <button
+                                            key={r.place_id || i}
+                                            type="button"
+                                            onClick={() => selectSearchResult(r)}
+                                            className="w-full p-2.5 text-left text-xs font-medium text-gray-700 hover:bg-orange-50 transition-colors flex items-start gap-2"
+                                        >
+                                            <MapPin size={14} className="text-orange-500 mt-0.5 shrink-0" />
+                                            <span className="line-clamp-2">{r.description || r.structured_formatting?.main_text}</span>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Map View */}
+                <div className="relative flex-1 w-full bg-slate-100">
+                    <div ref={mapContainerRef} className="w-full h-full" style={{ touchAction: 'none' }} />
+
+                    {/* Live distance floating badge */}
+                    {currentDistanceKm !== null && (
+                        <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-sm px-3.5 py-2 rounded-2xl border border-orange-200/80 shadow-lg z-10 flex items-center gap-2.5">
+                            <span className="text-sm">📏</span>
+                            <div>
+                                <p className="text-[9px] uppercase font-bold text-gray-400">Jarak ke Kost Anda</p>
+                                <p className="text-xs font-black text-orange-600">± {currentDistanceKm} KM</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="p-4 bg-white border-t border-gray-100 flex justify-between items-center gap-3 shrink-0">
+                    <div className="text-[11px] font-mono font-bold text-gray-500 hidden sm:block">
+                        {selectedLocation.lat.toFixed(6)}, {selectedLocation.lng.toFixed(6)}
+                    </div>
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-xs font-bold hover:bg-gray-50 transition-colors"
+                        >
+                            Batal
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => onSave(selectedLocation.lat, selectedLocation.lng)}
+                            className="px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black shadow-lg shadow-orange-500/20 flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
+                        >
+                            <Check size={16} />
+                            Gunakan Titik Gerbang Ini
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // ── Custom Facility Input ──────────────────────────────────────────────────────
 const FacilityInput: React.FC<{
     selected: string[];
@@ -1780,38 +2110,19 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         </Field>
                     )}
 
-                    {/* MODAL: MANUAL MAP PICKER FOR FACILITIES */}
+                    {/* MODAL: DEDICATED FACILITY LOCATION PICKER */}
                     {activeMapPicker && (
-                        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-                            <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm" onClick={() => setActiveMapPicker(null)}></div>
-                            <div className="bg-white max-w-lg w-full rounded-3xl overflow-hidden shadow-2xl relative z-10 animate-in zoom-in-95 duration-300 flex flex-col">
-                                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                                    <div>
-                                        <h3 className="font-black text-gray-900 uppercase tracking-tight">Pilih Titik di Peta</h3>
-                                        <p className="text-[10px] text-gray-500 font-bold uppercase mt-1">Geser peta untuk memilih lokasi presisi</p>
-                                    </div>
-                                    <button type="button" onClick={() => setActiveMapPicker(null)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 rounded-xl text-gray-400 hover:text-red-500 transition-colors">&times;</button>
-                                </div>
-                                <div className="relative h-[400px] w-full">
-                                    <MapPicker
-                                        lat={
-                                            (form[activeMapPicker.field] || [])[activeMapPicker.index]?.lat 
-                                            || form.location?.lat 
-                                            || -6.2088
-                                        }
-                                        lng={
-                                            (form[activeMapPicker.field] || [])[activeMapPicker.index]?.lng 
-                                            || form.location?.lng 
-                                            || 106.8456
-                                        }
-                                        onLocationChange={(lat, lng) => handleMapPickerSave(lat, lng)}
-                                    />
-                                </div>
-                                <div className="p-4 bg-orange-50 border-t border-orange-100 flex justify-end">
-                                  <p className="text-[10px] text-orange-600 font-bold italic">Lokasi otomatis disimpan saat penanda digeser.</p>
-                                </div>
-                            </div>
-                        </div>
+                        <FacilityLocationModal
+                            facilityName={(form[activeMapPicker.field] || [])[activeMapPicker.index]?.name || 'Landmark'}
+                            initialLat={(form[activeMapPicker.field] || [])[activeMapPicker.index]?.lat}
+                            initialLng={(form[activeMapPicker.field] || [])[activeMapPicker.index]?.lng}
+                            kostLat={form.location?.lat}
+                            kostLng={form.location?.lng}
+                            cityName={form.city}
+                            provinceName={form.province}
+                            onSave={(lat, lng) => handleMapPickerSave(lat, lng)}
+                            onClose={() => setActiveMapPicker(null)}
+                        />
                     )}
                 </div>
             );
