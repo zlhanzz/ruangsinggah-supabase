@@ -1745,12 +1745,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 .slice(0, 1);
         });
 
-        // 6. Scan Fasilitas Harian Mikro: Tempat Ibadah Terdekat (Radius 2 KM)
-        const scanWorship = performSearch({
+        // 6. Scan Fasilitas Harian Mikro: Masjid / Musholla Terdekat (Radius 2 KM)
+        const scanMosque = performSearch({
             location: centerLatLng,
             radius: 2000,
-            type: 'place_of_worship',
-            keyword: 'masjid|musholla|gereja'
+            type: 'mosque',
+            keyword: 'masjid|musholla'
         }).then(results => {
             return results
                 .filter(p => p.name && p.geometry?.location)
@@ -1772,7 +1772,61 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 .slice(0, 1);
         });
 
-        // 7. Scan Fasilitas Medis: Rumah Sakit Terdekat (Hanya jika belum ada di curated master)
+        // 7. Scan Fasilitas Harian Mikro: Gereja Terdekat (Radius 3.5 KM)
+        const scanChurch = performSearch({
+            location: centerLatLng,
+            radius: 3500,
+            type: 'church',
+            keyword: 'gereja|church|katedral|gki|gbi|hkbp|gpdi'
+        }).then(results => {
+            return results
+                .filter(p => p.name && p.geometry?.location)
+                .map(p => {
+                    const pLat = p.geometry.location.lat();
+                    const pLng = p.geometry.location.lng();
+                    const km = getKm(pLat, pLng);
+                    return {
+                        name: p.name,
+                        lat: pLat,
+                        lng: pLng,
+                        distance: `± ${km} KM`,
+                        kmVal: km,
+                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                        isLiveGoogleApi: true
+                    };
+                })
+                .sort((a, b) => a.kmVal - b.kmVal)
+                .slice(0, 1);
+        });
+
+        // 8. Scan Fasilitas Vital: SPBU / Pom Bensin Terdekat (Radius 3.5 KM)
+        const scanGasStation = performSearch({
+            location: centerLatLng,
+            radius: 3500,
+            type: 'gas_station',
+            keyword: 'spbu|pertamina|shell|bp|pom bensin'
+        }).then(results => {
+            return results
+                .filter(p => p.name && p.geometry?.location)
+                .map(p => {
+                    const pLat = p.geometry.location.lat();
+                    const pLng = p.geometry.location.lng();
+                    const km = getKm(pLat, pLng);
+                    return {
+                        name: p.name,
+                        lat: pLat,
+                        lng: pLng,
+                        distance: `± ${km} KM`,
+                        kmVal: km,
+                        transportMode: 'motorcycle',
+                        isLiveGoogleApi: true
+                    };
+                })
+                .sort((a, b) => a.kmVal - b.kmVal)
+                .slice(0, 1);
+        });
+
+        // 9. Scan Fasilitas Medis: Rumah Sakit Terdekat (Hanya jika belum ada di curated master)
         const hasCuratedHospital = curatedOthers.some(o => o.name.toLowerCase().includes('rs') || o.name.toLowerCase().includes('rumah sakit'));
         const scanHospitalFallback = hasCuratedHospital
             ? Promise.resolve([])
@@ -1802,7 +1856,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     .slice(0, 1);
             });
 
-        // 8. Scan Mall Terdekat (Hanya jika belum ada di curated master)
+        // 10. Scan Mall Terdekat (Hanya jika belum ada di curated master)
         const hasCuratedMall = curatedOthers.some(o => o.name.toLowerCase().includes('mall') || o.name.toLowerCase().includes('park') || o.name.toLowerCase().includes('square'));
         const scanMallFallback = hasCuratedMall
             ? Promise.resolve([])
@@ -1836,10 +1890,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             scanCampusesFallback,
             scanMinimarket,
             scanLaundry,
-            scanWorship,
+            scanMosque,
+            scanChurch,
+            scanGasStation,
             scanHospitalFallback,
             scanMallFallback
-        ]).then(([fallbackCampuses, minimarketList, laundryList, worshipList, fallbackHospitals, fallbackMalls]) => {
+        ]).then(([fallbackCampuses, minimarketList, laundryList, mosqueList, churchList, gasStationList, fallbackHospitals, fallbackMalls]) => {
             if (landmarkScanAbortRef.current !== scanId) return;
             setIsScanningLandmarks(false);
 
@@ -1855,7 +1911,9 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 ...fallbackHospitals,
                 ...minimarketList,
                 ...laundryList,
-                ...worshipList
+                ...gasStationList,
+                ...mosqueList,
+                ...churchList
             ];
 
             // 3. Gabungkan seluruh list bebas duplikasi untuk form

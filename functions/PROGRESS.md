@@ -2,6 +2,24 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 236. Deteksi Mikro SPBU & Gereja Terdekat pada Sistem Landmark (`KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna ingin agar sistem pencarian mikro tidak hanya memindai minimarket (Indomaret/Alfamart), laundry, dan masjid, tetapi juga otomatis mencari **SPBU (Pom Bensin) terdekat** dan tempat ibadah lain seperti **Gereja terdekat**.
+- **Implementasi Solusi**:
+  1. **Deteksi SPBU Terdekat (`scanGasStation`)**:
+     - Memindai fasilitas SPBU Pertamina/Shell/BP (`type: 'gas_station'`, keyword `'spbu|pertamina|shell|bp|pom bensin'`) dalam radius 3.5 KM.
+  2. **Pemisahan Deteksi Tempat Ibadah (`scanMosque` & `scanChurch`)**:
+     - `scanMosque`: Memindai masjid/musholla terdekat dalam radius 2 KM.
+     - `scanChurch`: Memindai gereja/katedral terdekat (`type: 'church'`, keyword `'gereja|church|katedral|gki|gbi|hkbp|gpdi'`) dalam radius 3.5 KM.
+  3. **Integrasi Rute Nyata Google Maps**:
+     - SPBU, Gereja, dan Masjid terdekat langsung digabungkan ke daftar fasilitas publik form mitra dan dihitung estimasi waktu nyata Google Maps (🚶 Jalan Kaki, 🏍️ Motor, 🚗 Mobil).
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 34.51s, 0 error).
+
 ### 235. Audit & Sinkronisasi Menyeluruh 270 Landmark Nasional Se-Indonesia via Google Maps Places API Resmi (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta agar SELURUH daftar master data landmark di sistem (mencakup seluruh kota di Indonesia, tidak hanya Makassar) dicek dan dipastikan kebenaran koordinatnya langsung berdasarkan yang terdaftar di Google Maps.
