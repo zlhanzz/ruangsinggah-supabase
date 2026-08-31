@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 241. Pertukaran Urutan Wizard Kamar (Langkah 3) & Fasilitas (Langkah 4) dengan Fasilitas & Foto Kamar Dinamis (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Kebutuhan**:
+  - Menggeser menu **Tipe Kamar** menjadi **Langkah 3** (Wizard Flow 3) dan **Fasilitas** menjadi **Langkah 4** (Wizard Flow 4).
+  - Menghapus input fasilitas kamar dan fasilitas kamar mandi dari formulir penambahan kamar di Langkah 3.
+  - Pada Langkah 4 (Fasilitas), input fasilitas kamar & kamar mandi dibuat dinamis menyesuaikan tipe-tipe kamar yang telah ditambahkan di Langkah 3.
+  - Pada Langkah 5 (Foto), input foto dibuat dinamis berkorelasi dengan fasilitas umum yang dipilih (Area Parkir, Dapur Bersama, WC Umum, Ruang Tamu, Laundry, dll.) serta input foto dinamis untuk setiap tipe kamar dan kamar mandi dalam.
+- **Implementasi Solusi**:
+  1. **Pertukaran STEPS**:
+     - `info` (1) ➔ `location` (2) ➔ `rooms` (3) ➔ `facilities` (4) ➔ `media` (5) ➔ `rules` (6).
+  2. **Langkah 3 (Kamar)**:
+     - Murni memetakan nama tipe kamar, ukuran kamar, skema tarif per periode sewa, kapasitas penghuni, kamar tersedia, dan sisa kamar.
+     - Fasilitas kamar tidur dan kamar mandi dihilangkan dari langkah ini dan dipindahkan ke Langkah 4.
+  3. **Langkah 4 (Fasilitas Properti & Kamar Dinamis)**:
+     - Bagian 1: Fasilitas Umum / Gedung (`form.facilities`) + Pengaturan Biaya Tambahan.
+     - Bagian 2: Kartu fasilitas dinamis per tipe kamar dari `form.roomTypes` untuk mengatur Fasilitas Kamar Tidur (`ROOM_AMENITIES`) dan Fasilitas Kamar Mandi (`BATH_AMENITIES`).
+  4. **Langkah 5 (Foto Berkorelasi Dinamis)**:
+     - Bagian Umum Dinamis: Hanya memunculkan dropzone foto fasilitas bersama yang dicentang di Langkah 4 (Area Parkir, Dapur Bersama, WC Umum, Ruang Tamu, Laundry) selain 3 kategori pokok (Bangunan Depan/Cover, Koridor, Lingkungan).
+     - Bagian Kamar Dinamis: Otomatis memunculkan dropzone foto kamar per tipe (`Kamar: [Nama Tipe Kamar]`), serta dropzone foto kamar mandi dalam jika fasilitas kamar mandi dalam dipilih.
+  5. **Integrasi & Validasi**:
+     - Memperbarui redirect validasi foto kosong di `handleSubmit` ke `setStep(4)`.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 23.32s, 0 error).
+
 ### 240. Penataan Ulang Urutan Wizard Formulir Mitra: Pemindahan Menu Foto ke Langkah 5 (`KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna memutuskan untuk membatalkan peletakan fasilitas umum pada Wizard Flow 1 (mengembalikan Info Dasar bersih seperti semula).

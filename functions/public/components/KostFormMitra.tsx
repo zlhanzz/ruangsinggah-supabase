@@ -6,7 +6,7 @@ import {
     X, ChevronRight, ChevronLeft, Camera, Video, MapPin, Home, Wifi,
     Plus, Trash2, Check, AlertCircle, Loader2, Upload, Image as ImageIcon,
     Phone, BookOpen, DollarSign, Search, Navigation, ShieldCheck, User, Maximize2,
-    Crosshair, CheckCircle2, Sparkles, LocateFixed, FileText, RotateCcw, Save, Droplets
+    Crosshair, CheckCircle2, Sparkles, LocateFixed, FileText, RotateCcw, Save, Droplets, Bed
 } from 'lucide-react';
 
 interface KostFormMitraProps {
@@ -20,8 +20,8 @@ interface KostFormMitraProps {
 const STEPS = [
     { id: 'info',       label: 'Info',      icon: <Home size={16} /> },
     { id: 'location',   label: 'Lokasi',    icon: <MapPin size={16} /> },
-    { id: 'facilities', label: 'Fasilitas', icon: <Wifi size={16} /> },
     { id: 'rooms',      label: 'Kamar',     icon: <Check size={16} /> },
+    { id: 'facilities', label: 'Fasilitas', icon: <Wifi size={16} /> },
     { id: 'media',      label: 'Foto',      icon: <Camera size={16} /> },
     { id: 'rules',      label: 'Peraturan', icon: <BookOpen size={16} /> },
 ];
@@ -2157,7 +2157,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             const totalPhotos = existingImagesWithLabels.length + uploadPayload.length;
             if (totalPhotos < 1) {
                 setError('Mohon unggah minimal 1 foto kost (terutama Bangunan Depan / Fasad).');
-                setStep(2);
+                setStep(4);
                 setSubmitting(false);
                 return;
             }
@@ -2395,72 +2395,17 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 </div>
             );
 
-            // ── STEP 2: Fasilitas Gedung ───────────────────────────────────────
+            // ── STEP 2 (Langkah 3): Tipe Kamar & Harga ────────────────────────
             case 2: return (
-                <div className="space-y-6">
-                    <Field label="Fasilitas Gedung" hint="Pilih preset atau ketik fasilitas lain yang dimiliki">
-                        <FacilityInput
-                            selected={form.facilities || []}
-                            presets={BUILDING_FACILITIES}
-                            onToggle={toggleFacility}
-                            onAdd={addCustomFacility}
-                            onRemove={removeCustomFacility}
-                            placeholder="Contoh: Kolam Renang, Gym, Rooftop..."
-                        />
-                    </Field>
-
-                    <Field label="Biaya Tambahan (Opsional)" hint="Isi jika kost menetapkan tagihan wajib bulanan di luar tagihan pokok kamar.">
-                        <div className="grid grid-cols-2 gap-3 mb-3">
-                            <Input placeholder="Nama biaya (Listrik)" value={form.additionalFeeName||''} onChange={e => upd('additionalFeeName',e.target.value)} icon={<BookOpen size={16}/>} />
-                            <Input type="number" placeholder="Nominal (Rp)" value={form.additionalFeePrice||''} onChange={e => upd('additionalFeePrice',parseInt(e.target.value)||0)} icon={<span className="text-[10px] font-bold text-gray-400">Rp</span>} />
-                        </div>
-                        <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Ketentuan Penagihan</p>
-                            <div className="flex gap-2">
-                                <button 
-                                    type="button"
-                                    onClick={() => upd('additionalFeeStartsFrom', 'month_1')}
-                                    className={`flex-1 h-10 rounded-xl text-[10px] font-black uppercase transition-all ${
-                                        form.additionalFeeStartsFrom !== 'month_2' 
-                                            ? 'bg-orange-500 text-white shadow-md' 
-                                            : 'bg-white text-gray-500 border border-gray-200'
-                                    }`}
-                                >
-                                    Mulai dari Bulan Awal Sewa Pertama
-                                </button>
-                                <button 
-                                    type="button"
-                                    onClick={() => upd('additionalFeeStartsFrom', 'month_2')}
-                                    className={`flex-1 h-10 rounded-xl text-[10px] font-black uppercase transition-all ${
-                                        form.additionalFeeStartsFrom === 'month_2' 
-                                            ? 'bg-orange-500 text-white shadow-md' 
-                                            : 'bg-white text-gray-500 border border-gray-200'
-                                    }`}
-                                >
-                                    Promo Bebas Tagihan di Bulan Pertama
-                                </button>
-                            </div>
-                            <p className="text-[9px] text-gray-400 font-bold mt-3 leading-relaxed">
-                                {form.additionalFeeStartsFrom === 'month_2' 
-                                    ? 'ℹ️ Biaya tambahan akan GRATIS pada awal sewa (bulan pertama), dan baru akan ditagih mulai periode perpanjangan berikutnya.'
-                                    : 'ℹ️ Biaya tambahan akan langsung ditagih bersamaan dengan pembayaran sewa pertama kali.'}
-                            </p>
-                        </div>
-                    </Field>
-                </div>
-            );
-
-            // ── STEP 3: Tipe Kamar & Harga ─────────────────────────────────────
-            case 3: return (
                 <div className="space-y-6">
                     <div className="flex items-center justify-between mb-3">
                         <div>
-                            <h3 className="font-black text-gray-900 uppercase tracking-tight">Tipe Kamar & Harga</h3>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">Tambahkan minimal 1 tipe kamar</p>
+                            <h3 className="font-black text-gray-900 uppercase tracking-tight">Tipe Kamar &amp; Harga</h3>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">Tambahkan tipe kamar yang tersedia di properti Anda</p>
                         </div>
                         <button type="button" onClick={addRoom}
-                            className="h-9 px-4 bg-orange-500 text-white rounded-2xl text-xs font-bold flex items-center gap-1.5 shadow-sm">
-                            <Plus size={14}/> Tambah
+                            className="h-9 px-4 bg-orange-500 text-white rounded-2xl text-xs font-bold flex items-center gap-1.5 shadow-sm hover:bg-orange-600 transition-colors">
+                            <Plus size={14}/> Tambah Tipe
                         </button>
                     </div>
 
@@ -2468,11 +2413,11 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         {(form.roomTypes || []).map((room, ri) => (
                             <div key={ri} className="bg-gray-50 rounded-3xl border border-gray-100 p-4 space-y-4">
                                 <div className="flex items-center justify-between">
-                                    <Input placeholder="Nama tipe kamar (contoh: Kamar Standard)"
+                                    <Input placeholder="Nama tipe kamar (contoh: Kamar Standard, VIP)"
                                         value={room.name}
                                         onChange={e => updRoom(ri, 'name', e.target.value)}
                                         className="bg-white border-gray-200 text-sm font-black flex-1 mr-2" />
-                                    <button type="button" onClick={() => removeRoom(ri)} className="w-9 h-9 text-rose-400 bg-rose-50 rounded-xl flex items-center justify-center shrink-0">
+                                    <button type="button" onClick={() => removeRoom(ri)} className="w-9 h-9 text-rose-400 bg-rose-50 rounded-xl flex items-center justify-center shrink-0 hover:bg-rose-100 transition-colors">
                                         <Trash2 size={16}/>
                                     </button>
                                 </div>
@@ -2480,7 +2425,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                 <div className="grid grid-cols-1 gap-2">
                                     <div>
                                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Ukuran Kamar</p>
-                                        <Input placeholder="Contoh: 3x4m" value={room.size || ''} onChange={e => updRoom(ri,'size',e.target.value)} className="bg-white" />
+                                        <Input placeholder="Contoh: 3x4m, 4x5m" value={room.size || ''} onChange={e => updRoom(ri,'size',e.target.value)} className="bg-white" />
                                     </div>
                                 </div>
 
@@ -2532,30 +2477,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                     );
                                 })()}
 
-                                <div>
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Fasilitas Kamar</p>
-                                    <FacilityInput
-                                        selected={room.roomFacilities || []}
-                                        presets={ROOM_AMENITIES}
-                                        onToggle={f => toggleRoomFeature(ri,'roomFacilities',f)}
-                                        onAdd={f => addCustomRoomFeature(ri,'roomFacilities',f)}
-                                        onRemove={f => toggleRoomFeature(ri,'roomFacilities',f)}
-                                        placeholder="Contoh: Sofa, Balkon..."
-                                    />
-                                </div>
-
-                                <div>
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Fasilitas Kamar Mandi</p>
-                                    <FacilityInput
-                                        selected={room.bathroomFacilities || []}
-                                        presets={BATH_AMENITIES}
-                                        onToggle={f => toggleRoomFeature(ri,'bathroomFacilities',f)}
-                                        onAdd={f => addCustomRoomFeature(ri,'bathroomFacilities',f)}
-                                        onRemove={f => toggleRoomFeature(ri,'bathroomFacilities',f)}
-                                    />
-                                </div>
-
-                                <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+                                <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
                                     <label className="flex items-center gap-2 cursor-pointer">
                                         <input 
                                             type="checkbox" 
@@ -2577,12 +2499,17 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         />
                                     </div>
                                 </div>
+
+                                <div className="p-2.5 bg-orange-50/50 rounded-xl border border-orange-100 text-[11px] text-orange-800 flex items-center gap-2 font-medium">
+                                    <Sparkles size={14} className="text-orange-500 shrink-0" />
+                                    <span>Fasilitas kamar tidur &amp; kamar mandi untuk tipe ini akan diatur di <strong>Langkah 4 (Fasilitas)</strong>.</span>
+                                </div>
                             </div>
                         ))}
 
-                        {(form.roomTypes||[]).length === 0 && (
+                        {(form.roomTypes || []).length === 0 && (
                             <button type="button" onClick={addRoom}
-                                className="w-full h-24 border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center gap-1 hover:border-orange-300 transition-colors text-gray-300">
+                                className="w-full h-24 border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center gap-1 hover:border-orange-300 transition-colors text-gray-400 hover:text-orange-500">
                                 <Plus size={24}/>
                                 <span className="text-xs font-bold">Tambah tipe kamar pertama</span>
                             </button>
@@ -2591,12 +2518,197 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 </div>
             );
 
-            // ── STEP 4: Foto Berkategori Terstruktur ─────────────────────────
+            // ── STEP 3 (Langkah 4): Fasilitas Properti & Kamar Dinamis ───────────
+            case 3: return (
+                <div className="space-y-6">
+                    {/* Bagian 1: Fasilitas Umum / Gedung */}
+                    <div className="space-y-4">
+                        <Field label="Fasilitas Gedung / Umum" hint="Pilih preset fasilitas bersama atau tambahkan fasilitas kustom">
+                            <FacilityInput
+                                selected={form.facilities || []}
+                                presets={BUILDING_FACILITIES}
+                                onToggle={toggleFacility}
+                                onAdd={addCustomFacility}
+                                onRemove={removeCustomFacility}
+                                placeholder="Contoh: Kolam Renang, Gym, Rooftop..."
+                            />
+                        </Field>
+
+                        <Field label="Biaya Tambahan (Opsional)" hint="Isi jika kost menetapkan tagihan wajib bulanan di luar tagihan pokok kamar.">
+                            <div className="grid grid-cols-2 gap-3 mb-3">
+                                <Input placeholder="Nama biaya (Listrik)" value={form.additionalFeeName||''} onChange={e => upd('additionalFeeName',e.target.value)} icon={<BookOpen size={16}/>} />
+                                <Input type="number" placeholder="Nominal (Rp)" value={form.additionalFeePrice||''} onChange={e => upd('additionalFeePrice',parseInt(e.target.value)||0)} icon={<span className="text-[10px] font-bold text-gray-400">Rp</span>} />
+                            </div>
+                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Ketentuan Penagihan</p>
+                                <div className="flex gap-2">
+                                    <button 
+                                        type="button"
+                                        onClick={() => upd('additionalFeeStartsFrom', 'month_1')}
+                                        className={`flex-1 h-10 rounded-xl text-[10px] font-black uppercase transition-all ${
+                                            form.additionalFeeStartsFrom !== 'month_2' 
+                                                ? 'bg-orange-500 text-white shadow-md' 
+                                                : 'bg-white text-gray-500 border border-gray-200'
+                                        }`}
+                                    >
+                                        Mulai dari Bulan Awal Sewa Pertama
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => upd('additionalFeeStartsFrom', 'month_2')}
+                                        className={`flex-1 h-10 rounded-xl text-[10px] font-black uppercase transition-all ${
+                                            form.additionalFeeStartsFrom === 'month_2' 
+                                                ? 'bg-orange-500 text-white shadow-md' 
+                                                : 'bg-white text-gray-500 border border-gray-200'
+                                        }`}
+                                    >
+                                        Promo Bebas Tagihan di Bulan Pertama
+                                    </button>
+                                </div>
+                                <p className="text-[9px] text-gray-400 font-bold mt-3 leading-relaxed">
+                                    {form.additionalFeeStartsFrom === 'month_2' 
+                                        ? 'ℹ️ Biaya tambahan akan GRATIS pada awal sewa (bulan pertama), dan baru akan ditagih mulai periode perpanjangan berikutnya.'
+                                        : 'ℹ️ Biaya tambahan akan langsung ditagih bersamaan dengan pembayaran sewa pertama kali.'}
+                                </p>
+                            </div>
+                        </Field>
+                    </div>
+
+                    {/* Bagian 2: Fasilitas Kamar per Tipe Kamar (Dinamis) */}
+                    <div className="pt-5 border-t border-gray-200 space-y-4">
+                        <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
+                                <Bed size={18} />
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">Fasilitas per Tipe Kamar</h4>
+                                <p className="text-xs text-gray-500">Tentukan fasilitas kamar tidur &amp; kamar mandi untuk masing-masing tipe kamar yang telah dibuat.</p>
+                            </div>
+                        </div>
+
+                        {(form.roomTypes || []).length === 0 ? (
+                            <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-800 flex items-center gap-3">
+                                <AlertCircle size={18} className="shrink-0 text-amber-600" />
+                                <span>Belum ada tipe kamar yang terdata. Silakan klik tombol <strong>Kembali</strong> ke Langkah 3 untuk menambahkan tipe kamar terlebih dahulu.</span>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {(form.roomTypes || []).map((room, ri) => (
+                                    <div key={ri} className="bg-white rounded-3xl border border-orange-200/90 p-4 sm:p-5 space-y-4 shadow-xs">
+                                        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="px-3 py-1 bg-orange-500 text-white rounded-xl text-xs font-black uppercase tracking-wider">
+                                                    {room.name || `Tipe Kamar ${ri + 1}`}
+                                                </span>
+                                                {room.size && (
+                                                    <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-lg">
+                                                        Ukuran: {room.size}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                                                Tipe #{ri + 1}
+                                            </span>
+                                        </div>
+
+                                        <div>
+                                            <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                                <span>🛏️</span> Fasilitas Kamar Tidur ({room.name || `Tipe ${ri+1}`})
+                                            </p>
+                                            <FacilityInput
+                                                selected={room.roomFacilities || []}
+                                                presets={ROOM_AMENITIES}
+                                                onToggle={f => toggleRoomFeature(ri, 'roomFacilities', f)}
+                                                onAdd={f => addCustomRoomFeature(ri, 'roomFacilities', f)}
+                                                onRemove={f => toggleRoomFeature(ri, 'roomFacilities', f)}
+                                                placeholder="Contoh: Sofa, Balkon, Kulkas Mini..."
+                                            />
+                                        </div>
+
+                                        <div className="pt-3 border-t border-gray-100">
+                                            <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                                <span>🚿</span> Fasilitas Kamar Mandi ({room.name || `Tipe ${ri+1}`})
+                                            </p>
+                                            <FacilityInput
+                                                selected={room.bathroomFacilities || []}
+                                                presets={BATH_AMENITIES}
+                                                onToggle={f => toggleRoomFeature(ri, 'bathroomFacilities', f)}
+                                                onAdd={f => addCustomRoomFeature(ri, 'bathroomFacilities', f)}
+                                                onRemove={f => toggleRoomFeature(ri, 'bathroomFacilities', f)}
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+
+            // ── STEP 4 (Langkah 5): Foto Properti & Kamar Dinamis ────────────────
             case 4: {
-                const combinedCategories = [
-                    ...PUBLIC_PHOTO_CATEGORIES,
-                    ...customCategories.map(c => ({ id: c, label: c, desc: `Foto area ${c} properti` }))
+                // 1. Kategori Area Umum Pokok
+                const dynamicGeneralCategories: PublicPhotoCategoryDef[] = [
+                    { id: 'Bangunan Depan', label: 'Bangunan Depan (Fasad)', desc: 'Tampak depan gedung & jalan akses (Cover Utama)', required: true },
+                    { id: 'Koridor', label: 'Koridor & Akses Masuk', desc: 'Lorong antar kamar, tangga, atau pintu masuk utama' },
+                    { id: 'Lingkungan', label: 'Lingkungan Sekitar', desc: 'Suasana jalan dan lingkungan di sekitar kost' },
                 ];
+
+                // 2. Kategori Area Umum Dinamis (Berdasarkan Fasilitas Gedung yang Dipilih)
+                const currentFacilities = form.facilities || [];
+                if (currentFacilities.some(f => /parkir/i.test(f))) {
+                    dynamicGeneralCategories.push({ id: 'Area Parkir', label: 'Area Parkir', desc: 'Tempat parkir motor atau mobil penghuni' });
+                }
+                if (currentFacilities.some(f => /dapur/i.test(f))) {
+                    dynamicGeneralCategories.push({ id: 'Dapur Bersama', label: 'Dapur Bersama', desc: 'Area memasak bersama, wastafel, & kompor' });
+                }
+                if (currentFacilities.some(f => /(wc|toilet|kamar mandi)/i.test(f))) {
+                    dynamicGeneralCategories.push({ id: 'WC Umum', label: 'WC Umum / Luar', desc: 'Kamar mandi luar untuk fasilitas bersama' });
+                }
+                if (currentFacilities.some(f => /(tamu|santai|bersama)/i.test(f))) {
+                    dynamicGeneralCategories.push({ id: 'Ruang Tamu', label: 'Ruang Tamu & Bersama', desc: 'Ruang santai atau ruang tamu penerima kunjungan' });
+                }
+                if (currentFacilities.some(f => /(laundry|cuci|jemur)/i.test(f))) {
+                    dynamicGeneralCategories.push({ id: 'Area Laundry', label: 'Area Laundry & Jemuran', desc: 'Tempat mencuci dan menjemur pakaian' });
+                }
+
+                // Fasilitas umum kustom yang diinput mitra otomatis jadi kategori foto
+                const customGeneralFacilities = currentFacilities.filter(f => !BUILDING_FACILITIES.includes(f));
+                customGeneralFacilities.forEach(cg => {
+                    if (!dynamicGeneralCategories.some(c => c.id.toLowerCase() === cg.toLowerCase())) {
+                        dynamicGeneralCategories.push({ id: cg, label: cg, desc: `Dokumentasi fasilitas ${cg}` });
+                    }
+                });
+
+                // Tambahkan kategori kustom tambahan dari user
+                customCategories.forEach(cc => {
+                    if (!dynamicGeneralCategories.some(c => c.id.toLowerCase() === cc.toLowerCase())) {
+                        dynamicGeneralCategories.push({ id: cc, label: cc, desc: `Foto area ${cc} properti` });
+                    }
+                });
+
+                // 3. Kategori Kamar Dinamis (Berdasarkan Tipe Kamar & Fasilitasnya)
+                const dynamicRoomCategories: PublicPhotoCategoryDef[] = [];
+                (form.roomTypes || []).forEach((room, ri) => {
+                    const roomName = room.name || `Tipe Kamar ${ri + 1}`;
+                    dynamicRoomCategories.push({
+                        id: `Kamar: ${roomName}`,
+                        label: `Kamar: ${roomName}`,
+                        desc: `Foto interior tempat tidur & suasana ${roomName}`
+                    });
+
+                    // Cek jika tipe kamar ini punya kamar mandi dalam
+                    const hasInsideBath = (room.bathroomFacilities || []).some((f: string) => /dalam/i.test(f));
+                    if (hasInsideBath) {
+                        dynamicRoomCategories.push({
+                            id: `Kamar Mandi: ${roomName}`,
+                            label: `KM Dalam: ${roomName}`,
+                            desc: `Foto kamar mandi dalam untuk ${roomName}`
+                        });
+                    }
+                });
+
+                const allActiveCategories = [...dynamicGeneralCategories, ...dynamicRoomCategories];
 
                 const existingWithCats = (form.imageUrls || []).map((img: any, idx: number) => {
                     const src = typeof img === 'string' ? img : (img?.original || img?.url || '');
@@ -2623,11 +2735,11 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                     <div className="flex items-center gap-2">
                                         <Camera className="w-5 h-5 text-orange-600" />
                                         <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">
-                                            Dokumentasi Foto Properti
+                                            Dokumentasi Foto Properti &amp; Kamar
                                         </h3>
                                     </div>
                                     <p className="text-xs text-gray-600 mt-1">
-                                        Unggah foto sesuai kategorinya agar calon penyewa mendapatkan visualisasi akurat &amp; terpercaya.
+                                        Daftar foto otomatis menyesuaikan dengan fasilitas umum dan tipe kamar yang Anda pilih.
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -2646,9 +2758,14 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             )}
                         </div>
 
-                        {/* Daftar Kategori Foto Terstruktur */}
+                        {/* SECTION A: Foto Area & Fasilitas Umum */}
                         <div className="space-y-4">
-                            {combinedCategories.map(cat => {
+                            <div className="flex items-center gap-2">
+                                <Home className="w-4 h-4 text-orange-600" />
+                                <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider">Area Gedung &amp; Fasilitas Umum</h4>
+                            </div>
+
+                            {dynamicGeneralCategories.map(cat => {
                                 const currentCatExisting = existingWithCats.filter(p => p.cat === cat.id);
                                 const currentCatNew = newPhotoItems.filter(p => p.category === cat.id);
                                 const catPhotosCount = currentCatExisting.length + currentCatNew.length;
@@ -2707,7 +2824,6 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
                                         {/* Grid Foto Kategori Ini */}
                                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                                            {/* Existing Photos */}
                                             {currentCatExisting.map((p, idx) => (
                                                 <div key={`existing-${idx}`} className="aspect-square rounded-2xl overflow-hidden border border-gray-200 relative group bg-gray-50">
                                                     <img src={p.src} alt={cat.label} className="w-full h-full object-cover" />
@@ -2725,12 +2841,11 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         &times;
                                                     </button>
                                                     <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white font-bold text-center truncate">
-                                                        {cat.id}
+                                                        {cat.label}
                                                     </div>
                                                 </div>
                                             ))}
 
-                                            {/* New Uploaded Photos */}
                                             {currentCatNew.map((item) => (
                                                 <div key={item.id} className="aspect-square rounded-2xl overflow-hidden border-2 border-orange-400 relative group bg-gray-50 shadow-xs animate-in zoom-in-95 duration-200">
                                                     <img src={item.preview} alt={cat.label} className="w-full h-full object-cover" />
@@ -2746,12 +2861,11 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         &times;
                                                     </button>
                                                     <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white font-bold text-center truncate">
-                                                        {cat.id}
+                                                        {cat.label}
                                                     </div>
                                                 </div>
                                             ))}
 
-                                            {/* Dropzone Upload Button for this Category */}
                                             <label className="aspect-square border-2 border-dashed border-orange-200 hover:border-orange-500 bg-orange-50/40 hover:bg-orange-50/80 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all gap-1.5 p-3 text-center group">
                                                 <input 
                                                     type="file" 
@@ -2779,6 +2893,122 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             })}
                         </div>
 
+                        {/* SECTION B: Foto per Tipe Kamar Dinamis */}
+                        {dynamicRoomCategories.length > 0 && (
+                            <div className="pt-4 border-t border-gray-200 space-y-4">
+                                <div className="flex items-center gap-2">
+                                    <Bed className="w-4 h-4 text-orange-600" />
+                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider">Foto Tipe Kamar Tidur &amp; Kamar Mandi Dalam</h4>
+                                </div>
+
+                                {dynamicRoomCategories.map(cat => {
+                                    const currentCatExisting = existingWithCats.filter(p => p.cat === cat.id);
+                                    const currentCatNew = newPhotoItems.filter(p => p.category === cat.id);
+                                    const catPhotosCount = currentCatExisting.length + currentCatNew.length;
+                                    const isBathroom = cat.id.startsWith('Kamar Mandi:');
+
+                                    return (
+                                        <div 
+                                            key={cat.id} 
+                                            className={`p-4 sm:p-5 rounded-3xl border transition-all ${
+                                                catPhotosCount > 0 
+                                                    ? 'bg-white border-orange-200 shadow-xs' 
+                                                    : 'bg-white border-gray-200/80'
+                                            }`}
+                                        >
+                                            <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                                                <div className="flex items-start gap-2.5">
+                                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                                                        isBathroom ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
+                                                    }`}>
+                                                        {isBathroom ? <Droplets size={16} /> : <Bed size={16} />}
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-xs sm:text-sm font-black text-gray-900">
+                                                            {cat.label}
+                                                        </span>
+                                                        <p className="text-[11px] text-gray-500 mt-0.5">
+                                                            {cat.desc}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                                                    catPhotosCount > 0 
+                                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                                        : 'bg-gray-100 text-gray-400'
+                                                }`}>
+                                                    {catPhotosCount} Foto
+                                                </span>
+                                            </div>
+
+                                            {/* Grid Foto Kategori Kamar Ini */}
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                                {currentCatExisting.map((p, idx) => (
+                                                    <div key={`existing-${idx}`} className="aspect-square rounded-2xl overflow-hidden border border-gray-200 relative group bg-gray-50">
+                                                        <img src={p.src} alt={cat.label} className="w-full h-full object-cover" />
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => removeExistingImage(p.raw)}
+                                                            className="absolute top-1.5 right-1.5 bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
+                                                            title="Hapus foto ini"
+                                                        >
+                                                            &times;
+                                                        </button>
+                                                        <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white font-bold text-center truncate">
+                                                            {cat.label}
+                                                        </div>
+                                                    </div>
+                                                ))}
+
+                                                {currentCatNew.map((item) => (
+                                                    <div key={item.id} className="aspect-square rounded-2xl overflow-hidden border-2 border-orange-400 relative group bg-gray-50 shadow-xs animate-in zoom-in-95 duration-200">
+                                                        <img src={item.preview} alt={cat.label} className="w-full h-full object-cover" />
+                                                        <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
+                                                            Baru
+                                                        </span>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => removeNewPhotoItem(item.id)}
+                                                            className="absolute top-1.5 right-1.5 bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
+                                                            title="Hapus foto ini"
+                                                        >
+                                                            &times;
+                                                        </button>
+                                                        <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white font-bold text-center truncate">
+                                                            {cat.label}
+                                                        </div>
+                                                    </div>
+                                                ))}
+
+                                                <label className="aspect-square border-2 border-dashed border-orange-200 hover:border-orange-500 bg-orange-50/40 hover:bg-orange-50/80 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all gap-1.5 p-3 text-center group">
+                                                    <input 
+                                                        type="file" 
+                                                        multiple 
+                                                        accept="image/*" 
+                                                        className="hidden" 
+                                                        onChange={e => {
+                                                            handleCategoryFilesUpload(cat.id, e.target.files);
+                                                            e.target.value = '';
+                                                        }} 
+                                                    />
+                                                    <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                        <Plus size={18} />
+                                                    </div>
+                                                    <span className="text-[11px] font-black text-orange-600 group-hover:underline">
+                                                        + Tambah Foto
+                                                    </span>
+                                                    <span className="text-[9px] text-gray-400 font-medium">
+                                                        Pilih dari Galeri
+                                                    </span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
                         {/* Tambah Kategori Kustom Tambahan */}
                         <div className="bg-gray-50/80 p-4 rounded-2xl border border-gray-200 flex flex-col sm:flex-row gap-2.5 items-center">
                             <input 
@@ -2793,7 +3023,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                 onClick={() => {
                                     const trimmed = newCategoryInput.trim();
                                     if (!trimmed) return;
-                                    if (!customCategories.includes(trimmed) && !PUBLIC_PHOTO_CATEGORIES.some(c => c.id.toLowerCase() === trimmed.toLowerCase())) {
+                                    if (!customCategories.includes(trimmed) && !allActiveCategories.some(c => c.id.toLowerCase() === trimmed.toLowerCase())) {
                                         setCustomCategories(prev => [...prev, trimmed]);
                                     }
                                     setNewCategoryInput('');
