@@ -13,7 +13,7 @@
   2. **Penerapan pada Input Harga Pokok & Biaya Tambahan**:
      - Mengubah `type="number"` menjadi `type="text"` dengan `inputMode="numeric"` agar keyboard pada smartphone tetap memunculkan pad angka/numpad.
      - Diterapkan pada seluruh input tarif sewa pokok (Bulanan, Harian, Mingguan, 3 Bulan, 6 Bulan, Tahunan) dan input nominal Biaya Tambahan Penghuni Ekstra.
-     - Placeholder disesuaikan menjadi format titik yang serasi (`Contoh: 200.000`).
+     - Placeholder disesuaikan menjadi format titik yang realistis (`Contoh: 50.000`).
 - **File Tersentuh**:
   - `functions/public/components/KostFormMitra.tsx`
   - `functions/PROGRESS.md`

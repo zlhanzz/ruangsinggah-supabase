@@ -2948,7 +2948,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 <input 
                                                     type="text" 
                                                     inputMode="numeric"
-                                                    placeholder="Contoh: 200.000" 
+                                                    placeholder="Contoh: 50.000" 
                                                     value={draftRoom.additionalCostPerPerson ? formatCurrencyInput(draftRoom.additionalCostPerPerson) : ''} 
                                                     onChange={e => updDraftRoom('additionalCostPerPerson', parseCurrencyInput(e.target.value))} 
                                                     className="w-full h-10 bg-white border border-gray-300 rounded-xl pl-9 pr-3 text-sm font-black text-gray-900 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500" 
