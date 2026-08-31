@@ -2,31 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 234. Master Dataset Anchor & Landmark Nasional Terkurasi Lengkap 350+ Titik Strategis di Seluruh Indonesia (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
+### 234. Master Dataset Anchor & Landmark Nasional Terkurasi Lengkap 350+ Titik Strategis & Engine Sinkron 0ms (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
-  - Pengguna mengevaluasi bahwa deteksi landmark open-world Google Maps mentah masih memunculkan tempat kursus/les bahasa (seperti *Full Bright Institute*), kampus besar yang terduplikasi karena marker gedung terpisah (seperti *Universitas Hasanuddin* dan *Rektorat UNHAS*), serta nama dalam bahasa Inggris.
-  - Pengguna meminta master data disusun secara komprehensif, presisi, dan optimal untuk seluruh magnet aktivitas dan hunian di Indonesia: kampus, mall, industri, perkantoran, rumah sakit rujukan, dan hub transportasi.
+  - Pengguna mengevaluasi bahwa deteksi landmark open-world Google Maps mentah memunculkan tempat kursus/les bahasa (seperti *Full Bright Institute*), kampus besar yang terduplikasi karena marker gedung terpisah (seperti *Universitas Hasanuddin* dan *Rektorat UNHAS*), serta nama dalam bahasa Inggris.
+  - Pada pengujian awal, formulir masih memuat data lama akibat blokade dependency Google Places API dan cache draft di localStorage.
 - **Implementasi Solusi**:
   1. **Penyusunan Master Dataset Anchor Nasional Terlengkap ([`curatedLandmarks.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants/curatedLandmarks.ts))**:
-     - Menyusun dataset master **350+ anchor strategis** dengan titik koordinat latitude & longitude presisi mencakup seluruh pulau di Indonesia (Makassar/Gowa/Maros/Parepare, Jabodetabek & Banten, Cikarang/Karawang, Bandung Raya/Jatinangor, Yogyakarta, Surabaya/Sidoarjo/Gresik/Malang/Jember, Semarang/Solo/Purwokerto/Salatiga, Aceh, Medan, Palembang, Padang, Pekanbaru, Lampung, Batam, Jambi, Bengkulu, Bali/Lombok/Kupang, Palu, Kendari, Gorontalo, Manado, Balikpapan/IKN, Samarinda, Banjarmasin, Pontianak, Tarakan, Ambon, Jayapura).
-     - Menyertakan episentrum kost legendaris nasional:
-       - 🎓 **Kampus Kedinasan & Perguruan Tinggi Terkemuka**: PKN STAN Bintaro, IPDN Jatinangor, STIE YKPN Seturan Jogja, Enhaii Poltekpar NHI Bandung, PENS & PPNS Sukolilo Surabaya, UNEJ Jember, UNPAM (kampus mahasiswa terbesar), UNHAS, UI, ITB, UGM, UNAIR, ITS, UB, UNDIP, USU, UNPAD, UIN, UMI, UNM, USK Aceh, UNTAD Palu, UHO Kendari, UNG Gorontalo, UNDANA Kupang, UBT Tarakan, UNCEN Jayapura, dll.
-       - 🛍️ **Mall & Ritel Modern**: Mall Panakkukang, Nipah, TSM, Grand Indonesia, Central Park, Gandaria City, AEON BSD, AEON Tanjung Barat, Bintaro Xchange, PVJ, Ciwalk, Pakuwon Jogja/Surabaya, Sun Plaza, Living World Denpasar, Duta Mall Banjarmasin, Big Mall Samarinda, MANTOS Manado, The Park Kendari, Palu Grand Mall, Lippo Kupang, dll.
-       - 🏢 **Kawasan Perkantoran & Bisnis (CBD)**: Boulevard Panakkukang, CPI, SCBD Sudirman, Kuningan, TB Simatupang, BSD Green Office, KIPP Ibu Kota Nusantara (IKN), dll.
-       - 🏭 **Kawasan Industri Raksasa**: KIMA Makassar, Jababeka Cikarang, MM2100, KIIC Karawang, Surya Cipta, GIIC Deltamas (Pusat Kendaraan Listrik EV), SIER Rungkut, JIIPE Manyar Gresik, Kendal (KIK), Batamindo Mukakuning, dll.
-       - 🏥 **Rumah Sakit Besar & Rujukan Nasional**: RSUP Dr. Wahidin, RS UNHAS, RS Siloam, RSCM, RS Fatmawati, RS Harapan Kita, RSPAD Gatot Soebroto, RS PON Cawang, RS Persahabatan, RS Hasan Sadikin, RS Borromeus, RS Sardjito, RS Bethesda, RS Panti Rapih, RS Dr. Soetomo, RS National Hospital, RS Saiful Anwar Malang, RS Kariadi, RS Margono, RS Adam Malik, RS M. Djamil, RSUP Prof. Kandou, RSUD Undata Palu, RSUD Bahteramas Kendari, dll.
-       - 🏖️ **Destinasi Wisata & Ikon Kota**: Pantai Losari, CPI, Fort Rotterdam, Malioboro, Monas, Beachwalk Kuta, dll.
-       - 🚆✈️ **Hub Transportasi & Kereta Cepat**: Stasiun Whoosh Kereta Cepat (Halim, Padalarang, Tegalluar), Bandara Sultan Hasanuddin, Bandara Soetta, Juanda, Ngurah Rai, Stasiun Gambir/Senen/Tugu/Gubeng, Pelabuhan Soetta Makassar.
-  2. **Engine Deteksi Cerdas di Formulir Listing Mandiri ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
-     - Fungsi `findNearbyCuratedLandmarks(centerLat, centerLng, 7)` secara instan memindai anchor master terdekat (0ms delay, 0 biaya API Google, 100% bebas dari kursus abal-abal, 0% duplikasi gedung).
+     - Menyusun dataset master **350+ anchor strategis** dengan titik koordinat latitude & longitude presisi mencakup seluruh pulau di Indonesia.
+     - Menyertakan kampus kedinasan (PKN STAN, IPDN), perguruan tinggi resmi (UI, ITB, UGM, UNHAS, dll.), mall, kawasan industri raksasa, rumah sakit rujukan nasional, dan hub transportasi (Whoosh).
+  2. **Engine Deteksi Sinkron Instan (0ms) & Auto-Sanitasi Draft ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - Memisahkan eksekusi master dataset dari status Google Places API sehingga master anchor langsung diterapkan secara sinkron (0ms) seketika lokasi dipilih.
+     - Menambahkan sanitasi pembersihan otomatis saat draft lama dimuat dari `localStorage`, membuang seluruh entri yang memuat kata kunci tempat kursus/bimbel.
+     - Menambahkan hook sinkronisasi otomatis saat Step 1 (Lokasi) aktif jika daftar landmark masih kosong atau memuat sisa draft lama.
      - Google Places API difokuskan khusus memindai fasilitas harian mikro (Minimarket Indomaret/Alfamart terdekat, Laundry kiloan terdekat, dan Tempat Ibadah terdekat dalam radius 2 KM).
 - **File Tersentuh**:
-  - `functions/public/constants/curatedLandmarks.ts` (File Baru: 350+ Anchor se-Indonesia)
+  - `functions/public/constants/curatedLandmarks.ts` (350+ Anchor se-Indonesia)
   - `functions/public/components/KostFormMitra.tsx`
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 20.81s, 0 error).
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 20.48s, 0 error).
 
 ### 233. Sistem Penyimpanan & Pemulihan Draft Otomatis Formulir Listing Mandiri (`KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:

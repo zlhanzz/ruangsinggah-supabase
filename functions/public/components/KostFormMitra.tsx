@@ -905,7 +905,24 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             if (savedDraft) {
                 const parsed = JSON.parse(savedDraft);
                 if (parsed.form && typeof parsed.form === 'object') {
-                    return { ...initialForm, ...parsed.form };
+                    const loadedForm = { ...initialForm, ...parsed.form };
+                    // Bersihkan kampus/landmark sampah yang sempat tersimpan dari draft lama
+                    if (Array.isArray(loadedForm.campuses)) {
+                        const garbagePatterns = [
+                            'bimbel', 'bimbingan belajar', 'les ', 'kursus', 'training', 'kumon', 'gandhi',
+                            'study club', 'daycare', 'kindergarten', 'paud', 'tk ', 'taman kanak',
+                            'sd ', 'smp ', 'sma ', 'smk ', 'madrasah', 'driving school', 'kursus mengemudi',
+                            'english course', 'lpk ', 'balai latihan', 'rektorat', 'fakultas', 'dekanat',
+                            'prodi', 'jurusan', 'pintu ', 'gate ', 'danau ', 'gedung ', 'hall ', 'auditorium',
+                            'asrama', 'rusunawa', 'kantin', 'parkiran', 'full bright'
+                        ];
+                        loadedForm.campuses = loadedForm.campuses.filter((c: any) => {
+                            if (!c || !c.name) return false;
+                            const lower = c.name.toLowerCase();
+                            return !garbagePatterns.some(p => lower.includes(p));
+                        });
+                    }
+                    return loadedForm;
                 }
             }
         } catch {}
@@ -1073,36 +1090,31 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     const [isScanningLandmarks, setIsScanningLandmarks] = useState(false);
     const landmarkScanAbortRef = useRef<number>(0);
 
+    const isInvalidCampus = useCallback((name: string) => {
+        if (!name) return false;
+        const lower = name.toLowerCase();
+        const blacklist = [
+            'bimbel', 'bimbingan belajar', 'les ', 'kursus', 'training', 'kumon', 'gandhi',
+            'study club', 'daycare', 'kindergarten', 'paud', 'tk ', 'taman kanak',
+            'sd ', 'smp ', 'sma ', 'smk ', 'madrasah', 'driving school', 'kursus mengemudi',
+            'english course', 'lpk ', 'balai latihan', 'rektorat', 'fakultas', 'dekanat',
+            'prodi', 'jurusan', 'pintu ', 'gate ', 'danau ', 'gedung ', 'hall ', 'auditorium',
+            'asrama', 'rusunawa', 'kantin', 'parkiran', 'full bright'
+        ];
+        return blacklist.some(b => lower.includes(b));
+    }, []);
+
     const detectNearbyLandmarks = useCallback((centerLat: number, centerLng: number) => {
-        const google = (window as any).google;
-        if (!google?.maps?.places?.PlacesService) return;
+        if (!centerLat || !centerLng) return;
 
         const scanId = Date.now();
         landmarkScanAbortRef.current = scanId;
-        setIsScanningLandmarks(true);
-
-        const tempDiv = document.createElement('div');
-        const service = new google.maps.places.PlacesService(tempDiv);
-        const centerLatLng = new google.maps.LatLng(centerLat, centerLng);
 
         const getKm = (pLat: number, pLng: number) => {
             return calculateDistance(centerLat, centerLng, pLat, pLng);
         };
 
-        const isInvalidCampus = (name: string) => {
-            const lower = name.toLowerCase();
-            const blacklist = [
-                'bimbel', 'bimbingan belajar', 'les ', 'kursus', 'training', 'kumon', 'gandhi',
-                'study club', 'daycare', 'kindergarten', 'paud', 'tk ', 'taman kanak',
-                'sd ', 'smp ', 'sma ', 'smk ', 'madrasah', 'driving school', 'kursus mengemudi',
-                'english course', 'lpk ', 'balai latihan', 'rektorat', 'fakultas', 'dekanat',
-                'prodi', 'jurusan', 'pintu ', 'gate ', 'danau ', 'gedung ', 'hall ', 'auditorium',
-                'asrama', 'rusunawa', 'kantin', 'parkiran', 'full bright'
-            ];
-            return blacklist.some(b => lower.includes(b));
-        };
-
-        // 1. Dapatkan Landmark & Anchor Master Terkurasi (25 Kota Indonesia)
+        // 1. DAPATKAN MASTER DATA TERKURASI SECARA INSTAN (0ms, Bebas Kuota, 100% Presisi)
         const curatedAnchors = findNearbyCuratedLandmarks(centerLat, centerLng, 7.0);
         const curatedCampuses = curatedAnchors
             .filter(a => a.category === 'campus')
@@ -1128,6 +1140,29 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 isLiveGoogleApi: true
             }));
 
+        // LANGSUNG PERBARUI STATE FORM SECARA SINKRON (0ms)
+        const initialCombined = [...curatedCampuses, ...curatedOthers];
+        if (initialCombined.length > 0) {
+            setForm(prev => ({
+                ...prev,
+                campuses: initialCombined.map(({ kmVal, ...item }: any) => item),
+                publicFacilities: curatedOthers.map(({ kmVal, ...item }: any) => item)
+            }));
+        }
+
+        // 2. CEK KETERSEDIAAN GOOGLE PLACES API UNTUK SCAN FASILITAS MIKRO (Minimarket, Laundry, Tempat Ibadah)
+        const google = (window as any).google;
+        if (!google?.maps?.places?.PlacesService) {
+            setIsScanningLandmarks(false);
+            return;
+        }
+
+        setIsScanningLandmarks(true);
+
+        const tempDiv = document.createElement('div');
+        const service = new google.maps.places.PlacesService(tempDiv);
+        const centerLatLng = new google.maps.LatLng(centerLat, centerLng);
+
         // Helper generic search promise
         const performSearch = (request: any): Promise<any[]> => {
             return new Promise((resolve) => {
@@ -1145,7 +1180,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             });
         };
 
-        // 2. Scan Kampus Fallback (Hanya jika belum ada kampus di curated master data)
+        // 3. Scan Kampus Fallback (Hanya jika belum ada kampus di curated master data)
         const scanCampusesFallback = curatedCampuses.length >= 2 
             ? Promise.resolve([]) 
             : performSearch({
@@ -1177,7 +1212,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     .slice(0, 3);
             });
 
-        // 3. Scan Fasilitas Harian Mikro: Minimarket / Supermarket Terdekat (Radius 2 KM)
+        // 4. Scan Fasilitas Harian Mikro: Minimarket / Supermarket Terdekat (Radius 2 KM)
         const scanMinimarket = performSearch({
             location: centerLatLng,
             radius: 2000,
@@ -1203,7 +1238,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 .slice(0, 2);
         });
 
-        // 4. Scan Fasilitas Harian Mikro: Laundry Kiloan Terdekat (Radius 2 KM)
+        // 5. Scan Fasilitas Harian Mikro: Laundry Kiloan Terdekat (Radius 2 KM)
         const scanLaundry = performSearch({
             location: centerLatLng,
             radius: 2000,
@@ -1229,7 +1264,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 .slice(0, 1);
         });
 
-        // 5. Scan Fasilitas Harian Mikro: Tempat Ibadah Terdekat (Radius 2 KM)
+        // 6. Scan Fasilitas Harian Mikro: Tempat Ibadah Terdekat (Radius 2 KM)
         const scanWorship = performSearch({
             location: centerLatLng,
             radius: 2000,
@@ -1256,7 +1291,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 .slice(0, 1);
         });
 
-        // 6. Scan Fasilitas Medis: Rumah Sakit Terdekat (Hanya jika belum ada di curated master)
+        // 7. Scan Fasilitas Medis: Rumah Sakit Terdekat (Hanya jika belum ada di curated master)
         const hasCuratedHospital = curatedOthers.some(o => o.name.toLowerCase().includes('rs') || o.name.toLowerCase().includes('rumah sakit'));
         const scanHospitalFallback = hasCuratedHospital
             ? Promise.resolve([])
@@ -1286,7 +1321,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     .slice(0, 1);
             });
 
-        // 7. Scan Mall Terdekat (Hanya jika belum ada di curated master)
+        // 8. Scan Mall Terdekat (Hanya jika belum ada di curated master)
         const hasCuratedMall = curatedOthers.some(o => o.name.toLowerCase().includes('mall') || o.name.toLowerCase().includes('park') || o.name.toLowerCase().includes('square'));
         const scanMallFallback = hasCuratedMall
             ? Promise.resolve([])
@@ -1373,7 +1408,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 setIsScanningLandmarks(false);
             }
         });
-    }, []);
+    }, [isInvalidCampus]);
 
     // ── location ───────────────────────────────────────────────────────────────
     const handleLocationChange = useCallback((lat: number, lng: number, address: string, city?: string, area?: string, province?: string) => {
@@ -1390,6 +1425,17 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             detectNearbyLandmarks(lat, lng);
         }
     }, [detectNearbyLandmarks]);
+
+    // Auto-sync master landmarks saat step lokasi aktif jika campuses kosong atau memuat data sampah
+    useEffect(() => {
+        if (step === 1 && form.location?.lat && form.location?.lng) {
+            const currentCampuses = form.campuses || [];
+            const hasGarbage = currentCampuses.some(c => isInvalidCampus(c.name));
+            if (currentCampuses.length === 0 || hasGarbage) {
+                detectNearbyLandmarks(form.location.lat, form.location.lng);
+            }
+        }
+    }, [step, form.location?.lat, form.location?.lng, detectNearbyLandmarks, isInvalidCampus]);
 
     // ── image handling ─────────────────────────────────────────────────────────
     const handleImages = (e: React.ChangeEvent<HTMLInputElement>) => {
