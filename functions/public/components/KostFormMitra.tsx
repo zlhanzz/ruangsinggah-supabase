@@ -923,26 +923,6 @@ const FacilityLocationModal: React.FC<FacilityLocationModalProps> = ({
             mapObjRef.current = map;
             landmarkMarkerRef.current = landmarkMarker;
             kostMarkerRef.current = kostMarker;
-
-            // Auto-resolve live sync ke Google Maps: selalu cari titik resmi instansi dari Google Maps
-            if (facilityName) {
-                const geocoder = new google.maps.Geocoder();
-                const cleanName = facilityName.replace(/\s*\(.*?\)\s*/g, ' ').trim();
-                const cityCtx = cityName ? `, ${cityName}` : '';
-                const queryStr = `${cleanName}${cityCtx}, Indonesia`;
-                geocoder.geocode({ address: queryStr, componentRestrictions: { country: 'ID' } }, (results: any[], status: string) => {
-                    if (status === 'OK' && results && results.length > 0) {
-                        const loc = results[0].geometry.location;
-                        const plat = loc.lat(), plng = loc.lng();
-                        setSelectedLocation({ lat: plat, lng: plng });
-                        landmarkMarker.setPosition({ lat: plat, lng: plng });
-                        map.setCenter({ lat: plat, lng: plng });
-                        map.setZoom(17);
-                        updatePolyline(plat, plng);
-                        setIsGoogleVerified(true);
-                    }
-                });
-            }
         } catch (e) {
             console.error("FacilityMap init error:", e);
         }
@@ -1014,40 +994,16 @@ const FacilityLocationModal: React.FC<FacilityLocationModalProps> = ({
         });
     };
 
-    const recalibrateFromGooglePlaces = () => {
-        if (!facilityName) return;
-        setIsSearching(true);
-        const gw = (window as any).google;
-        if (!gw?.maps) {
-            setIsSearching(false);
-            return;
-        }
-
-        // Coba dengan PlacesService findPlaceFromPhoneNumber / findPlaceFromQuery jika ada
-        const cleanName = facilityName.replace(/\s*\(.*?\)\s*/g, ' ').trim();
-        const cityCtx = cityName ? `, ${cityName}` : '';
-        const queryStr = `${cleanName}${cityCtx}, Indonesia`;
-
-        if (gw.maps.Geocoder) {
-            const geocoder = new gw.maps.Geocoder();
-            geocoder.geocode({ address: queryStr, componentRestrictions: { country: 'ID' } }, (results: any[], status: string) => {
-                setIsSearching(false);
-                if (status === 'OK' && results && results.length > 0) {
-                    const loc = results[0].geometry.location;
-                    const plat = loc.lat(), plng = loc.lng();
-                    setSelectedLocation({ lat: plat, lng: plng });
-                    if (landmarkMarkerRef.current && mapObjRef.current) {
-                        landmarkMarkerRef.current.setPosition({ lat: plat, lng: plng });
-                        mapObjRef.current.setCenter({ lat: plat, lng: plng });
-                        mapObjRef.current.setZoom(17);
-                        updatePolyline(plat, plng);
-                    }
-                } else {
-                    alert(`Tidak dapat menemukan titik resmi untuk "${cleanName}". Silakan geser penanda merah secara manual.`);
-                }
-            });
-        } else {
-            setIsSearching(false);
+    const handleManualCoordinateChange = (newLatStr: string, newLngStr: string) => {
+        const pLat = parseFloat(newLatStr);
+        const pLng = parseFloat(newLngStr);
+        if (!isNaN(pLat) && !isNaN(pLng)) {
+            setSelectedLocation({ lat: pLat, lng: pLng });
+            if (landmarkMarkerRef.current && mapObjRef.current) {
+                landmarkMarkerRef.current.setPosition({ lat: pLat, lng: pLng });
+                mapObjRef.current.panTo({ lat: pLat, lng: pLng });
+                updatePolyline(pLat, pLng);
+            }
         }
     };
 
@@ -1062,15 +1018,8 @@ const FacilityLocationModal: React.FC<FacilityLocationModalProps> = ({
                             <MapPin size={20} />
                         </div>
                         <div>
-                            <div className="flex items-center gap-2">
-                                <h3 className="font-black text-gray-900 text-sm leading-tight line-clamp-1">{facilityName || 'Tentukan Titik Gerbang Landmark'}</h3>
-                                {isGoogleVerified && (
-                                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full flex items-center gap-1 shrink-0">
-                                        <Check size={12} /> Google Maps
-                                    </span>
-                                )}
-                            </div>
-                            <p className="text-[11px] text-gray-500 font-medium mt-0.5">Geser penanda merah atau cari gerbang spesifik di peta</p>
+                            <h3 className="font-black text-gray-900 text-sm leading-tight line-clamp-1">{facilityName || 'Tentukan Titik Gerbang Landmark'}</h3>
+                            <p className="text-[11px] text-gray-500 font-medium mt-0.5">Geser penanda merah atau masukkan angka koordinat presisi</p>
                         </div>
                     </div>
                     <button type="button" onClick={onClose} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 rounded-xl text-gray-400 hover:text-red-500 transition-colors">
@@ -1078,13 +1027,13 @@ const FacilityLocationModal: React.FC<FacilityLocationModalProps> = ({
                     </button>
                 </div>
 
-                {/* Search & Auto-Sync in modal */}
-                <div className="p-3 bg-slate-50 border-b border-gray-100 flex flex-col sm:flex-row gap-2 relative z-20 shrink-0">
-                    <div className="relative flex-1">
+                {/* Search in modal */}
+                <div className="p-3 bg-slate-50 border-b border-gray-100 relative z-20 shrink-0">
+                    <div className="relative">
                         <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
                             type="text"
-                            placeholder={`Cari gerbang / gedung spesifik (Cth: Pintu 1 ${facilityName || ''})...`}
+                            placeholder={`Cari lokasi spesifik di peta (Cth: Pintu 1 ${facilityName || ''})...`}
                             value={searchQuery}
                             onChange={e => handleModalSearch(e.target.value)}
                             className="w-full h-10 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-900 pl-9 pr-4 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all"
@@ -1111,16 +1060,6 @@ const FacilityLocationModal: React.FC<FacilityLocationModalProps> = ({
                             </div>
                         )}
                     </div>
-                    <button
-                        type="button"
-                        onClick={recalibrateFromGooglePlaces}
-                        disabled={isSearching}
-                        className="h-10 px-3.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-xl text-[11px] font-bold text-orange-600 flex items-center justify-center gap-1.5 shrink-0 transition-colors disabled:opacity-50"
-                        title="Otomatis sinkronkan titik gerbang dari database resmi Google Maps"
-                    >
-                        <Sparkles size={14} className="text-orange-500" />
-                        <span>Tarik Titik Google</span>
-                    </button>
                 </div>
 
                 {/* Map View */}
@@ -1139,26 +1078,43 @@ const FacilityLocationModal: React.FC<FacilityLocationModalProps> = ({
                     )}
                 </div>
 
-                {/* Footer */}
-                <div className="p-4 bg-white border-t border-gray-100 flex justify-between items-center gap-3 shrink-0">
-                    <div className="text-[11px] font-mono font-bold text-gray-500 hidden sm:block">
-                        {selectedLocation.lat.toFixed(6)}, {selectedLocation.lng.toFixed(6)}
+                {/* Footer with Manual Lat/Lng Edit */}
+                <div className="p-3.5 bg-white border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
+                            <span className="text-[10px] font-bold text-gray-400">Lat:</span>
+                            <input
+                                type="text"
+                                value={selectedLocation.lat}
+                                onChange={e => handleManualCoordinateChange(e.target.value, selectedLocation.lng.toString())}
+                                className="w-24 bg-transparent text-xs font-mono font-bold text-gray-800 focus:outline-none"
+                            />
+                        </div>
+                        <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
+                            <span className="text-[10px] font-bold text-gray-400">Lng:</span>
+                            <input
+                                type="text"
+                                value={selectedLocation.lng}
+                                onChange={e => handleManualCoordinateChange(selectedLocation.lat.toString(), e.target.value)}
+                                className="w-24 bg-transparent text-xs font-mono font-bold text-gray-800 focus:outline-none"
+                            />
+                        </div>
                     </div>
                     <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-xs font-bold hover:bg-gray-50 transition-colors"
+                            className="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-xs font-bold hover:bg-gray-50 transition-colors"
                         >
                             Batal
                         </button>
                         <button
                             type="button"
                             onClick={() => onSave(selectedLocation.lat, selectedLocation.lng)}
-                            className="px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black shadow-lg shadow-orange-500/20 flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
+                            className="px-5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black shadow-lg shadow-orange-500/20 flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
                         >
                             <Check size={16} />
-                            Gunakan Titik Gerbang Ini
+                            Gunakan Titik Ini
                         </button>
                     </div>
                 </div>
