@@ -1011,6 +1011,43 @@ const FacilityLocationModal: React.FC<FacilityLocationModalProps> = ({
         });
     };
 
+    const recalibrateFromGooglePlaces = () => {
+        if (!facilityName) return;
+        setIsSearching(true);
+        const gw = (window as any).google;
+        if (!gw?.maps) {
+            setIsSearching(false);
+            return;
+        }
+
+        // Coba dengan PlacesService findPlaceFromPhoneNumber / findPlaceFromQuery jika ada
+        const cleanName = facilityName.replace(/\s*\(.*?\)\s*/g, ' ').trim();
+        const cityCtx = cityName ? `, ${cityName}` : '';
+        const queryStr = `${cleanName}${cityCtx}, Indonesia`;
+
+        if (gw.maps.Geocoder) {
+            const geocoder = new gw.maps.Geocoder();
+            geocoder.geocode({ address: queryStr, componentRestrictions: { country: 'ID' } }, (results: any[], status: string) => {
+                setIsSearching(false);
+                if (status === 'OK' && results && results.length > 0) {
+                    const loc = results[0].geometry.location;
+                    const plat = loc.lat(), plng = loc.lng();
+                    setSelectedLocation({ lat: plat, lng: plng });
+                    if (landmarkMarkerRef.current && mapObjRef.current) {
+                        landmarkMarkerRef.current.setPosition({ lat: plat, lng: plng });
+                        mapObjRef.current.setCenter({ lat: plat, lng: plng });
+                        mapObjRef.current.setZoom(17);
+                        updatePolyline(plat, plng);
+                    }
+                } else {
+                    alert(`Tidak dapat menemukan titik resmi untuk "${cleanName}". Silakan geser penanda merah secara manual.`);
+                }
+            });
+        } else {
+            setIsSearching(false);
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-[120000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-gray-950/80 backdrop-blur-md" onClick={onClose}></div>
@@ -1031,9 +1068,9 @@ const FacilityLocationModal: React.FC<FacilityLocationModalProps> = ({
                     </button>
                 </div>
 
-                {/* Search in modal */}
-                <div className="p-3 bg-slate-50 border-b border-gray-100 relative z-20 shrink-0">
-                    <div className="relative">
+                {/* Search & Auto-Sync in modal */}
+                <div className="p-3 bg-slate-50 border-b border-gray-100 flex flex-col sm:flex-row gap-2 relative z-20 shrink-0">
+                    <div className="relative flex-1">
                         <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
                             type="text"
@@ -1064,6 +1101,16 @@ const FacilityLocationModal: React.FC<FacilityLocationModalProps> = ({
                             </div>
                         )}
                     </div>
+                    <button
+                        type="button"
+                        onClick={recalibrateFromGooglePlaces}
+                        disabled={isSearching}
+                        className="h-10 px-3.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-xl text-[11px] font-bold text-orange-600 flex items-center justify-center gap-1.5 shrink-0 transition-colors disabled:opacity-50"
+                        title="Otomatis sinkronkan titik gerbang dari database resmi Google Maps"
+                    >
+                        <Sparkles size={14} className="text-orange-500" />
+                        <span>Tarik Titik Google</span>
+                    </button>
                 </div>
 
                 {/* Map View */}
