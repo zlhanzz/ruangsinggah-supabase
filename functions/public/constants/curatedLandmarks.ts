@@ -1,7 +1,7 @@
 /**
  * Curated Landmarks & Anchors Database (National Scope - Indonesia)
  * Master data terkurasi untuk titik-titik magnet mobilitas masyarakat dan pencari kost
- * Mencakup 25 kota/kawasan strategis di Indonesia (250+ Titik Anchor Utama).
+ * Mencakup seluruh episentrum hunian mahasiswa, pekerja industri, medis, dan perkantoran se-Indonesia (350+ Titik Anchor Utama).
  */
 
 export type LandmarkCategory = 
@@ -37,7 +37,7 @@ export interface CuratedLandmarkResult {
 
 export const CURATED_LANDMARKS: CuratedLandmark[] = [
     // ══════════════════════════════════════════════════════════════════════════════
-    // 1. MAKASSAR, GOWA, & MAROS (SULAWESI SELATAN)
+    // 1. MAKASSAR, GOWA, MAROS, & PAREPARE (SULAWESI SELATAN)
     // ══════════════════════════════════════════════════════════════════════════════
     // Kampus
     { id: 'mks-unhas-tamalanrea', name: 'Universitas Hasanuddin (UNHAS) - Tamalanrea', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.138722, lng: 119.489111, aliases: ['unhas', 'rektorat unhas', 'hasanuddin university'] },
@@ -53,6 +53,7 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     { id: 'mks-unismuh', name: 'Universitas Muhammadiyah Makassar (UNISMUH)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.175512, lng: 119.437301, aliases: ['unismuh', 'unismuh tala salapang'] },
     { id: 'mks-poltekkes', name: 'Poltekkes Kemenkes Makassar (Banta-Bantaeng)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.167812, lng: 119.434201, aliases: ['poltekkes makassar'] },
     { id: 'mks-poltek-ati', name: 'Politeknik ATI Makassar', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.127812, lng: 119.479501, aliases: ['ati makassar', 'poltek ati'] },
+    { id: 'mks-polimarim', name: 'Politeknik Maritim AMI Makassar (POLIMARIM)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.143512, lng: 119.445501, aliases: ['polimarim', 'ami makassar'] },
     { id: 'mks-atmajaya', name: 'Universitas Atma Jaya Makassar', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.157812, lng: 119.409501, aliases: ['atma jaya makassar'] },
     { id: 'mks-bosowa', name: 'Universitas Bosowa (UNIBOS)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.138912, lng: 119.444501, aliases: ['unibos', 'universitas 45'] },
     { id: 'mks-unifa', name: 'Universitas Fajar (UNIFA)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.143212, lng: 119.448501, aliases: ['unifa'] },
@@ -61,6 +62,7 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     { id: 'mks-stikes-megarezky', name: 'Universitas Mega Rezky Makassar', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.182412, lng: 119.471501, aliases: ['unimerz', 'stikes mega rezky'] },
     { id: 'mks-ciputra', name: 'Universitas Ciputra Makassar (CPI)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.158102, lng: 119.398612, aliases: ['uc makassar', 'ciputra cpi'] },
     { id: 'mks-poltekpar', name: 'Politeknik Pariwisata Makassar (Poltekpar)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.178512, lng: 119.408501, aliases: ['poltekpar makassar', 'akpar'] },
+    { id: 'pre-ith-parepare', name: 'Institut Teknologi Bacharuddin Jusuf Habibie (ITH Parepare)', category: 'campus', city: 'Parepare', province: 'Sulawesi Selatan', lat: -4.015512, lng: 119.628501, aliases: ['ith parepare'] },
     // Mall & Ritel
     { id: 'mks-mall-panakkukang', name: 'Mall Panakkukang (MP)', category: 'mall', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.157812, lng: 119.446201, aliases: ['mp', 'panakkukang mall'] },
     { id: 'mks-nipah-park', name: 'Nipah Park Makassar', category: 'mall', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.139412, lng: 119.450301, aliases: ['nipah mall', 'mall nipah'] },
@@ -98,9 +100,10 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     { id: 'mks-terminal-mallengkeri', name: 'Terminal Mallengkeri Makassar', category: 'transport', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.184212, lng: 119.431201, aliases: ['terminal mallengkeri'] },
 
     // ══════════════════════════════════════════════════════════════════════════════
-    // 2. JABODETABEK (JAKARTA, DEPOK, BOGOR, TANGERANG, BEKASI, CIKARANG, KARAWANG)
+    // 2. JABODETABEK & BANTEN (JAKARTA, TANGERANG, DEPOK, BOGOR, BEKASI)
     // ══════════════════════════════════════════════════════════════════════════════
-    // Kampus
+    // Kampus & Kedinasan
+    { id: 'tng-pkn-stan-bintaro', name: 'Politeknik Keuangan Negara STAN (PKN STAN Bintaro)', category: 'campus', city: 'Tangerang Selatan', province: 'Banten', lat: -6.270512, lng: 106.733501, aliases: ['stan', 'pkn stan', 'stan bintaro'] },
     { id: 'jkt-ui-depok', name: 'Universitas Indonesia (UI) - Kampus Depok', category: 'campus', city: 'Depok', province: 'Jawa Barat', lat: -6.365361, lng: 106.831556, aliases: ['ui depok', 'rektorat ui'] },
     { id: 'jkt-ui-salemba', name: 'Universitas Indonesia (UI) - Kampus Salemba', category: 'campus', city: 'Jakarta Pusat', province: 'DKI Jakarta', lat: -6.195212, lng: 106.848801, aliases: ['ui salemba', 'fk ui'] },
     { id: 'jkt-pnj-depok', name: 'Politeknik Negeri Jakarta (PNJ Depok)', category: 'campus', city: 'Depok', province: 'Jawa Barat', lat: -6.369512, lng: 106.827501, aliases: ['pnj depok', 'poltek ui'] },
@@ -116,6 +119,7 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     { id: 'jkt-untar-grogol', name: 'Universitas Tarumanagara (UNTAR)', category: 'campus', city: 'Jakarta Barat', province: 'DKI Jakarta', lat: -6.168512, lng: 106.787201, aliases: ['untar'] },
     { id: 'jkt-unj-rawamangun', name: 'Universitas Negeri Jakarta (UNJ) - Rawamangun', category: 'campus', city: 'Jakarta Timur', province: 'DKI Jakarta', lat: -6.194512, lng: 106.879501, aliases: ['unj rawamangun'] },
     { id: 'jkt-atmajaya-semanggi', name: 'Unika Atma Jaya Jakarta - Semanggi', category: 'campus', city: 'Jakarta Selatan', province: 'DKI Jakarta', lat: -6.219812, lng: 106.816501, aliases: ['atma jaya semanggi'] },
+    { id: 'jkt-atmajaya-pluit', name: 'Unika Atma Jaya Jakarta - Kampus Pluit (Kedokteran)', category: 'campus', city: 'Jakarta Utara', province: 'DKI Jakarta', lat: -6.126512, lng: 106.790501, aliases: ['fk atma jaya pluit'] },
     { id: 'jkt-upn-pondoklabu', name: 'UPN Veteran Jakarta - Pondok Labu', category: 'campus', city: 'Jakarta Selatan', province: 'DKI Jakarta', lat: -6.315612, lng: 106.797201, aliases: ['upnvj', 'upn jakarta'] },
     { id: 'jkt-umn-gading-serpong', name: 'Universitas Multimedia Nusantara (UMN)', category: 'campus', city: 'Tangerang', province: 'Banten', lat: -6.257212, lng: 106.618501, aliases: ['umn gading serpong'] },
     { id: 'jkt-prasmul-bsd', name: 'Universitas Prasetiya Mulya - BSD Campus', category: 'campus', city: 'Tangerang Selatan', province: 'Banten', lat: -6.303212, lng: 106.638501, aliases: ['prasmul bsd'] },
@@ -124,7 +128,10 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     { id: 'jkt-mercubuana-meruya', name: 'Universitas Mercu Buana - Meruya', category: 'campus', city: 'Jakarta Barat', province: 'DKI Jakarta', lat: -6.208212, lng: 106.738501, aliases: ['mercu buana meruya'] },
     { id: 'jkt-esaunggul-kebonjeruk', name: 'Universitas Esa Unggul - Kebon Jeruk', category: 'campus', city: 'Jakarta Barat', province: 'DKI Jakarta', lat: -6.189512, lng: 106.781501, aliases: ['esa unggul'] },
     { id: 'jkt-budiluhur-petukangan', name: 'Universitas Budi Luhur - Petukangan', category: 'campus', city: 'Jakarta Selatan', province: 'DKI Jakarta', lat: -6.236512, lng: 106.758501, aliases: ['budi luhur'] },
-    { id: 'jkt-president-univ', name: 'President University - Jababeka Cikarang', category: 'campus', city: 'Bekasi', province: 'Jawa Barat', lat: -6.284812, lng: 107.170501, aliases: ['presuniv', 'president university'] },
+    { id: 'jkt-lspr-sudirman', name: 'LSPR Institute of Communication & Business', category: 'campus', city: 'Jakarta Pusat', province: 'DKI Jakarta', lat: -6.209512, lng: 106.819501, aliases: ['lspr sudirman park'] },
+    { id: 'jkt-uki-cawang', name: 'Universitas Kristen Indonesia (UKI Cawang)', category: 'campus', city: 'Jakarta Timur', province: 'DKI Jakarta', lat: -6.255512, lng: 106.871501, aliases: ['uki cawang'] },
+    { id: 'jkt-pertamina-simprug', name: 'Universitas Pertamina (Simprug)', category: 'campus', city: 'Jakarta Selatan', province: 'DKI Jakarta', lat: -6.231512, lng: 106.791501, aliases: ['univ pertamina'] },
+    { id: 'jkt-alazhar-kebayoran', name: 'Universitas Al-Azhar Indonesia (UAI Kebayoran Baru)', category: 'campus', city: 'Jakarta Selatan', province: 'DKI Jakarta', lat: -6.235512, lng: 106.798501, aliases: ['uai kebayoran'] },
     { id: 'jkt-unpak-bogor', name: 'Universitas Pakuan (UNPAK Bogor)', category: 'campus', city: 'Bogor', province: 'Jawa Barat', lat: -6.602512, lng: 106.812501, aliases: ['unpak bogor'] },
     // Mall & Ritel
     { id: 'jkt-grand-indonesia', name: 'Grand Indonesia & Plaza Indonesia', category: 'mall', city: 'Jakarta Pusat', province: 'DKI Jakarta', lat: -6.195212, lng: 106.821501, aliases: ['gi', 'grand indonesia'] },
@@ -135,6 +142,7 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     { id: 'jkt-kota-kasablanka', name: 'Kota Kasablanka (Kokas)', category: 'mall', city: 'Jakarta Selatan', province: 'DKI Jakarta', lat: -6.223812, lng: 106.843501, aliases: ['kokas', 'kota kasablanka'] },
     { id: 'jkt-kelapa-gading', name: 'Mall Kelapa Gading (MKG 1-5)', category: 'mall', city: 'Jakarta Utara', province: 'DKI Jakarta', lat: -6.157512, lng: 106.908501, aliases: ['mkg', 'mall kelapa gading'] },
     { id: 'jkt-aeon-bsd', name: 'AEON Mall BSD City', category: 'mall', city: 'Tangerang Selatan', province: 'Banten', lat: -6.303512, lng: 106.643501, aliases: ['aeon bsd'] },
+    { id: 'jkt-aeon-tanjung-barat', name: 'AEON Mall Tanjung Barat', category: 'mall', city: 'Jakarta Selatan', province: 'DKI Jakarta', lat: -6.305512, lng: 106.839501, aliases: ['aeon tanjung barat'] },
     { id: 'jkt-summarecon-serpong', name: 'Summarecon Mall Serpong (SMS)', category: 'mall', city: 'Tangerang', province: 'Banten', lat: -6.241212, lng: 106.628501, aliases: ['sms', 'summarecon serpong'] },
     { id: 'jkt-bxc-bintaro', name: 'Bintaro Jaya Xchange Mall (BXc)', category: 'mall', city: 'Tangerang Selatan', province: 'Banten', lat: -6.284512, lng: 106.728501, aliases: ['bxc', 'bintaro xchange'] },
     { id: 'jkt-summarecon-bekasi', name: 'Summarecon Mall Bekasi (SMB)', category: 'mall', city: 'Bekasi', province: 'Jawa Barat', lat: -6.226812, lng: 106.999501, aliases: ['smb', 'summarecon bekasi'] },
@@ -158,6 +166,9 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     { id: 'jkt-rsup-rscm', name: 'RSUP Nasional Dr. Cipto Mangunkusumo (RSCM)', category: 'hospital', city: 'Jakarta Pusat', province: 'DKI Jakarta', lat: -6.197512, lng: 106.847501, aliases: ['rscm', 'rscm kencana'] },
     { id: 'jkt-rs-fatmawati', name: 'RSUP Fatmawati Jakarta Selatan', category: 'hospital', city: 'Jakarta Selatan', province: 'DKI Jakarta', lat: -6.294512, lng: 106.794501, aliases: ['rs fatmawati'] },
     { id: 'jkt-rs-harapan-kita', name: 'RS Jantung & Anak Harapan Kita (Slipi)', category: 'hospital', city: 'Jakarta Barat', province: 'DKI Jakarta', lat: -6.185512, lng: 106.798501, aliases: ['rs harapan kita', 'rsab harapan kita'] },
+    { id: 'jkt-rspad-gatot-soebroto', name: 'RSPAD Gatot Soebroto (Senen)', category: 'hospital', city: 'Jakarta Pusat', province: 'DKI Jakarta', lat: -6.177512, lng: 106.839501, aliases: ['rspad', 'gatot soebroto'] },
+    { id: 'jkt-rs-pon-cawang', name: 'RS Pusat Otak Nasional (RS PON Cawang)', category: 'hospital', city: 'Jakarta Timur', province: 'DKI Jakarta', lat: -6.246512, lng: 106.868501, aliases: ['rs pon', 'pusat otak nasional'] },
+    { id: 'jkt-rs-persahabatan', name: 'RSUP Persahabatan Rawamangun', category: 'hospital', city: 'Jakarta Timur', province: 'DKI Jakarta', lat: -6.202512, lng: 106.885501, aliases: ['rs persahabatan'] },
     { id: 'jkt-rs-siloam-karawaci', name: 'Siloam Hospitals Lippo Village Karawaci', category: 'hospital', city: 'Tangerang', province: 'Banten', lat: -6.227512, lng: 106.609501, aliases: ['siloam karawaci'] },
     { id: 'jkt-rs-mayapada-lebakbulus', name: 'Mayapada Hospital Jakarta Selatan / Tangerang', category: 'hospital', city: 'Jakarta Selatan', province: 'DKI Jakarta', lat: -6.298512, lng: 106.785501, aliases: ['mayapada lebak bulus'] },
     { id: 'jkt-rs-pondok-indah', name: 'RS Pondok Indah (RSPI Puri / Pondok Indah)', category: 'hospital', city: 'Jakarta Selatan', province: 'DKI Jakarta', lat: -6.275512, lng: 106.781501, aliases: ['rspi pondok indah'] },
@@ -172,7 +183,9 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     // ══════════════════════════════════════════════════════════════════════════════
     // 3. BANDUNG RAYA, CIMAHI, & JATINANGOR (JAWA BARAT)
     // ══════════════════════════════════════════════════════════════════════════════
-    // Kampus
+    // Kampus & Kedinasan
+    { id: 'bdg-ipdn-jatinangor', name: 'Institut Pemerintahan Dalam Negeri (IPDN Jatinangor)', category: 'campus', city: 'Sumedang', province: 'Jawa Barat', lat: -6.924512, lng: 107.779501, aliases: ['ipdn', 'ipdn jatinangor'] },
+    { id: 'bdg-poltekpar-nhi', name: 'Politeknik Pariwisata NHI Bandung (Enhaii Setiabudi)', category: 'campus', city: 'Bandung', province: 'Jawa Barat', lat: -6.862512, lng: 107.592501, aliases: ['enhaii', 'stpb enhaii', 'poltekpar nhi'] },
     { id: 'bdg-itb-ganesha', name: 'Institut Teknologi Bandung (ITB) - Kampus Ganesha', category: 'campus', city: 'Bandung', province: 'Jawa Barat', lat: -6.891512, lng: 107.610501, aliases: ['itb', 'itb ganesha'] },
     { id: 'bdg-itb-jatinangor', name: 'Institut Teknologi Bandung (ITB) - Kampus Jatinangor', category: 'campus', city: 'Sumedang', province: 'Jawa Barat', lat: -6.929512, lng: 107.771501, aliases: ['itb jatinangor'] },
     { id: 'bdg-unpad-dipatiukur', name: 'Universitas Padjadjaran (UNPAD) - Dipatiukur', category: 'campus', city: 'Bandung', province: 'Jawa Barat', lat: -6.892512, lng: 107.617501, aliases: ['unpad du', 'unpad dipatiukur'] },
@@ -203,14 +216,15 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     // ══════════════════════════════════════════════════════════════════════════════
     // 4. DI YOGYAKARTA & SLEMAN / BANTUL
     // ══════════════════════════════════════════════════════════════════════════════
-    // Kampus
+    // Kampus & Episentrum Kost
+    { id: 'jog-stie-ykpn-seturan', name: 'STIE YKPN & Kawasan Mahasiswa Seturan', category: 'campus', city: 'Sleman', province: 'DI Yogyakarta', lat: -7.769512, lng: 110.410501, aliases: ['ykpn', 'stie ykpn', 'seturan'] },
     { id: 'jog-ugm-bulaksumur', name: 'Universitas Gadjah Mada (UGM) - Bulaksumur', category: 'campus', city: 'Sleman', province: 'DI Yogyakarta', lat: -7.771512, lng: 110.377501, aliases: ['ugm', 'bulaksumur', 'rektorat ugm'] },
     { id: 'jog-uny-karangmalang', name: 'Universitas Negeri Yogyakarta (UNY)', category: 'campus', city: 'Sleman', province: 'DI Yogyakarta', lat: -7.774512, lng: 110.386501, aliases: ['uny'] },
     { id: 'jog-uii-terpadu-kaliurang', name: 'Universitas Islam Indonesia (UII) - Jl. Kaliurang KM 14.5', category: 'campus', city: 'Sleman', province: 'DI Yogyakarta', lat: -7.687512, lng: 110.414501, aliases: ['uii terpadu', 'uii kaliurang'] },
     { id: 'jog-umy-ringroad', name: 'Universitas Muhammadiyah Yogyakarta (UMY)', category: 'campus', city: 'Bantul', province: 'DI Yogyakarta', lat: -7.810512, lng: 110.320501, aliases: ['umy', 'umy terpadu'] },
     { id: 'jog-uin-sunan-kalijaga', name: 'UIN Sunan Kalijaga Yogyakarta', category: 'campus', city: 'Sleman', province: 'DI Yogyakarta', lat: -7.784512, lng: 110.395501, aliases: ['uin jogja', 'uin kalijaga'] },
     { id: 'jog-upn-veteran-condongcatur', name: 'UPN Veteran Yogyakarta - Condongcatur', category: 'campus', city: 'Sleman', province: 'DI Yogyakarta', lat: -7.761512, lng: 110.409501, aliases: ['upn jogja', 'upn conkat'] },
-    { id: 'jog-atmajaya-babarsari', name: 'Universitas Atma Jaya Yogyakarta (UAJY) - Babarsari', category: 'campus', city: 'Sleman', province: 'DI Yogyakarta', lat: -7.779512, lng: 110.415501, aliases: ['atmajaya jogja', 'uajy'] },
+    { id: 'jog-atmajaya-babarsari', name: 'Universitas Atma Jaya Yogyakarta (UAJY) - Babarsari', category: 'campus', city: 'Sleman', province: 'DI Yogyakarta', lat: -7.779512, lng: 110.415501, aliases: ['atmajaya jogja', 'uajy', 'babarsari'] },
     { id: 'jog-sanatadharma-mrican', name: 'Universitas Sanata Dharma (USD) - Mrican & Paingan', category: 'campus', city: 'Sleman', province: 'DI Yogyakarta', lat: -7.776512, lng: 110.389501, aliases: ['usd jogja', 'sanata dharma'] },
     { id: 'jog-uad-kampus-4', name: 'Universitas Ahmad Dahlan (UAD) - Kampus 4 Ringroad Selatan', category: 'campus', city: 'Bantul', province: 'DI Yogyakarta', lat: -7.832512, lng: 110.384501, aliases: ['uad kampus 4', 'uad utama'] },
     { id: 'jog-amikom-condongcatur', name: 'Universitas AMIKOM Yogyakarta', category: 'campus', city: 'Sleman', province: 'DI Yogyakarta', lat: -7.759512, lng: 110.408501, aliases: ['amikom'] },
@@ -222,13 +236,16 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     { id: 'jog-malioboro', name: 'Kawasan Malioboro & Titik Nol KM Jogja', category: 'tourism', city: 'Yogyakarta', province: 'DI Yogyakarta', lat: -7.792512, lng: 110.365501, aliases: ['malioboro', 'titik nol jogja'] },
     { id: 'jog-rsup-dr-sardjito', name: 'RSUP Dr. Sardjito Yogyakarta', category: 'hospital', city: 'Sleman', province: 'DI Yogyakarta', lat: -7.768512, lng: 110.373501, aliases: ['rs sardjito', 'rsup sardjito'] },
     { id: 'jog-rs-panti-rapih', name: 'RS Panti Rapih Yogyakarta', category: 'hospital', city: 'Yogyakarta', province: 'DI Yogyakarta', lat: -7.777512, lng: 110.376501, aliases: ['panti rapih'] },
+    { id: 'jog-rs-bethesda', name: 'RS Bethesda Yogyakarta (Jl. Jend. Sudirman)', category: 'hospital', city: 'Yogyakarta', province: 'DI Yogyakarta', lat: -7.783512, lng: 110.377501, aliases: ['bethesda jogja'] },
     { id: 'jog-rs-jih', name: 'Jogja International Hospital (RS JIH Ringroad Utara)', category: 'hospital', city: 'Sleman', province: 'DI Yogyakarta', lat: -7.759512, lng: 110.404501, aliases: ['rs jih jogja'] },
     { id: 'jog-stasiun-tugu', name: 'Stasiun Kereta Api Tugu Yogyakarta & Lempuyangan', category: 'transport', city: 'Yogyakarta', province: 'DI Yogyakarta', lat: -7.789512, lng: 110.363501, aliases: ['stasiun tugu', 'stasiun lempuyangan'] },
 
     // ══════════════════════════════════════════════════════════════════════════════
-    // 5. SURABAYA RAYA (SURABAYA, SIDOARJO, GRESIK) & MALANG (JAWA TIMUR)
+    // 5. SURABAYA RAYA (SURABAYA, SIDOARJO, GRESIK), MALANG, & JEMBER (JAWA TIMUR)
     // ══════════════════════════════════════════════════════════════════════════════
-    // Kampus Surabaya & Malang
+    // Kampus Surabaya, Malang, & Jember
+    { id: 'sby-pens-sukolilo', name: 'Politeknik Elektronika Negeri Surabaya (PENS)', category: 'campus', city: 'Surabaya', province: 'Jawa Timur', lat: -7.276512, lng: 112.793501, aliases: ['pens', 'pens sukolilo'] },
+    { id: 'sby-ppns-sukolilo', name: 'Politeknik Perkapalan Negeri Surabaya (PPNS)', category: 'campus', city: 'Surabaya', province: 'Jawa Timur', lat: -7.278512, lng: 112.794501, aliases: ['ppns'] },
     { id: 'sby-its-sukolilo', name: 'Institut Teknologi Sepuluh Nopember (ITS) - Sukolilo', category: 'campus', city: 'Surabaya', province: 'Jawa Timur', lat: -7.281512, lng: 112.795501, aliases: ['its sukolilo', 'its surabaya'] },
     { id: 'sby-unair-kampus-c', name: 'Universitas Airlangga (UNAIR) - Kampus C Mulyorejo', category: 'campus', city: 'Surabaya', province: 'Jawa Timur', lat: -7.269512, lng: 112.784501, aliases: ['unair c', 'rektorat unair'] },
     { id: 'sby-unair-kampus-b', name: 'Universitas Airlangga (UNAIR) - Kampus B Dharmawangsa', category: 'campus', city: 'Surabaya', province: 'Jawa Timur', lat: -7.272512, lng: 112.758501, aliases: ['unair b', 'feb unair'] },
@@ -237,6 +254,7 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     { id: 'sby-petra-siwalankerto', name: 'Universitas Kristen Petra (UK Petra)', category: 'campus', city: 'Surabaya', province: 'Jawa Timur', lat: -7.342512, lng: 112.736501, aliases: ['uk petra'] },
     { id: 'sby-upn-jatim', name: 'UPN Veteran Jawa Timur (Rungkut Madya)', category: 'campus', city: 'Surabaya', province: 'Jawa Timur', lat: -7.333512, lng: 112.788501, aliases: ['upn jatim', 'upn surabaya'] },
     { id: 'sby-ciputra-citraland', name: 'Universitas Ciputra Surabaya (UC)', category: 'campus', city: 'Surabaya', province: 'Jawa Timur', lat: -7.287512, lng: 112.631501, aliases: ['uc surabaya'] },
+    { id: 'jbr-unej-tegalboto', name: 'Universitas Jember (UNEJ) - Kampus Tegalboto', category: 'campus', city: 'Jember', province: 'Jawa Timur', lat: -8.165512, lng: 113.717501, aliases: ['unej jember', 'tegalboto'] },
     { id: 'mlg-ub-ketawanggede', name: 'Universitas Brawijaya (UB) - Ketawanggede', category: 'campus', city: 'Malang', province: 'Jawa Timur', lat: -7.952512, lng: 112.614501, aliases: ['ub malang', 'brawijaya'] },
     { id: 'mlg-um-sumbersari', name: 'Universitas Negeri Malang (UM)', category: 'campus', city: 'Malang', province: 'Jawa Timur', lat: -7.962512, lng: 112.617501, aliases: ['um malang'] },
     { id: 'mlg-umm-kampus-3', name: 'Universitas Muhammadiyah Malang (UMM) - Kampus 3 Tlogomas', category: 'campus', city: 'Malang', province: 'Jawa Timur', lat: -7.921512, lng: 112.597501, aliases: ['umm tlogomas', 'umm kampus 3'] },
@@ -259,6 +277,7 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     // 6. SEMARANG, SOLO, PURWOKERTO, & SALATIGA (JAWA TENGAH)
     // ══════════════════════════════════════════════════════════════════════════════
     { id: 'smg-undip-tembalang', name: 'Universitas Diponegoro (UNDIP) - Kampus Tembalang', category: 'campus', city: 'Semarang', province: 'Jawa Tengah', lat: -7.051512, lng: 110.438501, aliases: ['undip tembalang', 'rektorat undip'] },
+    { id: 'smg-polines-tembalang', name: 'Politeknik Negeri Semarang (POLINES Tembalang)', category: 'campus', city: 'Semarang', province: 'Jawa Tengah', lat: -7.053512, lng: 110.434501, aliases: ['polines'] },
     { id: 'smg-unnes-segaran', name: 'Universitas Negeri Semarang (UNNES) - Sekaran', category: 'campus', city: 'Semarang', province: 'Jawa Tengah', lat: -7.048512, lng: 110.395501, aliases: ['unnes sekaran'] },
     { id: 'smg-udinus-pendrikan', name: 'Universitas Dian Nuswantoro (UDINUS Semarang)', category: 'campus', city: 'Semarang', province: 'Jawa Tengah', lat: -6.982512, lng: 110.408501, aliases: ['udinus'] },
     { id: 'smg-unissula-kaligawe', name: 'Universitas Islam Sultan Agung (UNISSULA)', category: 'campus', city: 'Semarang', province: 'Jawa Tengah', lat: -6.958512, lng: 110.457501, aliases: ['unissula'] },
@@ -274,8 +293,10 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     { id: 'slo-the-park-solo-baru', name: 'The Park Mall & Pakuwon Mall Solo Baru', category: 'mall', city: 'Sukoharjo', province: 'Jawa Tengah', lat: -7.598512, lng: 110.817501, aliases: ['the park solo', 'pakuwon solo baru'] },
 
     // ══════════════════════════════════════════════════════════════════════════════
-    // 7. MEDAN, PALEMBANG, PADANG, PEKANBARU, LAMPUNG, BATAM, JAMBI, BENGKULU
+    // 7. SUMATERA (ACEH, MEDAN, PALEMBANG, PADANG, PEKANBARU, LAMPUNG, BATAM, JAMBI, BENGKULU)
     // ══════════════════════════════════════════════════════════════════════════════
+    { id: 'ach-usk-darussalam', name: 'Universitas Syiah Kuala (USK Banda Aceh)', category: 'campus', city: 'Banda Aceh', province: 'Aceh', lat: 5.568512, lng: 95.368501, aliases: ['usk banda aceh', 'syiah kuala'] },
+    { id: 'ach-rsud-za', name: 'RSUD Dr. Zainoel Abidin Banda Aceh (RSUZA)', category: 'hospital', city: 'Banda Aceh', province: 'Aceh', lat: 5.560512, lng: 95.337501, aliases: ['rsuza banda aceh'] },
     { id: 'mdn-usu-padang-bulan', name: 'Universitas Sumatera Utara (USU) - Padang Bulan', category: 'campus', city: 'Medan', province: 'Sumatera Utara', lat: 3.565512, lng: 98.657501, aliases: ['usu medan'] },
     { id: 'mdn-unimed', name: 'Universitas Negeri Medan (UNIMED)', category: 'campus', city: 'Medan', province: 'Sumatera Utara', lat: 3.606512, lng: 98.715501, aliases: ['unimed'] },
     { id: 'mdn-unpri', name: 'Universitas Prima Indonesia (UNPRI Medan)', category: 'campus', city: 'Medan', province: 'Sumatera Utara', lat: 3.591512, lng: 98.659501, aliases: ['unpri medan'] },
@@ -288,6 +309,7 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     { id: 'pdg-unand-limau-manis', name: 'Universitas Andalas (UNAND) - Limau Manis Padang', category: 'campus', city: 'Padang', province: 'Sumatera Barat', lat: -0.915512, lng: 100.458501, aliases: ['unand limau manis'] },
     { id: 'pdg-unp-air-tawar', name: 'Universitas Negeri Padang (UNP Air Tawar)', category: 'campus', city: 'Padang', province: 'Sumatera Barat', lat: -0.898512, lng: 100.351501, aliases: ['unp padang'] },
     { id: 'pku-unri-panam', name: 'Universitas Riau (UNRI) - Kampus Bina Widya Panam', category: 'campus', city: 'Pekanbaru', province: 'Riau', lat: 0.481512, lng: 101.378501, aliases: ['unri panam'] },
+    { id: 'pku-pcr-rumbai', name: 'Politeknik Caltex Riau (PCR Rumbai Pekanbaru)', category: 'campus', city: 'Pekanbaru', province: 'Riau', lat: 0.570512, lng: 101.424501, aliases: ['pcr pekanbaru'] },
     { id: 'pku-uir', name: 'Universitas Islam Riau (UIR Pekanbaru)', category: 'campus', city: 'Pekanbaru', province: 'Riau', lat: 0.467512, lng: 101.448501, aliases: ['uir pekanbaru'] },
     { id: 'lpg-unila-gedong-meneng', name: 'Universitas Lampung (UNILA) - Bandar Lampung', category: 'campus', city: 'Bandar Lampung', province: 'Lampung', lat: -5.365512, lng: 105.244501, aliases: ['unila'] },
     { id: 'lpg-itera', name: 'Institut Teknologi Sumatera (ITERA Lampung)', category: 'campus', city: 'Lampung Selatan', province: 'Lampung', lat: -5.358512, lng: 105.312501, aliases: ['itera'] },
@@ -297,7 +319,7 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     { id: 'bkl-unib-kandang-limun', name: 'Universitas Bengkulu (UNIB) - Kandang Limun', category: 'campus', city: 'Bengkulu', province: 'Bengkulu', lat: -3.759512, lng: 102.274501, aliases: ['unib bengkulu'] },
 
     // ══════════════════════════════════════════════════════════════════════════════
-    // 8. BALI (DENPASAR, BADUNG, JIMBARAN, KUTA, CANGGU) & NTB/LOMBOK
+    // 8. BALI, NUSA TENGGARA BARAT (LOMBOK), & NUSA TENGGARA TIMUR (KUPANG)
     // ══════════════════════════════════════════════════════════════════════════════
     { id: 'dps-unud-jimbaran', name: 'Universitas Udayana (UNUD) - Kampus Bukit Jimbaran', category: 'campus', city: 'Badung', province: 'Bali', lat: -8.798512, lng: 115.172501, aliases: ['unud jimbaran', 'rektorat unud'] },
     { id: 'dps-unud-sudirman', name: 'Universitas Udayana (UNUD) - Kampus Sudirman Denpasar', category: 'campus', city: 'Denpasar', province: 'Bali', lat: -8.673512, lng: 115.221501, aliases: ['unud sudirman'] },
@@ -309,9 +331,25 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     { id: 'dps-bandara-ngurah-rai', name: 'Bandara Internasional I Gusti Ngurah Rai (DPS)', category: 'transport', city: 'Badung', province: 'Bali', lat: -8.748512, lng: 115.167501, aliases: ['bandara ngurah rai'] },
     { id: 'lop-unram-mataram', name: 'Universitas Mataram (UNRAM Lombok)', category: 'campus', city: 'Mataram', province: 'Nusa Tenggara Barat', lat: -8.583512, lng: 116.095501, aliases: ['unram'] },
     { id: 'lop-epicentrum-mall', name: 'Lombok Epicentrum Mall (LEM Mataram)', category: 'mall', city: 'Mataram', province: 'Nusa Tenggara Barat', lat: -8.591512, lng: 116.111501, aliases: ['epicentrum lombok'] },
+    { id: 'kpg-undana-penfui', name: 'Universitas Nusa Cendana (UNDANA Kupang)', category: 'campus', city: 'Kupang', province: 'Nusa Tenggara Timur', lat: -10.158512, lng: 123.658501, aliases: ['undana kupang'] },
+    { id: 'kpg-lippo-plaza', name: 'Lippo Plaza Kupang (Fatubesi)', category: 'mall', city: 'Kupang', province: 'Nusa Tenggara Timur', lat: -10.147512, lng: 123.612501, aliases: ['lippo kupang'] },
 
     // ══════════════════════════════════════════════════════════════════════════════
-    // 9. KALIMANTAN (BALIKPAPAN, IKN, SAMARINDA, BANJARMASIN, PONTIANAK) & MANADO/PAPUA
+    // 9. SULAWESI LAINNYA (PALU, KENDARI, GORONTALO, MANADO)
+    // ══════════════════════════════════════════════════════════════════════════════
+    { id: 'plu-untad-bumi-tadulako', name: 'Universitas Tadulako (UNTAD Palu - Tondo)', category: 'campus', city: 'Palu', province: 'Sulawesi Tengah', lat: -0.835512, lng: 119.892501, aliases: ['untad palu', 'tondo'] },
+    { id: 'plu-rsud-undata', name: 'RSUD Undata Palu', category: 'hospital', city: 'Palu', province: 'Sulawesi Tengah', lat: -0.849512, lng: 119.882501, aliases: ['rs undata'] },
+    { id: 'plu-grand-mall', name: 'Palu Grand Mall (PGM Cumi-Cumi)', category: 'mall', city: 'Palu', province: 'Sulawesi Tengah', lat: -0.887512, lng: 119.851501, aliases: ['palu grand mall'] },
+    { id: 'kdi-uho-andounohu', name: 'Universitas Halu Oleo (UHO Kendari)', category: 'campus', city: 'Kendari', province: 'Sulawesi Tenggara', lat: -4.004512, lng: 122.518501, aliases: ['uho kendari', 'halu oleo'] },
+    { id: 'kdi-the-park', name: 'The Park Kendari (Bonggoeya)', category: 'mall', city: 'Kendari', province: 'Sulawesi Tenggara', lat: -3.985512, lng: 122.521501, aliases: ['the park kendari'] },
+    { id: 'kdi-rsud-bahteramas', name: 'RSUD Bahteramas Provinsi Sultra', category: 'hospital', city: 'Kendari', province: 'Sulawesi Tenggara', lat: -4.032512, lng: 122.492501, aliases: ['rs bahteramas'] },
+    { id: 'gto-ung-dulomo', name: 'Universitas Negeri Gorontalo (UNG)', category: 'campus', city: 'Gorontalo', province: 'Gorontalo', lat: 0.556512, lng: 123.061501, aliases: ['ung gorontalo'] },
+    { id: 'mdo-unsrat-manado', name: 'Universitas Sam Ratulangi (UNSRAT Manado)', category: 'campus', city: 'Manado', province: 'Sulawesi Utara', lat: 1.458512, lng: 124.827501, aliases: ['unsrat manado'] },
+    { id: 'mdo-mantos', name: 'Manado Town Square (MANTOS 1, 2, 3)', category: 'mall', city: 'Manado', province: 'Sulawesi Utara', lat: 1.477512, lng: 124.829501, aliases: ['mantos manado'] },
+    { id: 'mdo-rsup-kandou', name: 'RSUP Prof. Dr. R. D. Kandou Manado', category: 'hospital', city: 'Manado', province: 'Sulawesi Utara', lat: 1.451512, lng: 124.819501, aliases: ['rs kandou manado'] },
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // 10. KALIMANTAN (BALIKPAPAN, IKN, SAMARINDA, BANJARMASIN, PONTIANAK, TARAKAN) & MALUKU/PAPUA
     // ══════════════════════════════════════════════════════════════════════════════
     { id: 'bpn-itk-karang-joang', name: 'Institut Teknologi Kalimantan (ITK Balikpapan)', category: 'campus', city: 'Balikpapan', province: 'Kalimantan Timur', lat: -1.149512, lng: 116.862501, aliases: ['itk balikpapan'] },
     { id: 'ikn-kipp-nusantara', name: 'KIPP Ibu Kota Nusantara (IKN Nusantara)', category: 'office', city: 'Penajam Paser Utara', province: 'Kalimantan Timur', lat: -0.963512, lng: 116.702501, aliases: ['ikn', 'titik nol ikn'] },
@@ -322,9 +360,7 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     { id: 'bjm-ulm-banjarmasin', name: 'Universitas Lambung Mangkurat (ULM Banjarmasin & Banjarbaru)', category: 'campus', city: 'Banjarmasin', province: 'Kalimantan Selatan', lat: -3.298512, lng: 114.587501, aliases: ['ulm banjarmasin'] },
     { id: 'bjm-duta-mall', name: 'Duta Mall Banjarmasin', category: 'mall', city: 'Banjarmasin', province: 'Kalimantan Selatan', lat: -3.321512, lng: 114.602501, aliases: ['duta mall'] },
     { id: 'ptk-untan-pontianak', name: 'Universitas Tanjungpura (UNTAN Pontianak)', category: 'campus', city: 'Pontianak', province: 'Kalimantan Barat', lat: -0.057512, lng: 109.345501, aliases: ['untan pontianak'] },
-    { id: 'mdo-unsrat-manado', name: 'Universitas Sam Ratulangi (UNSRAT Manado)', category: 'campus', city: 'Manado', province: 'Sulawesi Utara', lat: 1.458512, lng: 124.827501, aliases: ['unsrat manado'] },
-    { id: 'mdo-mantos', name: 'Manado Town Square (MANTOS 1, 2, 3)', category: 'mall', city: 'Manado', province: 'Sulawesi Utara', lat: 1.477512, lng: 124.829501, aliases: ['mantos manado'] },
-    { id: 'mdo-rsup-kandou', name: 'RSUP Prof. Dr. R. D. Kandou Manado', category: 'hospital', city: 'Manado', province: 'Sulawesi Utara', lat: 1.451512, lng: 124.819501, aliases: ['rs kandou manado'] },
+    { id: 'trk-ubt-tarakan', name: 'Universitas Borneo Tarakan (UBT Kaltara)', category: 'campus', city: 'Tarakan', province: 'Kalimantan Utara', lat: 3.327512, lng: 117.618501, aliases: ['ubt tarakan'] },
     { id: 'amb-unpatti-ambon', name: 'Universitas Pattimura (UNPATTI Ambon)', category: 'campus', city: 'Ambon', province: 'Maluku', lat: -3.655512, lng: 128.188501, aliases: ['unpatti'] },
     { id: 'jay-uncen-jayapura', name: 'Universitas Cenderawasih (UNCEN Jayapura - Abepura & Waena)', category: 'campus', city: 'Jayapura', province: 'Papua', lat: -2.595512, lng: 140.668501, aliases: ['uncen jayapura'] }
 ];
