@@ -2985,25 +2985,16 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 // ── B. TAMPILAN RINGKASAN KARTU TIPE KAMAR (Summary View) ──
                 return (
                     <div className="space-y-6">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <Bed className="w-5 h-5 text-orange-600" />
-                                    <h3 className="font-black text-gray-900 uppercase tracking-tight text-sm sm:text-base">
-                                        Tipe Kamar &amp; Harga
-                                    </h3>
-                                </div>
-                                <p className="text-xs text-gray-500 mt-0.5">
-                                    Kelola daftar tipe kamar yang tersedia. Anda dapat menambah, mengedit, atau menghapus tipe kamar.
-                                </p>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <Bed className="w-5 h-5 text-orange-600" />
+                                <h3 className="font-black text-gray-900 uppercase tracking-tight text-sm sm:text-base">
+                                    Tipe Kamar &amp; Harga
+                                </h3>
                             </div>
-                            <button 
-                                type="button" 
-                                onClick={startAddRoom}
-                                className="h-10 px-4 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                            >
-                                <Plus size={16}/> + Tambah Tipe Kamar
-                            </button>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                                Kelola daftar tipe kamar yang tersedia. Anda dapat menambah, mengedit, atau menghapus tipe kamar.
+                            </p>
                         </div>
 
                         {/* Daftar Kartu Ringkasan Kamar Tersimpan */}

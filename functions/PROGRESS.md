@@ -2,6 +2,22 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 248. Penghapusan Tombol Redundan Tambah Tipe Kamar di Header Ringkasan (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pada tampilan ringkasan tipe kamar tersimpan (Summary View), terdapat tombol oranye `+ Tambah Tipe Kamar` di baris header atas yang menduplikasi fungsi tombol kartu besar `+ Tambah Tipe Kamar Lainnya` di bagian bawah daftar kamar.
+  - Pengguna meminta tombol di header tersebut dihapus karena memenuhi layar.
+- **Implementasi Solusi**:
+  1. **Pembersihan Baris Header Summary View**:
+     - Menghapus tombol `startAddRoom` dari header `Tipe Kamar & Harga`.
+     - Header kini tampil rapi dan lega dengan teks judul dan deskripsi saja.
+     - Penambahan kamar baru dilakukan sepenuhnya melalui tombol kartu `+ Tambah Tipe Kamar Lainnya` yang lebih intuitif dan terintegrasi di bagian bawah daftar kartu kamar.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 28.20s, 0 error).
+
 ### 247. Penghapusan Banner Notifikasi Draft Pengisian (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Banner kuning "Melanjutkan Draft Pengisian | Progres sebelumnya tersimpan otomatis | [Mulai Baru]" memakan ruang vertikal yang cukup besar tepat di atas form data.
