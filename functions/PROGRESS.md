@@ -2,6 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 244. Pertanyaan Eksplisit Opsi Biaya Sewa Tambahan Penghuni > 1 Orang di Tahap 2 (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pada Tahap 2 (Kapasitas & Ketersediaan), mitra membutuhkan pertanyaan eksplisit yang jelas mengenai apakah ada biaya sewa tambahan jika penghuninya lebih dari 1 orang.
+  - Banyak pemilik kost yang mengizinkan kamar diisi berdua/bertiga tanpa biaya tambahan (biaya tetap sama), sementara yang lain mengenakan biaya tambahan per bulan.
+- **Implementasi Solusi**:
+  1. **Pertanyaan Eksplisit & Interaktif**:
+     - Ditambahkan pertanyaan: *"Apakah ada biaya sewa tambahan jika kamar dihuni lebih dari 1 orang?"*.
+     - Sedia 2 pilihan tombol chip:
+       - `[ Tidak, Biaya Tetap Sama ]`: Menonaktifkan biaya tambahan dan menyetel nominal ke Rp 0.
+       - `[ Ya, Ada Biaya Tambahan ]`: Membuka field input nominal biaya tambahan per orang per bulan/periode.
+  2. **Keterangan Edukatif untuk Kapasitas 1 Orang**:
+     - Jika kapasitas dipilih `1 Orang`, ditampilkan box info yang ramah: *"Kamar ini dikhususkan untuk 1 penghuni. Pilih 2 Orang atau 3 Orang jika ingin mengizinkan penghuni tambahan & mengatur biaya tambahannya."*
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 26.82s, 0 error).
+
 ### 243. Alur Bertahap (Step-by-Step Mini-Wizard) Penambahan Kamar & Kartu Ringkasan Tipe Kamar (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Input penambahan kamar tidak boleh langsung muncul semua sekaligus karena membebani pemilik kost.

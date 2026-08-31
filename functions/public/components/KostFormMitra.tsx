@@ -1332,6 +1332,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         maxOccupants: 1,
         additionalCostPerPerson: 0
     });
+    const [hasExtraFee, setHasExtraFee] = useState<boolean>(false);
 
     const isInitialMount = useRef(true);
 
@@ -2086,6 +2087,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             additionalCostPerPerson: 0
         });
         setRoomSubStep(1);
+        setHasExtraFee(false);
         setEditingRoomIndex(-1); // -1 = Tambah Baru
     };
 
@@ -2099,6 +2101,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             ...target,
             pricing
         });
+        setHasExtraFee((target.additionalCostPerPerson || 0) > 0);
         setRoomSubStep(1);
         setEditingRoomIndex(index);
     };
@@ -2752,30 +2755,74 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         </div>
                                     </div>
 
-                                    {/* Biaya Tambahan Penghuni (Hanya tampil jika kapasitas > 1) */}
-                                    {(draftRoom.maxOccupants || 1) > 1 && (
-                                        <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-200/80 animate-in fade-in-50 duration-200">
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                                <div>
-                                                    <p className="text-[11px] font-black text-gray-800">
-                                                        Biaya Tambahan Penghuni Ekstra
-                                                    </p>
-                                                    <p className="text-[10px] text-gray-500">
-                                                        Ditagihkan jika kamar dihuni lebih dari 1 orang (Per {lowestPeriodLabel})
-                                                    </p>
+                                    {/* Pertanyaan Eksplisit Biaya Tambahan Penghuni > 1 Orang */}
+                                    {(draftRoom.maxOccupants || 1) > 1 ? (
+                                        <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-200/80 space-y-3 animate-in fade-in-50 duration-200">
+                                            <div>
+                                                <div className="flex items-center gap-1.5 text-amber-900 font-black text-xs">
+                                                    <Users size={15} className="text-amber-600" />
+                                                    <span>Biaya Sewa Tambahan Penghuni</span>
                                                 </div>
-                                                <div className="relative w-full sm:w-44 shrink-0">
-                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-bold">Rp</span>
-                                                    <input 
-                                                        type="number" 
-                                                        min="0" 
-                                                        placeholder="0" 
-                                                        value={draftRoom.additionalCostPerPerson || ''} 
-                                                        onChange={e => updDraftRoom('additionalCostPerPerson', parseInt(e.target.value) || 0)} 
-                                                        className="w-full h-9 bg-white border border-gray-300 rounded-xl pl-9 pr-3 text-xs font-bold text-gray-900 outline-none focus:border-orange-500" 
-                                                    />
-                                                </div>
+                                                <p className="text-[11px] text-gray-600 mt-1">
+                                                    Apakah ada biaya sewa tambahan jika kamar dihuni lebih dari 1 orang?
+                                                </p>
                                             </div>
+
+                                            {/* Pilihan: Tidak / Ya */}
+                                            <div className="flex flex-wrap gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setHasExtraFee(false);
+                                                        updDraftRoom('additionalCostPerPerson', 0);
+                                                    }}
+                                                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                                        !hasExtraFee && (draftRoom.additionalCostPerPerson || 0) === 0
+                                                            ? 'bg-gray-900 text-white shadow-xs'
+                                                            : 'bg-white text-gray-700 border border-gray-200 hover:border-gray-300'
+                                                    }`}
+                                                >
+                                                    Tidak, Biaya Tetap Sama
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setHasExtraFee(true)}
+                                                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                                        hasExtraFee || (draftRoom.additionalCostPerPerson || 0) > 0
+                                                            ? 'bg-orange-500 text-white shadow-xs'
+                                                            : 'bg-white text-gray-700 border border-gray-200 hover:border-orange-300'
+                                                    }`}
+                                                >
+                                                    Ya, Ada Biaya Tambahan
+                                                </button>
+                                            </div>
+
+                                            {/* Input Nominal jika memilih Ya */}
+                                            {(hasExtraFee || (draftRoom.additionalCostPerPerson || 0) > 0) && (
+                                                <div className="pt-2 border-t border-amber-200/60 animate-in fade-in-50 duration-200">
+                                                    <label className="block text-[10px] font-black text-gray-600 uppercase tracking-wider mb-1.5">
+                                                        Nominal Tambahan (Per Orang / {lowestPeriodLabel})
+                                                    </label>
+                                                    <div className="relative w-full sm:w-60">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-bold">
+                                                            Rp
+                                                        </span>
+                                                        <input 
+                                                            type="number" 
+                                                            min="0" 
+                                                            placeholder="Contoh: 200000" 
+                                                            value={draftRoom.additionalCostPerPerson || ''} 
+                                                            onChange={e => updDraftRoom('additionalCostPerPerson', parseInt(e.target.value) || 0)} 
+                                                            className="w-full h-10 bg-white border border-gray-300 rounded-xl pl-9 pr-3 text-xs font-bold text-gray-900 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500" 
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200/70 text-[11px] text-gray-500 flex items-center gap-2">
+                                            <Users size={15} className="text-gray-400 shrink-0" />
+                                            <span>Kamar ini dikhususkan untuk 1 penghuni. Pilih <strong>2 Orang</strong> atau <strong>3 Orang</strong> jika ingin mengizinkan penghuni tambahan &amp; mengatur biaya tambahannya.</span>
                                         </div>
                                     )}
 
