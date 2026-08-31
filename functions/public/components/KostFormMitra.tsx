@@ -1377,6 +1377,105 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
     const [activeMapPicker, setActiveMapPicker] = useState<{ field: 'campuses' | 'publicFacilities', index: number } | null>(null);
 
+    // Helper untuk memperkaya landmark dengan durasi rute nyata Google Maps (DistanceMatrixService)
+    const enrichLandmarksWithGoogleDistanceMatrix = useCallback((kostLat: number, kostLng: number, landmarks: any[]) => {
+        if (!landmarks || landmarks.length === 0 || !kostLat || !kostLng) return;
+        const google = (window as any).google;
+        if (!google?.maps?.DistanceMatrixService) return;
+
+        try {
+            const service = new google.maps.DistanceMatrixService();
+            const origin = new google.maps.LatLng(kostLat, kostLng);
+            const validLandmarks = landmarks.filter(l => l && typeof l.lat === 'number' && typeof l.lng === 'number');
+            if (validLandmarks.length === 0) return;
+
+            const destinations = validLandmarks.map(l => new google.maps.LatLng(l.lat, l.lng));
+
+            const fetchMatrix = (travelMode: any) => {
+                return new Promise<{ status: string; response: any }>((resolve) => {
+                    service.getDistanceMatrix(
+                        {
+                            origins: [origin],
+                            destinations: destinations,
+                            travelMode: travelMode,
+                            unitSystem: google.maps.UnitSystem.METRIC,
+                        },
+                        (response: any, status: any) => {
+                            resolve({ status, response });
+                        }
+                    );
+                });
+            };
+
+            Promise.all([
+                fetchMatrix(google.maps.TravelMode.DRIVING),
+                fetchMatrix(google.maps.TravelMode.WALKING)
+            ]).then(([drivingRes, walkingRes]) => {
+                const drivingElements = (drivingRes.status === 'OK' && drivingRes.response?.rows?.[0]?.elements) ? drivingRes.response.rows[0].elements : [];
+                const walkingElements = (walkingRes.status === 'OK' && walkingRes.response?.rows?.[0]?.elements) ? walkingRes.response.rows[0].elements : [];
+
+                setForm(prev => {
+                    const currentCampuses = [...(prev.campuses || [])];
+                    let hasChange = false;
+
+                    validLandmarks.forEach((vl, idx) => {
+                        const dEl = drivingElements[idx];
+                        const wEl = walkingElements[idx];
+
+                        const targetIdx = currentCampuses.findIndex(c => c.name === vl.name || (c.lat === vl.lat && c.lng === vl.lng));
+                        if (targetIdx !== -1) {
+                            let updatedItem = { ...currentCampuses[targetIdx] };
+                            if (dEl && dEl.status === 'OK') {
+                                const distText = dEl.distance.text;
+                                const motoMin = Math.max(1, Math.round(dEl.duration.value / 60));
+                                const carMin = Math.max(1, Math.round(dEl.duration.value / 60) + 1);
+                                const distKm = dEl.distance.value / 1000;
+
+                                let walkStr = `${Math.max(1, Math.ceil((distKm / 4.2) * 60))} mnt`;
+                                if (wEl && wEl.status === 'OK') {
+                                    walkStr = wEl.duration.text;
+                                }
+
+                                updatedItem = {
+                                    ...updatedItem,
+                                    distance: distText,
+                                    duration: dEl.duration.text,
+                                    walkDuration: walkStr,
+                                    motoDuration: `${motoMin} mnt`,
+                                    carDuration: `${carMin} mnt`,
+                                    isLiveGoogleApi: true
+                                };
+                                currentCampuses[targetIdx] = updatedItem;
+                                hasChange = true;
+                            } else if (wEl && wEl.status === 'OK') {
+                                updatedItem = {
+                                    ...updatedItem,
+                                    distance: wEl.distance.text,
+                                    duration: wEl.duration.text,
+                                    walkDuration: wEl.duration.text,
+                                    motoDuration: `${Math.max(1, Math.ceil((wEl.distance.value / 1000 / 28) * 60) + 1)} mnt`,
+                                    carDuration: `${Math.max(2, Math.ceil((wEl.distance.value / 1000 / 18) * 60) + 2)} mnt`,
+                                    isLiveGoogleApi: true
+                                };
+                                currentCampuses[targetIdx] = updatedItem;
+                                hasChange = true;
+                            }
+                        }
+                    });
+
+                    if (hasChange) {
+                        return { ...prev, campuses: currentCampuses };
+                    }
+                    return prev;
+                });
+            }).catch(err => {
+                console.warn('[DistanceMatrixService Mitra] Error:', err);
+            });
+        } catch (e) {
+            console.error('[DistanceMatrixService Mitra] Init error:', e);
+        }
+    }, []);
+
     const handleMapPickerSave = (lat: number, lng: number) => {
         if (!activeMapPicker) return;
         const { field, index } = activeMapPicker;
@@ -1388,9 +1487,15 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             distString = `± ${km} KM`;
         }
 
-        arr[index] = { ...arr[index], lat, lng, distance: distString };
+        const updatedItem = { ...arr[index], lat, lng, distance: distString };
+        arr[index] = updatedItem;
         upd(field, arr);
         setActiveMapPicker(null);
+
+        // Langsung hitung rute Google Maps nyata untuk titik baru ini
+        if (form.location?.lat && form.location?.lng) {
+            enrichLandmarksWithGoogleDistanceMatrix(form.location.lat, form.location.lng, [updatedItem]);
+        }
     };
 
     const [isSearchingFacility, setIsSearchingFacility] = useState<Record<string, boolean>>({});
@@ -1771,13 +1876,16 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     campuses: combinedLandmarks.map(({ kmVal, ...item }: any) => item),
                     publicFacilities: finalFacilities.map(({ kmVal, ...item }: any) => item)
                 }));
+
+                // Langsung hitung rute nyata Google Maps via DistanceMatrixService
+                enrichLandmarksWithGoogleDistanceMatrix(centerLat, centerLng, combinedLandmarks);
             }
         }).catch(() => {
             if (landmarkScanAbortRef.current === scanId) {
                 setIsScanningLandmarks(false);
             }
         });
-    }, [isInvalidCampus]);
+    }, [isInvalidCampus, enrichLandmarksWithGoogleDistanceMatrix]);
 
     // ── location ───────────────────────────────────────────────────────────────
     const handleLocationChange = useCallback((lat: number, lng: number, address: string, city?: string, area?: string, province?: string) => {
@@ -2067,26 +2175,38 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 </button>
                                             </div>
                                             {c.distance && (() => {
-                                                const kmMatch = c.distance.match(/[\d.]+/);
-                                                if (kmMatch) {
-                                                    const km = parseFloat(kmMatch[0]);
-                                                    const walk = Math.ceil((km / 5) * 60);
-                                                    const moto = Math.ceil((km / 30) * 60) + 2;
-                                                    const car = Math.ceil((km / 20) * 60) + 5;
-                                                    return (
-                                                        <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-2 rounded-xl border border-gray-100 w-full mt-2">
-                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-2">Estimasi Waktu:</span>
-                                                            <div className="flex items-center gap-3 text-xs font-bold text-gray-600">
-                                                                <span className="flex items-center gap-1">🚶 {walk} Mnt</span>
-                                                                <span className="text-gray-300">•</span>
-                                                                <span className="flex items-center gap-1">🏍️ {moto} Mnt</span>
-                                                                <span className="text-gray-300">•</span>
-                                                                <span className="flex items-center gap-1">🚗 {car} Mnt</span>
-                                                            </div>
+                                                const walk = c.walkDuration || (() => {
+                                                    const kmMatch = c.distance.match(/[\d.]+/);
+                                                    return kmMatch ? `${Math.ceil((parseFloat(kmMatch[0]) / 4.2) * 60)} Mnt` : '5 Mnt';
+                                                })();
+                                                const moto = c.motoDuration || (() => {
+                                                    const kmMatch = c.distance.match(/[\d.]+/);
+                                                    return kmMatch ? `${Math.ceil((parseFloat(kmMatch[0]) / 28) * 60) + 1} Mnt` : '2 Mnt';
+                                                })();
+                                                const car = c.carDuration || (() => {
+                                                    const kmMatch = c.distance.match(/[\d.]+/);
+                                                    return kmMatch ? `${Math.ceil((parseFloat(kmMatch[0]) / 18) * 60) + 2} Mnt` : '4 Mnt';
+                                                })();
+
+                                                return (
+                                                    <div className="flex flex-wrap items-center justify-between gap-2 bg-white px-3 py-2 rounded-xl border border-gray-100 w-full mt-2 shadow-xs">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Rute Google Maps:</span>
+                                                            {c.isLiveGoogleApi && (
+                                                                <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 text-[9px] font-bold rounded-md border border-emerald-200/60">
+                                                                    Live Rute
+                                                                </span>
+                                                            )}
                                                         </div>
-                                                    );
-                                                }
-                                                return null;
+                                                        <div className="flex items-center gap-3 text-xs font-bold text-gray-700">
+                                                            <span className="flex items-center gap-1" title="Jalan Kaki">🚶 {walk}</span>
+                                                            <span className="text-gray-300">•</span>
+                                                            <span className="flex items-center gap-1" title="Sepeda Motor">🏍️ {moto}</span>
+                                                            <span className="text-gray-300">•</span>
+                                                            <span className="flex items-center gap-1" title="Mobil">🚗 {car}</span>
+                                                        </div>
+                                                    </div>
+                                                );
                                             })()}
                                         </div>
                                         <div className="flex items-center gap-2">

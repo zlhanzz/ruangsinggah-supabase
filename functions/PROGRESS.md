@@ -2,23 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 235. Sinkronisasi Massal Titik Koordinat Asli Seluruh Master Landmark Nasional via OpenStreetMap API (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
+### 235. Integrasi Estimasi Jarak & Waktu Rute Nyata Google Maps via DistanceMatrixService (`KostFormMitra.tsx`, `curatedLandmarks.ts`) (Agustus 2026)
 - **Permintaan & Masalah**:
-  - Pengguna membutuhkan titik lokasi koordinat asli (Point of Interest / POI) dari setiap landmark yang ada di master data persis seperti saat dicari di peta.
+  - Pengguna membutuhkan estimasi waktu tempuh yang nyata sesuai rute jalan Google Maps (Jalan Kaki 🚶, Motor 🏍️, Mobil 🚗) pada form pendataan kost Mitra, identik dengan yang terpasang di dashboard agen.
 - **Implementasi Solusi**:
-  1. **Sinkronisasi Massal Koordinat Asli via OpenStreetMap API ([`curatedLandmarks.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants/curatedLandmarks.ts))**:
-     - Menjalankan automated lookup engine ke OpenStreetMap Nominatim API untuk seluruh daftar kampus, mall, rumah sakit, dan kawasan industri di Indonesia.
-     - Sebanyak 161+ titik koordinat berhasil disinkronkan secara presisi dengan akurasi 6 digit desimal (misal: UNHAS Tamalanrea `-5.132566, 119.488455`, PNUP `-5.129211, 119.481763`, UIM `-5.140639, 119.481089`, UMI `-5.136881, 119.447893`, MP `-5.157094, 119.446393`, dll.).
-  2. **Pembersihan Modal & Dukungan Input Presisi Manual ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
-     - Menonaktifkan geocoding otomatis liar latar belakang agar modal peta 100% mematuhi koordinat master data asli.
-     - Menyediakan input teks Latitude & Longitude interaktif langsung di footer modal.
+  1. **Integrasi Google Maps DistanceMatrixService ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - Mengimplementasikan helper `enrichLandmarksWithGoogleDistanceMatrix` yang secara otomatis memanggil API `google.maps.DistanceMatrixService` untuk mode perjalanan `DRIVING` dan `WALKING`.
+     - Durasi rute nyata yang memperhitungkan belokan jalan dan lalu lintas langsung disimpan ke objek data landmark (`walkDuration`, `motoDuration`, `carDuration`, `distance`, `isLiveGoogleApi`).
+     - Dipicu secara otomatis setelah pemindaian landmark selesai maupun saat titik lokasi diubah melalui modal peta (`handleMapPickerSave`).
+  2. **Tampilan Kartu Landmark Rute Nyata**:
+     - Menampilkan indikator rute nyata *"Rute Google Maps"* dengan badge *"Live Rute"* dan rincian waktu 🚶 Jalan Kaki, 🏍️ Motor, dan 🚗 Mobil yang akurat.
+  3. **Sinkronisasi Massal Koordinat Asli via OpenStreetMap API ([`curatedLandmarks.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants/curatedLandmarks.ts))**:
+     - Seluruh 161+ landmark terkurasi nasional telah menggunakan titik POI koordinat asli saat dicari di peta.
 - **File Tersentuh**:
-  - `functions/public/constants/curatedLandmarks.ts`
   - `functions/public/components/KostFormMitra.tsx`
+  - `functions/public/constants/curatedLandmarks.ts`
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 31.42s, 0 error).
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 43.28s, 0 error).
 
 ### 234. Master Dataset Anchor & Landmark Nasional Terkurasi Lengkap 350+ Titik Strategis & Isolasi 100% Master Data (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
