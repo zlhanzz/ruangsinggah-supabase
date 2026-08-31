@@ -2,6 +2,32 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 232. Penyempurnaan Deteksi Landmark: Kampus Top-to-Normal (Radius 7 KM) & Fasilitas Harian Terdekat (`KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna memberikan evaluasi bahwa hasil deteksi sebelumnya masih menampilkan lembaga kursus/bimbel kecil acak (seperti *"Sekolah Tinggi Ilmu Ekono"*, *"Academy of Pharmacy"*, dll.). Pengguna meminta agar:
+    1. Kampus ditampilkan dari yang paling top (populer/terkenal) hingga kampus biasa asalkan masuk dalam radius 7 KM.
+    2. Fasilitas harian penting (Mall, Supermarket/Minimarket, Tempat Ibadah, Laundry, RS) menampilkan titik lokasi yang **paling dekat** dari titik koordinat kost (*"untuk kampus mungkin kita bisa menampilkan kampus kampus yang dari top hingga biasa aja asalkan radiusnya masuk. untuk mall, supermarket/minimarket, tempat ibadah (masjid, gereja dll) dan laundry . tampilkan titik lokasi yang paling dekat aja dari titikk lokasi"*).
+- **Implementasi Solusi**:
+  1. **Penyaringan Blacklist Kursus & Bimbel**:
+     - Mengeliminasi tempat kursus/les non-kuliah (*bimbel, kursus, les, kumon, study club, daycare, tk, paud, sd, smp, sma, balai latihan*).
+  2. **Pemeringkatan Kampus Top-to-Normal (Radius 7 KM)**:
+     - Menggunakan skor popularitas berbasis ulasan riil Google Maps (`popularityScore = Math.log10(ratingsCount + 1) * 35 + (rating * 3) - ((km / 7) * 8)`).
+     - Mengambil top 4 kampus paling bereputasi dan relevan dalam radius 7 KM.
+  3. **Pencarian Fasilitas Harian Berbasis Jarak Terdekat (*Closest-First*)**:
+     - 🛒 **Minimarket / Supermarket Terdekat** (Indomaret, Alfamidi, Alfamart, dll., radius 2 KM).
+     - 🧺 **Laundry Kiloan Terdekat** (Laundry express, cuci kiloan, radius 2 KM).
+     - 🕌⛪ **Tempat Ibadah Terdekat** (Masjid, Musholla, Gereja, radius 2 KM).
+     - 🏥 **Rumah Sakit / Klinik Terdekat** (RSUP, RSUD, Klinik, radius 5 KM).
+     - 🛍️ **Mall / Pusat Belanja Terdekat** (Mall, Plaza, radius 7 KM).
+  4. **Kompilasi Otomatis & Terpadu**:
+     - Seluruh hasil dikompilasi ke daftar landmark sekitar kost secara instan saat lokasi ditetapkan, lengkap dengan estimasi waktu tempuh dan rute Google Maps terintegrasi.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 28.71s, 0 error).
+
 ### 231. Deteksi Otomatis Kampus & Landmark Terdekat via Google Places API (`KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta agar sistem mengadopsi fitur otomatisasi seperti Mamikos, di mana saat titik lokasi kost ditetapkan dan dikonfirmasi di peta, landmark terdekat (seperti kampus, mall, rumah sakit, stasiun, terminal) otomatis terdeteksi dan langsung muncul tanpa perlu klik manual lagi (*"pakai deteksi landmark otomatis aja, tapi nggk usah di klik secara manual lagi, langsung aja ketika titik lokasi kost sudah di tetapkan dan dikonfirmasi maka semuanya akan muncul secara otomatis juga"*).

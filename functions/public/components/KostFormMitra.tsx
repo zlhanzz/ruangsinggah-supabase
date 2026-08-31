@@ -981,84 +981,207 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             return calculateDistance(centerLat, centerLng, pLat, pLng);
         };
 
-        // 1. Scan Kampus & Universitas (radius 4.5 KM)
-        const scanCampuses = new Promise<any[]>((resolve) => {
-            service.nearbySearch(
-                {
-                    location: centerLatLng,
-                    radius: 4500,
-                    type: 'university'
-                },
-                (results: any[], status: string) => {
-                    if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-                        const parsed = results
-                            .filter(p => p.name && p.geometry?.location)
-                            .map(p => {
-                                const pLat = p.geometry.location.lat();
-                                const pLng = p.geometry.location.lng();
-                                const km = getKm(pLat, pLng);
-                                return {
-                                    name: p.name,
-                                    lat: pLat,
-                                    lng: pLng,
-                                    distance: `± ${km} KM`,
-                                    kmVal: km,
-                                    transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
-                                    isLiveGoogleApi: true
-                                };
-                            })
-                            .sort((a, b) => a.kmVal - b.kmVal)
-                            .slice(0, 4);
-                        resolve(parsed);
-                    } else {
-                        resolve([]);
-                    }
+        const isInvalidCampus = (name: string) => {
+            const lower = name.toLowerCase();
+            const blacklist = [
+                'bimbel', 'bimbingan belajar', 'les ', 'kursus', 'training', 'kumon', 'gandhi',
+                'study club', 'daycare', 'kindergarten', 'paud', 'tk ', 'taman kanak',
+                'sd ', 'smp ', 'sma ', 'smk ', 'madrasah', 'driving school', 'kursus mengemudi',
+                'english course', 'lpk ', 'balai latihan'
+            ];
+            return blacklist.some(b => lower.includes(b));
+        };
+
+        // Helper generic search promise
+        const performSearch = (request: any): Promise<any[]> => {
+            return new Promise((resolve) => {
+                try {
+                    service.nearbySearch(request, (results: any[], status: string) => {
+                        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+                            resolve(results);
+                        } else {
+                            resolve([]);
+                        }
+                    });
+                } catch {
+                    resolve([]);
                 }
-            );
+            });
+        };
+
+        // 1. Scan Kampus & Universitas (Radius 7 KM - Diurutkan dari yang Paling Top/Populer ke Biasa)
+        const scanCampuses = performSearch({
+            location: centerLatLng,
+            radius: 7000,
+            type: 'university'
+        }).then(results => {
+            return results
+                .filter(p => p.name && p.geometry?.location && !isInvalidCampus(p.name))
+                .map(p => {
+                    const pLat = p.geometry.location.lat();
+                    const pLng = p.geometry.location.lng();
+                    const km = getKm(pLat, pLng);
+                    const ratingsCount = p.user_ratings_total || 0;
+                    const rating = p.rating || 0;
+                    // Popularity ranking score: prioritas ulasan/reputasi namun tetap memperhitungkan jarak
+                    const popularityScore = Math.log10(ratingsCount + 1) * 35 + (rating * 3) - ((km / 7) * 8);
+                    return {
+                        name: p.name,
+                        lat: pLat,
+                        lng: pLng,
+                        distance: `± ${km} KM`,
+                        kmVal: km,
+                        popularityScore,
+                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                        isLiveGoogleApi: true
+                    };
+                })
+                .sort((a, b) => b.popularityScore - a.popularityScore)
+                .slice(0, 4); // Ambil 4 kampus terbaik dalam radius 7 KM
         });
 
-        // 2. Scan Fasilitas Umum (Mall, RS, Stasiun, Halte, Terminal, Pasar)
-        const scanFacilities = new Promise<any[]>((resolve) => {
-            service.nearbySearch(
-                {
-                    location: centerLatLng,
-                    radius: 3500,
-                    keyword: 'mall|rumah sakit|stasiun|terminal|supermarket|pasar'
-                },
-                (results: any[], status: string) => {
-                    if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-                        const parsed = results
-                            .filter(p => p.name && p.geometry?.location)
-                            .map(p => {
-                                const pLat = p.geometry.location.lat();
-                                const pLng = p.geometry.location.lng();
-                                const km = getKm(pLat, pLng);
-                                return {
-                                    name: p.name,
-                                    lat: pLat,
-                                    lng: pLng,
-                                    distance: `± ${km} KM`,
-                                    kmVal: km,
-                                    transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
-                                    isLiveGoogleApi: true
-                                };
-                            })
-                            .sort((a, b) => a.kmVal - b.kmVal)
-                            .slice(0, 4);
-                        resolve(parsed);
-                    } else {
-                        resolve([]);
-                    }
-                }
-            );
+        // 2. Scan Fasilitas Harian: Minimarket / Supermarket Terdekat (Radius 2 KM - Jarak Terdekat)
+        const scanMinimarket = performSearch({
+            location: centerLatLng,
+            radius: 2000,
+            keyword: 'indomaret|alfamidi|alfamart|supermarket'
+        }).then(results => {
+            return results
+                .filter(p => p.name && p.geometry?.location)
+                .map(p => {
+                    const pLat = p.geometry.location.lat();
+                    const pLng = p.geometry.location.lng();
+                    const km = getKm(pLat, pLng);
+                    return {
+                        name: p.name,
+                        lat: pLat,
+                        lng: pLng,
+                        distance: `± ${km} KM`,
+                        kmVal: km,
+                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                        isLiveGoogleApi: true
+                    };
+                })
+                .sort((a, b) => a.kmVal - b.kmVal)
+                .slice(0, 2); // 2 minimarket/supermarket paling dekat
         });
 
-        Promise.all([scanCampuses, scanFacilities]).then(([campusesList, facilitiesList]) => {
+        // 3. Scan Fasilitas Harian: Laundry Kiloan Terdekat (Radius 2 KM - Jarak Terdekat)
+        const scanLaundry = performSearch({
+            location: centerLatLng,
+            radius: 2000,
+            keyword: 'laundry|laundry kiloan|cuci pakaian'
+        }).then(results => {
+            return results
+                .filter(p => p.name && p.geometry?.location)
+                .map(p => {
+                    const pLat = p.geometry.location.lat();
+                    const pLng = p.geometry.location.lng();
+                    const km = getKm(pLat, pLng);
+                    return {
+                        name: p.name,
+                        lat: pLat,
+                        lng: pLng,
+                        distance: `± ${km} KM`,
+                        kmVal: km,
+                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                        isLiveGoogleApi: true
+                    };
+                })
+                .sort((a, b) => a.kmVal - b.kmVal)
+                .slice(0, 1); // 1 laundry terdekat
+        });
+
+        // 4. Scan Fasilitas Harian: Tempat Ibadah Terdekat (Masjid / Gereja, Radius 2 KM - Jarak Terdekat)
+        const scanWorship = performSearch({
+            location: centerLatLng,
+            radius: 2000,
+            type: 'place_of_worship',
+            keyword: 'masjid|musholla|gereja'
+        }).then(results => {
+            return results
+                .filter(p => p.name && p.geometry?.location)
+                .map(p => {
+                    const pLat = p.geometry.location.lat();
+                    const pLng = p.geometry.location.lng();
+                    const km = getKm(pLat, pLng);
+                    return {
+                        name: p.name,
+                        lat: pLat,
+                        lng: pLng,
+                        distance: `± ${km} KM`,
+                        kmVal: km,
+                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                        isLiveGoogleApi: true
+                    };
+                })
+                .sort((a, b) => a.kmVal - b.kmVal)
+                .slice(0, 1); // 1 tempat ibadah terdekat
+        });
+
+        // 5. Scan Fasilitas Medis: Rumah Sakit / Klinik Terdekat (Radius 5 KM - Jarak Terdekat)
+        const scanHospital = performSearch({
+            location: centerLatLng,
+            radius: 5000,
+            type: 'hospital',
+            keyword: 'rumah sakit|rsup|rsud|klinik'
+        }).then(results => {
+            return results
+                .filter(p => p.name && p.geometry?.location)
+                .map(p => {
+                    const pLat = p.geometry.location.lat();
+                    const pLng = p.geometry.location.lng();
+                    const km = getKm(pLat, pLng);
+                    return {
+                        name: p.name,
+                        lat: pLat,
+                        lng: pLng,
+                        distance: `± ${km} KM`,
+                        kmVal: km,
+                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                        isLiveGoogleApi: true
+                    };
+                })
+                .sort((a, b) => a.kmVal - b.kmVal)
+                .slice(0, 1); // 1 RS/klinik terdekat
+        });
+
+        // 6. Scan Pusat Belanja: Mall / Plaza Terdekat (Radius 7 KM - Jarak Terdekat)
+        const scanMall = performSearch({
+            location: centerLatLng,
+            radius: 7000,
+            type: 'shopping_mall',
+            keyword: 'mall|plaza|square|trade center'
+        }).then(results => {
+            return results
+                .filter(p => p.name && p.geometry?.location)
+                .map(p => {
+                    const pLat = p.geometry.location.lat();
+                    const pLng = p.geometry.location.lng();
+                    const km = getKm(pLat, pLng);
+                    return {
+                        name: p.name,
+                        lat: pLat,
+                        lng: pLng,
+                        distance: `± ${km} KM`,
+                        kmVal: km,
+                        transportMode: km <= 1.0 ? 'walk' : 'motorcycle',
+                        isLiveGoogleApi: true
+                    };
+                })
+                .sort((a, b) => a.kmVal - b.kmVal)
+                .slice(0, 1); // 1 mall terdekat
+        });
+
+        Promise.all([scanCampuses, scanMinimarket, scanLaundry, scanWorship, scanHospital, scanMall]).then(([campusesList, minimarketList, laundryList, worshipList, hospitalList, mallList]) => {
             if (landmarkScanAbortRef.current !== scanId) return;
             setIsScanningLandmarks(false);
 
+            // Gabungkan fasilitas harian terdekat
+            const dailyFacilities = [...minimarketList, ...laundryList, ...worshipList, ...hospitalList, ...mallList];
+            
             const combinedList = [...campusesList];
-            facilitiesList.forEach(fac => {
+            dailyFacilities.forEach(fac => {
                 if (!combinedList.some(c => c.name.toLowerCase() === fac.name.toLowerCase())) {
                     combinedList.push(fac);
                 }
@@ -1067,8 +1190,8 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             if (combinedList.length > 0) {
                 setForm(prev => ({
                     ...prev,
-                    campuses: combinedList.map(({ kmVal, ...item }) => item),
-                    publicFacilities: facilitiesList.map(({ kmVal, ...item }) => item)
+                    campuses: combinedList.map(({ kmVal, popularityScore, ...item }: any) => item),
+                    publicFacilities: dailyFacilities.map(({ kmVal, ...item }: any) => item)
                 }));
             }
         }).catch(() => {
