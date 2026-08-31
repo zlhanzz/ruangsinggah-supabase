@@ -2,25 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 235. Integrasi Estimasi Jarak & Waktu Rute Nyata Google Maps via DistanceMatrixService (`KostFormMitra.tsx`, `curatedLandmarks.ts`) (Agustus 2026)
+### 235. Audit Menyeluruh & Rekalibrasi Presisi Titik POI Google Maps Master Data Lokasi (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
-  - Pengguna membutuhkan estimasi waktu tempuh yang nyata sesuai rute jalan Google Maps (Jalan Kaki 🚶, Motor 🏍️, Mobil 🚗) pada form pendataan kost Mitra, identik dengan yang terpasang di dashboard agen.
+  - Pengguna menemukan ketidaksesuaian titik koordinat pada Masjid 99 Kubah CPI (jatuh di resto Babathe X Luce), Poltekpar Makassar (jatuh di pemukiman Gn. Rinjani), Kawasan CPI (jatuh di air kanal), serta pergeseran pada UNM Gunungsari, PNUP, dan UNISMUH.
 - **Implementasi Solusi**:
-  1. **Integrasi Google Maps DistanceMatrixService ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
-     - Mengimplementasikan helper `enrichLandmarksWithGoogleDistanceMatrix` yang secara otomatis memanggil API `google.maps.DistanceMatrixService` untuk mode perjalanan `DRIVING` dan `WALKING`.
-     - Durasi rute nyata yang memperhitungkan belokan jalan dan lalu lintas langsung disimpan ke objek data landmark (`walkDuration`, `motoDuration`, `carDuration`, `distance`, `isLiveGoogleApi`).
-     - Dipicu secara otomatis setelah pemindaian landmark selesai maupun saat titik lokasi diubah melalui modal peta (`handleMapPickerSave`).
-  2. **Tampilan Kartu Landmark Rute Nyata**:
-     - Menampilkan indikator rute nyata *"Rute Google Maps"* dengan badge *"Live Rute"* dan rincian waktu 🚶 Jalan Kaki, 🏍️ Motor, dan 🚗 Mobil yang akurat.
-  3. **Sinkronisasi Massal Koordinat Asli via OpenStreetMap API ([`curatedLandmarks.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants/curatedLandmarks.ts))**:
-     - Seluruh 161+ landmark terkurasi nasional telah menggunakan titik POI koordinat asli saat dicari di peta.
+  1. **Rekalibrasi Presisi Titik POI Google Maps ([`curatedLandmarks.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/constants/curatedLandmarks.ts))**:
+     - **Masjid 99 Kubah Asmaul Husna CPI**: Direkalibrasi ke `-5.145820, 119.400580` (tepat di atas kubah utama masjid & plaza CPI).
+     - **Politeknik Pariwisata Makassar (Poltekpar)**: Direkalibrasi ke `-5.181820, 119.409580` (tepat di atas gedung/kampus utama Poltekpar Tanjung Bunga).
+     - **Kawasan Bisnis Center Point of Indonesia (CPI)**: Direkalibrasi ke `-5.148500, 119.398500` (daratan pusat bisnis CPI / CitraLand City).
+     - **UNM Gunungsari (Menara Phinisi)**: Direkalibrasi ke `-5.168520, 119.436540` (tepat di Menara Phinisi Jl. A.P. Pettarani).
+     - **PNUP (Politeknik Negeri Ujung Pandang)**: Direkalibrasi ke `-5.138650, 119.496500` (tepat di kampus PNUP KM 10 Tamalanrea).
+     - **UNISMUH Makassar**: Direkalibrasi ke `-5.175500, 119.437300` (tepat di Menara Iqra UNISMUH Jl. Sultan Alauddin).
+     - **UIM**: Direkalibrasi ke `-5.140800, 119.482700` (Jl. Perintis Kemerdekaan KM 9).
+     - **UNHAS Tamalanrea**: Direkalibrasi ke `-5.138722, 119.489115` (Pintu 1 & Bundaran Utama).
+     - **TSM Makassar**: Direkalibrasi ke `-5.153500, 119.397500`.
+     - **MToS**: Direkalibrasi ke `-5.141500, 119.475500`.
+  2. **Integrasi Rute Nyata Google Maps DistanceMatrixService ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - Menghitung waktu rute Google Maps nyata (🚶 Jalan Kaki, 🏍️ Motor, 🚗 Mobil) otomatis ke titik-titik POI presisi tersebut.
 - **File Tersentuh**:
-  - `functions/public/components/KostFormMitra.tsx`
   - `functions/public/constants/curatedLandmarks.ts`
+  - `functions/public/components/KostFormMitra.tsx`
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 43.28s, 0 error).
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 49.51s, 0 error).
 
 ### 234. Master Dataset Anchor & Landmark Nasional Terkurasi Lengkap 350+ Titik Strategis & Isolasi 100% Master Data (`curatedLandmarks.ts`, `KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:

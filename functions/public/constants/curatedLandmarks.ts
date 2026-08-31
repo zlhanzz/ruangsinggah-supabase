@@ -40,17 +40,17 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     // 1. MAKASSAR, GOWA, MAROS, & PAREPARE (SULAWESI SELATAN)
     // ══════════════════════════════════════════════════════════════════════════════
     // Kampus
-    { id: 'mks-unhas-tamalanrea', name: 'Universitas Hasanuddin (UNHAS) - Tamalanrea', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.132566, lng: 119.488455, aliases: ['unhas', 'pintu 1 unhas', 'rektorat unhas'] },
+    { id: 'mks-unhas-tamalanrea', name: 'Universitas Hasanuddin (UNHAS) - Tamalanrea', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.138722, lng: 119.489115, aliases: ['unhas', 'pintu 1 unhas', 'rektorat unhas'] },
     { id: 'mks-unhas-gowa', name: 'Universitas Hasanuddin (UNHAS) - Kampus Teknik Gowa', category: 'campus', city: 'Gowa', province: 'Sulawesi Selatan', lat: -5.230784, lng: 119.502914, aliases: ['unhas gowa', 'fakultas teknik unhas'] },
-    { id: 'mks-uim', name: 'Universitas Islam Makassar (UIM)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.140639, lng: 119.481089, aliases: ['uim', 'universitas islam makassar'] },
-    { id: 'mks-pnup', name: 'Politeknik Negeri Ujung Pandang (PNUP)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.129211, lng: 119.481763, aliases: ['pnup', 'poltek unhas', 'politeknik negeri ujung pandang'] },
-    { id: 'mks-umi', name: 'Universitas Muslim Indonesia (UMI)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.136881, lng: 119.447893, aliases: ['umi', 'umi urip', 'universitas muslim indonesia'] },
-    { id: 'mks-unm-gunungsari', name: 'Universitas Negeri Makassar (UNM) - Gunungsari', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.185600, lng: 119.432400, aliases: ['unm', 'unm phinisi', 'menara phinisi unm'] },
+    { id: 'mks-uim', name: 'Universitas Islam Makassar (UIM)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.140800, lng: 119.482700, aliases: ['uim', 'universitas islam makassar'] },
+    { id: 'mks-pnup', name: 'Politeknik Negeri Ujung Pandang (PNUP)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.138650, lng: 119.496500, aliases: ['pnup', 'poltek unhas', 'politeknik negeri ujung pandang'] },
+    { id: 'mks-umi', name: 'Universitas Muslim Indonesia (UMI)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.138200, lng: 119.447500, aliases: ['umi', 'umi urip', 'universitas muslim indonesia'] },
+    { id: 'mks-unm-gunungsari', name: 'Universitas Negeri Makassar (UNM) - Gunungsari', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.168520, lng: 119.436540, aliases: ['unm', 'unm phinisi', 'menara phinisi unm'] },
     { id: 'mks-unm-parangtambung', name: 'Universitas Negeri Makassar (UNM) - Parangtambung', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.179800, lng: 119.428500, aliases: ['unm parangtambung', 'mipa unm'] },
     { id: 'mks-unm-banta-bantaeng', name: 'Universitas Negeri Makassar (UNM) - Banta-Bantaeng', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.163700, lng: 119.431200, aliases: ['fik unm'] },
     { id: 'mks-uin-samata', name: 'UIN Alauddin Makassar - Kampus 2 Samata', category: 'campus', city: 'Gowa', province: 'Sulawesi Selatan', lat: -5.203600, lng: 119.497100, aliases: ['uin samata', 'uin alauddin'] },
     { id: 'mks-uin-alauddin', name: 'UIN Alauddin Makassar - Kampus 1 Sultan Alauddin', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.176400, lng: 119.435700, aliases: ['uin kampus 1'] },
-    { id: 'mks-unismuh', name: 'Universitas Muhammadiyah Makassar (UNISMUH)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.18279, lng: 119.441806, aliases: ['unismuh', 'unismuh tala salapang'] },
+    { id: 'mks-unismuh', name: 'Universitas Muhammadiyah Makassar (UNISMUH)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.175500, lng: 119.437300, aliases: ['unismuh', 'unismuh tala salapang'] },
     { id: 'mks-poltekkes', name: 'Poltekkes Kemenkes Makassar (Banta-Bantaeng)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.167800, lng: 119.434200, aliases: ['poltekkes makassar'] },
     { id: 'mks-poltek-ati', name: 'Politeknik ATI Makassar', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.127800, lng: 119.429500, aliases: ['ati makassar', 'poltek ati'] },
     { id: 'mks-polimarim', name: 'Politeknik Maritim AMI Makassar (POLIMARIM)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.143500, lng: 119.445500, aliases: ['polimarim', 'ami makassar'] },
@@ -61,14 +61,14 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     { id: 'mks-stimik-handayani', name: 'Universitas Handayani Makassar', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.144800, lng: 119.456200, aliases: ['stimik handayani'] },
     { id: 'mks-stikes-megarezky', name: 'Universitas Mega Rezky Makassar', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.162332, lng: 119.477328, aliases: ['unimerz', 'stikes mega rezky'] },
     { id: 'mks-ciputra', name: 'Universitas Ciputra Makassar (CPI)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.149216, lng: 119.394935, aliases: ['uc makassar', 'ciputra cpi'] },
-    { id: 'mks-poltekpar', name: 'Politeknik Pariwisata Makassar (Poltekpar)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.178500, lng: 119.408500, aliases: ['poltekpar makassar', 'akpar'] },
+    { id: 'mks-poltekpar', name: 'Politeknik Pariwisata Makassar (Poltekpar)', category: 'campus', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.181820, lng: 119.409580, aliases: ['poltekpar makassar', 'akpar'] },
     { id: 'pre-ith-parepare', name: 'Institut Teknologi Bacharuddin Jusuf Habibie (ITH Parepare)', category: 'campus', city: 'Parepare', province: 'Sulawesi Selatan', lat: -4.015500, lng: 119.628500, aliases: ['ith parepare'] },
     // Mall & Ritel
     { id: 'mks-mall-panakkukang', name: 'Mall Panakkukang (MP)', category: 'mall', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.157094, lng: 119.446393, aliases: ['mp', 'panakkukang mall'] },
     { id: 'mks-nipah-park', name: 'Nipah Park Makassar', category: 'mall', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.139000, lng: 119.443000, aliases: ['nipah mall', 'mall nipah'] },
-    { id: 'mks-trans-studio', name: 'Trans Studio Mall Makassar (TSM)', category: 'mall', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.158853, lng: 119.394075, aliases: ['tsm makassar', 'trans studio'] },
+    { id: 'mks-trans-studio', name: 'Trans Studio Mall Makassar (TSM)', category: 'mall', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.153500, lng: 119.397500, aliases: ['tsm makassar', 'trans studio'] },
     { id: 'mks-pipo', name: 'Phinisi Point Mall (PiPo)', category: 'mall', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.152387, lng: 119.403947, aliases: ['pipo mall', 'mall pipo'] },
-    { id: 'mks-mtos', name: 'Makassar Town Square (MToS)', category: 'mall', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.144962, lng: 119.475495, aliases: ['mtos'] },
+    { id: 'mks-mtos', name: 'Makassar Town Square (MToS)', category: 'mall', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.141500, lng: 119.475500, aliases: ['mtos'] },
     { id: 'mks-mall-ratu-indah', name: 'Mall Ratu Indah (MaRI)', category: 'mall', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.153285, lng: 119.417308, aliases: ['mari', 'ratu indah'] },
     { id: 'mks-living-plaza-pettarani', name: 'Living Plaza Pettarani', category: 'mall', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.163453, lng: 119.436096, aliases: ['living plaza', 'ace pettarani'] },
     // Kawasan Industri & Bisnis
@@ -76,9 +76,9 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     { id: 'mks-pergudangan-parangloe', name: 'Kawasan Pergudangan Parangloe Indah', category: 'industrial', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.100695, lng: 119.480635, aliases: ['parangloe', 'pergudangan parangloe'] },
     { id: 'mks-cbd-panakkukang', name: 'Kawasan Bisnis Boulevard & Pengayoman', category: 'office', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.154200, lng: 119.444500, aliases: ['boulevard panakkukang', 'pengayoman'] },
     { id: 'mks-cbd-pettarani', name: 'Kawasan Perkantoran Jl. A.P. Pettarani', category: 'office', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.152400, lng: 119.435800, aliases: ['perkantoran pettarani', 'ap pettarani'] },
-    { id: 'mks-cbd-cpi', name: 'Kawasan Bisnis Center Point of Indonesia (CPI)', category: 'office', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.154800, lng: 119.397200, aliases: ['cpi makassar', 'citraland cpi'] },
+    { id: 'mks-cbd-cpi', name: 'Kawasan Bisnis Center Point of Indonesia (CPI)', category: 'office', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.148500, lng: 119.398500, aliases: ['cpi makassar', 'citraland cpi'] },
     // Rumah Sakit Besar
-    { id: 'mks-rsup-wahidin', name: 'RSUP Dr. Wahidin Sudirohusodo', category: 'hospital', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.135027, lng: 119.493421, aliases: ['rs wahidin', 'rsup wahidin'] },
+    { id: 'mks-rsup-wahidin', name: 'RSUP Dr. Wahidin Sudirohusodo', category: 'hospital', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.134500, lng: 119.496500, aliases: ['rs wahidin', 'rsup wahidin'] },
     { id: 'mks-rs-unhas', name: 'Rumah Sakit Universitas Hasanuddin (RS UNHAS)', category: 'hospital', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.134000, lng: 119.493500, aliases: ['rs unhas', 'rs pendidikan unhas'] },
     { id: 'mks-rs-siloam', name: 'Siloam Hospitals Makassar (Metro Tanjung Bunga)', category: 'hospital', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.150044, lng: 119.407091, aliases: ['rs siloam makassar', 'siloam tanjung bunga'] },
     { id: 'mks-rs-primaya', name: 'Primaya Hospital Makassar (Eks Awal Bros)', category: 'hospital', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.134806, lng: 119.43512, aliases: ['rs awal bros', 'rs primaya'] },
@@ -92,7 +92,7 @@ export const CURATED_LANDMARKS: CuratedLandmark[] = [
     // Wisata & Ikon Kota
     { id: 'mks-pantai-losari', name: 'Kawasan Wisata Pantai Losari', category: 'tourism', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.144800, lng: 119.407200, aliases: ['pantai losari', 'losari'] },
     { id: 'mks-fort-rotterdam', name: 'Benteng Fort Rotterdam', category: 'tourism', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.133800, lng: 119.405800, aliases: ['fort rotterdam', 'benteng ujung pandang'] },
-    { id: 'mks-masjid-99-kubah', name: 'Masjid 99 Kubah CPI Makassar', category: 'tourism', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.150200, lng: 119.399500, aliases: ['masjid 99 kubah', 'masjid cpi'] },
+    { id: 'mks-masjid-99-kubah', name: 'Masjid 99 Kubah CPI Makassar', category: 'tourism', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.145820, lng: 119.400580, aliases: ['masjid 99 kubah', 'masjid cpi', 'masjid kubah 99 asmaul husna'] },
     // Hub Transportasi
     { id: 'mks-bandara-hasanuddin', name: 'Bandara Internasional Sultan Hasanuddin', category: 'transport', city: 'Maros', province: 'Sulawesi Selatan', lat: -5.076665, lng: 119.552242, aliases: ['bandara hasanuddin', 'bandara shiam'] },
     { id: 'mks-pelabuhan-soetta', name: 'Pelabuhan Soekarno-Hatta Makassar', category: 'transport', city: 'Makassar', province: 'Sulawesi Selatan', lat: -5.122400, lng: 119.408500, aliases: ['pelabuhan makassar', 'pelabuhan soetta'] },
