@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 233. Sistem Penyimpanan & Pemulihan Draft Otomatis Formulir Listing Mandiri (`KostFormMitra.tsx`) (Agustus 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa saat mengisi formulir penambahan listing mandiri dan modal tertutup (*close*, refresh, atau berpindah layar), seluruh data yang sudah dimasukkan langsung hilang total dan harus mengulang pengisian dari awal lagi (*"sistem draft yang ada pada sistem penambahan listing mandiri yang ada pada dashboard admin berlum berufungsi optimal. ketika terclose dan sebagainya, data yang sebelumnya sudah kita masukkan langsung hilang. saya juga ingin agar ketik sudah memasukkan data dan close, data tersebut masih dapat dilanjutkan pengisiannya tanpa harus mengulang semuanya dari awal lagi"*).
+- **Implementasi Solusi**:
+  1. **Penyimpanan Draft Real-Time ke LocalStorage ([`KostFormMitra.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx))**:
+     - Mengimplementasikan helper `getDraftStorageKey(userId)` yang menyimpan snapshot state formulir secara real-time saat ada perubahan pada `form`, `step`, maupun `managementOption`.
+     - Menyimpan seluruh data: judul, deskripsi, lokasi, koordinat GPS/peta, provinsi, kota, kecamatan, landmark terdeteksi, fasilitas gedung, fasilitas kamar, tipe kamar, peraturan, dan kontak.
+  2. **Pemulihan Otomatis & Lanjutkan Sesi (*Smart Draft Resume*)**:
+     - Saat modal dibuka dalam mode baru (`!isEditing`), sistem otomatis memulihkan seluruh data dan langsung membawa pengguna ke posisi langkah (*Step*) terakhir yang sedang dikerjakan.
+  3. **Antarmuka Banner Draft & Opsi Reset**:
+     - Menampilkan banner status: *"📋 Melanjutkan Draft Pengisian (Langkah X)"*.
+     - Menyediakan tombol pintas **"Mulai Baru"** (`<RotateCcw />`) jika pengguna ingin membersihkan draft dan mengulang formulir baru dari awal.
+     - Menyematkan badge status *"Draft Aktif"* di header modal.
+  4. **Pembersihan Otomatis Pasca-Publikasi**:
+     - Menghapus draft dari `localStorage` secara otomatis saat properti berhasil disimpan/dipublikasikan ke database (`onSuccess`).
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `npm run build` di `functions/public/` lulus 100% (✓ 2505 modules transformed, 29.64s, 0 error).
+
 ### 232. Penyempurnaan Deteksi Landmark: Kampus Top-to-Normal (Radius 7 KM) & Fasilitas Harian Terdekat (`KostFormMitra.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna memberikan evaluasi bahwa hasil deteksi sebelumnya masih menampilkan lembaga kursus/bimbel kecil acak (seperti *"Sekolah Tinggi Ilmu Ekono"*, *"Academy of Pharmacy"*, dll.). Pengguna meminta agar:

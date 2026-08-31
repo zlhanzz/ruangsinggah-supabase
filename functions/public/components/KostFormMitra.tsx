@@ -5,7 +5,7 @@ import {
     X, ChevronRight, ChevronLeft, Camera, Video, MapPin, Home, Wifi,
     Plus, Trash2, Check, AlertCircle, Loader2, Upload, Image as ImageIcon,
     Phone, BookOpen, DollarSign, Search, Navigation, ShieldCheck, User, Maximize2,
-    Crosshair, CheckCircle2, Sparkles, LocateFixed
+    Crosshair, CheckCircle2, Sparkles, LocateFixed, FileText, RotateCcw, Save
 } from 'lucide-react';
 
 interface KostFormMitraProps {
@@ -848,14 +848,69 @@ const FacilityInput: React.FC<{
     );
 };
 
+// ── DRAFT STORAGE HELPERS ───────────────────────────────────────────────────
+const getDraftStorageKey = (userId?: string) => `ruangsinggah_kost_form_draft_${userId || 'default'}`;
+
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
 const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClose, onSuccess }) => {
     const isEditing = !!editingKost?.id;
-    const [step, setStep] = useState(0);
-    const [managementOption, setManagementOption] = useState<'none' | 'self' | 'kostmanager'>(
-        editingKost ? (editingKost.managed_by || 'self') : 'self'
-    );
-    const [form, setForm] = useState<Partial<Kost>>(editingKost ? { ...initialForm, ...editingKost } : initialForm);
+    const storageKey = getDraftStorageKey(user?.id || user?.uid);
+
+    // Initial state loader with Draft support
+    const [step, setStep] = useState<number>(() => {
+        if (isEditing) return 0;
+        try {
+            const savedDraft = localStorage.getItem(storageKey);
+            if (savedDraft) {
+                const parsed = JSON.parse(savedDraft);
+                if (typeof parsed.step === 'number' && parsed.step >= 0 && parsed.step < STEPS.length) {
+                    return parsed.step;
+                }
+            }
+        } catch {}
+        return 0;
+    });
+
+    const [managementOption, setManagementOption] = useState<'none' | 'self' | 'kostmanager'>(() => {
+        if (editingKost) return editingKost.managed_by || 'self';
+        try {
+            const savedDraft = localStorage.getItem(storageKey);
+            if (savedDraft) {
+                const parsed = JSON.parse(savedDraft);
+                if (parsed.managementOption) return parsed.managementOption;
+            }
+        } catch {}
+        return 'self';
+    });
+
+    const [restoredDraftInfo, setRestoredDraftInfo] = useState<{ savedAt?: string } | null>(() => {
+        if (isEditing) return null;
+        try {
+            const savedDraft = localStorage.getItem(storageKey);
+            if (savedDraft) {
+                const parsed = JSON.parse(savedDraft);
+                if (parsed.form && (parsed.form.title || parsed.form.address || parsed.form.price || parsed.step > 0)) {
+                    return { savedAt: parsed.lastSaved };
+                }
+            }
+        } catch {}
+        return null;
+    });
+
+    const [form, setForm] = useState<Partial<Kost>>(() => {
+        if (editingKost) return { ...initialForm, ...editingKost };
+        try {
+            const savedDraft = localStorage.getItem(storageKey);
+            if (savedDraft) {
+                const parsed = JSON.parse(savedDraft);
+                if (parsed.form && typeof parsed.form === 'object') {
+                    return { ...initialForm, ...parsed.form };
+                }
+            }
+        } catch {}
+        return initialForm;
+    });
+
     const [newImageFiles, setNewImageFiles] = useState<File[]>([]);
     const [newVideoFiles, setNewVideoFiles] = useState<File[]>([]);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
@@ -864,10 +919,62 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     const [tempRule, setTempRule] = useState('');
     const imageInputRef = useRef<HTMLInputElement>(null);
     const videoInputRef = useRef<HTMLInputElement>(null);
+    const isInitialMount = useRef(true);
+
+    // Auto-save draft to localStorage whenever form, step, or managementOption changes
+    useEffect(() => {
+        if (isEditing) return;
+
+        // Skip saving on initial mount to avoid overwriting with defaults prematurely
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
+
+        const timeoutId = setTimeout(() => {
+            try {
+                const hasData = form.title || form.address || form.description || form.city || step > 0 || (form.roomTypes && form.roomTypes.length > 0);
+                if (hasData) {
+                    const payload = {
+                        form,
+                        step,
+                        managementOption,
+                        lastSaved: new Date().toISOString()
+                    };
+                    localStorage.setItem(storageKey, JSON.stringify(payload));
+                }
+            } catch (err) {
+                console.warn('Gagal menyimpan draft kost ke localStorage:', err);
+            }
+        }, 400);
+
+        return () => clearTimeout(timeoutId);
+    }, [form, step, managementOption, isEditing, storageKey]);
+
+    // Handle clear draft and start fresh
+    const handleClearDraft = () => {
+        try {
+            localStorage.removeItem(storageKey);
+        } catch {}
+        setForm(initialForm);
+        setStep(0);
+        setManagementOption('self');
+        setRestoredDraftInfo(null);
+        setError('');
+        if (user) {
+            setForm({
+                ...initialForm,
+                omnichannelContactName: user.displayName || user.name || '',
+                omnichannelContactPhone: (user.phone || '').replace(/\D/g, '') || '',
+                omnichannelContactType: 'owner',
+                contactSelection: 'profile'
+            });
+        }
+    };
     
     // Auto-populate profile data if it's a new listing and source is profile
     useEffect(() => {
-        if (!isEditing && user) {
+        if (!isEditing && user && !restoredDraftInfo) {
             setForm(prev => ({
                 ...prev,
                 omnichannelContactName: user.displayName || user.name || prev.omnichannelContactName,
@@ -876,7 +983,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 contactSelection: 'profile'
             }));
         }
-    }, [user, isEditing]);
+    }, [user, isEditing, restoredDraftInfo]);
 
     const upd = (key: keyof Kost, val: any) => setForm(prev => ({ ...prev, [key]: val }));
 
@@ -1345,6 +1452,10 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 await updatePropertyWithMedia(editingKost.id, data, newImageFiles, newVideoFiles);
             } else {
                 await addPropertyWithMedia({ ...data, isVerified: false }, newImageFiles, newVideoFiles);
+                // Clear draft after successful creation
+                try {
+                    localStorage.removeItem(storageKey);
+                } catch {}
             }
             onSuccess();
         } catch (e: any) {
@@ -1845,10 +1956,22 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
                 <div>
-                    <h2 className="font-black text-gray-900 text-base">{isEditing ? 'Edit Listing' : 'Tambah Kost Baru'}</h2>
+                    <div className="flex items-center gap-2">
+                        <h2 className="font-black text-gray-900 text-base">{isEditing ? 'Edit Listing' : 'Tambah Kost Baru'}</h2>
+                        {!isEditing && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200/80 rounded-full text-[9px] font-bold text-emerald-700">
+                                <CheckCircle2 size={10} className="text-emerald-500" />
+                                <span>Draft Aktif</span>
+                            </span>
+                        )}
+                    </div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Langkah {step + 1} dari {activeSteps.length}</p>
                 </div>
-                <button onClick={onClose} className="w-10 h-10 rounded-2xl hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors">
+                <button 
+                    onClick={onClose} 
+                    className="w-10 h-10 rounded-2xl hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors"
+                    title="Tutup Formulir (Draft Tersimpan Otomatis)"
+                >
                     <X size={20} />
                 </button>
             </div>
@@ -1879,6 +2002,31 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     <div className="h-full bg-orange-500 rounded-full transition-all duration-500" style={{ width: `${((step + 1) / activeSteps.length) * 100}%` }} />
                 </div>
             </div>
+
+            {/* Restored Draft Notice Banner */}
+            {restoredDraftInfo && !isEditing && (
+                <div className="mx-5 mt-3 p-3 bg-gradient-to-r from-amber-50/90 to-orange-50/90 border border-amber-200/80 rounded-2xl flex items-center justify-between gap-3 shrink-0 shadow-xs">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-8 h-8 rounded-xl bg-orange-500/10 text-orange-600 flex items-center justify-center shrink-0">
+                            <FileText size={16} />
+                        </span>
+                        <div className="min-w-0">
+                            <p className="text-xs font-black text-gray-800 truncate">Melanjutkan Draft Pengisian</p>
+                            <p className="text-[10px] font-bold text-gray-500 truncate">
+                                Progres sebelumnya tersimpan otomatis • Langkah {step + 1} ({activeSteps[step]?.label})
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleClearDraft}
+                        className="px-3 py-1.5 bg-white border border-gray-200 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 rounded-xl text-[11px] font-bold text-gray-600 transition-all shrink-0 shadow-xs flex items-center gap-1.5"
+                    >
+                        <RotateCcw size={12} />
+                        <span>Mulai Baru</span>
+                    </button>
+                </div>
+            )}
 
             {/* Error Banner */}
             {error && (
