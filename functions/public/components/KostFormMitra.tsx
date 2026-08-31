@@ -2757,7 +2757,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
                                     {/* Pertanyaan Eksplisit Biaya Tambahan Penghuni > 1 Orang */}
                                     {(draftRoom.maxOccupants || 1) > 1 ? (
-                                        <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-200/80 space-y-3 animate-in fade-in-50 duration-200">
+                                        <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-200/80 space-y-2.5 animate-in fade-in-50 duration-200">
                                             <div>
                                                 <div className="flex items-center gap-1.5 text-amber-900 font-black text-xs">
                                                     <Users size={15} className="text-amber-600" />
@@ -2797,26 +2797,11 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 </button>
                                             </div>
 
-                                            {/* Input Nominal jika memilih Ya */}
+                                            {/* Hint informatif bahwa nominal ditentukan di Tahap 3 */}
                                             {(hasExtraFee || (draftRoom.additionalCostPerPerson || 0) > 0) && (
-                                                <div className="pt-2 border-t border-amber-200/60 animate-in fade-in-50 duration-200">
-                                                    <label className="block text-[10px] font-black text-gray-600 uppercase tracking-wider mb-1.5">
-                                                        Nominal Tambahan (Per Orang / {lowestPeriodLabel})
-                                                    </label>
-                                                    <div className="relative w-full sm:w-60">
-                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-bold">
-                                                            Rp
-                                                        </span>
-                                                        <input 
-                                                            type="number" 
-                                                            min="0" 
-                                                            placeholder="Contoh: 200000" 
-                                                            value={draftRoom.additionalCostPerPerson || ''} 
-                                                            onChange={e => updDraftRoom('additionalCostPerPerson', parseInt(e.target.value) || 0)} 
-                                                            className="w-full h-10 bg-white border border-gray-300 rounded-xl pl-9 pr-3 text-xs font-bold text-gray-900 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500" 
-                                                        />
-                                                    </div>
-                                                </div>
+                                                <p className="text-[10px] text-amber-800 font-medium bg-amber-100/60 p-2.5 rounded-xl border border-amber-200/50 animate-in fade-in-50 duration-200">
+                                                    💡 Besaran nominal biaya tambahan per orang akan Anda tentukan pada langkah berikutnya (Harga Sewa).
+                                                </p>
                                             )}
                                         </div>
                                     ) : (
@@ -2928,6 +2913,37 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                             );
                                         })}
                                     </div>
+
+                                    {/* Input Nominal Biaya Tambahan Penghuni (Ditampilkan Terpadu di Tahap Harga) */}
+                                    {(hasExtraFee || (draftRoom.additionalCostPerPerson || 0) > 0) && (
+                                        <div className="p-4 bg-amber-50/70 rounded-2xl border border-amber-200 space-y-2 animate-in fade-in-50 duration-200">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-1.5 text-amber-900 font-black text-xs">
+                                                    <Users size={15} className="text-amber-600" />
+                                                    <span>Biaya Tambahan Penghuni Ekstra (&gt; 1 Orang)</span>
+                                                </div>
+                                                <span className="px-2 py-0.5 bg-amber-200 text-amber-900 text-[9px] font-black uppercase rounded-md">
+                                                    Per Orang / Bulan
+                                                </span>
+                                            </div>
+                                            <p className="text-[10px] text-gray-600">
+                                                Ditagihkan per orang tambahan jika kamar diisi oleh lebih dari 1 penghuni.
+                                            </p>
+                                            <div className="relative w-full sm:w-72 pt-1">
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">
+                                                    Rp
+                                                </span>
+                                                <input 
+                                                    type="number" 
+                                                    min="0" 
+                                                    placeholder="Contoh: 200000" 
+                                                    value={draftRoom.additionalCostPerPerson || ''} 
+                                                    onChange={e => updDraftRoom('additionalCostPerPerson', parseInt(e.target.value) || 0)} 
+                                                    className="w-full h-10 bg-white border border-gray-300 rounded-xl pl-9 pr-3 text-sm font-black text-gray-900 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500" 
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Tombol Simpan Tipe Kamar */}
                                     <div className="pt-4 border-t border-gray-100 flex items-center justify-between">

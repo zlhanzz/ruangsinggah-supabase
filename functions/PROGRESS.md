@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 245. Pemindahan Input Nominal Biaya Tambahan Penghuni ke Tahap 3 (Harga Sewa) (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Memasukkan angka nominal uang di Tahap 2 (Kapasitas) membebani alur dan membuat fokus terbagi antara mengatur unit kamar dan menghitung nominal rupiah.
+  - Pengguna meminta agar jika dicentang "Ada Biaya Tambahan", nominalnya diinput di bagian harga (Tahap 3), sehingga seluruh struktur finansial kamar (harga pokok kamar & biaya tambahan per orang ekstra) terlihat secara terpadu.
+- **Implementasi Solusi**:
+  1. **Penyederhanaan Tahap 2 (Kapasitas & Ketersediaan)**:
+     - Tahap 2 murni berfokus pada preferensi kualitatif: *"Apakah ada biaya sewa tambahan jika kamar dihuni lebih dari 1 orang?"* (`[ Tidak, Biaya Tetap Sama ]` / `[ Ya, Ada Biaya Tambahan ]`).
+     - Kolom input nominal uang dihilangkan dari Tahap 2 dan diganti dengan hint informatif: *"💡 Besaran nominal biaya tambahan per orang akan Anda tentukan pada langkah berikutnya (Harga Sewa)."*
+  2. **Integrasi Finansial Terpadu di Tahap 3 (Periode Sewa & Harga)**:
+     - Di Tahap 3, jika mitra mencentang "Ya, Ada Biaya Tambahan" di Tahap 2, muncul kartu khusus beraksen amber di bawah daftar tarif sewa pokok:
+       `Biaya Tambahan Penghuni Ekstra (> 1 Orang)`
+       `Rp [ Masukkan Nominal ] / Bulan (per orang ekstra)`.
+     - Seluruh struktur harga kamar kini rapi, terpusat, dan mudah dipahami mitra.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 33.44s, 0 error).
+
 ### 244. Pertanyaan Eksplisit Opsi Biaya Sewa Tambahan Penghuni > 1 Orang di Tahap 2 (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pada Tahap 2 (Kapasitas & Ketersediaan), mitra membutuhkan pertanyaan eksplisit yang jelas mengenai apakah ada biaya sewa tambahan jika penghuninya lebih dari 1 orang.
