@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 243. Alur Bertahap (Step-by-Step Mini-Wizard) Penambahan Kamar & Kartu Ringkasan Tipe Kamar (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Input penambahan kamar tidak boleh langsung muncul semua sekaligus karena membebani pemilik kost.
+  - Proses harus bertahap:
+    1. Pemilihan profile tipe dan ukuran kamar dulu.
+    2. Jika sudah oke, lanjut ke maksimal kapasitas penghuni, biaya tambahan per orang per bulan (> 1 orang), dan jumlah unit kamar.
+    3. Jika sudah oke, lanjut ke periode sewa yang ditawarkan dan harga masing-masing periode.
+    4. Setelah semua terisi, disimpan ke dalam kartu ringkasan tipe kamar yang rapi.
+    5. Kartu ringkasan tipe kamar masih bisa diedit atau dihapus.
+    6. Masih di langkah 3 yang sama, mitra dapat menambah tipe kamar baru lainnya.
+- **Implementasi Solusi**:
+  1. **Sub-Wizard Bertahap 3 Tahap**:
+     - Mengembangkan stepper mini di dalam kartu penambahan/pengeditan kamar (`1. Profil & Ukuran` ➔ `2. Kapasitas & Unit` ➔ `3. Periode & Harga`).
+     - **Tahap 1**: Menampilkan preset nama kamar (`Standard`, `Deluxe`, `VIP`, dll.) dan pilihan cepat ukuran dimensi kamar + tombol `Lanjut ke Kapasitas ➔`.
+     - **Tahap 2**: Menampilkan pilihan kapasitas (`1 Orang`, `2 Orang`, `3 Orang`), biaya tambahan penghuni ekstra jika > 1, dan stepper unit kamar + tombol `Kembali` & `Lanjut ke Harga ➔`.
+     - **Tahap 3**: Menampilkan toggle periode sewa yang ditawarkan (`Bulanan` default aktif) serta input nominal harga untuk periode aktif + tombol `Kembali` & `Simpan Tipe Kamar`.
+  2. **Tampilan Kartu Ringkasan (Summary View)**:
+     - Setelah disimpan, kamar muncul sebagai kartu ringkasan yang bersih dan elegan (nama tipe, ukuran, kapasitas, ketersediaan unit, harga bulanan pokok, dan badge periode lainnya).
+     - Dilengkapi tombol ✏️ `Edit` (membuka kembali form bertahap untuk kamar tersebut) dan 🗑️ `Hapus`.
+     - Terdapat tombol `+ Tambah Tipe Kamar Lainnya` di bawah kartu ringkasan untuk menambah kamar baru secara dinamis.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 21.25s, 0 error).
+
 ### 242. Redesain Total UI/UX Tipe Kamar & Harga (Langkah 3) dengan Preset Terstandarisasi & Periode Sewa Fleksibel (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - UI/UX formulir penambahan tipe kamar dirasa kurang menarik, membingungkan, kaku, dan kurang responsif.

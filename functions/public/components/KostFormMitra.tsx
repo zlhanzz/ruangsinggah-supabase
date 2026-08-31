@@ -1315,6 +1315,24 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [tempRule, setTempRule] = useState('');
+    
+    // State sub-wizard pengisian kamar bertahap (Langkah 3)
+    const [editingRoomIndex, setEditingRoomIndex] = useState<number | null>(null);
+    const [roomSubStep, setRoomSubStep] = useState<1 | 2 | 3>(1);
+    const [draftRoom, setDraftRoom] = useState<RoomType>({
+        name: 'Standard',
+        size: '3x4 m',
+        price: 0,
+        pricing: [{ period: 'bulanan', price: 0 }],
+        features: [],
+        roomFacilities: [],
+        bathroomFacilities: [],
+        isAvailable: true,
+        availableRoomCount: 1,
+        maxOccupants: 1,
+        additionalCostPerPerson: 0
+    });
+
     const isInitialMount = useRef(true);
 
     // Auto-save draft to localStorage whenever form, step, or managementOption changes
@@ -2050,79 +2068,150 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         upd('facilities', (form.facilities || []).filter(x => x !== f));
     };
 
-    // ── room types ─────────────────────────────────────────────────────────────
-    const addRoom = () => {
+    // ── room types (Step-by-step Mini-wizard & Management) ──────────────────────
+    const startAddRoom = () => {
         const count = (form.roomTypes || []).length;
         const defaultName = count === 0 ? 'Standard' : (count === 1 ? 'Deluxe' : (count === 2 ? 'VIP' : (count === 3 ? 'Premium' : 'Exclusive')));
-        const newRoom: RoomType = {
-            name: defaultName, size: '3x4 m', price: 0,
+        setDraftRoom({
+            name: defaultName,
+            size: '3x4 m',
+            price: 0,
             pricing: [{ period: 'bulanan', price: 0 }],
-            features: [], roomFacilities: [], bathroomFacilities: [], isAvailable: true,
+            features: [],
+            roomFacilities: [],
+            bathroomFacilities: [],
+            isAvailable: true,
             availableRoomCount: 1,
-            maxOccupants: 1, additionalCostPerPerson: 0
-        };
-        upd('roomTypes', [...(form.roomTypes || []), newRoom]);
+            maxOccupants: 1,
+            additionalCostPerPerson: 0
+        });
+        setRoomSubStep(1);
+        setEditingRoomIndex(-1); // -1 = Tambah Baru
     };
-    const toggleRoomPricingPeriod = (roomIdx: number, period: PricingPeriod) => {
-        const rooms = [...(form.roomTypes || [])];
-        const pricing = [...(rooms[roomIdx].pricing || [])];
-        const exists = pricing.some(p => p.period === period);
-        let nextPricing: { period: PricingPeriod; price: number }[];
-        if (exists) {
-            // Minimal 1 periode tetap aktif agar tidak kosong
-            if (pricing.length <= 1) return;
-            nextPricing = pricing.filter(p => p.period !== period);
-        } else {
-            nextPricing = [...pricing, { period, price: 0 }];
-        }
-        updRoom(roomIdx, 'pricing', nextPricing);
+
+    const startEditRoom = (index: number) => {
+        const target = (form.roomTypes || [])[index];
+        if (!target) return;
+        const pricing = target.pricing && target.pricing.length > 0
+            ? [...target.pricing]
+            : [{ period: 'bulanan' as PricingPeriod, price: target.price || 0 }];
+        setDraftRoom({
+            ...target,
+            pricing
+        });
+        setRoomSubStep(1);
+        setEditingRoomIndex(index);
     };
-    const updRoom = (i: number, key: keyof RoomType, val: any) => {
-        const rooms = [...(form.roomTypes || [])];
-        let newVal = val;
-        
-        // Dynamic correlation
-        if (key === 'availableRoomCount') {
-            const count = parseInt(val) || 0;
-            rooms[i].isAvailable = count > 0;
-            newVal = count;
-        } else if (key === 'isAvailable') {
-            // If manually toggled to Available, ensure count is at least 1 if it was 0
-            if (val === true && (rooms[i].availableRoomCount || 0) <= 0) {
-                rooms[i].availableRoomCount = 1;
-            } else if (val === false) {
-                rooms[i].availableRoomCount = 0;
+
+    const updDraftRoom = (key: keyof RoomType, val: any) => {
+        setDraftRoom(prev => {
+            let newVal = val;
+            let isAvail = prev.isAvailable;
+            let count = prev.availableRoomCount || 0;
+
+            if (key === 'availableRoomCount') {
+                count = parseInt(val) || 0;
+                isAvail = count > 0;
+                newVal = count;
+            } else if (key === 'isAvailable') {
+                isAvail = val;
+                if (val === true && count <= 0) count = 1;
+                else if (val === false) count = 0;
             }
+
+            return {
+                ...prev,
+                [key]: newVal,
+                isAvailable: isAvail,
+                availableRoomCount: count
+            };
+        });
+    };
+
+    const toggleDraftRoomPricingPeriod = (period: PricingPeriod) => {
+        setDraftRoom(prev => {
+            const currentPricing = prev.pricing || [];
+            const exists = currentPricing.some(p => p.period === period);
+            let nextPricing: { period: PricingPeriod; price: number }[];
+            if (exists) {
+                if (currentPricing.length <= 1) return prev; // Minimal 1 periode
+                nextPricing = currentPricing.filter(p => p.period !== period);
+            } else {
+                nextPricing = [...currentPricing, { period, price: 0 }];
+            }
+            return { ...prev, pricing: nextPricing };
+        });
+    };
+
+    const updDraftRoomPrice = (period: PricingPeriod, price: number) => {
+        setDraftRoom(prev => {
+            const pricing = [...(prev.pricing || [])];
+            const idx = pricing.findIndex(p => p.period === period);
+            if (idx >= 0) pricing[idx] = { period, price };
+            else pricing.push({ period, price });
+            
+            const monthlyPrice = pricing.find(p => p.period === 'bulanan')?.price || price;
+            return {
+                ...prev,
+                pricing,
+                price: monthlyPrice
+            };
+        });
+    };
+
+    const saveDraftRoom = () => {
+        if (!draftRoom.name.trim()) {
+            alert('Silakan pilih atau masukkan nama tipe kamar.');
+            setRoomSubStep(1);
+            return;
         }
 
-        rooms[i] = { ...rooms[i], [key]: newVal };
-        
-        if (key === 'pricing') {
-            const monthly = (val as any[]).find((p: any) => p.period === 'bulanan');
-            if (monthly) rooms[i].price = monthly.price;
+        const monthlyPrice = draftRoom.pricing?.find(p => p.period === 'bulanan')?.price || draftRoom.price || 0;
+        const finalizedRoom: RoomType = {
+            ...draftRoom,
+            price: monthlyPrice
+        };
+
+        const currentRooms = [...(form.roomTypes || [])];
+        if (editingRoomIndex !== null && editingRoomIndex >= 0) {
+            currentRooms[editingRoomIndex] = finalizedRoom;
+        } else {
+            currentRooms.push(finalizedRoom);
         }
-        upd('roomTypes', rooms);
+
+        upd('roomTypes', currentRooms);
+        setEditingRoomIndex(null);
+        setRoomSubStep(1);
     };
-    const updRoomPrice = (roomIdx: number, period: PricingPeriod, price: number) => {
-        const rooms = [...(form.roomTypes || [])];
-        const pricing = [...(rooms[roomIdx].pricing || [])];
-        const existing = pricing.findIndex(p => p.period === period);
-        if (existing >= 0) pricing[existing] = { period, price };
-        else pricing.push({ period, price });
-        updRoom(roomIdx, 'pricing', pricing);
+
+    const cancelRoomDraft = () => {
+        setEditingRoomIndex(null);
+        setRoomSubStep(1);
     };
+
+    const removeRoom = (i: number) => {
+        upd('roomTypes', (form.roomTypes || []).filter((_, idx) => idx !== i));
+        if (editingRoomIndex === i) {
+            setEditingRoomIndex(null);
+            setRoomSubStep(1);
+        }
+    };
+
     const toggleRoomFeature = (roomIdx: number, field: 'roomFacilities' | 'bathroomFacilities', val: string) => {
         const rooms = [...(form.roomTypes || [])];
         const text = rooms[roomIdx][field] || [];
-        updRoom(roomIdx, field, text.includes(val) ? text.filter((x: string) => x !== val) : [...text, val]);
+        const nextList = text.includes(val) ? text.filter((x: string) => x !== val) : [...text, val];
+        rooms[roomIdx] = { ...rooms[roomIdx], [field]: nextList };
+        upd('roomTypes', rooms);
     };
+
     const addCustomRoomFeature = (roomIdx: number, field: 'roomFacilities' | 'bathroomFacilities', val: string) => {
         const rooms = [...(form.roomTypes || [])];
         const text = rooms[roomIdx][field] || [];
-        if (!text.includes(val)) updRoom(roomIdx, field, [...text, val]);
-    };
-    const removeRoom = (i: number) => {
-        upd('roomTypes', (form.roomTypes || []).filter((_, idx) => idx !== i));
+        if (!text.includes(val)) {
+            rooms[roomIdx] = { ...rooms[roomIdx], [field]: [...text, val] };
+            upd('roomTypes', rooms);
+        }
     };
 
     // ── submit ──────────────────────────────────────────────────────────────────
@@ -2414,79 +2503,101 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 </div>
             );
 
-            // ── STEP 2 (Langkah 3): Tipe Kamar & Harga ────────────────────────
-            case 2: return (
-                <div className="space-y-6">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <Bed className="w-5 h-5 text-orange-600" />
-                                <h3 className="font-black text-gray-900 uppercase tracking-tight text-sm sm:text-base">
-                                    Tipe Kamar &amp; Harga
-                                </h3>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                                Tentukan tipe kamar, ukuran, ketersediaan, dan skema tarif sewa.
-                            </p>
-                        </div>
-                        <button 
-                            type="button" 
-                            onClick={addRoom}
-                            className="h-10 px-4 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                        >
-                            <Plus size={16}/> + Tambah Tipe Kamar
-                        </button>
-                    </div>
+            // ── STEP 2 (Langkah 3): Tipe Kamar & Harga (Bertahap & Ringkasan) ──
+            case 2: {
+                const roomList = form.roomTypes || [];
+                const isFormOpen = editingRoomIndex !== null || roomList.length === 0;
 
-                    <div className="space-y-5">
-                        {(form.roomTypes || []).map((room, ri) => {
-                            const isCustomName = !ROOM_TYPE_PRESETS.includes(room.name);
-                            const activePeriods = (room.pricing || []).map(p => p.period);
-                            const lowestPeriod = activePeriods.length > 0 
-                                ? activePeriods.reduce((min, p) => periodWeights[p] < periodWeights[min] ? p : min, activePeriods[0]) 
-                                : 'bulanan';
-                            const lowestPeriodLabel = periodLabels[lowestPeriod] || 'Bulanan';
+                // ── A. TAMPILAN SUB-WIZARD BERTAHAP (Tambah / Edit Kamar) ──
+                if (isFormOpen) {
+                    const isNew = editingRoomIndex === null || editingRoomIndex === -1;
+                    const isCustomName = !ROOM_TYPE_PRESETS.includes(draftRoom.name);
+                    const activePeriods = (draftRoom.pricing || []).map(p => p.period);
+                    const lowestPeriod = activePeriods.length > 0 
+                        ? activePeriods.reduce((min, p) => periodWeights[p] < periodWeights[min] ? p : min, activePeriods[0]) 
+                        : 'bulanan';
+                    const lowestPeriodLabel = periodLabels[lowestPeriod] || 'Bulanan';
 
-                            return (
-                                <div key={ri} className="bg-white rounded-3xl border border-gray-200/90 shadow-sm p-4 sm:p-6 space-y-5 transition-all">
-                                    {/* Header Kartu Kamar */}
-                                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-7 h-7 rounded-xl bg-orange-500 text-white flex items-center justify-center font-black text-xs shadow-xs">
-                                                #{ri + 1}
-                                            </span>
-                                            <h4 className="font-black text-gray-900 text-sm">
-                                                {room.name ? `Tipe: ${room.name}` : `Tipe Kamar #${ri + 1}`}
-                                            </h4>
+                    return (
+                        <div className="space-y-5 animate-in fade-in-50 duration-200">
+                            {/* Header Form Bertahap */}
+                            <div className="bg-gradient-to-br from-orange-50 via-amber-50/40 to-white p-4 sm:p-5 rounded-3xl border border-orange-200/80 shadow-xs">
+                                <div className="flex items-center justify-between gap-3 mb-3">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center font-black text-xs shadow-xs">
+                                            <Bed size={16} />
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            {(form.roomTypes || []).length > 1 && (
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => removeRoom(ri)} 
-                                                    className="h-8 px-2.5 text-rose-500 bg-rose-50 hover:bg-rose-100 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                                                    title="Hapus tipe kamar ini"
-                                                >
-                                                    <Trash2 size={14}/>
-                                                    <span className="hidden sm:inline">Hapus</span>
-                                                </button>
-                                            )}
+                                        <div>
+                                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">
+                                                {isNew ? 'Tambah Tipe Kamar Baru' : `Edit: ${draftRoom.name || 'Tipe Kamar'}`}
+                                            </h3>
+                                            <p className="text-[11px] text-gray-500 mt-0.5">
+                                                Isi detail kamar secara bertahap (Tahap {roomSubStep} dari 3)
+                                            </p>
                                         </div>
                                     </div>
 
-                                    {/* 1. Pemilihan Tipe Kamar Terstandarisasi */}
+                                    {roomList.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={cancelRoomDraft}
+                                            className="px-3 py-1.5 rounded-xl text-xs font-bold text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer"
+                                        >
+                                            Batal
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Mini Stepper 3 Tahap */}
+                                <div className="flex items-center justify-between gap-1 pt-2 border-t border-orange-100/80">
+                                    {[
+                                        { s: 1, label: '1. Profil & Ukuran' },
+                                        { s: 2, label: '2. Kapasitas & Unit' },
+                                        { s: 3, label: '3. Periode & Harga' },
+                                    ].map((item, idx) => (
+                                        <div key={item.s} className="flex-1 flex items-center">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    // Boleh kembali ke step sebelumnya, atau maju jika sudah tervalidasi
+                                                    if (item.s < roomSubStep || (roomSubStep === 1 && draftRoom.name) || (roomSubStep === 2)) {
+                                                        setRoomSubStep(item.s as 1 | 2 | 3);
+                                                    }
+                                                }}
+                                                className={`flex-1 flex items-center justify-center py-2 px-1 rounded-xl text-[10px] sm:text-xs font-black transition-all text-center ${
+                                                    roomSubStep === item.s
+                                                        ? 'bg-orange-500 text-white shadow-xs'
+                                                        : roomSubStep > item.s
+                                                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                            : 'bg-white/60 text-gray-400 border border-gray-200/60'
+                                                }`}
+                                            >
+                                                {roomSubStep > item.s ? '✓ ' : ''}{item.label}
+                                            </button>
+                                            {idx < 2 && <span className="text-gray-300 mx-1 hidden sm:inline">➔</span>}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* KONTEN TAHAP 1: Profil & Ukuran Kamar */}
+                            {roomSubStep === 1 && (
+                                <div className="bg-white rounded-3xl border border-gray-200/90 shadow-sm p-4 sm:p-6 space-y-5 animate-in fade-in-50 duration-200">
                                     <div>
-                                        <label className="block text-[11px] font-black text-gray-700 uppercase tracking-wider mb-2">
-                                            Nama Tipe Kamar
-                                        </label>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <label className="text-[11px] font-black text-gray-800 uppercase tracking-wider">
+                                                Nama Tipe Kamar
+                                            </label>
+                                            <span className="text-[10px] text-gray-400 font-bold">Pilih preset</span>
+                                        </div>
                                         <div className="flex flex-wrap gap-1.5 mb-2.5">
                                             {ROOM_TYPE_PRESETS.map(preset => {
-                                                const isSelected = room.name === preset;
+                                                const isSelected = draftRoom.name === preset;
                                                 return (
                                                     <button
                                                         key={preset}
                                                         type="button"
-                                                        onClick={() => updRoom(ri, 'name', preset)}
+                                                        onClick={() => updDraftRoom('name', preset)}
                                                         className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
                                                             isSelected
                                                                 ? 'bg-orange-500 text-white shadow-xs scale-102'
@@ -2500,9 +2611,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                             <button
                                                 type="button"
                                                 onClick={() => {
-                                                    if (!isCustomName) {
-                                                        updRoom(ri, 'name', '');
-                                                    }
+                                                    if (!isCustomName) updDraftRoom('name', '');
                                                 }}
                                                 className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
                                                     isCustomName
@@ -2514,24 +2623,22 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                             </button>
                                         </div>
 
-                                        {/* Kolom input detail jika kustom atau ingin memberi catatan tambahan */}
                                         {isCustomName && (
                                             <div className="animate-in fade-in-50 duration-200">
                                                 <input
                                                     type="text"
                                                     placeholder="Tuliskan nama tipe kamar kustom (Contoh: VIP Mezzanine, Standard AC)..."
-                                                    value={room.name || ''}
-                                                    onChange={e => updRoom(ri, 'name', e.target.value)}
+                                                    value={draftRoom.name || ''}
+                                                    onChange={e => updDraftRoom('name', e.target.value)}
                                                     className="w-full h-10 px-3.5 bg-gray-50/70 border border-orange-300 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:border-orange-500 outline-none transition-all"
                                                 />
                                             </div>
                                         )}
                                     </div>
 
-                                    {/* 2. Ukuran Kamar */}
                                     <div>
                                         <div className="flex items-center justify-between mb-2">
-                                            <label className="text-[11px] font-black text-gray-700 uppercase tracking-wider">
+                                            <label className="text-[11px] font-black text-gray-800 uppercase tracking-wider">
                                                 Ukuran Kamar
                                             </label>
                                             <span className="text-[10px] text-gray-400 font-bold">Pilih cepat atau ketik</span>
@@ -2541,9 +2648,9 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 <button
                                                     key={sp}
                                                     type="button"
-                                                    onClick={() => updRoom(ri, 'size', sp)}
+                                                    onClick={() => updDraftRoom('size', sp)}
                                                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                                        room.size === sp
+                                                        draftRoom.size === sp
                                                             ? 'bg-gray-900 text-white shadow-xs'
                                                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                                     }`}
@@ -2556,15 +2663,37 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                             <input 
                                                 type="text" 
                                                 placeholder="Contoh: 3x4 m, 4x5 m" 
-                                                value={room.size || ''} 
-                                                onChange={e => updRoom(ri, 'size', e.target.value)} 
+                                                value={draftRoom.size || ''} 
+                                                onChange={e => updDraftRoom('size', e.target.value)} 
                                                 className="w-full h-10 pl-3.5 pr-9 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:bg-white focus:border-orange-500 outline-none"
                                             />
                                             <Maximize2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
                                         </div>
                                     </div>
 
-                                    {/* 3. Kapasitas Maksimal & Sisa Kamar (Grid 2 Kolom Bersih) */}
+                                    {/* Tombol Lanjut ke Tahap 2 */}
+                                    <div className="pt-3 border-t border-gray-100 flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (!draftRoom.name?.trim()) {
+                                                    alert('Mohon tentukan nama tipe kamar terlebih dahulu.');
+                                                    return;
+                                                }
+                                                setRoomSubStep(2);
+                                            }}
+                                            className="h-11 px-6 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+                                        >
+                                            <span>Lanjut ke Kapasitas</span>
+                                            <ChevronRight size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* KONTEN TAHAP 2: Kapasitas & Ketersediaan Kamar */}
+                            {roomSubStep === 2 && (
+                                <div className="bg-white rounded-3xl border border-gray-200/90 shadow-sm p-4 sm:p-6 space-y-5 animate-in fade-in-50 duration-200">
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50/70 p-4 rounded-2xl border border-gray-100">
                                         {/* Kapasitas Maksimal */}
                                         <div>
@@ -2576,9 +2705,9 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                     <button
                                                         key={cap}
                                                         type="button"
-                                                        onClick={() => updRoom(ri, 'maxOccupants', cap)}
+                                                        onClick={() => updDraftRoom('maxOccupants', cap)}
                                                         className={`flex-1 h-9 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                                            (room.maxOccupants || 1) === cap
+                                                            (draftRoom.maxOccupants || 1) === cap
                                                                 ? 'bg-orange-500 text-white shadow-xs'
                                                                 : 'bg-white text-gray-700 border border-gray-200 hover:border-orange-300'
                                                         }`}
@@ -2598,22 +2727,22 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 <button
                                                     type="button"
                                                     onClick={() => {
-                                                        const current = room.availableRoomCount || 0;
-                                                        if (current > 0) updRoom(ri, 'availableRoomCount', current - 1);
+                                                        const current = draftRoom.availableRoomCount || 0;
+                                                        if (current > 0) updDraftRoom('availableRoomCount', current - 1);
                                                     }}
                                                     className="w-9 h-9 bg-white border border-gray-200 hover:border-gray-400 rounded-xl flex items-center justify-center font-bold text-gray-700 active:scale-95 cursor-pointer"
                                                 >
                                                     -
                                                 </button>
                                                 <div className="flex-1 text-center font-black text-sm bg-white border border-gray-200 rounded-xl h-9 flex items-center justify-center px-2">
-                                                    <span className="text-gray-900">{room.availableRoomCount || 0}</span>
+                                                    <span className="text-gray-900">{draftRoom.availableRoomCount || 0}</span>
                                                     <span className="text-[10px] text-gray-400 font-bold ml-1">Kamar</span>
                                                 </div>
                                                 <button
                                                     type="button"
                                                     onClick={() => {
-                                                        const current = room.availableRoomCount || 0;
-                                                        updRoom(ri, 'availableRoomCount', current + 1);
+                                                        const current = draftRoom.availableRoomCount || 0;
+                                                        updDraftRoom('availableRoomCount', current + 1);
                                                     }}
                                                     className="w-9 h-9 bg-white border border-gray-200 hover:border-gray-400 rounded-xl flex items-center justify-center font-bold text-gray-700 active:scale-95 cursor-pointer"
                                                 >
@@ -2624,15 +2753,15 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                     </div>
 
                                     {/* Biaya Tambahan Penghuni (Hanya tampil jika kapasitas > 1) */}
-                                    {(room.maxOccupants || 1) > 1 && (
-                                        <div className="p-3.5 bg-amber-50/60 rounded-2xl border border-amber-200/80 animate-in fade-in-50 duration-200">
+                                    {(draftRoom.maxOccupants || 1) > 1 && (
+                                        <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-200/80 animate-in fade-in-50 duration-200">
                                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                                 <div>
                                                     <p className="text-[11px] font-black text-gray-800">
                                                         Biaya Tambahan Penghuni Ekstra
                                                     </p>
                                                     <p className="text-[10px] text-gray-500">
-                                                        Ditagihkan jika kamar diisi lebih dari 1 orang (Per {lowestPeriodLabel})
+                                                        Ditagihkan jika kamar dihuni lebih dari 1 orang (Per {lowestPeriodLabel})
                                                     </p>
                                                 </div>
                                                 <div className="relative w-full sm:w-44 shrink-0">
@@ -2641,8 +2770,8 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         type="number" 
                                                         min="0" 
                                                         placeholder="0" 
-                                                        value={room.additionalCostPerPerson || ''} 
-                                                        onChange={e => updRoom(ri, 'additionalCostPerPerson', parseInt(e.target.value) || 0)} 
+                                                        value={draftRoom.additionalCostPerPerson || ''} 
+                                                        onChange={e => updDraftRoom('additionalCostPerPerson', parseInt(e.target.value) || 0)} 
                                                         className="w-full h-9 bg-white border border-gray-300 rounded-xl pl-9 pr-3 text-xs font-bold text-gray-900 outline-none focus:border-orange-500" 
                                                     />
                                                 </div>
@@ -2650,111 +2779,269 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         </div>
                                     )}
 
-                                    {/* 4. Skema Tarif Sewa Fleksibel */}
-                                    <div className="pt-2 border-t border-gray-100 space-y-3">
-                                        <div>
-                                            <div className="flex items-center justify-between mb-1.5">
-                                                <label className="text-[11px] font-black text-gray-800 uppercase tracking-wider">
-                                                    Periode Sewa yang Ditawarkan
-                                                </label>
-                                                <span className="text-[10px] text-gray-400 font-bold">Pilih minimal 1 periode</span>
-                                            </div>
-                                            <p className="text-[10px] text-gray-500 mb-2.5">
-                                                Aktifkan periode sewa yang tersedia untuk tipe kamar ini (Bulanan aktif otomatis).
-                                            </p>
+                                    {/* Tombol Navigasi Tahap 2 */}
+                                    <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                                        <button
+                                            type="button"
+                                            onClick={() => setRoomSubStep(1)}
+                                            className="h-11 px-4 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                                        >
+                                            <ChevronLeft size={16} />
+                                            <span>Kembali</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setRoomSubStep(3)}
+                                            className="h-11 px-6 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+                                        >
+                                            <span>Lanjut ke Harga</span>
+                                            <ChevronRight size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
-                                            {/* Chips Pilihan Periode */}
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {PRICING_PERIODS.map(({ key, label }) => {
-                                                    const isActive = (room.pricing || []).some(p => p.period === key);
-                                                    return (
-                                                        <button
-                                                            key={key}
-                                                            type="button"
-                                                            onClick={() => toggleRoomPricingPeriod(ri, key)}
-                                                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                                                                isActive
-                                                                    ? 'bg-orange-500 text-white shadow-xs'
-                                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-transparent'
-                                                            }`}
-                                                        >
-                                                            <span>{isActive ? '✓' : '+'}</span>
-                                                            <span>{label}</span>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
+                            {/* KONTEN TAHAP 3: Periode Sewa & Harga */}
+                            {roomSubStep === 3 && (
+                                <div className="bg-white rounded-3xl border border-gray-200/90 shadow-sm p-4 sm:p-6 space-y-5 animate-in fade-in-50 duration-200">
+                                    <div>
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <label className="text-[11px] font-black text-gray-800 uppercase tracking-wider">
+                                                Periode Sewa yang Ditawarkan
+                                            </label>
+                                            <span className="text-[10px] text-gray-400 font-bold">Pilih minimal 1 periode</span>
                                         </div>
+                                        <p className="text-[10px] text-gray-500 mb-2.5">
+                                            Aktifkan periode sewa yang tersedia untuk tipe kamar ini (Bulanan aktif otomatis).
+                                        </p>
 
-                                        {/* Input Kolom Harga Hanya untuk Periode yang Aktif */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                                            {PRICING_PERIODS.filter(({ key }) => (room.pricing || []).some(p => p.period === key)).map(({ key, label }) => {
-                                                const val = room.pricing?.find(p => p.period === key)?.price || '';
-                                                const isMonthly = key === 'bulanan';
-
+                                        {/* Chips Pilihan Periode */}
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {PRICING_PERIODS.map(({ key, label }) => {
+                                                const isActive = (draftRoom.pricing || []).some(p => p.period === key);
                                                 return (
-                                                    <div 
-                                                        key={key} 
-                                                        className={`p-3.5 rounded-2xl border transition-all ${
-                                                            isMonthly 
-                                                                ? 'bg-orange-50/40 border-orange-200 ring-1 ring-orange-200' 
-                                                                : 'bg-gray-50 border-gray-200'
+                                                    <button
+                                                        key={key}
+                                                        type="button"
+                                                        onClick={() => toggleDraftRoomPricingPeriod(key)}
+                                                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                                            isActive
+                                                                ? 'bg-orange-500 text-white shadow-xs'
+                                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-transparent'
                                                         }`}
                                                     >
-                                                        <div className="flex items-center justify-between mb-1.5">
-                                                            <span className="text-[11px] font-black text-gray-800 flex items-center gap-1.5">
-                                                                <DollarSign size={13} className={isMonthly ? 'text-orange-600' : 'text-gray-400'} />
-                                                                <span>Harga Sewa {label}</span>
-                                                                {isMonthly && (
-                                                                    <span className="px-1.5 py-0.5 bg-orange-200 text-orange-800 text-[8px] font-black uppercase rounded-md">
-                                                                        Utama
-                                                                    </span>
-                                                                )}
-                                                            </span>
-                                                        </div>
-                                                        <div className="relative">
-                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">
-                                                                Rp
-                                                            </span>
-                                                            <input 
-                                                                type="number" 
-                                                                min="0" 
-                                                                placeholder="0"
-                                                                value={val}
-                                                                onChange={e => updRoomPrice(ri, key, parseInt(e.target.value) || 0)}
-                                                                className="w-full h-10 pl-9 pr-3 bg-white border border-gray-200 rounded-xl text-sm font-black text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" 
-                                                            />
-                                                        </div>
-                                                    </div>
+                                                        <span>{isActive ? '✓' : '+'}</span>
+                                                        <span>{label}</span>
+                                                    </button>
                                                 );
                                             })}
                                         </div>
                                     </div>
 
-                                    {/* Info Pemandu Langkah Berikutnya */}
-                                    <div className="p-3 bg-orange-50/60 rounded-2xl border border-orange-100 text-[11px] text-orange-900 flex items-center gap-2 font-medium">
-                                        <Sparkles size={16} className="text-orange-500 shrink-0" />
-                                        <span>Fasilitas tempat tidur &amp; kamar mandi untuk tipe ini akan disesuaikan di <strong>Langkah 4 (Fasilitas)</strong>.</span>
+                                    {/* Input Kolom Harga Hanya untuk Periode yang Aktif */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                        {PRICING_PERIODS.filter(({ key }) => (draftRoom.pricing || []).some(p => p.period === key)).map(({ key, label }) => {
+                                            const val = draftRoom.pricing?.find(p => p.period === key)?.price || '';
+                                            const isMonthly = key === 'bulanan';
+
+                                            return (
+                                                <div 
+                                                    key={key} 
+                                                    className={`p-3.5 rounded-2xl border transition-all ${
+                                                        isMonthly 
+                                                            ? 'bg-orange-50/40 border-orange-200 ring-1 ring-orange-200' 
+                                                            : 'bg-gray-50 border-gray-200'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between mb-1.5">
+                                                        <span className="text-[11px] font-black text-gray-800 flex items-center gap-1.5">
+                                                            <DollarSign size={13} className={isMonthly ? 'text-orange-600' : 'text-gray-400'} />
+                                                            <span>Harga Sewa {label}</span>
+                                                            {isMonthly && (
+                                                                <span className="px-1.5 py-0.5 bg-orange-200 text-orange-800 text-[8px] font-black uppercase rounded-md">
+                                                                    Utama
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                    <div className="relative">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">
+                                                            Rp
+                                                        </span>
+                                                        <input 
+                                                            type="number" 
+                                                            min="0" 
+                                                            placeholder="0"
+                                                            value={val}
+                                                            onChange={e => updDraftRoomPrice(key, parseInt(e.target.value) || 0)}
+                                                            className="w-full h-10 pl-9 pr-3 bg-white border border-gray-200 rounded-xl text-sm font-black text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" 
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Tombol Simpan Tipe Kamar */}
+                                    <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+                                        <button
+                                            type="button"
+                                            onClick={() => setRoomSubStep(2)}
+                                            className="h-11 px-4 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                                        >
+                                            <ChevronLeft size={16} />
+                                            <span>Kembali</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={saveDraftRoom}
+                                            className="h-11 px-6 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-md transition-all cursor-pointer"
+                                        >
+                                            <CheckCircle2 size={16} />
+                                            <span>Simpan Tipe Kamar</span>
+                                        </button>
                                     </div>
                                 </div>
-                            );
-                        })}
+                            )}
+                        </div>
+                    );
+                }
 
-                        {(form.roomTypes || []).length === 0 && (
+                // ── B. TAMPILAN RINGKASAN KARTU TIPE KAMAR (Summary View) ──
+                return (
+                    <div className="space-y-6">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <Bed className="w-5 h-5 text-orange-600" />
+                                    <h3 className="font-black text-gray-900 uppercase tracking-tight text-sm sm:text-base">
+                                        Tipe Kamar &amp; Harga
+                                    </h3>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                    Kelola daftar tipe kamar yang tersedia. Anda dapat menambah, mengedit, atau menghapus tipe kamar.
+                                </p>
+                            </div>
                             <button 
                                 type="button" 
-                                onClick={addRoom}
-                                className="w-full h-28 border-2 border-dashed border-orange-200 hover:border-orange-400 bg-orange-50/20 hover:bg-orange-50/50 rounded-3xl flex flex-col items-center justify-center gap-1.5 transition-all text-orange-600 cursor-pointer group"
+                                onClick={startAddRoom}
+                                className="h-10 px-4 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
                             >
-                                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                    <Plus size={22}/>
-                                </div>
-                                <span className="text-xs font-black uppercase tracking-wider">Tambah Tipe Kamar Pertama</span>
+                                <Plus size={16}/> + Tambah Tipe Kamar
                             </button>
-                        )}
+                        </div>
+
+                        {/* Daftar Kartu Ringkasan Kamar Tersimpan */}
+                        <div className="space-y-3.5">
+                            {roomList.map((room, ri) => {
+                                const activePricing = (room.pricing || []).filter(p => p.price > 0);
+                                const monthlyPrice = room.pricing?.find(p => p.period === 'bulanan')?.price || room.price || 0;
+
+                                return (
+                                    <div 
+                                        key={ri} 
+                                        className="bg-white rounded-3xl border border-gray-200/90 shadow-xs hover:shadow-sm p-4 sm:p-5 transition-all space-y-3"
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-9 h-9 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center font-black text-sm shrink-0">
+                                                    #{ri + 1}
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <h4 className="font-black text-gray-900 text-sm sm:text-base">
+                                                            {room.name || `Tipe Kamar #${ri + 1}`}
+                                                        </h4>
+                                                        {room.size && (
+                                                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded-lg">
+                                                                {room.size}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 mt-1">
+                                                        <span className="flex items-center gap-1 font-medium">
+                                                            <Users size={13} className="text-gray-400" />
+                                                            <span>Maks. {room.maxOccupants || 1} Orang</span>
+                                                        </span>
+                                                        <span>•</span>
+                                                        <span className={`font-bold ${room.isAvailable !== false && (room.availableRoomCount || 0) > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                            {room.isAvailable !== false && (room.availableRoomCount || 0) > 0 
+                                                                ? `${room.availableRoomCount} Kamar Tersedia` 
+                                                                : 'Kamar Penuh'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Tombol Edit & Hapus */}
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => startEditRoom(ri)}
+                                                    className="h-8 px-3 text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                                                >
+                                                    Edit
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeRoom(ri)}
+                                                    className="w-8 h-8 text-rose-500 bg-rose-50 hover:bg-rose-100 rounded-xl flex items-center justify-center transition-colors cursor-pointer"
+                                                    title="Hapus kamar ini"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Bagian Harga Ringkas */}
+                                        <div className="pt-2.5 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2">
+                                            <div>
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                                                    Tarif Pokok
+                                                </span>
+                                                <span className="text-sm sm:text-base font-black text-orange-600">
+                                                    {monthlyPrice > 0 
+                                                        ? `Rp ${monthlyPrice.toLocaleString('id-ID')} / Bulan`
+                                                        : 'Belum menetapkan harga bulanan'}
+                                                </span>
+                                            </div>
+
+                                            {/* Periode Tambahan Lainnya yang Aktif */}
+                                            {activePricing.length > 0 && (
+                                                <div className="flex flex-wrap gap-1">
+                                                    {activePricing.filter(p => p.period !== 'bulanan').map(p => (
+                                                        <span key={p.period} className="px-2 py-0.5 bg-gray-50 border border-gray-200 text-gray-600 text-[10px] font-bold rounded-lg">
+                                                            {periodLabels[p.period]}: Rp {p.price.toLocaleString('id-ID')}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Tombol Tambah Kamar Baru Lainnya */}
+                        <button 
+                            type="button" 
+                            onClick={startAddRoom}
+                            className="w-full h-20 border-2 border-dashed border-orange-200 hover:border-orange-400 bg-orange-50/20 hover:bg-orange-50/50 rounded-3xl flex items-center justify-center gap-2 transition-all text-orange-600 cursor-pointer group"
+                        >
+                            <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <Plus size={18}/>
+                            </div>
+                            <span className="text-xs font-black uppercase tracking-wider">+ Tambah Tipe Kamar Lainnya</span>
+                        </button>
+
+                        {/* Info Pemandu Langkah Berikutnya */}
+                        <div className="p-3.5 bg-orange-50/60 rounded-2xl border border-orange-100 text-[11px] text-orange-900 flex items-center gap-2 font-medium">
+                            <Sparkles size={16} className="text-orange-500 shrink-0" />
+                            <span>Seluruh fasilitas kamar tidur &amp; kamar mandi serta foto untuk tipe-tipe di atas akan diatur di <strong>Langkah 4 (Fasilitas)</strong> dan <strong>Langkah 5 (Foto)</strong>.</span>
+                        </div>
                     </div>
-                </div>
-            );
+                );
+            }
 
             // ── STEP 3 (Langkah 4): Fasilitas Properti & Kamar Dinamis ───────────
             case 3: return (
