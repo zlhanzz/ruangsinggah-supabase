@@ -2,6 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 246. Format Otomatis Pemisah Ribuan Titik (.) pada Input Harga Kamar (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pada formulir pengisian harga sewa dan biaya tambahan, nominal angka tampil menyatu tanpa pemisah ribuan (contoh: `500000`, `50000`), sehingga menyulitkan mitra membaca apakah nilai tersebut puluhan ribu, ratusan ribu, atau jutaan.
+  - Pengguna meminta agar otomatis ditambahkan titik (.) setiap setelah mengetik 3 digit angka.
+- **Implementasi Solusi**:
+  1. **Helper Currency Formatter & Parser**:
+     - Dibuat fungsi `formatCurrencyInput` untuk memformat angka dengan pemisah ribuan standar Indonesia titik (`.`) secara instan (contoh: `500000` ➔ `500.000`, `1500000` ➔ `1.500.000`).
+     - Dibuat fungsi `parseCurrencyInput` untuk membersihkan karakter titik sebelum disimpan ke state, sehingga nilai di database tetap numerik integer murni (`number`).
+  2. **Penerapan pada Input Harga Pokok & Biaya Tambahan**:
+     - Mengubah `type="number"` menjadi `type="text"` dengan `inputMode="numeric"` agar keyboard pada smartphone tetap memunculkan pad angka/numpad.
+     - Diterapkan pada seluruh input tarif sewa pokok (Bulanan, Harian, Mingguan, 3 Bulan, 6 Bulan, Tahunan) dan input nominal Biaya Tambahan Penghuni Ekstra.
+     - Placeholder disesuaikan menjadi format titik yang serasi (`Contoh: 200.000`).
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 26.04s, 0 error).
+
 ### 245. Pemindahan Input Nominal Biaya Tambahan Penghuni ke Tahap 3 (Harga Sewa) (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Memasukkan angka nominal uang di Tahap 2 (Kapasitas) membebani alur dan membuat fokus terbagi antara mengatur unit kamar dan menghitung nominal rupiah.

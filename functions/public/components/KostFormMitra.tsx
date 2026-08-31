@@ -2146,6 +2146,18 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         });
     };
 
+    const formatCurrencyInput = (val: number | string | undefined | null): string => {
+        if (val === undefined || val === null || val === '') return '';
+        const numStr = String(val).replace(/\D/g, '');
+        if (!numStr) return '';
+        return parseInt(numStr, 10).toLocaleString('id-ID');
+    };
+
+    const parseCurrencyInput = (rawStr: string): number => {
+        const clean = rawStr.replace(/\D/g, '');
+        return clean ? parseInt(clean, 10) : 0;
+    };
+
     const updDraftRoomPrice = (period: PricingPeriod, price: number) => {
         setDraftRoom(prev => {
             const pricing = [...(prev.pricing || [])];
@@ -2901,11 +2913,11 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                             Rp
                                                         </span>
                                                         <input 
-                                                            type="number" 
-                                                            min="0" 
+                                                            type="text" 
+                                                            inputMode="numeric"
                                                             placeholder="0"
-                                                            value={val}
-                                                            onChange={e => updDraftRoomPrice(key, parseInt(e.target.value) || 0)}
+                                                            value={val !== '' && val !== 0 ? formatCurrencyInput(val) : ''}
+                                                            onChange={e => updDraftRoomPrice(key, parseCurrencyInput(e.target.value))}
                                                             className="w-full h-10 pl-9 pr-3 bg-white border border-gray-200 rounded-xl text-sm font-black text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" 
                                                         />
                                                     </div>
@@ -2934,11 +2946,11 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                     Rp
                                                 </span>
                                                 <input 
-                                                    type="number" 
-                                                    min="0" 
-                                                    placeholder="Contoh: 200000" 
-                                                    value={draftRoom.additionalCostPerPerson || ''} 
-                                                    onChange={e => updDraftRoom('additionalCostPerPerson', parseInt(e.target.value) || 0)} 
+                                                    type="text" 
+                                                    inputMode="numeric"
+                                                    placeholder="Contoh: 200.000" 
+                                                    value={draftRoom.additionalCostPerPerson ? formatCurrencyInput(draftRoom.additionalCostPerPerson) : ''} 
+                                                    onChange={e => updDraftRoom('additionalCostPerPerson', parseCurrencyInput(e.target.value))} 
                                                     className="w-full h-10 bg-white border border-gray-300 rounded-xl pl-9 pr-3 text-sm font-black text-gray-900 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500" 
                                                 />
                                             </div>
