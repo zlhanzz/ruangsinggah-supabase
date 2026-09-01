@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 262. Perbaikan Supabase Insert/Update Error PGRST204 Kolom `categorized_photos` & `photo_categories` (`adminService.ts` & `userService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Saat mitra mengklik tombol "Publikasikan Kost" di `KostFormMitra.tsx:3856` / `adminService.ts:2092`, muncul error Supabase PostgREST `PGRST204: Could not find the 'categorized_photos' column of 'properties' in the schema cache`.
+- **Investigasi & Analisis Akar Masalah**:
+  - Berdasarkan audit skema tabel `properties` di PostgreSQL Supabase, kolom `categorized_photos` dan `photo_categories` tidak ada sebagai kolom fisik tingkat root.
+  - Data pengelompokan foto per kategori sebenarnya telah tersimpan dengan aman dan terstruktur di dalam kolom `metadata` (JSONB) (`metadata.categorized_photos` dan `metadata.photo_categories`).
+  - Namun pada fungsi `addPropertyWithMedia` dan `updatePropertyWithMedia`, terdapat baris duplikat yang mencoba mengirim `photo_categories` dan `categorized_photos` langsung di root payload insert/update tabel `properties`. PostgREST mendeteksi ketidaksesuaian skema fisik dan menolak operasi penyimpanan.
+- **Implementasi Solusi**:
+  1. **Pembersihan Root Payload di `adminService.ts`**:
+     - Menghapus baris `photo_categories: derivedPhotoCategories` dan `categorized_photos: derivedCategorizedPhotos` dari objek `insert` pada fungsi `addPropertyWithMedia`.
+     - Menghapus baris `photo_categories: derivedPhotoCategories` dan `categorized_photos: derivedCategorizedPhotos` dari objek `update` pada fungsi `updatePropertyWithMedia`.
+     - Memastikan kedua field tersebut tetap tersimpan utuh dan rapi di dalam kolom `metadata` (JSONB) properti.
+  2. **Penguatan Sinkronisasi Pembacaan di `userService.ts`**:
+     - Menambahkan fallback pembacaan dari `row.metadata?.photo_categories` dan `row.metadata?.categorized_photos` pada `fetchPublishedProperties` dan `getPublishedPropertyDetails` sehingga data foto per kategori terbaca sempurna di seluruh UI calon penyewa.
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/userService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 26.54s, 0 error).
+
 ### 261. Perbaikan Presisi Logika Kategori Foto Dinamis Berdasarkan Fasilitas Umum & Tipe Kamar (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna melaporkan anomali di Langkah 5 (Upload Foto): kategori foto "Ruang Tamu & Bersama" dan "Area Laundry & Jemuran" tiba-tiba muncul padahal pada Langkah 4 (Fasilitas Umum) kedua fasilitas tersebut sama sekali tidak dicentang.
