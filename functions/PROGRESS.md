@@ -5602,3 +5602,26 @@
 - **Verifikasi**:
   - Kompilasi `cmd /c npm run build` di `functions/public/` berhasil 100% dengan 0 error dalam 34.84s (✓ 2531 modules transformed).
 
+
+### 264. Perbaikan Bug Integritas Data oom_types pada Alur Pendaftaran Kost Mitra Self-Listing (September 2026)
+- **Permintaan & Masalah**:
+  1. Mitra yang mendaftarkan 2 tipe kamar (mis. Standard + VIP) pada form KostFormMitra.tsx mendapati hanya 1 tipe kamar tersimpan di database setelah klik "Publikasikan Kost".
+  2. Tipe kamar kedua hilang karena fungsi syncPropertyRooms di dminService.ts melakukan re-aggregasi oom_types dari latRooms dan menimpa (overwrite) kolom properties.room_types dengan hasil yang berpotensi corrupt akibat error RLS pada tabel relasional ooms.
+  3. Muncul pesan console.error merah ([SYNC_ROOMS] Error upserting rooms: new row violates row-level security policy for table "rooms") yang membingungkan mitra seolah proses gagal, padahal data kost utama sudah 100% tersimpan.
+- **Investigasi & Temuan**:
+  - properties.room_types (JSONB) adalah *single source of truth*. Data sudah benar saat diinsert dari form.
+  - Fungsi syncPropertyRooms mencoba sync ke tabel relasional sekunder ooms ? gagal karena RLS 42501 ? tetap lanjut re-aggregate ulang oom_types dari latRooms ? overwrite data asli yang sudah benar ? tipe kamar kedua hilang.
+  - Pemisahan data self-listing vs KostManager sudah ada via kolom is_managed (false = self-listing, true = KostManager).
+- **Implementasi & Solusi**:
+  * **1. Hapus Overwrite oom_types di syncPropertyRooms**:
+    - Blok re-aggregasi ggregatedRoomTypes dan UPDATE properties SET room_types = aggregatedRoomTypes dihapus sepenuhnya.
+    - syncPropertyRooms sekarang hanya mengupdate kolom price (harga minimum) yang dihitung dari awRooms asli (properties.room_types), bukan dari flatRooms yang bisa korup.
+  * **2. Graceful Handling RLS Error**:
+    - console.error diubah menjadi console.warn untuk error RLS kode 42501 pada tabel ooms, sehingga tidak muncul alarm palsu di konsol browser mitra.
+- **File Tersentuh**:
+  - unctions/public/adminService.ts
+  - unctions/PROGRESS.md
+  - WALKTHROUGH.md
+- **Verifikasi**:
+  - Kompilasi cmd /c npm run build di unctions/public/ berhasil 100% dengan 0 error dalam 30.29s (? 2506 modules transformed).
+  - Build exit code 0. Push ke branch ukan-productions berhasil (commit: b64c04).

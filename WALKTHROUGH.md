@@ -1,81 +1,80 @@
-# Walkthrough - Fitur #226: Sistem Pelaporan Iklan Kost & Pusat Manajemen Aduan Admin
-
-Dokumen ini merinci implementasi fitur tombol pelaporan iklan kost di sisi pengguna publik dan pusat penanganan tiket aduan properti di Dashboard Admin RuangSinggah.
-
----
-
-## 1. Ringkasan Perubahan
-
-### A. Sisi Pengguna Publik (`KostDetail.tsx`)
-- **Tombol Pengaduan**:
-  - Tombol *"🚩 Laporkan Iklan Ini"* ditempatkan pada kartu aksi sticky sidebar (di bawah tombol *Chat Pemilik*).
-  - Banner Card pengaduan *"Menemukan Masalah pada Iklan Ini? Laporkan Kost"* di bagian bawah detail kamar dan spesifikasi properti.
-- **Modal Interaktif Laporan**:
-  - **Kategori Masalah**:
-    1. 🚨 *Indikasi Penipuan / Minta Transfer di Luar Sistem* (`fraud`)
-    2. 🏷️ *Harga atau Fasilitas Tidak Sesuai Realita* (`mismatch`)
-    3. 📍 *Lokasi Titik Peta Palsu / Tidak Akurat* (`fake_location`)
-    4. 🚫 *Kost Sudah Penuh / Tidak Beroperasi* (`closed_or_full`)
-    5. 🔞 *Foto / Konten Tidak Pantas* (`inappropriate`)
-    6. 📝 *Lainnya* (`other`)
-  - **Form Input**: Rincian kronologi, Nama pelapor, dan Nomor WhatsApp aktif (auto-fill jika user sudah login).
-  - **Kompresi WebP Sisi Klien**: Setiap foto bukti yang diunggah otomatis dikompresi ke WebP sebelum diunggah ke storage.
-  - **Notifikasi Email Real-Time**: Laporan memicu pengiriman email notifikasi otomatis ke tim admin melalui FormSubmit.
+# WALKTHROUGH: Perbaikan Bug Integritas Data `room_types` — Fitur #264
+**Tanggal**: 2026-09-02 | **Branch**: `bukan-productions` | **Commit**: `ab64c04`
 
 ---
 
-### B. Sisi Dashboard Admin (`PropertyManagement.tsx`)
-- **Tab Baru & Metrik Statistik**:
-  - Kartu statistik ke-6: `🚨 Aduan Pengguna` dengan penghitung jumlah aduan pending yang butuh penanganan.
-  - Tab Navigasi `🚨 Aduan Pengguna` dengan badge counter animasi.
-- **Badge Peringatan Listing**:
-  - Pada tabel properti utama, listing yang memiliki aduan user akan menampilkan badge merah `🚨 X Aduan`, dan jika diklik akan langsung memfilter tiket aduan properti terkait.
-- **Tabel Manajemen Tiket Aduan**:
-  - Menampilkan nama properti, tombol chat pemilik, kategori & teks aduan, waktu kirim, identitas pelapor + tombol chat pelapor, thumbnail bukti foto (dengan modal zoom preview besar), dan status laporan.
-- **Aksi Cepat 1-Klik**:
-  - **Bekukan Kost Ini (Freeze)**: Membuka modal freeze properti di mana alasan pembekuan otomatis terisi dari laporan user, mengubah status listing menjadi `suspended`, dan otomatis menandai tiket laporan sebagai telah diselesaikan (`action_taken: 'frozen'`).
-  - **Chat Pemilik (WhatsApp)**: Pre-filled pesan klarifikasi ke pemilik properti.
-  - **Chat Pelapor (WhatsApp)**: Pre-filled pesan konfirmasi ke nomor pelapor.
-  - **Tandai Selesai (`resolved`)** & **Abaikan (`dismissed`)**.
+## 1. Daftar Perubahan
+
+### File: `functions/public/adminService.ts`
+
+#### Perubahan A — Graceful Handling RLS Error (baris ~1260)
+Mengubah `console.error` menjadi `console.warn` saat RLS kode `42501` terpicu pada tabel `rooms`, agar tidak ada alarm merah palsu di konsol browser mitra.
+
+#### Perubahan B (KRITIS) — Hapus Overwrite `room_types` (baris ~1266-1315)
+Menghapus seluruh blok re-aggregasi `aggregatedRoomTypes` yang sebelumnya menimpa kolom `properties.room_types` dengan data yang korup akibat upsert gagal ke tabel `rooms`.
+
+Sekarang `syncPropertyRooms` hanya mengupdate kolom `price` (harga minimum) berdasarkan `rawRooms` yang diambil langsung dari `properties.room_types` — sumber yang sudah benar dari awal insert.
 
 ---
 
-## 2. File yang Disentuh
+## 2. Hasil Pengujian
 
-1. [`functions/public/pages/KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx): Tombol pengaduan, modal pelaporan, dan kompresi WebP.
-2. [`functions/public/components/admin/PropertyManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyManagement.tsx): Tab laporan, badge aduan di tabel listing, tabel tiket aduan, modal zoom bukti, dan aksi pembekuan 1-klik terintegrasi.
-3. [`functions/public/userService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts): Helper `uploadReportEvidence` dan `submitPropertyReport`.
-4. [`functions/public/adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts): Helper `getPropertyReports` dan `updatePropertyReportStatus`.
-5. [`functions/public/emailService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/emailService.ts): Helper `notifyAdminPropertyReport`.
-6. [`functions/PROGRESS.md`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/PROGRESS.md): Pencatatan riwayat progres Fitur #226.
+### Build Verification
+- **✓ 2506 modules transformed. Built in 30.29s. Exit code 0.**
+
+### Root Cause yang Sudah Diperbaiki
+
+**ALUR LAMA (BERMASALAH):**
+1. INSERT properties (room_types = [Standard, VIP]) — berhasil
+2. syncPropertyRooms dipanggil
+3. Upsert ke tabel rooms — GAGAL RLS 42501
+4. Tetap lanjut: re-aggregate room_types dari flatRooms yang korup
+5. UPDATE properties SET room_types = [Standard] — **OVERWRITE! Bug!**
+6. Tipe VIP hilang dari database
+
+**ALUR BARU (SUDAH DIPERBAIKI):**
+1. INSERT properties (room_types = [Standard, VIP]) — berhasil
+2. syncPropertyRooms dipanggil
+3. Upsert ke tabel rooms — GAGAL RLS 42501
+4. console.warn kuning informatif (bukan error merah)
+5. Hitung harga minimum dari rawRooms (properties.room_types asli)
+6. UPDATE properties SET price = 500000 — hanya update price
+7. room_types tetap [Standard, VIP] — TIDAK DISENTUH
 
 ---
 
-## 3. Hasil Pengujian & Kompilasi
+## 3. Konfirmasi Pemisahan Data Self-Listing vs KostManager
 
-- Kompilasi build frontend dengan Vite:
+- **Self-listing Mitra**: `is_managed = false`
+- **KostManager**: `is_managed = true`
+
+Kedua jenis kost tersimpan di tabel `properties` yang sama namun dibedakan kolom `is_managed`. Dashboard mitra difilter berdasarkan `owner_uid = user.id` sehingga mitra hanya melihat kost miliknya sendiri.
+
+---
+
+## 4. Panduan Verifikasi untuk User
+
+1. Login sebagai mitra self-listing di browser.
+2. Buka Mitra Dashboard → klik "Tambah Kost".
+3. Isi form hingga **Langkah Tipe Kamar**: tambahkan **2 tipe kamar berbeda** (contoh: Standard Rp 500.000 dan VIP Rp 800.000).
+4. Upload minimal 1 foto → klik **"Publikasikan Kost"**.
+5. **Verifikasi konsol browser**: Tidak ada `console.error` merah. Hanya `console.warn` kuning jika RLS `rooms` terpicu.
+6. **Verifikasi Supabase** (Table Editor → `properties`): kolom `room_types` harus mengandung tepat **2 entri** dan `is_managed = false`.
+
+### SQL Opsional (Supabase SQL Editor — untuk mengaktifkan tabel `rooms` bagi mitra)
+
+```sql
+CREATE POLICY "Mitra can insert own property rooms"
+ON public.rooms FOR INSERT TO authenticated
+WITH CHECK (
+  property_id IN (SELECT id FROM properties WHERE owner_uid = auth.uid())
+);
+
+CREATE POLICY "Mitra can update own property rooms"
+ON public.rooms FOR UPDATE TO authenticated
+USING (
+  property_id IN (SELECT id FROM properties WHERE owner_uid = auth.uid())
+);
 ```
-vite v6.4.1 building for production...
-transforming...
-✓ 2505 modules transformed.
-rendering chunks...
-computing gzip size...
-✓ built in 24.82s
-0 errors, 0 lint warnings
-```
 
----
-
-## 4. Panduan Verifikasi Pengguna
-
-1. **Uji Laporan Publik**:
-   - Buka halaman salah satu kost di browser (misal: `/kost/:id`).
-   - Klik tombol *"Laporkan Iklan Ini"* di sidebar kanan atau di banner bawah.
-   - Pilih kategori masalah, isi deskripsi, masukkan nomor WhatsApp, unggah foto bukti, lalu klik *"Kirim Laporan"*.
-2. **Uji Moderasi di Dashboard Admin**:
-   - Buka Dashboard Admin -> Menu *"Manajemen Kost"*.
-   - Amati kartu statistik dan klik tab *"🚨 Aduan Pengguna"*.
-   - Periksa tiket laporan yang baru masuk:
-     - Klik thumbnail bukti foto untuk memperbesar gambar (*zoom modal*).
-     - Klik tombol *"Chat Pelapor"* atau *"Chat Mitra"* untuk memastikan format tautan WhatsApp terbuka dengan pesan prefill.
-     - Klik *"Bekukan Kost"* untuk melihat otomatisasi form alasan penalti dan perubahan status listing menjadi `suspended`.
+> **Catatan**: SQL ini bersifat opsional. Tanpa policy ini, data kamar tetap 100% aman di `properties.room_types` (JSONB) sebagai *single source of truth*.
