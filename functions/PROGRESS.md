@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 249. Sistem Input Fasilitas & Sub-Fasilitas Hirarkis Pola KostManager (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pada Langkah 4 (Fasilitas), tampilan awal menyajikan puluhan chips bulat berjejer secara datar (flat), membuat layar terasa sangat penuh (*bejibun*), membingungkan, dan sulit dipahami oleh mitra.
+  - Pengguna meminta agar digunakan sistem yang sama dengan formulir pendataan KostManager (`KostManagerPropertyFormModal.tsx` & `AgentDashboard.tsx`), yaitu sistem **Fasilitas Induk dan Sub-Fasilitas** yang kontekstual.
+- **Implementasi Solusi**:
+  1. **Komponen `HierarchicalPublicFacilityInput` untuk Fasilitas Umum**:
+     - Membagi fasilitas umum ke dalam kelompok induk berkelengkapan:
+       - 🅿️ **Area Parkir**: Jika dipilih/aktif, membuka sub-panel kelengkapan (`Parkir Motor`, `Parkir Mobil`, `Parkir Sepeda` + custom).
+       - 🍳 **Dapur Bersama**: Jika dipilih/aktif, membuka sub-panel kelengkapan (`Kompor`, `Kulkas Bersama`, `Dispenser Air`, `Wastafel Cuci Piring`, `Peralatan Masak`, `Meja Makan Bersama` + custom).
+       - 🚻 **WC Umum / Luar**: Jika dipilih/aktif, membuka sub-panel kelengkapan (`Kloset Duduk`, `Kloset Jongkok`, `Shower`, `Wastafel` + custom).
+     - Fasilitas umum mandiri (standalone) disajikan secara rapi dan ringkas: `WiFi`, `Ruang Tamu`, `CCTV`, `Laundry`, `Mushola`, `Area Jemuran`, `Security 24 Jam`, `Akses 24 Jam`, `Lift`, `Cleaning Service`.
+     - Fasilitas kustom bebas tetap tersedia dengan badge removable dan input teks di bagian bawah.
+  2. **Fasilitas Kamar per Tipe Kamar Hirarkis**:
+     - **Tipe Kamar Mandi**: Tombol segmented pilihan utama `[ 🚿 Kamar Mandi Dalam ]` vs `[ 🚪 Kamar Mandi Luar ]`. Jika memilih Kamar Mandi Dalam, otomatis muncul sub-kelengkapan (`Kloset Duduk`, `Kloset Jongkok`, `Shower`, `Water Heater`, `Wastafel`, `Bak Mandi`, `Ember & Gayung`).
+     - **Fasilitas Kamar Tidur**: Pilihan perabot esensial teratur (`Kasur`, `Lemari Pakaian`, `Meja Belajar`, `Kursi`, `AC`, `Kipas Angin`, `TV`, `Jendela`, `Ventilasi`, `Balkon`, `Kulkas Mini` + custom).
+  3. **Integritas Alur Data**:
+     - Seluruh fasilitas tersimpan konsisten dalam array string standar `form.facilities`, `room.roomFacilities`, dan `room.bathroomFacilities`, kompatibel penuh dengan database Supabase dan auto-save draft localStorage.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 48.20s, 0 error).
+
 ### 248. Penghapusan Tombol Redundan Tambah Tipe Kamar di Header Ringkasan (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pada tampilan ringkasan tipe kamar tersimpan (Summary View), terdapat tombol oranye `+ Tambah Tipe Kamar` di baris header atas yang menduplikasi fungsi tombol kartu besar `+ Tambah Tipe Kamar Lainnya` di bagian bawah daftar kamar.

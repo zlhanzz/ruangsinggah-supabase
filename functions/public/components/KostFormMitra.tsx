@@ -1151,6 +1151,342 @@ const FacilityLocationModal: React.FC<FacilityLocationModalProps> = ({
     );
 };
 
+// ── Fasilitas Umum Hirarkis (Pola KostManager) ──────────────────────────────
+interface PublicFacilitySubGroup {
+    id: string;
+    title: string;
+    icon: string;
+    mainKeywords: string[];
+    subOptions: string[];
+}
+
+const PUBLIC_FACILITY_SUB_GROUPS: PublicFacilitySubGroup[] = [
+    {
+        id: 'parkir',
+        title: 'Area Parkir',
+        icon: '🅿️',
+        mainKeywords: ['area parkir', 'parkir', 'parkiran', 'parkir motor', 'parkir mobil', 'parkir sepeda'],
+        subOptions: ['Parkir Motor', 'Parkir Mobil', 'Parkir Sepeda']
+    },
+    {
+        id: 'dapur',
+        title: 'Dapur Bersama',
+        icon: '🍳',
+        mainKeywords: ['dapur bersama', 'dapur', 'dapur umum'],
+        subOptions: ['Kompor', 'Kulkas Bersama', 'Dispenser Air', 'Wastafel Cuci Piring', 'Peralatan Masak', 'Meja Makan Bersama']
+    },
+    {
+        id: 'wc_umum',
+        title: 'WC Umum / Luar',
+        icon: '🚻',
+        mainKeywords: ['wc umum', 'kamar mandi luar', 'toilet umum', 'wc luar'],
+        subOptions: ['Kloset Duduk', 'Kloset Jongkok', 'Shower', 'Wastafel']
+    }
+];
+
+const STANDALONE_PUBLIC_FACILITIES = [
+    { label: 'WiFi', icon: '📶' },
+    { label: 'Ruang Tamu', icon: '🛋️' },
+    { label: 'CCTV', icon: '📹' },
+    { label: 'Laundry', icon: '🧺' },
+    { label: 'Mushola', icon: '🕌' },
+    { label: 'Area Jemuran', icon: '☀️' },
+    { label: 'Security 24 Jam', icon: '👮' },
+    { label: 'Akses 24 Jam', icon: '🔑' },
+    { label: 'Lift', icon: '🛗' },
+    { label: 'Cleaning Service', icon: '🧹' }
+];
+
+const ROOM_BEDROOM_PRESETS = [
+    { label: 'Kasur', icon: '🛏️' },
+    { label: 'Lemari Pakaian', icon: '🚪' },
+    { label: 'Meja Belajar', icon: '🪑' },
+    { label: 'Kursi', icon: '🪑' },
+    { label: 'AC', icon: '❄️' },
+    { label: 'Kipas Angin', icon: '🌀' },
+    { label: 'TV', icon: '📺' },
+    { label: 'Jendela', icon: '🪟' },
+    { label: 'Ventilasi', icon: '🌬️' },
+    { label: 'Balkon', icon: '🏙️' },
+    { label: 'Kulkas Mini', icon: '🧊' }
+];
+
+const ROOM_BATHROOM_SUB_OPTIONS = [
+    { label: 'Kloset Duduk', icon: '🚽' },
+    { label: 'Kloset Jongkok', icon: '🚽' },
+    { label: 'Shower', icon: '🚿' },
+    { label: 'Water Heater', icon: '♨️' },
+    { label: 'Wastafel', icon: '🚰' },
+    { label: 'Bak Mandi', icon: '🛁' },
+    { label: 'Ember & Gayung', icon: '🪣' }
+];
+
+const HierarchicalPublicFacilityInput: React.FC<{
+    facilities: string[];
+    onChange: (updated: string[]) => void;
+}> = ({ facilities = [], onChange }) => {
+    const [customInput, setCustomInput] = useState('');
+    const [subCustomInputs, setSubCustomInputs] = useState<Record<string, string>>({});
+
+    const allConfiguredPresets = useMemo(() => {
+        const set = new Set<string>();
+        STANDALONE_PUBLIC_FACILITIES.forEach(s => set.add(s.label.toLowerCase().trim()));
+        PUBLIC_FACILITY_SUB_GROUPS.forEach(g => {
+            set.add(g.title.toLowerCase().trim());
+            g.subOptions.forEach(sub => set.add(sub.toLowerCase().trim()));
+        });
+        return set;
+    }, []);
+
+    const customFacilities = useMemo(() => {
+        return facilities.filter(f => !allConfiguredPresets.has(f.toLowerCase().trim()));
+    }, [facilities, allConfiguredPresets]);
+
+    const isGroupActive = (group: PublicFacilitySubGroup) => {
+        return facilities.some(f => {
+            const nf = f.toLowerCase().trim();
+            return group.mainKeywords.some(kw => nf === kw || nf.includes(kw));
+        });
+    };
+
+    const toggleGroup = (group: PublicFacilitySubGroup) => {
+        const active = isGroupActive(group);
+        if (active) {
+            // Nonaktifkan grup: hapus nama grup dan semua sub-opsinya
+            const toRemove = new Set([...group.mainKeywords, ...group.subOptions.map(s => s.toLowerCase().trim())]);
+            const updated = facilities.filter(f => {
+                const nf = f.toLowerCase().trim();
+                return !toRemove.has(nf);
+            });
+            onChange(updated);
+        } else {
+            // Aktifkan grup dan berikan default sub-opsi pertama jika belum ada
+            const toAdd = [group.title];
+            if (group.subOptions.length > 0 && !facilities.includes(group.subOptions[0])) {
+                toAdd.push(group.subOptions[0]);
+            }
+            onChange([...facilities, ...toAdd]);
+        }
+    };
+
+    const toggleSubOption = (sub: string, groupTitle: string) => {
+        let current = [...facilities];
+        if (!current.some(f => f.toLowerCase().trim() === groupTitle.toLowerCase().trim())) {
+            current.push(groupTitle);
+        }
+        if (current.includes(sub)) {
+            current = current.filter(x => x !== sub);
+        } else {
+            current.push(sub);
+        }
+        onChange(current);
+    };
+
+    const addSubCustom = (groupId: string, groupTitle: string) => {
+        const val = (subCustomInputs[groupId] || '').trim();
+        if (!val) return;
+        let current = [...facilities];
+        if (!current.some(f => f.toLowerCase().trim() === groupTitle.toLowerCase().trim())) {
+            current.push(groupTitle);
+        }
+        if (!current.includes(val)) {
+            current.push(val);
+        }
+        onChange(current);
+        setSubCustomInputs(prev => ({ ...prev, [groupId]: '' }));
+    };
+
+    const toggleStandalone = (label: string) => {
+        if (facilities.includes(label)) {
+            onChange(facilities.filter(f => f !== label));
+        } else {
+            onChange([...facilities, label]);
+        }
+    };
+
+    const addCustomFacility = () => {
+        const val = customInput.trim();
+        if (!val || facilities.includes(val)) return;
+        onChange([...facilities, val]);
+        setCustomInput('');
+    };
+
+    const removeFacility = (item: string) => {
+        onChange(facilities.filter(f => f !== item));
+    };
+
+    return (
+        <div className="space-y-4">
+            {/* 1. Fasilitas Induk Berkelengkapan (Area Parkir, Dapur Bersama, WC Umum) */}
+            <div className="space-y-2.5">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    Fasilitas Utama dengan Kelengkapan
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {PUBLIC_FACILITY_SUB_GROUPS.map(group => {
+                        const active = isGroupActive(group);
+                        return (
+                            <button
+                                key={group.id}
+                                type="button"
+                                onClick={() => toggleGroup(group)}
+                                className={`p-3 rounded-2xl border text-left transition-all flex items-center justify-between gap-2 cursor-pointer ${
+                                    active
+                                        ? 'bg-orange-500 text-white border-orange-600 shadow-md shadow-orange-500/20 ring-2 ring-orange-200'
+                                        : 'bg-white text-gray-700 border-gray-200 hover:border-orange-300 hover:bg-orange-50/30'
+                                }`}
+                            >
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <span className="text-base shrink-0">{group.icon}</span>
+                                    <span className="text-xs font-black truncate">{group.title}</span>
+                                </div>
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg shrink-0 ${
+                                    active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+                                }`}>
+                                    {active ? 'Aktif' : '+ Pilih'}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {/* Panel Sub-Kelengkapan untuk Setiap Grup yang Aktif */}
+                {PUBLIC_FACILITY_SUB_GROUPS.map(group => {
+                    const active = isGroupActive(group);
+                    if (!active) return null;
+
+                    return (
+                        <div key={`panel_${group.id}`} className="p-3.5 bg-orange-50/70 border border-orange-200/80 rounded-2xl space-y-2.5 animate-in fade-in-50 duration-200">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-black text-orange-950 flex items-center gap-1.5">
+                                    <span>{group.icon}</span>
+                                    <span>Kelengkapan {group.title}:</span>
+                                </span>
+                                <span className="text-[9px] font-bold text-orange-800/80 bg-orange-200/60 px-2 py-0.5 rounded-md">
+                                    Pilih kelengkapan yang tersedia
+                                </span>
+                            </div>
+
+                            {/* Sub Options Chips */}
+                            <div className="flex flex-wrap gap-1.5">
+                                {group.subOptions.map(sub => {
+                                    const isSubChecked = facilities.includes(sub);
+                                    return (
+                                        <button
+                                            key={sub}
+                                            type="button"
+                                            onClick={() => toggleSubOption(sub, group.title)}
+                                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                                isSubChecked
+                                                    ? 'bg-orange-500 text-white shadow-xs'
+                                                    : 'bg-white border border-orange-200 text-gray-700 hover:border-orange-400'
+                                            }`}
+                                        >
+                                            <span className="text-[10px]">{isSubChecked ? '✓' : '↳'}</span>
+                                            <span>{sub}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Sub custom input */}
+                            <div className="flex gap-1.5 pt-1">
+                                <input
+                                    type="text"
+                                    placeholder={`Tambah kelengkapan ${group.title.toLowerCase()}...`}
+                                    value={subCustomInputs[group.id] || ''}
+                                    onChange={e => setSubCustomInputs({ ...subCustomInputs, [group.id]: e.target.value })}
+                                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSubCustom(group.id, group.title); } }}
+                                    className="flex-1 h-8 px-3 bg-white border border-orange-200 rounded-xl text-xs font-medium text-gray-800 placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => addSubCustom(group.id, group.title)}
+                                    className="h-8 px-3 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                                >
+                                    + Tambah
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* 2. Fasilitas Umum Mandiri (Popular Presets) */}
+            <div className="space-y-2 pt-2 border-t border-gray-100">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    Fasilitas Umum Lainnya
+                </p>
+                <div className="flex flex-wrap gap-2">
+                    {STANDALONE_PUBLIC_FACILITIES.map(item => {
+                        const active = facilities.includes(item.label);
+                        return (
+                            <button
+                                key={item.label}
+                                type="button"
+                                onClick={() => toggleStandalone(item.label)}
+                                className={`h-9 px-3.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                                    active
+                                        ? 'bg-orange-500 text-white border-orange-500 shadow-xs'
+                                        : 'bg-white text-gray-600 border-gray-200 hover:border-orange-300'
+                                }`}
+                            >
+                                <span>{item.icon}</span>
+                                <span>{item.label}</span>
+                                {active && <span className="ml-0.5 text-[10px]">✓</span>}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* 3. Fasilitas Kustom Lainnya */}
+            <div className="space-y-2 pt-2 border-t border-dashed border-gray-200">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    Fasilitas Kustom / Tambahan
+                </p>
+                {customFacilities.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pb-1">
+                        {customFacilities.map(cf => (
+                            <span key={cf} className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100/70 border border-amber-200 text-amber-900 text-xs font-bold rounded-xl">
+                                <span>{cf}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => removeFacility(cf)}
+                                    className="w-4 h-4 rounded-full bg-amber-200/80 hover:bg-rose-500 hover:text-white text-amber-800 flex items-center justify-center text-[10px] leading-none transition-colors cursor-pointer"
+                                >
+                                    &times;
+                                </button>
+                            </span>
+                        ))}
+                    </div>
+                )}
+                <div className="flex gap-2 items-center">
+                    <div className="relative flex-1">
+                        <Plus size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Contoh: Kolam Renang, Rooftop, Gym, Gazebo..."
+                            value={customInput}
+                            onChange={e => setCustomInput(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomFacility(); } }}
+                            className="w-full h-10 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-900 pl-9 pr-4 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition-all"
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        onClick={addCustomFacility}
+                        disabled={!customInput.trim()}
+                        className="h-10 px-4 bg-orange-500 text-white rounded-xl text-xs font-bold disabled:opacity-40 hover:bg-orange-600 transition-colors shrink-0 cursor-pointer"
+                    >
+                        + Tambah
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // ── Custom Facility Input ──────────────────────────────────────────────────────
 const FacilityInput: React.FC<{
     selected: string[];
@@ -2229,6 +2565,24 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         }
     };
 
+    const setRoomBathroomType = (roomIdx: number, type: 'dalam' | 'luar') => {
+        const rooms = [...(form.roomTypes || [])];
+        const currentBath = rooms[roomIdx].bathroomFacilities || [];
+        if (type === 'dalam') {
+            let nextBath = currentBath.filter(b => b !== 'Kamar Mandi Luar');
+            if (!nextBath.includes('Kamar Mandi Dalam')) {
+                nextBath = ['Kamar Mandi Dalam', ...nextBath];
+            }
+            if (!nextBath.some(b => ['Kloset Duduk', 'Kloset Jongkok', 'Shower'].includes(b))) {
+                nextBath.push('Shower');
+            }
+            rooms[roomIdx] = { ...rooms[roomIdx], bathroomFacilities: nextBath };
+        } else {
+            rooms[roomIdx] = { ...rooms[roomIdx], bathroomFacilities: ['Kamar Mandi Luar'] };
+        }
+        upd('roomTypes', rooms);
+    };
+
     // ── submit ──────────────────────────────────────────────────────────────────
     const handleSubmit = async () => {
         if (!form.title?.trim()) { setError('Nama kost wajib diisi.'); setStep(0); return; }
@@ -3112,16 +3466,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             // ── STEP 3 (Langkah 4): Fasilitas Properti & Kamar Dinamis ───────────
             case 3: return (
                 <div className="space-y-6">
-                    {/* Bagian 1: Fasilitas Umum / Gedung */}
+                    {/* Bagian 1: Fasilitas Umum / Gedung (Hirarkis Pola KostManager) */}
                     <div className="space-y-4">
-                        <Field label="Fasilitas Gedung / Umum" hint="Pilih preset fasilitas bersama atau tambahkan fasilitas kustom">
-                            <FacilityInput
-                                selected={form.facilities || []}
-                                presets={BUILDING_FACILITIES}
-                                onToggle={toggleFacility}
-                                onAdd={addCustomFacility}
-                                onRemove={removeCustomFacility}
-                                placeholder="Contoh: Kolam Renang, Gym, Rooftop..."
+                        <Field label="Fasilitas Gedung / Umum" hint="Pilih fasilitas utama dan lengkapi detailnya tanpa repot">
+                            <HierarchicalPublicFacilityInput
+                                facilities={form.facilities || []}
+                                onChange={updated => upd('facilities', updated)}
                             />
                         </Field>
 
@@ -3165,7 +3515,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         </Field>
                     </div>
 
-                    {/* Bagian 2: Fasilitas Kamar per Tipe Kamar (Dinamis) */}
+                    {/* Bagian 2: Fasilitas Kamar per Tipe Kamar (Dinamis & Hirarkis) */}
                     <div className="pt-5 border-t border-gray-200 space-y-4">
                         <div className="flex items-center gap-2.5">
                             <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
@@ -3173,7 +3523,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             </div>
                             <div>
                                 <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">Fasilitas per Tipe Kamar</h4>
-                                <p className="text-xs text-gray-500">Tentukan fasilitas kamar tidur &amp; kamar mandi untuk masing-masing tipe kamar yang telah dibuat.</p>
+                                <p className="text-xs text-gray-500">Tentukan tipe kamar mandi &amp; kelengkapannya serta perabot kamar untuk setiap tipe kamar yang dibuat.</p>
                             </div>
                         </div>
 
@@ -3184,52 +3534,111 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                {(form.roomTypes || []).map((room, ri) => (
-                                    <div key={ri} className="bg-white rounded-3xl border border-orange-200/90 p-4 sm:p-5 space-y-4 shadow-xs">
-                                        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                                            <div className="flex items-center gap-2">
-                                                <span className="px-3 py-1 bg-orange-500 text-white rounded-xl text-xs font-black uppercase tracking-wider">
-                                                    {room.name || `Tipe Kamar ${ri + 1}`}
-                                                </span>
-                                                {room.size && (
-                                                    <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-lg">
-                                                        Ukuran: {room.size}
+                                {(form.roomTypes || []).map((room, ri) => {
+                                    const bList = room.bathroomFacilities || [];
+                                    const isInsideBath = bList.includes('Kamar Mandi Dalam') || (!bList.includes('Kamar Mandi Luar') && bList.length > 0);
+
+                                    return (
+                                        <div key={ri} className="bg-white rounded-3xl border border-orange-200/90 p-4 sm:p-5 space-y-4 shadow-xs">
+                                            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="px-3 py-1 bg-orange-500 text-white rounded-xl text-xs font-black uppercase tracking-wider">
+                                                        {room.name || `Tipe Kamar ${ri + 1}`}
                                                     </span>
+                                                    {room.size && (
+                                                        <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-lg">
+                                                            Ukuran: {room.size}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                                                    Tipe #{ri + 1}
+                                                </span>
+                                            </div>
+
+                                            {/* Sub-Sistem 1: Kamar Mandi (Pilihan Utama: Dalam vs Luar) */}
+                                            <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-black text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                                                        <span>🚿</span> Tipe Kamar Mandi
+                                                    </span>
+                                                    <span className="text-[10px] font-bold text-gray-400">Pilih salah satu</span>
+                                                </div>
+
+                                                {/* Toggle Kamar Mandi Dalam vs Kamar Mandi Luar */}
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setRoomBathroomType(ri, 'dalam')}
+                                                        className={`h-11 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                                            isInsideBath
+                                                                ? 'bg-orange-500 text-white shadow-sm ring-2 ring-orange-200'
+                                                                : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-100'
+                                                        }`}
+                                                    >
+                                                        <span>🚿</span> Kamar Mandi Dalam
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setRoomBathroomType(ri, 'luar')}
+                                                        className={`h-11 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                                            !isInsideBath
+                                                                ? 'bg-orange-500 text-white shadow-sm ring-2 ring-orange-200'
+                                                                : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-100'
+                                                        }`}
+                                                    >
+                                                        <span>🚪</span> Kamar Mandi Luar
+                                                    </button>
+                                                </div>
+
+                                                {/* Sub-kelengkapan jika Kamar Mandi Dalam */}
+                                                {isInsideBath && (
+                                                    <div className="pt-2 border-t border-slate-200/60 space-y-2 animate-in fade-in-50 duration-200">
+                                                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider block">
+                                                            Kelengkapan Kamar Mandi Dalam:
+                                                        </span>
+                                                        <div className="flex flex-wrap gap-1.5">
+                                                            {ROOM_BATHROOM_SUB_OPTIONS.map(opt => {
+                                                                const active = (room.bathroomFacilities || []).includes(opt.label);
+                                                                return (
+                                                                    <button
+                                                                        key={opt.label}
+                                                                        type="button"
+                                                                        onClick={() => toggleRoomFeature(ri, 'bathroomFacilities', opt.label)}
+                                                                        className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                                                            active
+                                                                                ? 'bg-orange-500 text-white shadow-xs'
+                                                                                : 'bg-white border border-gray-200 text-gray-700 hover:border-orange-300'
+                                                                        }`}
+                                                                    >
+                                                                        <span>{opt.icon}</span>
+                                                                        <span>{opt.label}</span>
+                                                                        {active && <span className="text-[10px]">✓</span>}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
                                                 )}
                                             </div>
-                                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                                                Tipe #{ri + 1}
-                                            </span>
-                                        </div>
 
-                                        <div>
-                                            <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                                                <span>🛏️</span> Fasilitas Kamar Tidur ({room.name || `Tipe ${ri+1}`})
-                                            </p>
-                                            <FacilityInput
-                                                selected={room.roomFacilities || []}
-                                                presets={ROOM_AMENITIES}
-                                                onToggle={f => toggleRoomFeature(ri, 'roomFacilities', f)}
-                                                onAdd={f => addCustomRoomFeature(ri, 'roomFacilities', f)}
-                                                onRemove={f => toggleRoomFeature(ri, 'roomFacilities', f)}
-                                                placeholder="Contoh: Sofa, Balkon, Kulkas Mini..."
-                                            />
+                                            {/* Sub-Sistem 2: Fasilitas & Perabot Kamar Tidur */}
+                                            <div>
+                                                <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                                    <span>🛏️</span> Fasilitas &amp; Perabot Kamar Tidur
+                                                </p>
+                                                <FacilityInput
+                                                    selected={room.roomFacilities || []}
+                                                    presets={ROOM_BEDROOM_PRESETS.map(p => p.label)}
+                                                    onToggle={f => toggleRoomFeature(ri, 'roomFacilities', f)}
+                                                    onAdd={f => addCustomRoomFeature(ri, 'roomFacilities', f)}
+                                                    onRemove={f => toggleRoomFeature(ri, 'roomFacilities', f)}
+                                                    placeholder="Contoh: Sofa, Balkon, Kulkas Mini..."
+                                                />
+                                            </div>
                                         </div>
-
-                                        <div className="pt-3 border-t border-gray-100">
-                                            <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                                                <span>🚿</span> Fasilitas Kamar Mandi ({room.name || `Tipe ${ri+1}`})
-                                            </p>
-                                            <FacilityInput
-                                                selected={room.bathroomFacilities || []}
-                                                presets={BATH_AMENITIES}
-                                                onToggle={f => toggleRoomFeature(ri, 'bathroomFacilities', f)}
-                                                onAdd={f => addCustomRoomFeature(ri, 'bathroomFacilities', f)}
-                                                onRemove={f => toggleRoomFeature(ri, 'bathroomFacilities', f)}
-                                            />
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
