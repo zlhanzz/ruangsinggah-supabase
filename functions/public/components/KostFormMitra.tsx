@@ -90,7 +90,7 @@ interface NewPhotoItem {
 }
 
 const initialForm: Partial<Kost> = {
-    title: '', description: '', type: 'Campur', status: 'published',
+    title: '', description: '', type: 'Campur', status: 'draft',
     province: '', city: '', area: '', address: '',
     location: { lat: -6.2088, lng: 106.8456 },
     imageUrls: [], videoUrls: [],
@@ -3853,7 +3853,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             if (isEditing && editingKost?.id) {
                 await updatePropertyWithMedia(editingKost.id, data, pendingUploadPayload, []);
             } else {
-                await addPropertyWithMedia({ ...data, isVerified: false }, pendingUploadPayload, []);
+                await addPropertyWithMedia({ ...data, status: 'draft', isVerified: false }, pendingUploadPayload, []);
                 // Clear draft after successful creation
                 try {
                     localStorage.removeItem(storageKey);

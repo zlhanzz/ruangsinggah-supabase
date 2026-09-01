@@ -1977,6 +1977,7 @@ export async function addPropertyWithMedia(
 
   const isAdmin = await checkIfUserIsAdmin(user.id);
   const targetOwnerUid = (isAdmin && kostData.ownerUid) ? kostData.ownerUid : user.id;
+  const targetStatus = isAdmin ? (kostData.status || 'draft') : 'draft';
 
   // Generate a temporary ID for Storage path (will be overwritten with DB-generated UUID)
   const tempId = crypto.randomUUID();
@@ -2061,7 +2062,7 @@ export async function addPropertyWithMedia(
       },
       type: kostData.type,
       property_type: kostData.type, // Map the type specifically for Supabase DB
-      status: kostData.status || 'draft',
+      status: targetStatus,
       is_verified: kostData.isVerified ?? false,
       is_managed: kostData.isManaged ?? false,
       rating: Number(kostData.rating || 0),

@@ -2,6 +2,29 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 263. Penegakan Status Awal 'draft' pada Pendaftaran Properti Mitra & Penyelesaian Error RLS 42501 (`adminService.ts` & `KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Saat mitra mengklik tombol "Publikasikan Kost" untuk mengirim pendataan kost ke dashboard admin, muncul error `42501: new row violates row-level security policy for table "properties"`.
+- **Investigasi & Analisis Akar Masalah**:
+  - Kebijakan keamanan baris (Row Level Security / RLS) pada database PostgreSQL Supabase melarang akun mitra / non-admin untuk langsung memasukkan properti baru dengan `status: 'published'`.
+  - Di `KostFormMitra.tsx:93`, `initialForm` secara keliru diinisialisasi dengan status `'published'`, sehingga payload form selalu mengirim status tersebut.
+  - Pada `adminService.ts:2064` (`addPropertyWithMedia`), kode memasukkan `status: kostData.status || 'draft'` tanpa memvalidasi apakah user yang login adalah admin atau mitra biasa. Akibatnya, status `published` lolos ke payload insert Supabase dan ditolak keras oleh RLS PostgreSQL dengan error `42501`.
+  - Simulasi nyata dengan akun mitra membuktikan: jika properti di-insert dengan `status: 'published'` maka ditolak RLS `42501`, namun jika berstatus `status: 'draft'` maka **100% lolos sukses**.
+- **Implementasi Solusi**:
+  1. **Penguncian Status 'draft' untuk Non-Admin di `adminService.ts`**:
+     - Memperbarui `addPropertyWithMedia` untuk menghitung `const targetStatus = isAdmin ? (kostData.status || 'draft') : 'draft'`.
+     - Properti baru yang didaftarkan oleh mitra dijamin selalu berstatus `'draft'` dengan `is_verified: false` agar aman dari penolakan RLS dan mematuhi alur tinjauan (*review*) resmi oleh admin.
+  2. **Koreksi Nilai Awal di `KostFormMitra.tsx`**:
+     - Mengubah default `initialForm.status` menjadi `'draft'`.
+     - Memastikan pemanggilan `addPropertyWithMedia` secara eksplisit menetapkan `{ ...data, status: 'draft', isVerified: false }`.
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 21.96s, 0 error).
+
 ### 262. Perbaikan Supabase Insert/Update Error PGRST204 Kolom `categorized_photos` & `photo_categories` (`adminService.ts` & `userService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   - Saat mitra mengklik tombol "Publikasikan Kost" di `KostFormMitra.tsx:3856` / `adminService.ts:2092`, muncul error Supabase PostgREST `PGRST204: Could not find the 'categorized_photos' column of 'properties' in the schema cache`.
