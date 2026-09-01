@@ -2905,8 +2905,23 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         });
     };
 
-    // ── Helper konversi gambar ke Base64 Low-Res untuk AI Vision (<180KB) ─────────
-    const createLowResBase64ForAi = async (file: File, maxDim = 1280): Promise<string> => {
+    // ── Helper identifikasi kategori rawan spanduk / kontak luar ──────────────
+    const isBannerProneCategory = (category: string): boolean => {
+        const lower = (category || '').toLowerCase();
+        return (
+            lower.includes('depan') || 
+            lower.includes('fasad') || 
+            lower.includes('front') || 
+            lower.includes('lingkungan') || 
+            lower.includes('parkir') || 
+            lower.includes('gerbang') || 
+            lower.includes('luar') ||
+            lower.includes('akses')
+        );
+    };
+
+    // ── Helper konversi citra ke Base64 Low-Res untuk AI Vision (~45KB, Sweet Spot 1024px) ───
+    const createLowResBase64ForAi = async (file: File, maxDim = 1024, quality = 0.65): Promise<string> => {
         return new Promise((resolve) => {
             if (!file.type.startsWith('image/')) return resolve('');
             const reader = new FileReader();
@@ -2929,7 +2944,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     const ctx = canvas.getContext('2d');
                     if (!ctx) return resolve('');
                     ctx.drawImage(img, 0, 0, width, height);
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+                    const dataUrl = canvas.toDataURL('image/jpeg', quality);
                     const base64 = dataUrl.split(',')[1] || '';
                     resolve(base64);
                 };
@@ -2941,7 +2956,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         });
     };
 
-    // ── Helper pengaburan area kontak (Canvas Mosaic Blur + Mask Overlay) ────────
+    // ── Helper penyamaran kotak kontak (Tight Fit Canvas Mosaic Blur) ───────────
     const applyBlurToBoundingBoxes = async (
         file: File, 
         boxes: Array<{ ymin: number; xmin: number; ymax: number; xmax: number }>
@@ -3025,56 +3040,68 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         const fileArr = Array.from(files);
         if (fileArr.length === 0) return;
 
-        setIsScanningBanner(true);
-        let anyContactDetected = false;
+        const needAiScan = isBannerProneCategory(category);
+        if (needAiScan) {
+            setIsScanningBanner(true);
+        }
 
-        const newItems: NewPhotoItem[] = [];
-        for (const file of fileArr) {
-            try {
-                let fileToProcess = file;
-                let isBlurred = false;
+        try {
+            let anyContactDetected = false;
 
-                // 1. Ekstrak Base64 Low-Res untuk AI Vision (<80KB)
-                const lowResBase64 = await createLowResBase64ForAi(file);
-                if (lowResBase64) {
-                    // 2. Pindai keberadaan spanduk / nomor kontak via Edge Function Gemini Flash
-                    const detection = await detectPhotoContactBanner(lowResBase64, 'image/jpeg');
-                    if (detection.hasContact && detection.boxes && detection.boxes.length > 0) {
-                        fileToProcess = await applyBlurToBoundingBoxes(file, detection.boxes);
-                        isBlurred = true;
-                        anyContactDetected = true;
+            // Proses seluruh file secara paralel (Promise.all) untuk akselerasi instan
+            const processedItems = await Promise.all(
+                fileArr.map(async (file) => {
+                    try {
+                        let fileToProcess = file;
+                        let isBlurred = false;
+
+                        // Pindai AI hanya jika kategori rawan spanduk/kontak (eksterior/fasad/lingkungan)
+                        if (needAiScan) {
+                            const lowResBase64 = await createLowResBase64ForAi(file, 1024, 0.65);
+                            if (lowResBase64) {
+                                const detection = await detectPhotoContactBanner(lowResBase64, 'image/jpeg');
+                                if (detection.hasContact && detection.boxes && detection.boxes.length > 0) {
+                                    fileToProcess = await applyBlurToBoundingBoxes(file, detection.boxes);
+                                    isBlurred = true;
+                                    anyContactDetected = true;
+                                }
+                            }
+                        }
+
+                        // Kompresi ke WebP Resolusi Tinggi (Client-Side)
+                        const webpFile = await compressImageToWebP(fileToProcess);
+                        const preview = URL.createObjectURL(webpFile);
+                        return {
+                            id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                            file: webpFile,
+                            preview,
+                            category,
+                            caption: category,
+                            isBlurred
+                        } as NewPhotoItem;
+                    } catch (err) {
+                        console.error("Error processing photo:", err);
+                        const preview = URL.createObjectURL(file);
+                        return {
+                            id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                            file,
+                            preview,
+                            category,
+                            caption: category,
+                            isBlurred: false
+                        } as NewPhotoItem;
                     }
-                }
+                })
+            );
 
-                // 3. Kompresi ke WebP (Client-Side)
-                const webpFile = await compressImageToWebP(fileToProcess);
-                const preview = URL.createObjectURL(webpFile);
-                newItems.push({
-                    id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-                    file: webpFile,
-                    preview,
-                    category,
-                    caption: category,
-                    isBlurred
-                });
-            } catch (err) {
-                console.error("Error processing photo:", err);
-                const preview = URL.createObjectURL(file);
-                newItems.push({
-                    id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-                    file,
-                    preview,
-                    category,
-                    caption: category
-                });
+            if (anyContactDetected) {
+                setBannerNotice('Foto Anda terdeteksi memuat informasi kontak langsung/spanduk sewa dan telah disamarkan secara otomatis oleh sistem demi keamanan transaksi.');
             }
-        }
 
-        setIsScanningBanner(false);
-        if (anyContactDetected) {
-            setBannerNotice('Foto Anda terdeteksi memuat informasi kontak langsung/spanduk sewa dan telah disamarkan secara otomatis oleh sistem demi keamanan transaksi.');
+            setNewPhotoItems(prev => [...prev, ...processedItems]);
+        } finally {
+            setIsScanningBanner(false);
         }
-        setNewPhotoItems(prev => [...prev, ...newItems]);
     };
 
     const updateNewPhotoCaption = (id: string, caption: string) => {

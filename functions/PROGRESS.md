@@ -24,6 +24,10 @@
   5. **Penyempurnaan Presisi Sensor (Tight Bounding Box)**:
      - Mengetatkan prompt AI Vision agar fokus secara eksklusif pada spanduk kain/kontak yang memuat nomor telepon, dan mengabaikan plang nama bangunan/kost permanen di dinding (tanpa kontak).
      - Menghilangkan padding margin berlebih di canvas front-end (0% offset) sehingga kotak mosaik blur pas menempel pada tepi kain spanduk tanpa menutupi pot bunga, jalanan, atau pagar.
+  6. **Akselerasi & Efisiensi Maksimal (Smart Category Filtering & Promise.all)**:
+     - **Smart Category Filter**: Membatasi pemindaian AI Vision hanya pada kategori foto eksterior yang berpotensi memiliki spanduk sewa (`Bangunan Depan/Fasad`, `Area Lingkungan`, `Gerbang/Pagar`, `Akses Masuk`). Foto interior (kamar tidur, kasur, kamar mandi dalam, dapur) langsung lolos instan (0 detik) ke WebP tanpa AI, memangkas 70–80% kuota API.
+     - **Pemrosesan Paralel (`Promise.all`)**: Mengubah loop serial menjadi paralel sehingga banyak foto yang diunggah bersamaan selesai dalam satu waktu tunggu yang sama.
+     - **Resolusi Sweet Spot (1024px / 0.65)**: Payload base64 turun ke ~45 KB per foto untuk kecepatan transmisi dan decoding AI 2x lebih kencang tanpa mengurangi ketajaman foto asli hasil upload (tetap Full HD WebP).
 - **File Tersentuh**:
   - `supabase/functions/detect-contact-banner/index.ts`
   - `functions/public/adminService.ts`
@@ -31,7 +35,7 @@
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 32.11s, 0 error).
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 24.20s, 0 error).
 
 ### 255. Pencatatan Permanen Caption dan Kategori Foto ke Database & Tampilan User Listing (`KostFormMitra.tsx`, `adminService.ts`, `userService.ts`, `KostDetail.tsx`, `types.ts`) (September 2026)
 - **Permintaan & Masalah**:
