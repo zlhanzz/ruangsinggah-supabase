@@ -21,6 +21,9 @@
      - Menampilkan indikator loading saat pemindaian foto: *"Memindai foto dengan Gemini 3.7 Flash..."*.
      - Menampilkan banner edukatif di Langkah 5: *"Perlindungan Kontak & Privasi Aktif: Foto Anda terdeteksi memuat informasi kontak langsung/spanduk sewa dan telah disamarkan secara otomatis demi keamanan transaksi."*.
      - Menyematkan badge `🛡️ Disamarkan` pada thumbnail foto yang terkena penyamaran.
+  5. **Penyempurnaan Presisi Sensor (Tight Bounding Box)**:
+     - Mengetatkan prompt AI Vision agar fokus secara eksklusif pada spanduk kain/kontak yang memuat nomor telepon, dan mengabaikan plang nama bangunan/kost permanen di dinding (tanpa kontak).
+     - Menghilangkan padding margin berlebih di canvas front-end (0% offset) sehingga kotak mosaik blur pas menempel pada tepi kain spanduk tanpa menutupi pot bunga, jalanan, atau pagar.
 - **File Tersentuh**:
   - `supabase/functions/detect-contact-banner/index.ts`
   - `functions/public/adminService.ts`
@@ -28,7 +31,7 @@
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 38.60s, 0 error).
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 32.11s, 0 error).
 
 ### 255. Pencatatan Permanen Caption dan Kategori Foto ke Database & Tampilan User Listing (`KostFormMitra.tsx`, `adminService.ts`, `userService.ts`, `KostDetail.tsx`, `types.ts`) (September 2026)
 - **Permintaan & Masalah**:

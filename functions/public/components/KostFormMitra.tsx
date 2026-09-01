@@ -2961,15 +2961,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     // Gambar citra asli
                     ctx.drawImage(img, 0, 0);
 
-                    // Terapkan blur dan masker pada setiap bounding box (koordinat 0-1000)
+                    // Terapkan blur dan masker pada setiap bounding box pas sesuai koordinat AI (0-1000)
                     boxes.forEach(box => {
-                        const padY = Math.round((box.ymax - box.ymin) * 0.08);
-                        const padX = Math.round((box.xmax - box.xmin) * 0.08);
-
-                        const normYmin = Math.max(0, box.ymin - padY);
-                        const normXmin = Math.max(0, box.xmin - padX);
-                        const normYmax = Math.min(1000, box.ymax + padY);
-                        const normXmax = Math.min(1000, box.xmax + padX);
+                        const normYmin = Math.max(0, Math.min(1000, box.ymin));
+                        const normXmin = Math.max(0, Math.min(1000, box.xmin));
+                        const normYmax = Math.max(0, Math.min(1000, box.ymax));
+                        const normXmax = Math.max(0, Math.min(1000, box.xmax));
 
                         const x = Math.round((normXmin / 1000) * img.width);
                         const y = Math.round((normYmin / 1000) * img.height);
@@ -2991,17 +2988,19 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                 ctx.drawImage(offCanvas, 0, 0, offCanvas.width, offCanvas.height, x, y, w, h);
                             }
 
-                            // 2. Overlay frosted dark semi-transparan
-                            ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+                            // 2. Overlay frosted dark semi-transparan tipis elegan
+                            ctx.fillStyle = 'rgba(15, 23, 42, 0.70)';
                             ctx.fillRect(x, y, w, h);
 
-                            // 3. Label elegan "Kontak Disamarkan"
-                            const fontSize = Math.max(10, Math.min(22, Math.round(h * 0.35)));
-                            ctx.fillStyle = '#ffffff';
-                            ctx.font = `bold ${fontSize}px sans-serif`;
-                            ctx.textAlign = 'center';
-                            ctx.textBaseline = 'middle';
-                            ctx.fillText('🔒 Kontak Disamarkan', x + w / 2, y + h / 2);
+                            // 3. Label elegan "🔒 Kontak Disamarkan" jika ukuran kotak memadai
+                            if (w >= 45 && h >= 16) {
+                                const fontSize = Math.max(9, Math.min(16, Math.round(h * 0.28)));
+                                ctx.fillStyle = '#ffffff';
+                                ctx.font = `bold ${fontSize}px sans-serif`;
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'middle';
+                                ctx.fillText('🔒 Kontak Disamarkan', x + w / 2, y + h / 2);
+                            }
 
                             ctx.restore();
                         }

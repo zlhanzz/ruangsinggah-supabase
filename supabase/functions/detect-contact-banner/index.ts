@@ -35,20 +35,21 @@ serve(async (req) => {
     const prompt = `
 Anda adalah AI vision inspeksi foto properti sewa khusus untuk platform RuangSinggah.id.
 Tugas Anda adalah mendeteksi apakah di dalam foto ini terdapat:
-1. SPANDUK / BANNER / PLANG / PAPAN NAMA PENYEWAAN KOST (misalnya bertuliskan "TERIMA KOST", "MENERIMA KOST", "KOST PUTRI", "KOST PUTRA", "DISEWAKAN", spanduk kain/terpal di pagar atau dinding).
-2. INFORMASI KONTAK LANGSUNG (seperti nomor HP, nomor WhatsApp, kata "Hubungi", "Hub", "Telp", "WA", "SMS", "CP", nomor 08xx / +62xx).
+1. SPANDUK / BANNER KAIN yang memuat penawaran sewa kamar dan informasi kontak langsung (nomor HP/WhatsApp, kata "Hubungi", "Hub", "Telp", "WA", "CP", nomor telepon 08xx / +62xx).
+2. TEKS NOMOR TELEPON atau kontak langsung yang sengaja dipasang untuk transaksi di luar platform.
 
-PANDUAN DETEKSI KETAT:
-1. Pindai seluruh bagian foto, termasuk spanduk kain/terpal di pagar, dinding, tiang, atau gerbang depan (misal spanduk hijau/merah/kuning bertuliskan "Menerima Kost... Hub: ...").
-2. Jika DITEMUKAN spanduk penyewaan kost atau teks kontak:
-   - Buat kotak bounding box (skala 0 sampai 1000: ymin, xmin, ymax, xmax) yang MENCAKUP SELURUH AREA SPANDUK / BANNER tersebut (atau setidaknya seluruh blok teks nomor telepon & keterangannya) agar sistem dapat menyamarkannya secara rapi dan bersih.
-   - Set "has_contact": true.
-3. Jika foto bersih dari spanduk penyewaan kamar dan tidak ada nomor kontak (misal hanya bangunan tanpa spanduk, interior kamar tidur bersih, atau hanya plat nomor kendaraan kecil di jalan), set "has_contact": false dan "boxes": [].
+ATURAN KETAT PRESISI (TIGHT BOUNDING BOX):
+1. FOKUS HANYA PADA KONTAK: Jangan tandai tulisan nama gedung/kost permanen di dinding (seperti tulisan semen/kayu nama kost, plang alamat RT/RW, nomor rumah) JIKA TIDAK MEMUAT nomor telepon. Tulisan nama kost biasa di dinding BUKAN pelanggaran.
+2. UKURAN KOTAK HARUS SANGAT PRESISI (TIGHT FIT):
+   - Koordinat bounding box (skala 0 sampai 1000: ymin, xmin, ymax, xmax) HARUS MENEMPEL PAS DI TEPI KAIN SPANDUK atau pas di sekeliling teks kontak saja.
+   - DILARANG melebihi tepi kain spanduk. JANGAN menyertakan pot bunga, jalanan, pagar di luar kain, lantai, tiang, atau dinding sekitar.
+   - Kotak harus sekecil dan seakurat mungkin hanya menutupi spanduk hijau/spanduk kontak tersebut.
+3. Jika foto bersih dari spanduk kontak atau nomor telepon, kembalikan "has_contact": false dan "boxes": [].
 
 FORMAT OUTPUT (JSON SAJA, TANPA BACKTICKS):
 {
   "has_contact": true / false,
-  "detected_texts": ["daftar teks yang terbaca pada spanduk/kontak"],
+  "detected_texts": ["daftar teks kontak atau tulisan spanduk"],
   "boxes": [
     {
       "ymin": 0-1000,
