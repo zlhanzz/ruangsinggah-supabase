@@ -2,6 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 252. Mekanisme Input Biaya Tambahan Fasilitas dengan Toggle On/Off & Checklist Cakupan Item Ala Dashboard Agen (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar bagian **Biaya Tambahan Fasilitas** pada formulir pendaftaran mitra (`KostFormMitra.tsx` Langkah 4) memiliki mekanisme input yang sama dengan yang ada pada Dashboard Agen (`AgentDashboard.tsx`):
+    1. Menginput nominal harga bulanan dengan format pemisah ribuan otomatis.
+    2. Menentukan cakupan biaya tambahan (mencakup apa saja) menggunakan checklist item interaktif.
+    3. Diterapkan tombol toggle On/Off untuk menentukan secara eksplisit apakah ada biaya tambahan fasilitas atau tidak.
+- **Implementasi Solusi**:
+  1. **Toggle Switch On / Off Eksplisit**:
+     - Menghadirkan opsi toggle: `[ ✕ Tidak Ada ]` vs `[ ✓ Ada Biaya Tambahan ]`.
+     - Saat memilih **Tidak Ada**: panel konfigurasi tertutup rapi, menyajikan keterangan informatif bahwa biaya sewa sudah bersih (*all-in*), serta mereset nominal biaya `additionalFeePrice = 0` dan `additionalFeeName = ''`.
+     - Saat memilih **Ada Biaya Tambahan**: panel mekar terbuka dengan animasi transisi yang mulus.
+  2. **Input Nominal Harga Terformat Otomatis**:
+     - Menggunakan helper `formatCurrencyInput` dan `parseCurrencyInput` dengan prefix `Rp` dan pemisah titik ribuan otomatis (misal: `50.000`), sehingga konsisten dengan pengisian tarif kamar.
+  3. **Checklist Cakupan Biaya Tambahan Ala Dashboard Agen**:
+     - Menyediakan grid checklist item preset cakupan esensial:
+       - ⚡ **Listrik**
+       - 💧 **Air**
+       - 🗑️ **Sampah**
+       - 📶 **Wifi**
+       - 🛡️ **Keamanan / Parkir**
+     - Dilengkapi input penambahan cakupan kustom bebas (+ tombol `+ Tambah` / enter) untuk item tambahan lain (misal: *Gas*, *Laundry*, *Iuran RT*).
+     - Sinkronisasi dua arah instan dengan field string database `form.additionalFeeName` (contoh: `"Listrik, Air, Sampah"`).
+  4. **Retensi Ketentuan Penagihan**:
+     - Pilihan ketentuan penagihan (`Mulai dari Bulan Awal Sewa Pertama` vs `Promo Bebas Tagihan di Bulan Pertama`) tetap tersaji elegan dengan penjelasannya.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` sukses 100% (✓ 2506 modules transformed, 0 error).
+
 ### 251. Adopsi Mekanisme Input Fasilitas Clean & Ringkas Dashboard Agen pada Formulir Mitra (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna lebih menyukai mekanisme sistem input fasilitas yang ada pada Dashboard Agen (`KostManagerPropertyFormModal.tsx` & `AgentDashboard.tsx`) karena terasa jauh lebih *clean*, ringkas, ringan, dan tidak membuat pusing (*nggak bikin mumet*).

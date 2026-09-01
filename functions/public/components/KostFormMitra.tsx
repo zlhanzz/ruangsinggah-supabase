@@ -71,6 +71,14 @@ const PUBLIC_PHOTO_CATEGORIES: PublicPhotoCategoryDef[] = [
     { id: 'Fasilitas Lainnya', label: 'Fasilitas & Area Lainnya', desc: 'Rooftop, tempat jemuran, pos keamanan, dll.' },
 ];
 
+const ADDITIONAL_FEE_COVERED_PRESETS = [
+    { label: 'Listrik', icon: '⚡' },
+    { label: 'Air', icon: '💧' },
+    { label: 'Sampah', icon: '🗑️' },
+    { label: 'Wifi', icon: '📶' },
+    { label: 'Keamanan / Parkir', icon: '🛡️' }
+];
+
 interface NewPhotoItem {
     id: string;
     file: File;
@@ -1616,6 +1624,17 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         additionalCostPerPerson: 0
     });
     const [hasExtraFee, setHasExtraFee] = useState<boolean>(false);
+    const [isAdditionalFeeActive, setIsAdditionalFeeActive] = useState<boolean>(() => {
+        return (form.additionalFeePrice || 0) > 0 || Boolean(form.additionalFeeName && form.additionalFeeName.trim().length > 0);
+    });
+    const [customCoveredFeeInput, setCustomCoveredFeeInput] = useState('');
+
+    // Sinkronisasi otomatis status aktif jika ada data biaya tambahan dari form/draft
+    useEffect(() => {
+        if ((form.additionalFeePrice || 0) > 0 || (form.additionalFeeName && form.additionalFeeName.trim().length > 0)) {
+            setIsAdditionalFeeActive(true);
+        }
+    }, [form.additionalFeePrice, form.additionalFeeName]);
 
     const isInitialMount = useRef(true);
 
@@ -3422,44 +3441,257 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             />
                         </Field>
 
-                        <Field label="Biaya Tambahan (Opsional)" hint="Isi jika kost menetapkan tagihan wajib bulanan di luar tagihan pokok kamar.">
-                            <div className="grid grid-cols-2 gap-3 mb-3">
-                                <Input placeholder="Nama biaya (Listrik)" value={form.additionalFeeName||''} onChange={e => upd('additionalFeeName',e.target.value)} icon={<BookOpen size={16}/>} />
-                                <Input type="number" placeholder="Nominal (Rp)" value={form.additionalFeePrice||''} onChange={e => upd('additionalFeePrice',parseInt(e.target.value)||0)} icon={<span className="text-[10px] font-bold text-gray-400">Rp</span>} />
-                            </div>
-                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Ketentuan Penagihan</p>
-                                <div className="flex gap-2">
-                                    <button 
+                        {/* Bagian Biaya Tambahan Fasilitas Bulanan (On/Off & Mekanisme Ala Dashboard Agen) */}
+                        <div className="p-4 sm:p-5 bg-white rounded-3xl border border-gray-200 shadow-xs space-y-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-base">🏷️</span>
+                                        <h4 className="text-xs sm:text-sm font-black text-gray-900 uppercase tracking-tight">
+                                            Biaya Tambahan Fasilitas Bulanan (Opsional)
+                                        </h4>
+                                    </div>
+                                    <p className="text-[11px] text-gray-500 mt-0.5">
+                                        Pilih apakah kost memiliki tagihan wajib bulanan di luar tagihan pokok kamar (misal: listrik, air, sampah, wifi).
+                                    </p>
+                                </div>
+
+                                {/* Toggle On / Off */}
+                                <div className="inline-flex p-1 bg-gray-100 rounded-2xl shrink-0 self-start sm:self-center">
+                                    <button
                                         type="button"
-                                        onClick={() => upd('additionalFeeStartsFrom', 'month_1')}
-                                        className={`flex-1 h-10 rounded-xl text-[10px] font-black uppercase transition-all ${
-                                            form.additionalFeeStartsFrom !== 'month_2' 
-                                                ? 'bg-orange-500 text-white shadow-md' 
-                                                : 'bg-white text-gray-500 border border-gray-200'
+                                        onClick={() => {
+                                            setIsAdditionalFeeActive(false);
+                                            upd('additionalFeePrice', 0);
+                                            upd('additionalFeeName', '');
+                                        }}
+                                        className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                                            !isAdditionalFeeActive
+                                                ? 'bg-white text-gray-800 shadow-xs ring-1 ring-gray-200'
+                                                : 'text-gray-500 hover:text-gray-800'
                                         }`}
                                     >
-                                        Mulai dari Bulan Awal Sewa Pertama
+                                        ✕ Tidak Ada
                                     </button>
-                                    <button 
+                                    <button
                                         type="button"
-                                        onClick={() => upd('additionalFeeStartsFrom', 'month_2')}
-                                        className={`flex-1 h-10 rounded-xl text-[10px] font-black uppercase transition-all ${
-                                            form.additionalFeeStartsFrom === 'month_2' 
-                                                ? 'bg-orange-500 text-white shadow-md' 
-                                                : 'bg-white text-gray-500 border border-gray-200'
+                                        onClick={() => {
+                                            setIsAdditionalFeeActive(true);
+                                            if (!form.additionalFeeStartsFrom) {
+                                                upd('additionalFeeStartsFrom', 'month_1');
+                                            }
+                                        }}
+                                        className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                                            isAdditionalFeeActive
+                                                ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
+                                                : 'text-gray-500 hover:text-orange-600'
                                         }`}
                                     >
-                                        Promo Bebas Tagihan di Bulan Pertama
+                                        <span>✓</span>
+                                        <span>Ada Biaya Tambahan</span>
                                     </button>
                                 </div>
-                                <p className="text-[9px] text-gray-400 font-bold mt-3 leading-relaxed">
-                                    {form.additionalFeeStartsFrom === 'month_2' 
-                                        ? 'ℹ️ Biaya tambahan akan GRATIS pada awal sewa (bulan pertama), dan baru akan ditagih mulai periode perpanjangan berikutnya.'
-                                        : 'ℹ️ Biaya tambahan akan langsung ditagih bersamaan dengan pembayaran sewa pertama kali.'}
-                                </p>
                             </div>
-                        </Field>
+
+                            {/* Panel Konten Detail (Ketika Aktif) */}
+                            {isAdditionalFeeActive ? (
+                                <div className="space-y-4 animate-in fade-in-50 duration-200 pt-1">
+                                    {/* 1. Input Nominal Harga Bulanan */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider block">
+                                            Nominal Biaya Tambahan Bulanan (Rp/Bulan)
+                                        </label>
+                                        <div className="relative max-w-sm">
+                                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-black text-gray-400">
+                                                Rp
+                                            </span>
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                placeholder="Contoh: 50.000"
+                                                value={form.additionalFeePrice ? formatCurrencyInput(form.additionalFeePrice) : ''}
+                                                onChange={e => {
+                                                    const val = parseCurrencyInput(e.target.value);
+                                                    upd('additionalFeePrice', val);
+                                                }}
+                                                className="w-full h-11 pl-10 pr-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-black text-gray-900 outline-none focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-100 transition-all"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* 2. Cakupan Biaya Tambahan (Mencakup Apa Saja - Checklist Ala Dashboard Agen) */}
+                                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">
+                                                Cakupan Biaya Tambahan (Mencakup Apa Saja)
+                                            </label>
+                                            <span className="text-[9px] font-bold text-gray-400">
+                                                Pilih satu atau lebih
+                                            </span>
+                                        </div>
+
+                                        {/* Grid Preset Cakupan Item */}
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                            {ADDITIONAL_FEE_COVERED_PRESETS.map(preset => {
+                                                const coveredList = (form.additionalFeeName || '')
+                                                    .split(',')
+                                                    .map(s => s.trim())
+                                                    .filter(Boolean);
+                                                const isChecked = coveredList.some(item => item.toLowerCase() === preset.label.toLowerCase());
+
+                                                return (
+                                                    <label
+                                                        key={preset.label}
+                                                        className={`flex items-center gap-2.5 p-2.5 sm:p-3 border rounded-xl cursor-pointer transition-all ${
+                                                            isChecked
+                                                                ? 'border-orange-500 bg-orange-50/60 text-orange-950 font-bold shadow-xs ring-1 ring-orange-400/40'
+                                                                : 'border-gray-200 bg-[#fbfbfc] text-gray-700 hover:border-orange-300 hover:bg-orange-50/20'
+                                                        }`}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isChecked}
+                                                            onChange={() => {
+                                                                let updated: string[];
+                                                                if (isChecked) {
+                                                                    updated = coveredList.filter(i => i.toLowerCase() !== preset.label.toLowerCase());
+                                                                } else {
+                                                                    updated = [...coveredList, preset.label];
+                                                                }
+                                                                upd('additionalFeeName', updated.join(', '));
+                                                            }}
+                                                            className="rounded border-gray-300 text-orange-500 focus:ring-orange-500 w-4 h-4 cursor-pointer accent-orange-500 shrink-0"
+                                                        />
+                                                        <span className="text-base shrink-0">{preset.icon}</span>
+                                                        <span className="text-xs font-bold truncate">{preset.label}</span>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* Custom Covered Tags (Jika ada item kustom di luar preset) */}
+                                        {(() => {
+                                            const coveredList = (form.additionalFeeName || '')
+                                                .split(',')
+                                                .map(s => s.trim())
+                                                .filter(Boolean);
+                                            const presetLabels = ADDITIONAL_FEE_COVERED_PRESETS.map(p => p.label.toLowerCase());
+                                            const customItems = coveredList.filter(i => !presetLabels.includes(i.toLowerCase()));
+
+                                            if (customItems.length === 0) return null;
+                                            return (
+                                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                                    {customItems.map(item => (
+                                                        <span key={item} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-100 text-orange-900 text-xs font-bold rounded-lg border border-orange-200">
+                                                            <span>{item}</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const updated = coveredList.filter(i => i.toLowerCase() !== item.toLowerCase());
+                                                                    upd('additionalFeeName', updated.join(', '));
+                                                                }}
+                                                                className="hover:text-red-600 font-black text-xs cursor-pointer"
+                                                            >
+                                                                &times;
+                                                            </button>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* Input Tambah Cakupan Kustom */}
+                                        <div className="flex gap-2 items-center pt-1">
+                                            <input
+                                                type="text"
+                                                value={customCoveredFeeInput}
+                                                onChange={e => setCustomCoveredFeeInput(e.target.value)}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        const val = customCoveredFeeInput.trim();
+                                                        if (!val) return;
+                                                        const coveredList = (form.additionalFeeName || '')
+                                                            .split(',')
+                                                            .map(s => s.trim())
+                                                            .filter(Boolean);
+                                                        if (!coveredList.some(i => i.toLowerCase() === val.toLowerCase())) {
+                                                            upd('additionalFeeName', [...coveredList, val].join(', '));
+                                                        }
+                                                        setCustomCoveredFeeInput('');
+                                                    }
+                                                }}
+                                                placeholder="Tambah cakupan biaya lainnya (misal: Gas, Laundry, Iuran RT)..."
+                                                className="flex-grow h-9 px-3 border border-gray-200 rounded-xl text-xs bg-gray-50 outline-none text-gray-800 placeholder-gray-400 focus:border-orange-500 focus:bg-white focus:ring-1 focus:ring-orange-200 transition-all"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const val = customCoveredFeeInput.trim();
+                                                    if (!val) return;
+                                                    const coveredList = (form.additionalFeeName || '')
+                                                        .split(',')
+                                                        .map(s => s.trim())
+                                                        .filter(Boolean);
+                                                    if (!coveredList.some(i => i.toLowerCase() === val.toLowerCase())) {
+                                                        upd('additionalFeeName', [...coveredList, val].join(', '));
+                                                    }
+                                                    setCustomCoveredFeeInput('');
+                                                }}
+                                                disabled={!customCoveredFeeInput.trim()}
+                                                className="h-9 px-3.5 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-bold text-xs rounded-xl flex items-center justify-center transition-all shadow-xs disabled:opacity-40 cursor-pointer shrink-0"
+                                            >
+                                                + Tambah
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* 3. Ketentuan Penagihan */}
+                                    <div className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-2.5">
+                                        <span className="text-[10px] font-black text-gray-600 uppercase tracking-wider block">
+                                            Ketentuan Penagihan
+                                        </span>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => upd('additionalFeeStartsFrom', 'month_1')}
+                                                className={`h-10 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                                    form.additionalFeeStartsFrom !== 'month_2'
+                                                        ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
+                                                        : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                <span>📅</span>
+                                                <span>Mulai dari Bulan Awal Sewa Pertama</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => upd('additionalFeeStartsFrom', 'month_2')}
+                                                className={`h-10 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                                    form.additionalFeeStartsFrom === 'month_2'
+                                                        ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
+                                                        : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                <span>🎁</span>
+                                                <span>Promo Bebas Tagihan di Bulan Pertama</span>
+                                            </button>
+                                        </div>
+                                        <p className="text-[10px] text-gray-500 leading-relaxed font-medium">
+                                            {form.additionalFeeStartsFrom === 'month_2'
+                                                ? 'ℹ️ Biaya tambahan akan GRATIS pada awal sewa (bulan pertama), dan baru akan ditagih mulai periode perpanjangan berikutnya.'
+                                                : 'ℹ️ Biaya tambahan akan langsung ditagih bersamaan dengan pembayaran sewa pertama kali.'}
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="p-3 bg-gray-50 rounded-2xl border border-dashed border-gray-200 text-center">
+                                    <p className="text-xs text-gray-500 font-medium">
+                                        Biaya sewa kamar sudah bersih (<em>all-in</em>). Tidak ada biaya tambahan fasilitas yang ditagihkan terpisah kepada penghuni.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Bagian 2: Fasilitas Kamar per Tipe Kamar (Dinamis & Hirarkis) */}
