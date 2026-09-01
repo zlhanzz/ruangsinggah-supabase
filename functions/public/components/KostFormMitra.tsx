@@ -1242,25 +1242,32 @@ const HierarchicalPublicFacilityInput: React.FC<{
         return facilities.filter(f => !allConfiguredPresets.has(f.toLowerCase().trim()));
     }, [facilities, allConfiguredPresets]);
 
-    const isGroupActive = (group: PublicFacilitySubGroup) => {
+    // Deteksi aktif yang presisi dan instan
+    const isGroupActive = useCallback((group: PublicFacilitySubGroup) => {
+        const lowerTitle = group.title.toLowerCase().trim();
         return facilities.some(f => {
             const nf = f.toLowerCase().trim();
-            return group.mainKeywords.some(kw => nf === kw || nf.includes(kw));
+            if (nf === lowerTitle) return true;
+            if (group.mainKeywords.some(kw => nf === kw)) return true;
+            if (group.subOptions.some(sub => sub.toLowerCase().trim() === nf)) return true;
+            return false;
         });
-    };
+    }, [facilities]);
 
+    // Toggle on/off grup yang bersih tanpa macet/delay
     const toggleGroup = (group: PublicFacilitySubGroup) => {
         const active = isGroupActive(group);
         if (active) {
-            // Nonaktifkan grup: hapus nama grup dan semua sub-opsinya
-            const toRemove = new Set([...group.mainKeywords, ...group.subOptions.map(s => s.toLowerCase().trim())]);
-            const updated = facilities.filter(f => {
-                const nf = f.toLowerCase().trim();
-                return !toRemove.has(nf);
-            });
+            // Nonaktifkan: bersihkan nama grup, kata kunci, dan seluruh sub-opsinya
+            const toRemoveSet = new Set<string>([
+                group.title.toLowerCase().trim(),
+                ...group.mainKeywords.map(k => k.toLowerCase().trim()),
+                ...group.subOptions.map(s => s.toLowerCase().trim())
+            ]);
+            const updated = facilities.filter(f => !toRemoveSet.has(f.toLowerCase().trim()));
             onChange(updated);
         } else {
-            // Aktifkan grup dan berikan default sub-opsi pertama jika belum ada
+            // Aktifkan: tambahkan judul grup dan default sub-opsi pertama jika belum ada
             const toAdd = [group.title];
             if (group.subOptions.length > 0 && !facilities.includes(group.subOptions[0])) {
                 toAdd.push(group.subOptions[0]);
@@ -1271,12 +1278,13 @@ const HierarchicalPublicFacilityInput: React.FC<{
 
     const toggleSubOption = (sub: string, groupTitle: string) => {
         let current = [...facilities];
-        if (!current.some(f => f.toLowerCase().trim() === groupTitle.toLowerCase().trim())) {
-            current.push(groupTitle);
-        }
         if (current.includes(sub)) {
             current = current.filter(x => x !== sub);
         } else {
+            // Pastikan judul parent juga tercatat agar konsisten
+            if (!current.some(f => f.toLowerCase().trim() === groupTitle.toLowerCase().trim())) {
+                current.push(groupTitle);
+            }
             current.push(sub);
         }
         onChange(current);
@@ -1317,99 +1325,139 @@ const HierarchicalPublicFacilityInput: React.FC<{
 
     return (
         <div className="space-y-4">
-            {/* 1. Fasilitas Induk Berkelengkapan (Area Parkir, Dapur Bersama, WC Umum) */}
+            {/* 1. Fasilitas Induk Berkelengkapan (Setiap Parent Langsung Memuat Sub-Kelengkapannya Secara Inline) */}
             <div className="space-y-2.5">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
                     Fasilitas Utama dengan Kelengkapan
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="space-y-2.5">
                     {PUBLIC_FACILITY_SUB_GROUPS.map(group => {
                         const active = isGroupActive(group);
+                        const selectedCount = facilities.filter(f => 
+                            group.subOptions.some(sub => sub.toLowerCase().trim() === f.toLowerCase().trim())
+                        ).length;
+
                         return (
-                            <button
+                            <div
                                 key={group.id}
-                                type="button"
-                                onClick={() => toggleGroup(group)}
-                                className={`p-3 rounded-2xl border text-left transition-all flex items-center justify-between gap-2 cursor-pointer ${
+                                className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
                                     active
-                                        ? 'bg-orange-500 text-white border-orange-600 shadow-md shadow-orange-500/20 ring-2 ring-orange-200'
-                                        : 'bg-white text-gray-700 border-gray-200 hover:border-orange-300 hover:bg-orange-50/30'
+                                        ? 'border-orange-500 bg-orange-50/40 shadow-xs ring-1 ring-orange-400/30'
+                                        : 'border-gray-200 bg-white hover:border-orange-300'
                                 }`}
                             >
-                                <div className="flex items-center gap-2 min-w-0">
-                                    <span className="text-base shrink-0">{group.icon}</span>
-                                    <span className="text-xs font-black truncate">{group.title}</span>
+                                {/* Baris Header Parent Card */}
+                                <div
+                                    onClick={() => toggleGroup(group)}
+                                    className="p-3 sm:p-3.5 flex items-center justify-between gap-3 cursor-pointer select-none"
+                                >
+                                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0 transition-colors ${
+                                            active ? 'bg-orange-500 text-white shadow-xs' : 'bg-gray-100 text-gray-700'
+                                        }`}>
+                                            {group.icon}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <h5 className="text-xs sm:text-sm font-black text-gray-900 leading-tight truncate">
+                                                {group.title}
+                                            </h5>
+                                            <p className="text-[10px] font-medium text-gray-400">
+                                                {active 
+                                                    ? `${selectedCount} kelengkapan aktif` 
+                                                    : 'Klik untuk mengaktifkan fasilitas ini'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Tombol Toggle Status On/Off */}
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleGroup(group);
+                                        }}
+                                        className={`h-8 px-3.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0 ${
+                                            active
+                                                ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/20 ring-2 ring-orange-200'
+                                                : 'bg-gray-100 text-gray-600 hover:bg-orange-100 hover:text-orange-600'
+                                        }`}
+                                    >
+                                        {active ? (
+                                            <>
+                                                <span>✓</span>
+                                                <span>Aktif</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span>+</span>
+                                                <span>Pilih</span>
+                                            </>
+                                        )}
+                                    </button>
                                 </div>
-                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg shrink-0 ${
-                                    active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
-                                }`}>
-                                    {active ? 'Aktif' : '+ Pilih'}
-                                </span>
-                            </button>
+
+                                {/* Panel Sub-Kelengkapan LANGSUNG MEKAR DI BAWAH KARTU INI */}
+                                {active && (
+                                    <div className="px-3.5 pb-3.5 pt-2 border-t border-orange-200/80 space-y-2.5 animate-in fade-in-50 duration-200 bg-white/70">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black text-orange-950 flex items-center gap-1">
+                                                <span>↳</span>
+                                                <span>Kelengkapan {group.title}:</span>
+                                            </span>
+                                            <span className="text-[9px] font-bold text-orange-800 bg-orange-100 px-2 py-0.5 rounded-md">
+                                                Pilih yang tersedia
+                                            </span>
+                                        </div>
+
+                                        {/* Sub Options Chips */}
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {group.subOptions.map(sub => {
+                                                const isSubChecked = facilities.some(f => f.toLowerCase().trim() === sub.toLowerCase().trim());
+                                                return (
+                                                    <button
+                                                        key={sub}
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            toggleSubOption(sub, group.title);
+                                                        }}
+                                                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                                                            isSubChecked
+                                                                ? 'bg-orange-500 text-white shadow-xs ring-1 ring-orange-300'
+                                                                : 'bg-white border border-orange-200/90 text-gray-700 hover:border-orange-400 hover:bg-orange-50/50'
+                                                        }`}
+                                                    >
+                                                        <span className="text-[10px]">{isSubChecked ? '✓' : '↳'}</span>
+                                                        <span>{sub}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* Sub custom input */}
+                                        <div className="flex gap-1.5 pt-1">
+                                            <input
+                                                type="text"
+                                                placeholder={`Tambah kelengkapan ${group.title.toLowerCase()}...`}
+                                                value={subCustomInputs[group.id] || ''}
+                                                onChange={e => setSubCustomInputs({ ...subCustomInputs, [group.id]: e.target.value })}
+                                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSubCustom(group.id, group.title); } }}
+                                                className="flex-1 h-8 px-3 bg-white border border-orange-200 rounded-xl text-xs font-medium text-gray-800 placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => addSubCustom(group.id, group.title)}
+                                                className="h-8 px-3 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
+                                            >
+                                                + Tambah
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         );
                     })}
                 </div>
-
-                {/* Panel Sub-Kelengkapan untuk Setiap Grup yang Aktif */}
-                {PUBLIC_FACILITY_SUB_GROUPS.map(group => {
-                    const active = isGroupActive(group);
-                    if (!active) return null;
-
-                    return (
-                        <div key={`panel_${group.id}`} className="p-3.5 bg-orange-50/70 border border-orange-200/80 rounded-2xl space-y-2.5 animate-in fade-in-50 duration-200">
-                            <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-black text-orange-950 flex items-center gap-1.5">
-                                    <span>{group.icon}</span>
-                                    <span>Kelengkapan {group.title}:</span>
-                                </span>
-                                <span className="text-[9px] font-bold text-orange-800/80 bg-orange-200/60 px-2 py-0.5 rounded-md">
-                                    Pilih kelengkapan yang tersedia
-                                </span>
-                            </div>
-
-                            {/* Sub Options Chips */}
-                            <div className="flex flex-wrap gap-1.5">
-                                {group.subOptions.map(sub => {
-                                    const isSubChecked = facilities.includes(sub);
-                                    return (
-                                        <button
-                                            key={sub}
-                                            type="button"
-                                            onClick={() => toggleSubOption(sub, group.title)}
-                                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                                                isSubChecked
-                                                    ? 'bg-orange-500 text-white shadow-xs'
-                                                    : 'bg-white border border-orange-200 text-gray-700 hover:border-orange-400'
-                                            }`}
-                                        >
-                                            <span className="text-[10px]">{isSubChecked ? '✓' : '↳'}</span>
-                                            <span>{sub}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-
-                            {/* Sub custom input */}
-                            <div className="flex gap-1.5 pt-1">
-                                <input
-                                    type="text"
-                                    placeholder={`Tambah kelengkapan ${group.title.toLowerCase()}...`}
-                                    value={subCustomInputs[group.id] || ''}
-                                    onChange={e => setSubCustomInputs({ ...subCustomInputs, [group.id]: e.target.value })}
-                                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSubCustom(group.id, group.title); } }}
-                                    className="flex-1 h-8 px-3 bg-white border border-orange-200 rounded-xl text-xs font-medium text-gray-800 placeholder-gray-400 focus:outline-none focus:border-orange-500"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => addSubCustom(group.id, group.title)}
-                                    className="h-8 px-3 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
-                                >
-                                    + Tambah
-                                </button>
-                            </div>
-                        </div>
-                    );
-                })}
             </div>
 
             {/* 2. Fasilitas Umum Mandiri (Popular Presets) */}

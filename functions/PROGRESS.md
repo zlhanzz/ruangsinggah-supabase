@@ -2,6 +2,26 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 250. Optimasi Responsivitas On/Off & Tata Letak Inline Sub-Fasilitas Langsung di Bawah Induk (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa tombol on/off fasilitas induk kurang responsif (kadang delay atau status tidak berubah sama sekali saat diklik).
+  - Tampilan kurang dinamis karena saat fasilitas induk diklik, sub-fasilitasnya tidak langsung muncul di bawah kartu induk tersebut, melainkan terlempar ke bawah di antara fasilitas-fasilitas utama lainnya.
+- **Implementasi Solusi**:
+  1. **Tata Letak Inline Accordion Card**:
+     - Membungkus setiap fasilitas utama (🅿️ Area Parkir, 🍳 Dapur Bersama, 🚻 WC Umum / Luar) dalam satu kontainer kartu tersendiri (`Inline Group Card`).
+     - Sub-panel kelengkapan dirender langsung di dalam kartu yang sama, tepat di bawah baris header induk dengan pembatas garis elegan dan animasi fade-in yang mulus.
+     - Ketika Area Parkir aktif, sub-opsi parkir langsung mekar di kartu Area Parkir (tanpa melompati kartu Dapur Bersama atau WC Umum).
+  2. **Perbaikan Logika & Responsivitas 0ms**:
+     - Memperbaiki bug logika filter: status aktif kini menggunakan `isGroupActive` berbasis exact matching yang konsisten dengan set deaktifasi `toRemoveSet`, sehingga grup dapat dimatikan (*off*) dan dihidupkan (*on*) kembali secara instan dan bersih tanpa macet.
+     - Menambahkan isolasi event `e.stopPropagation()` pada tombol toggle on/off agar interaksi klik switch dan klik kartu berjalan presisi tanpa konflik event bubbling.
+     - Menyediakan indikator jumlah kelengkapan yang aktif secara real-time pada kartu induk (contoh: *"2 kelengkapan aktif"*).
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 49.18s, 0 error).
+
 ### 249. Sistem Input Fasilitas & Sub-Fasilitas Hirarkis Pola KostManager (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pada Langkah 4 (Fasilitas), tampilan awal menyajikan puluhan chips bulat berjejer secara datar (flat), membuat layar terasa sangat penuh (*bejibun*), membingungkan, dan sulit dipahami oleh mitra.
