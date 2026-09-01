@@ -2982,7 +2982,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         });
     };
 
-    // ── Helper penyamaran kotak kontak (Tight Fit Canvas Mosaic Blur) ───────────
+    // ── Helper penyamaran kotak kontak dengan Branding Watermark ruangsinggah.id ──
     const applyBlurToBoundingBoxes = async (
         file: File, 
         boxes: Array<{ ymin: number; xmin: number; ymax: number; xmax: number }>
@@ -3002,8 +3002,8 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     // Gambar citra asli
                     ctx.drawImage(img, 0, 0);
 
-                    // Terapkan blur dan masker pada setiap bounding box pas sesuai koordinat AI (0-1000)
-                    boxes.forEach(box => {
+                    // 1. Konversi boxes (skala 0-1000) ke pixel absolut
+                    const rawBoxesPx = boxes.map(box => {
                         const normYmin = Math.max(0, Math.min(1000, box.ymin));
                         const normXmin = Math.max(0, Math.min(1000, box.xmin));
                         const normYmax = Math.max(0, Math.min(1000, box.ymax));
@@ -3013,38 +3013,142 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         const y = Math.round((normYmin / 1000) * img.height);
                         const w = Math.round(((normXmax - normXmin) / 1000) * img.width);
                         const h = Math.round(((normYmax - normYmin) / 1000) * img.height);
+                        return { x, y, w, h, r: x + w, b: y + h };
+                    }).filter(b => b.w > 0 && b.h > 0);
 
-                        if (w > 0 && h > 0) {
-                            ctx.save();
-                            // 1. Mosaik / Pixelate berat di canvas
-                            const offCanvas = document.createElement('canvas');
-                            const scale = 0.08;
-                            offCanvas.width = Math.max(1, Math.round(w * scale));
-                            offCanvas.height = Math.max(1, Math.round(h * scale));
-                            const offCtx = offCanvas.getContext('2d');
-                            if (offCtx) {
-                                offCtx.imageSmoothingEnabled = true;
-                                offCtx.drawImage(canvas, x, y, w, h, 0, 0, offCanvas.width, offCanvas.height);
-                                ctx.imageSmoothingEnabled = false;
-                                ctx.drawImage(offCanvas, 0, 0, offCanvas.width, offCanvas.height, x, y, w, h);
+                    if (rawBoxesPx.length === 0) return resolve(file);
+
+                    // 2. Gabungkan kotak-kotak yang beririsan atau berdekatan (clustering spanduk)
+                    // Toleransi gap 3.5% dari dimensi gambar agar baris spanduk yang sama melebur menjadi 1 area utuh
+                    const gapX = Math.round(img.width * 0.035);
+                    const gapY = Math.round(img.height * 0.035);
+
+                    const mergedBoxes: Array<{ x: number; y: number; w: number; h: number; r: number; b: number }> = [];
+                    const used = new Array(rawBoxesPx.length).fill(false);
+
+                    for (let i = 0; i < rawBoxesPx.length; i++) {
+                        if (used[i]) continue;
+                        let cluster = { ...rawBoxesPx[i] };
+                        used[i] = true;
+
+                        let expanded = true;
+                        while (expanded) {
+                            expanded = false;
+                            for (let j = 0; j < rawBoxesPx.length; j++) {
+                                if (used[j]) continue;
+                                const b = rawBoxesPx[j];
+                                const isClose = !(
+                                    b.x > cluster.r + gapX ||
+                                    b.r < cluster.x - gapX ||
+                                    b.y > cluster.b + gapY ||
+                                    b.b < cluster.y - gapY
+                                );
+                                if (isClose) {
+                                    cluster.x = Math.min(cluster.x, b.x);
+                                    cluster.y = Math.min(cluster.y, b.y);
+                                    cluster.r = Math.max(cluster.r, b.r);
+                                    cluster.b = Math.max(cluster.b, b.b);
+                                    cluster.w = cluster.r - cluster.x;
+                                    cluster.h = cluster.b - cluster.y;
+                                    used[j] = true;
+                                    expanded = true;
+                                }
                             }
-
-                            // 2. Overlay frosted dark semi-transparan tipis elegan
-                            ctx.fillStyle = 'rgba(15, 23, 42, 0.70)';
-                            ctx.fillRect(x, y, w, h);
-
-                            // 3. Label elegan "🔒 Kontak Disamarkan" jika ukuran kotak memadai
-                            if (w >= 45 && h >= 16) {
-                                const fontSize = Math.max(9, Math.min(16, Math.round(h * 0.28)));
-                                ctx.fillStyle = '#ffffff';
-                                ctx.font = `bold ${fontSize}px sans-serif`;
-                                ctx.textAlign = 'center';
-                                ctx.textBaseline = 'middle';
-                                ctx.fillText('🔒 Kontak Disamarkan', x + w / 2, y + h / 2);
-                            }
-
-                            ctx.restore();
                         }
+                        mergedBoxes.push(cluster);
+                    }
+
+                    // Helper gambar rounded rectangle kapsul yang kompatibel di semua browser
+                    const drawPill = (c: CanvasRenderingContext2D, px: number, py: number, pw: number, ph: number, pr: number) => {
+                        c.beginPath();
+                        c.moveTo(px + pr, py);
+                        c.lineTo(px + pw - pr, py);
+                        c.quadraticCurveTo(px + pw, py, px + pw, py + pr);
+                        c.lineTo(px + pw, py + ph - pr);
+                        c.quadraticCurveTo(px + pw, py + ph, px + pw - pr, py + ph);
+                        c.lineTo(px + pr, py + ph);
+                        c.quadraticCurveTo(px, py + ph, px, py + ph - pr);
+                        c.lineTo(px, py + pr);
+                        c.quadraticCurveTo(px, py, px + pr, py);
+                        c.closePath();
+                    };
+
+                    // 3. Terapkan efek mosaik & watermark elegan pada setiap area gabungan
+                    mergedBoxes.forEach(box => {
+                        const { x, y, w, h } = box;
+                        if (w <= 0 || h <= 0) return;
+
+                        ctx.save();
+
+                        // A. Mosaik / Pixelate di canvas (hancurkan angka kontak secara fisik)
+                        const offCanvas = document.createElement('canvas');
+                        const scale = 0.06;
+                        offCanvas.width = Math.max(1, Math.round(w * scale));
+                        offCanvas.height = Math.max(1, Math.round(h * scale));
+                        const offCtx = offCanvas.getContext('2d');
+                        if (offCtx) {
+                            offCtx.imageSmoothingEnabled = true;
+                            offCtx.drawImage(canvas, x, y, w, h, 0, 0, offCanvas.width, offCanvas.height);
+                            ctx.imageSmoothingEnabled = false;
+                            ctx.drawImage(offCanvas, 0, 0, offCanvas.width, offCanvas.height, x, y, w, h);
+                        }
+
+                        // B. Lapisan Frosted Glassmorphism Gelap yang Bersih
+                        ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+                        ctx.fillRect(x, y, w, h);
+
+                        // Garis batas luar halus tipis
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(x, y, w, h);
+
+                        // C. Render Watermark Kapsul Elegan "ruangsinggah.id"
+                        if (w >= 45 && h >= 16) {
+                            const centerX = x + w / 2;
+                            const centerY = y + h / 2;
+
+                            // Ukuran font adaptif proporsional terhadap luas kotak spanduk
+                            const fontSize = Math.max(11, Math.min(24, Math.round(Math.min(h * 0.38, w * 0.13))));
+                            ctx.font = `bold ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+
+                            const textPart1 = "ruangsinggah";
+                            const textPart2 = ".id";
+                            const width1 = ctx.measureText(textPart1).width;
+                            const width2 = ctx.measureText(textPart2).width;
+                            const totalTextWidth = width1 + width2;
+
+                            // Dimensi pill kapsul badge
+                            const padX = Math.round(fontSize * 0.85);
+                            const padY = Math.round(fontSize * 0.42);
+                            const pillW = totalTextWidth + (padX * 2);
+                            const pillH = fontSize + (padY * 2);
+                            const pillX = centerX - (pillW / 2);
+                            const pillY = centerY - (pillH / 2);
+                            const pillRadius = Math.round(pillH / 2);
+
+                            // Gambar background rounded capsule pill
+                            drawPill(ctx, pillX, pillY, pillW, pillH, pillRadius);
+                            ctx.fillStyle = 'rgba(2, 6, 23, 0.88)';
+                            ctx.fill();
+                            ctx.strokeStyle = 'rgba(249, 115, 22, 0.65)';
+                            ctx.lineWidth = 1.5;
+                            ctx.stroke();
+
+                            // Gambar teks brand resmi dua warna
+                            ctx.textAlign = 'left';
+                            ctx.textBaseline = 'middle';
+                            const startTextX = centerX - (totalTextWidth / 2);
+
+                            // "ruangsinggah" (Putih bersih)
+                            ctx.fillStyle = '#FFFFFF';
+                            ctx.fillText(textPart1, startTextX, centerY);
+
+                            // ".id" (Oranye khas RuangSinggah)
+                            ctx.fillStyle = '#FB923C';
+                            ctx.fillText(textPart2, startTextX + width1, centerY);
+                        }
+
+                        ctx.restore();
                     });
 
                     canvas.toBlob((blob) => {
@@ -3132,7 +3236,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             );
 
             if (anyContactDetected) {
-                setBannerNotice('Foto Anda terdeteksi memuat informasi kontak langsung/spanduk sewa dan telah disamarkan secara otomatis oleh sistem demi keamanan transaksi.');
+                setBannerNotice('Foto Anda terdeteksi memuat informasi spanduk/kontak dan telah disematkan watermark resmi ruangsinggah.id secara otomatis demi keamanan transaksi.');
             }
 
             setNewPhotoItems(prev => [...prev, ...processedItems]);
@@ -5009,8 +5113,9 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 <div key={item.id} className="aspect-square rounded-2xl overflow-hidden border-2 border-orange-400 relative group bg-gray-50 shadow-xs animate-in zoom-in-95 duration-200">
                                                     <img src={item.preview} alt={cat.label} className="w-full h-full object-cover" />
                                                     {item.isBlurred ? (
-                                                        <span className="absolute top-1.5 left-1.5 bg-rose-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider flex items-center gap-0.5" title="Nomor kontak/spanduk terdeteksi dan disamarkan secara otomatis">
-                                                            <ShieldAlert size={9} /> Disamarkan
+                                                        <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah diberi watermark resmi ruangsinggah.id">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+                                                            ruangsinggah.id
                                                         </span>
                                                     ) : (
                                                         <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
@@ -5175,8 +5280,9 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                     <div key={item.id} className="aspect-square rounded-2xl overflow-hidden border-2 border-orange-400 relative group bg-gray-50 shadow-xs animate-in zoom-in-95 duration-200">
                                                         <img src={item.preview} alt={cat.label} className="w-full h-full object-cover" />
                                                         {item.isBlurred ? (
-                                                            <span className="absolute top-1.5 left-1.5 bg-rose-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider flex items-center gap-0.5" title="Nomor kontak/spanduk terdeteksi dan disamarkan secara otomatis">
-                                                                <ShieldAlert size={9} /> Disamarkan
+                                                            <span className="absolute top-1.5 left-1.5 bg-slate-900/90 border border-orange-500/50 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 backdrop-blur-xs" title="Spanduk kontak telah diberi watermark resmi ruangsinggah.id">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+                                                                ruangsinggah.id
                                                             </span>
                                                         ) : (
                                                             <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">

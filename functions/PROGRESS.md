@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 258. Redesain Penyamaran Spanduk dengan Bounding Box Clustering & Watermark Branding Elegan "ruangsinggah.id" (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna memberikan masukan terhadap tampilan penyamaran spanduk kontak yang sebelumnya:
+    1. Spanduk yang memuat beberapa baris nomor telepon menghasilkan beberapa kotak deteksi AI yang bertingkat, sehingga label teks sensor muncul berulang kali secara bertumpuk.
+    2. Teks label "Kontak Disamarkan" dan badge merah mencolok "DISAMARKAN" memberi kesan sensor manual yang kaku dan kurang elegan.
+    3. Pengguna mengusulkan agar sensor diubah menjadi watermark elegan bertuliskan brand startup resmi: **`ruangsinggah.id`**.
+- **Implementasi Solusi**:
+  1. **Algoritma Penggabungan Kotak Bersinggungan (*Bounding Box Clustering & Union*)**:
+     - Membangun algoritma clustering pada fungsi `applyBlurToBoundingBoxes`: jika beberapa kotak deteksi dari AI saling beririsan (*overlap*) atau memiliki jarak dekat (radius 3.5% dimensi gambar), kotak-kotak tersebut otomatis dilebur menjadi satu bidang batas gabungan tunggal (*single clean bounding area*). Menghilangkan duplikasi kotak dan teks yang bertumpuk.
+  2. **Watermark Kapsul Elegan (*Rounded Pill Badge*) "ruangsinggah.id"**:
+     - Latar belakang spanduk tetap diberikan mosaik pixelate halus di canvas (menghancurkan karakter nomor telepon/kontak secara fisik & matematis) lalu dilapisi frosted glassmorphism gelap yang bersih `rgba(15, 23, 42, 0.78)`.
+     - Di tengah area spanduk, digambar satu badge kapsul elegan (*rounded pill*) berlatar belakang `rgba(2, 6, 23, 0.88)` dengan border aksen oranye halus `rgba(249, 115, 22, 0.65)`.
+     - Tipografi modern dua warna:
+       - Kata **`ruangsinggah`** dengan warna putih bersih (`#FFFFFF`, font bold).
+       - Kata **`.id`** dengan warna oranye terang khas RuangSinggah (`#FB923C`).
+     - Mengubah kesan sensor menjadi **watermark branding resmi platform properti premium** kelas dunia (seperti Airbnb / Rumah123).
+  3. **Penyempurnaan Badge Thumbnail Foto**:
+     - Mengubah badge merah mencolok `DISAMARKAN` menjadi badge kapsul dark-glassmorphism yang elegan: `ruangsinggah.id` dengan dot oranye berdenyut halus (*pulse dot*), menciptakan kesan foto properti yang terverifikasi dan profesional.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 25.28s, 0 error).
+
 ### 257. Sistem Instant Cloud Upload ke Supabase Storage, Draf Foto Persisten, dan Pembersihan Sampah Draf yang Aman (`KostFormMitra.tsx`, `adminService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna melaporkan bahwa saat foto kost telah diunggah di formulir mitra lalu formulirnya tertutup atau browser di-refresh, foto yang sudah diunggah menghilang dan tidak tersimpan sebagai draf sehingga harus diunggah ulang dari awal.
