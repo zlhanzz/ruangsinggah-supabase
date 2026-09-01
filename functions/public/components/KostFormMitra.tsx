@@ -2905,8 +2905,8 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         });
     };
 
-    // ── Helper konversi gambar ke Base64 Low-Res untuk AI Vision (<80KB) ─────────
-    const createLowResBase64ForAi = async (file: File, maxDim = 800): Promise<string> => {
+    // ── Helper konversi gambar ke Base64 Low-Res untuk AI Vision (<180KB) ─────────
+    const createLowResBase64ForAi = async (file: File, maxDim = 1280): Promise<string> => {
         return new Promise((resolve) => {
             if (!file.type.startsWith('image/')) return resolve('');
             const reader = new FileReader();

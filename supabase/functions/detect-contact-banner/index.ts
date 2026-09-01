@@ -33,22 +33,21 @@ serve(async (req) => {
 
     const prompt = `
 Anda adalah AI vision inspeksi foto properti sewa khusus untuk platform RuangSinggah.id.
-Tugas Anda adalah mendeteksi apakah di dalam foto ini terdapat SPANDUK, BANNER, PLANG, TULISAN TANGAN, atau STIKER yang memuat INFORMASI KONTAK LANGSUNG (seperti: nomor HP/WhatsApp, kata "Hubungi", "Telp", "WA", "SMS", "CP", nomor telepon 08xx / +62xx, atau plang sewa kamar dengan kontak).
+Tugas Anda adalah mendeteksi apakah di dalam foto ini terdapat:
+1. SPANDUK / BANNER / PLANG / PAPAN NAMA PENYEWAAN KOST (misalnya bertuliskan "TERIMA KOST", "MENERIMA KOST", "KOST PUTRI", "KOST PUTRA", "DISEWAKAN", spanduk kain/terpal di pagar atau dinding).
+2. INFORMASI KONTAK LANGSUNG (seperti nomor HP, nomor WhatsApp, kata "Hubungi", "Hub", "Telp", "WA", "SMS", "CP", nomor 08xx / +62xx).
 
-PANDUAN DETEKSI:
-1. Cari teks nomor telepon atau spanduk penyewaan kost yang memuat nomor telepon.
-2. Jika DITEMUKAN, tandai kotak area teks nomor telepon atau banner tersebut menggunakan koordinat bounding box standar (skala 0 sampai 1000):
-   - ymin: koordinat atas (0 - 1000)
-   - xmin: koordinat kiri (0 - 1000)
-   - ymax: koordinat bawah (0 - 1000)
-   - xmax: koordinat kanan (0 - 1000)
-3. Jika TIDAK DITEMUKAN nomor telepon atau kontak langsung (misal hanya foto bangunan bersih, kamar tidur, atau hanya plat nomor kendaraan kecil), set "has_contact": false dan "boxes": [].
-4. Berikan bounding box yang mencakup teks nomor kontak tersebut secara pas dan akurat agar dapat disamarkan/di-blur oleh sistem.
+PANDUAN DETEKSI KETAT:
+1. Pindai seluruh bagian foto, termasuk spanduk kain/terpal di pagar, dinding, tiang, atau gerbang depan (misal spanduk hijau/merah/kuning bertuliskan "Menerima Kost... Hub: ...").
+2. Jika DITEMUKAN spanduk penyewaan kost atau teks kontak:
+   - Buat kotak bounding box (skala 0 sampai 1000: ymin, xmin, ymax, xmax) yang MENCAKUP SELURUH AREA SPANDUK / BANNER tersebut (atau setidaknya seluruh blok teks nomor telepon & keterangannya) agar sistem dapat menyamarkannya secara rapi dan bersih.
+   - Set "has_contact": true.
+3. Jika foto bersih dari spanduk penyewaan kamar dan tidak ada nomor kontak (misal hanya bangunan tanpa spanduk, interior kamar tidur bersih, atau hanya plat nomor kendaraan kecil di jalan), set "has_contact": false dan "boxes": [].
 
 FORMAT OUTPUT (JSON SAJA, TANPA BACKTICKS):
 {
   "has_contact": true / false,
-  "detected_texts": ["teks kontak yang terdeteksi"],
+  "detected_texts": ["daftar teks yang terbaca pada spanduk/kontak"],
   "boxes": [
     {
       "ymin": 0-1000,
