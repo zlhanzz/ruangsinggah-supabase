@@ -2937,12 +2937,8 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         return (
             lower.includes('depan') || 
             lower.includes('fasad') || 
-            lower.includes('front') || 
             lower.includes('lingkungan') || 
-            lower.includes('parkir') || 
-            lower.includes('gerbang') || 
-            lower.includes('luar') ||
-            lower.includes('akses')
+            lower.includes('parkir')
         );
     };
 

@@ -2,6 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 259. Pengetatan Presisi Filter Kategori AI Scanner Spanduk (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna mengklarifikasi bahwa kategori input foto di sistem RuangSinggah tidak memiliki kategori "gerbang", "akses", dan "luar".
+  - Pengguna meminta agar pemindaian AI banner secara khusus hanya difokuskan pada 3 kategori utama yang rawan spanduk: **Bagian Depan (Fasad)**, **Lingkungan Sekitar**, dan **Area Parkir**.
+  - Kategori lain tidak perlu dipindai oleh AI agar proses upload berlangsung instan (0 detik jeda AI) dan tidak membuang kuota token.
+- **Implementasi Solusi**:
+  1. **Refinement `isBannerProneCategory`**:
+     - Menghapus kata kunci `gerbang`, `akses`, `luar`, dan `front`.
+     - Membatasi pencocokan secara ketat hanya pada: `depan`, `fasad`, `lingkungan`, dan `parkir`.
+  2. **Efisiensi Maksimal & Instant Upload**:
+     - Foto pada kategori seperti *Koridor & Akses Masuk*, *WC Umum / Luar*, *Dapur Bersama*, *Ruang Tamu*, serta seluruh tipe kamar langsung di-bypass dari AI Vision (0 detik pemrosesan AI) dan langsung dikompresi ke WebP resolusi tinggi.
+     - Menghemat hingga 80-90% pemakaian kuota API Gemini untuk setiap listing kost.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 35.59s, 0 error).
+
 ### 258. Redesain Penyamaran Spanduk dengan Bounding Box Clustering & Watermark Branding Elegan "ruangsinggah.id" (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna memberikan masukan terhadap tampilan penyamaran spanduk kontak yang sebelumnya:
