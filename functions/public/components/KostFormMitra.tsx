@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Kost, RoomType, PricingPeriod } from '../types';
-import { addPropertyWithMedia, updatePropertyWithMedia, detectPhotoContactBanner } from '../adminService';
+import { addPropertyWithMedia, updatePropertyWithMedia, detectPhotoContactBanner, uploadDraftPhotoToStorage, deleteDraftPhotosFromStorage } from '../adminService';
 import { findNearbyCuratedLandmarks } from '../constants/curatedLandmarks';
 import {
     X, ChevronRight, ChevronLeft, Camera, Video, MapPin, Home, Wifi,
@@ -81,11 +81,12 @@ const ADDITIONAL_FEE_COVERED_PRESETS = [
 
 interface NewPhotoItem {
     id: string;
-    file: File;
+    file?: File;
     preview: string;
     category: string;
     caption?: string;
     isBlurred?: boolean;
+    storagePath?: string;
 }
 
 const initialForm: Partial<Kost> = {
@@ -2193,7 +2194,19 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         return initialForm;
     });
 
-    const [newPhotoItems, setNewPhotoItems] = useState<NewPhotoItem[]>([]);
+    const [newPhotoItems, setNewPhotoItems] = useState<NewPhotoItem[]>(() => {
+        if (isEditing || freshStart) return [];
+        try {
+            const savedDraft = localStorage.getItem(storageKey);
+            if (savedDraft) {
+                const parsed = JSON.parse(savedDraft);
+                if (Array.isArray(parsed.draftPhotos)) {
+                    return parsed.draftPhotos;
+                }
+            }
+        } catch {}
+        return [];
+    });
     const [customCategories, setCustomCategories] = useState<string[]>([]);
     const [newCategoryInput, setNewCategoryInput] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -2246,12 +2259,20 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
         const timeoutId = setTimeout(() => {
             try {
-                const hasData = form.title || form.address || form.description || form.city || step > 0 || (form.roomTypes && form.roomTypes.length > 0);
+                const hasData = form.title || form.address || form.description || form.city || step > 0 || (form.roomTypes && form.roomTypes.length > 0) || newPhotoItems.length > 0;
                 if (hasData) {
                     const payload = {
                         form,
                         step,
                         managementOption,
+                        draftPhotos: newPhotoItems.map(p => ({
+                            id: p.id,
+                            preview: p.preview,
+                            category: p.category,
+                            caption: p.caption,
+                            isBlurred: p.isBlurred,
+                            storagePath: p.storagePath
+                        })),
                         lastSaved: new Date().toISOString()
                     };
                     localStorage.setItem(storageKey, JSON.stringify(payload));
@@ -2263,14 +2284,19 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         }, 400);
 
         return () => clearTimeout(timeoutId);
-    }, [form, step, managementOption, isEditing, storageKey]);
+    }, [form, step, managementOption, newPhotoItems, isEditing, storageKey]);
 
     // Handle clear draft and start fresh
     const handleClearDraft = () => {
         try {
+            const pathsToDelete = newPhotoItems.map(p => p.storagePath).filter(Boolean) as string[];
+            if (pathsToDelete.length > 0) {
+                deleteDraftPhotosFromStorage(pathsToDelete);
+            }
             localStorage.removeItem(storageKey);
             window.dispatchEvent(new Event('kost_draft_updated'));
         } catch {}
+        setNewPhotoItems([]);
         setForm(initialForm);
         setStep(0);
         setManagementOption('self');
@@ -3068,14 +3094,27 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
                         // Kompresi ke WebP Resolusi Tinggi (Client-Side)
                         const webpFile = await compressImageToWebP(fileToProcess);
-                        const preview = URL.createObjectURL(webpFile);
+
+                        // Upload Instan ke Cloud Supabase Storage di folder 'drafts/{userId}/'
+                        let previewUrl = '';
+                        let storagePath: string | undefined = undefined;
+                        try {
+                            const uploadRes = await uploadDraftPhotoToStorage(webpFile, user?.id);
+                            previewUrl = uploadRes.publicUrl;
+                            storagePath = uploadRes.storagePath;
+                        } catch (uploadErr) {
+                            console.warn('Gagal upload instan ke storage, fallback ke local objectURL:', uploadErr);
+                            previewUrl = URL.createObjectURL(webpFile);
+                        }
+
                         return {
                             id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                             file: webpFile,
-                            preview,
+                            preview: previewUrl,
                             category,
                             caption: category,
-                            isBlurred
+                            isBlurred,
+                            storagePath
                         } as NewPhotoItem;
                     } catch (err) {
                         console.error("Error processing photo:", err);
@@ -3126,6 +3165,9 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         setNewPhotoItems(prev => {
             const target = prev.find(p => p.id === id);
             if (target) {
+                if (target.storagePath) {
+                    deleteDraftPhotosFromStorage([target.storagePath]);
+                }
                 try { URL.revokeObjectURL(target.preview); } catch {}
             }
             return prev.filter(p => p.id !== id);
@@ -3562,16 +3604,23 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 return 0;
             });
 
-            const uploadPayload = sortedNewItems.map(item => {
-                const finalCategory = item.category;
-                const finalCaption = (item.caption && item.caption.trim()) ? item.caption.trim() : item.category;
-                return {
-                    file: item.file,
-                    label: finalCategory,
-                    category: finalCategory,
-                    caption: finalCaption
-                };
-            });
+            // Pisahkan foto baru:
+            // a. Foto baru yang SUDAH terunggah instan ke Supabase Storage (URL http)
+            const alreadyUploadedItems = sortedNewItems.filter(item => item.preview && item.preview.startsWith('http')).map(item => ({
+                original: item.preview,
+                url: item.preview,
+                label: item.category,
+                category: item.category,
+                caption: (item.caption && item.caption.trim()) ? item.caption.trim() : item.category
+            }));
+
+            // b. Foto baru yang BELUM terunggah (jika upload instan sempat gagal/offline)
+            const pendingUploadPayload = sortedNewItems.filter(item => (!item.preview || !item.preview.startsWith('http')) && item.file).map(item => ({
+                file: item.file!,
+                label: item.category,
+                category: item.category,
+                caption: (item.caption && item.caption.trim()) ? item.caption.trim() : item.category
+            }));
 
             const existingImagesWithLabels = (form.imageUrls || []).map((img: any, idx: number) => {
                 const url = typeof img === 'string' ? img : (img?.original || img?.url || '');
@@ -3585,13 +3634,16 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     ? String(img.caption).trim()
                     : (label || category || 'Foto Properti');
                 return { original: url, url, label, category, caption };
-            }).sort((a: any, b: any) => {
+            });
+
+            // Satukan seluruh gambar yang sudah siap di cloud
+            const allImagesList = [...existingImagesWithLabels, ...alreadyUploadedItems].sort((a: any, b: any) => {
                 if (a.label === 'Bangunan Depan' && b.label !== 'Bangunan Depan') return -1;
                 if (a.label !== 'Bangunan Depan' && b.label === 'Bangunan Depan') return 1;
                 return 0;
             });
 
-            const totalPhotos = existingImagesWithLabels.length + uploadPayload.length;
+            const totalPhotos = allImagesList.length + pendingUploadPayload.length;
             if (totalPhotos < 1) {
                 setError('Mohon unggah minimal 1 foto kost (terutama Bangunan Depan / Fasad).');
                 setStep(4);
@@ -3600,12 +3652,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             }
 
             const allPhotoCategories = Array.from(new Set([
-                ...existingImagesWithLabels.map((img: any) => img.label || img.category),
-                ...sortedNewItems.map(item => item.category)
+                ...allImagesList.map((img: any) => img.label || img.category),
+                ...pendingUploadPayload.map(item => item.category)
             ]));
 
             const categorizedPhotosMap: Record<string, string[]> = {};
-            existingImagesWithLabels.forEach((img: any) => {
+            allImagesList.forEach((img: any) => {
                 const cat = img.label || img.category || 'Foto Properti';
                 const u = img.original || img.url;
                 if (u) {
@@ -3617,7 +3669,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             const data = { 
                 ...form, 
                 ...contactUpdates, 
-                imageUrls: existingImagesWithLabels,
+                imageUrls: allImagesList,
                 photoCategories: allPhotoCategories,
                 categorizedPhotos: categorizedPhotosMap,
                 price: finalPrice, 
@@ -3625,9 +3677,9 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             };
             
             if (isEditing && editingKost?.id) {
-                await updatePropertyWithMedia(editingKost.id, data, uploadPayload, []);
+                await updatePropertyWithMedia(editingKost.id, data, pendingUploadPayload, []);
             } else {
-                await addPropertyWithMedia({ ...data, isVerified: false }, uploadPayload, []);
+                await addPropertyWithMedia({ ...data, isVerified: false }, pendingUploadPayload, []);
                 // Clear draft after successful creation
                 try {
                     localStorage.removeItem(storageKey);

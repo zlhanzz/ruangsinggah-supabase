@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 257. Sistem Instant Cloud Upload ke Supabase Storage, Draf Foto Persisten, dan Pembersihan Sampah Draf yang Aman (`KostFormMitra.tsx`, `adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa saat foto kost telah diunggah di formulir mitra lalu formulirnya tertutup atau browser di-refresh, foto yang sudah diunggah menghilang dan tidak tersimpan sebagai draf sehingga harus diunggah ulang dari awal.
+  - Pengguna meminta agar sistem draf foto langsung terhubung dengan cloud Supabase Storage, serta dilengkapi aturan pembersihan sampah draf yang hati-hati dan aman agar tidak menumpuk file tak terpakai.
+- **Implementasi Solusi**:
+  1. **Instant Cloud Upload ke Supabase Storage (`adminService.ts`)**:
+     - Menambahkan fungsi `uploadDraftPhotoToStorage(file, userId)`: Setelah foto dikompresi ke WebP resolusi tinggi dan disamarkan (jika ada spanduk), foto langsung diunggah seketika ke Supabase Storage pada jalur terisolasi `properties/drafts/${userId}/${timestamp}_${fileName}.webp`.
+     - Fungsi mengembalikan `publicUrl` CDN Supabase dan `storagePath`.
+  2. **Persistensi Penuh Draf Foto (`KostFormMitra.tsx`)**:
+     - Karena foto telah berwujud URL internet resmi Supabase, array `draftPhotos` (berisi ID, URL, kategori, caption, dan status sensor) dapat langsung disimpan ke draf `localStorage` tanpa hambatan kuota 5MB.
+     - Saat formulir dibuka kembali (*initial mount*), foto-foto draf dipulihkan secara instan dari Supabase Storage lengkap dengan kategori dan status penyamaran.
+  3. **Pembersihan Sampah Draf yang Aman (*Safe Garbage Collection*)**:
+     - Menambahkan fungsi `deleteDraftPhotosFromStorage(storagePaths)` di `adminService.ts` dengan filter keselamatan mutlak: **hanya file yang diawali path `drafts/` yang diizinkan untuk dihapus**. File listing properti aktif 100% aman dan tidak akan pernah terhapus secara tidak sengaja.
+     - Ketika mitra menghapus satu foto draf (`removeNewPhotoItem`), file draf langsung dihapus dari Supabase Storage.
+     - Ketika mitra menekan tombol "Hapus Draf / Mulai Baru" (`handleClearDraft`), seluruh file foto draf terkait langsung dibersihkan dari Supabase Storage.
+  4. **Submit Instan Tanpa Re-Upload**:
+     - Pada fungsi `handleSubmit`, foto-foto baru yang telah terunggah ke Supabase Storage dipetakan langsung ke `imageUrls` listing properti. Tombol simpan akhir menjadi instan karena tidak perlu lagi mengunggah ulang file gambar berukuran besar.
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 25.14s, 0 error).
+
 ### 256. Deteksi Spanduk / Kontak Langsung pada Foto Properti & Blurring Otomatis Berbasis Canvas dengan Gemini 3.7 Flash (`detect-contact-banner`, `KostFormMitra.tsx`, `adminService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   - Foto properti yang diunggah mitra sering kali memuat spanduk/banner atau tulisan yang menampilkan nomor kontak langsung (nomor HP/WA, plang sewa kamar, dsb.) yang berisiko memicu transaksi liar di luar sistem resmi RuangSinggah.

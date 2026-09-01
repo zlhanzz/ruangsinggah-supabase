@@ -264,6 +264,71 @@ export async function uploadFileAndGetURL(file: File, folderName: string): Promi
   return uploadFileToStorage(file, 'properties', folderName);
 }
 
+export interface DraftPhotoUploadResult {
+  publicUrl: string;
+  storagePath: string;
+}
+
+/**
+ * uploadDraftPhotoToStorage: Mengunggah foto sementara draft ke folder khusus 'drafts/{userId}/'
+ * agar tersimpan di cloud Supabase dan tidak hilang saat form tertutup.
+ */
+export async function uploadDraftPhotoToStorage(
+  file: File,
+  userId?: string
+): Promise<DraftPhotoUploadResult> {
+  const { data: { user } } = await supabase.auth.getUser();
+  const targetUid = user?.id || userId || 'guest';
+
+  // Pastikan format WebP
+  const processedFile = await convertToWebP(file);
+  let sanitizedFileName = processedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+  if (!sanitizedFileName.toLowerCase().endsWith('.webp')) {
+    sanitizedFileName += '.webp';
+  }
+
+  const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${sanitizedFileName}`;
+  const storagePath = `drafts/${targetUid}/${fileName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('properties')
+    .upload(storagePath, processedFile, {
+      contentType: 'image/webp',
+      upsert: false,
+    });
+
+  if (uploadError) {
+    console.error('Gagal mengunggah foto draft ke Supabase storage:', uploadError);
+    throw new Error(`Gagal menyimpan foto draft ke cloud: ${uploadError.message}`);
+  }
+
+  const { data: urlData } = supabase.storage.from('properties').getPublicUrl(storagePath);
+  return {
+    publicUrl: urlData.publicUrl,
+    storagePath
+  };
+}
+
+/**
+ * deleteDraftPhotosFromStorage: Membersihkan file foto draft dari folder 'drafts/' secara aman.
+ * Mencegah kebocoran storage tanpa risiko menyentuh foto listing aktif.
+ */
+export async function deleteDraftPhotosFromStorage(storagePaths: string[]): Promise<void> {
+  if (!storagePaths || storagePaths.length === 0) return;
+  // Safety filter mutlak: hanya file di folder 'drafts/' yang boleh dihapus
+  const safePaths = storagePaths.filter(p => typeof p === 'string' && p.startsWith('drafts/'));
+  if (safePaths.length === 0) return;
+
+  try {
+    const { error } = await supabase.storage.from('properties').remove(safePaths);
+    if (error) {
+      console.warn('Gagal menghapus file draft dari Supabase storage:', error);
+    }
+  } catch (err) {
+    console.warn('Exception saat membersihkan file draft:', err);
+  }
+}
+
 // ---- PROPERTY FUNCTIONS ----
 
 export async function getAdminProperties(ownerUid?: string): Promise<BasicPropertyInfo[]> {
