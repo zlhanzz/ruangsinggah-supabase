@@ -2892,34 +2892,54 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         }
     }, [step, form.location?.lat, form.location?.lng, detectNearbyLandmarks, isInvalidCampus]);
 
-    // ── image handling (categorized & client-side webp) ─────────────────────────
-    const compressImageToWebP = async (file: File, quality = 0.82, maxDimension = 1920): Promise<File> => {
+    // ── Image handling: Standardisasi Rasio 4:3 Landscape (1200 x 900) & Client-Side WebP ───
+    const compressImageToWebP = async (file: File, quality = 0.82): Promise<File> => {
         return new Promise((resolve) => {
             if (!file.type.startsWith('image/')) return resolve(file);
             const reader = new FileReader();
             reader.onload = (e) => {
                 const img = new Image();
                 img.onload = () => {
-                    let { width, height } = img;
-                    if (width > maxDimension || height > maxDimension) {
-                        if (width > height) {
-                            height = Math.round((height * maxDimension) / width);
-                            width = maxDimension;
-                        } else {
-                            width = Math.round((width * maxDimension) / height);
-                            height = maxDimension;
-                        }
-                    }
                     const canvas = document.createElement('canvas');
-                    canvas.width = width;
-                    canvas.height = height;
+                    
+                    // Target standar industri: 1200 x 900 (Rasio Lanskap 4:3 Seragam)
+                    const TARGET_WIDTH = 1200;
+                    const TARGET_HEIGHT = 900;
+
+                    canvas.width = TARGET_WIDTH;
+                    canvas.height = TARGET_HEIGHT;
+
                     const ctx = canvas.getContext('2d');
                     if (!ctx) return resolve(file);
-                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Interpolasi grafis halus & tajam
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+
+                    const imgRatio = img.width / img.height;
+                    const targetRatio = TARGET_WIDTH / TARGET_HEIGHT;
+                    let sx = 0, sy = 0, sWidth = img.width, sHeight = img.height;
+
+                    if (imgRatio > targetRatio) {
+                        // Foto lebih lebar dari 4:3 (16:9 / panorama) -> Smart Center-Crop horizontal
+                        sWidth = img.height * targetRatio;
+                        sx = (img.width - sWidth) / 2;
+                    } else {
+                        // Foto lebih tinggi / portrait (9:16 / 3:4 vertikal HP) -> Smart Center-Crop vertikal
+                        sHeight = img.width / targetRatio;
+                        sy = (img.height - sHeight) / 2;
+                    }
+
+                    // Render foto di canvas dengan crop tengah simetris
+                    ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
+
                     canvas.toBlob((blob) => {
                         if (!blob) return resolve(file);
                         const newFileName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
-                        const webpFile = new File([blob], newFileName, { type: "image/webp" });
+                        const webpFile = new File([blob], newFileName, { 
+                            type: "image/webp",
+                            lastModified: Date.now()
+                        });
                         resolve(webpFile);
                     }, "image/webp", quality);
                 };

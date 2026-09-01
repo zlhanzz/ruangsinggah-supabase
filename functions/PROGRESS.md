@@ -2,6 +2,28 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 260. Standardisasi Rasio 4:3 Landscape (1200 x 900) & Smart Center-Crop pada Input Foto Mitra (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna menanyakan ketersediaan penyesuaian rasio dan ukuran foto otomatis pada dashboard mitra, dan menunjuk sistem auto-crop yang sudah ada di pendataan KostManager agen (`convertToWebP` di `adminService.ts`).
+  - Sebelumnya, fungsi `compressImageToWebP` di form mitra hanya melakukan downscale resolusi dengan mempertahankan rasio asli gambar, sehingga foto portrait (tegak 9:16 dari kamera smartphone) tetap vertikal dan tampil tidak seragam (belang-belang/terpotong tidak beraturan) di kartu listing pencarian user dan galeri properti.
+- **Implementasi Solusi**:
+  1. **Smart Center-Crop ke Rasio Standar 4:3 (1200 x 900 px)**:
+     - Mengintegrasikan algoritma pemotongan cerdas di tengah (*center-crop*) pada `compressImageToWebP` di `KostFormMitra.tsx`:
+       - Menetapkan target standar industri: **1200 x 900 pixel** (rasio lanskap 4:3).
+       - Membandingkan `imgRatio` terhadap `targetRatio` (1.333).
+       - Jika foto lebih lebar (16:9 atau panorama): sistem melakukan crop horizontal simetris di sisi kiri dan kanan.
+       - Jika foto tegak/portrait (9:16 atau 3:4 vertikal dari kamera HP): sistem melakukan crop vertikal simetris di bagian atas dan bawah.
+     - Interpolasi canvas diatur ke `imageSmoothingQuality = 'high'` untuk menjaga ketajaman detail bangunan dan interior kamar.
+  2. **Harmoni dengan AI Vision & Cloud Storage**:
+     - Pipeline berjalan selaras: Pemindaian AI spanduk ➔ Watermarking `ruangsinggah.id` ➔ Auto-Crop 4:3 & WebP Compression ➔ Instant Cloud Upload ke Supabase Storage.
+     - Seluruh foto yang diunggah mitra kini 100% seragam, simetris, dan proporsional saat tampil di antarmuka calon penyewa.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 29.79s, 0 error).
+
 ### 259. Pengetatan Presisi Filter Kategori AI Scanner Spanduk (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna mengklarifikasi bahwa kategori input foto di sistem RuangSinggah tidak memiliki kategori "gerbang", "akses", dan "luar".
