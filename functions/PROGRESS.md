@@ -2,6 +2,39 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 254. Pengetatan Aturan Validasi Input Kost Mitra (Wizard Flow 1 - 6) & Saklar Eksklusif WC (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Tombol navigasi "Lanjut" pada form pendaftaran mitra sebelumnya dapat ditekan untuk melompati langkah wizard tanpa memeriksa kelengkapan data esensial.
+  - Sub-fasilitas WC (Kloset Duduk vs Kloset Jongkok) masih dapat dipilih bersamaan padahal secara fisik tidak mungkin terjadi pada satu titik kloset.
+  - Pengguna meminta pengetatan aturan validasi wajib vs opsional secara menyeluruh pada setiap langkah (Flow 1 - 6):
+    1. Flow 1: Nama kost & tipe penghuni kost (Putra/Putri/Campur) WAJIB, deskripsi kost OPSIONAL.
+    2. Flow 2: Alamat lengkap, kota, dan penentuan titik koordinat pin lokasi pada peta WAJIB.
+    3. Flow 3: Minimal satu tipe kamar terdaftar WAJIB. Pada pembuatan tipe kamar: nama, ukuran kamar, kapasitas penghuni (min 1), kuota kamar tersedia (min 1), penentuan ada/tidaknya biaya tambahan orang (jika ada, nominal biaya per kepala WAJIB > 0), serta periode dan tarif sewa WAJIB diisi.
+    4. Flow 4: Fasilitas gedung/umum WAJIB dipilih minimal satu. Sub-fasilitas dari fasilitas yang dicentang (Parkir, Dapur Bersama, WC Umum) WAJIB dipilih. Saklar eksklusif WC: Kloset Duduk vs Kloset Jongkok saling mengunci (tidak bisa terpilih bersamaan). Penentuan ada/tidaknya biaya tambahan fasilitas WAJIB (jika ada, nominal bulanan > 0 dan cakupan biaya WAJIB dipilih). Fasilitas untuk setiap tipe kamar WAJIB ditentukan tipe WC-nya (Dalam/Luar) dan kelengkapan sub-fasilitasnya.
+    5. Flow 5: Seluruh kategori foto yang muncul (baik umum maupun reaksi tipe kamar/fasilitas terpilih) WAJIB memiliki minimal 1 foto per kategorinya.
+    6. Flow 6: Peraturan kost OPSIONAL.
+- **Implementasi Solusi**:
+  1. **Saklar Eksklusif Kloset Duduk vs Kloset Jongkok**:
+     - Pada `HierarchicalPublicFacilityInput` dan `HierarchicalRoomFacilityInput`, jika pengguna memilih 'Kloset Duduk', sistem otomatis membatalkan pilihan 'Kloset Jongkok', dan sebaliknya.
+  2. **Validasi Sub-Wizard Kamar (`saveDraftRoom`)**:
+     - Memvalidasi nama tipe kamar dan ukuran kamar pada Tahap 1 sebelum ke Tahap 2.
+     - Memvalidasi kapasitas penghuni (>= 1) dan jumlah kamar tersedia (>= 1 unit) pada Tahap 2 sebelum ke Tahap 3.
+     - Memvalidasi nominal biaya orang tambahan (> 0) jika toggle aktif, serta minimal satu periode sewa dengan harga > 0 sebelum draft kamar dapat disimpan.
+  3. **Validator Langkah Wizard (`validateCurrentStep` & `handleNextStep`)**:
+     - Menggantikan navigasi langsung tombol "Lanjut" dengan pemeriksaan ketat `validateCurrentStep(step)`.
+     - Menampilkan pesan error spesifik dan mencegah mitra melompat ke langkah berikutnya jika ada data wajib yang belum terpenuhi.
+  4. **Validasi Lengkap Kategori Foto Langkah 5**:
+     - Membuat helper terpadu `computeActivePhotoCategories(form, customCategories)` yang menghitung seluruh kategori umum dan kategori reaksi tipe kamar/fasilitas.
+     - Memeriksa setiap kategori aktif; jika ada kategori dengan 0 foto, sistem menampilkan pesan error menyebutkan nama kategori tersebut (misal: `"Kategori foto 'KM Dalam: Standard' wajib diunggah minimal 1 foto sebelum melanjutkan."`).
+  5. **Verifikasi Menyeluruh pada `handleSubmit`**:
+     - Menjalankan iterasi validasi dari Langkah 1 hingga Langkah 5 (`s = 0` s.d. `4`) sebelum memproses pengunggahan media dan penyimpanan database.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` sukses 100% (✓ 2506 modules transformed, 36.08s, 0 error).
+
 ### 253. Adopsi Mekanisme Input Fasilitas Tipe Kamar Ala Dashboard Agen (KostManager) dengan Sub-Fasilitas Inline (`KostFormMitra.tsx` & `types.ts`) (September 2026)
 - **Permintaan & Masalah**:
   - Pada Langkah 4 formulir pendaftaran mitra (`KostFormMitra.tsx`), sistem input fasilitas kamar sebelumnya terbagi kaku menjadi dua sekat: opsi radio tipe kamar mandi di atas, dan deretan chips bulat datar `FacilityInput` di bawah.

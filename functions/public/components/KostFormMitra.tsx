@@ -1319,6 +1319,12 @@ const HierarchicalPublicFacilityInput: React.FC<{
             if (!current.some(f => f.toLowerCase().trim() === parentLabel.toLowerCase().trim())) {
                 current.push(parentLabel);
             }
+            // Saklar eksklusif WC: Kloset Duduk vs Kloset Jongkok (tidak mungkin bersamaan)
+            if (lowerSub.includes('duduk')) {
+                current = current.filter(f => !f.toLowerCase().includes('jongkok'));
+            } else if (lowerSub.includes('jongkok')) {
+                current = current.filter(f => !f.toLowerCase().includes('duduk'));
+            }
             current.push(sub);
         }
         onChange(current);
@@ -1597,12 +1603,19 @@ const HierarchicalRoomFacilityInput: React.FC<{
         });
     };
 
-    // Sub Bathroom Toggle
+    // Sub Bathroom Toggle (dengan saklar eksklusif Kloset Duduk vs Kloset Jongkok)
     const handleToggleBathroomSub = (subLabel: string) => {
         let updatedBath = [...currentBathroomFacilities];
-        if (updatedBath.includes(subLabel)) {
-            updatedBath = updatedBath.filter(b => b !== subLabel);
+        const lower = subLabel.toLowerCase().trim();
+        if (updatedBath.some(b => b.toLowerCase().trim() === lower)) {
+            updatedBath = updatedBath.filter(b => b.toLowerCase().trim() !== lower);
         } else {
+            // Saklar eksklusif WC: Kloset Duduk vs Kloset Jongkok
+            if (lower.includes('duduk')) {
+                updatedBath = updatedBath.filter(b => !b.toLowerCase().includes('jongkok'));
+            } else if (lower.includes('jongkok')) {
+                updatedBath = updatedBath.filter(b => !b.toLowerCase().includes('duduk'));
+            }
             updatedBath.push(subLabel);
         }
         onUpdateRoom({
@@ -2013,6 +2026,84 @@ const FacilityInput: React.FC<{
 
 // ── DRAFT STORAGE HELPERS ───────────────────────────────────────────────────
 const getDraftStorageKey = (userId?: string) => `ruangsinggah_kost_form_draft_${userId || 'default'}`;
+
+// ── HELPER KATEGORI FOTO AKTIF (Digunakan untuk Render Langkah 5 & Validasi Ketat) ──
+const computeActivePhotoCategories = (
+    currentForm: typeof initialForm,
+    userCustomCats: string[] = []
+): PublicPhotoCategoryDef[] => {
+    // 1. Kategori Area Umum Pokok
+    const categories: PublicPhotoCategoryDef[] = [
+        { id: 'Bangunan Depan', label: 'Bangunan Depan (Fasad)', desc: 'Tampak depan gedung & jalan akses (Cover Utama)', required: true },
+        { id: 'Koridor', label: 'Koridor & Akses Masuk', desc: 'Lorong antar kamar, tangga, atau pintu masuk utama' },
+        { id: 'Lingkungan', label: 'Lingkungan Sekitar', desc: 'Suasana jalan dan lingkungan di sekitar kost' },
+    ];
+
+    // 2. Kategori Area Umum Dinamis (Berdasarkan Fasilitas Gedung yang Dipilih)
+    const currentFacilities = currentForm.facilities || [];
+    if (currentFacilities.some(f => /parkir/i.test(f))) {
+        categories.push({ id: 'Area Parkir', label: 'Area Parkir', desc: 'Tempat parkir motor atau mobil penghuni' });
+    }
+    if (currentFacilities.some(f => /dapur/i.test(f))) {
+        categories.push({ id: 'Dapur Bersama', label: 'Dapur Bersama', desc: 'Area memasak bersama, wastafel, & kompor' });
+    }
+    if (currentFacilities.some(f => /(wc|toilet|kamar mandi)/i.test(f))) {
+        categories.push({ id: 'WC Umum', label: 'WC Umum / Luar', desc: 'Kamar mandi luar untuk fasilitas bersama' });
+    }
+    if (currentFacilities.some(f => /(tamu|santai|bersama)/i.test(f))) {
+        categories.push({ id: 'Ruang Tamu', label: 'Ruang Tamu & Bersama', desc: 'Ruang santai atau ruang tamu penerima kunjungan' });
+    }
+    if (currentFacilities.some(f => /(laundry|cuci|jemur)/i.test(f))) {
+        categories.push({ id: 'Area Laundry', label: 'Area Laundry & Jemuran', desc: 'Tempat mencuci dan menjemur pakaian' });
+    }
+
+    // Fasilitas umum kustom yang diinput mitra otomatis jadi kategori foto
+    const customGeneralFacilities = currentFacilities.filter(f => !BUILDING_FACILITIES.includes(f));
+    customGeneralFacilities.forEach(cg => {
+        if (!categories.some(c => c.id.toLowerCase() === cg.toLowerCase())) {
+            categories.push({ id: cg, label: cg, desc: `Dokumentasi fasilitas ${cg}` });
+        }
+    });
+
+    // Tambahkan kategori kustom tambahan dari user
+    userCustomCats.forEach(cc => {
+        if (!categories.some(c => c.id.toLowerCase() === cc.toLowerCase())) {
+            categories.push({ id: cc, label: cc, desc: `Foto area ${cc} properti` });
+        }
+    });
+
+    // 3. Kategori Kamar Dinamis (Berdasarkan Tipe Kamar & Fasilitasnya)
+    (currentForm.roomTypes || []).forEach((room, ri) => {
+        const roomName = room.name || `Tipe Kamar ${ri + 1}`;
+        categories.push({
+            id: `Kamar: ${roomName}`,
+            label: `Kamar: ${roomName}`,
+            desc: `Foto interior tempat tidur & suasana ${roomName}`
+        });
+
+        // Cek jika tipe kamar ini punya kamar mandi dalam
+        const hasInsideBath = (room.bathroomFacilities || []).some((f: string) => /dalam/i.test(f)) || (room.roomFacilities || []).some((f: string) => /kamar mandi dalam/i.test(f));
+        if (hasInsideBath) {
+            categories.push({
+                id: `Kamar Mandi: ${roomName}`,
+                label: `KM Dalam: ${roomName}`,
+                desc: `Foto kamar mandi dalam untuk ${roomName}`
+            });
+        }
+
+        // Cek jika tipe kamar ini punya dapur dalam
+        const hasInsideKitchen = (room.roomFacilities || []).some((f: string) => /dapur dalam/i.test(f));
+        if (hasInsideKitchen) {
+            categories.push({
+                id: `Dapur Dalam: ${roomName}`,
+                label: `Dapur Dalam: ${roomName}`,
+                desc: `Foto area dapur dalam untuk ${roomName}`
+            });
+        }
+    });
+
+    return categories;
+};
 
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
 interface KostFormMitraProps {
@@ -2977,9 +3068,35 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     };
 
     const saveDraftRoom = () => {
-        if (!draftRoom.name.trim()) {
-            alert('Silakan pilih atau masukkan nama tipe kamar.');
+        if (!draftRoom.name?.trim()) {
+            alert('Nama tipe kamar wajib diisi.');
             setRoomSubStep(1);
+            return;
+        }
+        if (!draftRoom.size?.trim()) {
+            alert('Ukuran kamar wajib diisi (contoh: 3x4 m).');
+            setRoomSubStep(1);
+            return;
+        }
+        if ((draftRoom.maxOccupants || 0) < 1) {
+            alert('Maksimal kapasitas penghuni kamar minimal 1 orang.');
+            setRoomSubStep(2);
+            return;
+        }
+        if ((draftRoom.availableRoomCount || 0) < 1) {
+            alert('Jumlah ketersediaan kamar minimal 1 unit.');
+            setRoomSubStep(2);
+            return;
+        }
+        if (hasExtraFee && (draftRoom.additionalCostPerPerson || 0) <= 0) {
+            alert('Anda mengaktifkan opsi Biaya Sewa Tambahan Penghuni. Silakan isi nominal biaya tambahan per orang (harus lebih dari Rp 0).');
+            setRoomSubStep(3);
+            return;
+        }
+        const hasValidPricing = (draftRoom.pricing || []).some(p => p.price > 0) || (draftRoom.price || 0) > 0;
+        if (!hasValidPricing) {
+            alert('Silakan tentukan minimal satu periode sewa dan isi nominal harga sewanya (harus lebih dari Rp 0).');
+            setRoomSubStep(3);
             return;
         }
 
@@ -3049,10 +3166,184 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         upd('roomTypes', rooms);
     };
 
+    // ── VALIDATOR ATURAN KETAT PER LANGKAH WIZARD ────────────────────────────────
+    const validateCurrentStep = (currentStep: number): string | null => {
+        // ── STEP 0 (Langkah 1: Info Dasar Kost) ──
+        if (currentStep === 0) {
+            if (!form.title || !form.title.trim()) {
+                return 'Nama kost wajib diisi.';
+            }
+            if (!form.type) {
+                return 'Silakan pilih tipe penghuni kost (Putra / Putri / Campur).';
+            }
+            return null;
+        }
+
+        // ── STEP 1 (Langkah 2: Lokasi & Alamat) ──
+        if (currentStep === 1) {
+            if (!form.address || !form.address.trim()) {
+                return 'Alamat lengkap kost wajib diisi.';
+            }
+            if (!form.city || !form.city.trim()) {
+                return 'Kota / Kabupaten kost wajib diisi.';
+            }
+            const lat = form.location?.lat;
+            const lng = form.location?.lng;
+            if (!lat || !lng || (lat === 0 && lng === 0)) {
+                return 'Wajib menentukan titik koordinat lokasi kost pada peta.';
+            }
+            return null;
+        }
+
+        // ── STEP 2 (Langkah 3: Tipe & Kamar Kost) ──
+        if (currentStep === 2) {
+            if (editingRoomIndex !== null) {
+                return 'Mohon selesaikan dan simpan tipe kamar yang sedang diedit terlebih dahulu, atau klik Batalkan.';
+            }
+            const rooms = form.roomTypes || [];
+            if (rooms.length === 0) {
+                return 'Wajib mendaftarkan minimal satu tipe kamar sebelum melanjutkan.';
+            }
+            return null;
+        }
+
+        // ── STEP 3 (Langkah 4: Fasilitas Properti & Kamar) ──
+        if (currentStep === 3) {
+            const publicFacs = form.facilities || [];
+            if (publicFacs.length === 0) {
+                return 'Wajib memilih minimal satu fasilitas gedung/umum.';
+            }
+
+            // 1. Validasi Sub-Fasilitas Area Parkir
+            const hasParkingParent = publicFacs.some(f => /parkir/i.test(f));
+            if (hasParkingParent) {
+                const hasParkingSub = publicFacs.some(f => /parkir motor|parkir mobil/i.test(f));
+                if (!hasParkingSub) {
+                    return 'Anda memilih fasilitas Area Parkir. Wajib memilih minimal satu sub-fasilitasnya (Parkir Motor atau Parkir Mobil).';
+                }
+            }
+
+            // 2. Validasi Sub-Fasilitas Dapur Bersama
+            const hasKitchenParent = publicFacs.some(f => /dapur/i.test(f));
+            if (hasKitchenParent) {
+                const hasKitchenSub = publicFacs.some(f => /kompor|kulkas|wastafel|gas|kitchen set|dispenser/i.test(f));
+                if (!hasKitchenSub) {
+                    return 'Anda memilih fasilitas Dapur Bersama. Wajib memilih minimal satu sub-fasilitasnya (misal: Kompor / Kulkas).';
+                }
+            }
+
+            // 3. Validasi Sub-Fasilitas WC Umum
+            const hasBathroomParent = publicFacs.some(f => /wc umum|kamar mandi luar/i.test(f));
+            if (hasBathroomParent) {
+                const hasBathroomSub = publicFacs.some(f => /kloset duduk|kloset jongkok|shower|bak mandi|ember/i.test(f));
+                if (!hasBathroomSub) {
+                    return 'Anda memilih fasilitas WC Umum. Wajib memilih minimal satu sub-fasilitas WC umum (misal: Kloset Duduk atau Kloset Jongkok).';
+                }
+            }
+
+            // 4. Validasi Biaya Tambahan Fasilitas Bulanan
+            if (isAdditionalFeeActive) {
+                if ((form.additionalFeePrice || 0) <= 0) {
+                    return 'Anda mengaktifkan opsi Ada Biaya Tambahan Fasilitas. Wajib mengisi nominal biaya tambahan bulanan (harus lebih dari Rp 0).';
+                }
+                if (!form.additionalFeeName || !form.additionalFeeName.trim()) {
+                    return 'Anda mengaktifkan opsi Ada Biaya Tambahan Fasilitas. Wajib memilih atau mencentang cakupan biaya tambahan (misal: Listrik, Air, Sampah).';
+                }
+            }
+
+            // 5. Validasi Fasilitas per Tipe Kamar
+            const rooms = form.roomTypes || [];
+            for (let i = 0; i < rooms.length; i++) {
+                const r = rooms[i];
+                const rName = r.name || `Tipe Kamar #${i + 1}`;
+                const rFacs = r.roomFacilities || [];
+                const bFacs = r.bathroomFacilities || [];
+                const kFacs = r.kitchenFacilities || [];
+
+                // Wajib tentukan tipe kamar mandi (Dalam atau Luar)
+                const hasInsideBath = bFacs.includes('Kamar Mandi Dalam') || rFacs.includes('Kamar Mandi Dalam');
+                const hasOutsideBath = bFacs.includes('Kamar Mandi Luar') || rFacs.includes('Kamar Mandi Luar');
+                if (!hasInsideBath && !hasOutsideBath) {
+                    return `Pada ${rName}: Wajib memilih tipe kamar mandi (Kamar Mandi Dalam atau Kamar Mandi Luar).`;
+                }
+
+                // Jika Kamar Mandi Dalam: wajib memilih minimal 1 sub kelengkapan WC
+                if (hasInsideBath) {
+                    const subBath = bFacs.filter(b => b !== 'Kamar Mandi Dalam' && b !== 'Kamar Mandi Luar');
+                    if (subBath.length === 0) {
+                        return `Pada ${rName}: Anda memilih Kamar Mandi Dalam. Wajib memilih minimal satu kelengkapan WC (misal: Kloset Duduk, Shower, dll).`;
+                    }
+                }
+
+                // Jika Dapur Dalam: wajib memilih minimal 1 sub kelengkapan dapur
+                const hasInsideKitchen = rFacs.includes('Dapur Dalam');
+                if (hasInsideKitchen && kFacs.length === 0) {
+                    return `Pada ${rName}: Anda memilih Dapur Dalam. Wajib memilih minimal satu kelengkapan dapur dalam (misal: Kompor, Wastafel Cuci Piring, dll).`;
+                }
+
+                // Wajib ada fasilitas / perabot kamar atau status Kosongan
+                if (rFacs.length === 0) {
+                    return `Pada ${rName}: Wajib memilih fasilitas kamar tidur atau konfirmasi status Kosongan.`;
+                }
+            }
+
+            return null;
+        }
+
+        // ── STEP 4 (Langkah 5: Dokumentasi Foto) ──
+        if (currentStep === 4) {
+            const activeCategories = computeActivePhotoCategories(form, customCategories);
+
+            const existingWithCats = (form.imageUrls || []).map((img: any, idx: number) => {
+                const src = typeof img === 'string' ? img : (img?.original || img?.url || '');
+                let cat = 'Bangunan Depan';
+                if (typeof img === 'object' && (img.label || img.category)) {
+                    cat = img.label || img.category;
+                } else if (Array.isArray(form.photoCategories) && form.photoCategories[idx]) {
+                    cat = form.photoCategories[idx];
+                } else if (idx > 0) {
+                    cat = 'Fasilitas Lainnya';
+                }
+                return { src, cat };
+            }).filter(p => !!p.src);
+
+            for (const cat of activeCategories) {
+                const existingCount = existingWithCats.filter(p => p.cat === cat.id).length;
+                const newCount = newPhotoItems.filter(p => p.category === cat.id).length;
+                if (existingCount + newCount < 1) {
+                    return `Kategori foto '${cat.label}' wajib diunggah minimal 1 foto sebelum melanjutkan.`;
+                }
+            }
+
+            return null;
+        }
+
+        // ── STEP 5 (Langkah 6: Peraturan Kost) ──
+        // Peraturan kost bersifat OPSIONAL
+        return null;
+    };
+
+    const handleNextStep = () => {
+        const validationError = validateCurrentStep(step);
+        if (validationError) {
+            setError(validationError);
+            return;
+        }
+        setError('');
+        setStep(s => s + 1);
+    };
+
     // ── submit ──────────────────────────────────────────────────────────────────
     const handleSubmit = async () => {
-        if (!form.title?.trim()) { setError('Nama kost wajib diisi.'); setStep(0); return; }
-        if (!form.city?.trim())  { setError('Kota wajib diisi.'); setStep(1); return; }
+        // Validasi menyeluruh dari Langkah 1 hingga Langkah 5
+        for (let s = 0; s <= 4; s++) {
+            const stepErr = validateCurrentStep(s);
+            if (stepErr) {
+                setError(stepErr);
+                setStep(s);
+                return;
+            }
+        }
 
         let finalPrice = form.price || 0;
         if ((form.roomTypes || []).length > 0) {
@@ -3512,7 +3803,11 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                             type="button"
                                             onClick={() => {
                                                 if (!draftRoom.name?.trim()) {
-                                                    alert('Mohon tentukan nama tipe kamar terlebih dahulu.');
+                                                    alert('Nama tipe kamar wajib diisi.');
+                                                    return;
+                                                }
+                                                if (!draftRoom.size?.trim()) {
+                                                    alert('Ukuran kamar wajib diisi (contoh: 3x4 m).');
                                                     return;
                                                 }
                                                 setRoomSubStep(2);
@@ -3655,7 +3950,17 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => setRoomSubStep(3)}
+                                            onClick={() => {
+                                                if ((draftRoom.maxOccupants || 0) < 1) {
+                                                    alert('Maksimal kapasitas penghuni kamar minimal 1 orang.');
+                                                    return;
+                                                }
+                                                if ((draftRoom.availableRoomCount || 0) < 1) {
+                                                    alert('Jumlah ketersediaan kamar minimal 1 unit.');
+                                                    return;
+                                                }
+                                                setRoomSubStep(3);
+                                            }}
                                             className="h-11 px-6 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-sm transition-all cursor-pointer"
                                         >
                                             <span>Lanjut ke Harga</span>
@@ -4251,68 +4556,10 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
             // ── STEP 4 (Langkah 5): Foto Properti & Kamar Dinamis ────────────────
             case 4: {
-                // 1. Kategori Area Umum Pokok
-                const dynamicGeneralCategories: PublicPhotoCategoryDef[] = [
-                    { id: 'Bangunan Depan', label: 'Bangunan Depan (Fasad)', desc: 'Tampak depan gedung & jalan akses (Cover Utama)', required: true },
-                    { id: 'Koridor', label: 'Koridor & Akses Masuk', desc: 'Lorong antar kamar, tangga, atau pintu masuk utama' },
-                    { id: 'Lingkungan', label: 'Lingkungan Sekitar', desc: 'Suasana jalan dan lingkungan di sekitar kost' },
-                ];
-
-                // 2. Kategori Area Umum Dinamis (Berdasarkan Fasilitas Gedung yang Dipilih)
-                const currentFacilities = form.facilities || [];
-                if (currentFacilities.some(f => /parkir/i.test(f))) {
-                    dynamicGeneralCategories.push({ id: 'Area Parkir', label: 'Area Parkir', desc: 'Tempat parkir motor atau mobil penghuni' });
-                }
-                if (currentFacilities.some(f => /dapur/i.test(f))) {
-                    dynamicGeneralCategories.push({ id: 'Dapur Bersama', label: 'Dapur Bersama', desc: 'Area memasak bersama, wastafel, & kompor' });
-                }
-                if (currentFacilities.some(f => /(wc|toilet|kamar mandi)/i.test(f))) {
-                    dynamicGeneralCategories.push({ id: 'WC Umum', label: 'WC Umum / Luar', desc: 'Kamar mandi luar untuk fasilitas bersama' });
-                }
-                if (currentFacilities.some(f => /(tamu|santai|bersama)/i.test(f))) {
-                    dynamicGeneralCategories.push({ id: 'Ruang Tamu', label: 'Ruang Tamu & Bersama', desc: 'Ruang santai atau ruang tamu penerima kunjungan' });
-                }
-                if (currentFacilities.some(f => /(laundry|cuci|jemur)/i.test(f))) {
-                    dynamicGeneralCategories.push({ id: 'Area Laundry', label: 'Area Laundry & Jemuran', desc: 'Tempat mencuci dan menjemur pakaian' });
-                }
-
-                // Fasilitas umum kustom yang diinput mitra otomatis jadi kategori foto
-                const customGeneralFacilities = currentFacilities.filter(f => !BUILDING_FACILITIES.includes(f));
-                customGeneralFacilities.forEach(cg => {
-                    if (!dynamicGeneralCategories.some(c => c.id.toLowerCase() === cg.toLowerCase())) {
-                        dynamicGeneralCategories.push({ id: cg, label: cg, desc: `Dokumentasi fasilitas ${cg}` });
-                    }
-                });
-
-                // Tambahkan kategori kustom tambahan dari user
-                customCategories.forEach(cc => {
-                    if (!dynamicGeneralCategories.some(c => c.id.toLowerCase() === cc.toLowerCase())) {
-                        dynamicGeneralCategories.push({ id: cc, label: cc, desc: `Foto area ${cc} properti` });
-                    }
-                });
-
-                // 3. Kategori Kamar Dinamis (Berdasarkan Tipe Kamar & Fasilitasnya)
-                const dynamicRoomCategories: PublicPhotoCategoryDef[] = [];
-                (form.roomTypes || []).forEach((room, ri) => {
-                    const roomName = room.name || `Tipe Kamar ${ri + 1}`;
-                    dynamicRoomCategories.push({
-                        id: `Kamar: ${roomName}`,
-                        label: `Kamar: ${roomName}`,
-                        desc: `Foto interior tempat tidur & suasana ${roomName}`
-                    });
-
-                    // Cek jika tipe kamar ini punya kamar mandi dalam
-                    const hasInsideBath = (room.bathroomFacilities || []).some((f: string) => /dalam/i.test(f));
-                    if (hasInsideBath) {
-                        dynamicRoomCategories.push({
-                            id: `Kamar Mandi: ${roomName}`,
-                            label: `KM Dalam: ${roomName}`,
-                            desc: `Foto kamar mandi dalam untuk ${roomName}`
-                        });
-                    }
-                });
-
-                const allActiveCategories = [...dynamicGeneralCategories, ...dynamicRoomCategories];
+                // Kategori Foto Aktif Terpadu (Area Umum & Dinamis Reaksi Tipe Kamar / Fasilitas Terpilih)
+                const allActiveCategories = computeActivePhotoCategories(form, customCategories);
+                const dynamicGeneralCategories = allActiveCategories.filter(c => !c.id.startsWith('Kamar: ') && !c.id.startsWith('Kamar Mandi: ') && !c.id.startsWith('Dapur Dalam: '));
+                const dynamicRoomCategories = allActiveCategories.filter(c => c.id.startsWith('Kamar: ') || c.id.startsWith('Kamar Mandi: ') || c.id.startsWith('Dapur Dalam: '));
 
                 const existingWithCats = (form.imageUrls || []).map((img: any, idx: number) => {
                     const src = typeof img === 'string' ? img : (img?.original || img?.url || '');
@@ -4701,7 +4948,12 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         <React.Fragment key={s.id}>
                             <button
                                 type="button"
-                                onClick={() => i < step && setStep(i)}
+                                onClick={() => {
+                                    if (i < step) {
+                                        setError('');
+                                        setStep(i);
+                                    }
+                                }}
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide transition-all ${
                                     i === step ? 'bg-orange-500 text-white shadow-md' :
                                     i < step ? 'bg-green-100 text-green-600 cursor-pointer' :
@@ -4748,8 +5000,8 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     )}
 
                     {step < activeSteps.length - 1 ? (
-                        <button type="button" onClick={() => { setError(''); setStep(s => s + 1); }}
-                            className="flex-1 h-14 bg-orange-500 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-100 active:scale-95 transition-transform">
+                        <button type="button" onClick={handleNextStep}
+                            className="flex-1 h-14 bg-orange-500 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-100 active:scale-95 transition-transform cursor-pointer">
                             Lanjut <ChevronRight size={18}/>
                         </button>
                     ) : (
