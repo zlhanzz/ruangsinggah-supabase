@@ -28,6 +28,9 @@
      - **Smart Category Filter**: Membatasi pemindaian AI Vision hanya pada kategori foto eksterior yang berpotensi memiliki spanduk sewa (`Bangunan Depan/Fasad`, `Area Lingkungan`, `Gerbang/Pagar`, `Akses Masuk`). Foto interior (kamar tidur, kasur, kamar mandi dalam, dapur) langsung lolos instan (0 detik) ke WebP tanpa AI, memangkas 70–80% kuota API.
      - **Pemrosesan Paralel (`Promise.all`)**: Mengubah loop serial menjadi paralel sehingga banyak foto yang diunggah bersamaan selesai dalam satu waktu tunggu yang sama.
      - **Resolusi Sweet Spot (1024px / 0.65)**: Payload base64 turun ke ~45 KB per foto untuk kecepatan transmisi dan decoding AI 2x lebih kencang tanpa mengurangi ketajaman foto asli hasil upload (tetap Full HD WebP).
+  7. **Pengalaman Pengguna Tanpa Gangguan (In-Card Seamless Loading & Eliminasi Banner Atas)**:
+     - Menghapus banner biru besar di bagian atas daftar foto (`Memindai foto dengan Gemini 3.7 Flash...`) agar layout tidak bergeser (*zero layout shift*) dan tidak menampilkan teks teknis nama AI yang mencolok.
+     - Memindahkan status pemrosesan langsung ke dalam kartu tombol upload foto pada kategori yang bersangkutan (`uploadingCategory === cat.id`), menampilkan animasi spinner halus `Loader2` dan teks *"Memproses... Mohon tunggu"* hingga foto selesai dan langsung muncul di grid.
 - **File Tersentuh**:
   - `supabase/functions/detect-contact-banner/index.ts`
   - `functions/public/adminService.ts`

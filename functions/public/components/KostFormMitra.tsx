@@ -2200,7 +2200,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     const [error, setError] = useState('');
     const [tempRule, setTempRule] = useState('');
     const [editingCaptionTarget, setEditingCaptionTarget] = useState<{ id: string; isNew: boolean; caption: string; catLabel: string; raw?: any } | null>(null);
-    const [isScanningBanner, setIsScanningBanner] = useState<boolean>(false);
+    const [uploadingCategory, setUploadingCategory] = useState<string | null>(null);
     const [bannerNotice, setBannerNotice] = useState<string | null>(null);
     
     // State sub-wizard pengisian kamar bertahap (Langkah 3)
@@ -3040,10 +3040,8 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         const fileArr = Array.from(files);
         if (fileArr.length === 0) return;
 
+        setUploadingCategory(category);
         const needAiScan = isBannerProneCategory(category);
-        if (needAiScan) {
-            setIsScanningBanner(true);
-        }
 
         try {
             let anyContactDetected = false;
@@ -3100,7 +3098,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
             setNewPhotoItems(prev => [...prev, ...processedItems]);
         } finally {
-            setIsScanningBanner(false);
+            setUploadingCategory(null);
         }
     };
 
@@ -4849,15 +4847,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             </div>
                         )}
 
-                        {/* Status Pemindaian Banner AI */}
-                        {isScanningBanner && (
-                            <div className="bg-blue-50/90 border border-blue-200 text-blue-950 px-4 py-3 rounded-2xl flex items-center gap-2.5 shadow-xs animate-in fade-in duration-200">
-                                <Loader2 className="w-4 h-4 text-blue-600 animate-spin shrink-0" />
-                                <span className="text-xs font-bold text-blue-900">
-                                    Memindai foto dengan Gemini 3.7 Flash untuk mendeteksi nomor kontak &amp; spanduk sewa...
-                                </span>
-                            </div>
-                        )}
+
 
                         {/* SECTION A: Foto Area & Fasilitas Umum */}
                         <div className="space-y-4">
@@ -5004,27 +4994,41 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 </div>
                                             ))}
 
-                                            <label className="aspect-square border-2 border-dashed border-orange-200 hover:border-orange-500 bg-orange-50/40 hover:bg-orange-50/80 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all gap-1.5 p-3 text-center group">
-                                                <input 
-                                                    type="file" 
-                                                    multiple 
-                                                    accept="image/*" 
-                                                    className="hidden" 
-                                                    onChange={e => {
-                                                        handleCategoryFilesUpload(cat.id, e.target.files);
-                                                        e.target.value = '';
-                                                    }} 
-                                                />
-                                                <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                    <Plus size={18} />
+                                            {uploadingCategory === cat.id ? (
+                                                <div className="aspect-square border-2 border-dashed border-orange-300 bg-orange-50/70 rounded-2xl flex flex-col items-center justify-center p-3 text-center gap-1.5 animate-pulse">
+                                                    <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center">
+                                                        <Loader2 size={18} className="animate-spin text-orange-600" />
+                                                    </div>
+                                                    <span className="text-[11px] font-bold text-orange-700">
+                                                        Memproses...
+                                                    </span>
+                                                    <span className="text-[9px] text-gray-400 font-medium">
+                                                        Mohon tunggu
+                                                    </span>
                                                 </div>
-                                                <span className="text-[11px] font-black text-orange-600 group-hover:underline">
-                                                    + Tambah Foto
-                                                </span>
-                                                <span className="text-[9px] text-gray-400 font-medium">
-                                                    Pilih dari Galeri
-                                                </span>
-                                            </label>
+                                            ) : (
+                                                <label className="aspect-square border-2 border-dashed border-orange-200 hover:border-orange-500 bg-orange-50/40 hover:bg-orange-50/80 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all gap-1.5 p-3 text-center group">
+                                                    <input 
+                                                        type="file" 
+                                                        multiple 
+                                                        accept="image/*" 
+                                                        className="hidden" 
+                                                        onChange={e => {
+                                                            handleCategoryFilesUpload(cat.id, e.target.files);
+                                                            e.target.value = '';
+                                                        }} 
+                                                    />
+                                                    <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                        <Plus size={18} />
+                                                    </div>
+                                                    <span className="text-[11px] font-black text-orange-600 group-hover:underline">
+                                                        + Tambah Foto
+                                                    </span>
+                                                    <span className="text-[9px] text-gray-400 font-medium">
+                                                        Pilih dari Galeri
+                                                    </span>
+                                                </label>
+                                            )}
                                         </div>
                                     </div>
                                 );
@@ -5156,6 +5160,19 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                     </div>
                                                 ))}
 
+                                            {uploadingCategory === cat.id ? (
+                                                <div className="aspect-square border-2 border-dashed border-orange-300 bg-orange-50/70 rounded-2xl flex flex-col items-center justify-center p-3 text-center gap-1.5 animate-pulse">
+                                                    <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center">
+                                                        <Loader2 size={18} className="animate-spin text-orange-600" />
+                                                    </div>
+                                                    <span className="text-[11px] font-bold text-orange-700">
+                                                        Memproses...
+                                                    </span>
+                                                    <span className="text-[9px] text-gray-400 font-medium">
+                                                        Mohon tunggu
+                                                    </span>
+                                                </div>
+                                            ) : (
                                                 <label className="aspect-square border-2 border-dashed border-orange-200 hover:border-orange-500 bg-orange-50/40 hover:bg-orange-50/80 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all gap-1.5 p-3 text-center group">
                                                     <input 
                                                         type="file" 
@@ -5177,6 +5194,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         Pilih dari Galeri
                                                     </span>
                                                 </label>
+                                            )}
                                             </div>
                                         </div>
                                     );
