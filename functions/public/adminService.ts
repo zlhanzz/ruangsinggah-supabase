@@ -5297,4 +5297,45 @@ export async function updatePropertyReportStatus(
   }
 }
 
+export interface ContactBannerDetectionResult {
+  hasContact: boolean;
+  detectedTexts?: string[];
+  boxes: Array<{
+    ymin: number;
+    xmin: number;
+    ymax: number;
+    xmax: number;
+    label?: string;
+  }>;
+}
 
+export const detectPhotoContactBanner = async (
+  base64Image: string,
+  mimeType = 'image/webp'
+): Promise<ContactBannerDetectionResult> => {
+  try {
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Deteksi banner kontak timeout (12s)')), 12000)
+    );
+
+    const invokePromise = supabase.functions.invoke('detect-contact-banner', {
+      body: { base64Image, mimeType }
+    });
+
+    const res: any = await Promise.race([invokePromise, timeoutPromise]);
+    const { data: aiRes, error: aiErr } = res || {};
+
+    if (!aiErr && aiRes && aiRes.success && aiRes.data) {
+      const data = aiRes.data;
+      return {
+        hasContact: !!data.has_contact,
+        detectedTexts: Array.isArray(data.detected_texts) ? data.detected_texts : [],
+        boxes: Array.isArray(data.boxes) ? data.boxes : []
+      };
+    }
+    return { hasContact: false, detectedTexts: [], boxes: [] };
+  } catch (err) {
+    console.warn('Pemeriksaan banner kontak dilewati (fallback aman):', err);
+    return { hasContact: false, detectedTexts: [], boxes: [] };
+  }
+};

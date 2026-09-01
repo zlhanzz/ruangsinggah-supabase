@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Kost, RoomType, PricingPeriod } from '../types';
-import { addPropertyWithMedia, updatePropertyWithMedia } from '../adminService';
+import { addPropertyWithMedia, updatePropertyWithMedia, detectPhotoContactBanner } from '../adminService';
 import { findNearbyCuratedLandmarks } from '../constants/curatedLandmarks';
 import {
     X, ChevronRight, ChevronLeft, Camera, Video, MapPin, Home, Wifi,
     Plus, Trash2, Check, AlertCircle, Loader2, Upload, Image as ImageIcon,
     Phone, BookOpen, DollarSign, Search, Navigation, ShieldCheck, User, Users, Maximize2,
-    Crosshair, CheckCircle2, Sparkles, LocateFixed, FileText, RotateCcw, Save, Droplets, Bed, Edit3
+    Crosshair, CheckCircle2, Sparkles, LocateFixed, FileText, RotateCcw, Save, Droplets, Bed, Edit3, ShieldAlert
 } from 'lucide-react';
 
 interface KostFormMitraProps {
@@ -85,6 +85,7 @@ interface NewPhotoItem {
     preview: string;
     category: string;
     caption?: string;
+    isBlurred?: boolean;
 }
 
 const initialForm: Partial<Kost> = {
@@ -2199,6 +2200,8 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     const [error, setError] = useState('');
     const [tempRule, setTempRule] = useState('');
     const [editingCaptionTarget, setEditingCaptionTarget] = useState<{ id: string; isNew: boolean; caption: string; catLabel: string; raw?: any } | null>(null);
+    const [isScanningBanner, setIsScanningBanner] = useState<boolean>(false);
+    const [bannerNotice, setBannerNotice] = useState<string | null>(null);
     
     // State sub-wizard pengisian kamar bertahap (Langkah 3)
     const [editingRoomIndex, setEditingRoomIndex] = useState<number | null>(null);
@@ -2902,25 +2905,161 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         });
     };
 
+    // ── Helper konversi gambar ke Base64 Low-Res untuk AI Vision (<80KB) ─────────
+    const createLowResBase64ForAi = async (file: File, maxDim = 800): Promise<string> => {
+        return new Promise((resolve) => {
+            if (!file.type.startsWith('image/')) return resolve('');
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    let { width, height } = img;
+                    if (width > maxDim || height > maxDim) {
+                        if (width > height) {
+                            height = Math.round((height * maxDim) / width);
+                            width = maxDim;
+                        } else {
+                            width = Math.round((width * maxDim) / height);
+                            height = maxDim;
+                        }
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return resolve('');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+                    const base64 = dataUrl.split(',')[1] || '';
+                    resolve(base64);
+                };
+                img.onerror = () => resolve('');
+                img.src = e.target?.result as string;
+            };
+            reader.onerror = () => resolve('');
+            reader.readAsDataURL(file);
+        });
+    };
+
+    // ── Helper pengaburan area kontak (Canvas Mosaic Blur + Mask Overlay) ────────
+    const applyBlurToBoundingBoxes = async (
+        file: File, 
+        boxes: Array<{ ymin: number; xmin: number; ymax: number; xmax: number }>
+    ): Promise<File> => {
+        if (!boxes || boxes.length === 0) return file;
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return resolve(file);
+
+                    // Gambar citra asli
+                    ctx.drawImage(img, 0, 0);
+
+                    // Terapkan blur dan masker pada setiap bounding box (koordinat 0-1000)
+                    boxes.forEach(box => {
+                        const padY = Math.round((box.ymax - box.ymin) * 0.08);
+                        const padX = Math.round((box.xmax - box.xmin) * 0.08);
+
+                        const normYmin = Math.max(0, box.ymin - padY);
+                        const normXmin = Math.max(0, box.xmin - padX);
+                        const normYmax = Math.min(1000, box.ymax + padY);
+                        const normXmax = Math.min(1000, box.xmax + padX);
+
+                        const x = Math.round((normXmin / 1000) * img.width);
+                        const y = Math.round((normYmin / 1000) * img.height);
+                        const w = Math.round(((normXmax - normXmin) / 1000) * img.width);
+                        const h = Math.round(((normYmax - normYmin) / 1000) * img.height);
+
+                        if (w > 0 && h > 0) {
+                            ctx.save();
+                            // 1. Mosaik / Pixelate berat di canvas
+                            const offCanvas = document.createElement('canvas');
+                            const scale = 0.08;
+                            offCanvas.width = Math.max(1, Math.round(w * scale));
+                            offCanvas.height = Math.max(1, Math.round(h * scale));
+                            const offCtx = offCanvas.getContext('2d');
+                            if (offCtx) {
+                                offCtx.imageSmoothingEnabled = true;
+                                offCtx.drawImage(canvas, x, y, w, h, 0, 0, offCanvas.width, offCanvas.height);
+                                ctx.imageSmoothingEnabled = false;
+                                ctx.drawImage(offCanvas, 0, 0, offCanvas.width, offCanvas.height, x, y, w, h);
+                            }
+
+                            // 2. Overlay frosted dark semi-transparan
+                            ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+                            ctx.fillRect(x, y, w, h);
+
+                            // 3. Label elegan "Kontak Disamarkan"
+                            const fontSize = Math.max(10, Math.min(22, Math.round(h * 0.35)));
+                            ctx.fillStyle = '#ffffff';
+                            ctx.font = `bold ${fontSize}px sans-serif`;
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillText('🔒 Kontak Disamarkan', x + w / 2, y + h / 2);
+
+                            ctx.restore();
+                        }
+                    });
+
+                    canvas.toBlob((blob) => {
+                        if (!blob) return resolve(file);
+                        const blurredFile = new File([blob], file.name, { type: file.type || 'image/jpeg' });
+                        resolve(blurredFile);
+                    }, file.type || 'image/jpeg', 0.95);
+                };
+                img.onerror = () => resolve(file);
+                img.src = e.target?.result as string;
+            };
+            reader.onerror = () => resolve(file);
+            reader.readAsDataURL(file);
+        });
+    };
+
     const handleCategoryFilesUpload = async (category: string, files: FileList | File[] | null) => {
         if (!files) return;
         const fileArr = Array.from(files);
         if (fileArr.length === 0) return;
 
+        setIsScanningBanner(true);
+        let anyContactDetected = false;
+
         const newItems: NewPhotoItem[] = [];
         for (const file of fileArr) {
             try {
-                const webpFile = await compressImageToWebP(file);
+                let fileToProcess = file;
+                let isBlurred = false;
+
+                // 1. Ekstrak Base64 Low-Res untuk AI Vision (<80KB)
+                const lowResBase64 = await createLowResBase64ForAi(file);
+                if (lowResBase64) {
+                    // 2. Pindai keberadaan spanduk / nomor kontak via Edge Function Gemini Flash
+                    const detection = await detectPhotoContactBanner(lowResBase64, 'image/jpeg');
+                    if (detection.hasContact && detection.boxes && detection.boxes.length > 0) {
+                        fileToProcess = await applyBlurToBoundingBoxes(file, detection.boxes);
+                        isBlurred = true;
+                        anyContactDetected = true;
+                    }
+                }
+
+                // 3. Kompresi ke WebP (Client-Side)
+                const webpFile = await compressImageToWebP(fileToProcess);
                 const preview = URL.createObjectURL(webpFile);
                 newItems.push({
                     id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                     file: webpFile,
                     preview,
                     category,
-                    caption: category
+                    caption: category,
+                    isBlurred
                 });
             } catch (err) {
-                console.error("Error compressing image:", err);
+                console.error("Error processing photo:", err);
                 const preview = URL.createObjectURL(file);
                 newItems.push({
                     id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -2930,6 +3069,11 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     caption: category
                 });
             }
+        }
+
+        setIsScanningBanner(false);
+        if (anyContactDetected) {
+            setBannerNotice('Foto Anda terdeteksi memuat informasi kontak langsung/spanduk sewa dan telah disamarkan secara otomatis oleh sistem demi keamanan transaksi.');
         }
         setNewPhotoItems(prev => [...prev, ...newItems]);
     };
@@ -4656,6 +4800,39 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             )}
                         </div>
 
+                        {/* Banner Deteksi & Penyamaran Kontak AI */}
+                        {bannerNotice && (
+                            <div className="bg-amber-50/90 border border-amber-300 text-amber-950 p-4 rounded-3xl flex items-start justify-between gap-3 shadow-xs animate-in fade-in duration-200">
+                                <div className="flex items-start gap-2.5">
+                                    <div className="w-7 h-7 rounded-xl bg-amber-200/80 text-amber-800 flex items-center justify-center shrink-0 mt-0.5">
+                                        <ShieldAlert size={16} />
+                                    </div>
+                                    <div className="text-xs">
+                                        <p className="font-black text-amber-900 uppercase tracking-wider">Perlindungan Kontak &amp; Privasi Aktif</p>
+                                        <p className="text-amber-800 mt-0.5 font-medium leading-relaxed">{bannerNotice}</p>
+                                    </div>
+                                </div>
+                                <button 
+                                    type="button" 
+                                    onClick={() => setBannerNotice(null)}
+                                    className="text-amber-500 hover:text-amber-800 text-lg font-black leading-none p-1"
+                                    title="Tutup pemberitahuan"
+                                >
+                                    &times;
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Status Pemindaian Banner AI */}
+                        {isScanningBanner && (
+                            <div className="bg-blue-50/90 border border-blue-200 text-blue-950 px-4 py-3 rounded-2xl flex items-center gap-2.5 shadow-xs animate-in fade-in duration-200">
+                                <Loader2 className="w-4 h-4 text-blue-600 animate-spin shrink-0" />
+                                <span className="text-xs font-bold text-blue-900">
+                                    Memindai foto dengan Gemini 3.7 Flash untuk mendeteksi nomor kontak &amp; spanduk sewa...
+                                </span>
+                            </div>
+                        )}
+
                         {/* SECTION A: Foto Area & Fasilitas Umum */}
                         <div className="space-y-4">
                             <div className="flex items-center gap-2">
@@ -4763,9 +4940,15 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                             {currentCatNew.map((item) => (
                                                 <div key={item.id} className="aspect-square rounded-2xl overflow-hidden border-2 border-orange-400 relative group bg-gray-50 shadow-xs animate-in zoom-in-95 duration-200">
                                                     <img src={item.preview} alt={cat.label} className="w-full h-full object-cover" />
-                                                    <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
-                                                        Baru
-                                                    </span>
+                                                    {item.isBlurred ? (
+                                                        <span className="absolute top-1.5 left-1.5 bg-rose-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider flex items-center gap-0.5" title="Nomor kontak/spanduk terdeteksi dan disamarkan secara otomatis">
+                                                            <ShieldAlert size={9} /> Disamarkan
+                                                        </span>
+                                                    ) : (
+                                                        <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
+                                                            Baru
+                                                        </span>
+                                                    )}
                                                     <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
                                                         <button 
                                                             type="button" 
@@ -4909,9 +5092,15 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 {currentCatNew.map((item) => (
                                                     <div key={item.id} className="aspect-square rounded-2xl overflow-hidden border-2 border-orange-400 relative group bg-gray-50 shadow-xs animate-in zoom-in-95 duration-200">
                                                         <img src={item.preview} alt={cat.label} className="w-full h-full object-cover" />
-                                                        <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
-                                                            Baru
-                                                        </span>
+                                                        {item.isBlurred ? (
+                                                            <span className="absolute top-1.5 left-1.5 bg-rose-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider flex items-center gap-0.5" title="Nomor kontak/spanduk terdeteksi dan disamarkan secara otomatis">
+                                                                <ShieldAlert size={9} /> Disamarkan
+                                                            </span>
+                                                        ) : (
+                                                            <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
+                                                                Baru
+                                                            </span>
+                                                        )}
                                                         <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
                                                             <button 
                                                                 type="button" 

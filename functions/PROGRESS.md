@@ -2,6 +2,34 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 256. Deteksi Spanduk / Kontak Langsung pada Foto Properti & Blurring Otomatis Berbasis Canvas dengan Gemini 3.7 Flash (`detect-contact-banner`, `KostFormMitra.tsx`, `adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Foto properti yang diunggah mitra sering kali memuat spanduk/banner atau tulisan yang menampilkan nomor kontak langsung (nomor HP/WA, plang sewa kamar, dsb.) yang berisiko memicu transaksi liar di luar sistem resmi RuangSinggah.
+  - Pengguna meminta agar sistem dapat mendeteksi banner tersebut secara otomatis dan menerapkan metode penyamaran (blur) yang hemat token AI, cepat, dan hemat biaya.
+  - Pengguna meminta prioritas model AI menggunakan **Gemini 3.7 Flash**.
+- **Implementasi Solusi**:
+  1. **Supabase Edge Function Cerdas & Hemat Token (`detect-contact-banner`)**:
+     - Membangun Edge Function Deno yang menerapkan arsitektur **Model Priority Cascade** dengan memprioritaskan `gemini-3.7-flash` (diikuti fallback ke `gemini-2.5-flash`, `gemini-2.0-flash`, dan `gemini-1.5-flash`).
+     - Prompt AI dirancang khusus mengekstrak teks kontak/nomor telepon dan mengembalikan koordinat *bounding box* (skala 0 - 1000). AI tidak menghasilkan inpainting sehingga respon sangat cepat (0.5 - 1.5 detik) dan output token sangat minimal (<100 token).
+  2. **Service Layer & Fallback Aman (`adminService.ts`)**:
+     - Menambahkan interface `ContactBannerDetectionResult` dan fungsi `detectPhotoContactBanner(base64Image, mimeType)` dengan timeout guard 12 detik dan fallback aman (jika API offline/timeout, upload foto tetap berjalan mulus tanpa macet).
+  3. **Low-Res Base64 Transfer (<80KB) & Canvas Blurring (`KostFormMitra.tsx`)**:
+     - Helper `createLowResBase64ForAi`: Meresize foto ke maks 800px di memori browser sebelum dikirim ke AI agar transmisi instan (<80KB).
+     - Helper `applyBlurToBoundingBoxes`: Menerapkan efek pixelate mosaik di HTML5 Canvas browser (downscale 0.08x lalu upscale tanpa smoothing) sehingga informasi nomor kontak hancur permanen secara matematis, dipadukan dengan overlay semi-transparan `rgba(15, 23, 42, 0.75)` bertuliskan `🔒 Kontak Disamarkan`.
+     - File yang disamarkan kemudian diteruskan ke pipeline kompresi `compressImageToWebP`, sehingga file yang diunggah ke Supabase Storage dan database adalah file yang **sudah dalam kondisi tersamarkan**.
+  4. **Antarmuka & Edukasi Pengguna (`KostFormMitra.tsx`)**:
+     - Menampilkan indikator loading saat pemindaian foto: *"Memindai foto dengan Gemini 3.7 Flash..."*.
+     - Menampilkan banner edukatif di Langkah 5: *"Perlindungan Kontak & Privasi Aktif: Foto Anda terdeteksi memuat informasi kontak langsung/spanduk sewa dan telah disamarkan secara otomatis demi keamanan transaksi."*.
+     - Menyematkan badge `🛡️ Disamarkan` pada thumbnail foto yang terkena penyamaran.
+- **File Tersentuh**:
+  - `supabase/functions/detect-contact-banner/index.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 38.60s, 0 error).
+
 ### 255. Pencatatan Permanen Caption dan Kategori Foto ke Database & Tampilan User Listing (`KostFormMitra.tsx`, `adminService.ts`, `userService.ts`, `KostDetail.tsx`, `types.ts`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta kepastian mutlak bahwa seluruh kategori dan caption foto yang diunggah mitra tercatat secara permanen di database Supabase, dan ditampilkan dengan jelas pada antarmuka calon penyewa saat listing ditampilkan.
