@@ -6,12 +6,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Model priority cascade: Prioritaskan Gemini 3.7 Flash, dengan fallback otomatis ke versi Flash lainnya
+// Model priority cascade: Gunakan model aktif Gemini Flash teruji dengan fallback otomatis
 const CANDIDATE_MODELS = [
-  "gemini-3.7-flash",
   "gemini-2.5-flash",
   "gemini-2.0-flash",
-  "gemini-1.5-flash"
+  "gemini-1.5-flash",
+  "gemini-3.7-flash"
 ];
 
 serve(async (req) => {
@@ -21,6 +21,7 @@ serve(async (req) => {
 
   try {
     const { imageUrl, base64Image, mimeType } = await req.json();
+    console.log("[EDGE_BANNER] Request diterima, panjang base64:", base64Image ? base64Image.length : 0);
 
     const GEMINI_KEYS_RAW = Deno.env.get('GEMINI_API_KEY') || "";
     const GEMINI_KEYS = GEMINI_KEYS_RAW.split(',').map(k => k.trim()).filter(k => k);

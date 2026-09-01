@@ -5314,8 +5314,9 @@ export const detectPhotoContactBanner = async (
   mimeType = 'image/webp'
 ): Promise<ContactBannerDetectionResult> => {
   try {
+    console.log('[AI_BANNER] Memanggil Edge Function detect-contact-banner...');
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Deteksi banner kontak timeout (12s)')), 12000)
+      setTimeout(() => reject(new Error('Deteksi banner kontak timeout (18s)')), 18000)
     );
 
     const invokePromise = supabase.functions.invoke('detect-contact-banner', {
@@ -5323,10 +5324,16 @@ export const detectPhotoContactBanner = async (
     });
 
     const res: any = await Promise.race([invokePromise, timeoutPromise]);
+    console.log('[AI_BANNER] Respon Supabase Edge Function:', res);
     const { data: aiRes, error: aiErr } = res || {};
+
+    if (aiErr) {
+      console.error('[AI_BANNER] Error invoke Edge Function:', aiErr);
+    }
 
     if (!aiErr && aiRes && aiRes.success && aiRes.data) {
       const data = aiRes.data;
+      console.log('[AI_BANNER] Sukses mendeteksi:', data);
       return {
         hasContact: !!data.has_contact,
         detectedTexts: Array.isArray(data.detected_texts) ? data.detected_texts : [],
@@ -5335,7 +5342,7 @@ export const detectPhotoContactBanner = async (
     }
     return { hasContact: false, detectedTexts: [], boxes: [] };
   } catch (err) {
-    console.warn('Pemeriksaan banner kontak dilewati (fallback aman):', err);
+    console.warn('[AI_BANNER] Pemeriksaan banner kontak dilewati (fallback aman):', err);
     return { hasContact: false, detectedTexts: [], boxes: [] };
   }
 };
