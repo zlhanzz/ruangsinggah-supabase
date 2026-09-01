@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Kost, DatabaseProduct } from './types';
+import { Kost, DatabaseProduct, ImageUrlObject } from './types';
 import { notifyAdminTransaction } from './emailService';
 import { getCurrentDate } from './utils/timeUtils';
 
@@ -15,8 +15,30 @@ const convertTimestamp = (ts: any): string => {
 const getDisplayImageUrl = (img: any): string => {
   if (!img) return '';
   if (typeof img === 'string') return ensureAbsoluteUrl(img, 'properties');
-  const path = img.webp || img.original || img.thumbnail || '';
+  const path = img.webp || img.original || img.thumbnail || img.url || '';
   return ensureAbsoluteUrl(path, 'properties');
+};
+
+// Helper to extract rich image object with full metadata (url, label, category, caption)
+export const getDisplayImageObject = (img: any): ImageUrlObject | null => {
+  if (!img) return null;
+  if (typeof img === 'string') {
+    const u = ensureAbsoluteUrl(img, 'properties');
+    return { original: u, url: u, label: '', category: '', caption: '' };
+  }
+  const path = img.webp || img.original || img.thumbnail || img.url || '';
+  const u = ensureAbsoluteUrl(path, 'properties');
+  const label = img.label || img.category || '';
+  const category = img.category || img.label || '';
+  const caption = img.caption || label || category || '';
+  return {
+    ...img,
+    original: ensureAbsoluteUrl(img.original || path, 'properties'),
+    url: u,
+    label,
+    category,
+    caption
+  };
 };
 
 // Helper to ensure URL is absolute (Supabase Storage support)
@@ -109,6 +131,7 @@ export async function getPublishedProperties(): Promise<Kost[]> {
     return data.map((row) => {
       const rawImages = row.image_urls || [];
       const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
+      const photosMeta = rawImages.map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
 
       const rawVideos = row.video_urls || [];
       const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');
@@ -131,6 +154,7 @@ export async function getPublishedProperties(): Promise<Kost[]> {
         rating: row.rating || 0,
         location: row.location || { lat: 0, lng: 0 },
         imageUrls: images,
+        photosMeta,
         videoUrls: videos,
         instagramUrl: row.instagram_url || '',
         tiktokUrl: row.tiktok_url || '',
@@ -171,6 +195,7 @@ export async function getPublishedPropertyDetails(propertyId: string): Promise<K
 
     const rawImages = row.image_urls || [];
     const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
+    const photosMeta = rawImages.map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
 
     const rawVideos = row.video_urls || [];
     const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');
@@ -191,6 +216,7 @@ export async function getPublishedPropertyDetails(propertyId: string): Promise<K
       rating: row.rating || 0,
       location: row.location || { lat: 0, lng: 0 },
       imageUrls: images,
+      photosMeta,
       videoUrls: videos,
       instagramUrl: row.instagram_url || '',
       tiktokUrl: row.tiktok_url || '',

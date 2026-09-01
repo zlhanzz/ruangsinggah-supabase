@@ -6,7 +6,7 @@ import {
     X, ChevronRight, ChevronLeft, Camera, Video, MapPin, Home, Wifi,
     Plus, Trash2, Check, AlertCircle, Loader2, Upload, Image as ImageIcon,
     Phone, BookOpen, DollarSign, Search, Navigation, ShieldCheck, User, Users, Maximize2,
-    Crosshair, CheckCircle2, Sparkles, LocateFixed, FileText, RotateCcw, Save, Droplets, Bed
+    Crosshair, CheckCircle2, Sparkles, LocateFixed, FileText, RotateCcw, Save, Droplets, Bed, Edit3
 } from 'lucide-react';
 
 interface KostFormMitraProps {
@@ -84,6 +84,7 @@ interface NewPhotoItem {
     file: File;
     preview: string;
     category: string;
+    caption?: string;
 }
 
 const initialForm: Partial<Kost> = {
@@ -2197,6 +2198,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [tempRule, setTempRule] = useState('');
+    const [editingCaptionTarget, setEditingCaptionTarget] = useState<{ id: string; isNew: boolean; caption: string; catLabel: string; raw?: any } | null>(null);
     
     // State sub-wizard pengisian kamar bertahap (Langkah 3)
     const [editingRoomIndex, setEditingRoomIndex] = useState<number | null>(null);
@@ -2914,7 +2916,8 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                     file: webpFile,
                     preview,
-                    category
+                    category,
+                    caption: category
                 });
             } catch (err) {
                 console.error("Error compressing image:", err);
@@ -2923,11 +2926,32 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     id: `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                     file,
                     preview,
-                    category
+                    category,
+                    caption: category
                 });
             }
         }
         setNewPhotoItems(prev => [...prev, ...newItems]);
+    };
+
+    const updateNewPhotoCaption = (id: string, caption: string) => {
+        setNewPhotoItems(prev => prev.map(p => p.id === id ? { ...p, caption } : p));
+    };
+
+    const updateExistingPhotoCaption = (targetRaw: any, caption: string) => {
+        const cur = form.imageUrls || [];
+        const updated = cur.map((u: any) => {
+            const src = typeof u === 'string' ? u : (u?.original || u?.url);
+            const targetSrc = typeof targetRaw === 'string' ? targetRaw : (targetRaw?.original || targetRaw?.url);
+            if (src === targetSrc) {
+                if (typeof u === 'string') {
+                    return { original: u, url: u, caption };
+                }
+                return { ...u, caption };
+            }
+            return u;
+        });
+        upd('imageUrls', updated);
     };
 
     const removeNewPhotoItem = (id: string) => {
@@ -3370,18 +3394,29 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 return 0;
             });
 
-            const uploadPayload = sortedNewItems.map(item => ({
-                file: item.file,
-                label: item.category,
-                category: item.category
-            }));
+            const uploadPayload = sortedNewItems.map(item => {
+                const finalCategory = item.category;
+                const finalCaption = (item.caption && item.caption.trim()) ? item.caption.trim() : item.category;
+                return {
+                    file: item.file,
+                    label: finalCategory,
+                    category: finalCategory,
+                    caption: finalCaption
+                };
+            });
 
             const existingImagesWithLabels = (form.imageUrls || []).map((img: any, idx: number) => {
                 const url = typeof img === 'string' ? img : (img?.original || img?.url || '');
                 const label = typeof img === 'object' && (img?.label || img?.category)
                     ? (img.label || img.category)
                     : (Array.isArray(form.photoCategories) && form.photoCategories[idx] ? form.photoCategories[idx] : (idx === 0 ? 'Bangunan Depan' : 'Fasilitas Lainnya'));
-                return { original: url, url, label, category: label };
+                const category = typeof img === 'object' && (img?.category || img?.label)
+                    ? (img.category || img.label)
+                    : label;
+                const caption = typeof img === 'object' && (img?.caption && String(img.caption).trim())
+                    ? String(img.caption).trim()
+                    : (label || category || 'Foto Properti');
+                return { original: url, url, label, category, caption };
             }).sort((a: any, b: any) => {
                 if (a.label === 'Bangunan Depan' && b.label !== 'Bangunan Depan') return -1;
                 if (a.label !== 'Bangunan Depan' && b.label === 'Bangunan Depan') return 1;
@@ -3397,15 +3432,26 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             }
 
             const allPhotoCategories = Array.from(new Set([
-                ...existingImagesWithLabels.map((img: any) => img.label),
+                ...existingImagesWithLabels.map((img: any) => img.label || img.category),
                 ...sortedNewItems.map(item => item.category)
             ]));
+
+            const categorizedPhotosMap: Record<string, string[]> = {};
+            existingImagesWithLabels.forEach((img: any) => {
+                const cat = img.label || img.category || 'Foto Properti';
+                const u = img.original || img.url;
+                if (u) {
+                    if (!categorizedPhotosMap[cat]) categorizedPhotosMap[cat] = [];
+                    categorizedPhotosMap[cat].push(u);
+                }
+            });
 
             const data = { 
                 ...form, 
                 ...contactUpdates, 
                 imageUrls: existingImagesWithLabels,
                 photoCategories: allPhotoCategories,
+                categorizedPhotos: categorizedPhotosMap,
                 price: finalPrice, 
                 managed_by: managementOption 
             };
@@ -4571,7 +4617,8 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     } else if (idx > 0) {
                         cat = 'Fasilitas Lainnya';
                     }
-                    return { src, cat, raw: img, idx };
+                    const caption = typeof img === 'object' && img?.caption ? img.caption : cat;
+                    return { src, cat, caption, raw: img, idx };
                 }).filter(p => !!p.src);
 
                 const totalAllPhotos = existingWithCats.length + newPhotoItems.length;
@@ -4590,7 +4637,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         </h3>
                                     </div>
                                     <p className="text-xs text-gray-600 mt-1">
-                                        Daftar foto otomatis menyesuaikan dengan fasilitas umum dan tipe kamar yang Anda pilih.
+                                        Daftar foto otomatis menyesuaikan dengan fasilitas umum dan tipe kamar yang Anda pilih. Anda juga dapat memberi keterangan (caption) pada masing-masing foto.
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -4683,16 +4730,32 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                             Cover
                                                         </span>
                                                     )}
-                                                    <button 
-                                                        type="button" 
-                                                        onClick={() => removeExistingImage(p.raw)}
-                                                        className="absolute top-1.5 right-1.5 bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
-                                                        title="Hapus foto ini"
-                                                    >
-                                                        &times;
-                                                    </button>
-                                                    <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white font-bold text-center truncate">
-                                                        {cat.label}
+                                                    <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setEditingCaptionTarget({
+                                                                id: `existing-${idx}`,
+                                                                isNew: false,
+                                                                caption: p.caption || cat.label,
+                                                                catLabel: cat.label,
+                                                                raw: p.raw
+                                                            })}
+                                                            className="bg-gray-900/80 hover:bg-orange-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md transition-all active:scale-90"
+                                                            title="Beri Keterangan / Caption Foto"
+                                                        >
+                                                            <Edit3 size={11} />
+                                                        </button>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => removeExistingImage(p.raw)}
+                                                            className="bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
+                                                            title="Hapus foto ini"
+                                                        >
+                                                            &times;
+                                                        </button>
+                                                    </div>
+                                                    <div className="absolute bottom-0 inset-x-0 bg-black/75 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white text-center">
+                                                        <p className="font-bold truncate">{p.caption || cat.label}</p>
                                                     </div>
                                                 </div>
                                             ))}
@@ -4703,16 +4766,31 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                     <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
                                                         Baru
                                                     </span>
-                                                    <button 
-                                                        type="button" 
-                                                        onClick={() => removeNewPhotoItem(item.id)}
-                                                        className="absolute top-1.5 right-1.5 bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
-                                                        title="Hapus foto ini"
-                                                    >
-                                                        &times;
-                                                    </button>
-                                                    <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white font-bold text-center truncate">
-                                                        {cat.label}
+                                                    <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setEditingCaptionTarget({
+                                                                id: item.id,
+                                                                isNew: true,
+                                                                caption: item.caption || cat.label,
+                                                                catLabel: cat.label
+                                                            })}
+                                                            className="bg-gray-900/80 hover:bg-orange-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md transition-all active:scale-90"
+                                                            title="Beri Keterangan / Caption Foto"
+                                                        >
+                                                            <Edit3 size={11} />
+                                                        </button>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => removeNewPhotoItem(item.id)}
+                                                            className="bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
+                                                            title="Hapus foto ini"
+                                                        >
+                                                            &times;
+                                                        </button>
+                                                    </div>
+                                                    <div className="absolute bottom-0 inset-x-0 bg-black/75 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white text-center">
+                                                        <p className="font-bold truncate">{item.caption || cat.label}</p>
                                                     </div>
                                                 </div>
                                             ))}
@@ -4798,16 +4876,32 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 {currentCatExisting.map((p, idx) => (
                                                     <div key={`existing-${idx}`} className="aspect-square rounded-2xl overflow-hidden border border-gray-200 relative group bg-gray-50">
                                                         <img src={p.src} alt={cat.label} className="w-full h-full object-cover" />
-                                                        <button 
-                                                            type="button" 
-                                                            onClick={() => removeExistingImage(p.raw)}
-                                                            className="absolute top-1.5 right-1.5 bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
-                                                            title="Hapus foto ini"
-                                                        >
-                                                            &times;
-                                                        </button>
-                                                        <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white font-bold text-center truncate">
-                                                            {cat.label}
+                                                        <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={() => setEditingCaptionTarget({
+                                                                    id: `existing-${idx}`,
+                                                                    isNew: false,
+                                                                    caption: p.caption || cat.label,
+                                                                    catLabel: cat.label,
+                                                                    raw: p.raw
+                                                                })}
+                                                                className="bg-gray-900/80 hover:bg-orange-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md transition-all active:scale-90"
+                                                                title="Beri Keterangan / Caption Foto"
+                                                            >
+                                                                <Edit3 size={11} />
+                                                            </button>
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={() => removeExistingImage(p.raw)}
+                                                                className="absolute top-1.5 right-1.5 bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
+                                                                title="Hapus foto ini"
+                                                            >
+                                                                &times;
+                                                            </button>
+                                                        </div>
+                                                        <div className="absolute bottom-0 inset-x-0 bg-black/75 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white text-center">
+                                                            <p className="font-bold truncate">{p.caption || cat.label}</p>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -4818,16 +4912,31 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
                                                             Baru
                                                         </span>
-                                                        <button 
-                                                            type="button" 
-                                                            onClick={() => removeNewPhotoItem(item.id)}
-                                                            className="absolute top-1.5 right-1.5 bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
-                                                            title="Hapus foto ini"
-                                                        >
-                                                            &times;
-                                                        </button>
-                                                        <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white font-bold text-center truncate">
-                                                            {cat.label}
+                                                        <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={() => setEditingCaptionTarget({
+                                                                    id: item.id,
+                                                                    isNew: true,
+                                                                    caption: item.caption || cat.label,
+                                                                    catLabel: cat.label
+                                                                })}
+                                                                className="bg-gray-900/80 hover:bg-orange-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md transition-all active:scale-90"
+                                                                title="Beri Keterangan / Caption Foto"
+                                                            >
+                                                                <Edit3 size={11} />
+                                                            </button>
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={() => removeNewPhotoItem(item.id)}
+                                                                className="bg-red-600/90 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shadow-md transition-all active:scale-90"
+                                                                title="Hapus foto ini"
+                                                            >
+                                                                &times;
+                                                            </button>
+                                                        </div>
+                                                        <div className="absolute bottom-0 inset-x-0 bg-black/75 backdrop-blur-xs py-1 px-1.5 text-[9px] text-white text-center">
+                                                            <p className="font-bold truncate">{item.caption || cat.label}</p>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -4884,6 +4993,71 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                 + Kategori
                             </button>
                         </div>
+
+                        {/* Modal Dialog Edit Caption Foto */}
+                        {editingCaptionTarget && (
+                            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+                                <div className="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+                                    <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                                        <div className="flex items-center gap-2">
+                                            <Edit3 className="w-4 h-4 text-orange-600" />
+                                            <h5 className="text-xs font-black text-gray-900 uppercase tracking-wider">Keterangan / Caption Foto</h5>
+                                        </div>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setEditingCaptionTarget(null)}
+                                            className="text-gray-400 hover:text-gray-600 text-lg leading-none font-bold"
+                                        >
+                                            &times;
+                                        </button>
+                                    </div>
+                                    <div className="py-4 space-y-3">
+                                        <div className="bg-orange-50 text-orange-800 text-[11px] p-2.5 rounded-xl border border-orange-200/60">
+                                            <span className="font-bold">Kategori: </span>{editingCaptionTarget.catLabel}
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">
+                                                Caption / Keterangan Tambahan:
+                                            </label>
+                                            <input 
+                                                type="text"
+                                                value={editingCaptionTarget.caption}
+                                                onChange={(e) => setEditingCaptionTarget(prev => prev ? { ...prev, caption: e.target.value } : null)}
+                                                placeholder="Contoh: Tampak depan dari gerbang utama"
+                                                className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 font-medium"
+                                                maxLength={80}
+                                                autoFocus
+                                            />
+                                            <span className="text-[10px] text-gray-400 mt-1 block text-right">Maks. 80 karakter</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingCaptionTarget(null)}
+                                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors"
+                                        >
+                                            Batal
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const finalCap = editingCaptionTarget.caption.trim() || editingCaptionTarget.catLabel;
+                                                if (editingCaptionTarget.isNew) {
+                                                    updateNewPhotoCaption(editingCaptionTarget.id, finalCap);
+                                                } else if (editingCaptionTarget.raw) {
+                                                    updateExistingPhotoCaption(editingCaptionTarget.raw, finalCap);
+                                                }
+                                                setEditingCaptionTarget(null);
+                                            }}
+                                            className="px-4 py-1.5 rounded-xl text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white transition-colors shadow-xs"
+                                        >
+                                            Simpan Keterangan
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 );
             }

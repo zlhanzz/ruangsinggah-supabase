@@ -2,6 +2,41 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 255. Pencatatan Permanen Caption dan Kategori Foto ke Database & Tampilan User Listing (`KostFormMitra.tsx`, `adminService.ts`, `userService.ts`, `KostDetail.tsx`, `types.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta kepastian mutlak bahwa seluruh kategori dan caption foto yang diunggah mitra tercatat secara permanen di database Supabase, dan ditampilkan dengan jelas pada antarmuka calon penyewa saat listing ditampilkan.
+- **Implementasi Solusi**:
+  1. **Standardisasi Type Data & Objek Media Kaya (`types.ts`)**:
+     - Memperluas interface `ImageUrlObject` dengan atribut lengkap: `url?: string; label?: string; category?: string; caption?: string;`.
+     - Menambahkan properti `photosMeta?: ImageUrlObject[];` pada antarmuka publik `Kost`.
+  2. **Persistensi Database Multi-Layer (`adminService.ts`)**:
+     - Pada `addPropertyWithMedia` dan `updatePropertyWithMedia`:
+       - Setiap foto yang diunggah mitra menghasilkan objek media kaya: `{ original, url, label, category, caption }`.
+       - Objek disimpan ke kolom `image_urls` (JSONB), `photo_categories` (Text Array), `categorized_photos` (JSONB mapping per kategori), serta `metadata.photos_meta` (JSONB).
+  3. **Pengambilan Data Front-End Publik Bebas Regresi (`userService.ts`)**:
+     - Menambahkan helper `getDisplayImageObject(img)` yang mengekstrak metadata foto (`url`, `original`, `label`, `category`, `caption`).
+     - Memperbarui `getPublishedProperties` dan `getPublishedPropertyDetails` agar menyertakan `photosMeta` tanpa merusak kompatibilitas `imageUrls` (array of string URL absolut) untuk komponen kartu lain.
+  4. **Antarmuka Pengisian & Edit Caption Mitra (`KostFormMitra.tsx`)**:
+     - Menambahkan interface `NewPhotoItem.caption?: string` dengan inisialisasi default terisi nama kategori foto.
+     - Menyediakan tombol edit caption `Edit3` di samping tombol hapus `×` pada setiap thumbnail foto baru maupun foto lama.
+     - Menghadirkan modal pop-up interaktif untuk mengubah dan memberi keterangan detail pada setiap foto.
+     - Menyusun upload payload dan draft update dengan membawa metadata `file`, `label`, `category`, dan `caption`.
+  5. **Tampilan Dinamis di Sisi Pengguna (`KostDetail.tsx`)**:
+     - Mengekstrak `PhotoItem` dengan membaca `photosMeta` dari database jika tersedia, serta fallback ke `image_urls` dan `categorizedPhotos`.
+     - Menampilkan badge kategori foto di sudut kiri atas carousel utama (`🏠 Bangunan Depan (Fasad)`, `🛏️ Kamar: Standard`, dll.).
+     - Menampilkan info foto dan counter di sudut kanan bawah (`📸 1 / N FOTO • [Label / Kategori]`).
+     - Menampilkan banner caption foto terpadu di kiri bawah jika foto memiliki caption keterangan detail yang berbeda dari nama kategorinya.
+- **File Tersentuh**:
+  - `functions/public/types.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/userService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, 58.09s, 0 error).
+
 ### 254. Pengetatan Aturan Validasi Input Kost Mitra (Wizard Flow 1 - 6) & Saklar Eksklusif WC (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Tombol navigasi "Lanjut" pada form pendaftaran mitra sebelumnya dapat ditekan untuk melompati langkah wizard tanpa memeriksa kelengkapan data esensial.

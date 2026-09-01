@@ -125,15 +125,20 @@ export interface Kost {
   // KostManager / Management Type
   managed_by?: 'self' | 'kostmanager';
 
-  // Photo categories from survey
+  // Photo categories and metadata from survey / mitra input
   photoCategories?: string[];
   categorizedPhotos?: Record<string, string[]>;
+  photosMeta?: ImageUrlObject[];
 }
 
 export interface ImageUrlObject {
   original: string;
+  url?: string;
   webp?: string;
   thumbnail?: string;
+  label?: string;
+  category?: string;
+  caption?: string;
 }
 
 export interface DatabaseProduct {

@@ -10,7 +10,7 @@ import { incrementPropertyView, createBookingRequest, submitPropertyReport, uplo
 import { notifyAdminPropertyReport } from '../emailService';
 import { getOrCreateChatSession, SYSTEM_ADMIN_ID } from '../chatService';
 import { supabase } from '../supabase';
-import { Bed, Home, Camera, Sparkles, CheckCircle2, ChevronDown, Layers, Flag, ShieldAlert, AlertTriangle, X, Check, Upload, Image as ImageIcon, Send, Phone, User as UserIcon } from 'lucide-react';
+import { Bed, Home, Camera, Sparkles, CheckCircle2, ChevronDown, Layers, Flag, ShieldAlert, AlertTriangle, X, Check, Upload, Image as ImageIcon, Send, Phone, User as UserIcon, MessageSquare } from 'lucide-react';
 
 interface KostDetailProps {
   kost: Kost;
@@ -316,6 +316,8 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   interface PhotoItem {
     url: string;
     label: string;
+    category?: string;
+    caption?: string;
     isRoom: boolean;
     roomName?: string;
   }
@@ -332,33 +334,77 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
       .trim();
   };
 
-  // Extract all property-level photos with their surveyed category labels (Only if present in database)
+  // Helper map from photosMeta if available from database
+  const photosMetaMap = useMemo(() => {
+    const map = new Map<string, { label?: string; category?: string; caption?: string }>();
+    if (Array.isArray(kost.photosMeta)) {
+      kost.photosMeta.forEach(pm => {
+        const u = pm.url || pm.original;
+        if (u) {
+          map.set(u, {
+            label: pm.label || pm.category,
+            category: pm.category || pm.label,
+            caption: pm.caption
+          });
+        }
+      });
+    }
+    return map;
+  }, [kost.photosMeta]);
+
+  // Extract all property-level photos with their surveyed category labels and captions (Only if present in database)
   const propertyPhotos: PhotoItem[] = (kost.imageUrls || []).map((img: any, idx: number) => {
     const url = typeof img === 'string' ? img : (img?.url || img?.original || img?.thumbnail || '');
     let label = '';
-    if (typeof img === 'object' && (img.label || img.category || img.caption || img.title)) {
-      label = img.label || img.category || img.caption || img.title;
-    } else if (Array.isArray(kost.photoCategories) && kost.photoCategories[idx]) {
-      label = kost.photoCategories[idx];
-    } else if (Array.isArray((kost as any).photo_categories) && (kost as any).photo_categories[idx]) {
-      label = (kost as any).photo_categories[idx];
-    } else if (kost.categorizedPhotos && typeof kost.categorizedPhotos === 'object') {
-      for (const [catName, catUrls] of Object.entries(kost.categorizedPhotos)) {
-        if (Array.isArray(catUrls) && catUrls.includes(url)) {
-          label = catName;
-          break;
+    let category = '';
+    let caption = '';
+
+    const meta = photosMetaMap.get(url);
+    if (meta) {
+      label = meta.label || '';
+      category = meta.category || '';
+      caption = meta.caption || '';
+    }
+
+    if (!label && typeof img === 'object') {
+      label = img.label || img.category || img.title || '';
+      category = img.category || img.label || '';
+      caption = img.caption || '';
+    }
+
+    if (!label) {
+      if (Array.isArray(kost.photoCategories) && kost.photoCategories[idx]) {
+        label = kost.photoCategories[idx];
+      } else if (Array.isArray((kost as any).photo_categories) && (kost as any).photo_categories[idx]) {
+        label = (kost as any).photo_categories[idx];
+      } else if (kost.categorizedPhotos && typeof kost.categorizedPhotos === 'object') {
+        for (const [catName, catUrls] of Object.entries(kost.categorizedPhotos)) {
+          if (Array.isArray(catUrls) && catUrls.includes(url)) {
+            label = catName;
+            break;
+          }
         }
-      }
-    } else if ((kost as any).categorized_photos && typeof (kost as any).categorized_photos === 'object') {
-      for (const [catName, catUrls] of Object.entries((kost as any).categorized_photos)) {
-        if (Array.isArray(catUrls) && (catUrls as any[]).includes(url)) {
-          label = catName;
-          break;
+      } else if ((kost as any).categorized_photos && typeof (kost as any).categorized_photos === 'object') {
+        for (const [catName, catUrls] of Object.entries((kost as any).categorized_photos)) {
+          if (Array.isArray(catUrls) && (catUrls as any[]).includes(url)) {
+            label = catName;
+            break;
+          }
         }
       }
     }
 
-    return { url, label: cleanPhotoCategoryLabel(label), isRoom: false };
+    const cleanLabel = cleanPhotoCategoryLabel(label || category);
+    const cleanCategory = cleanPhotoCategoryLabel(category || label);
+    const finalCaption = caption && caption.trim() ? caption.trim() : cleanLabel;
+
+    return { 
+      url, 
+      label: cleanLabel, 
+      category: cleanCategory, 
+      caption: finalCaption, 
+      isRoom: false 
+    };
   }).filter(p => !!p.url);
 
   // Normalize all individual room units and extract their photos with survey category labels
@@ -942,13 +988,13 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                 )}
 
                 {/* Active Photo Info & Counter Badge */}
-                <div className="absolute bottom-6 right-6 bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/15 flex items-center gap-2">
-                  <Camera size={12} className="text-orange-400" />
-                  <span>{currentPhoto + 1} / {displayedImages.length} FOTO</span>
+                <div className="absolute bottom-6 right-6 max-w-[85%] bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/15 flex items-center gap-2">
+                  <Camera size={12} className="text-orange-400 shrink-0" />
+                  <span className="shrink-0">{currentPhoto + 1} / {displayedImages.length} FOTO</span>
                   {currentPhotoItem?.label ? (
                     <>
-                      <span className="text-white/40">•</span>
-                      <span className={currentPhotoItem.isRoom ? "text-orange-400 font-bold" : "text-emerald-400 font-bold"}>
+                      <span className="text-white/40 shrink-0">•</span>
+                      <span className={`truncate ${currentPhotoItem.isRoom ? "text-orange-400 font-bold" : "text-emerald-400 font-bold"}`}>
                         {currentPhotoItem.isRoom
                           ? (currentPhotoItem.roomName ? `${currentPhotoItem.roomName} - ${currentPhotoItem.label}` : currentPhotoItem.label)
                           : currentPhotoItem.label}
@@ -957,20 +1003,30 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                   ) : null}
                 </div>
 
-                {/* Active Category Tag Top Left (Only if valid label exists in database) */}
-                {currentPhotoItem && currentPhotoItem.label && (
-                  <div className="absolute top-6 left-6 bg-black/60 backdrop-blur-md text-white px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider shadow-lg border border-white/20 flex items-center gap-1.5">
+                {/* Active Category Tag Top Left */}
+                {currentPhotoItem && (currentPhotoItem.label || currentPhotoItem.category) && (
+                  <div className="absolute top-6 left-6 max-w-[80%] bg-black/60 backdrop-blur-md text-white px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider shadow-lg border border-white/20 flex items-center gap-1.5">
                     {currentPhotoItem.isRoom ? (
                       <>
-                        <Bed size={13} className="text-orange-400" />
-                        <span>{currentPhotoItem.roomName ? `${currentPhotoItem.roomName} • ${currentPhotoItem.label}` : currentPhotoItem.label}</span>
+                        <Bed size={13} className="text-orange-400 shrink-0" />
+                        <span className="truncate">{currentPhotoItem.roomName ? `${currentPhotoItem.roomName} • ${currentPhotoItem.label || currentPhotoItem.category}` : (currentPhotoItem.label || currentPhotoItem.category)}</span>
                       </>
                     ) : (
                       <>
-                        <Sparkles size={13} className="text-orange-400" />
-                        <span>{currentPhotoItem.label}</span>
+                        <Sparkles size={13} className="text-orange-400 shrink-0" />
+                        <span className="truncate">{currentPhotoItem.label || currentPhotoItem.category}</span>
                       </>
                     )}
+                  </div>
+                )}
+
+                {/* Photo Caption Overlay (Bottom Left) - Tampil jika caption ada dan berbeda dari kategori */}
+                {currentPhotoItem?.caption && (
+                  currentPhotoItem.caption.trim().toLowerCase() !== (currentPhotoItem.label || currentPhotoItem.category || '').trim().toLowerCase()
+                ) && (
+                  <div className="absolute bottom-6 left-6 max-w-[55%] hidden sm:flex items-center gap-1.5 bg-black/60 backdrop-blur-md text-white/95 px-3.5 py-2 rounded-2xl text-[11px] font-medium border border-white/15 shadow-md">
+                    <MessageSquare size={13} className="text-orange-400 shrink-0" />
+                    <span className="truncate" title={currentPhotoItem.caption}>{currentPhotoItem.caption}</span>
                   </div>
                 )}
               </div>

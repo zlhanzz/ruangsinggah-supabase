@@ -1933,13 +1933,17 @@ export async function addPropertyWithMedia(
   const newImageObjects: any[] = [];
   for (const item of imageFiles) {
     const rawFile = (item && 'file' in item) ? item.file : (item as File);
-    const label = (item && 'label' in item) ? (item.label || item.category) : undefined;
+    const label = (item && 'label' in item) ? (item.label || (item as any).category) : undefined;
+    const category = (item && 'category' in item) ? (item as any).category : label;
+    const caption = (item && 'caption' in item) ? (item as any).caption : (label || category);
     const webpFile = await convertToWebP(rawFile);
     const url = await uploadFileToStorage(webpFile, 'properties', `${user.id}/${tempId}/images/original`);
     newImageObjects.push({ 
       original: url, 
       url, 
-      ...(label ? { label } : {}) 
+      ...(label ? { label } : {}),
+      ...(category ? { category } : {}),
+      ...(caption ? { caption } : {})
     });
   }
 
@@ -1953,14 +1957,14 @@ export async function addPropertyWithMedia(
   const allImages = [...existingImages, ...newImageObjects];
   const derivedPhotoCategories = kostData.photoCategories && kostData.photoCategories.length > 0
     ? kostData.photoCategories
-    : allImages.map((img: any) => img.label || '');
+    : allImages.map((img: any) => img.label || img.category || '');
 
   const derivedCategorizedPhotos = (kostData.categorizedPhotos && Object.keys(kostData.categorizedPhotos).length > 0)
     ? kostData.categorizedPhotos
     : (() => {
         const catMap: Record<string, string[]> = {};
         allImages.forEach((img: any) => {
-          const cat = img.label || 'Foto Properti';
+          const cat = img.label || img.category || 'Foto Properti';
           const u = img.original || img.url;
           if (u) {
             if (!catMap[cat]) catMap[cat] = [];
@@ -1987,7 +1991,8 @@ export async function addPropertyWithMedia(
         ...(kostData.metadata || {}),
         province: kostData.province || '',
         photo_categories: derivedPhotoCategories,
-        categorized_photos: derivedCategorizedPhotos
+        categorized_photos: derivedCategorizedPhotos,
+        photos_meta: allImages
       },
       type: kostData.type,
       property_type: kostData.type, // Map the type specifically for Supabase DB
@@ -2093,15 +2098,19 @@ export async function updatePropertyWithMedia(
     })
   ]);
 
-  // Filter kept objects and sync labels from kostData.imageUrls if updated
+  // Filter kept objects and sync labels/category/caption from kostData.imageUrls if updated
   const finalImageObjects = (kostData.imageUrls && kostData.imageUrls.length > 0)
     ? kostData.imageUrls.map((img: any) => {
         if (typeof img === 'string') return { original: img, url: img };
+        const label = img.label || img.category || '';
+        const category = img.category || img.label || '';
+        const caption = img.caption || label || category || '';
         return {
           original: img.original || img.url || '',
           url: img.url || img.original || '',
-          ...(img.label ? { label: img.label } : {}),
-          ...(img.category ? { category: img.category } : {})
+          ...(label ? { label } : {}),
+          ...(category ? { category } : {}),
+          ...(caption ? { caption } : {})
         };
       })
     : currentImageObjects.filter((imgObj: any) => {
@@ -2119,17 +2128,21 @@ export async function updatePropertyWithMedia(
     return keptVideoStrings.includes(url);
   });
 
-  // Upload new files with category label support
+  // Upload new files with category label and caption support
   const newImageObjects: any[] = [];
   for (const item of newImageFiles) {
     const rawFile = (item && 'file' in item) ? item.file : (item as File);
-    const label = (item && 'label' in item) ? (item.label || item.category) : undefined;
+    const label = (item && 'label' in item) ? (item.label || (item as any).category) : undefined;
+    const category = (item && 'category' in item) ? (item as any).category : label;
+    const caption = (item && 'caption' in item) ? (item as any).caption : (label || category);
     const webpFile = await convertToWebP(rawFile);
     const url = await uploadFileToStorage(webpFile, 'properties', `${user.id}/${propertyId}/images/original`);
     newImageObjects.push({ 
       original: url, 
       url, 
-      ...(label ? { label } : {}) 
+      ...(label ? { label } : {}),
+      ...(category ? { category } : {}),
+      ...(caption ? { caption } : {})
     });
   }
 
@@ -2144,14 +2157,14 @@ export async function updatePropertyWithMedia(
 
   const derivedPhotoCategories = kostData.photoCategories && kostData.photoCategories.length > 0
     ? kostData.photoCategories
-    : allImages.map((img: any) => img.label || '');
+    : allImages.map((img: any) => img.label || img.category || '');
 
   const derivedCategorizedPhotos = (kostData.categorizedPhotos && Object.keys(kostData.categorizedPhotos).length > 0)
     ? kostData.categorizedPhotos
     : (() => {
         const catMap: Record<string, string[]> = {};
         allImages.forEach((img: any) => {
-          const cat = img.label || 'Foto Properti';
+          const cat = img.label || img.category || 'Foto Properti';
           const u = img.original || img.url;
           if (u) {
             if (!catMap[cat]) catMap[cat] = [];
@@ -2178,7 +2191,8 @@ export async function updatePropertyWithMedia(
         ...(kostData.metadata || {}),
         ...(kostData.province !== undefined ? { province: kostData.province } : {}),
         photo_categories: derivedPhotoCategories,
-        categorized_photos: derivedCategorizedPhotos
+        categorized_photos: derivedCategorizedPhotos,
+        photos_meta: allImages
       },
       type: kostData.type,
       property_type: kostData.type, // Sync added column
