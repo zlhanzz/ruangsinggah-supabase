@@ -2,6 +2,33 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 261. Perbaikan Presisi Logika Kategori Foto Dinamis Berdasarkan Fasilitas Umum & Tipe Kamar (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan anomali di Langkah 5 (Upload Foto): kategori foto "Ruang Tamu & Bersama" dan "Area Laundry & Jemuran" tiba-tiba muncul padahal pada Langkah 4 (Fasilitas Umum) kedua fasilitas tersebut sama sekali tidak dicentang.
+  - Pengguna mempertanyakan apakah sistem upload foto sudah berjalan dinamis mengikuti input tipe kamar dan fasilitas umum sebelumnya.
+- **Investigasi & Analisis Akar Masalah**:
+  - Ditemukan *regex keyword collision* pada fungsi `computeActivePhotoCategories`:
+    - Regex ruang tamu sebelumnya menggunakan `/(tamu|santai|bersama)/i`. Ketika mitra mencentang `Dapur Bersama` atau `Kulkas Bersama`, kata `"bersama"` memicu regex tersebut sehingga kartu Ruang Tamu salah dimunculkan (*false positive*).
+    - Regex laundry sebelumnya menggunakan `/(laundry|cuci|jemur)/i`. Ketika mitra mencentang sub-kelengkapan dapur `Wastafel Cuci Piring`, kata `"cuci"` memicu regex tersebut sehingga kartu Area Laundry salah dimunculkan (*false positive*).
+- **Implementasi Solusi**:
+  1. **Pencocokan Eksak (*Exact Match*) Fasilitas Utama**:
+     - Ruang Tamu: Hanya aktif jika fasilitas utama **`Ruang Tamu`** dipilih secara eksplisit (`ruang tamu`, `ruang santai`, `lobby`). Kata `"bersama"` dihapus total dari deteksi.
+     - Area Laundry & Jemuran: Hanya aktif jika fasilitas utama **`Laundry`** atau **`Area Jemuran`** dipilih secara eksplisit (`laundry`, `area jemuran`, `jemuran`). Kata `"cuci"` dihapus sehingga `Wastafel Cuci Piring` tidak pernah lagi memicu laundry.
+     - Dapur Bersama: Hanya aktif jika fasilitas utama `Dapur Bersama` dipilih.
+     - WC Umum: Hanya aktif jika fasilitas utama `WC Umum` dipilih.
+     - Area Parkir: Hanya aktif jika fasilitas utama `Area Parkir` (atau sub parkir motor/mobil) dipilih.
+     - Mushola: Menambahkan deteksi kartu foto ibadah jika `Mushola` dipilih.
+  2. **Perlindungan Sub-Kelengkapan dari Kategori Kustom**:
+     - Mendaftarkan seluruh sub-opsi fasilitas standar (`Kompor`, `Kulkas Bersama`, `Dispenser Air`, `Wastafel Cuci Piring`, `Peralatan Masak`, `Kloset Duduk`, `Shower`, dll.) ke dalam set `knownStandardFacilities` agar tidak pernah bocor menjadi kategori foto kustom tak terduga.
+  3. **Penegasan Sistem Foto Dinamis**:
+     - Memastikan seluruh tipe kamar di Langkah 3 ter-generate secara dinamis (`Kamar: ${roomName}`), dan kartu foto kamar mandi dalam / dapur dalam hanya muncul jika tipe kamar bersangkutan mencentang fasilitas tersebut.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 21.59s, 0 error).
+
 ### 260. Standardisasi Rasio 4:3 Landscape (1200 x 900) & Smart Center-Crop pada Input Foto Mitra (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna menanyakan ketersediaan penyesuaian rasio dan ukuran foto otomatis pada dashboard mitra, dan menunjuk sistem auto-crop yang sudah ada di pendataan KostManager agen (`convertToWebP` di `adminService.ts`).

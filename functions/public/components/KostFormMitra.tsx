@@ -2035,47 +2035,101 @@ const computeActivePhotoCategories = (
     currentForm: typeof initialForm,
     userCustomCats: string[] = []
 ): PublicPhotoCategoryDef[] => {
-    // 1. Kategori Area Umum Pokok
+    // 1. Kategori Area Umum Pokok (Selalu Ada)
     const categories: PublicPhotoCategoryDef[] = [
         { id: 'Bangunan Depan', label: 'Bangunan Depan (Fasad)', desc: 'Tampak depan gedung & jalan akses (Cover Utama)', required: true },
         { id: 'Koridor', label: 'Koridor & Akses Masuk', desc: 'Lorong antar kamar, tangga, atau pintu masuk utama' },
         { id: 'Lingkungan', label: 'Lingkungan Sekitar', desc: 'Suasana jalan dan lingkungan di sekitar kost' },
     ];
 
-    // 2. Kategori Area Umum Dinamis (Berdasarkan Fasilitas Gedung yang Dipilih)
+    // 2. Kategori Area Umum Dinamis (HANYA jika Fasilitas Utama yang Bersangkutan Dicentang)
     const currentFacilities = currentForm.facilities || [];
-    if (currentFacilities.some(f => /parkir/i.test(f))) {
+
+    // A. Area Parkir: aktif jika "Area Parkir" atau sub-opsinya dipilih
+    const hasParking = currentFacilities.some(f => {
+        const lower = f.toLowerCase().trim();
+        return lower === 'area parkir' || lower === 'parkir' || lower.startsWith('parkir ');
+    });
+    if (hasParking) {
         categories.push({ id: 'Area Parkir', label: 'Area Parkir', desc: 'Tempat parkir motor atau mobil penghuni' });
     }
-    if (currentFacilities.some(f => /dapur/i.test(f))) {
+
+    // B. Dapur Bersama: aktif jika fasilitas utama "Dapur Bersama" dipilih
+    const hasKitchen = currentFacilities.some(f => {
+        const lower = f.toLowerCase().trim();
+        return lower === 'dapur bersama' || lower === 'dapur' || lower === 'dapur umum';
+    });
+    if (hasKitchen) {
         categories.push({ id: 'Dapur Bersama', label: 'Dapur Bersama', desc: 'Area memasak bersama, wastafel, & kompor' });
     }
-    if (currentFacilities.some(f => /(wc|toilet|kamar mandi)/i.test(f))) {
+
+    // C. WC Umum: aktif jika fasilitas utama "WC Umum" atau "Kamar Mandi Luar" dipilih
+    const hasPublicBath = currentFacilities.some(f => {
+        const lower = f.toLowerCase().trim();
+        return lower === 'wc umum' || lower === 'toilet umum' || lower === 'wc luar' || lower === 'kamar mandi luar';
+    });
+    if (hasPublicBath) {
         categories.push({ id: 'WC Umum', label: 'WC Umum / Luar', desc: 'Kamar mandi luar untuk fasilitas bersama' });
     }
-    if (currentFacilities.some(f => /(tamu|santai|bersama)/i.test(f))) {
+
+    // D. Ruang Tamu: HANYA aktif jika fasilitas utama "Ruang Tamu" dipilih secara eksplisit
+    const hasLivingRoom = currentFacilities.some(f => {
+        const lower = f.toLowerCase().trim();
+        return lower === 'ruang tamu' || lower === 'ruang santai' || lower === 'lobby';
+    });
+    if (hasLivingRoom) {
         categories.push({ id: 'Ruang Tamu', label: 'Ruang Tamu & Bersama', desc: 'Ruang santai atau ruang tamu penerima kunjungan' });
     }
-    if (currentFacilities.some(f => /(laundry|cuci|jemur)/i.test(f))) {
+
+    // E. Area Laundry & Jemuran: HANYA aktif jika fasilitas utama "Laundry" atau "Area Jemuran" dipilih secara eksplisit
+    const hasLaundry = currentFacilities.some(f => {
+        const lower = f.toLowerCase().trim();
+        return lower === 'laundry' || lower === 'area jemuran' || lower === 'jemuran' || lower === 'tempat jemuran';
+    });
+    if (hasLaundry) {
         categories.push({ id: 'Area Laundry', label: 'Area Laundry & Jemuran', desc: 'Tempat mencuci dan menjemur pakaian' });
     }
 
-    // Fasilitas umum kustom yang diinput mitra otomatis jadi kategori foto
-    const customGeneralFacilities = currentFacilities.filter(f => !BUILDING_FACILITIES.includes(f));
+    // F. Mushola: aktif jika fasilitas "Mushola" dipilih
+    const hasMushola = currentFacilities.some(f => {
+        const lower = f.toLowerCase().trim();
+        return lower === 'mushola' || lower === 'musholla' || lower === 'surau';
+    });
+    if (hasMushola) {
+        categories.push({ id: 'Mushola', label: 'Mushola', desc: 'Fasilitas ibadah mushola bersama' });
+    }
+
+    // Kumpulan seluruh fasilitas standar dan sub-opsi kelengkapan agar tidak bocor menjadi kategori foto kustom
+    const knownStandardFacilities = new Set<string>([
+        // Fasilitas utama
+        'wifi', 'area parkir', 'parkir', 'dapur bersama', 'dapur', 'wc umum', 'toilet umum', 
+        'ruang tamu', 'cctv', 'laundry', 'mushola', 'area jemuran', 'jemuran', 'security 24 jam', 
+        'akses 24 jam', 'lift', 'cleaning service',
+        // Sub-opsi parkir
+        'parkir motor', 'parkir mobil', 'parkir sepeda',
+        // Sub-opsi dapur (jangan biarkan "Wastafel Cuci Piring" atau "Kulkas Bersama" bocor jadi kategori foto)
+        'kompor', 'kulkas bersama', 'kulkas', 'dispenser air', 'dispenser', 'wastafel cuci piring', 
+        'peralatan masak', 'meja makan bersama', 'meja makan',
+        // Sub-opsi WC umum
+        'kloset duduk', 'kloset jongkok', 'shower', 'wastafel'
+    ]);
+
+    // Fasilitas umum kustom murni (yang benar-benar diketik manual oleh mitra)
+    const customGeneralFacilities = currentFacilities.filter(f => !knownStandardFacilities.has(f.toLowerCase().trim()));
     customGeneralFacilities.forEach(cg => {
         if (!categories.some(c => c.id.toLowerCase() === cg.toLowerCase())) {
             categories.push({ id: cg, label: cg, desc: `Dokumentasi fasilitas ${cg}` });
         }
     });
 
-    // Tambahkan kategori kustom tambahan dari user
+    // Tambahkan kategori kustom tambahan dari user jika ada
     userCustomCats.forEach(cc => {
         if (!categories.some(c => c.id.toLowerCase() === cc.toLowerCase())) {
             categories.push({ id: cc, label: cc, desc: `Foto area ${cc} properti` });
         }
     });
 
-    // 3. Kategori Kamar Dinamis (Berdasarkan Tipe Kamar & Fasilitasnya)
+    // 3. Kategori Kamar Dinamis (Berdasarkan Tipe Kamar & Fasilitasnya di Langkah 3 & 4)
     (currentForm.roomTypes || []).forEach((room, ri) => {
         const roomName = room.name || `Tipe Kamar ${ri + 1}`;
         categories.push({
