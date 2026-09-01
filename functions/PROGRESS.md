@@ -2,6 +2,30 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 251. Adopsi Mekanisme Input Fasilitas Clean & Ringkas Dashboard Agen pada Formulir Mitra (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna lebih menyukai mekanisme sistem input fasilitas yang ada pada Dashboard Agen (`KostManagerPropertyFormModal.tsx` & `AgentDashboard.tsx`) karena terasa jauh lebih *clean*, ringkas, ringan, dan tidak membuat pusing (*nggak bikin mumet*).
+  - Pengguna ingin agar **mekanisme ringkasan input dari Dashboard Agen diadopsi**, namun **kelengkapan variasi fasilitas dari formulir mitra tetap dipertahankan 100%** untuk setiap kategorinya.
+- **Implementasi Solusi**:
+  1. **Tata Letak Grid 2 Kolom Bersih & Kompak Ala Dashboard Agen**:
+     - Mengubah komponen `HierarchicalPublicFacilityInput` dari kartu tebal bertingkat menjadi antarmuka grid 2 kolom dengan card checkbox baris ringkas (`label` ber-border halus, checkbox oranye instan, ikon emoji, dan teks tebal).
+     - Menyatukan seluruh fasilitas umum utama (WiFi, Area Parkir, Dapur Bersama, WC Umum, Ruang Tamu, CCTV, Laundry, Mushola, Area Jemuran, Security 24 Jam, Akses 24 Jam, Lift, Cleaning Service) dalam satu grid terpadu yang sangat rapi dan lega.
+  2. **Sub-Panel Inline Beraksen Garis Kiri (`border-l-2 border-orange-500`)**:
+     - Saat fasilitas induk (**Area Parkir**, **Dapur Bersama**, **WC Umum**) dicentang aktif, panel sub-kelengkapannya langsung terbuka secara inline pada baris berikutnya (`col-span-2`) tepat di bawah induk terkait.
+     - Menggunakan aksen garis oranye di sisi kiri (`border-l-2 border-orange-500 bg-orange-50/40 pl-4 py-2.5 rounded-r-xl`), memuat checkbox sub-kelengkapan ringkas dan form penambahan kustom secara terintegrasi.
+  3. **Penyesuaian Serupa pada Fasilitas per Tipe Kamar**:
+     - Mengadopsi card radio ringkas untuk pilihan `[ Kamar Mandi Dalam ]` vs `[ Kamar Mandi Luar ]`.
+     - Saat memilih Kamar Mandi Dalam, sub-kelengkapan kamar mandi (Kloset Duduk/Jongkok, Shower, Water Heater, Wastafel, dll.) mekar dengan aksen inline `border-l-2 border-orange-500`.
+  4. **Retensi Kelengkapan Mitra & Responsivitas 0ms**:
+     - Seluruh opsi kelengkapan mitra (termasuk tag kustom dan input penambahan bebas) tetap dipertahankan 100%.
+     - State array string `facilities`, `roomFacilities`, dan `bathroomFacilities` tetap sinkron dan kompatibel penuh dengan skema database Supabase.
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` sukses 100% (✓ 2506 modules transformed, 31.73s, 0 error).
+
 ### 250. Optimasi Responsivitas On/Off & Tata Letak Inline Sub-Fasilitas Langsung di Bawah Induk (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna melaporkan bahwa tombol on/off fasilitas induk kurang responsif (kadang delay atau status tidak berubah sama sekali saat diklik).
