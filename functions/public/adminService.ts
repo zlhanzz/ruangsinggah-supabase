@@ -1258,60 +1258,45 @@ export async function syncPropertyRooms(propertyId: string, inputRooms?: any[]):
             .upsert(roomsPayload, { onConflict: 'property_id,room_number' });
 
         if (upsertErr) {
-            console.error(`[SYNC_ROOMS] Error upserting rooms:`, upsertErr.message);
+            if (upsertErr.code === '42501') {
+                // RLS policy restricts write to relational rooms table — this is expected for draft properties.
+                // Data kamar 100% aman tersimpan di properties.room_types (JSONB) sebagai single source of truth.
+                console.warn(`[SYNC_ROOMS] RLS policy membatasi penulisan ke tabel rooms (kode 42501). Data kamar tetap lengkap di properties.room_types.`);
+            } else {
+                console.warn(`[SYNC_ROOMS] Gagal sinkronisasi tabel rooms:`, upsertErr.message);
+            }
         } else {
             console.log(`[SYNC_ROOMS] Successfully synced rooms.`);
         }
 
-        // 3. Group flatRooms by roomTypeName and update parent properties table
-        const groups: Record<string, any[]> = {};
-        flatRooms.forEach((r: any) => {
-            const key = r.roomTypeName || 'Standard';
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(r);
-        });
-
-        const aggregatedRoomTypes = Object.keys(groups).map(typeName => {
-            const roomsInGroup = groups[typeName];
-            const prices = roomsInGroup.map(r => Number(r.price)).filter(p => p > 0);
-            const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
-            const availableRooms = roomsInGroup.filter(r => r.status === 'available' || r.status === 'kosong' || r.status === 'kosong_siap');
-            const availableCount = availableRooms.length;
-            const isAvailable = availableCount > 0;
-            
-            const firstRoom = roomsInGroup[0] || {};
-            
-            return {
-                name: typeName,
-                price: minPrice,
-                size: firstRoom.size || '3x4m',
-                isAvailable: isAvailable,
-                availableRoomCount: availableCount,
-                maxOccupants: firstRoom.maxOccupants || 1,
-                roomFacilities: firstRoom.roomFacilities || [],
-                bathroomFacilities: firstRoom.bathroomFacilities || [],
-                rooms: roomsInGroup.map(r => ({
-                    roomNumber: r.roomNumber,
-                    status: r.status,
-                    images: r.images || []
-                }))
-            };
-        });
-
-        const allPrices = flatRooms.map(r => Number(r.price)).filter(p => p > 0);
-        const finalMinPrice = allPrices.length > 0 ? Math.min(...allPrices) : 0;
-
-        console.log(`[SYNC_ROOMS] Updating properties table for property ${propertyId} with aggregated room_types...`);
-        const { error: propUpdateErr } = await supabase
-            .from('properties')
-            .update({
-                room_types: aggregatedRoomTypes,
-                price: finalMinPrice
+        // 3. Update harga minimum (price) di properties berdasarkan rawRooms — JANGAN timpa room_types.
+        //    room_types sudah benar saat diinsert dari form. Re-aggregasi dari flatRooms bisa menyebabkan
+        //    kehilangan tipe kamar jika upsert ke tabel rooms gagal (RLS). Cukup update price saja.
+        const allPricesFromRaw = rawRooms
+            .map((rt: any) => {
+                // Ambil harga bulanan dari pricing array jika ada, fallback ke price langsung
+                const monthlyPrice = Array.isArray(rt.pricing)
+                    ? (rt.pricing.find((p: any) => p.period === 'bulanan')?.price || rt.price || 0)
+                    : (rt.price || 0);
+                return Number(monthlyPrice);
             })
-            .eq('id', propertyId);
+            .filter((p: number) => p > 0);
+        const finalMinPrice = allPricesFromRaw.length > 0 ? Math.min(...allPricesFromRaw) : 0;
 
-        if (propUpdateErr) {
-            console.error(`[SYNC_ROOMS] Error updating property:`, propUpdateErr.message);
+        if (finalMinPrice > 0) {
+            console.log(`[SYNC_ROOMS] Updating property price to Rp ${finalMinPrice.toLocaleString('id-ID')} (harga minimum dari ${rawRooms.length} tipe kamar).`);
+            const { error: propUpdateErr } = await supabase
+                .from('properties')
+                .update({ price: finalMinPrice })
+                .eq('id', propertyId);
+
+            if (propUpdateErr) {
+                console.warn(`[SYNC_ROOMS] Gagal update harga properti:`, propUpdateErr.message);
+            } else {
+                console.log(`[SYNC_ROOMS] Harga properti berhasil diperbarui.`);
+            }
+        } else {
+            console.log(`[SYNC_ROOMS] Tidak ada harga valid — skip update price.`);
         }
     } catch (err) {
         console.error(`[SYNC_ROOMS] Fatal error during sync:`, err);
