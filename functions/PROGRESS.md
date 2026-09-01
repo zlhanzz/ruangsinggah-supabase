@@ -2,6 +2,41 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 253. Adopsi Mekanisme Input Fasilitas Tipe Kamar Ala Dashboard Agen (KostManager) dengan Sub-Fasilitas Inline (`KostFormMitra.tsx` & `types.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pada Langkah 4 formulir pendaftaran mitra (`KostFormMitra.tsx`), sistem input fasilitas kamar sebelumnya terbagi kaku menjadi dua sekat: opsi radio tipe kamar mandi di atas, dan deretan chips bulat datar `FacilityInput` di bawah.
+  - Pengguna meminta agar sistem input fasilitas tipe kamar disamakan dengan **input fasilitas kamar pada Dashboard Agen (KostManager)**:
+    1. Mengadopsi mekanisme parent dan sub-fasilitas inline (mekar rapi di bawah induk terkait).
+    2. Menghadirkan quick switch kondisi kamar: `[ ⚠️ Kosongan (Tanpa Perabot) ]` vs `[ ✓ Furnished (Isian) ]`.
+    3. Mempertahankan dan bahkan mengembangkan kelengkapan fasilitas kamar dengan format grid 2 kolom yang clean, teratur, dan dilengkapi ikon emoji serta checkbox responsif (0ms).
+- **Implementasi Solusi**:
+  1. **Quick Switch Kondisi Kamar (Kosongan vs Furnished)**:
+     - Ditempatkan di bagian atas setiap kartu tipe kamar.
+     - Saat memilih **Kosongan (Tanpa Perabot)**: seluruh perabot isian (Kasur, Lemari, Meja Belajar, Kursi, AC, Kipas Angin, TV, Water Heater, Kulkas Mini) dinonaktifkan dengan transisi `opacity-40 pointer-events-none`, menyisakan fasilitas fisik kamar seperti Kamar Mandi Dalam/Luar, Dapur Dalam, Jendela Luar, Ventilasi, dan Balkon.
+     - Saat memilih **Furnished (Isian)**: seluruh perabot terbuka dan dapat dipilih secara leluasa.
+  2. **Grid 2 Kolom Fasilitas Utama Kamar Terpadu**:
+     - Menyatukan seluruh fasilitas kamar dalam antarmuka grid 2 kolom dengan kartu checkbox ringkas (Kasur, Lemari Pakaian, Meja Belajar, Kursi, AC, Kipas Angin, TV, Water Heater, Jendela Luar, Ventilasi, Balkon, Kulkas Mini, Kamar Mandi Dalam, Kamar Mandi Luar, Dapur Dalam).
+  3. **Mekanisme Sub-Fasilitas Inline Beraksen Garis Kiri (`border-l-2 border-orange-500`)**:
+     - **Kamar Mandi Dalam**: saat dicentang, mekar sub-panel inline di bawahnya (`col-span-2`) beraksen oranye, memuat sub-kelengkapan:
+       - 🚽 Kloset Duduk, 🚽 Kloset Jongkok, 🚿 Shower, ♨️ Water Heater, 🚰 Wastafel, 🛁 Bak Mandi, 🪣 Ember & Gayung.
+       - Dilengkapi badge tags kelengkapan WC kustom dan kolom input penambahan (+).
+     - **Dapur Dalam**: saat dicentang, mekar sub-panel inline di bawahnya (`col-span-2`) beraksen oranye, memuat sub-kelengkapan:
+       - 🍳 Kompor, 🧊 Kulkas, 🚰 Wastafel Cuci Piring, 🗄️ Kitchen Set, 💧 Dispenser.
+       - Dilengkapi badge tags kelengkapan dapur kustom dan kolom input penambahan (+).
+     - **Kamar Mandi Luar**: opsi alternatif yang otomatis menyesuaikan status kamar mandi dalam secara konsisten.
+  4. **Fasilitas Kamar Kustom Bebas**:
+     - Mitra dapat menambahkan fasilitas unik apa pun di luar preset (misal: *Sofa*, *Karpet*, *Cermin Rias*) yang ditampilkan dalam bentuk badge dengan tombol hapus `&times;`.
+  5. **Integritas Alur Data & Skema Database**:
+     - Menambahkan properti `kitchenFacilities?: string[]` pada `RoomType` di `types.ts`.
+     - Sinkronisasi state `roomFacilities`, `bathroomFacilities`, dan `kitchenFacilities` tetap kompatibel 100% dengan filter pencarian kost, `KostDetail.tsx`, dan pendataan foto unit kamar di Langkah 5.
+- **File Tersentuh**:
+  - `functions/public/types.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` sukses 100% (✓ 2506 modules transformed, 57.24s, 0 error).
+
 ### 252. Mekanisme Input Biaya Tambahan Fasilitas dengan Toggle On/Off & Checklist Cakupan Item Ala Dashboard Agen (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta agar bagian **Biaya Tambahan Fasilitas** pada formulir pendaftaran mitra (`KostFormMitra.tsx` Langkah 4) memiliki mekanisme input yang sama dengan yang ada pada Dashboard Agen (`AgentDashboard.tsx`):

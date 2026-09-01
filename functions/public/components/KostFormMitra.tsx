@@ -1230,6 +1230,32 @@ const ROOM_BATHROOM_SUB_OPTIONS = [
     { label: 'Ember & Gayung', icon: '🪣' }
 ];
 
+const ROOM_KITCHEN_SUB_OPTIONS = [
+    { label: 'Kompor', icon: '🍳' },
+    { label: 'Kulkas', icon: '🧊' },
+    { label: 'Wastafel Cuci Piring', icon: '🚰' },
+    { label: 'Kitchen Set', icon: '🗄️' },
+    { label: 'Dispenser', icon: '💧' }
+];
+
+const ALL_ROOM_FACILITY_PRESETS = [
+    { label: 'Kasur', icon: '🛏️', isPerabot: true },
+    { label: 'Lemari Pakaian', icon: '🚪', isPerabot: true },
+    { label: 'Meja Belajar', icon: '🪑', isPerabot: true },
+    { label: 'Kursi', icon: '🪑', isPerabot: true },
+    { label: 'AC', icon: '❄️', isPerabot: true },
+    { label: 'Kipas Angin', icon: '🌀', isPerabot: true },
+    { label: 'TV', icon: '📺', isPerabot: true },
+    { label: 'Water Heater', icon: '♨️', isPerabot: true },
+    { label: 'Jendela Luar', icon: '🪟', isPerabot: false },
+    { label: 'Ventilasi', icon: '🌬️', isPerabot: false },
+    { label: 'Balkon', icon: '🏙️', isPerabot: false },
+    { label: 'Kulkas Mini', icon: '🧊', isPerabot: true },
+    { label: 'Kamar Mandi Dalam', icon: '🚿', isPerabot: false },
+    { label: 'Kamar Mandi Luar', icon: '🚪', isPerabot: false },
+    { label: 'Dapur Dalam', icon: '🍳', isPerabot: false }
+];
+
 const HierarchicalPublicFacilityInput: React.FC<{
     facilities: string[];
     onChange: (updated: string[]) => void;
@@ -1434,6 +1460,480 @@ const HierarchicalPublicFacilityInput: React.FC<{
                     onClick={addCustomFacility}
                     disabled={!customInput.trim()}
                     className="h-9 px-4 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-bold text-xs rounded-xl flex items-center justify-center transition-all shadow-xs disabled:opacity-40 cursor-pointer shrink-0"
+                >
+                    + Tambah
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const HierarchicalRoomFacilityInput: React.FC<{
+    room: RoomType;
+    roomIndex: number;
+    onUpdateRoom: (updatedRoom: RoomType) => void;
+}> = ({ room, roomIndex, onUpdateRoom }) => {
+    const [customRoomInput, setCustomRoomInput] = useState('');
+    const [customBathroomInput, setCustomBathroomInput] = useState('');
+    const [customKitchenInput, setCustomKitchenInput] = useState('');
+
+    const currentRoomFacilities = room.roomFacilities || [];
+    const currentBathroomFacilities = room.bathroomFacilities || [];
+    const currentKitchenFacilities = room.kitchenFacilities || [];
+
+    const isKosongan = currentRoomFacilities.includes('Kosongan (Tanpa Perabot)');
+
+    const isInsideBath = currentBathroomFacilities.includes('Kamar Mandi Dalam') || currentRoomFacilities.includes('Kamar Mandi Dalam');
+    const isOutsideBath = currentBathroomFacilities.includes('Kamar Mandi Luar') || currentRoomFacilities.includes('Kamar Mandi Luar');
+    const isInsideKitchen = currentRoomFacilities.includes('Dapur Dalam');
+
+    // Preset labels set to identify custom tags
+    const knownPresets = useMemo(() => {
+        const set = new Set<string>();
+        ALL_ROOM_FACILITY_PRESETS.forEach(p => set.add(p.label.toLowerCase().trim()));
+        set.add('kasur');
+        set.add('lemari');
+        set.add('lemari pakaian');
+        set.add('meja belajar');
+        set.add('kursi');
+        set.add('ac');
+        set.add('kipas angin');
+        set.add('tv');
+        set.add('water heater');
+        set.add('jendela');
+        set.add('jendela luar');
+        set.add('ventilasi');
+        set.add('balkon');
+        set.add('kulkas mini');
+        set.add('kamar mandi dalam');
+        set.add('kamar mandi luar');
+        set.add('dapur dalam');
+        set.add('kosongan (tanpa perabot)');
+        return set;
+    }, []);
+
+    const customRoomTags = useMemo(() => {
+        return currentRoomFacilities.filter(f => !knownPresets.has(f.toLowerCase().trim()));
+    }, [currentRoomFacilities, knownPresets]);
+
+    // Handle Kosongan toggle
+    const handleSetKosongan = (kosongan: boolean) => {
+        let updatedRoomFacs = [...currentRoomFacilities];
+        if (kosongan) {
+            const perabotNames = ALL_ROOM_FACILITY_PRESETS.filter(p => p.isPerabot).map(p => p.label.toLowerCase());
+            updatedRoomFacs = updatedRoomFacs.filter(f => !perabotNames.includes(f.toLowerCase()) && !['kasur', 'lemari', 'meja belajar', 'kursi', 'ac', 'kipas angin', 'tv', 'water heater', 'kulkas mini'].includes(f.toLowerCase()));
+            if (!updatedRoomFacs.includes('Kosongan (Tanpa Perabot)')) {
+                updatedRoomFacs.push('Kosongan (Tanpa Perabot)');
+            }
+        } else {
+            updatedRoomFacs = updatedRoomFacs.filter(f => f !== 'Kosongan (Tanpa Perabot)');
+        }
+        onUpdateRoom({
+            ...room,
+            roomFacilities: updatedRoomFacs
+        });
+    };
+
+    // Handle Main Facility Toggle
+    const handleToggleFacility = (label: string) => {
+        let updatedRoomFacs = [...currentRoomFacilities];
+        let updatedBathFacs = [...currentBathroomFacilities];
+        let updatedKitchenFacs = [...currentKitchenFacilities];
+
+        if (label === 'Kamar Mandi Dalam') {
+            if (isInsideBath) {
+                // Nonaktifkan Kamar Mandi Dalam
+                updatedRoomFacs = updatedRoomFacs.filter(f => f !== 'Kamar Mandi Dalam');
+                updatedBathFacs = updatedBathFacs.filter(f => f !== 'Kamar Mandi Dalam');
+            } else {
+                // Aktifkan Kamar Mandi Dalam & nonaktifkan Kamar Mandi Luar
+                if (!updatedRoomFacs.includes('Kamar Mandi Dalam')) updatedRoomFacs.push('Kamar Mandi Dalam');
+                updatedRoomFacs = updatedRoomFacs.filter(f => f !== 'Kamar Mandi Luar');
+                
+                updatedBathFacs = updatedBathFacs.filter(f => f !== 'Kamar Mandi Luar');
+                if (!updatedBathFacs.includes('Kamar Mandi Dalam')) updatedBathFacs.unshift('Kamar Mandi Dalam');
+                if (!updatedBathFacs.some(b => ['Kloset Duduk', 'Kloset Jongkok', 'Shower'].includes(b))) {
+                    updatedBathFacs.push('Shower');
+                }
+            }
+        } else if (label === 'Kamar Mandi Luar') {
+            if (isOutsideBath) {
+                // Nonaktifkan Kamar Mandi Luar
+                updatedRoomFacs = updatedRoomFacs.filter(f => f !== 'Kamar Mandi Luar');
+                updatedBathFacs = updatedBathFacs.filter(f => f !== 'Kamar Mandi Luar');
+            } else {
+                // Aktifkan Kamar Mandi Luar & nonaktifkan Kamar Mandi Dalam
+                if (!updatedRoomFacs.includes('Kamar Mandi Luar')) updatedRoomFacs.push('Kamar Mandi Luar');
+                updatedRoomFacs = updatedRoomFacs.filter(f => f !== 'Kamar Mandi Dalam');
+                updatedBathFacs = ['Kamar Mandi Luar'];
+            }
+        } else if (label === 'Dapur Dalam') {
+            if (isInsideKitchen) {
+                // Nonaktifkan Dapur Dalam
+                updatedRoomFacs = updatedRoomFacs.filter(f => f !== 'Dapur Dalam');
+            } else {
+                // Aktifkan Dapur Dalam
+                if (!updatedRoomFacs.includes('Dapur Dalam')) updatedRoomFacs.push('Dapur Dalam');
+                if (updatedKitchenFacs.length === 0) {
+                    updatedKitchenFacs = ['Kompor', 'Wastafel Cuci Piring'];
+                }
+            }
+        } else {
+            // Fasilitas umum / perabot kamar
+            const lowerLabel = label.toLowerCase();
+            const exists = updatedRoomFacs.some(f => f.toLowerCase() === lowerLabel);
+            if (exists) {
+                updatedRoomFacs = updatedRoomFacs.filter(f => f.toLowerCase() !== lowerLabel);
+            } else {
+                updatedRoomFacs.push(label);
+            }
+        }
+
+        onUpdateRoom({
+            ...room,
+            roomFacilities: updatedRoomFacs,
+            bathroomFacilities: updatedBathFacs,
+            kitchenFacilities: updatedKitchenFacs
+        });
+    };
+
+    // Sub Bathroom Toggle
+    const handleToggleBathroomSub = (subLabel: string) => {
+        let updatedBath = [...currentBathroomFacilities];
+        if (updatedBath.includes(subLabel)) {
+            updatedBath = updatedBath.filter(b => b !== subLabel);
+        } else {
+            updatedBath.push(subLabel);
+        }
+        onUpdateRoom({
+            ...room,
+            bathroomFacilities: updatedBath
+        });
+    };
+
+    // Sub Kitchen Toggle
+    const handleToggleKitchenSub = (subLabel: string) => {
+        let updatedKitchen = [...currentKitchenFacilities];
+        if (updatedKitchen.includes(subLabel)) {
+            updatedKitchen = updatedKitchen.filter(k => k !== subLabel);
+        } else {
+            updatedKitchen.push(subLabel);
+        }
+        onUpdateRoom({
+            ...room,
+            kitchenFacilities: updatedKitchen
+        });
+    };
+
+    return (
+        <div className="space-y-3.5">
+            {/* Quick Switch: Kosongan vs Furnished */}
+            <div className="flex bg-gray-100 p-1 rounded-2xl gap-1 border border-gray-200/80">
+                <button
+                    type="button"
+                    onClick={() => handleSetKosongan(true)}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs uppercase tracking-wider font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        isKosongan
+                            ? 'bg-amber-500 text-white shadow-xs scale-[1.01]'
+                            : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                >
+                    <AlertCircle size={14} className="shrink-0" />
+                    <span>Kosongan (Tanpa Perabot)</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => handleSetKosongan(false)}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs uppercase tracking-wider font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        !isKosongan
+                            ? 'bg-orange-500 text-white shadow-xs scale-[1.01]'
+                            : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                >
+                    <CheckCircle2 size={14} className="shrink-0" />
+                    <span>Furnished (Isian)</span>
+                </button>
+            </div>
+
+            {/* Grid 2 Kolom Fasilitas Utama Kamar */}
+            <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+                {ALL_ROOM_FACILITY_PRESETS.map(preset => {
+                    const isChecked = (() => {
+                        if (preset.label === 'Kamar Mandi Dalam') return isInsideBath;
+                        if (preset.label === 'Kamar Mandi Luar') return isOutsideBath;
+                        if (preset.label === 'Dapur Dalam') return isInsideKitchen;
+                        return currentRoomFacilities.some(f => f.toLowerCase() === preset.label.toLowerCase() || (preset.label === 'Lemari Pakaian' && f.toLowerCase() === 'lemari') || (preset.label === 'Jendela Luar' && f.toLowerCase() === 'jendela'));
+                    })();
+
+                    const isDisabled = preset.isPerabot && isKosongan;
+
+                    return (
+                        <React.Fragment key={preset.label}>
+                            <label
+                                className={`flex items-center gap-2.5 p-2.5 sm:p-3 border rounded-xl cursor-pointer transition-all select-none ${
+                                    isDisabled
+                                        ? 'opacity-40 bg-gray-50 border-gray-200 pointer-events-none'
+                                        : isChecked
+                                            ? 'border-orange-500 bg-orange-50/60 text-orange-950 font-bold shadow-xs ring-1 ring-orange-400/40'
+                                            : 'border-gray-200 bg-[#fbfbfc] text-gray-700 hover:border-orange-300 hover:bg-orange-50/20'
+                                }`}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={isChecked && !isDisabled}
+                                    disabled={isDisabled}
+                                    onChange={() => handleToggleFacility(preset.label)}
+                                    className="rounded border-gray-300 text-orange-500 focus:ring-orange-500 w-4 h-4 cursor-pointer accent-orange-500 shrink-0"
+                                />
+                                <span className="text-base shrink-0">{preset.icon}</span>
+                                <span className="text-xs font-bold truncate">{preset.label}</span>
+                            </label>
+
+                            {/* Sub Panel Inline: Kamar Mandi Dalam */}
+                            {preset.label === 'Kamar Mandi Dalam' && isChecked && (
+                                <div className="col-span-2 pl-4 sm:pl-5 border-l-2 border-orange-500 flex flex-col gap-2.5 bg-orange-50/40 p-3 sm:p-3.5 rounded-r-2xl animate-fadeIn">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-black text-orange-950 uppercase tracking-wider flex items-center gap-1.5">
+                                            <span>🚿</span> Kelengkapan Kamar Mandi Dalam:
+                                        </span>
+                                        <span className="text-[9px] font-bold text-orange-700/80">
+                                            Pilih yang tersedia
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        {ROOM_BATHROOM_SUB_OPTIONS.map(opt => {
+                                            const subActive = currentBathroomFacilities.some(b => b.toLowerCase() === opt.label.toLowerCase());
+                                            return (
+                                                <label key={opt.label} className="flex items-center gap-2 cursor-pointer p-1.5 rounded-lg hover:bg-white/60 select-none">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={subActive}
+                                                        onChange={() => handleToggleBathroomSub(opt.label)}
+                                                        className="rounded border-gray-300 text-orange-500 focus:ring-orange-500 w-4 h-4 cursor-pointer accent-orange-500 shrink-0"
+                                                    />
+                                                    <span className="text-xs text-gray-800 font-bold">{opt.icon} {opt.label}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Custom bathroom tags */}
+                                    {(() => {
+                                        const knownBath = new Set(ROOM_BATHROOM_SUB_OPTIONS.map(o => o.label.toLowerCase()));
+                                        knownBath.add('kamar mandi dalam');
+                                        knownBath.add('kamar mandi luar');
+                                        const customs = currentBathroomFacilities.filter(b => !knownBath.has(b.toLowerCase().trim()));
+                                        if (customs.length === 0) return null;
+                                        return (
+                                            <div className="flex flex-wrap gap-1.5 pt-1 border-t border-orange-100">
+                                                {customs.map(c => (
+                                                    <span key={c} className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-orange-100 text-orange-950 text-[10px] font-bold rounded-lg border border-orange-200">
+                                                        <span>{c}</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleToggleBathroomSub(c)}
+                                                            className="hover:text-red-600 font-black text-xs cursor-pointer"
+                                                        >
+                                                            &times;
+                                                        </button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Custom bathroom input adder */}
+                                    <div className="flex gap-2 items-center pt-1 border-t border-orange-100">
+                                        <input
+                                            type="text"
+                                            value={customBathroomInput}
+                                            onChange={e => setCustomBathroomInput(e.target.value)}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const val = customBathroomInput.trim();
+                                                    if (!val) return;
+                                                    if (!currentBathroomFacilities.some(b => b.toLowerCase() === val.toLowerCase())) {
+                                                        handleToggleBathroomSub(val);
+                                                    }
+                                                    setCustomBathroomInput('');
+                                                }
+                                            }}
+                                            placeholder="Tambah kelengkapan WC..."
+                                            className="flex-grow h-8 px-2.5 border border-orange-200 rounded-lg text-xs bg-white outline-none text-gray-800 focus:border-orange-500"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const val = customBathroomInput.trim();
+                                                if (!val) return;
+                                                if (!currentBathroomFacilities.some(b => b.toLowerCase() === val.toLowerCase())) {
+                                                    handleToggleBathroomSub(val);
+                                                }
+                                                setCustomBathroomInput('');
+                                            }}
+                                            disabled={!customBathroomInput.trim()}
+                                            className="h-8 px-3 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-lg disabled:opacity-40 cursor-pointer"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Sub Panel Inline: Dapur Dalam */}
+                            {preset.label === 'Dapur Dalam' && isChecked && (
+                                <div className="col-span-2 pl-4 sm:pl-5 border-l-2 border-orange-500 flex flex-col gap-2.5 bg-orange-50/40 p-3 sm:p-3.5 rounded-r-2xl animate-fadeIn">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-black text-orange-950 uppercase tracking-wider flex items-center gap-1.5">
+                                            <span>🍳</span> Kelengkapan Dapur Dalam:
+                                        </span>
+                                        <span className="text-[9px] font-bold text-orange-700/80">
+                                            Pilih yang tersedia
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        {ROOM_KITCHEN_SUB_OPTIONS.map(opt => {
+                                            const subActive = currentKitchenFacilities.some(k => k.toLowerCase() === opt.label.toLowerCase());
+                                            return (
+                                                <label key={opt.label} className="flex items-center gap-2 cursor-pointer p-1.5 rounded-lg hover:bg-white/60 select-none">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={subActive}
+                                                        onChange={() => handleToggleKitchenSub(opt.label)}
+                                                        className="rounded border-gray-300 text-orange-500 focus:ring-orange-500 w-4 h-4 cursor-pointer accent-orange-500 shrink-0"
+                                                    />
+                                                    <span className="text-xs text-gray-800 font-bold">{opt.icon} {opt.label}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Custom kitchen tags */}
+                                    {(() => {
+                                        const knownKitchen = new Set(ROOM_KITCHEN_SUB_OPTIONS.map(o => o.label.toLowerCase()));
+                                        const customs = currentKitchenFacilities.filter(k => !knownKitchen.has(k.toLowerCase().trim()));
+                                        if (customs.length === 0) return null;
+                                        return (
+                                            <div className="flex flex-wrap gap-1.5 pt-1 border-t border-orange-100">
+                                                {customs.map(c => (
+                                                    <span key={c} className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-orange-100 text-orange-950 text-[10px] font-bold rounded-lg border border-orange-200">
+                                                        <span>{c}</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleToggleKitchenSub(c)}
+                                                            className="hover:text-red-600 font-black text-xs cursor-pointer"
+                                                        >
+                                                            &times;
+                                                        </button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Custom kitchen input adder */}
+                                    <div className="flex gap-2 items-center pt-1 border-t border-orange-100">
+                                        <input
+                                            type="text"
+                                            value={customKitchenInput}
+                                            onChange={e => setCustomKitchenInput(e.target.value)}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const val = customKitchenInput.trim();
+                                                    if (!val) return;
+                                                    if (!currentKitchenFacilities.some(k => k.toLowerCase() === val.toLowerCase())) {
+                                                        handleToggleKitchenSub(val);
+                                                    }
+                                                    setCustomKitchenInput('');
+                                                }
+                                            }}
+                                            placeholder="Tambah kelengkapan dapur..."
+                                            className="flex-grow h-8 px-2.5 border border-orange-200 rounded-lg text-xs bg-white outline-none text-gray-800 focus:border-orange-500"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const val = customKitchenInput.trim();
+                                                if (!val) return;
+                                                if (!currentKitchenFacilities.some(k => k.toLowerCase() === val.toLowerCase())) {
+                                                    handleToggleKitchenSub(val);
+                                                }
+                                                setCustomKitchenInput('');
+                                            }}
+                                            disabled={!customKitchenInput.trim()}
+                                            className="h-8 px-3 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-lg disabled:opacity-40 cursor-pointer"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </React.Fragment>
+                    );
+                })}
+            </div>
+
+            {/* Custom Room Facilities Badges */}
+            {customRoomTags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1 border-t border-gray-100">
+                    {customRoomTags.map(tag => (
+                        <span key={tag} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 text-orange-950 text-xs font-bold rounded-lg border border-orange-200">
+                            <span>{tag}</span>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const updated = currentRoomFacilities.filter(f => f.toLowerCase() !== tag.toLowerCase());
+                                    onUpdateRoom({ ...room, roomFacilities: updated });
+                                }}
+                                className="hover:text-red-600 font-black text-xs cursor-pointer"
+                            >
+                                &times;
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            )}
+
+            {/* Input Tambah Fasilitas Kamar Kustom */}
+            <div className="flex gap-2 items-center pt-1 border-t border-gray-100">
+                <input
+                    type="text"
+                    value={customRoomInput}
+                    onChange={e => setCustomRoomInput(e.target.value)}
+                    onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const val = customRoomInput.trim();
+                            if (!val) return;
+                            if (!currentRoomFacilities.some(f => f.toLowerCase() === val.toLowerCase())) {
+                                onUpdateRoom({
+                                    ...room,
+                                    roomFacilities: [...currentRoomFacilities, val]
+                                });
+                            }
+                            setCustomRoomInput('');
+                        }
+                    }}
+                    placeholder="Tambah fasilitas kamar lainnya (misal: Sofa, Karpet, Cermin Rias)..."
+                    className="flex-grow h-9 px-3 border border-gray-200 rounded-xl text-xs bg-gray-50 outline-none text-gray-800 placeholder-gray-400 focus:border-orange-500 focus:bg-white focus:ring-1 focus:ring-orange-200 transition-all"
+                />
+                <button
+                    type="button"
+                    onClick={() => {
+                        const val = customRoomInput.trim();
+                        if (!val) return;
+                        if (!currentRoomFacilities.some(f => f.toLowerCase() === val.toLowerCase())) {
+                            onUpdateRoom({
+                                ...room,
+                                roomFacilities: [...currentRoomFacilities, val]
+                            });
+                        }
+                        setCustomRoomInput('');
+                    }}
+                    disabled={!customRoomInput.trim()}
+                    className="h-9 px-3.5 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-bold text-xs rounded-xl flex items-center justify-center transition-all shadow-xs disabled:opacity-40 cursor-pointer shrink-0"
                 >
                     + Tambah
                 </button>
@@ -3713,119 +4213,36 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                {(form.roomTypes || []).map((room, ri) => {
-                                    const bList = room.bathroomFacilities || [];
-                                    const isInsideBath = bList.includes('Kamar Mandi Dalam') || (!bList.includes('Kamar Mandi Luar') && bList.length > 0);
-
-                                    return (
-                                        <div key={ri} className="bg-white rounded-3xl border border-orange-200/90 p-4 sm:p-5 space-y-4 shadow-xs">
-                                            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="px-3 py-1 bg-orange-500 text-white rounded-xl text-xs font-black uppercase tracking-wider">
-                                                        {room.name || `Tipe Kamar ${ri + 1}`}
-                                                    </span>
-                                                    {room.size && (
-                                                        <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-lg">
-                                                            Ukuran: {room.size}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                                                    Tipe #{ri + 1}
+                                {(form.roomTypes || []).map((room, ri) => (
+                                    <div key={ri} className="bg-white rounded-3xl border border-orange-200/90 p-4 sm:p-5 space-y-4 shadow-xs">
+                                        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="px-3 py-1 bg-orange-500 text-white rounded-xl text-xs font-black uppercase tracking-wider">
+                                                    {room.name || `Tipe Kamar ${ri + 1}`}
                                                 </span>
-                                            </div>
-
-                                            {/* Sub-Sistem 1: Kamar Mandi (Pilihan Utama: Dalam vs Luar) */}
-                                            <div className="flex flex-col gap-2 p-3 bg-[#fbfbfc] border border-gray-200 rounded-2xl">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-[11px] font-black text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
-                                                        <span>🚿</span> Tipe Kamar Mandi
+                                                {room.size && (
+                                                    <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-lg">
+                                                        Ukuran: {room.size}
                                                     </span>
-                                                    <span className="text-[9px] font-bold text-gray-400">Pilih salah satu</span>
-                                                </div>
-
-                                                {/* Toggle Kamar Mandi Dalam vs Kamar Mandi Luar */}
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <label className={`flex items-center gap-2.5 p-2.5 sm:p-3 border rounded-xl cursor-pointer transition-all ${
-                                                        isInsideBath 
-                                                            ? 'border-orange-500 bg-orange-50/60 text-orange-950 font-bold shadow-xs ring-1 ring-orange-400/40' 
-                                                            : 'border-gray-200 bg-white text-gray-700 hover:border-orange-300'
-                                                    }`}>
-                                                        <input 
-                                                            type="radio" 
-                                                            name={`bath_type_${ri}`} 
-                                                            checked={isInsideBath} 
-                                                            onChange={() => setRoomBathroomType(ri, 'dalam')}
-                                                            className="text-orange-500 focus:ring-orange-500 accent-orange-500 w-4 h-4 cursor-pointer"
-                                                        />
-                                                        <span className="text-sm shrink-0">🚿</span>
-                                                        <span className="text-xs font-bold truncate">Kamar Mandi Dalam</span>
-                                                    </label>
-                                                    <label className={`flex items-center gap-2.5 p-2.5 sm:p-3 border rounded-xl cursor-pointer transition-all ${
-                                                        !isInsideBath 
-                                                            ? 'border-orange-500 bg-orange-50/60 text-orange-950 font-bold shadow-xs ring-1 ring-orange-400/40' 
-                                                            : 'border-gray-200 bg-white text-gray-700 hover:border-orange-300'
-                                                    }`}>
-                                                        <input 
-                                                            type="radio" 
-                                                            name={`bath_type_${ri}`} 
-                                                            checked={!isInsideBath} 
-                                                            onChange={() => setRoomBathroomType(ri, 'luar')}
-                                                            className="text-orange-500 focus:ring-orange-500 accent-orange-500 w-4 h-4 cursor-pointer"
-                                                        />
-                                                        <span className="text-sm shrink-0">🚪</span>
-                                                        <span className="text-xs font-bold truncate">Kamar Mandi Luar</span>
-                                                    </label>
-                                                </div>
-
-                                                {/* Sub-kelengkapan jika Kamar Mandi Dalam */}
-                                                {isInsideBath && (
-                                                    <div className="pl-4 sm:pl-5 border-l-2 border-orange-500 flex flex-col gap-2 bg-orange-50/40 p-3 rounded-r-xl animate-fadeIn mt-1">
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="text-[10px] font-black text-orange-950 uppercase tracking-wider">
-                                                                Kelengkapan Kamar Mandi Dalam:
-                                                            </span>
-                                                            <span className="text-[9px] font-bold text-orange-700/80">
-                                                                Pilih yang tersedia
-                                                            </span>
-                                                        </div>
-                                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                                            {ROOM_BATHROOM_SUB_OPTIONS.map(opt => {
-                                                                const active = (room.bathroomFacilities || []).includes(opt.label);
-                                                                return (
-                                                                    <label key={opt.label} className="flex items-center gap-2 cursor-pointer p-1 rounded-lg hover:bg-white/60 select-none">
-                                                                        <input 
-                                                                            type="checkbox"
-                                                                            checked={active}
-                                                                            onChange={() => toggleRoomFeature(ri, 'bathroomFacilities', opt.label)}
-                                                                            className="rounded border-gray-300 text-orange-500 focus:ring-orange-500 w-4 h-4 cursor-pointer accent-orange-500 shrink-0"
-                                                                        />
-                                                                        <span className="text-xs text-gray-800 font-bold">{opt.icon} {opt.label}</span>
-                                                                    </label>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    </div>
                                                 )}
                                             </div>
-
-                                            {/* Sub-Sistem 2: Fasilitas & Perabot Kamar Tidur */}
-                                            <div>
-                                                <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                                                    <span>🛏️</span> Fasilitas &amp; Perabot Kamar Tidur
-                                                </p>
-                                                <FacilityInput
-                                                    selected={room.roomFacilities || []}
-                                                    presets={ROOM_BEDROOM_PRESETS.map(p => p.label)}
-                                                    onToggle={f => toggleRoomFeature(ri, 'roomFacilities', f)}
-                                                    onAdd={f => addCustomRoomFeature(ri, 'roomFacilities', f)}
-                                                    onRemove={f => toggleRoomFeature(ri, 'roomFacilities', f)}
-                                                    placeholder="Contoh: Sofa, Balkon, Kulkas Mini..."
-                                                />
-                                            </div>
+                                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                                                Tipe #{ri + 1}
+                                            </span>
                                         </div>
-                                    );
-                                })}
+
+                                        {/* Sistem Fasilitas Kamar Terpadu (Parent & Sub-Fasilitas Ala Dashboard Agen) */}
+                                        <HierarchicalRoomFacilityInput
+                                            room={room}
+                                            roomIndex={ri}
+                                            onUpdateRoom={updatedRoom => {
+                                                const rooms = [...(form.roomTypes || [])];
+                                                rooms[ri] = updatedRoom;
+                                                upd('roomTypes', rooms);
+                                            }}
+                                        />
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>

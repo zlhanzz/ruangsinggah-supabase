@@ -42,6 +42,7 @@ export interface RoomType {
   features: string[]; // General specs/highlights (e.g. "Termasuk Listrik", "Lantai 1")
   roomFacilities: string[]; // Specific room items (e.g. "Kasur", "Lemari")
   bathroomFacilities: string[]; // Bathroom specifics
+  kitchenFacilities?: string[]; // Kitchen specifics (if Dapur Dalam)
   isAvailable?: boolean; // Availability status
   availableRoomCount?: number; // Number of available rooms for this type
   maxOccupants?: number; // Maximum number of occupants allowed
