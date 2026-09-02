@@ -2,6 +2,25 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 274. Redesain Tampilan Landmark & Fasilitas Publik Terdekat Menjadi Ramping & Efisien (Compact Grid Horizontal) (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Bagian Landmark (Kampus Terdekat) dan Fasilitas Publik Terdekat pada halaman detail kost sebelumnya memakan ruang vertikal secara berlebihan karena dirender sebagai kartu vertikal tinggi (`min-w-[200px]`, tinggi ~160px) dengan `flex-wrap`.
+  - Pengguna meminta agar tampilan landmark dan fasilitas publik dibuat jauh lebih ramping, efisien, dan tidak memakan banyak tempat.
+- **Implementasi Solusi**:
+  1. **Grid Responsif Compact 2-Kolom (`grid grid-cols-1 md:grid-cols-2 gap-2`)**:
+     - Menggantikan kartu vertikal besar dengan horizontal card ramping setinggi ~48px.
+     - Di desktop tampil rapi dalam 2 kolom bersebelahan, di mobile dalam 1 kolom vertikal yang compact.
+  2. **Struktur Konten Baris Ramping**:
+     - Sisi Kiri: Icon pin ter-bundle (`MapPin`, `GraduationCap`, `Building2` dari `lucide-react`) + Nama tempat tebal ber-tooltip.
+     - Sisi Kanan: Badge jarak (`distance`) bernuansa oranye/biru pastel.
+     - Sub-baris: Estimasi waktu tempuh 3 moda transportasi (🚶 Jalan Kaki, 🏍️ Motor, 🚗 Mobil) dalam chips abu-abu mini + Tombol **Rute** ringkas yang langsung membuka navigasi Google Maps.
+  3. **Bebas FOUT**:
+     - 100% menggunakan SVG bundled lokal `lucide-react`, 0 network request CDN font ligature.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+- **Verifikasi**:
+  - Uji kompilasi build TypeScript `cmd /c "npm run build"` lulus 100% (exit code 0, 0 error).
+
 ### 273. Restrukturisasi & Penyajian Fasilitas & Sub-Fasilitas Listing Berhirarki (1:1 Sesuai Input Mitra & Agen) (`KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Bagian Fasilitas Umum pada halaman detail kost sebelumnya hanya merender array fasilitas secara datar (flat array) dengan bullet bulat sederhana, sehingga sub-fasilitas kelengkapan (seperti kompor, kulkas bersama, wastafel cuci piring, dispenser air, peralatan masak, parkir motor, parkir mobil) bercampur baur dengan fasilitas utama tanpa hierarki.

@@ -15,7 +15,8 @@ import {
   ShieldAlert, AlertTriangle, X, Check, Upload, Image as ImageIcon, Send, 
   Phone, User as UserIcon, MessageSquare, Clock, Wifi, CookingPot, Car, 
   Bike, Bath, ShieldCheck, KeyRound, Shirt, Sun, Building2, Armchair, 
-  Wind, Tv, Droplets, Utensils, Refrigerator, Lock 
+  Wind, Tv, Droplets, Utensils, Refrigerator, Lock, MapPin, Navigation, 
+  GraduationCap 
 } from 'lucide-react';
 import { createKostSlug } from '../utils/slugUtils';
 
@@ -1566,115 +1567,141 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                   )}
 
                   {hasCampuses && (
-                    <div className="space-y-3 pt-2">
-                      <h4 className="font-bold text-gray-900 text-sm uppercase tracking-widest pl-2">Kampus Terdekat</h4>
-                      <div className="flex flex-wrap gap-3">
-                        {kost.campuses!.map((campus, idx) => (
-                          <div key={idx} className="flex-1 min-w-[200px] bg-orange-50 border border-orange-100 rounded-2xl p-4 flex flex-col justify-between items-start gap-4">
-                            <span className="font-bold text-gray-900">{campus.name}</span>
-                            <div className="w-full">
-                              <div className="flex items-center justify-between w-full mb-3">
-                                <span className="font-black text-orange-600 bg-white px-3 py-1.5 rounded-full shadow-sm text-xs">
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between pl-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center">
+                            <GraduationCap size={14} />
+                          </div>
+                          <h4 className="font-bold text-gray-900 text-xs uppercase tracking-widest">Kampus Terdekat</h4>
+                        </div>
+                        <span className="text-[11px] font-bold text-gray-400">
+                          {kost.campuses!.length} Lokasi
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {kost.campuses!.map((campus, idx) => {
+                          const kmMatch = campus.distance?.match(/[\d.]+/);
+                          const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
+                          const walkText = campus.walkDuration || `${Math.ceil((km / 4.2) * 60)}m`;
+                          const motoText = campus.motoDuration || `${Math.ceil((km / 28) * 60) + 1}m`;
+                          const carText = campus.carDuration || `${Math.ceil((km / 18) * 60) + 2}m`;
+
+                          return (
+                            <div 
+                              key={idx} 
+                              className="bg-white border border-gray-100 hover:border-orange-200 rounded-2xl p-2.5 px-3.5 flex items-center justify-between gap-2.5 transition-all hover:bg-orange-50/20 group shadow-2xs"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                <div className="w-8 h-8 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                                  <GraduationCap size={15} />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold text-gray-900 text-xs truncate" title={campus.name}>
+                                    {campus.name}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-400 mt-0.5">
+                                    <span title="Jalan Kaki">🚶 {walkText}</span>
+                                    <span>•</span>
+                                    <span title="Sepeda Motor">🏍️ {motoText}</span>
+                                    <span>•</span>
+                                    <span title="Mobil">🚗 {carText}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="font-black text-orange-600 bg-orange-50 border border-orange-100/80 px-2 py-1 rounded-xl text-[10px]">
                                   {campus.distance}
                                 </span>
+
                                 {campus.lat && campus.lng && (
                                   <a
                                     href={`https://www.google.com/maps/dir/?api=1&origin=${kost.location?.lat || 0},${kost.location?.lng || 0}&destination=${campus.lat},${campus.lng}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-[10px] font-black uppercase tracking-widest text-white bg-orange-500 hover:bg-orange-600 px-3 py-1.5 rounded-xl transition-colors"
+                                    className="flex items-center gap-1 text-[10px] font-bold text-orange-600 hover:text-white bg-orange-50 hover:bg-orange-500 border border-orange-100/60 hover:border-orange-500 px-2.5 py-1 rounded-xl transition-all active:scale-95 shadow-2xs"
+                                    title="Petunjuk Arah"
                                   >
-                                    Lihat Rute
+                                    <Navigation size={10} className="shrink-0" />
+                                    <span>Rute</span>
                                   </a>
                                 )}
                               </div>
-                              {(() => {
-                                const walkText = campus.walkDuration || (() => {
-                                  const kmMatch = campus.distance?.match(/[\d.]+/);
-                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
-                                  return `${Math.ceil((km / 4.2) * 60)}m`;
-                                })();
-                                const motoText = campus.motoDuration || (() => {
-                                  const kmMatch = campus.distance?.match(/[\d.]+/);
-                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
-                                  return `${Math.ceil((km / 28) * 60) + 1}m`;
-                                })();
-                                const carText = campus.carDuration || (() => {
-                                  const kmMatch = campus.distance?.match(/[\d.]+/);
-                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
-                                  return `${Math.ceil((km / 18) * 60) + 2}m`;
-                                })();
-
-                                return (
-                                  <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-gray-500 bg-white px-3 py-2 rounded-xl border border-gray-100/50 shadow-2xs">
-                                    <span className="flex items-center gap-1" title="Jalan Kaki">🚶 {walkText}</span>
-                                    <span className="text-gray-200">|</span>
-                                    <span className="flex items-center gap-1" title="Motor">🏍️ {motoText}</span>
-                                    <span className="text-gray-200">|</span>
-                                    <span className="flex items-center gap-1" title="Mobil">🚗 {carText}</span>
-                                  </div>
-                                );
-                              })()}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
 
                   {hasPublicFacilities && (
-                    <div className="space-y-3 pt-2">
-                      <h4 className="font-bold text-gray-900 text-sm uppercase tracking-widest pl-2">Fasilitas Publik</h4>
-                      <div className="flex flex-wrap gap-3">
-                        {kost.publicFacilities!.map((fac, idx) => (
-                          <div key={idx} className="flex-1 min-w-[200px] bg-blue-50 border border-blue-100 rounded-2xl p-4 flex flex-col justify-between items-start gap-4">
-                            <span className="font-bold text-gray-900">{fac.name}</span>
-                            <div className="w-full">
-                              <div className="flex items-center justify-between w-full mb-3">
-                                <span className="font-black text-blue-600 bg-white px-3 py-1.5 rounded-full shadow-sm text-xs">
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between pl-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                            <Building2 size={14} />
+                          </div>
+                          <h4 className="font-bold text-gray-900 text-xs uppercase tracking-widest">Fasilitas Publik</h4>
+                        </div>
+                        <span className="text-[11px] font-bold text-gray-400">
+                          {kost.publicFacilities!.length} Lokasi
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {kost.publicFacilities!.map((fac, idx) => {
+                          const kmMatch = fac.distance?.match(/[\d.]+/);
+                          const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
+                          const walkText = fac.walkDuration || `${Math.ceil((km / 4.2) * 60)}m`;
+                          const motoText = fac.motoDuration || `${Math.ceil((km / 28) * 60) + 1}m`;
+                          const carText = fac.carDuration || `${Math.ceil((km / 18) * 60) + 2}m`;
+
+                          return (
+                            <div 
+                              key={idx} 
+                              className="bg-white border border-gray-100 hover:border-blue-200 rounded-2xl p-2.5 px-3.5 flex items-center justify-between gap-2.5 transition-all hover:bg-blue-50/20 group shadow-2xs"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                                  <Building2 size={15} />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold text-gray-900 text-xs truncate" title={fac.name}>
+                                    {fac.name}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-400 mt-0.5">
+                                    <span title="Jalan Kaki">🚶 {walkText}</span>
+                                    <span>•</span>
+                                    <span title="Sepeda Motor">🏍️ {motoText}</span>
+                                    <span>•</span>
+                                    <span title="Mobil">🚗 {carText}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="font-black text-blue-600 bg-blue-50 border border-blue-100/80 px-2 py-1 rounded-xl text-[10px]">
                                   {fac.distance}
                                 </span>
+
                                 {fac.lat && fac.lng && (
                                   <a
                                     href={`https://www.google.com/maps/dir/?api=1&origin=${kost.location?.lat || 0},${kost.location?.lng || 0}&destination=${fac.lat},${fac.lng}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-[10px] font-black uppercase tracking-widest text-white bg-blue-500 hover:bg-blue-600 px-3 py-1.5 rounded-xl transition-colors"
+                                    className="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-100/60 hover:border-blue-600 px-2.5 py-1 rounded-xl transition-all active:scale-95 shadow-2xs"
+                                    title="Petunjuk Arah"
                                   >
-                                    Lihat Rute
+                                    <Navigation size={10} className="shrink-0" />
+                                    <span>Rute</span>
                                   </a>
                                 )}
                               </div>
-                              {(() => {
-                                const walkText = fac.walkDuration || (() => {
-                                  const kmMatch = fac.distance?.match(/[\d.]+/);
-                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
-                                  return `${Math.ceil((km / 4.2) * 60)}m`;
-                                })();
-                                const motoText = fac.motoDuration || (() => {
-                                  const kmMatch = fac.distance?.match(/[\d.]+/);
-                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
-                                  return `${Math.ceil((km / 28) * 60) + 1}m`;
-                                })();
-                                const carText = fac.carDuration || (() => {
-                                  const kmMatch = fac.distance?.match(/[\d.]+/);
-                                  const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
-                                  return `${Math.ceil((km / 18) * 60) + 2}m`;
-                                })();
-
-                                return (
-                                  <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-gray-500 bg-white px-3 py-2 rounded-xl border border-gray-100/50 shadow-2xs">
-                                    <span className="flex items-center gap-1" title="Jalan Kaki">🚶 {walkText}</span>
-                                    <span className="text-gray-200">|</span>
-                                    <span className="flex items-center gap-1" title="Motor">🏍️ {motoText}</span>
-                                    <span className="text-gray-200">|</span>
-                                    <span className="flex items-center gap-1" title="Mobil">🚗 {carText}</span>
-                                  </div>
-                                );
-                              })()}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
