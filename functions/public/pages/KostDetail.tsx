@@ -465,31 +465,58 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     const isAvail = rt.isAvailable !== false && rt.status?.toLowerCase() !== 'terisi' && rt.status?.toLowerCase() !== 'penuh';
     const rName = rt.name ? (String(rt.name).trim().toLowerCase().startsWith('kamar') ? rt.name : `Kamar ${rt.name}`) : `Kamar ${rtIdx + 1}`;
     const rawImages = rt.images || rt.image_urls || [];
-    const roomPhotoItems: PhotoItem[] = rawImages.map((img: any, imgIdx: number) => {
-      const url = typeof img === 'string' ? img : (img?.url || img?.original || '');
-      let label = '';
-      if (typeof img === 'object' && (img.label || img.category || img.caption || img.title)) {
-        label = img.label || img.category || img.caption || img.title;
-      } else if (Array.isArray(rt.photoCategories) && rt.photoCategories[imgIdx]) {
-        label = rt.photoCategories[imgIdx];
-      } else if (Array.isArray(rt.photo_categories) && rt.photo_categories[imgIdx]) {
-        label = rt.photo_categories[imgIdx];
-      } else if (rt.categorizedPhotos && typeof rt.categorizedPhotos === 'object') {
-        for (const [catName, catUrls] of Object.entries(rt.categorizedPhotos)) {
-          if (Array.isArray(catUrls) && catUrls.includes(url)) {
-            label = catName;
-            break;
+
+    // --- FALLBACK: Untuk kost biasa (non-managed), jika rt.images kosong,
+    // coba ekstrak foto dari propertyPhotos yang labelnya mengandung nama tipe kamar ini.
+    // Contoh: foto berlabel "Interior Kamar: Standard" atau "Kamar Mandi: VIP" akan dicocokkan
+    // ke roomType dengan name "Standard" atau "VIP".
+    const buildRoomPhotoItemsFromRaw = (): PhotoItem[] => {
+      return rawImages.map((img: any, imgIdx: number) => {
+        const url = typeof img === 'string' ? img : (img?.url || img?.original || '');
+        let label = '';
+        if (typeof img === 'object' && (img.label || img.category || img.caption || img.title)) {
+          label = img.label || img.category || img.caption || img.title;
+        } else if (Array.isArray(rt.photoCategories) && rt.photoCategories[imgIdx]) {
+          label = rt.photoCategories[imgIdx];
+        } else if (Array.isArray(rt.photo_categories) && rt.photo_categories[imgIdx]) {
+          label = rt.photo_categories[imgIdx];
+        } else if (rt.categorizedPhotos && typeof rt.categorizedPhotos === 'object') {
+          for (const [catName, catUrls] of Object.entries(rt.categorizedPhotos)) {
+            if (Array.isArray(catUrls) && catUrls.includes(url)) {
+              label = catName;
+              break;
+            }
           }
         }
-      }
+        if (!label) {
+          const defaultRoomCats = ['Interior Kamar', 'Kamar Mandi', 'Tempat Tidur', 'Lemari / Storage'];
+          label = defaultRoomCats[imgIdx] || `Foto Kamar ${imgIdx + 1}`;
+        }
+        return { url, label: cleanPhotoCategoryLabel(label), isRoom: true, roomName: rName };
+      }).filter((p: PhotoItem) => !!p.url);
+    };
 
-      if (!label) {
-        const defaultRoomCats = ['Interior Kamar', 'Kamar Mandi', 'Tempat Tidur', 'Lemari / Storage'];
-        label = defaultRoomCats[imgIdx] || `Foto Kamar ${imgIdx + 1}`;
-      }
+    let roomPhotoItems: PhotoItem[] = buildRoomPhotoItemsFromRaw();
 
-      return { url, label: cleanPhotoCategoryLabel(label), isRoom: true, roomName: rName };
-    }).filter(p => !!p.url);
+    // Fallback: jika foto unit kosong dan ini adalah kost biasa (non-managed),
+    // gunakan propertyPhotos yang labelnya relevan dengan nama tipe kamar ini.
+    if (roomPhotoItems.length === 0 && !kost.isManaged && rt.name) {
+      const rtNameLower = String(rt.name).trim().toLowerCase();
+      // Coba cocokkan: "Interior Kamar: Standard" mengandung "standard" → match dengan rt.name "Standard"
+      const matchedFromPropertyPhotos = propertyPhotos.filter(pp => {
+        const lbl = (pp.label || pp.category || '').toLowerCase();
+        return lbl.includes(rtNameLower);
+      });
+
+      if (matchedFromPropertyPhotos.length > 0) {
+        // Tandai sebagai foto kamar (isRoom: true) dengan roomName tipe ini
+        roomPhotoItems = matchedFromPropertyPhotos.map(pp => ({
+          ...pp,
+          isRoom: true,
+          roomName: rName
+        }));
+      }
+    }
 
     return [{
       id: rt.id || `room_${rtIdx}`,
@@ -670,15 +697,19 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   const currentParentGroup = parentRoomGroups[selectedParentTypeIdx] || parentRoomGroups[0];
   const selectedChildRoom = currentParentGroup?.rooms.find(r => r.variantIdx === selectedVariantIdx) || currentParentGroup?.rooms[0];
 
-  // Filter only empty/available rooms
-  const emptyRooms = normalizedRooms.filter(r => r.isAvailable);
+  // Filter rooms for photo navigation bar:
+  // - KostManager: hanya tampilkan unit kamar yang masih kosong/tersedia
+  // - Kost biasa (non-managed): tampilkan semua tipe kamar yang memiliki foto (tidak peduli status)
+  const emptyRooms = kost.isManaged
+    ? normalizedRooms.filter(r => r.isAvailable)
+    : normalizedRooms.filter(r => r.photoItems && r.photoItems.length > 0);
 
   // Active room if a specific room filter is selected
   const activeFilteredRoom = activePhotoFilter !== 'all'
     ? normalizedRooms.find(r => r.id === activePhotoFilter || r.name === activePhotoFilter || r.rawName === activePhotoFilter)
     : null;
 
-  // Only show room photo navigation bar if there are valid room units with distinct room photos
+  // Only show room photo navigation bar if there are rooms with distinct photos
   const hasDistinctRoomPhotos = emptyRooms.some(r => r.photoItems && r.photoItems.length > 0 && r.images && r.images.length > 0);
   const showRoomPhotoNav = emptyRooms.length > 0 && hasDistinctRoomPhotos;
 
@@ -1075,13 +1106,13 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                 </div>
               )}
 
-              {/* Bilah Tombol Navigasi Isolasi Foto Kamar Kosong (Hanya tampil jika ada data foto spesifik unit kamar) */}
+              {/* Bilah Tombol Navigasi Foto Kamar — tampil jika ada foto spesifik per tipe/unit kamar */}
               {showRoomPhotoNav && (
                 <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-2xs space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                     <span className="text-[11px] font-black text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
                       <Camera size={14} className="text-orange-500" />
-                      Pilih Foto Unit Kamar
+                      {kost.isManaged ? 'Pilih Foto Unit Kamar' : 'Pilih Foto Tipe Kamar'}
                     </span>
                     {activePhotoFilter !== 'all' && (
                       <button
@@ -1114,7 +1145,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                       <span>Semua Foto</span>
                     </button>
 
-                    {/* Tombol Per Kamar Kosong */}
+                    {/* Tombol per tipe/unit kamar yang memiliki foto */}
                     {emptyRooms.map((room) => {
                       const isSelected = activePhotoFilter === room.id || activePhotoFilter === room.name || activePhotoFilter === room.rawName;
 
