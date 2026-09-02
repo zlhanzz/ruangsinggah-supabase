@@ -322,3 +322,10 @@ export interface KostManagerPackage {
   is_active: boolean;
 }
 
+export interface MitraPromoPopupSetting {
+  is_active: boolean;
+  title?: string;
+  image_url?: string;
+  link_url?: string;
+  alt_text?: string;
+}

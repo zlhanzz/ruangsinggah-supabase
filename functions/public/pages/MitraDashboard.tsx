@@ -2,10 +2,10 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../supabase';
 import KostFormMitra from '../components/KostFormMitra';
-import { Kost, Page } from '../types';
+import { Kost, Page, MitraPromoPopupSetting } from '../types';
 import { FORMAT_CURRENCY, INDONESIAN_BANKS } from '../constants';
 import { getOwnerProperties, getOwnerBookings, updateBookingStatus } from '../userService';
-import { getResidentStatus } from '../adminService';
+import { getResidentStatus, getMitraPromoPopupSetting } from '../adminService';
 import { getMyChatSessions, ChatSession, getOrCreateChatSession } from '../chatService';
 import { getCurrentDate, setMockDate, getMockDateStr, parseDateSafely } from '../utils/timeUtils';
 import { createKostSlug } from '../utils/slugUtils';
@@ -138,6 +138,9 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     }, [tab]);
 
     const handleMenuChange = (menu: MenuKey) => {
+        if (menu === 'properties' && promoPopupSetting?.is_active) {
+            setShowPromoPopup(true);
+        }
         navigate(`${Page.DASHBOARD_MITRA}/${menu}`);
     };
     const [bookingTab, setBookingTab] = useState<'pending' | 'awaiting_payment' | 'completed'>('pending');
@@ -153,6 +156,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [showKostForm, setShowKostForm] = useState(false);
     const [editingKost, setEditingKost] = useState<Partial<Kost> | null>(null);
     const [previewingKost, setPreviewingKost] = useState<Kost | null>(null);
+    const [promoPopupSetting, setPromoPopupSetting] = useState<MitraPromoPopupSetting | null>(null);
+    const [showPromoPopup, setShowPromoPopup] = useState(false);
     const [isStartingFresh, setIsStartingFresh] = useState(false);
     const draftStorageKey = useMemo(() => uid ? `kost_form_draft_${uid}` : 'kost_form_draft_guest', [uid]);
     const [activeDraft, setActiveDraft] = useState<{
@@ -161,6 +166,27 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
         managementOption?: string;
         lastSaved?: string;
     } | null>(null);
+
+    // Load promo popup setting on mount and trigger if properties tab is open
+    useEffect(() => {
+        getMitraPromoPopupSetting().then(setting => {
+            setPromoPopupSetting(setting);
+            if (setting?.is_active && (tab === 'properties' || !tab)) {
+                setShowPromoPopup(true);
+            }
+        });
+    }, [tab]);
+
+    // Handle Escape key for popup
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setShowPromoPopup(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     const checkDraft = useCallback(() => {
         try {
@@ -918,34 +944,6 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                     );
                                 }
 
-                                if (isVerified) {
-                                    return (
-                                        <div className="bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-orange-500/20">
-                                            <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full mix-blend-overlay filter blur-2xl opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                                            <div className="relative z-10 flex flex-col md:flex-row gap-4 items-center justify-between">
-                                                <div className="text-left flex-1">
-                                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 rounded-full mb-2 shadow-sm backdrop-blur-sm">
-                                                        <Zap size={10} className="text-white animate-pulse" fill="currentColor" />
-                                                        <span className="text-[9px] font-black text-white uppercase tracking-widest">Premium</span>
-                                                    </div>
-                                                    <h3 className="text-base lg:text-lg font-black text-white tracking-tight leading-tight">
-                                                        Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!
-                                                    </h3>
-                                                    <p className="text-xs text-orange-50 leading-relaxed max-w-2xl mt-1 font-medium font-sans">
-                                                        Duduk manis, biarkan tim kami mengurus foto/video profesional, penagihan otomatis, dan promosi penuh untuk mendatangkan penyewa baru.
-                                                    </p>
-                                                </div>
-                                                <button 
-                                                    onClick={() => navigate(Page.KOSTMANAGER)}
-                                                    className="bg-white hover:bg-orange-50 text-orange-600 px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md shrink-0 flex items-center justify-center gap-2 w-full md:w-auto"
-                                                >
-                                                    Pelajari <ArrowUpRight size={14} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                }
-
                                 return null;
                             })()}
 
@@ -1287,36 +1285,6 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                         Status kamar, foto terverifikasi, dan promosi dikelola secara profesional. Pantau okupansi kamar dan ajukan request kapan saja.
                                                     </p>
                                                 </div>
-                                            </div>
-                                        </div>
-                                    );
-                                }
-
-                                if (isVerified) {
-                                    return (
-                                        <div className="bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 rounded-3xl p-5 lg:p-6 relative overflow-hidden shadow-md border border-orange-500/20">
-                                            <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full mix-blend-overlay filter blur-2xl opacity-10 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                                            
-                                            <div className="relative z-10 flex flex-col md:flex-row gap-4 items-center justify-between">
-                                                <div className="text-left flex-1">
-                                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 rounded-full mb-2 shadow-sm backdrop-blur-sm">
-                                                        <Zap size={10} className="text-white animate-pulse" fill="currentColor" />
-                                                        <span className="text-[9px] font-black text-white uppercase tracking-widest">Premium</span>
-                                                    </div>
-                                                    <h3 className="text-base lg:text-lg font-black text-white tracking-tight leading-tight">
-                                                        Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!
-                                                    </h3>
-                                                    <p className="text-xs text-orange-50 leading-relaxed max-w-2xl mt-1 font-medium font-sans">
-                                                        Duduk manis, biarkan tim kami mengurus foto/video profesional, penagihan otomatis, dan promosi penuh untuk mendatangkan penyewa baru.
-                                                    </p>
-                                                </div>
-                                                
-                                                <button 
-                                                    onClick={() => navigate(Page.KOSTMANAGER)}
-                                                    className="bg-white hover:bg-orange-50 text-orange-600 px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md shrink-0 flex items-center justify-center gap-2 w-full md:w-auto"
-                                                >
-                                                    Pelajari <ArrowUpRight size={14} />
-                                                </button>
                                             </div>
                                         </div>
                                     );
@@ -2683,6 +2651,113 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                     </div>
                 </div>
             )}
+            {/* ── POP-UP IKLAN GRAFIS PROMO MITRA (KOSTMANAGER) ── */}
+            {showPromoPopup && promoPopupSetting && promoPopupSetting.is_active && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="relative w-full max-w-lg mx-auto">
+                        {/* Tombol Close Melayang di Sudut Kanan Atas */}
+                        <button
+                            type="button"
+                            onClick={() => setShowPromoPopup(false)}
+                            className="absolute -top-3 -right-3 z-30 w-9 h-9 rounded-full bg-gray-900 text-white border-2 border-white/80 shadow-xl flex items-center justify-center hover:bg-black hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                            title="Tutup Iklan (Esc)"
+                        >
+                            <X size={18} />
+                        </button>
+
+                        {/* Konten Iklan */}
+                        {promoPopupSetting.image_url ? (
+                            /* Model 1: Desain Grafis Banner Yang Diunggah Super Admin */
+                            <div className="relative rounded-3xl overflow-hidden shadow-2xl bg-gray-900 border border-white/20 group">
+                                <div 
+                                    onClick={() => {
+                                        setShowPromoPopup(false);
+                                        navigate(promoPopupSetting.link_url || Page.KOSTMANAGER);
+                                    }}
+                                    className="cursor-pointer overflow-hidden block"
+                                >
+                                    <img 
+                                        src={promoPopupSetting.image_url} 
+                                        alt={promoPopupSetting.alt_text || promoPopupSetting.title || 'Promo KostManager'} 
+                                        className="w-full h-auto max-h-[75vh] object-contain group-hover:scale-[1.02] transition-transform duration-300"
+                                    />
+                                </div>
+                                <div className="bg-gray-950/90 backdrop-blur-sm p-3.5 flex items-center justify-between border-t border-gray-800">
+                                    <p className="text-xs font-bold text-gray-300 truncate pr-2">
+                                        {promoPopupSetting.title || 'Program Unggulan KostManager'}
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowPromoPopup(false);
+                                            navigate(promoPopupSetting.link_url || Page.KOSTMANAGER);
+                                        }}
+                                        className="px-4 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider shrink-0 shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+                                    >
+                                        Pelajari <ArrowUpRight size={13} />
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            /* Model 2: Fallback Desain Default Visual KostManager */
+                            <div className="bg-gradient-to-br from-orange-600 via-amber-500 to-orange-600 rounded-3xl p-6 lg:p-8 text-white shadow-2xl border border-orange-400/30 overflow-hidden relative">
+                                <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+                                
+                                <div className="relative z-10 space-y-4">
+                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 rounded-full shadow-sm backdrop-blur-sm">
+                                        <Zap size={12} className="text-white animate-pulse" fill="currentColor" />
+                                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Program Eksklusif Mitra</span>
+                                    </div>
+
+                                    <h3 className="text-xl lg:text-2xl font-black text-white tracking-tight leading-snug">
+                                        {promoPopupSetting.title || 'Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!'}
+                                    </h3>
+
+                                    <p className="text-xs text-orange-50 leading-relaxed font-medium">
+                                        Duduk manis, biarkan tim kami mengurus foto/video profesional 360°, penagihan sewa otomatis, dan promosi penuh untuk mendatangkan penyewa baru.
+                                    </p>
+
+                                    <div className="space-y-2 py-1 text-xs text-white font-semibold">
+                                        <div className="flex items-center gap-2">
+                                            <CheckCircle2 size={15} className="text-white shrink-0" />
+                                            <span>Foto & Video 360° Profesional RuangSinggah</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <CheckCircle2 size={15} className="text-white shrink-0" />
+                                            <span>Penagihan otomatis & rekonsiliasi keuangan</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <CheckCircle2 size={15} className="text-white shrink-0" />
+                                            <span>Prioritas tampil di pencarian pencari kost</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-2 flex items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowPromoPopup(false);
+                                                navigate(promoPopupSetting.link_url || Page.KOSTMANAGER);
+                                            }}
+                                            className="flex-1 py-3 bg-white hover:bg-orange-50 text-orange-600 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-lg active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                                        >
+                                            Pelajari Sekarang <ArrowUpRight size={14} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPromoPopup(false)}
+                                            className="px-4 py-3 bg-black/20 hover:bg-black/30 text-white rounded-xl font-bold text-xs transition-colors cursor-pointer"
+                                        >
+                                            Nanti Saja
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Time Travel Controller */}
             <TimeSimulator />
         </>

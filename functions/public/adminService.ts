@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner, KostManagerPackage } from './types';
+import { Kost, DatabaseProduct, ImageUrlObject, VideoUrlObject, SurveyRequest, Banner, KostManagerPackage, MitraPromoPopupSetting } from './types';
 import { notifyAdminStatusUpdate } from './emailService';
 import { ensureAbsoluteUrl } from './userService';
 import { getCurrentDate } from './utils/timeUtils';
@@ -4271,6 +4271,77 @@ export async function deleteBanner(bannerId: string): Promise<void> {
   // 2. Delete record
   const { error } = await supabase.from('banners').delete().eq('id', bannerId);
   if (error) throw error;
+}
+
+// ---- MITRA PROMO POPUP SETTING FUNCTIONS ----
+
+export const DEFAULT_MITRA_PROMO_POPUP: MitraPromoPopupSetting = {
+  is_active: true,
+  title: 'Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!',
+  image_url: '',
+  link_url: '/kost-manager',
+  alt_text: 'Promo KostManager RuangSinggah'
+};
+
+export async function getMitraPromoPopupSetting(): Promise<MitraPromoPopupSetting> {
+  try {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'mitra_promo_popup')
+      .maybeSingle();
+
+    if (error || !data || !data.value) {
+      return DEFAULT_MITRA_PROMO_POPUP;
+    }
+
+    return {
+      is_active: Boolean(data.value.is_active ?? DEFAULT_MITRA_PROMO_POPUP.is_active),
+      title: String(data.value.title ?? DEFAULT_MITRA_PROMO_POPUP.title),
+      image_url: String(data.value.image_url ?? ''),
+      link_url: String(data.value.link_url ?? DEFAULT_MITRA_PROMO_POPUP.link_url),
+      alt_text: String(data.value.alt_text ?? DEFAULT_MITRA_PROMO_POPUP.alt_text),
+    };
+  } catch (err) {
+    console.error('getMitraPromoPopupSetting error:', err);
+    return DEFAULT_MITRA_PROMO_POPUP;
+  }
+}
+
+export async function saveMitraPromoPopupSetting(
+  settings: Partial<MitraPromoPopupSetting>,
+  newImageFile?: File
+): Promise<MitraPromoPopupSetting> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Access Denied');
+
+  let imageUrl = settings.image_url ?? '';
+
+  if (newImageFile) {
+    imageUrl = await uploadFileToStorage(newImageFile, 'banners', 'promo');
+  }
+
+  const payload: MitraPromoPopupSetting = {
+    is_active: settings.is_active ?? true,
+    title: settings.title ?? DEFAULT_MITRA_PROMO_POPUP.title,
+    image_url: imageUrl,
+    link_url: settings.link_url ?? DEFAULT_MITRA_PROMO_POPUP.link_url,
+    alt_text: settings.alt_text ?? DEFAULT_MITRA_PROMO_POPUP.alt_text,
+  };
+
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({
+      key: 'mitra_promo_popup',
+      value: payload,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'key' });
+
+  if (error) throw error;
+  return payload;
 }
 
 // ---- USER MANAGEMENT FUNCTIONS ----

@@ -2,6 +2,45 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 270. Konversi Banner Statis KostManager Menjadi Pop-up Iklan Grafis Dinamis dengan Kontrol Super Admin (`BannerManagement.tsx`, `MitraDashboard.tsx`, `adminService.ts`, `types.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna merasa terganggu dengan banner statis oranye besar KostManager yang *hardcoded* di atas halaman "Kost Saya" dan Beranda mitra, yang memakan ruang vertikal secara permanen:
+    > *"bisa nggak sih ini dalam bentuk pop up aja yang muncul terus saat mitra membuka menu kelola kost atau baru pertama kali login tanpa harus menjadi hardcode yang selalu memenuhi tempat"*
+    > *"kalau perlu nanti kita pakai desain grafis aja sebagai banner promo kostmanager. jadi nnanti bentuknya seperti iklan pop up yang bisa di close. kontrol pop up iklan promo nantinya akan ada di dashboard super admin untuk upload desain banner nya"*
+- **Investigasi & Analisis**:
+  1. *Hardcoded Clutter*: Dua blok banner promo oranye berukuran besar sebelumnya terpasang paten di tab Beranda (overview) dan tab Kost Saya (properties) di `MitraDashboard.tsx`. Hal ini mempersempit area kerja pengelolaan listing dan memicu komplain layout yang sesak.
+  2. *Kurangnya Fleksibilitas Pemasaran*: Admin tidak dapat mengganti konten, visual grafis, atau menonaktifkan promosi tanpa harus mengedit kode sumber secara manual.
+  3. *Solusi Pop-Up Ad*: Mengadopsi pola *in-app image ad popup* modern (seperti Tokopedia/Traveloka/Mamikos). Desain grafis promosi yang menawan muncul di tengah layar dengan tombol close `[ ✕ ]` melayang di sudut atas, sehingga setelah ditutup, ruang dashboard mitra 100% bersih dan rapi.
+- **Implementasi Solusi**:
+  1. **Konfigurasi Database Terpusat ([`adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts), [`types.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/types.ts))**:
+     - Menambahkan tipe `MitraPromoPopupSetting` (`is_active`, `title`, `image_url`, `link_url`, `alt_text`).
+     - Menyimpan dan membaca konfigurasi dari tabel `app_settings` Supabase dengan `key = 'mitra_promo_popup'`.
+     - Mengembangkan fungsi `getMitraPromoPopupSetting()` dan `saveMitraPromoPopupSetting(setting, newImageFile?)`.
+  2. **Panel Kontrol Super Admin ([`BannerManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/BannerManagement.tsx))**:
+     - Menambahkan kartu kontrol baru: **"🖼️ Kontrol Desain Pop-Up Iklan Promo Mitra (KostManager)"**.
+     - Fitur lengkap:
+       - **Pratinjau Desain Banner Grafis**: Menampilkan visual aktif secara real-time.
+       - **Upload Desain Grafis Baru**: Otomatis dikompresi ke WebP sebelum diunggah ke Supabase Storage (`banners/promo/`).
+       - **Toggle Status On/Off**: Mengaktifkan atau menonaktifkan penayangan pop-up di sisi mitra.
+       - **Pengaturan Link URL & Pesan Judul**: Menentukan rute tujuan ketika banner di-klik (default: `/kost-manager`).
+       - **Tombol Reset Default**: Mengembalikan ke fallback visual default.
+  3. **Pembersihan Layout & Pop-Up Iklan di Sisi Mitra ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**:
+     - Menghapus total kedua banner statis oranye di tab overview dan tab properties. Area kerja mitra menjadi lega dan bersih.
+     - Membaca konfigurasi `mitra_promo_popup` saat dashboard dimuat.
+     - Menampilkan modal pop-up iklan dengan latar belakang gelap blur (`backdrop-blur-md`) saat mitra membuka menu "Kelola Kost" (`properties`) atau login.
+     - Menyediakan tombol tutup `[ ✕ ]` melayang di sudut kanan atas banner dan dukungan penutupan dengan tombol keyboard `Escape`.
+     - Mengklik gambar banner akan mengarahkan mitra langsung ke rute promosi KostManager (`/kost-manager`).
+     - Jika belum ada desain grafis custom yang diunggah admin, pop-up secara otomatis menampilkan desain visual bawaan KostManager yang elegan.
+- **File Tersentuh**:
+  - `functions/public/types.ts`
+  - `functions/public/adminService.ts`
+  - `functions/public/components/admin/BannerManagement.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 1928 modules transformed, built in 31.95s, 0 error).
+
 ### 269. Modal Pratinjau Interaktif Listing Terisolasi 1:1 UI/UX Asli User di Lingkup Dashboard Mitra (`KostDetail.tsx`, `MitraKostPreviewModal.tsx`, `MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna ingin memisahkan secara tegas lingkungan portal mitra dari lingkungan user pencari kost untuk persiapan arsitektur masa depan (seperti subdomain mandiri), dan meminta agar fitur preview listing kost yang sedang diajukan tetap berada di dalam lingkup dashboard mitra tanpa harus menembus/melompat ke rute publik:

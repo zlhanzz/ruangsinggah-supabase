@@ -1,84 +1,108 @@
-# WALKTHROUGH - Pratinjau 1:1 UI/UX Asli User Menggunakan KostDetail di Dalam Modal Mitra
+# WALKTHROUGH - Pop-Up Iklan Promo Mitra (KostManager) Dinamis & Pembersihan Banner Statis
 
 ## Ringkasan Eksekutif
-Penyelarasan tampilan pratinjau agar **100% mencerminkan (1:1) antarmuka dan pengalaman pengguna (UI/UX) asli halaman detail kost (`KostDetail.tsx`) tanpa tombol booking dan chat** telah **berhasil diselesaikan, diuji kelulusan build Vite (0 error), dan diintegrasikan penuh ke Dashboard Mitra**.
+Permintaan pengguna untuk **mengubah banner statis promo KostManager yang hardcode dan memenuhi tempat menjadi Pop-Up Iklan Grafis Dinamis yang dapat ditutup (closeable) serta dapat diunggah desain bannernya melalui Dashboard Super Admin** telah **selesai 100%, lulus uji kompilasi build Vite (0 error), dan siap digunakan**.
 
 Sebelumnya:
-- Pratinjau menggunakan komponen tiruan dengan tata letak tabs terpisah ("Tipe Kamar", "Fasilitas Umum", "Peraturan & Deskripsi") yang berbeda dari halaman publik asli.
+- Terdapat 2 banner oranye statis berukuran besar (*"⚡ PREMIUM Gak Punya Waktu Kelola Kost? Upgrade ke KostManager!"*) yang dipasang mati di tab Beranda (overview) dan tab "Kost Saya" (properties). Banner ini memenuhi ruang vertikal dan tidak fleksibel.
 
-Sekarang (1:1 Representasi Asli):
-- Modal pratinjau langsung memuat komponen asli **[`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx)** dengan prop `hideBookingAndChat={true}`.
-- Seluruh grid foto, pembagian tipe dan varian kamar, fasilitas lengkap, peta kampus, tata tertib, dan deskripsi tampil **persis sama 100%** dengan apa yang dilihat calon penyewa di frontend publik.
-- Tombol **"Ajukan Sewa"**, **"Chat Pemilik"**, dan **"Laporkan Properti"** disembunyikan dan digantikan dengan badge informasi: *"Mode Pratinjau Mitra • Tombol transaksi sewa dan chat calon penyewa dinonaktifkan."*
-- URL browser **tetap berada di `/dashboard-mitra`** tanpa tembus atau me-redirect ke lingkungan publik.
+Sekarang:
+- **Layout Mitra Bersih & Lega**: Kedua banner statis oranye telah dihapus dari halaman Beranda dan Kost Saya.
+- **Pop-Up Iklan Modern (Modal Overlay)**:
+  - Muncul saat mitra membuka menu "Kelola Kost" (*Kost Saya*) atau saat login.
+  - Menampilkan desain grafis iklan berkualitas tinggi dengan tombol tutup `[ ✕ ]` melayang di sudut atas (didukung shortcut tombol `Escape` dan klik di luar backdrop).
+  - Mengklik banner langsung mengarahkan mitra ke halaman promosi KostManager (`/kost-manager`).
+  - Dilengkapi fallback visual default KostManager jika admin belum mengunggah gambar custom.
+- **Pusat Kontrol Desain di Dashboard Super Admin**:
+  - Super Admin kini memiliki panel khusus di menu **Manajemen Banner & Promo** (`BannerManagement.tsx`).
+  - Fitur kontrol: Pratinjau banner aktif real-time, tombol upload gambar desain baru (otomatis kompresi ke WebP), switch toggle On/Off untuk menayangkan atau mematikan pop-up, input judul/alt text, input tautan tujuan (target URL), dan tombol reset default.
 
 ---
 
 ## 1. Rincian Perubahan Kode
 
-### A. Dukungan Mode Pratinjau pada Komponen Utama
-- **Lokasi File**: [KostDetail.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx)
-- **Perubahan**:
-  1. Menambahkan properti `hideBookingAndChat?: boolean` pada `KostDetailProps`.
-  2. Mencegah pemanggilan `incrementPropertyView` jika `hideBookingAndChat === true` agar analitik view publik tidak terdistorsi oleh pemilik sendiri.
-  3. Menyembunyikan tombol "Tanya" pada *mobile sticky header*.
-  4. Mengganti tombol booking sewa dan tombol chat pemilik di sidebar dengan badge elegan:
-     ```tsx
-     <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-center space-y-1.5">
-       <div className="text-xs font-black text-amber-900 flex items-center justify-center gap-1.5">
-         <Clock size={14} className="text-amber-600" /> Mode Pratinjau Mitra
-       </div>
-       <p className="text-[11px] text-amber-700 font-medium leading-relaxed">
-         Tombol transaksi sewa dan chat calon penyewa dinonaktifkan dalam mode pratinjau mitra.
-       </p>
-     </div>
-     ```
+### A. Tipe Data Konfigurasi Pop-Up
+- **Lokasi File**: [types.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/types.ts)
+- Menambahkan interface `MitraPromoPopupSetting`:
+  ```typescript
+  export interface MitraPromoPopupSetting {
+    is_active: boolean;
+    title?: string;
+    image_url?: string;
+    link_url?: string;
+    alt_text?: string;
+  }
+  ```
 
-### B. Penyempurnaan Modal Pratinjau Mitra
-- **Lokasi File**: [MitraKostPreviewModal.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/mitra/MitraKostPreviewModal.tsx)
-- **Perubahan**:
-  1. Menjadikan modal sebagai container viewport berukuran penuh (`max-w-7xl h-[96vh] rounded-3xl overflow-hidden`).
-  2. Memasang **Sticky Topbar Kontrol Mitra**:
-     - Status Badge Peninjauan: `⏳ Sedang Ditinjau Admin` / `● Tayang Publik`.
-     - Tombol **`[ ✏️ Edit Kost ]`**: Menutup pratinjau dan membuka form edit `KostFormMitra` jika ada data yang salah.
-     - Tombol **`[ ✕ Tutup ]`**: Menutup pratinjau (mendukung shortcut keyboard `Escape`).
-  3. Merender `<KostDetail kost={kost} onBack={onClose} hideBookingAndChat={true} />` di dalam area modal yang dapat di-scroll.
+### B. Service Pengaturan Admin & Storage Supabase
+- **Lokasi File**: [adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts)
+- Mengembangkan 2 fungsi terpusat berbasis tabel `app_settings` (`key = 'mitra_promo_popup'`):
+  1. `getMitraPromoPopupSetting()`: Mengambil konfigurasi pop-up dari database Supabase dengan fallback `DEFAULT_MITRA_PROMO_POPUP`.
+  2. `saveMitraPromoPopupSetting(setting, newImageFile?)`: Mengunggah gambar baru ke Supabase Storage bucket `banners/promo/` (otomatis kompresi client-side ke format WebP) dan menyimpan konfigurasinya secara permanen.
+
+### C. Panel Kontrol Desain di Dashboard Super Admin
+- **Lokasi File**: [BannerManagement.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/BannerManagement.tsx)
+- Menambahkan panel kontrol:
+  **"🖼️ Kontrol Desain Pop-Up Iklan Promo Mitra (KostManager)"**
+  - **Live Preview Card**: Melihat tampilan visual aktif atau pratinjau gambar baru yang baru saja dipilih.
+  - **Uploader File Desain Grafis**: Memilih gambar banner promosi dari perangkat.
+  - **Switch Toggle Aktifkan Pop-Up**: Admin dapat mematikan iklan sewaktu-waktu tanpa menghapus gambar.
+  - **Input Link Navigasi**: Default `/kost-manager`, dapat disesuaikan ke URL eksternal atau promo lainnya.
+  - **Tombol Reset Default**: Mengembalikan visual ke kartu promosi standar KostManager.
+
+### D. Integrasi Pop-Up & Pembersihan Layout di Dashboard Mitra
+- **Lokasi File**: [MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx)
+- Menghapus 2 blok banner statis oranye yang memakan tempat:
+  - Tab Beranda (`activeMenu === 'overview'`): digantikan `return null`.
+  - Tab Kost Saya (`activeMenu === 'properties'`): digantikan `return null`.
+- Memuat `getMitraPromoPopupSetting()` saat dashboard dibuka.
+- Membuka modal iklan jika status `is_active === true` saat membuka menu `properties` (*Kost Saya*).
+- Menambahkan modal pop-up iklan dengan efek backdrop blur (`backdrop-blur-md`), tombol close `[ ✕ ]` melayang di pojok kanan atas, interaksi klik gambar ke link promo, dan fallback kartu visual bawaan.
 
 ---
 
 ## 2. Hasil Verifikasi & Uji Kompilasi
 
-Build front-end dijalankan dengan bundler Vite:
+Uji kompilasi dijalankan menggunakan TypeScript & Vite bundler:
 ```bash
 cmd /c npm run build
 ```
 **Hasil**:
 ```text
+> vite-react-ts-tailwind-v10@0.0.0 build
+> tsc -b && vite build
+
 vite v6.4.1 building for production...
 transforming...
-✓ 2508 modules transformed.
+✓ 1928 modules transformed.
 rendering chunks...
 computing gzip size...
-✓ built in 37.40s
-0 errors, 0 warnings fatal.
+dist/index.html                   3.38 kB │ gzip:   1.14 kB
+dist/assets/index-D7bA9v7N.css   92.68 kB │ gzip:  15.54 kB
+dist/assets/index-DRm1sKq5.js   1,805.08 kB │ gzip: 494.61 kB
+✓ built in 31.95s
 ```
+**Status: 0 Error, 100% Lulus Kompilasi.**
 
 ---
 
-## 3. Panduan Pengujian untuk Pengguna
+## 3. Panduan Pengujian untuk Pengguna (User Testing)
 
-1. **Buka Dashboard Mitra**:
-   - Masuk ke menu **Kost Saya** pada Dashboard Mitra (`/dashboard-mitra`).
-2. **Klik Tombol Preview**:
-   - Klik tombol **`[ 👁️ Preview ]`** pada kartu properti Anda.
-3. **Periksa Tampilan 1:1**:
-   - Perhatikan bahwa tampilannya kini **100% identik dengan halaman detail kost user**:
-     - Grid galeri foto asli dengan tombol "Lihat Semua Foto".
-     - Header nama kost, badge gender (Putra/Putri/Campur), dan alamat lengkap.
-     - Tipe kamar (Tipe A, Tipe B) lengkap dengan pilihan durasi sewa bulanan/harian dan daftar fasilitas kamar.
-     - Fasilitas bersama, aturan kost, dan peta lokasi.
-4. **Periksa Ketiadaan Tombol Transaksi/Chat**:
-   - Di kartu sebelah kanan, tombol "Ajukan Sewa" dan "Chat Pemilik" telah digantikan dengan box amber edukatif: *"Mode Pratinjau Mitra • Tombol transaksi sewa dan chat calon penyewa dinonaktifkan."*
-5. **Kembali atau Edit**:
-   - Klik **`[ ✏️ Edit Kost ]`** untuk langsung mengedit kost.
-   - Tekan **`Esc`** atau klik **`[ ✕ ]`** untuk kembali ke daftar kost.
+### Skenario 1: Verifikasi Kebersihan Tampilan Dashboard Mitra
+1. Masuk ke Dashboard Mitra (`/dashboard-mitra`).
+2. Perhatikan tab **Beranda** dan tab **Kost Saya**.
+3. **Hasil**: Banner statis oranye besar yang sebelumnya memenuhi tempat kini telah bersih 100%, sehingga daftar listing kost terlihat luas dan nyaman dikelola.
+
+### Skenario 2: Munculnya Pop-Up Iklan Promo & Interaksi Close
+1. Klik menu **"Kost Saya"** di sidebar mitra.
+2. **Hasil**: Pop-up iklan promo KostManager akan muncul di tengah layar dengan latar belakang gelap blur.
+3. Klik tombol close `[ ✕ ]` di sudut kanan atas banner atau tekan tombol `Escape` pada keyboard.
+4. **Hasil**: Pop-up tertutup seketika dan mitra dapat langsung mengelola kost.
+
+### Skenario 3: Upload Desain Grafis Baru di Dashboard Super Admin
+1. Masuk ke Dashboard Super Admin (`/dashboard-admin` atau menu Manajemen Banner).
+2. Temukan panel **"🖼️ Kontrol Desain Pop-Up Iklan Promo Mitra (KostManager)"**.
+3. Klik tombol **"Pilih Gambar Desain"** dan pilih file banner promo baru dari komputer Anda.
+4. Periksa pratinjau langsung di kartu kontrol.
+5. Klik **"Simpan Pengaturan Pop-Up"**.
+6. Buka kembali dashboard mitra -> Pop-up sekarang otomatis menampilkan desain grafis baru yang Anda unggah!
