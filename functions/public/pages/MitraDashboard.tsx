@@ -1322,26 +1322,51 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                 return null;
                             })()}
 
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <h3 className="font-black text-gray-900 text-lg">Kost Saya</h3>
-                                    <p className="text-xs text-gray-400 font-bold mt-0.5 uppercase tracking-widest">
-                                        {properties.length} Properti Aktif {activeDraft ? '• 1 Draft Belum Selesai' : ''}
-                                    </p>
-                                </div>
-                                <button
-                                    onClick={() => { 
-                                        if (checkVerification()) {
-                                            setEditingKost(null); 
-                                            setIsStartingFresh(true); 
-                                            setShowKostForm(true); 
-                                        }
-                                    }}
-                                    className="h-11 px-5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 flex items-center gap-2 active:scale-95 transition-transform cursor-pointer"
-                                >
-                                    <Plus size={16} strokeWidth={3} /> Tambah
-                                </button>
-                            </div>
+                            {(() => {
+                                const publishedCount = properties.filter(p => p.status === 'published').length;
+                                const inReviewCount = properties.filter(p => p.status !== 'published' && p.status !== 'suspended').length;
+                                const suspendedCount = properties.filter(p => p.status === 'suspended').length;
+
+                                return (
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h3 className="font-black text-gray-900 text-lg">Kost Saya</h3>
+                                            <div className="flex items-center gap-2 mt-0.5 flex-wrap text-xs">
+                                                <span className="font-black text-emerald-600 uppercase tracking-wider">
+                                                    {publishedCount} Properti Tayang
+                                                </span>
+                                                {inReviewCount > 0 && (
+                                                    <span className="font-black text-amber-600 uppercase tracking-wider flex items-center gap-1">
+                                                        • {inReviewCount} Menunggu Review
+                                                    </span>
+                                                )}
+                                                {suspendedCount > 0 && (
+                                                    <span className="font-black text-rose-600 uppercase tracking-wider flex items-center gap-1">
+                                                        • {suspendedCount} Ditangguhkan
+                                                    </span>
+                                                )}
+                                                {activeDraft && (
+                                                    <span className="font-bold text-gray-400 uppercase tracking-wider">
+                                                        • 1 Draft Pengisian
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => { 
+                                                if (checkVerification()) {
+                                                    setEditingKost(null); 
+                                                    setIsStartingFresh(true); 
+                                                    setShowKostForm(true); 
+                                                }
+                                            }}
+                                            className="h-11 px-5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 flex items-center gap-2 active:scale-95 transition-transform cursor-pointer"
+                                        >
+                                            <Plus size={16} strokeWidth={3} /> Tambah
+                                        </button>
+                                    </div>
+                                );
+                            })()}
 
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                                 {/* ── KARTU DRAFT KHUSUS (DAPAT DILANJUTKAN KAPAN SAJA) ── */}
@@ -1442,9 +1467,19 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                 </div>
 
                                                 <div className="absolute top-4 right-4">
-                                                    <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${p.status === 'published' ? 'bg-green-500 text-white border-green-400' : 'bg-gray-700 text-white border-gray-600'}`}>
-                                                        {p.status === 'published' ? '● Aktif' : '● Draft'}
-                                                    </span>
+                                                    {p.status === 'published' ? (
+                                                        <span className="px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-emerald-500 text-white border border-emerald-400 shadow-md flex items-center gap-1">
+                                                            <CheckCircle2 size={11} /> Tayang Publik
+                                                        </span>
+                                                    ) : p.status === 'suspended' ? (
+                                                        <span className="px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-rose-500 text-white border border-rose-400 shadow-md flex items-center gap-1">
+                                                            <AlertCircle size={11} /> Ditangguhkan
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-500 text-white border border-amber-400 shadow-md flex items-center gap-1 animate-pulse">
+                                                            <Clock size={11} /> Sedang Ditinjau
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 
                                                 <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-white">
@@ -1490,6 +1525,45 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                         <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                                                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Rating</p>
                                                             <p className="text-xs font-black text-gray-900 mt-0.5">⭐ {p.rating}</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Info Banner Khusus Properti Dalam Tahap Peninjauan */}
+                                                {p.status !== 'published' && p.status !== 'suspended' && (
+                                                    <div className="mt-3.5 p-3.5 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-amber-50/90 border border-amber-200/80 rounded-2xl flex items-start gap-2.5 shadow-xs">
+                                                        <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                                                            <Clock size={15} className="animate-pulse" />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <p className="font-black text-amber-950 text-xs uppercase tracking-wide">
+                                                                    Tahap Peninjauan Admin
+                                                                </p>
+                                                                <span className="px-1.5 py-0.5 bg-amber-200/80 text-amber-900 rounded text-[9px] font-black uppercase tracking-wider">
+                                                                    Estimasi 1×24 Jam
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-[11px] text-amber-900/90 font-medium leading-relaxed">
+                                                                Listing Anda telah berhasil diajukan dan sedang diverifikasi oleh tim RuangSinggah. Listing akan <strong>otomatis tayang di pencarian publik</strong> setelah disetujui.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Info Banner Khusus Properti Ditangguhkan */}
+                                                {p.status === 'suspended' && (
+                                                    <div className="mt-3.5 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 shadow-xs">
+                                                        <div className="w-7 h-7 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 mt-0.5">
+                                                            <AlertCircle size={15} />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <p className="font-black text-rose-950 text-xs uppercase tracking-wide">
+                                                                Listing Ditangguhkan
+                                                            </p>
+                                                            <p className="text-[11px] text-rose-900/90 font-medium leading-relaxed">
+                                                                {(p as any).metadata?.suspend_reason || 'Listing memerlukan perbaikan data. Silakan klik tombol edit untuk memperbarui data kost Anda.'}
+                                                            </p>
                                                         </div>
                                                     </div>
                                                 )}

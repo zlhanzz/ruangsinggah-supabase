@@ -1,96 +1,88 @@
-# IMPLEMENTATION PLAN - Penghapusan Auto-Check Sub-Fasilitas Saat Memilih Fasilitas Induk
+# IMPLEMENTATION PLAN - Peningkatan Kejelasan Status Listing dalam Tahap Peninjauan (Review) di Dashboard Mitra
 
 ## 1. Analisis Masalah & Kebutuhan
 
 ### Masalah Saat Ini:
-Pada formulir pendaftaran dan pengeditan kost mitra (`KostFormMitra.tsx`), terdapat beberapa fasilitas induk berjenjang (*hierarchical facilities*) yang memiliki sub-opsi kelengkapan. Ketika pengguna mencentang kotak fasilitas induk, sistem secara otomatis mencentang satu atau beberapa sub-fasilitas secara paksa (*auto-injected default*), meskipun pengguna belum memilihnya:
-
-1. **Fasilitas Umum / Gedung (`HierarchicalPublicFacilityInput` - Langkah 4)**:
-   - Baris 1307-1311: Logika `toggleItem` secara otomatis menambahkan sub-opsi indeks ke-0 (`item.subOptions[0]`) ke dalam array `facilities`:
-     - Mencentang **Area Parkir** $\rightarrow$ Otomatis mencentang **Parkir Motor**.
-     - Mencentang **Dapur Bersama** $\rightarrow$ Otomatis mencentang **Kompor**.
-     - Mencentang **WC Umum** $\rightarrow$ Otomatis mencentang **Kloset Duduk**.
-2. **Fasilitas Kamar (`HierarchicalRoomFacilityInput` - Langkah 3)**:
-   - Baris 1564-1566: Saat mencentang **Kamar Mandi Dalam**, sistem secara otomatis memasukkan **Shower** ke dalam `bathroomFacilities`.
-   - Baris 1586-1588: Saat mencentang **Dapur Dalam**, sistem secara otomatis memasukkan **Kompor** dan **Wastafel Cuci Piring** ke dalam `kitchenFacilities`.
-
-### Dampak Masalah:
-- Pengguna merasa bingung dan terganggu karena fasilitas yang tidak dimiliki kost (misalnya kost yang hanya menyediakan parkir mobil, atau kamar mandi dalam yang hanya memakai bak mandi/gayung tanpa shower, atau dapur dalam tanpa kompor) ikut tercentang tanpa disengaja.
-- Pengguna harus mencari dan menghapus centang sub-fasilitas yang otomatis tercentang tersebut satu per satu.
+Ketika mitra selesai mengisi seluruh formulir pendaftaran kost (6 langkah) dan menekan tombol **"Publikasikan Kost"**, mitra kembali ke halaman Dashboard Mitra tab **"Kost Saya"** dan menemukan tampilan yang sangat membingungkan:
+1. **Subtitle Header Menyesatkan**:
+   - Subtitle bertuliskan `1 PROPERTI AKTIF`, padahal properti tersebut baru saja disubmit dan belum tayang di publik (`status: 'draft'`).
+2. **Badge Status Kartu yang Gelap & Membingungkan (`• DRAFT`)**:
+   - Foto properti hanya memiliki badge abu-abu gelap bertuliskan `• DRAFT` (`p.status === 'published' ? '● Aktif' : '● Draft'`).
+   - Mitra menjadi bingung dan bertanya-tanya: *"Loh, saya tadi sudah klik Publikasikan Kost, kenapa statusnya masih Draft? Apakah gagal tersimpan? Apakah belum di-publish?"*
+3. **Ketiadaan Banner / Informasi Penjelasan di Kartu**:
+   - Kartu properti sama sekali tidak menjelaskan bahwa data sudah aman tersimpan dan saat ini sedang dalam antrean verifikasi/peninjauan oleh tim admin RuangSinggah.
+4. **Kendala Tombol "Preview" untuk Pemilik**:
+   - Tombol `[👁️ Preview]` mengarahkan ke `/kost/${p.id}`, namun fungsi pembacaan data publik (`getPublishedPropertyDetails`) mengunci query dengan `.eq('status', 'published')`.
+   - Akibatnya, saat mitra mengklik tombol Preview untuk mengecek tampilan kostnya, sistem gagal menemukan properti dan langsung me-redirect mitra ke halaman katalog umum tanpa penjelasan.
 
 ### Tujuan Pengembangan:
-- Memastikan bahwa saat fasilitas induk dicentang, **TIDAK ADA** sub-fasilitas yang dicentang secara otomatis.
-- Sub-panel kelengkapan tetap terbuka rapi di bawah fasilitas induk dengan semua sub-opsi dalam keadaan kosong/belum tercentang, sehingga pengguna dapat dengan leluasa dan akurat memilih sub-fasilitas yang benar-benar tersedia.
-- Ketika fasilitas induk dinonaktifkan (uncheck), seluruh sub-fasilitas di bawahnya dibersihkan secara rapi agar tidak ada data residu.
+1. **Transparansi Status**: Mengubah badge status kartu kost menjadi dinamis, informatif, dan ramah:
+   - Status Aktif/Published: Badge hijau cerah `● Tayang Publik` / `● Aktif`.
+   - Status Peninjauan: Badge amber/kuning modern dengan animasi denyut halus `<Clock size={11} /> Sedang Ditinjau` atau `Menunggu Review Admin`.
+   - Status Suspended: Badge merah `<AlertTriangle size={11} /> Dibekukan / Perlu Revisi`.
+2. **Banner Edukasi Status di Dalam Kartu**:
+   - Menampilkan box status peninjauan di dalam kartu kost yang menjelaskan secara transparan bahwa listing telah berhasil diajukan dan sedang diperiksa oleh tim admin (estimasi 1x24 jam), serta akan otomatis tayang setelah disetujui.
+3. **Akurasi Ringkasan Header "Kost Saya"**:
+   - Memisahkan penghitungan properti secara jujur: properti yang tayang aktif vs properti yang sedang dalam tahap peninjauan admin.
+4. **Dukungan Pratinjau (Preview) untuk Pemilik**:
+   - Mengizinkan pemilik kost dan admin untuk membuka dan mempratinjau halaman `/kost/${p.id}` meskipun statusnya masih dalam peninjauan, dilengkapi banner penanda pratinjau di bagian atas halaman.
 
 ---
 
 ## 2. Dampak Perubahan
 
 File yang akan disentuh:
-- `c:\Users\ZHULL\Desktop\Firebase to Supabase\functions\public\components\KostFormMitra.tsx`:
-  - Komponen `HierarchicalPublicFacilityInput` (fungsi `toggleItem`): Menghapus injeksi `item.subOptions[0]`.
-  - Komponen `HierarchicalRoomFacilityInput` (fungsi `handleToggleFacility`):
-    - Menghapus injeksi otomatis `Shower` saat mengaktifkan `Kamar Mandi Dalam`.
-    - Menghapus injeksi otomatis `['Kompor', 'Wastafel Cuci Piring']` saat mengaktifkan `Dapur Dalam`.
-    - Membersihkan sub-fasilitas terkait saat induk dinonaktifkan.
+1. `c:\Users\ZHULL\Desktop\Firebase to Supabase\functions\public\pages\MitraDashboard.tsx`:
+   - Menyesuaikan kalkulasi counter ringkasan header (membedakan properti tayang aktif dan yang sedang ditinjau).
+   - Memperbarui badge status pada foto kartu properti (mendukung status `published`, `in_review` / `draft`, dan `suspended`).
+   - Menambahkan banner/kartu notifikasi status peninjauan yang informatif di dalam kartu properti mitra.
+2. `c:\Users\ZHULL\Desktop\Firebase to Supabase\functions\public\userService.ts`:
+   - Memperbarui fungsi `getPublishedPropertyDetails(propertyId)` agar mengizinkan pemuatan detail properti jika pengguna yang meminta adalah pemilik properti (`owner_uid === user.id`) atau admin, meskipun statusnya belum `published`.
+3. `c:\Users\ZHULL\Desktop\Firebase to Supabase\functions\public\pages\KostDetail.tsx`:
+   - Menampilkan banner pratinjau (*Preview Mode Banner*) jika kost yang sedang dibuka berstatus belum tayang (`status !== 'published'`), memberi tahu pemilik bahwa halaman ini adalah pratinjau sebelum listing disetujui.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (Fase 2 - Menunggu Persetujuan/ACC)
+## 3. Langkah-Langkah Eksekusi (Fase 2 - Menunggu Persetujuan / ACC)
 
-1. **Pembersihan Logika `HierarchicalPublicFacilityInput`**:
-   - Pada fungsi `toggleItem(item: PublicFacilityItemDef)`:
-     ```typescript
-     // Sebelum:
-     const toAdd = [item.label];
-     if (item.hasSub && item.subOptions && item.subOptions.length > 0) {
-         if (!facilities.some(f => f.toLowerCase().trim() === item.subOptions![0].toLowerCase().trim())) {
-             toAdd.push(item.subOptions[0]);
-         }
-     }
-     onChange([...facilities, ...toAdd]);
+### Langkah 1: Peningkatan UI Kartu & Header di `MitraDashboard.tsx`
+- Hitung metrik properti:
+  ```typescript
+  const publishedCount = properties.filter(p => p.status === 'published').length;
+  const inReviewCount = properties.filter(p => p.status !== 'published' && p.status !== 'suspended').length;
+  const suspendedCount = properties.filter(p => p.status === 'suspended').length;
+  ```
+- Tampilkan ringkasan yang jelas pada header:
+  - Misal: `{publishedCount} Properti Tayang Publik {inReviewCount > 0 ? `• ${inReviewCount} Sedang Ditinjau` : ''}`
+- Render badge status 3-tingkat pada foto properti:
+  - `published`: `bg-emerald-500 text-white` (Tayang Publik)
+  - `draft / pending_review`: `bg-amber-500 text-white animate-pulse` (Sedang Ditinjau)
+  - `suspended`: `bg-rose-500 text-white` (Ditangguhkan)
+- Tampilkan banner penjelasan status di dalam kartu jika `p.status !== 'published'`.
 
-     // Sesudah:
-     const toAdd = [item.label];
-     onChange([...facilities, ...toAdd]);
-     ```
-   - Hasil: Mencentang "Area Parkir", "Dapur Bersama", atau "WC Umum" hanya akan mengaktifkan induknya dan membuka sub-panel tanpa mencentang satu pun sub-opsi.
+### Langkah 2: Dukungan Pratinjau Pemilik di `userService.ts` & `KostDetail.tsx`
+- Di `userService.ts` (`getPublishedPropertyDetails`):
+  - Jika properti ditemukan dengan `status === 'published'`, kembalikan langsung.
+  - Jika tidak ditemukan, coba ambil properti berdasarkan ID dan periksa apakah user yang sedang login adalah pemilik atau admin. Jika ya, kembalikan detail properti tersebut untuk kebutuhan pratinjau.
+- Di `KostDetail.tsx`:
+  - Jika `kost.status !== 'published'`, tampilkan banner di bagian atas:
+    *"🔍 Mode Pratinjau Pemilik: Listing ini sedang dalam tahap peninjauan admin dan belum dapat dilihat oleh publik."*
 
-2. **Pembersihan Logika `HierarchicalRoomFacilityInput`**:
-   - Pada `label === 'Kamar Mandi Dalam'`:
-     - Hapus baris:
-       ```typescript
-       if (!updatedBathFacs.some(b => ['Kloset Duduk', 'Kloset Jongkok', 'Shower'].includes(b))) {
-           updatedBathFacs.push('Shower');
-       }
-       ```
-     - Saat dinonaktifkan (`isInsideBath === true`), bersihkan juga sub-fasilitas kamar mandi agar tidak meninggalkan status menggantung.
-   - Pada `label === 'Dapur Dalam'`:
-     - Hapus baris:
-       ```typescript
-       if (updatedKitchenFacs.length === 0) {
-           updatedKitchenFacs = ['Kompor', 'Wastafel Cuci Piring'];
-       }
-       ```
-     - Saat dinonaktifkan (`isInsideKitchen === true`), bersihkan `updatedKitchenFacs = []`.
+### Langkah 3: Verifikasi Kompilasi & Pengujian
+- Jalankan `cmd /c npm run build` di direktori `functions/public/` untuk memastikan 0 error kompilasi Vite/TypeScript.
 
-3. **Pengujian & Validasi Build**:
-   - Jalankan `cmd /c npm run build` di direktori `functions/public/` untuk memastikan 0 error kompilasi TypeScript dan bundler Vite.
-4. **Pencatatan Riwayat & Git Push**:
-   - Catat ke `functions/PROGRESS.md` sebagai **Fitur #266**.
-   - Terbitkan dokumen `WALKTHROUGH.md`.
-   - Commit dan push ke branch `bukan-productions`.
+### Langkah 4: Pencatatan Riwayat & Git Push
+- Catat ke `functions/PROGRESS.md` sebagai **Fitur #267**.
+- Buat laporan `WALKTHROUGH.md`.
+- Commit dan push ke branch GitHub `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-- **Verifikasi Build**: Memastikan `npm run build` sukses 100% tanpa error kompilasi.
-- **Verifikasi UI Skenario**:
-  1. Centang **Area Parkir** $\rightarrow$ Pastikan sub-panel terbuka dan "Parkir Motor", "Parkir Mobil", "Parkir Sepeda" semuanya **tidak tercentang**.
-  2. Centang **Dapur Bersama** $\rightarrow$ Pastikan sub-panel terbuka dan "Kompor", "Kulkas Bersama", dll. semuanya **tidak tercentang**.
-  3. Centang **WC Umum** $\rightarrow$ Pastikan sub-panel terbuka dan "Kloset Duduk", "Shower", dll. semuanya **tidak tercentang**.
-  4. Centang **Kamar Mandi Dalam** $\rightarrow$ Pastikan "Shower" **tidak ikut tercentang otomatis**.
-  5. Centang **Dapur Dalam** $\rightarrow$ Pastikan "Kompor" dan "Wastafel Cuci Piring" **tidak ikut tercentang otomatis**.
-  6. Uncheck fasilitas induk $\rightarrow$ Pastikan sub-panel tertutup dan data sub-fasilitas dibersihkan secara konsisten.
+- **Verifikasi Build**: `npm run build` sukses 100% tanpa error kompilasi.
+- **Verifikasi UI Dashboard Mitra**:
+  1. Header menampilkan jumlah properti aktif dan properti dalam peninjauan secara terpisah dan akurat.
+  2. Kartu properti berstatus review menampilkan badge kuning cerah `⏳ Sedang Ditinjau` dengan ikon jam, bukan badge gelap `• DRAFT`.
+  3. Kartu properti menampilkan kotak penjelasan edukatif bahwa listing sedang diverifikasi oleh admin (estimasi 1x24 jam) dan akan otomatis tayang.
+  4. Tombol **Preview** dapat diklik oleh pemilik dan berhasil membuka tampilan pratinjau detail kost dengan banner khusus mode pratinjau.

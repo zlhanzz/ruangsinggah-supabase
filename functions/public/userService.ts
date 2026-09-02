@@ -184,14 +184,39 @@ export async function getPublishedProperties(): Promise<Kost[]> {
 
 export async function getPublishedPropertyDetails(propertyId: string): Promise<Kost | null> {
   try {
-    const { data: row, error } = await supabase
+    let row: any = null;
+
+    // 1. Coba ambil jika status published (terbuka untuk umum)
+    const { data: pubRow } = await supabase
       .from('properties')
       .select('*')
       .eq('id', propertyId)
       .eq('status', 'published')
-      .single();
+      .maybeSingle();
 
-    if (error || !row) return null;
+    if (pubRow) {
+      row = pubRow;
+    } else {
+      // 2. Mode Pratinjau (Preview Mode): jika belum published, izinkan pemilik atau admin melihat propertinya
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: privRow } = await supabase
+          .from('properties')
+          .select('*')
+          .eq('id', propertyId)
+          .maybeSingle();
+
+        if (privRow) {
+          const isOwner = privRow.owner_uid === user.id;
+          const isAdmin = user.app_metadata?.role === 'admin' || user.user_metadata?.role === 'admin';
+          if (isOwner || isAdmin) {
+            row = privRow;
+          }
+        }
+      }
+    }
+
+    if (!row) return null;
 
     const rawImages = row.image_urls || [];
     const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');

@@ -2,6 +2,43 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 267. Peningkatan Kejelasan Status Listing dalam Peninjauan (Review) di Dashboard Mitra & Dukungan Mode Pratinjau (Preview) Pemilik (`MitraDashboard.tsx`, `userService.ts`, `KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan tampilan status listing pada menu "Kost Saya" di Dashboard Mitra sangat membingungkan pasca-publikasi:
+    > *"ketika sebuah listing dalam tahap peninjauan,/review tolong tampilkan statusnya dengan baik, saya rasa untuk tampilan seperti ini mitra kurang tau apa yang sedang terjadi sekarang, dan mungkin akan bingung mempertanyakan kenapa propertinya belum listing padahal sudah di publish"*
+  - Tangkapan layar memperlihatkan:
+    1. Subtitle header bertuliskan `1 PROPERTI AKTIF` (menghitung seluruh item properti tanpa membedakan status).
+    2. Foto kartu properti menampilkan badge abu-abu gelap bertuliskan `• DRAFT` (`p.status === 'published' ? '● Aktif' : '● Draft'`).
+    3. Tidak ada informasi penjelasan bahwa listing telah berhasil dikirim dan sedang dalam antrean review admin.
+    4. Tombol **Preview** langsung mental/redirect ke `/listings` karena fungsi pembacaan data publik `getPublishedPropertyDetails` mengunci filter hanya untuk `status === 'published'`.
+- **Investigasi & Analisis Akar Masalah**:
+  1. *Header Summary Bias*: Logika `properties.length` menganggap semua listing yang tersimpan di database sebagai "Properti Aktif", mengaburkan fakta bahwa listing baru memerlukan verifikasi admin sebelum tayang publik.
+  2. *Badge Status Biner & Membingungkan*: Hanya ada kondisi `published` ("Aktif") atau fallback ("Draft"). Mitra yang baru menekan "Publikasikan Kost" merasa cemas karena statusnya tertulis "Draft" seolah-olah pengajuan belum selesai atau gagal disimpan.
+  3. *Zero Educational Feedback*: Di dalam kartu properti tidak terdapat box status atau perkiraan waktu review (SLA 1x24 jam).
+  4. *Preview Access Blocker*: `getPublishedPropertyDetails` mengembalikan `null` jika properti belum `published`, menyebabkan `KostDetailWrapper` di `App.tsx` melempar pemilik kembali ke `/listings`.
+- **Implementasi Solusi**:
+  1. **Akurasi Metrik Header "Kost Saya" ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**:
+     - Memisahkan penghitungan metrik secara transparan: `publishedCount`, `inReviewCount`, dan `suspendedCount`.
+     - Header menampilkan informasi jujur: `{publishedCount} Properti Tayang` dan `{inReviewCount} Menunggu Review` (serta `{suspendedCount} Ditangguhkan` jika ada).
+  2. **Pembaruan Badge Foto 3-Tingkat ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**:
+     - `published`: `bg-emerald-500 text-white` (Tayang Publik)
+     - `draft / pending_review`: `bg-amber-500 text-white animate-pulse` (⏳ Sedang Ditinjau)
+     - `suspended`: `bg-rose-500 text-white` (Ditangguhkan)
+  3. **Banner Status Edukatif di Dalam Kartu Properti ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**:
+     - Menambahkan banner informatif bergradasi amber/orange yang menjelaskan secara ramah bahwa listing berhasil diajukan, sedang diverifikasi tim RuangSinggah (estimasi 1×24 jam), dan akan otomatis tayang di katalog pencarian publik setelah disetujui.
+     - Menyediakan banner peringatan untuk status `suspended` yang memuat alasan penangguhan dan saran perbaikan.
+  4. **Dukungan Mode Pratinjau Pemilik & Admin ([`userService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts), [`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx))**:
+     - Memperbarui `getPublishedPropertyDetails` agar memeriksa apakah pemanggil adalah pemilik (`owner_uid === user.id`) atau admin jika properti belum berstatus `published`.
+     - Pada `KostDetail.tsx`, jika properti belum published, sistem menampilkan **Banner Mode Pratinjau Pemilik** di bagian atas layar dan tombol sewa berubah menjadi `Pratinjau (Belum Tayang)` agar calon penyewa tidak dapat mengajukan booking sebelum listing disetujui.
+- **File Tersentuh**:
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/userService.ts`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 38.94s, 0 error).
+
 ### 266. Penghapusan Auto-Check Sub-Fasilitas Saat Memilih Fasilitas Induk (`KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna melaporkan bahwa ketika mencentang fasilitas induk pada form fasilitas, beberapa sub-fasilitas ikut tercentang secara otomatis padahal belum dipilih oleh pengguna.

@@ -10,7 +10,7 @@ import { incrementPropertyView, createBookingRequest, submitPropertyReport, uplo
 import { notifyAdminPropertyReport } from '../emailService';
 import { getOrCreateChatSession, SYSTEM_ADMIN_ID } from '../chatService';
 import { supabase } from '../supabase';
-import { Bed, Home, Camera, Sparkles, CheckCircle2, ChevronDown, Layers, Flag, ShieldAlert, AlertTriangle, X, Check, Upload, Image as ImageIcon, Send, Phone, User as UserIcon, MessageSquare } from 'lucide-react';
+import { Bed, Home, Camera, Sparkles, CheckCircle2, ChevronDown, Layers, Flag, ShieldAlert, AlertTriangle, X, Check, Upload, Image as ImageIcon, Send, Phone, User as UserIcon, MessageSquare, Clock } from 'lucide-react';
 
 interface KostDetailProps {
   kost: Kost;
@@ -941,6 +941,26 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
       </Helmet>
       {/* ===== END SEO ===== */}
 
+      {/* Banner Mode Pratinjau Pemilik / Admin jika belum published */}
+      {kost.status !== 'published' && (
+        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white px-4 py-3 shadow-md border-b border-amber-600">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 font-bold">
+              <Clock size={16} className="shrink-0 animate-pulse" />
+              <span>
+                <strong>MODE PRATINJAU:</strong> Listing ini saat ini <strong>{kost.status === 'suspended' ? 'DITANGGUHKAN' : 'DALAM TAHAP PENINJAUAN ADMIN'}</strong> dan belum dapat dilihat oleh publik.
+              </span>
+            </div>
+            <button 
+              onClick={onBack}
+              className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg font-black uppercase text-[10px] tracking-wider shrink-0 transition-colors cursor-pointer"
+            >
+              Kembali
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Sticky Header */}
       <div className="lg:hidden sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-gray-100 px-4 py-4 flex items-center justify-between">
         <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
@@ -1592,29 +1612,34 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
 
                 <div className="space-y-3">
                   {(() => {
+                    const isUnpublished = kost.status !== 'published';
                     const isManaged = Boolean(kost.isManaged);
                     const isAvailable = isManaged
                       ? Boolean(selectedChildRoom && selectedChildRoom.isAvailable)
                       : Boolean(selectedRoom && selectedRoom.isAvailable !== false);
 
-                    const buttonText = isManaged
-                      ? (!selectedChildRoom
-                          ? 'Pilih Kamar'
-                          : !selectedChildRoom.isAvailable
+                    const buttonText = isUnpublished
+                      ? 'Pratinjau (Belum Tayang)'
+                      : isManaged
+                        ? (!selectedChildRoom
+                            ? 'Pilih Kamar'
+                            : !selectedChildRoom.isAvailable
+                              ? 'Kamar Penuh'
+                              : `Ajukan Sewa ${selectedChildRoom.displayName}`)
+                        : (!isAvailable
                             ? 'Kamar Penuh'
-                            : `Ajukan Sewa ${selectedChildRoom.displayName}`)
-                      : (!isAvailable
-                          ? 'Kamar Penuh'
-                          : `Ajukan Sewa (${periodLabels[selectedPeriod] || selectedPeriod})`);
+                            : `Ajukan Sewa (${periodLabels[selectedPeriod] || selectedPeriod})`);
 
                     return (
                       <button
-                        onClick={handleBookingClick}
-                        disabled={!isAvailable}
+                        onClick={isUnpublished ? () => alert('Ini adalah mode pratinjau pemilik. Calon penyewa belum dapat mengajukan sewa sampai listing disetujui dan berstatus tayang publik oleh admin.') : handleBookingClick}
+                        disabled={!isAvailable && !isUnpublished}
                         className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl transition-all active:scale-95 ${
-                          !isAvailable
-                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
-                            : 'bg-orange-500 text-white shadow-orange-100 hover:bg-orange-600 cursor-pointer'
+                          isUnpublished
+                            ? 'bg-amber-500 text-white shadow-amber-100 hover:bg-amber-600 cursor-pointer'
+                            : !isAvailable
+                              ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                              : 'bg-orange-500 text-white shadow-orange-100 hover:bg-orange-600 cursor-pointer'
                         }`}
                       >
                         {buttonText}
