@@ -39,27 +39,29 @@ const QuickActionMenu: React.FC<QuickActionMenuProps> = ({ onAction }) => {
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-5 mb-10">
-      <div className="bg-white rounded-3xl lg:rounded-[2.5rem] p-4 lg:p-3 shadow-md border border-gray-100/50">
-        <h2 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4 lg:mb-3 lg:ml-4 flex items-center gap-2">
-          <span className="h-1 w-1 bg-orange-500 rounded-full"></span>
-          Menu Utama & Fitur
-        </h2>
-        <div className="grid grid-cols-4 gap-3 lg:gap-4 px-1">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-5 mb-8">
+      <div className="bg-white rounded-3xl lg:rounded-[2.5rem] p-4 lg:p-6 shadow-sm border border-gray-100">
+        <div className="flex items-center gap-2 mb-4 lg:ml-2">
+          <span className="w-2 h-2 rounded-full bg-[#ff7a00]"></span>
+          <h2 className="text-[11px] font-extrabold uppercase tracking-wider text-gray-700">
+            Menu Utama & Fitur
+          </h2>
+        </div>
+        <div className="grid grid-cols-4 gap-3 lg:gap-5">
           {actions.map((action) => (
             <button
               key={action.id}
               onClick={() => onAction(action.page)}
-              className="flex flex-col lg:flex-row items-center group gap-2 lg:gap-3 transition-all active:scale-[0.97] bg-white lg:bg-gray-50/40 hover:bg-white p-2.5 lg:px-4 lg:py-3 rounded-2xl lg:rounded-2xl border border-gray-100 hover:border-orange-500/40 hover:shadow-xl hover:shadow-orange-500/10 lg:w-full"
+              className="flex flex-col lg:flex-row items-center group gap-2 lg:gap-4 transition-all active:scale-[0.97] bg-white lg:bg-gray-50/50 hover:bg-white p-3 lg:px-5 lg:py-4 rounded-2xl border border-gray-100 hover:border-orange-300 hover:shadow-lg hover:shadow-orange-500/10 lg:w-full cursor-pointer"
             >
-              <div className={`p-3 lg:p-2.5 rounded-xl lg:rounded-xl ${action.color} shadow-sm group-hover:shadow-md group-hover:scale-110 transition-all duration-300`}>
-                {React.cloneElement(action.icon as React.ReactElement, { className: "w-5 h-5 sm:w-6 sm:h-6 lg:w-4.5 lg:h-4.5" })}
+              <div className={`p-3 lg:p-3 rounded-2xl ${action.color} shadow-xs group-hover:scale-105 transition-transform duration-300 flex items-center justify-center shrink-0`}>
+                {React.cloneElement(action.icon as React.ReactElement, { className: "w-5 h-5 sm:w-6 sm:h-6" })}
               </div>
               <div className="flex flex-col text-center lg:text-left">
-                <span className="text-[10px] lg:text-[12px] font-black text-gray-800 uppercase tracking-tight group-hover:text-orange-500 transition-colors leading-tight">
+                <span className="text-[10px] sm:text-xs lg:text-sm font-black text-gray-900 uppercase tracking-tight group-hover:text-orange-500 transition-colors leading-tight">
                   {action.label}
                 </span>
-                <span className="hidden lg:block text-[8px] text-gray-400 font-bold uppercase tracking-widest mt-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                <span className="hidden lg:block text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1 opacity-70 group-hover:opacity-100 transition-opacity">
                   Klik Disini &rsaquo;
                 </span>
               </div>

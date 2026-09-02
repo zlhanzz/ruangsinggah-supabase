@@ -1,55 +1,66 @@
-# Walkthrough: Notifikasi Email Otomatis ke Admin pada Pengajuan Verifikasi Identitas Mitra & Agen (`emailService.ts`, `MitraProfile.tsx`, `AgentProfile.tsx`, `Profile.tsx`)
+# WALKTHROUGH: Modernisasi UI/UX Beranda (Home) & Bottom Navigation Bar Mobile dengan Desain Google Stitch
 
-Dokumentasi ini merangkum penyelesaian implementasi **Fitur #224**, yaitu pengiriman notifikasi email otomatis ke admin setiap kali ada pengajuan verifikasi identitas (KTP) baru yang masuk dari calon mitra (pemilik kost) maupun calon agen pemasaran.
-
----
-
-## 1. Ringkasan Perubahan
-
-### A. Helper Notifikasi Email Terstruktur (`emailService.ts`)
-- Menambahkan fungsi [`notifyAdminIdentityVerification`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/emailService.ts) yang secara dinamis mengambil seluruh alamat email admin aktif dari tabel `users` (dengan fallback `sulhan77777@gmail.com`).
-- Format email memuat:
-  1. **Subjek**: `Transaksi Baru - Pengajuan Verifikasi Identitas (Calon Mitra / Calon Agen)!`
-  2. **Tipe Akun**: *"Calon Mitra / Pemilik Kost"* atau *"Calon Agen Pemasaran"*.
-  3. **Nama Lengkap**: Sesuai KTP / Profil.
-  4. **Email Akun & Nomor WhatsApp**.
-  5. **Nomor NIK KTP & Alamat Sesuai KTP**.
-  6. **Tautan Foto KTP**: Untuk pratinjau instan foto dokumen KTP.
-  7. **ID Pengguna & Tautan Langsung ke Dashboard Verifikasi Admin**.
-
-### B. Integrasi Pengiriman pada Form Pengajuan
-- **Mitra Profile ([`MitraProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraProfile.tsx))**:
-  - Saat calon mitra melengkapi formulir dan menyimpan data verifikasi KTP (`user_verifications` status `'pending'`), sistem secara otomatis mengirimkan email notifikasi ke admin.
-- **Agent Profile ([`AgentProfile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/AgentProfile.tsx))**:
-  - Saat calon agen melengkapi formulir dan mengajukan data verifikasi KTP, sistem secara otomatis mengirimkan email notifikasi ke admin.
-- **Profile Umum ([`Profile.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/Profile.tsx))**:
-  - Jika agen memperbarui berkas verifikasi identitas di halaman profil pengguna, sistem juga memicu email notifikasi ke admin.
+## 1. Ringkasan Pekerjaan
+Telah berhasil dilakukan modernisasi dan penyegaran tampilan antarmuka (UI/UX) pada **Halaman Beranda (Home)** dan **Bottom Navigation Bar Mobile** menggunakan kerangka dan token styling **Google Stitch**. Seluruh konten riil (logo RuangSinggah.id, data listing Supabase, filter pencarian, dan sistem autentikasi) tetap dipertahankan 100% utuh dan berfungsi normal.
 
 ---
 
-## 2. Hasil Pengujian & Kompilasi
+## 2. Rincian Perubahan Komponen & File
 
-### Uji Build Frontend (Vite)
-```bash
-> ruangsinggah.id@0.0.0 build
-> vite build
+### A. `functions/public/index.css`
+- Mengintegrasikan CSS design tokens Google Stitch (`--primary`, `--primary-container: #ff7a00`, `--background: #f8f9ff`, `--tertiary: #6d3bd7`, dsb.).
+- Menyediakan utility classes tipografi (`.text-headline-md`, `.text-headline-lg`, `.text-body-md`, `.text-label-bold`, dsb.).
 
-vite v6.4.1 building for production...
-transforming...
-✓ 2504 modules transformed.
-rendering chunks...
-computing gzip size...
-✓ built in 25.55s
-```
-*Hasil:* **100% Lulus (0 Error)**.
+### B. `functions/public/components/Navbar.tsx`
+- **Desktop Navbar**:
+  - Tautan navigasi: `Cari Kost`, `Data Kost`, `Jasa Survey`, `Jadi Mitra` dengan garis oranye penanda aktif.
+  - Tombol Masuk / Daftar pill oranye `#ff7a00` yang modern.
+- **Mobile Bottom Navigation Bar (4 Menu)**:
+  1. 🏠 **Home** (`Page.HOME`)
+  2. 🔍 **Search** (`Page.LISTINGS`)
+  3. 📄 **Orders** (`Page.MY_BOOKINGS`)
+  4. 👤 **Profile** (`Page.PROFILE` / `Page.LOGIN`)
+  - 100% menggunakan SVG bundled lokal `lucide-react` (Bebas FOUT).
+
+### C. `functions/public/pages/Home.tsx`
+- **Desktop Search Bar**: Floating horizontal pill bar dengan 4 segmen (Lokasi/Nama, Kota, Kampus, Jenis Kost) dan tombol cari bulat gelap.
+- **Mobile Search Bar**: Compact pill trigger dengan label *"CARI KOST SEKARANG"* dan tombol *"FILTER"* untuk membuka `FilterDrawer`.
+- **Rekomendasi Utama**: Section header dengan aksen oranye `— REKOMENDASI UTAMA`, judul `KOST PILIHAN HARI INI`, dan tombol `LIHAT SEMUA >`.
+
+### D. `functions/public/components/QuickActionMenu.tsx`
+- Header: `• Menu Utama & Fitur` dengan dot oranye.
+- 4 Kartu Aksi Cepat dengan warna pastel elegan: Cari Kost (oranye), Data Kost (biru), Jasa Survey (hijau), Jadi Mitra (ungu).
+
+### E. `functions/public/components/KostCard.tsx`
+- Kartu listing rounded-3xl yang clean dengan badge kategori, badge verified oranye, bintang rating, icon lokasi MapPin, dan tombol `DETAIL` hitam elegan.
 
 ---
 
-## 3. Panduan Pengujian bagi Pengguna
+## 3. Hasil Pengujian & Kompilasi
 
-1. Buka halaman **Profil Mitra** (`/dashboard-mitra/profile`) atau **Profil Agen** (`/agent/profile`).
-2. Klik tombol **"Lengkapi Profil & Verifikasi"**.
-3. Masukkan data profil, unggah foto KTP, dan klik **"Simpan Profil"**.
-4. **Hasil**:
-   - Data verifikasi tersimpan dengan status `pending`.
-   - Admin akan menerima email pemberitahuan yang berisi detail lengkap nama calon mitra/agen, nomor WhatsApp, nomor KTP, alamat, dan tautan foto KTP untuk ditinjau.
+- **Uji Kompilasi TypeScript / Vite**:
+  ```bash
+  cmd /c npm run build
+  ```
+  **Hasil:**
+  ```text
+  ✓ 2504 modules transformed.
+  ✓ built in 1m 10s
+  Exit code: 0 (0 error)
+  ```
+
+---
+
+## 4. Panduan Pengujian untuk Pengguna
+
+1. **Uji Tampilan Desktop (PC)**:
+   - Buka `localhost:5173` di browser.
+   - Perhatikan header navbar, search bar horizontal floating pill, menu 4 fitur utama, dan grid kartu kost rekomendasi yang rapi dan elegan.
+   - Coba lakukan pencarian atau klik filter untuk memastikan fungsionalitas pencarian berjalan normal.
+2. **Uji Tampilan Mobile (HP / Mode Responsif)**:
+   - Aktifkan mode responsive mobile (Inspect Element $\rightarrow$ Mobile View).
+   - Periksa Bottom Navigation Bar di bagian bawah layar:
+     - Terdapat 4 menu: **Home**, **Search**, **Orders**, dan **Profile**.
+     - Coba klik menu **Profile**: aplikasi akan mengarahkan ke halaman profil (atau halaman login jika belum login).
+     - Coba klik menu **Search**: aplikasi akan membuka katalog cari kost.
+     - Coba klik menu **Orders**: aplikasi akan membuka halaman kost saya/pemesanan.

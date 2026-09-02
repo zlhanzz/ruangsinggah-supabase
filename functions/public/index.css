@@ -154,3 +154,66 @@ input::-ms-clear {
   -webkit-font-smoothing: antialiased;
 }
 
+/* --- GOOGLE STITCH HOME & LAYOUT STYLES --- */
+:root {
+  --tertiary-fixed: #e9ddff;
+  --inverse-surface: #213145;
+  --outline: #8c7263;
+  --on-secondary: #ffffff;
+  --secondary-container: #8fa7fe;
+  --tertiary-fixed-dim: #d0bcff;
+  --tertiary-container: #ae8dff;
+  --on-surface-variant: #584235;
+  --on-primary-fixed-variant: #753400;
+  --inverse-primary: #ffb68b;
+  --on-secondary-fixed-variant: #264191;
+  --primary-fixed-dim: #ffb68b;
+  --inverse-on-surface: #eaf1ff;
+  --secondary-fixed: #dce1ff;
+  --surface-container-highest: #d3e4fe;
+  --on-error: #ffffff;
+  --on-primary-container: #5c2800;
+  --secondary: #4059aa;
+  --on-tertiary-fixed-variant: #5516be;
+  --primary-fixed: #ffdbc8;
+  --on-tertiary: #ffffff;
+  --surface-tint: #994700;
+  --surface-variant: #d3e4fe;
+  --surface-container: #e5eeff;
+  --secondary-fixed-dim: #b6c4ff;
+  --surface-dim: #cbdbf5;
+  --on-background: #0b1c30;
+  --on-error-container: #93000a;
+  --error-container: #ffdad6;
+  --on-surface: #0b1c30;
+  --surface-container-low: #eff4ff;
+  --primary-container: #ff7a00;
+  --surface-container-high: #dce9ff;
+  --surface: #f8f9ff;
+  --on-secondary-fixed: #00164e;
+  --on-primary: #ffffff;
+  --on-secondary-container: #1d3989;
+  --on-tertiary-fixed: #23005c;
+  --on-primary-fixed: #321200;
+  --surface-bright: #f8f9ff;
+  --background: #f8f9ff;
+  --primary: #994700;
+  --tertiary: #6d3bd7;
+  --outline-variant: #e0c0af;
+  --on-tertiary-container: #4400a2;
+  --error: #ba1a1a;
+  --surface-container-lowest: #ffffff;
+
+  --margin-page: 1.25rem;
+  --radius-full: 9999px;
+  --radius-xl: 0.75rem;
+}
+
+.text-headline-md { font-size: 18px; line-height: 24px; font-weight: 700; }
+.text-headline-lg { font-size: 20px; line-height: 28px; font-weight: 800; }
+.text-body-md { font-size: 14px; line-height: 20px; font-weight: 400; }
+.text-body-lg { font-size: 16px; line-height: 24px; font-weight: 500; }
+.text-label-bold { font-size: 12px; line-height: 16px; font-weight: 700; }
+.text-label-sm { font-size: 10px; line-height: 14px; font-weight: 600; }
+
+

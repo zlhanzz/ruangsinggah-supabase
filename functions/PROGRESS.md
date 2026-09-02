@@ -2,6 +2,43 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 279. Modernisasi UI/UX Beranda (Home) & Bottom Navigation Bar Mobile dengan Desain Google Stitch (`Home.tsx`, `Navbar.tsx`, `QuickActionMenu.tsx`, `KostCard.tsx`, `index.css`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta penyesuaian UI/UX pada halaman beranda (Home) dan mobile navigation bar dengan mengadopsi desain modern hasil konversi Google Stitch.
+  - Penyesuaian berfokus pada kerangka dan styling bersih (*clean*), mempertahankan seluruh konten riil, logo RuangSinggah.id, data listing dari Supabase, dan fungsionalitas filter yang sudah ada.
+  - Pada mobile, bottom navigation bar disesuaikan memiliki 4 menu presisi: **Home**, **Search**, **Orders**, dan **Profile**.
+- **Implementasi Solusi**:
+  1. **Integrasi Design Tokens & Utilities Google Stitch (`index.css`)**:
+     - Mengintegrasikan CSS color tokens (`--primary: #994700`, `--primary-container: #ff7a00`, `--background: #f8f9ff`, `--surface: #f8f9ff`, `--tertiary: #6d3bd7`, dsb.).
+     - Menambahkan typography classes (`.text-headline-md`, `.text-headline-lg`, `.text-body-md`, dsb.) dan komponen styling.
+  2. **Modernisasi Navbar & 4-Menu Mobile Bottom Navigation (`Navbar.tsx`)**:
+     - Desktop Navbar: Nav link elegan (`Cari Kost`, `Data Kost`, `Jasa Survey`, `Jadi Mitra`) dengan indikator garis oranye aktif dan tombol auth Masuk/Daftar (pill button oranye).
+     - Mobile Bottom Navigation Bar: Menampilkan 4 menu utama berurutan:
+       1. 🏠 **Home** (`Page.HOME`)
+       2. 🔍 **Search** (`Page.LISTINGS`)
+       3. 📄 **Orders** (`Page.MY_BOOKINGS`)
+       4. 👤 **Profile** (`Page.PROFILE` / `Page.LOGIN` jika guest)
+     - 100% menggunakan SVG bundled lokal `lucide-react` (`Home`, `Search`, `ClipboardList`, `User`, `Bell`) bebas FOUT.
+  3. **Penyelarasan Search Bar Desktop & Mobile (`Home.tsx`)**:
+     - Desktop: Horizontal floating pill bar dengan 4 segmen (Lokasi/Nama, Kota, Kampus, Jenis Kost) + tombol search bulat `#0b1c30`.
+     - Mobile: Compact trigger bar dengan ikon Search, teks *"CARI KOST SEKARANG"*, dan tombol *"FILTER"*.
+  4. **Penyelarasan Menu Utama & Fitur (`QuickActionMenu.tsx`)**:
+     - Section header: `• Menu Utama & Fitur` dengan dot oranye.
+     - 4 Action cards: Cari Kost, Data Kost, Jasa Survey, Jadi Mitra dengan icon pastel lembut dan shadow modern.
+  5. **Penyelarasan Kartu Kost Rekomendasi (`KostCard.tsx`)**:
+     - Rounded-3xl card dengan aspect ratio foto proporsional.
+     - Badge kategori, badge verified oranye, bintang rating, icon lokasi MapPin, dan tombol `DETAIL` hitam elegan.
+- **File Tersentuh**:
+  - `functions/public/index.css`
+  - `functions/public/components/Navbar.tsx`
+  - `functions/public/pages/Home.tsx`
+  - `functions/public/components/QuickActionMenu.tsx`
+  - `functions/public/components/KostCard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` lulus 100% (✓ 2504 modules transformed, built in 1m 10s, 0 error).
+
 ### 224. Notifikasi Email Otomatis ke Admin Saat Ada Pengajuan Verifikasi Identitas Mitra & Agen Baru (`emailService.ts`, `MitraProfile.tsx`, `AgentProfile.tsx`, `Profile.tsx`) (Agustus 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta agar setiap kali ada pengajuan verifikasi identitas (KTP) yang masuk, baik dari calon mitra (pemilik kost) maupun calon agen pemasaran, sistem secara otomatis mengirimkan notifikasi email ke email admin.

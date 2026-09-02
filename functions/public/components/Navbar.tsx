@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Page } from '../types';
-import { Bell, MessageSquare } from 'lucide-react';
+import { Bell, MessageSquare, Home, Search, ClipboardList, User } from 'lucide-react';
 import NotificationDropdown from './NotificationDropdown';
 import { notificationService } from '../notificationService';
 
@@ -13,7 +13,7 @@ interface NavbarProps {
   hideNavLinks?: boolean;
 }
 
-  const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogout, hideBottomNav, hideNavLinks }) => {
+const Navbar: React.FC<NavbarProps> = ({ activePage, onPageChange, user, onLogout, hideBottomNav, hideNavLinks }) => {
   const isAdminPage = activePage.startsWith(Page.DASHBOARD_ADMIN);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -23,11 +23,10 @@ interface NavbarProps {
   const notificationsRef = useRef<HTMLDivElement>(null);
 
   const navItems = [
-    { label: 'Beranda', id: Page.HOME },
     { label: 'Cari Kost', id: Page.LISTINGS },
-    { label: 'Database Kost', id: Page.PRODUCTS },
+    { label: 'Data Kost', id: Page.PRODUCTS },
     { label: 'Jasa Survey', id: Page.SURVEY_SERVICE },
-    { label: 'Mitra Kost', id: Page.OWNER },
+    { label: 'Jadi Mitra', id: Page.OWNER },
   ];
 
   // Close profile dropdown when clicking outside
@@ -376,46 +375,80 @@ interface NavbarProps {
                   )}
                 </div>
               ) : (
-                <button
-                  onClick={() => onPageChange(Page.LOGIN)}
-                  className="text-gray-900 font-bold text-sm hover:text-orange-500 transition-colors"
-                >
-                  Masuk / Daftar
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => onPageChange(Page.LOGIN)}
+                    className="text-gray-800 font-bold text-sm hover:text-orange-500 transition-colors px-3 py-2 cursor-pointer"
+                  >
+                    Masuk
+                  </button>
+                  <button
+                    onClick={() => onPageChange(Page.LOGIN)}
+                    className="bg-[#ff7a00] hover:bg-orange-600 text-white font-bold text-sm px-5 py-2 rounded-full shadow-sm hover:shadow transition-all cursor-pointer"
+                  >
+                    Daftar
+                  </button>
+                </div>
               )}
             </div>
           </div>
         </div>
       </nav>
 
-      {/* Edge-to-Edge Mobile Bottom Navigation */}
-      {[Page.HOME, Page.LISTINGS, Page.PRODUCTS, Page.MY_BOOKINGS, Page.CHAT].includes(activePage) && !hideBottomNav && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 w-full z-[100] bg-white border-t border-gray-100 shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.05)]">
-          <div className="flex items-center justify-around pb-1 pt-2">
+      {/* Mobile Bottom Navigation Bar (4 Items: Home, Search, Orders, Profile) */}
+      {[Page.HOME, Page.LISTINGS, Page.PRODUCTS, Page.MY_BOOKINGS, Page.CHAT, Page.PROFILE].includes(activePage) && !hideBottomNav && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 w-full z-[100] bg-white/95 backdrop-blur-md border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-[env(safe-area-inset-bottom)]">
+          <div className="flex items-center justify-around py-1.5 px-2">
+            {/* 1. Home */}
             <button
               onClick={() => onPageChange(Page.HOME)}
-              className={`flex-1 flex flex-col items-center gap-1 p-2 transition-all ${activePage === Page.HOME ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'}`}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition-all cursor-pointer ${
+                activePage === Page.HOME ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'
+              }`}
             >
-              <svg className={`w-6 h-6 ${activePage === Page.HOME ? 'stroke-orange-500 fill-orange-50' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={activePage === Page.HOME ? 2.5 : 2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
-              <span className={`text-[11px] ${activePage === Page.HOME ? 'font-bold' : 'font-medium'}`}>Beranda</span>
+              <Home size={22} className={activePage === Page.HOME ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
+              <span className={`text-[10px] ${activePage === Page.HOME ? 'font-bold text-orange-500' : 'font-medium text-gray-500'}`}>
+                Home
+              </span>
             </button>
 
+            {/* 2. Search */}
             <button
-              onClick={() => onPageChange(Page.CHAT)}
-              className={`flex-1 flex flex-col items-center gap-1 p-2 transition-all ${activePage === Page.CHAT ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'}`}
+              onClick={() => onPageChange(Page.LISTINGS)}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition-all cursor-pointer ${
+                activePage === Page.LISTINGS ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'
+              }`}
             >
-              <div className="relative">
-                <MessageSquare className={`w-6 h-6 ${activePage === Page.CHAT ? 'stroke-orange-500 fill-orange-50' : ''}`} />
-              </div>
-              <span className={`text-[11px] ${activePage === Page.CHAT ? 'font-bold' : 'font-medium'}`}>Pesan</span>
+              <Search size={22} className={activePage === Page.LISTINGS ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
+              <span className={`text-[10px] ${activePage === Page.LISTINGS ? 'font-bold text-orange-500' : 'font-medium text-gray-500'}`}>
+                Search
+              </span>
             </button>
 
+            {/* 3. Orders */}
             <button
               onClick={() => onPageChange(Page.MY_BOOKINGS)}
-              className={`flex-1 flex flex-col items-center gap-1 p-2 transition-all ${activePage === Page.MY_BOOKINGS ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'}`}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition-all cursor-pointer ${
+                activePage === Page.MY_BOOKINGS ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'
+              }`}
             >
-              <svg className={`w-6 h-6 ${activePage === Page.MY_BOOKINGS ? 'stroke-orange-500 fill-orange-50' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={activePage === Page.MY_BOOKINGS ? 2.5 : 2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-              <span className={`text-[11px] ${activePage === Page.MY_BOOKINGS ? 'font-bold' : 'font-medium'}`}>Kost Saya</span>
+              <ClipboardList size={22} className={activePage === Page.MY_BOOKINGS ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
+              <span className={`text-[10px] ${activePage === Page.MY_BOOKINGS ? 'font-bold text-orange-500' : 'font-medium text-gray-500'}`}>
+                Orders
+              </span>
+            </button>
+
+            {/* 4. Profile */}
+            <button
+              onClick={() => onPageChange(user ? Page.PROFILE : Page.LOGIN)}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition-all cursor-pointer ${
+                activePage === Page.PROFILE || activePage === Page.LOGIN ? 'text-orange-500' : 'text-gray-400 hover:text-gray-800'
+              }`}
+            >
+              <User size={22} className={activePage === Page.PROFILE || activePage === Page.LOGIN ? 'stroke-orange-500 stroke-[2.5]' : 'stroke-gray-400'} />
+              <span className={`text-[10px] ${activePage === Page.PROFILE || activePage === Page.LOGIN ? 'font-bold text-orange-500' : 'font-medium text-gray-500'}`}>
+                Profile
+              </span>
             </button>
           </div>
         </div>
