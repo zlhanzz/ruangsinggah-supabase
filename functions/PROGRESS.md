@@ -2,6 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 275. Perbaikan Foto Hilang Pasca-Edit Listing Mitra & Penegasan Alur Publish Baru vs Edit Listing (`adminService.ts` & `KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Mitra melaporkan bahwa setelah melakukan pengeditan data kost pada Dashboard Mitra lalu menyimpannya, foto-foto pada listing menjadi hilang / rusak (tampil sebagai broken image icon `Thumbnail 1`, `Thumbnail 2`, dst. di sisi user pencari kost).
+  - Pengguna menanyakan apakah alur edit listing lama yang sudah disetujui admin sama dengan pendaftaran listing baru yang wajib menunggu ACC admin dari awal.
+- **Investigasi & Analisis Akar Masalah**:
+  1. *Akar Masalah Foto Hilang*:
+     - Fungsi pembacaan listing `getOwnerProperties` di `userService.ts` mengonversi domain URL foto dari Supabase (`supabase.co`) ke CDN proxy (`media.ruangsinggah.id`).
+     - Ketika listing diedit, `KostFormMitra.tsx` mengirimkan URL `media.ruangsinggah.id` ke `updatePropertyWithMedia`.
+     - Fungsi `updatePropertyWithMedia` sebelumnya membandingkan string eksak (`keptUrl === imgObj.original`). Perbedaan nama host domain membuat komparasi bernilai `false` untuk seluruh foto lama.
+     - Akibatnya, sistem salah menduga bahwa semua foto lama telah dihapus oleh pengguna dan memicu `deleteFileFromStorage()`, yang secara fisik menghapus file foto dari Supabase Storage.
+  2. *Penegasan Alur Publish Baru vs Editing*:
+     - Listing baru (`addPropertyWithMedia`) wajib berstatus `'draft'` dengan `is_verified: false` untuk ditinjau & di-ACC oleh Super Admin.
+     - Listing lama yang sudah tayang (`status === 'published'`) ketika diedit (`updatePropertyWithMedia`) wajib **tetap berstatus `'published'`** dan `is_verified: true`, sehingga perubahan data langsung tayang secara instan di sisi user tanpa harus menunggu antrean review admin ulang.
+- **Implementasi Solusi**:
+  1. **Helper Normalisasi Path Storage (`normalizeStorageRelativePath` & `deleteFileFromStorage`) di `adminService.ts`**:
+     - Mengembangkan fungsi `normalizeStorageRelativePath` yang mengekstrak path relatif objek storage (contoh: `properties/user123/kost/img.webp`), kebal terhadap perbedaan domain CDN proxy (`media.ruangsinggah.id`), direct Supabase, maupun relative path.
+     - Memperbarui pengecekan `itemsToDelete`, `videosToDelete`, dan `findLabelForUrl` agar mencocokkan path storage yang dinormalisasi. Foto lama yang dipertahankan dijamin tidak akan pernah terhapus dari storage.
+  2. **Perlindungan Status Listing Saat Edit di `adminService.ts` & `KostFormMitra.tsx`**:
+     - Pada `updatePropertyWithMedia`, menetapkan `targetStatus` & `targetVerified`: jika properti yang diedit sudah `published`, maka status tetap `published` dan `is_verified: (existing.is_verified ?? true)`.
+     - Di `KostFormMitra.tsx`, memberikan umpan balik notifikasi yang ramah dan kontekstual:
+       - Edit Listing Aktif: *"Perubahan berhasil disimpan! Data kost Anda telah langsung diperbarui pada listing publik."*
+       - Edit Listing Draft: *"Perubahan draft berhasil disimpan! Menunggu peninjauan oleh tim admin RuangSinggah."*
+       - Pendaftaran Baru: *"Pendaftaran kost berhasil diajukan! Listing baru Anda saat ini dalam tahap peninjauan (review) oleh tim RuangSinggah dan akan otomatis tayang setelah disetujui."*
+- **File Tersentuh**:
+  - `functions/public/adminService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 34.61s, 0 error).
+
 ### 274. Redesain Tampilan Landmark & Fasilitas Publik Terdekat Menjadi Ramping & Efisien (Compact Grid Horizontal) (`KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Bagian Landmark (Kampus Terdekat) dan Fasilitas Publik Terdekat pada halaman detail kost sebelumnya memakan ruang vertikal secara berlebihan karena dirender sebagai kartu vertikal tinggi (`min-w-[200px]`, tinggi ~160px) dengan `flex-wrap`.

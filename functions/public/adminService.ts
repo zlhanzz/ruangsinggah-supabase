@@ -106,20 +106,59 @@ export async function checkIfUserIsAdmin(uid: string): Promise<boolean> {
   return role === 'admin';
 }
 
+// Normalisasi path relatif storage agar perbandingan dan penghapusan konsisten di semua domain (CDN proxy & direct Supabase)
+export function normalizeStorageRelativePath(urlStr: string): string {
+  if (!urlStr || typeof urlStr !== 'string') return '';
+  const trimmed = urlStr.trim();
+  // Ekstrak bagian path setelah /storage/v1/object/public/<bucket>/ atau /storage/v1/object/<bucket>/
+  const match = trimmed.match(/\/storage\/v1\/object\/(?:public\/)?[^/]+\/(.+)$/i);
+  if (match && match[1]) {
+    return decodeURIComponent(match[1].split('?')[0]);
+  }
+  // Coba parse sebagai URL standar
+  try {
+    const u = new URL(trimmed);
+    const p = decodeURIComponent(u.pathname.replace(/^\/+/, ''));
+    const parts = p.split(/storage\/v1\/object\/(?:public\/)?[^/]+\//i);
+    if (parts.length > 1) {
+      return parts[1].split('?')[0];
+    }
+    return p.split('?')[0];
+  } catch {
+    return decodeURIComponent(trimmed.replace(/^\/+/, '').split('?')[0]);
+  }
+}
+
 // Delete file from Supabase Storage using URL parsing
 async function deleteFileFromStorage(fileUrl: string): Promise<void> {
   if (!fileUrl) return;
   try {
-    // Supabase Storage URL format:
-    // https://<project>.supabase.co/storage/v1/object/public/<bucket>/<path>
-    const url = new URL(fileUrl);
-    const pathParts = url.pathname.split('/storage/v1/object/public/');
-    if (pathParts.length < 2) return;
-    const rest = pathParts[1];
-    const slashIdx = rest.indexOf('/');
-    if (slashIdx === -1) return;
-    const bucket = rest.substring(0, slashIdx);
-    const filePath = rest.substring(slashIdx + 1);
+    const rawTrimmed = fileUrl.trim();
+    let bucket = 'properties';
+    let filePath = '';
+
+    const urlMatch = rawTrimmed.match(/\/storage\/v1\/object\/(?:public\/)?([^/]+)\/(.+)$/i);
+    if (urlMatch && urlMatch[1] && urlMatch[2]) {
+      bucket = urlMatch[1];
+      filePath = decodeURIComponent(urlMatch[2].split('?')[0]);
+    } else {
+      try {
+        const u = new URL(rawTrimmed);
+        const parts = u.pathname.split(/storage\/v1\/object\/(?:public\/)?/i);
+        if (parts.length >= 2) {
+          const rest = parts[1];
+          const slashIdx = rest.indexOf('/');
+          if (slashIdx !== -1) {
+            bucket = rest.substring(0, slashIdx);
+            filePath = decodeURIComponent(rest.substring(slashIdx + 1).split('?')[0]);
+          }
+        }
+      } catch {
+        filePath = normalizeStorageRelativePath(rawTrimmed);
+      }
+    }
+
+    if (!filePath) return;
     const { error } = await supabase.storage.from(bucket).remove([filePath]);
     if (error) console.warn('Storage delete warning:', error.message);
   } catch (e) {
@@ -2121,25 +2160,40 @@ export async function updatePropertyWithMedia(
   );
   const keptVideoStrings = kostData.videoUrls || [];
 
+  const normalizedKeptImagePaths = keptImageStrings.map(normalizeStorageRelativePath).filter(Boolean);
+  const normalizedKeptVideoPaths = keptVideoStrings.map(normalizeStorageRelativePath).filter(Boolean);
+
+  const isImagePathKept = (candidate: string) => {
+    if (!candidate) return false;
+    if (keptImageStrings.includes(candidate)) return true;
+    const norm = normalizeStorageRelativePath(candidate);
+    if (!norm) return false;
+    return normalizedKeptImagePaths.some(k => k === norm || norm.endsWith(k) || k.endsWith(norm));
+  };
+
+  const isVideoPathKept = (candidate: string) => {
+    if (!candidate) return false;
+    if (keptVideoStrings.includes(candidate)) return true;
+    const norm = normalizeStorageRelativePath(candidate);
+    if (!norm) return false;
+    return normalizedKeptVideoPaths.some(k => k === norm || norm.endsWith(k) || k.endsWith(norm));
+  };
+
   // Determine deletions
   const itemsToDelete = currentImageObjects.filter((imgObj: any) => {
-    const isKept = keptImageStrings.some(keptUrl =>
-      keptUrl === imgObj.original ||
-      keptUrl === imgObj.webp ||
-      keptUrl === imgObj.thumbnail ||
-      keptUrl === imgObj ||
-      keptUrl === imgObj.url
-    );
+    const origUrl = typeof imgObj === 'string' ? imgObj : (imgObj.original || imgObj.url || '');
+    const webpUrl = typeof imgObj === 'object' ? (imgObj.webp || '') : '';
+    const thumbUrl = typeof imgObj === 'object' ? (imgObj.thumbnail || '') : '';
+
+    const isKept = isImagePathKept(origUrl) ||
+                   (webpUrl && isImagePathKept(webpUrl)) ||
+                   (thumbUrl && isImagePathKept(thumbUrl));
     return !isKept;
   });
 
   const videosToDelete = currentVideoObjects.filter((vidObj: any) => {
-    const isKept = keptVideoStrings.some(keptUrl =>
-      keptUrl === vidObj.original ||
-      keptUrl === vidObj.webp ||
-      keptUrl === vidObj
-    );
-    return !isKept;
+    const url = typeof vidObj === 'string' ? vidObj : (vidObj.original || vidObj.url || '');
+    return !isVideoPathKept(url);
   });
 
   // Delete removed files from Storage
@@ -2164,12 +2218,26 @@ export async function updatePropertyWithMedia(
 
   const findLabelForUrl = (u: string): string => {
     if (!u) return '';
-    const fromMeta = existingPhotosMeta.find((m: any) => (m.original === u || m.url === u || m.webp === u));
+    const normU = normalizeStorageRelativePath(u);
+    const matchesUrl = (target: string) => {
+      if (!target) return false;
+      if (target === u) return true;
+      const normT = normalizeStorageRelativePath(target);
+      return normT && (normT === normU || normT.endsWith(normU) || normU.endsWith(normT));
+    };
+
+    const fromMeta = existingPhotosMeta.find((m: any) => 
+      matchesUrl(m.original) || matchesUrl(m.url) || matchesUrl(m.webp)
+    );
     if (fromMeta?.label || fromMeta?.category) return fromMeta.label || fromMeta.category;
-    const fromObj = currentImageObjects.find((o: any) => (o.original === u || o.url === u || o.webp === u));
+
+    const fromObj = currentImageObjects.find((o: any) => 
+      matchesUrl(o.original) || matchesUrl(o.url) || matchesUrl(o.webp)
+    );
     if (fromObj?.label || fromObj?.category) return fromObj.label || fromObj.category;
+
     for (const [catName, urls] of Object.entries(existingCategorized)) {
-      if (Array.isArray(urls) && urls.some(item => item === u || item.includes(u) || u.includes(item))) {
+      if (Array.isArray(urls) && urls.some(item => matchesUrl(item))) {
         return catName;
       }
     }
@@ -2200,18 +2268,15 @@ export async function updatePropertyWithMedia(
         };
       })
     : currentImageObjects.filter((imgObj: any) => {
-        return keptImageStrings.some(keptUrl =>
-          keptUrl === imgObj.original ||
-          keptUrl === imgObj.webp ||
-          keptUrl === imgObj.thumbnail ||
-          keptUrl === imgObj ||
-          keptUrl === imgObj.url
-        );
+        const origUrl = typeof imgObj === 'string' ? imgObj : (imgObj.original || imgObj.url || '');
+        const webpUrl = typeof imgObj === 'object' ? (imgObj.webp || '') : '';
+        const thumbUrl = typeof imgObj === 'object' ? (imgObj.thumbnail || '') : '';
+        return isImagePathKept(origUrl) || (webpUrl && isImagePathKept(webpUrl)) || (thumbUrl && isImagePathKept(thumbUrl));
       });
 
   const finalVideoObjects = currentVideoObjects.filter((vidObj: any) => {
     const url = typeof vidObj === 'string' ? vidObj : vidObj.original;
-    return keptVideoStrings.includes(url);
+    return isVideoPathKept(url);
   });
 
   // Upload new files with category label and caption support
@@ -2260,6 +2325,18 @@ export async function updatePropertyWithMedia(
         return catMap;
       })();
 
+  // Status & Verification Preservation:
+  // - Admin dapat mengubah status secara bebas.
+  // - Mitra / Non-Admin:
+  //   * Jika properti SUDAH 'published', status TETAP 'published' dan is_verified: (existing.is_verified ?? true).
+  //   * Jika properti masih 'draft', status TETAP 'draft' dan is_verified: false.
+  const targetStatus = isAdmin 
+    ? (kostData.status || existing.status || 'draft')
+    : (existing.status === 'published' ? 'published' : 'draft');
+  const targetVerified = isAdmin
+    ? (kostData.isVerified !== undefined ? kostData.isVerified : (existing.is_verified ?? false))
+    : (existing.status === 'published' ? (existing.is_verified ?? true) : false);
+
   const { error: updateError } = await supabase
     .from('properties')
     .update({
@@ -2282,9 +2359,9 @@ export async function updatePropertyWithMedia(
       },
       type: kostData.type,
       property_type: kostData.type, // Sync added column
-      status: kostData.status,
-      is_verified: kostData.isVerified,
-      is_managed: kostData.isManaged,
+      status: targetStatus,
+      is_verified: targetVerified,
+      is_managed: kostData.isManaged !== undefined ? kostData.isManaged : (existing.is_managed ?? false),
       rating: Number(kostData.rating || 0),
       location: kostData.location,
       image_urls: allImages,

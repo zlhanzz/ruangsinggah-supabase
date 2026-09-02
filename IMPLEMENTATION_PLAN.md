@@ -1,80 +1,131 @@
-# Rencana Implementasi: Eliminasi Duplikasi Landmark & Perampingan Total Menjadi 1 Baris Murni (Single-Line Row)
+# IMPLEMENTATION PLAN: Perbaikan Foto Hilang Pasca-Edit Listing Mitra & Penegasan Alur Edit vs Publish Baru
 
-## 1. Analisis Masalah & Kebutuhan
+## 1. Analisis Masalah & Pertanyaan Pengguna
 
-Berdasarkan tinjauan dan evaluasi visual dari pengguna:
-1. **Duplikasi Data (Double & Berulang)**:
-   - Di daftar **"Kampus Terdekat"**, data memuat 10 lokasi yang mencakup kampus sejati (Unhas, UIM, PNUP) sekaligus fasilitas umum (Makassar Town Square, RSUP Wahidin, KIMA, Terminal Daya, Zap Laundry, Masjid, Gereja).
-   - Di daftar **"Fasilitas Publik"**, 7 lokasi yang sama diulang kembali.
-   - *Penyebab*: Pada saat pemindaian/pengisian form di `KostFormMitra.tsx`, `campuses` diisi dengan array gabungan `[...finalCampuses, ...cleanFinalFacilities]`. Akibatnya, listing kost yang tersimpan di database memiliki fasilitas publik di dalam array `campuses` sekaligus array `public_facilities`.
-2. **Layout Masih Tebal (Belum 1 Baris Murni)**:
-   - Setiap kartu saat ini memiliki **2 baris bertingkat** (baris 1: Nama + Jarak + Rute; baris 2: Moda jalan kaki, motor, mobil).
-   - Hal ini membuat kartu tetap memakan tinggi vertikal yang signifikan dan terasa tidak efisien.
-   - *Keinginan Pengguna*: **"cukup satu baris aja cukup"** — Semua elemen (Icon, Nama Tempat, Estimasi Waktu/Jarak, dan Tombol Rute) berada dalam **1 baris lurus murni** tanpa ada baris kedua di bawahnya.
+### A. Akar Masalah Foto Hilang / Broken Image Pasca-Edit
+Dari hasil investigasi mendalam pada alur kerja data dari front-end ke database dan cloud storage:
+1. **Perbedaan Domain URL (Proxy CDN vs Supabase Direct)**:
+   - Saat Mitra membuka Dashboard Mitra, daftar properti dibaca via `getOwnerProperties(uid)` di `userService.ts`.
+   - Fungsi `ensureAbsoluteUrl` secara otomatis mengubah domain penyimpanan Supabase (`https://<project-ref>.supabase.co/...`) menjadi domain CDN proxy resmi (`https://media.ruangsinggah.id/...`).
+   - Ketika Mitra mengklik tombol **"Edit"**, objek properti dengan URL `media.ruangsinggah.id` tersebut diumpankan ke dalam form `KostFormMitra.tsx`.
+2. **False Negative pada Pengecekan Foto yang Dihapus (`itemsToDelete`)**:
+   - Saat Mitra menekan "Simpan Perubahan", data dikirim ke fungsi `updatePropertyWithMedia()` di `adminService.ts`.
+   - Pada baris pengecekan foto yang dihapus:
+     ```typescript
+     const itemsToDelete = currentImageObjects.filter((imgObj: any) => {
+       const isKept = keptImageStrings.some(keptUrl =>
+         keptUrl === imgObj.original || keptUrl === imgObj.webp || ...
+       );
+       return !isKept;
+     });
+     ```
+   - Karena `imgObj.original` di database masih berupa `supabase.co` sedangkan `keptUrl` dari form berupa `media.ruangsinggah.id`, perbandingan string eksak menghasilkan `false`.
+   - Sistem salah menduga bahwa **seluruh foto lama telah dihapus oleh mitra**, lalu memanggil `deleteFileFromStorage()` yang secara fisik **menghapus file gambar dari Supabase Storage**!
+   - Akibatnya, URL yang tersimpan di database menjadi broken link (error 404) dan tampilan foto di sisi user pencari properti menjadi kosong / broken image icon.
 
 ---
 
-## 2. Dampak Perubahan (File yang Terpengaruh)
+### B. Penegasan Alur: Listing Baru (Publish Baru) vs Listing Lama (Editing)
+Pengguna menanyakan:
+> *"apakah jangan jangan meskipun sebelumnya sudah pernah di acc oleh admin dan berhasil listing, ketika dilakukan pengeditan, alurnya masih sama ? harus acc dulu dari admin? kita perlu ada perbaikan sih jika seandainya begitu, sistem kita harus membedakan yang mana yang baru publissh dan yang mana hanya melakukan editing"*
 
-1. `functions/public/pages/KostDetail.tsx`:
-   - Menambahkan filter pemisah pintar (`campusList` vs `publicFacilitiesList`) untuk membersihkan duplikasi data warisan di database.
-   - Merombak total rendering kartu landmark menjadi **1 baris horizontal murni (Single Line Row)** setinggi ~36px:
-     - `[Icon] [Nama Tempat]` di sisi kiri (`truncate`).
-     - `[🚶 22m · 🏍️ 5m]` dan/atau badge jarak `[1.5 km]` di tengah/kanan dalam 1 garis lurus.
-     - `[Rute ↗]` tombol navigasi kompak di ujung kanan.
-2. `functions/public/components/KostFormMitra.tsx`:
-   - Memperbaiki pengisian state saat auto-scan: `campuses` hanya diisi murni kampus/universitas (`finalCampuses`), sedangkan `publicFacilities` diisi fasilitas publik (`cleanFinalFacilities`).
-3. `functions/PROGRESS.md` & `WALKTHROUGH.md`:
-   - Pencatatan dokumentasi dan riwayat pengerjaan fitur #275.
+**Prinsip Desain & Alur yang Harus Ditegakkan**:
+1. **Listing Baru (Pendaftaran Baru Pertama Kali)**:
+   - Dijalankan melalui fungsi `addPropertyWithMedia`.
+   - Status awal **WAJIB `'draft'`** dengan `is_verified: false`.
+   - Memerlukan review dan verifikasi/ACC dari Super Admin sebelum dapat tayang di katalog publik.
+2. **Editing Listing Lama (Yang Sudah Pernah di-ACC & Tayang)**:
+   - Dijalankan melalui fungsi `updatePropertyWithMedia`.
+   - **Jika properti sebelumnya SUDAH berstatus `'published'`**: Maka saat mitra melakukan pengeditan (misal update fasilitas, ubah harga sewa, perbaiki deskripsi, atau ganti/tambah foto), properti **TETAP berstatus `'published'`** (langsung ter-update secara instan tanpa harus antre ACC admin dari awal lagi).
+   - **Jika properti sebelumnya masih berstatus `'draft'` atau `'revision'` (sedang/butuh revisi)**: Properti tetap berstatus `'draft'` untuk menunggu peninjauan admin.
+
+---
+
+## 2. Dampak Perubahan File
+
+1. **`functions/public/adminService.ts`**:
+   - Menambahkan helper normalisasi storage path `extractStorageRelativePath(url: string)` agar komparasi file gambar di `updatePropertyWithMedia`, `findLabelForUrl`, dan fungsi manajemen media lainnya 100% kebal terhadap perbedaan domain (`media.ruangsinggah.id` vs `supabase.co`).
+   - Mencegah `itemsToDelete` menghapus foto yang sebenarnya masih dipertahankan oleh mitra.
+   - Memastikan bahwa jika properti yang diedit sudah `status === 'published'`, status tetap terjaga `'published'` dan `is_verified: existing.is_verified` (tidak ter-reset ke draft).
+2. **`functions/public/components/KostFormMitra.tsx`**:
+   - Memastikan payload saat edit (`isEditing`) membawa status yang tepat (`editingKost.status === 'published' ? 'published' : 'draft'`).
+   - Memberikan pesan feedback / alert yang jelas: Jika listing aktif diedit, beritahukan bahwa perubahan langsung tayang. Jika listing draft diedit, beritahukan bahwa pengajuan dikirim untuk review.
+3. **`functions/public/userService.ts`**:
+   - Memastikan helper `getDisplayImageUrl` dan `ensureAbsoluteUrl` konsisten dan aman saat data bolak-balik antara pembacaan dan pembaruan.
 
 ---
 
 ## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah di-ACC)
 
-### Langkah 1: Deduplikasi & Pemisahan Kategori di `KostDetail.tsx`
-- Membuat computed list dengan `useMemo`:
+### Langkah 1: Penguatan Normalisasi Path Storage di `adminService.ts`
+- Implementasi fungsi pembantu `normalizeStorageRelativePath(url: string)`:
   ```typescript
-  // 1. Fasilitas Publik murni
-  const publicFacilitiesList = useMemo(() => {
-    return kost.publicFacilities || [];
-  }, [kost.publicFacilities]);
-
-  // 2. Kampus terdekat murni (filter item yang sudah ada di fasilitas publik atau non-kampus)
-  const campusList = useMemo(() => {
-    const raw = kost.campuses || [];
-    if (publicFacilitiesList.length === 0) return raw;
-    const publicNames = new Set(publicFacilitiesList.map(p => p.name.toLowerCase().trim()));
-    return raw.filter(c => !publicNames.has(c.name.toLowerCase().trim()));
-  }, [kost.campuses, publicFacilitiesList]);
+  export function normalizeStorageRelativePath(urlStr: string): string {
+    if (!urlStr || typeof urlStr !== 'string') return '';
+    const trimmed = urlStr.trim();
+    // Ekstrak bagian path setelah /storage/v1/object/public/<bucket>/ atau ambil path relatifnya
+    const match = trimmed.match(/\/storage\/v1\/object\/public\/[^/]+\/(.+)$/);
+    if (match && match[1]) {
+      return match[1].split('?')[0]; // path bersih tanpa query params
+    }
+    return trimmed.split('?')[0];
+  }
   ```
+- Memperbarui `itemsToDelete` pada `updatePropertyWithMedia`:
+  ```typescript
+  const normalizedKeptPaths = keptImageStrings.map(normalizeStorageRelativePath).filter(Boolean);
+  
+  const itemsToDelete = currentImageObjects.filter((imgObj: any) => {
+    const origPath = normalizeStorageRelativePath(imgObj.original || imgObj.url || (typeof imgObj === 'string' ? imgObj : ''));
+    const webpPath = normalizeStorageRelativePath(imgObj.webp || '');
+    const thumbPath = normalizeStorageRelativePath(imgObj.thumbnail || '');
+    
+    const isKept = normalizedKeptPaths.some(keptPath => 
+      keptPath === origPath || 
+      (webpPath && keptPath === webpPath) || 
+      (thumbPath && keptPath === thumbPath) ||
+      (origPath && (keptPath.endsWith(origPath) || origPath.endsWith(keptPath)))
+    );
+    return !isKept;
+  });
+  ```
+- Memperbarui `findLabelForUrl` dengan pencocokan path yang dinormalisasi.
 
-### Langkah 2: Redesain UI Menjadi 1 Baris Horizontal Murni (Single Line Row)
-- Mengubah struktur layout item:
-  - Container: `flex items-center justify-between py-2 px-3 rounded-xl border border-gray-100 bg-white hover:bg-gray-50 transition-colors gap-2 text-xs`
-  - Kiri: Icon vector murni (14px) + Nama tempat tebal (`truncate max-w-[130px] sm:max-w-[180px]`)
-  - Tengah/Kanan (tetap 1 baris sejajar):
-    - Chips waktu tempuh motor/jalan kaki ringkas: `<span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">🏍️ 5m</span>`
-    - Badge jarak: `<span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">1.5 km</span>`
-    - Tombol Rute: Link minimalis Google Maps berikon `Navigation`
-  - **Hasil**: 1 item = Tepat 1 baris ramping dan bersih!
+### Langkah 2: Perlindungan Status Properti pada Alur Edit
+- Pada `updatePropertyWithMedia`, tentukan status akhir secara aman:
+  ```typescript
+  const targetStatus = isAdmin 
+    ? (kostData.status || existing.status || 'draft')
+    : (existing.status === 'published' ? 'published' : 'draft');
+  const targetVerified = isAdmin
+    ? (kostData.isVerified !== undefined ? kostData.isVerified : existing.is_verified)
+    : (existing.status === 'published' ? (existing.is_verified ?? true) : false);
+  ```
+- Dengan demikian, jika mitra mengedit kost yang sudah disetujui admin, statusnya tetap `published` dan langsung tayang. Jika baru mendaftar, tetap `draft` menunggu persetujuan.
 
-### Langkah 3: Perbaikan Sumber Data di `KostFormMitra.tsx`
-- Memastikan `setForm` saat scan dan submit form hanya memasukkan kampus ke `campuses` dan non-kampus ke `publicFacilities`.
+### Langkah 3: Penyesuaian Pesan Feedback di `KostFormMitra.tsx`
+- Pada submit berhasil:
+  - Jika `isEditing && editingKost?.status === 'published'`: Tampilkan notifikasi "Perubahan berhasil disimpan! Data kost Anda telah langsung diperbarui di listing publik."
+  - Jika `isEditing && editingKost?.status !== 'published'`: Tampilkan "Perubahan draft berhasil disimpan! Menunggu peninjauan admin."
+  - Jika listing baru: Tampilkan "Pengajuan kost berhasil dikirim! Menunggu peninjauan tim RuangSinggah."
 
-### Langkah 4: Verifikasi & Kompilasi
-- Menjalankan `cmd /c "npm run build"` di direktori `functions` untuk memastikan kelulusan build TypeScript (0 error).
-
-### Langkah 5: Git Commit & Push ke `bukan-productions`
-- Commit perubahan dan push langsung ke branch `bukan-productions`.
+### Langkah 4: Uji Kompilasi & Build
+- Menjalankan `npm run build` di `functions/public/` untuk memastikan 0 error kompilasi TypeScript.
+- Memperbarui `functions/PROGRESS.md` dan menerbitkan `WALKTHROUGH.md`.
+- Melakukan git commit & push ke branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-1. **Verifikasi Visual**:
-   - Memastikan tidak ada lagi nama tempat fasilitas publik yang muncul ganda di bawah "Kampus Terdekat".
-   - Memastikan setiap item landmark tampil presisi dalam 1 baris lurus tanpa ada baris kedua yang memicu pemborosan ruang.
-2. **Verifikasi Fungsional**:
-   - Tombol "Rute" tetap membuka rute navigasi Google Maps secara akurat.
-3. **Verifikasi Build**:
-   - `npm run build` sukses tanpa error TypeScript.
+| Skenario Pengujian | Hasil yang Diharapkan |
+|---|---|
+| **Edit Listing Published** | Data ter-update, foto lama TIDAK terhapus dari storage, status tetap `published`, foto tetap muncul di halaman detail. |
+| **Hapus Salah Satu Foto Saat Edit** | Hanya foto yang dihapus yang dibersihkan dari storage, foto lainnya tetap utuh. |
+| **Tambah Foto Baru Saat Edit** | Foto baru terunggah dan ditambahkan ke daftar galeri, foto lama tidak terganggu. |
+| **Pendaftaran Listing Baru** | Listing masuk dengan status `draft` dan `is_verified: false` untuk di-review admin. |
+| **Kompilasi TypeScript** | `npm run build` berhasil 100% dengan 0 error. |
+
+---
+
+> **Status:** Menunggu persetujuan (*Proceed / ACC*) dari Pengguna sebelum eksekusi kode (Fase 2).

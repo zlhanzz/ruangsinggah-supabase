@@ -4186,7 +4186,22 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             };
             
             if (isEditing && editingKost?.id) {
-                await updatePropertyWithMedia(editingKost.id, data, pendingUploadPayload, []);
+                const isCurrentlyPublished = editingKost.status === 'published';
+                const editStatus = isCurrentlyPublished ? 'published' : 'draft';
+                const editVerified = isCurrentlyPublished ? (editingKost.isVerified ?? true) : false;
+                
+                await updatePropertyWithMedia(
+                    editingKost.id, 
+                    { ...data, status: editStatus, isVerified: editVerified }, 
+                    pendingUploadPayload, 
+                    []
+                );
+
+                if (isCurrentlyPublished) {
+                    alert('Perubahan berhasil disimpan! Data kost Anda telah langsung diperbarui pada listing publik.');
+                } else {
+                    alert('Perubahan draft berhasil disimpan! Menunggu peninjauan oleh tim admin RuangSinggah.');
+                }
             } else {
                 await addPropertyWithMedia({ ...data, status: 'draft', isVerified: false }, pendingUploadPayload, []);
                 // Clear draft after successful creation
@@ -4194,6 +4209,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     localStorage.removeItem(storageKey);
                     window.dispatchEvent(new Event('kost_draft_updated'));
                 } catch {}
+                alert('Pendaftaran kost berhasil diajukan! Listing baru Anda saat ini dalam tahap peninjauan (review) oleh tim RuangSinggah dan akan otomatis tayang setelah disetujui.');
             }
             onSuccess();
         } catch (e: any) {
