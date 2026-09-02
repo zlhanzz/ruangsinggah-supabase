@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabase';
 import { FORMAT_CURRENCY } from '../../constants';
 import { sendNotification } from '../../notificationService';
+import { createKostSlug } from '../../utils/slugUtils';
 import { 
     Users, 
     Calendar, 
@@ -3898,7 +3899,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                                     <div className="flex items-center justify-end gap-1.5">
                                                                         {/* Tombol 1: Buka Web Publik Listing */}
                                                                         <a
-                                                                            href={`/kost/${p.id}`}
+                                                                            href={`/kost/${createKostSlug(p)}`}
                                                                             target="_blank"
                                                                             rel="noopener noreferrer"
                                                                             className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer shadow-2xs"
@@ -5934,7 +5935,7 @@ const KostManagerPortal: React.FC<KostManagerPortalProps> = ({ isAdmin, activeMe
                                                             </span>
                                                         </div>
                                                         <a
-                                                            href={`/kost/${activeProp.id}`}
+                                                            href={`/kost/${createKostSlug(activeProp)}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             className="px-3 py-2 bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"

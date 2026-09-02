@@ -1,72 +1,64 @@
-# WALKTHROUGH - Peningkatan Kejelasan Status Listing dalam Tahap Peninjauan (Review) di Dashboard Mitra
+# WALKTHROUGH - Penerapan URL Ramah SEO (Slug Nama Kost & Lokasi) pada Seluruh Listing
 
 ## Ringkasan Eksekutif
-Peningkatan pengalaman pengguna (UX) untuk mengatasi kebingungan mitra mengenai status listing pasca-publikasi telah **berhasil diselesaikan dan diverifikasi penuh**.
+Penerapan sistem URL ramah SEO (*SEO-friendly Slugs*) berbasis **Opsi 1 (Standar Airbnb & Mamikos)** telah **berhasil diselesaikan, diuji kelulusan build Vite (0 error), dan diintegrasikan penuh ke seluruh sistem perutean**.
 
-Sebelumnya, ketika mitra menekan "Publikasikan Kost", dashboard menampilkan subtitle menyesatkan `1 PROPERTI AKTIF` dan foto properti menampilkan badge abu-abu gelap `• DRAFT` tanpa penjelasan apa pun. Tombol "Preview" pun langsung mental/redirect ke halaman katalog umum.
+Sebelumnya, URL halaman detail kost menggunakan format ID database acak panjang (UUID):
+```text
+https://ruangsinggah.id/kost/bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f
+```
 
-Setelah perbaikan ini diterapkan:
-1. **Subtitle Header Jujur & Akurat**: Memisahkan penghitungan properti yang tayang aktif vs yang sedang menunggu peninjauan admin.
-2. **Badge Status Modern & Ramah**: Badge foto kini berubah menjadi kuning/amber dengan denyut halus `⏳ Sedang Ditinjau` (atau `● Tayang Publik` untuk yang aktif, dan `● Ditangguhkan` untuk yang disuspend).
-3. **Banner Status Edukatif**: Kartu kost dilengkapi kotak informasi bergradasi ramah yang menjelaskan bahwa data telah berhasil masuk, sedang ditinjau oleh admin (estimasi 1x24 jam), dan akan otomatis tayang di katalog pencarian setelah disetujui.
-4. **Mode Pratinjau (Preview) Berfungsi Penuh**: Pemilik kost kini dapat mengklik tombol `Preview` dan melihat tampilan halaman detail kost miliknya sendiri lengkap dengan banner *Mode Pratinjau Pemilik*.
+Setelah pembaruan ini, seluruh tautan listing kost bertransformasi menjadi URL yang manusiawi, rapi, dan kaya kata kunci:
+```text
+https://ruangsinggah.id/kost/kost-apalah-daya-tamalanrea-bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f
+```
 
 ---
 
-## 1. Rincian Perubahan Kode
+## 1. Keunggulan Arsitektur Opsi 1 yang Diterapkan
 
-### A. Dashboard Mitra: Metrik Header, Badge Foto, & Banner Edukatif
-- **Lokasi**: [MitraDashboard.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx)
-- **Perubahan**:
-  1. **Metrik Header "Kost Saya"**:
-     ```tsx
-     const publishedCount = properties.filter(p => p.status === 'published').length;
-     const inReviewCount = properties.filter(p => p.status !== 'published' && p.status !== 'suspended').length;
-     const suspendedCount = properties.filter(p => p.status === 'suspended').length;
-     ```
-     Menghilangkan teks menyesatkan `{properties.length} Properti Aktif` dan menggantinya dengan pemisahan transparan:
-     - `{publishedCount} Properti Tayang`
-     - `{inReviewCount} Menunggu Review`
-     - `{suspendedCount} Ditangguhkan`
-  2. **Badge Status Foto 3-Tingkat**:
-     - `published`: `bg-emerald-500 text-white` (`<CheckCircle2 size={11} /> Tayang Publik`)
-     - `draft / pending`: `bg-amber-500 text-white animate-pulse` (`<Clock size={11} /> Sedang Ditinjau`)
-     - `suspended`: `bg-rose-500 text-white` (`<AlertCircle size={11} /> Ditangguhkan`)
-  3. **Banner Status Edukatif di Dalam Kartu**:
-     - Ditambahkan kotak bergradasi amber/orange yang informatif di bawah kartu metrik harga & rating, menjelaskan SLA review 1×24 jam dan jaminan otomatisasi tayang.
+1. **Bebas Tabrakan Nama (Zero Collision)**:
+   - Apabila terdapat 2 atau lebih kost dengan nama yang persis sama di area yang sama (contoh: *"Kost Melati"* di *"Tamalanrea"*), sistem tidak akan pernah mengalami tabrakan URL karena identifier UUID unik selalu tersemat di bagian akhir slug.
+2. **Kekuatan SEO Maksimal (Search Engine Optimization)**:
+   - Mesin pencari seperti Google secara langsung mengenali kata kunci: `kost`, nama properti, dan wilayah/kota pada URL halaman.
+3. **Performa Instan Tanpa Mengubah Skema Database**:
+   - Query pencarian data kost tetap membaca primary key UUID yang diindeks secara cepat oleh PostgreSQL Supabase, tanpa beban pencocokan string dinamis atau penambahan kolom baru.
+4. **Jaminan Kompatibilitas Mundur (Backward Compatibility & Canonical URL)**:
+   - Jika pengguna mengakses tautan lama berbasis UUID murni (misal dari chat WhatsApp terdahulu atau bookmark browser), halaman kost tetap terbuka dengan mulus dan address bar browser secara otomatis diperbarui (*silent canonical replace*) ke URL slug baru tanpa memicu reload halaman.
 
-### B. Otentikasi Mode Pratinjau (Preview Mode) Pemilik
-- **Lokasi**: [userService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts)
-- **Perubahan**:
-  - Memperbarui `getPublishedPropertyDetails(propertyId)`:
+---
+
+## 2. Rincian Perubahan Kode
+
+### A. Modul Utility Slug Generator & Parser
+- **Lokasi File**: [slugUtils.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/utils/slugUtils.ts) (Baru)
+- **Fungsi Utama**:
+  - `slugifyText(text)`: Membersihkan teks dari emoji, simbol khusus, karakter aksen, dan mengganti spasi berlebih menjadi tanda hubung `-`.
+  - `createKostSlug(kost)`: Menghasilkan slug rapi dengan menggabungkan nama kost, area/kota, dan UUID properti:
     ```typescript
-    // 1. Coba ambil jika status published (terbuka untuk umum)
-    const { data: pubRow } = await supabase.from('properties').select('*').eq('id', propertyId).eq('status', 'published').maybeSingle();
-    
-    // 2. Mode Pratinjau (Preview Mode): jika belum published, izinkan pemilik atau admin melihat propertinya
-    if (!pubRow) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: privRow } = await supabase.from('properties').select('*').eq('id', propertyId).maybeSingle();
-        if (privRow && (privRow.owner_uid === user.id || user.app_metadata?.role === 'admin' || user.user_metadata?.role === 'admin')) {
-          row = privRow;
-        }
-      }
-    }
+    return `${cleanTitle}-${cleanLocation}-${kost.id}`;
     ```
-  - Mencegah redirect liar ke `/listings` saat pemilik menekan tombol `Preview`.
+  - `extractKostId(param)`: Mengekstrak UUID asli secara presisi menggunakan ekspresi reguler `/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i`.
 
-### C. Halaman Detail Kost: Banner Mode Pratinjau & Pengamanan CTA Booking
-- **Lokasi**: [KostDetail.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx)
+### B. Integrasi Perutean & Sinkronisasi Canonical URL
+- **Lokasi File**: [App.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/App.tsx)
 - **Perubahan**:
-  - Mengimpor ikon SVG `<Clock />` murni dari `lucide-react`.
-  - Menampilkan banner oranye/amber di paling atas halaman detail:
-    *"MODE PRATINJAU: Listing ini saat ini DALAM TAHAP PENINJAUAN ADMIN dan belum dapat dilihat oleh publik."*
-  - Mengubah tombol booking utama menjadi `Pratinjau (Belum Tayang)` agar calon penyewa tidak dapat mengajukan transaksi sewa sebelum listing berstatus tayang publik.
+  - `handleKostSelect`: Navigasi klik properti dari Beranda, Katalog Listing, dan halaman Area Kampus kini otomatis mengarahkan ke `/kost/${createKostSlug(kost)}`.
+  - `KostDetailWrapper`:
+    - Menggunakan `extractKostId(id)` agar parameter slug maupun UUID lama sama-sama dapat dibaca oleh database.
+    - Menambahkan `useEffect` untuk memperbarui address bar browser ke format slug baru jika pengguna membuka link menggunakan format UUID lama.
+
+### C. Penyelarasan Navigasi di Seluruh Halaman Terkait
+1. **Dashboard Mitra ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**:
+   - Tombol **Preview** pada kartu kost dan tombol "Lihat Listing" kini membuka URL berformat slug baru.
+2. **Halaman Detail Kost ([`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx))**:
+   - Meta tag `<link rel="canonical">` dan metadata OpenGraph Schema.org JSON-LD menggunakan format URL slug baru.
+3. **Portal Admin ([`PropertyManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyManagement.tsx) & [`KostManagerPortal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx))**:
+   - Tautan "Kunjungi Halaman Publik" kini membuka halaman publik dengan URL slug baru.
 
 ---
 
-## 2. Hasil Verifikasi & Uji Kompilasi
+## 3. Hasil Verifikasi & Uji Kompilasi
 
 Kompilasi build aplikasi front-end dijalankan menggunakan bundler Vite:
 ```bash
@@ -76,29 +68,27 @@ cmd /c npm run build
 ```text
 vite v6.4.1 building for production...
 transforming...
-✓ 2506 modules transformed.
+✓ 2507 modules transformed.
 rendering chunks...
 computing gzip size...
-✓ built in 38.94s
+✓ built in 36.43s
 0 errors, 0 warnings fatal.
 ```
 
 ---
 
-## 3. Panduan Pengujian untuk Pengguna
+## 4. Panduan Pengujian untuk Pengguna
 
-1. **Buka Dashboard Mitra (Kost Saya)**:
+1. **Uji dari Dashboard Mitra (Kost Saya)**:
    - Buka menu **Kost Saya** pada Dashboard Mitra (`/dashboard-mitra`).
-2. **Periksa Header**:
-   - Perhatikan subtitle di bawah judul "Kost Saya". Jika Anda memiliki 1 kost yang baru diajukan, subtitle akan berbunyi:
-     `0 PROPERTI TAYANG • 1 MENUNGGU REVIEW` (bukan lagi `1 PROPERTI AKTIF`).
-3. **Periksa Kartu Properti**:
-   - Sudut kanan atas foto properti kini memiliki badge kuning cerah berdenyut: **`⏳ Sedang Ditinjau`** (bukan lagi badge gelap `• DRAFT`).
-   - Di dalam kartu properti terdapat kotak edukasi:
-     *"Tahap Peninjauan Admin (Estimasi 1×24 Jam) - Listing Anda telah berhasil diajukan dan sedang diverifikasi oleh tim RuangSinggah. Listing akan otomatis tayang di pencarian publik setelah disetujui."*
-4. **Klik Tombol Preview**:
-   - Klik tombol **`[ 👁️ Preview ]`** pada kartu kost tersebut.
-   - Halaman detail kost Anda akan terbuka secara sempurna tanpa mental/redirect ke `/listings`.
-   - Di bagian atas halaman detail akan muncul banner:
-     *"MODE PRATINJAU: Listing ini saat ini DALAM TAHAP PENINJAUAN ADMIN dan belum dapat dilihat oleh publik."*
-   - Tombol sewa berlabel `Pratinjau (Belum Tayang)`.
+   - Klik tombol **`[ 👁️ Preview ]`** pada kartu kost Anda.
+   - Perhatikan URL di browser address bar sekarang menampilkan nama kost dan lokasi Anda, contoh:
+     `http://localhost:5173/kost/kost-apalah-daya-tamalanrea-bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f`
+2. **Uji dari Katalog Pencarian / Beranda**:
+   - Buka halaman **Katalog Kost** (`/listings`) atau Beranda (`/`).
+   - Klik salah satu kartu kost.
+   - Halaman detail akan terbuka dengan URL yang mengandung nama kost dan lokasinya.
+3. **Uji Kompatibilitas Mundur (Backward Compatibility)**:
+   - Coba ketik atau paste link lama berbasis UUID murni di browser:
+     `http://localhost:5173/kost/bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f`
+   - Halaman detail akan tetap terbuka dengan sukses, dan perhatikan URL di address bar browser secara otomatis berubah menjadi format slug baru yang cantik.

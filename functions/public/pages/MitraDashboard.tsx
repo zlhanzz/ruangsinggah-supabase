@@ -8,6 +8,7 @@ import { getOwnerProperties, getOwnerBookings, updateBookingStatus } from '../us
 import { getResidentStatus } from '../adminService';
 import { getMyChatSessions, ChatSession, getOrCreateChatSession } from '../chatService';
 import { getCurrentDate, setMockDate, getMockDateStr, parseDateSafely } from '../utils/timeUtils';
+import { createKostSlug } from '../utils/slugUtils';
 import { notifyAdminWithdrawalRequest } from '../emailService';
 import TimeSimulator from '../components/TimeSimulator';
 import { 
@@ -248,7 +249,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
     const handleViewListing = () => {
         if (properties.length > 0) {
-            window.open('/kost/' + properties[0].id, '_blank');
+            window.open('/kost/' + createKostSlug(properties[0]), '_blank');
         } else {
             navigate(Page.LISTINGS);
         }
@@ -1593,7 +1594,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                 ) : (
                                                     <div className="flex gap-2 mt-4">
                                                         <button 
-                                                            onClick={() => navigate(`/kost/${p.id}`)}
+                                                            onClick={() => navigate(`/kost/${createKostSlug(p)}`)}
                                                             className="flex-1 h-11 rounded-xl bg-gray-50 text-gray-700 font-bold text-xs hover:bg-gray-100 transition-colors border border-gray-100 flex items-center justify-center gap-1"
                                                         >
                                                             <Eye size={14} /> Preview

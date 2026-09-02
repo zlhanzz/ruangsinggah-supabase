@@ -6,6 +6,7 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
 import { getPublishedProperties, getPublishedPropertyDetails, ensureAbsoluteUrl } from './userService';
+import { createKostSlug, extractKostId } from './utils/slugUtils';
 
 // Code splitting: semua page selain Home dimuat on-demand (lazy)
 const Listings = lazy(() => import('./pages/Listings'));
@@ -471,9 +472,18 @@ const App: React.FC = () => {
     setListings(prev => prev.filter(item => item.id !== id));
   };
 
-  const handleKostSelect = (id: string) => {
+  const handleKostSelect = (idOrKost: any) => {
     // We removed the strict login block to allow unauthenticated users to view details (professional public SEO)
-    navigate(`/kost/${id}`);
+    if (typeof idOrKost === 'object' && idOrKost?.id) {
+      navigate(`/kost/${createKostSlug(idOrKost)}`);
+      return;
+    }
+    const found = listings.find((k: any) => k.id === idOrKost);
+    if (found) {
+      navigate(`/kost/${createKostSlug(found)}`);
+    } else if (typeof idOrKost === 'string') {
+      navigate(`/kost/${idOrKost}`);
+    }
   };
 
   const handleLogout = async () => {
@@ -525,7 +535,8 @@ const App: React.FC = () => {
     alert('Data Tersimpan');
     if (pendingTransaction) {
       if (pendingTransaction.type === 'kost') {
-        navigate(`/kost/${pendingTransaction.id}`);
+        const found = listings.find((k: any) => k.id === pendingTransaction.id);
+        navigate(`/kost/${found ? createKostSlug(found) : pendingTransaction.id}`);
       } else if (pendingTransaction.type === 'product') {
         navigate(Page.PRODUCTS);
       }
@@ -557,16 +568,20 @@ const App: React.FC = () => {
   // --- WRAPPER FOR DEEP LINK DETAIL ---
   const KostDetailWrapper = ({ listings, user, isProfileComplete, setPendingTransaction }: any) => {
     const { id } = useParams();
-    const [kost, setKost] = useState<Kost | null>(listings.find((k: any) => k.id === id) || null);
+    const realPropertyId = extractKostId(id || '');
+
+    const [kost, setKost] = useState<Kost | null>(
+      listings.find((k: any) => k.id === realPropertyId || createKostSlug(k) === id) || null
+    );
     const [loading, setLoading] = useState(!kost);
 
     useEffect(() => {
       async function loadKost() {
-        if (!id) return;
-        if (!kost) {
+        if (!realPropertyId) return;
+        if (!kost || kost.id !== realPropertyId) {
           setLoading(true);
           try {
-            const data = await getPublishedPropertyDetails(id);
+            const data = await getPublishedPropertyDetails(realPropertyId);
             setKost(data);
           } catch (e) {
             console.error(e);
@@ -576,7 +591,18 @@ const App: React.FC = () => {
         }
       }
       loadKost();
-    }, [id]);
+    }, [realPropertyId]);
+
+    // Canonical URL Sync: jika user membuka via UUID lama, perbarui URL di address bar ke format SEO slug
+    useEffect(() => {
+      if (kost) {
+        const expectedSlug = createKostSlug(kost);
+        const currentPath = window.location.pathname;
+        if (expectedSlug && currentPath !== `/kost/${expectedSlug}`) {
+          window.history.replaceState(null, '', `/kost/${expectedSlug}`);
+        }
+      }
+    }, [kost]);
 
     if (loading) return (
       <div className="min-h-screen flex items-center justify-center bg-white">
@@ -817,7 +843,7 @@ const App: React.FC = () => {
             } />
 
             {/* Legacy redirect */}
-            <Route path={Page.DETAIL} element={<Navigate to={selectedKostId ? `/kost/${selectedKostId}` : Page.LISTINGS} replace />} />
+            <Route path={Page.DETAIL} element={<Navigate to={selectedKost ? `/kost/${createKostSlug(selectedKost)}` : (selectedKostId ? `/kost/${selectedKostId}` : Page.LISTINGS)} replace />} />
 
             <Route path="*" element={<Navigate to={Page.HOME} replace />} />
           </Routes>

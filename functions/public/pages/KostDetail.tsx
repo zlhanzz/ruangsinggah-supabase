@@ -11,6 +11,7 @@ import { notifyAdminPropertyReport } from '../emailService';
 import { getOrCreateChatSession, SYSTEM_ADMIN_ID } from '../chatService';
 import { supabase } from '../supabase';
 import { Bed, Home, Camera, Sparkles, CheckCircle2, ChevronDown, Layers, Flag, ShieldAlert, AlertTriangle, X, Check, Upload, Image as ImageIcon, Send, Phone, User as UserIcon, MessageSquare, Clock } from 'lucide-react';
+import { createKostSlug } from '../utils/slugUtils';
 
 interface KostDetailProps {
   kost: Kost;
@@ -80,7 +81,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
     return (img as any).url || (img as any).thumbnail || 'https://ruangsinggah.id/logo.png';
   })();
 
-  const canonicalUrl = `https://ruangsinggah.id/kost/${kost.id}`;
+  const canonicalUrl = `https://ruangsinggah.id/kost/${createKostSlug(kost)}`;
 
   const jsonLd = {
     '@context': 'https://schema.org',

@@ -3,6 +3,7 @@ import {
     BasicPropertyInfo, updatePropertyStatus, freezeProperty, unfreezeProperty,
     togglePropertyVerification, PropertyReportItem, getPropertyReports, updatePropertyReportStatus
 } from '../../adminService';
+import { createKostSlug } from '../../utils/slugUtils';
 import {
     Building2, Home, Search, Filter, Sparkles, ShieldCheck, CheckCircle2,
     AlertCircle, Clock, X, Phone, ExternalLink, Eye, Trash2, Snowflake,
@@ -747,7 +748,7 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
 
                                                     {/* Buka Halaman Publik */}
                                                     <button
-                                                        onClick={() => window.open(`/kost/${item.id}`, '_blank')}
+                                                        onClick={() => window.open('/kost/' + createKostSlug(item), '_blank')}
                                                         className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl transition-all active:scale-95 cursor-pointer"
                                                         title="Kunjungi Halaman Publik"
                                                     >
@@ -1215,7 +1216,7 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
 
                             <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                                 <button
-                                    onClick={() => window.open(`/kost/${selectedPropertyForReview.id}`, '_blank')}
+                                    onClick={() => window.open('/kost/' + createKostSlug(selectedPropertyForReview), '_blank')}
                                     className="px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-100 transition-all flex items-center gap-1.5 cursor-pointer"
                                 >
                                     <ExternalLink size={14} /> Halaman Publik

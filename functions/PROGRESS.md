@@ -2,6 +2,39 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 268. Penerapan URL Ramah SEO (Slug Nama Kost & Lokasi) pada Seluruh Listing Berbasis Opsi 1 (`slugUtils.ts`, `App.tsx`, `MitraDashboard.tsx`, `KostDetail.tsx`, dll.) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar URL halaman listing kost tidak lagi menggunakan kode acak panjang (UUID) murni, melainkan menampilkan nama kost langsung di URL untuk meningkatkan estetika dan SEO, serta menanyakan bagaimana cara terbaik mengantisipasi jika ada kost yang memiliki nama sama:
+    > *"btw bisa nggak sih nanti setiap listing kost kita tidak langi menggunakan kode di urlnya tapi menggunakan nama kostnya langsung tertera di url? tapi perlu antisipasi nama kost yang sama sih. bagusnya bagimana?"*
+  - Pengguna menyetujui penerapan **Opsi 1 (Standar Airbnb & Mamikos)**: `/kost/{nama-kost}-{area/kota}-{uuid}`.
+- **Investigasi & Analisis Akar Masalah**:
+  1. *UUID-Only URL*: Format sebelumnya `/kost/bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f` tidak ramah SEO mesin pencari (Google menyukai keyword nama dan lokasi) dan terlihat kaku saat dibagikan ke calon penyewa.
+  2. *Duplicate Name Collision*: Di dunia nyata, nama kost sering kembar (misal "Kost Melati" atau "Kost Pelangi"). Menggunakan akhiran UUID di ujung slug menjamin 100% bebas tabrakan (*zero collision*) tanpa perlu query database berat atau penambahan kolom database baru.
+  3. *Backward Compatibility*: Seluruh tautan lama berbasis UUID murni yang sudah tersebar di WhatsApp atau bookmark pengguna harus tetap berfungsi dan otomatis di-update ke format slug baru (*Canonical URL 301 replace*).
+- **Implementasi Solusi**:
+  1. **Pembuatan Helper Slug Generator & Parser ([`slugUtils.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/utils/slugUtils.ts))**:
+     - `createKostSlug(kost)`: Mengonversi nama kost + area/kota menjadi string kebab-case bersih (menghilangkan emoji, simbol khusus, dan karakter aksen) lalu menggabungkannya dengan UUID properti: `/kost/{nama-kost}-{area}-{uuid}`.
+     - `extractKostId(param)`: Menggunakan regex UUID `/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i` sehingga sistem dapat mengekstrak ID database secara instan baik dari URL slug baru maupun URL UUID lama.
+  2. **Perutean Fleksibel & Canonical URL Sync ([`App.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/App.tsx))**:
+     - `KostDetailWrapper` menggunakan `extractKostId(id)` untuk memuat data properti.
+     - Menambahkan sinkronisasi otomatis: jika user mengakses link lama UUID murni, address bar browser secara otomatis diperbarui ke format slug baru menggunakan `window.history.replaceState` tanpa me-reload halaman.
+     - Menyesuaikan fungsi navigasi `handleKostSelect(idOrKost)` agar otomatis membentuk rute slug baru saat pengguna mengklik kartu kost dari Beranda atau Katalog Listing.
+  3. **Penyelarasan Tautan di Seluruh Komponen**:
+     - **Dashboard Mitra ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**: Tombol Preview membuka `/kost/${createKostSlug(p)}`.
+     - **Detail Kost ([`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx))**: Meta tag SEO `canonicalUrl` dan Schema.org JSON-LD menggunakan format slug baru.
+     - **Portal Admin ([`PropertyManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyManagement.tsx) & [`KostManagerPortal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/KostManagerPortal.tsx))**: Tombol "Kunjungi Halaman Publik" mengarah ke slug baru.
+- **File Tersentuh**:
+  - `functions/public/utils/slugUtils.ts` (baru)
+  - `functions/public/App.tsx`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/components/admin/PropertyManagement.tsx`
+  - `functions/public/components/admin/KostManagerPortal.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2507 modules transformed, built in 36.43s, 0 error).
+
 ### 267. Peningkatan Kejelasan Status Listing dalam Peninjauan (Review) di Dashboard Mitra & Dukungan Mode Pratinjau (Preview) Pemilik (`MitraDashboard.tsx`, `userService.ts`, `KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna melaporkan tampilan status listing pada menu "Kost Saya" di Dashboard Mitra sangat membingungkan pasca-publikasi:
