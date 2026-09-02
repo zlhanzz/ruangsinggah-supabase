@@ -2,6 +2,35 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 273. Restrukturisasi & Penyajian Fasilitas & Sub-Fasilitas Listing Berhirarki (1:1 Sesuai Input Mitra & Agen) (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Bagian Fasilitas Umum pada halaman detail kost sebelumnya hanya merender array fasilitas secara datar (flat array) dengan bullet bulat sederhana, sehingga sub-fasilitas kelengkapan (seperti kompor, kulkas bersama, wastafel cuci piring, dispenser air, peralatan masak, parkir motor, parkir mobil) bercampur baur dengan fasilitas utama tanpa hierarki.
+  - Fasilitas kamar juga belum terdeskripsikan secara rapi per kategori perabot kamar tidur, kamar mandi, dan dapur kamar di sidebar.
+- **Implementasi Solusi**:
+  1. **Parser Fasilitas Hirarkis (`parseStructuredPublicFacilities`)**:
+     - Mengelompokkan sub-fasilitas ke dalam kartu induk utama (**Dapur Bersama**, **Area Parkir**, **WC Umum / Luar**, **Ruang Tamu & Bersama**).
+     - Menampilkan sub-kelengkapan dalam bentuk pills/chips rapi berikon centang di dalam kartu induk fasilitas tersebut.
+     - Memetakan fasilitas mandiri (**WiFi**, **CCTV**, **Security 24 Jam**, **Akses 24 Jam**, **Laundry**, **Mushola**, **Area Jemuran**, **Lift**, **Cleaning Service**, dll.) ke dalam grid kartu ber-ikon vector SVG `lucide-react`.
+  2. **Struktur Fasilitas Kamar Per Tipe (`structuredRoomFacilities`)**:
+     - Mengelompokkan fasilitas per unit terpilih menjadi sub-kategori: *Perabot & Ruangan* (Kasur, Lemari, Meja, AC, TV, Jendela), *Kamar Mandi* (Kamar Mandi Dalam/Luar, Kloset Duduk/Jongkok, Water Heater, Shower), *Dapur Pribadi* (jika ada Dapur Dalam), serta indikator peringatan khusus jika kamar berstatus *Kosongan (Tanpa Perabot)*.
+  3. **Bebas FOUT**: Seluruh icon menggunakan SVG vector murni yang ter-bundle lokal via `lucide-react`.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+- **Commit**: `c3e9b55` → `bukan-productions`
+
+### 272. Fix Galeri Foto Tipe Kamar untuk Kost Biasa (Non-Managed) (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Bilah navigasi foto tipe kamar (`showRoomPhotoNav`) tidak muncul untuk listing kost biasa (bukan KostManager) meskipun foto sudah ada.
+  - Foto kost biasa disimpan di `kost.imageUrls` (propertyPhotos) dengan label seperti `"Interior Kamar: Standard"`, `"Kamar Mandi: VIP"`, bukan di `rt.images`.
+  - `normalizedRooms` hanya membaca `rt.images || rt.image_urls`, selalu kosong untuk kost biasa → `showRoomPhotoNav = false`.
+- **Implementasi Solusi**:
+  1. **Fallback foto di `normalizedRooms`**: Jika `rt.images` kosong dan `!kost.isManaged`, sistem kini memindai `propertyPhotos` untuk foto berlabel yang mengandung nama tipe kamar (cth: `"Standard"` → match label `"Interior Kamar: Standard"`). Foto yang cocok di-assign ke tipe kamar tersebut sebagai `roomPhotoItems`.
+  2. **Update `emptyRooms`**: Untuk kost biasa, `emptyRooms` kini mencakup semua tipe yang memiliki foto (tidak peduli status available/terisi). Untuk KostManager, tetap hanya unit yang `isAvailable`.
+  3. **Label nav bar dinamis**: Bilah navigasi kini menampilkan `"Pilih Foto Unit Kamar"` (KostManager) atau `"Pilih Foto Tipe Kamar"` (kost biasa) secara kontekstual.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+- **Commit**: `9698d29` → `bukan-productions`
+
 ### 271. Modal Pratinjau 1:1 Super Admin dengan Fitur Minta Catatan Revisi Mitra & Integrasi Status Perlu Revisi di Dashboard Mitra (`PropertyReviewModal.tsx`, `PropertyManagement.tsx`, `MitraDashboard.tsx`, `adminService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   - Super Admin memerlukan kemampuan untuk meninjau listing baru secara 1:1 persis seperti tampilan asli pengguna/pencari kost tanpa tombol booking/chat aktif, serta memberikan catatan revisi terstruktur jika data kost masih kurang lengkap atau belum memenuhi standar sebelum disetujui.
