@@ -2148,15 +2148,41 @@ export async function updatePropertyWithMedia(
   ]);
 
   // Filter kept objects and sync labels/category/caption from kostData.imageUrls if updated
+  const existingPhotosMeta: any[] = Array.isArray(existing.metadata?.photos_meta) ? existing.metadata.photos_meta : [];
+  const existingCategorized: Record<string, string[]> = existing.metadata?.categorized_photos || {};
+
+  const findLabelForUrl = (u: string): string => {
+    if (!u) return '';
+    const fromMeta = existingPhotosMeta.find((m: any) => (m.original === u || m.url === u || m.webp === u));
+    if (fromMeta?.label || fromMeta?.category) return fromMeta.label || fromMeta.category;
+    const fromObj = currentImageObjects.find((o: any) => (o.original === u || o.url === u || o.webp === u));
+    if (fromObj?.label || fromObj?.category) return fromObj.label || fromObj.category;
+    for (const [catName, urls] of Object.entries(existingCategorized)) {
+      if (Array.isArray(urls) && urls.some(item => item === u || item.includes(u) || u.includes(item))) {
+        return catName;
+      }
+    }
+    return '';
+  };
+
   const finalImageObjects = (kostData.imageUrls && kostData.imageUrls.length > 0)
-    ? kostData.imageUrls.map((img: any) => {
-        if (typeof img === 'string') return { original: img, url: img };
-        const label = img.label || img.category || '';
-        const category = img.category || img.label || '';
-        const caption = img.caption || label || category || '';
+    ? kostData.imageUrls.map((img: any, idx: number) => {
+        const urlStr = typeof img === 'string' ? img : (img.original || img.url || '');
+        let label = typeof img === 'object' ? (img.label || img.category || '') : '';
+        let category = typeof img === 'object' ? (img.category || img.label || '') : '';
+        if (!label) {
+          label = findLabelForUrl(urlStr);
+        }
+        if (!label && Array.isArray(kostData.photoCategories) && kostData.photoCategories[idx]) {
+          label = kostData.photoCategories[idx];
+        }
+        if (!category) {
+          category = label;
+        }
+        const caption = (typeof img === 'object' && img.caption) ? img.caption : (label || category || '');
         return {
-          original: img.original || img.url || '',
-          url: img.url || img.original || '',
+          original: urlStr,
+          url: urlStr,
           ...(label ? { label } : {}),
           ...(category ? { category } : {}),
           ...(caption ? { caption } : {})
@@ -2204,7 +2230,7 @@ export async function updatePropertyWithMedia(
   const targetOwnerUid = (isAdmin && kostData.ownerUid) ? kostData.ownerUid : existing.owner_uid;
   const allImages = [...finalImageObjects, ...newImageObjects];
 
-  const derivedPhotoCategories = kostData.photoCategories && kostData.photoCategories.length > 0
+  const derivedPhotoCategories = (kostData.photoCategories && kostData.photoCategories.length > 0 && kostData.photoCategories.some((c: any) => !!c))
     ? kostData.photoCategories
     : allImages.map((img: any) => img.label || img.category || '');
 

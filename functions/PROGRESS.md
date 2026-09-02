@@ -2,6 +2,38 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 265. Pemulihan Metadata Kategori Foto Properti Saat Edit Listing Kost Mitra (`userService.ts`, `KostFormMitra.tsx`, `adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Mitra menanyakan mengapa setelah mempublikasikan kost, hampir semua foto kecuali "Bangunan Depan" hilang / menjadi 0 foto ketika kartu kost diklik "Edit" (`media_1788356202994.png`).
+  - Pengguna mengkhawatirkan apakah foto-foto tersebut tidak benar-benar tersimpan di database Supabase untuk peran mitra biasa.
+- **Investigasi & Analisis Akar Masalah**:
+  1. *Penyimpanan Database & Storage*: Data foto dan file gambar 100% tersimpan aman di Supabase Storage (`properties/...`) dan kolom PostgreSQL `properties.image_urls` serta `properties.metadata` (`photos_meta`, `photo_categories`, `categorized_photos`).
+  2. *Mapping Omission pada Pembacaan Data*: Fungsi `getOwnerProperties(ownerUid)` di `userService.ts:851-894` mengekstrak `image_urls` menjadi array URL string murni (`imageUrls: images`), namun **tidak memetakan** field `photosMeta`, `photoCategories`, `categorizedPhotos`, maupun `metadata` ke objek properti yang dikembalikan.
+  3. *Distribusi Default di Form Edit*: Ketika objek properti tersebut diedit di `KostFormMitra.tsx`, form hanya menerima array string `form.imageUrls` tanpa informasi kategori. Logika `existingWithCats` kemudian menetapkan indeks 0 sebagai "Bangunan Depan" dan seluruh indeks lainnya dilempar ke "Fasilitas Lainnya", menyebabkan kartu kategori seperti "Koridor & Akses Masuk", "Lingkungan Sekitar", "Area Parkir", dan kategori tipe kamar menjadi 0 foto.
+- **Implementasi Solusi**:
+  1. **Pemetaan Lengkap Metadata Foto di `userService.ts` (`getOwnerProperties`)**:
+     - Memetakan field `photosMeta` dari `p.metadata?.photos_meta || (Array.isArray(p.image_urls) ? p.image_urls : [])`.
+     - Memetakan field `photoCategories` dari `p.metadata?.photo_categories`.
+     - Memetakan field `categorizedPhotos` dari `p.metadata?.categorized_photos`.
+     - Memetakan field `metadata: p.metadata`.
+  2. **Rekonstruksi Presisi Kategori Foto di `KostFormMitra.tsx`**:
+     - Menginisialisasi `form.photoCategories`, `form.photosMeta`, dan `form.categorizedPhotos` dari properti `editingKost` atau `editingKost.metadata`.
+     - Menginisialisasi `customCategories` dari `editingKost.photoCategories` atau `editingKost.metadata?.photo_categories`.
+     - Menyelaraskan fungsi penghapusan foto `removeExistingImage` agar memperbarui `form.imageUrls` dan `form.photosMeta` secara sinkron.
+     - Pada validasi `validateCurrentStep(4)` dan rendering Step 4 UI (`existingWithCats`), menggunakan `sourceImages` yang memprioritaskan `photosMeta`, membaca `label`/`category`, dan melakukan reverse lookup ke `form.categorizedPhotos` untuk memetakan foto ke kartu kategori aslinya.
+     - Pada payload submit `existingImagesWithLabels`, mempertahankan objek foto lengkap beserta label, kategori, dan caption.
+  3. **Penguatan Sinkronisasi di `adminService.ts` (`updatePropertyWithMedia`)**:
+     - Menambahkan fungsi `findLabelForUrl` untuk memulihkan label/kategori dari `existing.metadata?.photos_meta`, `currentImageObjects`, atau `existing.metadata?.categorized_photos` jika terjadi pengiriman data yang belum terlabel.
+     - Menjaga `derivedPhotoCategories` dan `derivedCategorizedPhotos` agar tidak tertimpa oleh array string kosong.
+- **File Tersentuh**:
+  - `functions/public/userService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 37.27s, 0 error).
+
 ### 264. Pemulihan & Penguatan Sensor Banner Kontak Otomatis AI (Nomor Telepon / Spanduk Sewa) (`adminService.ts`, `KostFormMitra.tsx`, `supabase/config.toml`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna menanyakan mengapa sensor banner otomatis dari sistem tidak bekerja lagi pada foto tampak depan kost ("Bangunan Depan") yang memuat spanduk sewa berisi nomor telepon/WhatsApp (`media_1788339018992.png`). Foto terunggah dengan badge hijau "BARU" dan bukan badge "ruangsinggah.id" (sensor kontak tidak aktif).

@@ -2271,7 +2271,26 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         } catch {}
         return [];
     });
-    const [customCategories, setCustomCategories] = useState<string[]>([]);
+
+    const [customCategories, setCustomCategories] = useState<string[]>(() => {
+        if (editingKost?.photoCategories && Array.isArray(editingKost.photoCategories)) {
+            const knownStandardIds = new Set([
+                'bangunan depan', 'fasad', 'koridor', 'area parkir', 'parkir', 'dapur bersama', 
+                'ruang tamu', 'wc umum', 'toilet umum', 'lingkungan', 'fasilitas lainnya', 'area laundry', 'laundry', 'mushola'
+            ]);
+            return editingKost.photoCategories.filter(cat => {
+                if (!cat) return false;
+                const lower = cat.toLowerCase().trim();
+                return (
+                    !knownStandardIds.has(lower) && 
+                    !cat.startsWith('Kamar: ') && 
+                    !cat.startsWith('Kamar Mandi: ') && 
+                    !cat.startsWith('Dapur Dalam: ')
+                );
+            });
+        }
+        return [];
+    });
     const [newCategoryInput, setNewCategoryInput] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
@@ -3590,9 +3609,9 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
     const updateExistingPhotoCaption = (targetRaw: any, caption: string) => {
         const cur = form.imageUrls || [];
+        const targetSrc = typeof targetRaw === 'string' ? targetRaw : (targetRaw?.original || targetRaw?.url);
         const updated = cur.map((u: any) => {
             const src = typeof u === 'string' ? u : (u?.original || u?.url);
-            const targetSrc = typeof targetRaw === 'string' ? targetRaw : (targetRaw?.original || targetRaw?.url);
             if (src === targetSrc) {
                 if (typeof u === 'string') {
                     return { original: u, url: u, caption };
@@ -3601,7 +3620,14 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             }
             return u;
         });
-        upd('imageUrls', updated);
+        const updatedMeta = (form.photosMeta || []).map((m: any) => {
+            const src = m?.original || m?.url;
+            if (src === targetSrc) {
+                return { ...m, caption };
+            }
+            return m;
+        });
+        setForm(prev => ({ ...prev, imageUrls: updated, photosMeta: updatedMeta }));
     };
 
     const removeNewPhotoItem = (id: string) => {
@@ -3619,12 +3645,16 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
     const removeExistingImage = (targetUrl: any) => {
         const cur = form.imageUrls || [];
+        const targetSrc = typeof targetUrl === 'string' ? targetUrl : (targetUrl?.original || targetUrl?.url);
         const filtered = cur.filter((u: any) => {
             const src = typeof u === 'string' ? u : (u?.original || u?.url);
-            const targetSrc = typeof targetUrl === 'string' ? targetUrl : (targetUrl?.original || targetUrl?.url);
             return src !== targetSrc;
         });
-        upd('imageUrls', filtered);
+        const filteredMeta = (form.photosMeta || []).filter((m: any) => {
+            const src = m?.original || m?.url;
+            return src !== targetSrc;
+        });
+        setForm(prev => ({ ...prev, imageUrls: filtered, photosMeta: filteredMeta }));
     };
 
     // ── facilities ─────────────────────────────────────────────────────────────
@@ -3971,15 +4001,35 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         if (currentStep === 4) {
             const activeCategories = computeActivePhotoCategories(form, customCategories);
 
-            const existingWithCats = (form.imageUrls || []).map((img: any, idx: number) => {
-                const src = typeof img === 'string' ? img : (img?.original || img?.url || '');
-                let cat = 'Bangunan Depan';
+            const sourceImages = (form.photosMeta && form.photosMeta.length > 0)
+                ? form.photosMeta
+                : (form.imageUrls || []);
+
+            const existingWithCats = sourceImages.map((img: any, idx: number) => {
+                const src = typeof img === 'string' ? img : (img?.original || img?.url || img?.webp || '');
+                let cat = '';
                 if (typeof img === 'object' && (img.label || img.category)) {
                     cat = img.label || img.category;
                 } else if (Array.isArray(form.photoCategories) && form.photoCategories[idx]) {
                     cat = form.photoCategories[idx];
-                } else if (idx > 0) {
-                    cat = 'Fasilitas Lainnya';
+                }
+
+                if (!cat && form.categorizedPhotos && typeof form.categorizedPhotos === 'object') {
+                    for (const [catName, urls] of Object.entries(form.categorizedPhotos)) {
+                        if (Array.isArray(urls)) {
+                            const matched = urls.some((u: string) => 
+                                u === src || (src && u && (u.includes(src) || src.includes(u)))
+                            );
+                            if (matched) {
+                                cat = catName;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!cat) {
+                    cat = idx === 0 ? 'Bangunan Depan' : 'Fasilitas Lainnya';
                 }
                 return { src, cat };
             }).filter(p => !!p.src);
@@ -4065,11 +4115,34 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 caption: (item.caption && item.caption.trim()) ? item.caption.trim() : item.category
             }));
 
-            const existingImagesWithLabels = (form.imageUrls || []).map((img: any, idx: number) => {
-                const url = typeof img === 'string' ? img : (img?.original || img?.url || '');
-                const label = typeof img === 'object' && (img?.label || img?.category)
+            const sourceExisting = (form.photosMeta && form.photosMeta.length > 0)
+                ? form.photosMeta
+                : (form.imageUrls || []);
+
+            const existingImagesWithLabels = sourceExisting.map((img: any, idx: number) => {
+                const url = typeof img === 'string' ? img : (img?.original || img?.url || img?.webp || '');
+                let label = typeof img === 'object' && (img?.label || img?.category)
                     ? (img.label || img.category)
-                    : (Array.isArray(form.photoCategories) && form.photoCategories[idx] ? form.photoCategories[idx] : (idx === 0 ? 'Bangunan Depan' : 'Fasilitas Lainnya'));
+                    : (Array.isArray(form.photoCategories) && form.photoCategories[idx] ? form.photoCategories[idx] : '');
+
+                if (!label && form.categorizedPhotos && typeof form.categorizedPhotos === 'object') {
+                    for (const [catName, urls] of Object.entries(form.categorizedPhotos)) {
+                        if (Array.isArray(urls)) {
+                            const matched = urls.some((u: string) => 
+                                u === url || (url && u && (u.includes(url) || url.includes(u)))
+                            );
+                            if (matched) {
+                                label = catName;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!label) {
+                    label = idx === 0 ? 'Bangunan Depan' : 'Fasilitas Lainnya';
+                }
+
                 const category = typeof img === 'object' && (img?.category || img?.label)
                     ? (img.category || img.label)
                     : label;
@@ -5290,16 +5363,37 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 const dynamicGeneralCategories = allActiveCategories.filter(c => !c.id.startsWith('Kamar: ') && !c.id.startsWith('Kamar Mandi: ') && !c.id.startsWith('Dapur Dalam: '));
                 const dynamicRoomCategories = allActiveCategories.filter(c => c.id.startsWith('Kamar: ') || c.id.startsWith('Kamar Mandi: ') || c.id.startsWith('Dapur Dalam: '));
 
-                const existingWithCats = (form.imageUrls || []).map((img: any, idx: number) => {
-                    const src = typeof img === 'string' ? img : (img?.original || img?.url || '');
-                    let cat = 'Bangunan Depan';
+                const sourceImages = (form.photosMeta && form.photosMeta.length > 0)
+                    ? form.photosMeta
+                    : (form.imageUrls || []);
+
+                const existingWithCats = sourceImages.map((img: any, idx: number) => {
+                    const src = typeof img === 'string' ? img : (img?.original || img?.url || img?.webp || '');
+                    let cat = '';
                     if (typeof img === 'object' && (img.label || img.category)) {
                         cat = img.label || img.category;
                     } else if (Array.isArray(form.photoCategories) && form.photoCategories[idx]) {
                         cat = form.photoCategories[idx];
-                    } else if (idx > 0) {
-                        cat = 'Fasilitas Lainnya';
                     }
+
+                    if (!cat && form.categorizedPhotos && typeof form.categorizedPhotos === 'object') {
+                        for (const [catName, urls] of Object.entries(form.categorizedPhotos)) {
+                            if (Array.isArray(urls)) {
+                                const matched = urls.some((u: string) => 
+                                    u === src || (src && u && (u.includes(src) || src.includes(u)))
+                                );
+                                if (matched) {
+                                    cat = catName;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (!cat) {
+                        cat = idx === 0 ? 'Bangunan Depan' : 'Fasilitas Lainnya';
+                    }
+
                     const caption = typeof img === 'object' && img?.caption ? img.caption : cat;
                     return { src, cat, caption, raw: img, idx };
                 }).filter(p => !!p.src);

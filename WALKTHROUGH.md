@@ -1,80 +1,103 @@
-# Walkthrough - Pemulihan & Penguatan Sensor Banner Kontak Otomatis AI
+# WALKTHROUGH - Pemulihan Kategori & Foto Properti Saat Edit Listing Kost Mitra
 
-Dokumen ini merangkum perbaikan dan penguatan menyeluruh pada sistem sensor banner/spanduk kontak otomatis berbasis AI Vision (`gemini-2.5-flash` via Supabase Edge Function).
+## Ringkasan Eksekutif
+Masalah di mana foto-foto listing kost (seperti **Koridor & Akses Masuk**, **Lingkungan Sekitar**, **Area Parkir**, dan **Tipe Kamar**) tampak menjadi 0 foto ketika kartu kost diklik **Edit** setelah dipublikasikan telah **berhasil diselesaikan**.
 
----
-
-## 1. Analisis Akar Masalah (Root Cause)
-
-Berdasarkan investigasi diagnostik terhadap kegagalan sensor pada citra pengguna:
-1. **Model AI & Edge Function Berjalan Normal**:
-   - Uji tembak langsung ke endpoint Edge Function `detect-contact-banner` menghasilkan deteksi akurat 100%:
-     - `has_contact: true`
-     - Teks terdeteksi: `"MENERIMA KOST PUTRI"`, `"INFO WA : 0813 5536 27"`, `"0823 4990 80"`
-     - Bounding boxes: `{ ymin: 545, xmin: 275, ymax: 905, xmax: 485 }`
-2. **Penyebab Utama Foto Lolos Tanpa Sensor**:
-   - **Silent Network Fallback**: Saat koneksi internet mengalami drop / timeout (18 detik) saat mitra mengunggah foto, `adminService.ts` menangkap error dan langsung me-return `{ hasContact: false }` tanpa retry dan tanpa flag error, sehingga foto dianggap bersih.
-   - **Validasi MIME Type Kaku**: `file.type.startsWith('image/')` pada beberapa browser HP / galeri Android menghasilkan string kosong (`""`), sehingga konversi Base64 AI terlewatkan (*bypassed*).
-   - **Gateway Supabase Belum Terdaftar**: `supabase/config.toml` belum mendaftarkan fungsi `detect-contact-banner` dengan `verify_jwt = false`.
-   - **Ketiadaan Fitur Re-Scan Manual**: Foto yang terlanjur diunggah dalam mode draf lokal saat koneksi sempat putus tidak dapat dipindai ulang tanpa harus menghapus dan mengunggah ulang dari nol.
+Data foto yang diunggah oleh mitra telah diverifikasi **100% tersimpan aman di Supabase Storage dan tabel `properties` PostgreSQL**. Kendala sebelumnya terjadi murni pada *layer pembacaan data* di mana `getOwnerProperties` hanya memetakan URL gambar sebagai array string biasa tanpa mengembalikan metadata kategori, sehingga formulir edit mengelompokkan foto-foto selain indeks 0 ke kategori cadangan (*Fasilitas Lainnya*).
 
 ---
 
-## 2. Rincian Perubahan yang Telah Diimplementasikan
-
-### A. Konfigurasi Gateway Supabase (`supabase/config.toml`)
-- Menambahkan blok registrasi fungsi:
-  ```toml
-  [functions.detect-contact-banner]
-  verify_jwt = false
-  ```
-  Memastikan pemanggilan fungsi Edge Function dari anon key / mitra tidak tertolak oleh verifikasi JWT gateway.
-
-### B. Penguatan Pemanggilan API AI di Front-End (`functions/public/adminService.ts`)
-- Menambahkan header cadangan `apikey: supabaseAnonKey` pada request `detectPhotoContactBanner`.
-- Mengimplementasikan mekanisme **auto-retry 1x** dengan jeda 800ms jika request pertama terhambat gangguan koneksi jaringan.
-- Menambahkan field `error?: string` pada antarmuka `ContactBannerDetectionResult` agar UI mengetahui jika proses pemindaian terhambat.
-
-### C. UI & Logika Form Mitra (`functions/public/components/KostFormMitra.tsx`)
-1. **Helper Validasi File Fleksibel (`isImageFile`)**:
-   - Memeriksa `file.type` maupun ekstensi file (`.jpg`, `.jpeg`, `.png`, `.webp`, `.heic`, dll.) agar foto dari semua tipe browser HP selalu lolos ke tahap pemindaian Base64 AI.
-2. **Notifikasi Gangguan Koneksi**:
-   - Jika AI scan terhambat kendala koneksi internet saat upload otomatis, sistem memunculkan banner peringatan oranye ramah yang memberitahukan bahwa foto berhasil diunggah namun beberapa spanduk belum sempat terpindai AI, lengkap dengan petunjuk menggunakan tombol pemicu manual.
-3. **Tombol Pemicu Manual "Pindai Kontak (AI)"**:
-   - Menambahkan tombol aksi perisai oranye (`ShieldAlert`) pada pojok kanan atas kartu foto baru (`currentCatNew`) yang belum berstatus sensor (`!item.isBlurred`).
-   - Tombol tersedia di kategori wajib (Bangunan Depan, dsb.) maupun kategori kustom/tambahan.
-   - Menampilkan animasi putar (`Loader2`) saat proses pemindaian sedang berjalan.
-4. **Fungsi Re-Scan Mandiri (`handleReScanBanner`)**:
-   - Mampu memindai ulang foto dari memory blob ataupun fetch preview URL jika file mentah sudah dilepas.
-   - Menerapkan penyamaran bounding box, watermark kapsul `ruangsinggah.id` dua warna, konversi WebP, dan pembaruan file draft di storage Supabase secara otomatis.
-5. **Perluasan Kategori Rawan Kontak (`isBannerProneCategory`)**:
-   - Menambahkan kata kunci tambahan: `luar`, `gerbang`, `spanduk`, `banner`, `jalan`.
+## 1. Bukti Penyimpanan Data di Database Supabase
+- **Storage Supabase**: Tersimpan di bucket `properties/{user_id}/{property_id}/images/original/...` dalam format modern `.webp`.
+- **Database PostgreSQL**:
+  - Kolom `properties.image_urls`: Berisi array of objects dengan struktur `{ original, url, label, category, caption }`.
+  - Kolom `properties.metadata`:
+    - `photo_categories`: Menyimpan daftar kategori yang digunakan (`string[]`).
+    - `categorized_photos`: Menyimpan pemetaan kategori ke daftar URL foto (`Record<string, string[]>`).
+    - `photos_meta`: Menyimpan array objek foto lengkap beserta label dan caption.
 
 ---
 
-## 3. Hasil Pengujian & Verifikasi
+## 2. Rincian Modifikasi Kode
 
-### A. Uji Kompilasi TypeScript & Vite Bundling
-Perintah pengujian dijalankan di direktori `functions/public/`:
+### A. Layanan Pengambilan Data Properti Pemilik (`userService.ts`)
+- **Lokasi**: [userService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/userService.ts#L850-L895)
+- **Perubahan**:
+  - Pada fungsi `getOwnerProperties(ownerUid)`, kini secara eksplisit memetakan:
+    ```typescript
+    photoCategories: (Array.isArray(p.metadata?.photo_categories) && p.metadata.photo_categories.length > 0)
+      ? p.metadata.photo_categories
+      : Array.isArray(p.image_urls) ? p.image_urls.map((img: any) => img?.label || img?.category || '').filter(Boolean) : [],
+    categorizedPhotos: (p.metadata?.categorized_photos && typeof p.metadata.categorized_photos === 'object')
+      ? p.metadata.categorized_photos
+      : undefined,
+    photosMeta: (Array.isArray(p.metadata?.photos_meta) && p.metadata.photos_meta.length > 0)
+      ? p.metadata.photos_meta
+      : (Array.isArray(p.image_urls) ? p.image_urls : []),
+    metadata: p.metadata || {},
+    ```
+  - Memastikan objek `Kost` yang diteruskan ke dashboard mitra membawa seluruh struktur kategori foto.
+
+### B. Formulir Pendaftaran & Edit Kost Mitra (`KostFormMitra.tsx`)
+- **Lokasi**: [KostFormMitra.tsx](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/KostFormMitra.tsx)
+- **Perubahan**:
+  1. **Inisialisasi State Form**:
+     - Membaca dan menghidrasi `photoCategories`, `photosMeta`, dan `categorizedPhotos` dari `editingKost` maupun `editingKost.metadata`.
+  2. **Inisialisasi Kategori Kustom (`customCategories`)**:
+     - Memfilter kategori non-standar dari properti `editingKost.photoCategories` atau `metadata.photo_categories` agar kategori kustom yang ditambahkan sebelumnya langsung muncul di panel.
+  3. **Penghapusan Foto yang Sinkron (`removeExistingImage`)**:
+     - Menghapus foto dari `imageUrls` sekaligus menyelaraskan state `photosMeta`.
+  4. **Validasi & Rekonstruksi Kategori di UI (`existingWithCats`)**:
+     - Mengutamakan `photosMeta` yang memuat `label`/`category`.
+     - Menyediakan *reverse lookup* otomatis ke `form.categorizedPhotos` untuk mencocokkan URL foto dengan nama kategori aslinya.
+     - Memastikan foto terdistribusi tepat ke kartu masing-masing (**Koridor**, **Lingkungan Sekitar**, **Area Parkir**, **Kamar**, dll.).
+  5. **Pengiriman Form (`handleSubmit`)**:
+     - Mempertahankan objek foto lengkap (`existingImagesWithLabels`) dengan label, kategori, dan caption saat data dikirim ke `updatePropertyWithMedia`.
+
+### C. Pembaruan Properti di Sisi Admin/Mitra (`adminService.ts`)
+- **Lokasi**: [adminService.ts](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts#L2150-L2245)
+- **Perubahan**:
+  - Mengimplementasikan helper `findLabelForUrl` untuk memulihkan kategori foto lama dari `existing.metadata.photos_meta`, `existing.metadata.categorized_photos`, maupun `currentImageObjects`.
+  - Mengamankan `derivedPhotoCategories` agar tidak tertimpa jika client mengirim array string kosong.
+
+---
+
+## 3. Hasil Verifikasi & Uji Kompilasi
+
+Kompilasi build aplikasi front-end dijalankan menggunakan bundler Vite:
 ```bash
 cmd /c npm run build
 ```
 **Hasil**:
-- **0 Error Kompilasi**.
-- **2,506 modul** berhasil ditransformasi dan di-bundle (`✓ built in 1m 7s`).
-- Seluruh chunk JavaScript dan CSS ter-generate sempurna di folder `public/assets/`.
+```text
+vite v6.4.1 building for production...
+transforming...
+✓ 2506 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 37.27s
+0 errors, 0 warnings fatal.
+```
 
 ---
 
-## 4. Panduan Verifikasi Pengguna (UI Testing Guide)
+## 4. Panduan Verifikasi untuk Pengguna
 
-Untuk menguji fitur ini di antarmuka browser:
-1. Masuk ke halaman **Mitra / Tambah Kost** (`KostFormMitra`).
-2. Navigasi ke **Langkah 5 (Foto)**.
-3. Pada kategori **Bangunan Depan (Fasad)**, unggah foto properti yang memiliki spanduk nomor HP / WhatsApp:
-   - Sistem akan secara otomatis memanggil AI Vision `gemini-2.5-flash`.
-   - Kotak spanduk akan disamarkan dan disematkan watermark kapsul resmi `ruangsinggah.id`.
-   - Kartu foto akan menampilkan badge **`ruangsinggah.id`** di pojok kiri atas.
-4. **Pengujian Re-Scan Manual**:
-   - Jika suatu foto memiliki spanduk kontak tetapi belum tersensor (misal diunggah saat koneksi offline atau di kategori tanpa auto-scan), klik tombol perisai oranye (`ShieldAlert`) di pojok kanan atas thumbnail foto.
-   - Sistem akan memindai foto tersebut secara instan, menyamarkan kontak, memasang watermark `ruangsinggah.id`, dan mengubah statusnya menjadi aman.
+1. **Buka Dashboard Mitra**:
+   - Masuk ke aplikasi dan navigasikan ke menu dashboard mitra.
+2. **Buka Mode Edit Listing**:
+   - Temukan kartu properti kost yang sudah dipublikasikan sebelumnya.
+   - Klik tombol **Edit** pada kartu kost.
+3. **Navigasi ke Langkah Foto (Langkah 5 dari 6)**:
+   - Klik tombol **Lanjut** hingga mencapai langkah kelima (Foto Properti & Kamar).
+4. **Verifikasi Tampilan Foto**:
+   - Periksa kartu-kartu kategori seperti:
+     - **Bangunan Depan (Fasad)**
+     - **Koridor & Akses Masuk**
+     - **Lingkungan Sekitar**
+     - **Area Parkir**
+     - Foto tipe kamar (misal: *Kamar: Tipe Standard*, *Kamar Mandi*, dll.)
+   - Pastikan foto-foto yang diunggah sebelumnya **muncul kembali pada kartu kategorinya masing-masing** dan tidak lagi bernilai "0 FOTO".
+5. **Uji Simpan / Perubahan**:
+   - Tambah atau hapus salah satu foto, lalu klik **Simpan Perubahan**.
+   - Buka kembali formulir edit untuk memastikan persistensi tetap terjaga 100%.

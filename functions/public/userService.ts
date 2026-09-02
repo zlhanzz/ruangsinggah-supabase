@@ -851,9 +851,13 @@ export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
     return allProps.map((row) => {
       const rawImages = row.image_urls || [];
       const images = rawImages.map(getDisplayImageUrl).filter((u: string) => u !== '');
+      const photosMeta = (row.metadata?.photos_meta || rawImages).map(getDisplayImageObject).filter(Boolean) as ImageUrlObject[];
 
       const rawVideos = row.video_urls || [];
       const videos = rawVideos.map(getDisplayVideoUrl).filter((u: string) => u !== '');
+
+      const photoCategories = row.photo_categories || row.photoCategories || (row.metadata && (row.metadata.photo_categories || row.metadata.photoCategories)) || [];
+      const categorizedPhotos = row.categorized_photos || row.categorizedPhotos || (row.metadata && (row.metadata.categorized_photos || row.metadata.categorizedPhotos)) || {};
 
       return {
         id: row.id,
@@ -873,6 +877,7 @@ export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
         rating: row.rating || 0,
         location: row.location || { lat: 0, lng: 0 },
         imageUrls: images,
+        photosMeta,
         videoUrls: videos,
         instagramUrl: row.instagram_url || '',
         tiktokUrl: row.tiktok_url || '',
@@ -881,6 +886,7 @@ export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
         rules: row.rules || [],
         campuses: row.campuses || [],
         publicFacilities: row.public_facilities || [],
+        virtualTourUrl: row.virtual_tour_url || '',
         createdAt: convertTimestamp(row.created_at),
         updatedAt: convertTimestamp(row.updated_at),
         views: row.views || 0,
@@ -890,6 +896,10 @@ export async function getOwnerProperties(ownerUid: string): Promise<Kost[]> {
         omnichannelContactName: row.omnichannel_contact_name,
         omnichannelContactPhone: row.omnichannel_contact_phone,
         omnichannelContactType: row.omnichannel_contact_type,
+        managed_by: row.managed_by || row.metadata?.managed_by || (row.is_managed ? 'kostmanager' : 'self'),
+        photoCategories,
+        categorizedPhotos,
+        metadata: row.metadata || {},
       } as Kost;
     });
   } catch (error: any) {
