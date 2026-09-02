@@ -5354,31 +5354,60 @@ export interface ContactBannerDetectionResult {
     xmax: number;
     label?: string;
   }>;
+  error?: string;
 }
 
 export const detectPhotoContactBanner = async (
   base64Image: string,
   mimeType = 'image/webp'
 ): Promise<ContactBannerDetectionResult> => {
-  try {
-    console.log('[AI_BANNER] Memanggil Edge Function detect-contact-banner...');
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+  const invokeAttempt = async (attemptNumber: number): Promise<any> => {
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Deteksi banner kontak timeout (18s)')), 18000)
+      setTimeout(() => reject(new Error(`Deteksi banner kontak timeout (18s) - Percobaan ${attemptNumber}`)), 18000)
     );
 
     const invokePromise = supabase.functions.invoke('detect-contact-banner', {
-      body: { base64Image, mimeType }
+      body: { base64Image, mimeType },
+      headers: supabaseAnonKey ? {
+        apikey: supabaseAnonKey
+      } : undefined
     });
 
-    const res: any = await Promise.race([invokePromise, timeoutPromise]);
-    console.log('[AI_BANNER] Respon Supabase Edge Function:', res);
+    return await Promise.race([invokePromise, timeoutPromise]);
+  };
+
+  try {
+    console.log('[AI_BANNER] Memanggil Edge Function detect-contact-banner...');
+    let res: any;
+    let lastError: any = null;
+
+    // Percobaan 1
+    try {
+      res = await invokeAttempt(1);
+    } catch (err: any) {
+      lastError = err;
+      console.warn('[AI_BANNER] Percobaan 1 gagal, mencoba retry dalam 800ms...', err?.message || err);
+      // Tunggu 800ms sebelum retry
+      await new Promise(r => setTimeout(r, 800));
+      // Percobaan 2 (Retry)
+      res = await invokeAttempt(2);
+    }
+
     const { data: aiRes, error: aiErr } = res || {};
 
     if (aiErr) {
       console.error('[AI_BANNER] Error invoke Edge Function:', aiErr);
+      return { 
+        hasContact: false, 
+        detectedTexts: [], 
+        boxes: [], 
+        error: aiErr.message || 'Gagal memanggil fungsi AI' 
+      };
     }
 
-    if (!aiErr && aiRes && aiRes.success && aiRes.data) {
+    if (aiRes && aiRes.success && aiRes.data) {
       const data = aiRes.data;
       console.log('[AI_BANNER] Sukses mendeteksi:', data);
       return {
@@ -5387,9 +5416,15 @@ export const detectPhotoContactBanner = async (
         boxes: Array.isArray(data.boxes) ? data.boxes : []
       };
     }
+
     return { hasContact: false, detectedTexts: [], boxes: [] };
-  } catch (err) {
+  } catch (err: any) {
     console.warn('[AI_BANNER] Pemeriksaan banner kontak dilewati (fallback aman):', err);
-    return { hasContact: false, detectedTexts: [], boxes: [] };
+    return { 
+      hasContact: false, 
+      detectedTexts: [], 
+      boxes: [], 
+      error: err?.message || 'Gangguan jaringan saat memindai spanduk kontak' 
+    };
   }
 };

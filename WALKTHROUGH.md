@@ -1,67 +1,80 @@
-# WALKTHROUGH: Pembersihan Total (Multi-Layer Defense) Fasilitas Sampah / Service Printer — Fitur #268
-**Tanggal**: 2026-09-02 | **Branch**: `bukan-productions`
+# Walkthrough - Pemulihan & Penguatan Sensor Banner Kontak Otomatis AI
+
+Dokumen ini merangkum perbaikan dan penguatan menyeluruh pada sistem sensor banner/spanduk kontak otomatis berbasis AI Vision (`gemini-2.5-flash` via Supabase Edge Function).
 
 ---
 
-## 1. Ringkasan Masalah & Perbaikan
+## 1. Analisis Akar Masalah (Root Cause)
 
-### Masalah yang Terjadi:
-- Tempat **"Service Printer"** (0,5 KM) masih muncul di formulir pendaftaran/edit kost mitra pada bagian *Langkah 2: Lokasi & Fasilitas Terdekat*.
-- **Akar Penyebab**:
-  1. Data draft lama yang tersimpan di `localStorage` memuat hasil pemindaian sebelum perbaikan filter diterapkan.
-  2. Saat draft diinisialisasi ulang dari `localStorage`, daftar `garbagePatterns` belum memuat kata `printer` atau `service`.
-  3. Komponen render JSX di bagian tampilan belum memiliki proteksi filter, sehingga apapun yang tersisa di memori browser langsung ditampilkan ke layar.
-
-### Solusi 4 Lapisan Pertahanan (*Defense in Depth*):
-1. **Lapisan 1 (Pembersihan Draft LocalStorage)**:
-   - Pola `garbagePatterns` pada pemuatan draft diperluas dengan kata kunci: `printer`, `service`, `servis`, `print`, `fotocopy`, `foto copy`, `percetakan`, `cuci motor`, `cuci mobil`, `car wash`, `steam`, `bengkel`, `tambal ban`, `counter`, `konter`, `pulsa`, `cell`, `salon`, `barber`.
-   - Data lama di browser yang memuat kata-kata tersebut **langsung terhapus saat formulir dibuka**.
-2. **Lapisan 2 (Helper Global `isGarbageFacility`)**:
-   - Dibuat fungsi validator mandiri yang memeriksa string nama tempat dan langsung menolak jika termasuk usaha non-fasilitas publik kost.
-3. **Lapisan 3 (Penyaringan Mutlak di Akhir Scanning)**:
-   - Sebelum `setForm` dipanggil di `detectNearbyLandmarks`, array `combinedLandmarks` dan `finalFacilities` wajib disaring dengan `!isGarbageFacility(name)`.
-4. **Lapisan 4 (Auto-Purge `useEffect` & Proteksi Render JSX UI)**:
-   - `useEffect` sinkronisasi lokasi secara reaktif mendeteksi dan membersihkan state `campuses` jika masih ada item sampah yang tersisa di memori.
-   - Render tampilan UI diproteksi: `(form.campuses || []).filter(c => !isGarbageFacility(c.name)).map(...)` dengan handler mutasi item yang aman berbasis referensi objek (`item === c` dan `item !== c`).
+Berdasarkan investigasi diagnostik terhadap kegagalan sensor pada citra pengguna:
+1. **Model AI & Edge Function Berjalan Normal**:
+   - Uji tembak langsung ke endpoint Edge Function `detect-contact-banner` menghasilkan deteksi akurat 100%:
+     - `has_contact: true`
+     - Teks terdeteksi: `"MENERIMA KOST PUTRI"`, `"INFO WA : 0813 5536 27"`, `"0823 4990 80"`
+     - Bounding boxes: `{ ymin: 545, xmin: 275, ymax: 905, xmax: 485 }`
+2. **Penyebab Utama Foto Lolos Tanpa Sensor**:
+   - **Silent Network Fallback**: Saat koneksi internet mengalami drop / timeout (18 detik) saat mitra mengunggah foto, `adminService.ts` menangkap error dan langsung me-return `{ hasContact: false }` tanpa retry dan tanpa flag error, sehingga foto dianggap bersih.
+   - **Validasi MIME Type Kaku**: `file.type.startsWith('image/')` pada beberapa browser HP / galeri Android menghasilkan string kosong (`""`), sehingga konversi Base64 AI terlewatkan (*bypassed*).
+   - **Gateway Supabase Belum Terdaftar**: `supabase/config.toml` belum mendaftarkan fungsi `detect-contact-banner` dengan `verify_jwt = false`.
+   - **Ketiadaan Fitur Re-Scan Manual**: Foto yang terlanjur diunggah dalam mode draf lokal saat koneksi sempat putus tidak dapat dipindai ulang tanpa harus menghapus dan mengunggah ulang dari nol.
 
 ---
 
-## 2. File yang Disentuh
+## 2. Rincian Perubahan yang Telah Diimplementasikan
 
-- **`functions/public/components/KostFormMitra.tsx`**:
-  - Memperbarui parser draft awal `localStorage` (baris 2230).
-  - Menambahkan fungsi helper `isGarbageFacility` (baris 2625).
-  - Menyaring `combinedLandmarks` dan `finalFacilities` di `detectNearbyLandmarks` (baris 3050).
-  - Menambahkan auto-purge di `useEffect` (baris 3100).
-  - Memproteksi pemetaan render tampilan JSX (baris 4140).
-- **`public/assets/` & `public/index.html`**:
-  - Bundle frontend hasil kompilasi `npm run build`.
-- **`functions/PROGRESS.md`**:
-  - Pencatatan riwayat Fitur #268.
+### A. Konfigurasi Gateway Supabase (`supabase/config.toml`)
+- Menambahkan blok registrasi fungsi:
+  ```toml
+  [functions.detect-contact-banner]
+  verify_jwt = false
+  ```
+  Memastikan pemanggilan fungsi Edge Function dari anon key / mitra tidak tertolak oleh verifikasi JWT gateway.
+
+### B. Penguatan Pemanggilan API AI di Front-End (`functions/public/adminService.ts`)
+- Menambahkan header cadangan `apikey: supabaseAnonKey` pada request `detectPhotoContactBanner`.
+- Mengimplementasikan mekanisme **auto-retry 1x** dengan jeda 800ms jika request pertama terhambat gangguan koneksi jaringan.
+- Menambahkan field `error?: string` pada antarmuka `ContactBannerDetectionResult` agar UI mengetahui jika proses pemindaian terhambat.
+
+### C. UI & Logika Form Mitra (`functions/public/components/KostFormMitra.tsx`)
+1. **Helper Validasi File Fleksibel (`isImageFile`)**:
+   - Memeriksa `file.type` maupun ekstensi file (`.jpg`, `.jpeg`, `.png`, `.webp`, `.heic`, dll.) agar foto dari semua tipe browser HP selalu lolos ke tahap pemindaian Base64 AI.
+2. **Notifikasi Gangguan Koneksi**:
+   - Jika AI scan terhambat kendala koneksi internet saat upload otomatis, sistem memunculkan banner peringatan oranye ramah yang memberitahukan bahwa foto berhasil diunggah namun beberapa spanduk belum sempat terpindai AI, lengkap dengan petunjuk menggunakan tombol pemicu manual.
+3. **Tombol Pemicu Manual "Pindai Kontak (AI)"**:
+   - Menambahkan tombol aksi perisai oranye (`ShieldAlert`) pada pojok kanan atas kartu foto baru (`currentCatNew`) yang belum berstatus sensor (`!item.isBlurred`).
+   - Tombol tersedia di kategori wajib (Bangunan Depan, dsb.) maupun kategori kustom/tambahan.
+   - Menampilkan animasi putar (`Loader2`) saat proses pemindaian sedang berjalan.
+4. **Fungsi Re-Scan Mandiri (`handleReScanBanner`)**:
+   - Mampu memindai ulang foto dari memory blob ataupun fetch preview URL jika file mentah sudah dilepas.
+   - Menerapkan penyamaran bounding box, watermark kapsul `ruangsinggah.id` dua warna, konversi WebP, dan pembaruan file draft di storage Supabase secara otomatis.
+5. **Perluasan Kategori Rawan Kontak (`isBannerProneCategory`)**:
+   - Menambahkan kata kunci tambahan: `luar`, `gerbang`, `spanduk`, `banner`, `jalan`.
 
 ---
 
-## 3. Hasil Pengujian & Kompilasi
+## 3. Hasil Pengujian & Verifikasi
 
-### Hasil Build Vite Frontend:
-```text
-✓ 2506 modules transformed.
-rendering chunks...
-computing gzip size...
-../../public/index.html                                  7.36 kB │ gzip:   2.23 kB
-../../public/assets/MitraDashboard-DZCZJGE5.js         382.53 kB │ gzip:  84.88 kB
-✓ built in 34.39s
-Exit code: 0
+### A. Uji Kompilasi TypeScript & Vite Bundling
+Perintah pengujian dijalankan di direktori `functions/public/`:
+```bash
+cmd /c npm run build
 ```
-- **Kompilasi TypeScript & Vite**: Lulus 100% dengan **0 error**.
+**Hasil**:
+- **0 Error Kompilasi**.
+- **2,506 modul** berhasil ditransformasi dan di-bundle (`✓ built in 1m 7s`).
+- Seluruh chunk JavaScript dan CSS ter-generate sempurna di folder `public/assets/`.
 
 ---
 
-## 4. Panduan Pengujian bagi Pengguna (User Testing Guide)
+## 4. Panduan Verifikasi Pengguna (UI Testing Guide)
 
-1. Lakukan refresh halaman browser (`Ctrl + F5` atau `Cmd + Shift + R`) pada formulir kost mitra.
-2. Masuk ke **Langkah 2: Lokasi & Fasilitas Terdekat**.
-3. **Verifikasi**:
-   - Item **"Service Printer"** kini **hilang seketika** (terhapus otomatis dari draft browser).
-   - Klik tombol **"Pindai Ulang Landmark"**.
-   - Sistem memindai ulang, dan tempat-tempat yang muncul hanya fasilitas publik asli (Kampus, Mall, Rumah Sakit, Minimarket, Laundry Pakaian, Masjid, Gereja, SPBU).
+Untuk menguji fitur ini di antarmuka browser:
+1. Masuk ke halaman **Mitra / Tambah Kost** (`KostFormMitra`).
+2. Navigasi ke **Langkah 5 (Foto)**.
+3. Pada kategori **Bangunan Depan (Fasad)**, unggah foto properti yang memiliki spanduk nomor HP / WhatsApp:
+   - Sistem akan secara otomatis memanggil AI Vision `gemini-2.5-flash`.
+   - Kotak spanduk akan disamarkan dan disematkan watermark kapsul resmi `ruangsinggah.id`.
+   - Kartu foto akan menampilkan badge **`ruangsinggah.id`** di pojok kiri atas.
+4. **Pengujian Re-Scan Manual**:
+   - Jika suatu foto memiliki spanduk kontak tetapi belum tersensor (misal diunggah saat koneksi offline atau di kategori tanpa auto-scan), klik tombol perisai oranye (`ShieldAlert`) di pojok kanan atas thumbnail foto.
+   - Sistem akan memindai foto tersebut secara instan, menyamarkan kontak, memasang watermark `ruangsinggah.id`, dan mengubah statusnya menjadi aman.

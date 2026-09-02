@@ -2278,6 +2278,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
     const [tempRule, setTempRule] = useState('');
     const [editingCaptionTarget, setEditingCaptionTarget] = useState<{ id: string; isNew: boolean; caption: string; catLabel: string; raw?: any } | null>(null);
     const [uploadingCategory, setUploadingCategory] = useState<string | null>(null);
+    const [reScanningId, setReScanningId] = useState<string | null>(null);
     const [bannerNotice, setBannerNotice] = useState<string | null>(null);
     
     // State sub-wizard pengisian kamar bertahap (Langkah 3)
@@ -3123,10 +3124,18 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         }
     }, [step, form.location?.lat, form.location?.lng, detectNearbyLandmarks, isInvalidCampus, isGarbageFacility]);
 
+    // ── Helper validasi file gambar fleksibel (MIME type & ekstensi nama file) ──
+    const isImageFile = (file: File): boolean => {
+        if (!file) return false;
+        if (file.type && file.type.startsWith('image/')) return true;
+        const name = (file.name || '').toLowerCase();
+        return /\.(jpe?g|png|webp|heic|bmp|gif|tiff?)$/i.test(name);
+    };
+
     // ── Image handling: Standardisasi Rasio 4:3 Landscape (1200 x 900) & Client-Side WebP ───
     const compressImageToWebP = async (file: File, quality = 0.82): Promise<File> => {
         return new Promise((resolve) => {
-            if (!file.type.startsWith('image/')) return resolve(file);
+            if (!isImageFile(file)) return resolve(file);
             const reader = new FileReader();
             reader.onload = (e) => {
                 const img = new Image();
@@ -3189,14 +3198,19 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             lower.includes('depan') || 
             lower.includes('fasad') || 
             lower.includes('lingkungan') || 
-            lower.includes('parkir')
+            lower.includes('parkir') ||
+            lower.includes('luar') ||
+            lower.includes('gerbang') ||
+            lower.includes('spanduk') ||
+            lower.includes('banner') ||
+            lower.includes('jalan')
         );
     };
 
     // ── Helper konversi citra ke Base64 Low-Res untuk AI Vision (~45KB, Sweet Spot 1024px) ───
     const createLowResBase64ForAi = async (file: File, maxDim = 1024, quality = 0.65): Promise<string> => {
         return new Promise((resolve) => {
-            if (!file.type.startsWith('image/')) return resolve('');
+            if (!isImageFile(file)) return resolve('');
             const reader = new FileReader();
             reader.onload = (e) => {
                 const img = new Image();
@@ -3422,6 +3436,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
         try {
             let anyContactDetected = false;
+            let lastScanError: string | null = null;
 
             // Proses seluruh file secara paralel (Promise.all) untuk akselerasi instan
             const processedItems = await Promise.all(
@@ -3439,6 +3454,9 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                     fileToProcess = await applyBlurToBoundingBoxes(file, detection.boxes);
                                     isBlurred = true;
                                     anyContactDetected = true;
+                                } else if (detection.error) {
+                                    lastScanError = detection.error;
+                                    console.warn('[AI_BANNER] Deteksi kontak terhambat:', detection.error);
                                 }
                             }
                         }
@@ -3484,11 +3502,85 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
 
             if (anyContactDetected) {
                 setBannerNotice('Foto Anda terdeteksi memuat informasi spanduk/kontak dan telah disematkan watermark resmi ruangsinggah.id secara otomatis demi keamanan transaksi.');
+            } else if (lastScanError && needAiScan) {
+                setBannerNotice(`Koneksi internet terganggu saat pemindaian otomatis (${lastScanError}). Anda dapat menekan tombol 🛡️ pada kartu foto untuk memindai ulang kapan saja.`);
             }
 
             setNewPhotoItems(prev => [...prev, ...processedItems]);
         } finally {
             setUploadingCategory(null);
+        }
+    };
+
+    // ── Helper Pemindaian Ulang (Re-Scan) Spanduk Kontak dengan AI Vision ──────
+    const handleReScanBanner = async (item: NewPhotoItem) => {
+        if (reScanningId) return;
+        setReScanningId(item.id);
+        try {
+            let sourceFile = item.file;
+            if (!sourceFile && item.preview) {
+                try {
+                    const resp = await fetch(item.preview);
+                    const blob = await resp.blob();
+                    sourceFile = new File([blob], `rescan_${item.id}.webp`, { type: blob.type || 'image/webp' });
+                } catch (fetchErr) {
+                    console.warn('Gagal fetch preview URL untuk re-scan:', fetchErr);
+                }
+            }
+
+            if (!sourceFile) {
+                alert('File foto tidak ditemukan untuk dipindai ulang. Silakan hapus dan unggah kembali foto ini.');
+                return;
+            }
+
+            const lowResBase64 = await createLowResBase64ForAi(sourceFile, 1024, 0.65);
+            if (!lowResBase64) {
+                alert('Format gambar tidak dapat diproses oleh AI. Pastikan file berupa gambar yang valid.');
+                return;
+            }
+
+            const detection = await detectPhotoContactBanner(lowResBase64, 'image/jpeg');
+            if (detection.hasContact && detection.boxes && detection.boxes.length > 0) {
+                const blurredFile = await applyBlurToBoundingBoxes(sourceFile, detection.boxes);
+                const webpFile = await compressImageToWebP(blurredFile);
+
+                let previewUrl = '';
+                let storagePath: string | undefined = undefined;
+                try {
+                    if (item.storagePath) {
+                        deleteDraftPhotosFromStorage([item.storagePath]);
+                    }
+                    const uploadRes = await uploadDraftPhotoToStorage(webpFile, user?.id);
+                    previewUrl = uploadRes.publicUrl;
+                    storagePath = uploadRes.storagePath;
+                } catch {
+                    previewUrl = URL.createObjectURL(webpFile);
+                }
+
+                setNewPhotoItems(prev => prev.map(p => {
+                    if (p.id === item.id) {
+                        return {
+                            ...p,
+                            file: webpFile,
+                            preview: previewUrl,
+                            isBlurred: true,
+                            storagePath
+                        };
+                    }
+                    return p;
+                }));
+
+                setBannerNotice('Spanduk kontak pada foto berhasil dideteksi dan disematkan watermark resmi ruangsinggah.id!');
+            } else if (detection.error) {
+                alert(`Pemindaian AI terhambat: ${detection.error}. Silakan periksa koneksi internet Anda dan coba lagi.`);
+            } else {
+                alert('AI telah memindai foto ini dan tidak menemukan spanduk nomor kontak/telepon.');
+            }
+        } catch (err: any) {
+            console.error('Error re-scanning photo:', err);
+            alert('Terjadi kesalahan saat memindai ulang foto: ' + (err?.message || 'Gangguan teknis'));
+        } finally {
+            setReScanningId(null);
         }
     };
 
@@ -5390,6 +5482,21 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                         </span>
                                                     )}
                                                     <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
+                                                        {!item.isBlurred && isBannerProneCategory(cat.id) && (
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={() => handleReScanBanner(item)}
+                                                                disabled={reScanningId === item.id}
+                                                                className="bg-amber-600/90 hover:bg-amber-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md transition-all active:scale-90 disabled:opacity-50"
+                                                                title="Pindai Spanduk / Kontak dengan AI"
+                                                            >
+                                                                {reScanningId === item.id ? (
+                                                                    <Loader2 size={11} className="animate-spin" />
+                                                                ) : (
+                                                                    <ShieldAlert size={11} />
+                                                                )}
+                                                            </button>
+                                                        )}
                                                         <button 
                                                             type="button" 
                                                             onClick={() => setEditingCaptionTarget({
@@ -5557,6 +5664,21 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                             </span>
                                                         )}
                                                         <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
+                                                            {!item.isBlurred && isBannerProneCategory(cat.id) && (
+                                                                <button 
+                                                                    type="button" 
+                                                                    onClick={() => handleReScanBanner(item)}
+                                                                    disabled={reScanningId === item.id}
+                                                                    className="bg-amber-600/90 hover:bg-amber-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md transition-all active:scale-90 disabled:opacity-50"
+                                                                    title="Pindai Spanduk / Kontak dengan AI"
+                                                                >
+                                                                    {reScanningId === item.id ? (
+                                                                        <Loader2 size={11} className="animate-spin" />
+                                                                    ) : (
+                                                                        <ShieldAlert size={11} />
+                                                                    )}
+                                                                </button>
+                                                            )}
                                                             <button 
                                                                 type="button" 
                                                                 onClick={() => setEditingCaptionTarget({

@@ -2,6 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 264. Pemulihan & Penguatan Sensor Banner Kontak Otomatis AI (Nomor Telepon / Spanduk Sewa) (`adminService.ts`, `KostFormMitra.tsx`, `supabase/config.toml`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna menanyakan mengapa sensor banner otomatis dari sistem tidak bekerja lagi pada foto tampak depan kost ("Bangunan Depan") yang memuat spanduk sewa berisi nomor telepon/WhatsApp (`media_1788339018992.png`). Foto terunggah dengan badge hijau "BARU" dan bukan badge "ruangsinggah.id" (sensor kontak tidak aktif).
+- **Investigasi & Analisis Akar Masalah**:
+  1. *Edge Function Supabase & Model Gemini Aktif*: Pengujian diagnostik langsung ke Edge Function `detect-contact-banner` membuktikan Edge Function dan model AI `gemini-2.5-flash` aktif 100% dan sukses mendeteksi nomor telepon spanduk pada citra user (`has_contact: true`, teks: `"INFO WA : 0813 5536 27"`, `"0823 4990 80"`).
+  2. *Silent Fallback pada Gangguan Jaringan*: Pada `adminService.ts`, jika terjadi network disconnect atau timeout HTTP (18s), blok catch langsung mengembalikan `{ hasContact: false }` tanpa retry dan tanpa flag error ke UI, sehingga foto masuk apa adanya.
+  3. *Validasi File Terlalu Kaku*: Pengecekan `file.type.startsWith('image/')` pada browser mobile atau Android gallery bisa mengembalikan string kosong (`""`), menyebabkan pembuatan Base64 AI di-skip.
+  4. *Konfigurasi Gateway*: `supabase/config.toml` belum mendaftarkan entri `[functions.detect-contact-banner]` dengan `verify_jwt = false`.
+  5. *Ketiadaan Tombol Re-Scan Manual*: Jika foto terunggah saat koneksi sempat drop, pengguna tidak memiliki cara untuk memindai ulang foto tanpa menghapus dan mengunggahnya dari awal.
+- **Implementasi Solusi**:
+  1. **Konfigurasi Gateway Supabase (`supabase/config.toml`)**:
+     - Menambahkan deklarasi fungsi `[functions.detect-contact-banner]` dengan `verify_jwt = false` agar pemanggilan dari anon client/mitra selalu diizinkan tanpa kendala JWT.
+  2. **Penguatan Pemanggilan API AI di Front-End (`adminService.ts`)**:
+     - Menambahkan header cadangan `apikey: supabaseAnonKey`.
+     - Menambahkan mekanisme auto-retry 1x dengan jeda 800ms jika request pertama terhambat gangguan jaringan.
+     - Menyediakan properti `error?: string` pada `ContactBannerDetectionResult` agar status kegagalan jaringan tertangkap oleh UI form.
+  3. **Validasi Fleksibel & Feedback UI di `KostFormMitra.tsx`**:
+     - Menambahkan helper `isImageFile(file)` yang memeriksa MIME type maupun ekstensi file (`.jpg`, `.jpeg`, `.png`, `.webp`, `.heic`, dll.).
+     - Menampilkan banner notifikasi ramah (`AlertCircle`) jika koneksi AI terputus saat proses upload berlangsung.
+     - Mengembangkan fungsi `handleReScanBanner(item)` yang dapat memindai ulang foto langsung dari memory / fetch preview URL, menerapkan penyamaran kotak spanduk dan watermark kapsul `ruangsinggah.id`, mengompresi ke WebP, dan memperbarui Supabase storage draft.
+     - Menambahkan tombol aksi manual "Pindai Kontak (AI)" berlambang perisai (`ShieldAlert`) pada kartu foto yang belum tersensor (`!item.isBlurred`) baik pada kategori wajib maupun kategori kustom/tambahan.
+     - Memperluas cakupan deteksi kategori rawan kontak (`isBannerProneCategory`) dengan keyword tambahan: `luar`, `gerbang`, `spanduk`, `banner`, `jalan`.
+- **File Tersentuh**:
+  - `supabase/config.toml`
+  - `functions/public/adminService.ts`
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 1m 7s, 0 error).
+
 ### 263. Penegakan Status Awal 'draft' pada Pendaftaran Properti Mitra & Penyelesaian Error RLS 42501 (`adminService.ts` & `KostFormMitra.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Saat mitra mengklik tombol "Publikasikan Kost" untuk mengirim pendataan kost ke dashboard admin, muncul error `42501: new row violates row-level security policy for table "properties"`.

@@ -7,3 +7,6 @@ entrypoint = "./functions/cancel-booking/index.ts"
 
 [functions.wa-webhook]
 verify_jwt = false
+
+[functions.detect-contact-banner]
+verify_jwt = false
