@@ -5625,3 +5625,26 @@
 - **Verifikasi**:
   - Kompilasi cmd /c npm run build di unctions/public/ berhasil 100% dengan 0 error dalam 30.29s (? 2506 modules transformed).
   - Build exit code 0. Push ke branch ukan-productions berhasil (commit: b64c04).
+
+### 265. Konfigurasi Lokalisasi Default Google Maps API ke Bahasa Indonesia & Region ID (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengaturan Google Maps API di web app RuangSinggah.id sebelumnya belum menentukan bahasa dan wilayah default (language dan region).
+  2. Google Maps API secara default menggunakan bahasa Inggris (en-US) jika tidak dispesifikasikan secara eksplisit.
+  3. Akibatnya, pemindaian/scanning tempat terdekat (Google Places Service, Nearby Search, Geocoder) untuk mencari kampus, tempat ibadah, SPBU, dsb. terkadang menghasilkan nama/kategori berbahasa Inggris atau gagal mencocokkan kata kunci bahasa Indonesia lokal.
+  4. Kontrol peta (UI control) menampilkan tombol bahasa Inggris (Map, Satellite, Terms of Use).
+- **Implementasi & Solusi**:
+  * **1. Penambahan Parameter Lokalisasi Resmi Google Maps**:
+    - Pada functions/public/index.html, URL loader Google Maps API diperbarui dengan parameter:
+      - language=id: Mengubah bahasa UI kontrol peta, nama tempat/POI, hasil Places API, respons Geocoder, dan petunjuk arah rute menjadi Bahasa Indonesia.
+      - region=ID: Memprioritaskan (geographical bias) hasil geocoding dan pencarian tempat ke wilayah kedaulatan Indonesia.
+    - URL terpasang: https://maps.googleapis.com/maps/api/js?key=%VITE_GOOGLE_MAPS_API_KEY%&libraries=places,routes,geometry&language=id&region=ID&loading=async
+  * **2. Kompilasi & Regenerasi Bundle Distribusi**:
+    - Kompilasi build frontend Vite (npm run build) berhasil mengompilasi dan meregenerasi public/index.html dengan parameter language=id&region=ID dan file bundle aset teroptimasi.
+- **File Tersentuh**:
+  - functions/public/index.html
+  - public/index.html
+  - functions/PROGRESS.md
+  - WALKTHROUGH.md
+- **Verifikasi**:
+  - Build Vite frontend npm run build di functions/public/ sukses 100% dengan 0 error dalam 53.98s (✓ 2506 modules transformed).
+  - Skrip Google Maps API di public/index.html dan functions/public/index.html terverifikasi memuat language=id&region=ID.
