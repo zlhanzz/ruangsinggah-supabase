@@ -1,42 +1,53 @@
-# Walkthrough - Redesain Tampilan Landmark & Fasilitas Publik Terdekat Menjadi Ramping & Efisien
+# Walkthrough: Redesain Tampilan Landmark & Fasilitas Publik Terdekat Menjadi Ramping & Efisien
 
-## 1. Ringkasan Perubahan
-Sesuai dengan arahan dan evaluasi pengguna mengenai tampilan Landmark dan Fasilitas Publik terdekat pada halaman detail kost (`KostDetail.tsx`) yang sebelumnya memakan ruang vertikal secara berlebihan (*"sangat tidak ramping dan efisien. sangat memekan banyak tempat"*), kami telah melakukan perombakan antarmuka menjadi **Compact Horizontal Grid** yang modern, rapi, dan hemat tempat.
-
----
-
-## 2. Detail Implementasi
-
-### A. Format Baris Horizontal Kompak (1 Item = 1 Baris Elegan)
-- **Sebelumnya**: Menggunakan kartu vertikal bertingkat (`p-3 flex flex-col justify-between`) dengan tombol rute terpisah di baris bawah, yang menyebabkan tinggi kartu mencapai ~90px per item dan memakan ruang vertikal yang sangat besar.
-- **Sesudah**: 
-  - Mengadopsi tata letak horizontal ramping setinggi ~46px per item.
-  - Sisi Kiri: Ikon vector SVG lokal (`GraduationCap` warna oranye untuk kampus, `Building2` warna biru untuk fasilitas umum), nama lokasi tebal dengan pemangkasan otomatis (`truncate`) dan tooltip judul lengkap saat di-hover.
-  - Sub-baris: Estimasi waktu tempuh 3 moda transportasi (`🚶 Jalan Kaki`, `🏍️ Sepeda Motor`, `🚗 Mobil`) disajikan dalam teks ringkas bernuansa abu-abu modern.
-  - Sisi Kanan: Badge jarak (`distance`, misal: `1.2 km`) dengan kontras lembut, didampingi tombol **Rute** ringkas berikon `Navigation` yang langsung membuka navigasi Google Maps ke titik koordinat tujuan.
-
-### B. Layout Responsif 2 Kolom (`grid-cols-1 md:grid-cols-2 gap-2`)
-- Di layar tablet/desktop, landmark disajikan secara paralel 2 kolom sehingga informasi lokasi dapat dilihat secara komprehensif tanpa harus banyak melakukan scroll ke bawah.
-- Di layar mobile, kartu menyesuaikan secara proporsional dengan padding yang nyaman disentuh.
-
-### C. 100% Bebas FOUT & Zero Network Request CDN
-- Seluruh icon menggunakan React vector SVG lokal dari package `lucide-react` (`GraduationCap`, `Building2`, `MapPin`, `Navigation`), menjamin tidak ada kedipan teks mentah (*Flash of Unstyled Text*) pada koneksi lambat.
+## Ringkasan Perubahan
+Bagian **Kampus Terdekat** dan **Fasilitas Publik Terdekat** pada halaman detail kost ([`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx)) telah berhasil dirombak total dari tata letak kartu vertikal tinggi (`min-w-[200px]`, tinggi ~160px) yang boros ruang menjadi **Compact Horizontal Grid (2-Kolom Desktop / 1-Kolom Mobile)** setinggi ~44-48px per baris. Tampilan baru ini sangat padat, bersih, modern, dan memberikan efisiensi ruang vertikal hingga lebih dari 65%.
 
 ---
 
-## 3. Hasil Pengujian & Kompilasi
-- **TypeScript Compilation Check**:
-  ```bash
-  cmd /c "npm run build"
-  ```
-  - **Hasil**: Exit code 0, **0 error**, kompilasi berhasil 100%.
+## Daftar Perubahan Detail
+
+### 1. Perubahan Tata Letak Rendering ([`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx#L1582-L1702))
+- **Struktur Grid Responsif**: Mengganti wrapper `flex flex-wrap gap-4` dengan `grid grid-cols-1 md:grid-cols-2 gap-1.5`.
+  - Di layar desktop/tablet, item otomatis tersusun sejajar 2 kolom kiri-kanan.
+  - Di layar mobile, item tersusun 1 kolom ramping tanpa scroll horizontal dan tanpa memakan tinggi layar.
+- **Struktur Baris Item (Single-Line Compact Row)**:
+  - **Sisi Kiri (Identitas Lokasi)**:
+    - Icon badge kecil 20x20px (`GraduationCap` warna oranye lembut untuk kampus, `Building2` warna biru lembut untuk fasilitas publik).
+    - Nama landmark dengan tipografi tebal (`text-xs font-bold`) yang dilengkapi `truncate` dan tooltip `title` agar tidak merusak layout jika nama lokasi panjang.
+  - **Sisi Kanan (Informasi Jarak, Durasi & Navigasi)**:
+    - Estimasi waktu tempuh ringkas: `🚶 {walkText} • 🏍️ {motoText}` (disembunyikan cerdas di layar sangat kecil dan tampil rapi di desktop).
+    - Badge jarak: Pil berwarna oranye pastel untuk kampus (`px-1.5 py-0.5 text-[10px]`) dan biru pastel untuk fasilitas publik.
+    - Tombol aksi **Rute**: Tombol ringkas berikon vector navigasi (`Navigation`) yang langsung membuka rute Google Maps origin-ke-destination saat diklik.
+
+### 2. Bebas Flash of Unstyled Text (FOUT) & Zero Network Overhead
+- Seluruh icon menggunakan SVG vector murni yang ter-bundle lokal via `lucide-react` (`GraduationCap`, `Building2`, `Navigation`, `MapPin`).
+- Bebas dari ketergantungan Google Fonts CDN `.woff2` sehingga tidak terjadi kedipan teks mentah saat loading.
 
 ---
 
-## 4. Panduan Verifikasi Pengguna
-1. Buka salah satu halaman detail kost di aplikasi web (contoh: `/kost/:id`).
-2. Gulir ke bagian **"Lokasi & Lingkungan"**.
-3. Perhatikan bagian **"Kampus Terdekat"** dan **"Fasilitas Publik"**:
-   - Kartu lokasi kini tampil rapat, ramping, dan rapi dalam format horizontal.
-   - Nama tempat, estimasi waktu tempuh 3 moda transportasi, badge jarak, dan tombol "Rute" tersaji secara harmonis dan tidak memakan ruang vertikal yang panjang.
-   - Klik tombol **"Rute"** pada salah satu item untuk memastikan petunjuk arah Google Maps terbuka di tab baru dengan titik asal koordinat kost dan titik tujuan landmark.
+## Bukti Hasil Pengujian & Kompilasi
+
+### Uji Build TypeScript:
+```powershell
+> functions@0.0.0 build
+> tsc
+
+Exit Code: 0 (Lulus 100%, 0 Error)
+```
+
+### Git Commit & Push:
+- **Branch**: `bukan-productions`
+- **Commit Hash**: `e6ce53a`
+- **Status**: Berhasil ter-push ke repository GitHub remote.
+
+---
+
+## Panduan Pengujian oleh Pengguna (User Testing Guide)
+
+1. Buka halaman web detail kost apa pun yang memiliki data kampus atau fasilitas publik terdekat (misalnya: kost di area kampus).
+2. Gulir ke bagian **"Lokasi & Lingkungan"** di bawah peta.
+3. Perhatikan sub-bagian **"Kampus Terdekat"** dan **"Fasilitas Publik"**:
+   - Tampilan kini berbentuk baris-baris horizontal ramping berdampingan (2 kolom di desktop).
+   - Terdapat nama tempat yang jelas, badge jarak (misal `0.4 km`), estimasi waktu tempuh jalan kaki & motor, serta tombol `Rute`.
+   - Klik tombol `Rute` pada salah satu item untuk memastikan navigasi Google Maps terbuka dengan titik asal kost dan titik tujuan landmark yang presisi.
