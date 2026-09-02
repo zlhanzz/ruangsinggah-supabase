@@ -1597,26 +1597,33 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                           const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
                           const walkText = campus.walkDuration || `${Math.ceil((km / 4.2) * 60)}m`;
                           const motoText = campus.motoDuration || `${Math.ceil((km / 28) * 60) + 1}m`;
+                          const carText = campus.carDuration || `${Math.ceil((km / 18) * 60) + 2}m`;
 
                           return (
                             <div 
                               key={idx} 
-                              className="bg-white border border-gray-100 hover:border-orange-200 rounded-xl px-2.5 py-1.5 flex items-center justify-between gap-2 transition-all hover:bg-orange-50/20 group shadow-2xs"
+                              className="bg-white border border-gray-100 hover:border-orange-200 rounded-xl p-2 px-2.5 flex items-center justify-between gap-2.5 transition-all hover:bg-orange-50/20 group shadow-2xs"
                             >
                               <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <div className="w-5 h-5 rounded-md bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
-                                  <GraduationCap size={12} />
+                                <div className="w-7 h-7 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                                  <GraduationCap size={14} />
                                 </div>
-                                <span className="font-bold text-gray-800 text-xs truncate" title={campus.name}>
-                                  {campus.name}
-                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold text-gray-900 text-xs truncate leading-tight" title={campus.name}>
+                                    {campus.name}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[10px] font-medium text-gray-500 mt-0.5 whitespace-nowrap">
+                                    <span title="Jalan Kaki">🚶 {walkText}</span>
+                                    <span className="text-gray-300">•</span>
+                                    <span title="Sepeda Motor">🏍️ {motoText}</span>
+                                    <span className="text-gray-300">•</span>
+                                    <span title="Mobil">🚗 {carText}</span>
+                                  </div>
+                                </div>
                               </div>
 
                               <div className="flex items-center gap-1.5 shrink-0">
-                                <span className="text-[10px] font-semibold text-gray-400 hidden sm:inline" title="Waktu tempuh">
-                                  🚶{walkText} • 🏍️{motoText}
-                                </span>
-                                <span className="font-bold text-orange-600 bg-orange-50 border border-orange-100/80 px-1.5 py-0.5 rounded-lg text-[10px] whitespace-nowrap">
+                                <span className="font-bold text-orange-600 bg-orange-50 border border-orange-100/80 px-2 py-0.5 rounded-lg text-[10px] whitespace-nowrap">
                                   {campus.distance}
                                 </span>
 
@@ -1628,7 +1635,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                     className="flex items-center gap-1 text-[10px] font-bold text-orange-600 hover:text-white bg-orange-50 hover:bg-orange-500 border border-orange-100/60 hover:border-orange-500 px-2 py-0.5 rounded-lg transition-all active:scale-95 shadow-2xs"
                                     title="Petunjuk Arah"
                                   >
-                                    <Navigation size={9} className="shrink-0" />
+                                    <Navigation size={10} className="shrink-0" />
                                     <span>Rute</span>
                                   </a>
                                 )}
@@ -1658,26 +1665,33 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                           const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
                           const walkText = fac.walkDuration || `${Math.ceil((km / 4.2) * 60)}m`;
                           const motoText = fac.motoDuration || `${Math.ceil((km / 28) * 60) + 1}m`;
+                          const carText = fac.carDuration || `${Math.ceil((km / 18) * 60) + 2}m`;
 
                           return (
                             <div 
                               key={idx} 
-                              className="bg-white border border-gray-100 hover:border-blue-200 rounded-xl px-2.5 py-1.5 flex items-center justify-between gap-2 transition-all hover:bg-blue-50/20 group shadow-2xs"
+                              className="bg-white border border-gray-100 hover:border-blue-200 rounded-xl p-2 px-2.5 flex items-center justify-between gap-2.5 transition-all hover:bg-blue-50/20 group shadow-2xs"
                             >
                               <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <div className="w-5 h-5 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                                  <Building2 size={12} />
+                                <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                                  <Building2 size={14} />
                                 </div>
-                                <span className="font-bold text-gray-800 text-xs truncate" title={fac.name}>
-                                  {fac.name}
-                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold text-gray-900 text-xs truncate leading-tight" title={fac.name}>
+                                    {fac.name}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[10px] font-medium text-gray-500 mt-0.5 whitespace-nowrap">
+                                    <span title="Jalan Kaki">🚶 {walkText}</span>
+                                    <span className="text-gray-300">•</span>
+                                    <span title="Sepeda Motor">🏍️ {motoText}</span>
+                                    <span className="text-gray-300">•</span>
+                                    <span title="Mobil">🚗 {carText}</span>
+                                  </div>
+                                </div>
                               </div>
 
                               <div className="flex items-center gap-1.5 shrink-0">
-                                <span className="text-[10px] font-semibold text-gray-400 hidden sm:inline" title="Waktu tempuh">
-                                  🚶{walkText} • 🏍️{motoText}
-                                </span>
-                                <span className="font-black text-blue-600 bg-blue-50 border border-blue-100/80 px-1.5 py-0.5 rounded-lg text-[10px] whitespace-nowrap">
+                                <span className="font-bold text-blue-600 bg-blue-50 border border-blue-100/80 px-2 py-0.5 rounded-lg text-[10px] whitespace-nowrap">
                                   {fac.distance}
                                 </span>
 
@@ -1689,7 +1703,7 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                     className="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-100/60 hover:border-blue-600 px-2 py-0.5 rounded-lg transition-all active:scale-95 shadow-2xs"
                                     title="Petunjuk Arah"
                                   >
-                                    <Navigation size={9} className="shrink-0" />
+                                    <Navigation size={10} className="shrink-0" />
                                     <span>Rute</span>
                                   </a>
                                 )}
