@@ -16,7 +16,7 @@ import {
   Phone, User as UserIcon, MessageSquare, Clock, Wifi, CookingPot, Car, 
   Bike, Bath, ShieldCheck, KeyRound, Shirt, Sun, Building2, Armchair, 
   Wind, Tv, Droplets, Utensils, Refrigerator, Lock, MapPin, Navigation, 
-  GraduationCap 
+  GraduationCap, RotateCcw
 } from 'lucide-react';
 import { createKostSlug } from '../utils/slugUtils';
 
@@ -902,8 +902,56 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   const hasPublicFacilities = publicFacilitiesList.length > 0;
   const hasLocationSection = hasValidLocation || hasCampuses || hasPublicFacilities;
 
-  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${kost.location?.lat || 0},${kost.location?.lng || 0}`;
-  const embedMapsUrl = `https://maps.google.com/maps?q=${kost.location?.lat || 0},${kost.location?.lng || 0}&z=16&output=embed`;
+  // --- INTERACTIVE IN-APP ROUTE PREVIEW STATE ---
+  interface ActiveRouteInfo {
+    name: string;
+    lat: number;
+    lng: number;
+    type: 'campus' | 'facility';
+    distance?: string;
+    walkDuration?: string;
+    motoDuration?: string;
+    carDuration?: string;
+  }
+
+  const [activeRoute, setActiveRoute] = useState<ActiveRouteInfo | null>(null);
+  const mapPreviewRef = React.useRef<HTMLDivElement>(null);
+
+  const handleSelectRoute = (dest: ActiveRouteInfo) => {
+    // Jika rute yang sama diklik lagi, toggle off (kembali ke titik kost)
+    if (activeRoute && activeRoute.name === dest.name && activeRoute.lat === dest.lat && activeRoute.lng === dest.lng) {
+      setActiveRoute(null);
+      return;
+    }
+    setActiveRoute(dest);
+    // Smooth scroll ke layar mini map
+    if (mapPreviewRef.current) {
+      mapPreviewRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  const handleResetRoute = () => {
+    setActiveRoute(null);
+  };
+
+  const originLat = kost.location?.lat || 0;
+  const originLng = kost.location?.lng || 0;
+
+  // Dynamic Embed URL: Direction vs Single Pin
+  const currentEmbedUrl = useMemo(() => {
+    if (activeRoute && activeRoute.lat && activeRoute.lng && originLat && originLng) {
+      return `https://maps.google.com/maps?saddr=${originLat},${originLng}&daddr=${activeRoute.lat},${activeRoute.lng}&output=embed`;
+    }
+    return `https://maps.google.com/maps?q=${originLat},${originLng}&z=16&output=embed`;
+  }, [originLat, originLng, activeRoute]);
+
+  // Dynamic External Navigation URL
+  const externalMapsUrl = useMemo(() => {
+    if (activeRoute && activeRoute.lat && activeRoute.lng && originLat && originLng) {
+      return `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLng}&destination=${activeRoute.lat},${activeRoute.lng}`;
+    }
+    return `https://www.google.com/maps/search/?api=1&query=${originLat},${originLng}`;
+  }, [originLat, originLng, activeRoute]);
 
   const periodLabels: Record<string, string> = {
     'harian': 'Per Hari',
@@ -1560,23 +1608,84 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
               <InfoSection title="Lokasi & Lingkungan">
                 <div className="space-y-6">
                   {hasValidLocation && (
-                    <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100">
-                      <iframe
-                        title="Kost Location"
-                        width="100%"
-                        height="200"
-                        style={{ border: 0 }}
-                        loading="lazy"
-                        allowFullScreen
-                        src={embedMapsUrl}
-                      ></iframe>
+                    <div ref={mapPreviewRef} className="space-y-3 scroll-mt-24">
+                      {/* Active Route Header Banner (Muncul dinamis saat rute dipilih) */}
+                      {activeRoute && (
+                        <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white rounded-2xl p-3 px-4 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-8 h-8 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0">
+                              <Navigation size={16} className="text-white" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[10px] uppercase font-black tracking-wider text-orange-100">
+                                  Menampilkan Rute Menuju
+                                </span>
+                                {activeRoute.distance && (
+                                  <span className="bg-white/25 text-white px-2 py-0.5 rounded-full text-[10px] font-black">
+                                    {activeRoute.distance}
+                                  </span>
+                                )}
+                              </div>
+                              <h5 className="font-black text-sm truncate max-w-[280px] sm:max-w-md text-white">
+                                {activeRoute.name}
+                              </h5>
+                              <div className="flex items-center gap-2 text-[10px] text-orange-100 font-bold mt-0.5 flex-wrap">
+                                {activeRoute.walkDuration && <span>🚶 {activeRoute.walkDuration}</span>}
+                                {activeRoute.motoDuration && <span>• 🏍️ {activeRoute.motoDuration}</span>}
+                                {activeRoute.carDuration && <span>• 🚗 {activeRoute.carDuration}</span>}
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleResetRoute}
+                            className="self-end sm:self-center px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white text-white hover:text-orange-600 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer shrink-0"
+                            title="Kembalikan Peta ke Titik Kost"
+                          >
+                            <RotateCcw size={12} />
+                            <span>Titik Kost</span>
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="relative bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 group">
+                        <iframe
+                          key={currentEmbedUrl}
+                          title={activeRoute ? `Rute ke ${activeRoute.name}` : "Kost Location"}
+                          width="100%"
+                          height="260"
+                          style={{ border: 0 }}
+                          loading="lazy"
+                          allowFullScreen
+                          src={currentEmbedUrl}
+                          className="w-full h-64 sm:h-72 object-cover"
+                        ></iframe>
+                      </div>
+
+                      {/* Action Button: Buka Google Maps / Navigasi Penuh */}
+                      <a 
+                        href={externalMapsUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className={`w-full ${
+                          activeRoute ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-md' : 'bg-white hover:bg-gray-50 text-gray-900 border border-gray-200 shadow-sm'
+                        } py-3.5 px-4 rounded-2xl font-bold text-center transition-all text-xs sm:text-sm uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]`}
+                      >
+                        {activeRoute ? (
+                          <>
+                            <Navigation size={16} />
+                            <span>Buka Navigasi Penuh di Google Maps ↗</span>
+                          </>
+                        ) : (
+                          <>
+                            <MapPin size={16} className="text-orange-500" />
+                            <span>Buka Google Maps</span>
+                          </>
+                        )}
+                      </a>
                     </div>
-                  )}
-                  {hasValidLocation && (
-                    <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="w-full bg-white border border-gray-200 text-gray-900 py-4 rounded-2xl font-bold text-center hover:bg-gray-50 transition-colors shadow-sm text-sm uppercase tracking-widest flex items-center justify-center gap-2">
-                      <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                      Buka Google Maps
-                    </a>
                   )}
 
                   {hasCampuses && (
@@ -1599,13 +1708,19 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                           const motoText = campus.motoDuration || `${Math.ceil((km / 28) * 60) + 1}m`;
                           const carText = campus.carDuration || `${Math.ceil((km / 18) * 60) + 2}m`;
 
+                          const isRouteActive = activeRoute?.name === campus.name && activeRoute?.lat === campus.lat && activeRoute?.lng === campus.lng;
+
                           return (
                             <div 
                               key={idx} 
-                              className="bg-white border border-gray-100 hover:border-orange-200 rounded-xl p-2 px-2.5 flex items-center justify-between gap-2.5 transition-all hover:bg-orange-50/20 group shadow-2xs"
+                              className={`bg-white border rounded-xl p-2 px-2.5 flex items-center justify-between gap-2.5 transition-all group shadow-2xs ${
+                                isRouteActive ? 'border-orange-500 bg-orange-50/40 ring-1 ring-orange-400' : 'border-gray-100 hover:border-orange-200 hover:bg-orange-50/20'
+                              }`}
                             >
                               <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <div className="w-7 h-7 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform ${
+                                  isRouteActive ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-600'
+                                }`}>
                                   <GraduationCap size={14} />
                                 </div>
                                 <div className="min-w-0 flex-1">
@@ -1627,18 +1742,30 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                   {campus.distance}
                                 </span>
 
-                                {campus.lat && campus.lng && (
-                                  <a
-                                    href={`https://www.google.com/maps/dir/?api=1&origin=${kost.location?.lat || 0},${kost.location?.lng || 0}&destination=${campus.lat},${campus.lng}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-1 text-[10px] font-bold text-orange-600 hover:text-white bg-orange-50 hover:bg-orange-500 border border-orange-100/60 hover:border-orange-500 px-2 py-0.5 rounded-lg transition-all active:scale-95 shadow-2xs"
-                                    title="Petunjuk Arah"
+                                {campus.lat && campus.lng ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectRoute({
+                                      name: campus.name,
+                                      lat: campus.lat,
+                                      lng: campus.lng,
+                                      type: 'campus',
+                                      distance: campus.distance,
+                                      walkDuration: walkText,
+                                      motoDuration: motoText,
+                                      carDuration: carText
+                                    })}
+                                    className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 shadow-2xs cursor-pointer ${
+                                      isRouteActive 
+                                        ? 'bg-orange-500 text-white border border-orange-500 shadow-sm' 
+                                        : 'text-orange-600 hover:text-white bg-orange-50 hover:bg-orange-500 border border-orange-100/60 hover:border-orange-500'
+                                    }`}
+                                    title={isRouteActive ? 'Klik untuk sembunyikan rute' : 'Tampilkan rute pada peta mini di atas'}
                                   >
-                                    <Navigation size={10} className="shrink-0" />
-                                    <span>Rute</span>
-                                  </a>
-                                )}
+                                    <Navigation size={10} className={`shrink-0 ${isRouteActive ? 'rotate-45' : ''}`} />
+                                    <span>{isRouteActive ? 'Aktif ✓' : 'Rute'}</span>
+                                  </button>
+                                ) : null}
                               </div>
                             </div>
                           );
@@ -1667,13 +1794,19 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                           const motoText = fac.motoDuration || `${Math.ceil((km / 28) * 60) + 1}m`;
                           const carText = fac.carDuration || `${Math.ceil((km / 18) * 60) + 2}m`;
 
+                          const isRouteActive = activeRoute?.name === fac.name && activeRoute?.lat === fac.lat && activeRoute?.lng === fac.lng;
+
                           return (
                             <div 
                               key={idx} 
-                              className="bg-white border border-gray-100 hover:border-blue-200 rounded-xl p-2 px-2.5 flex items-center justify-between gap-2.5 transition-all hover:bg-blue-50/20 group shadow-2xs"
+                              className={`bg-white border rounded-xl p-2 px-2.5 flex items-center justify-between gap-2.5 transition-all group shadow-2xs ${
+                                isRouteActive ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-400' : 'border-gray-100 hover:border-blue-200 hover:bg-blue-50/20'
+                              }`}
                             >
                               <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform ${
+                                  isRouteActive ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'
+                                }`}>
                                   <Building2 size={14} />
                                 </div>
                                 <div className="min-w-0 flex-1">
@@ -1695,18 +1828,30 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                   {fac.distance}
                                 </span>
 
-                                {fac.lat && fac.lng && (
-                                  <a
-                                    href={`https://www.google.com/maps/dir/?api=1&origin=${kost.location?.lat || 0},${kost.location?.lng || 0}&destination=${fac.lat},${fac.lng}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-100/60 hover:border-blue-600 px-2 py-0.5 rounded-lg transition-all active:scale-95 shadow-2xs"
-                                    title="Petunjuk Arah"
+                                {fac.lat && fac.lng ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectRoute({
+                                      name: fac.name,
+                                      lat: fac.lat,
+                                      lng: fac.lng,
+                                      type: 'facility',
+                                      distance: fac.distance,
+                                      walkDuration: walkText,
+                                      motoDuration: motoText,
+                                      carDuration: carText
+                                    })}
+                                    className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 shadow-2xs cursor-pointer ${
+                                      isRouteActive 
+                                        ? 'bg-blue-600 text-white border border-blue-600 shadow-sm' 
+                                        : 'text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-100/60 hover:border-blue-600'
+                                    }`}
+                                    title={isRouteActive ? 'Klik untuk sembunyikan rute' : 'Tampilkan rute pada peta mini di atas'}
                                   >
-                                    <Navigation size={10} className="shrink-0" />
-                                    <span>Rute</span>
-                                  </a>
-                                )}
+                                    <Navigation size={10} className={`shrink-0 ${isRouteActive ? 'rotate-45' : ''}`} />
+                                    <span>{isRouteActive ? 'Aktif ✓' : 'Rute'}</span>
+                                  </button>
+                                ) : null}
                               </div>
                             </div>
                           );

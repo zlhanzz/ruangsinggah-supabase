@@ -1,88 +1,101 @@
-# IMPLEMENTATION PLAN: Perbaikan Tampilan Foto Listing pada Sesi Admin & Sinkronisasi Data Real-Time di Halaman Detail
+# IMPLEMENTATION PLAN: Interactive In-App Route Preview pada Mini Peta Halaman Detail Kost (`KostDetail.tsx`)
 
-## 1. Analisis Masalah
+## 1. Analisis Kebutuhan & Masalah
 
-### A. Gejala yang Ditemukan
-- Pengguna melaporkan bahwa foto listing kost ("Kost Apalah Daya") **muncul sempurna** ketika diakses oleh pengguna biasa (real user), pada perangkat mobile, maupun dalam kondisi belum login (guest).
-- Namun, ketika diakses oleh akun **Administrator** yang membuka pratinjau / halaman publik dari Desktop, foto utama dan thumbnail tampil sebagai kotak gelap dengan broken image icon (`Thumbnail 1`, `Thumbnail 2`, dst.).
-
-### B. Investigasi Akar Masalah
-1. **Stale State Caching di `KostDetailWrapper` (`App.tsx`)**:
-   - Di `App.tsx:573-585`, `KostDetailWrapper` mengambil data awal dari state `listings.find(...)` yang dimuat saat aplikasi pertama kali dibuka.
-   - Terdapat kondisi penahan:
-     ```typescript
-     if (!kost || kost.id !== realPropertyId) {
-       // getPublishedPropertyDetails hanya dipanggil jika kost belum ada di listings
-     }
-     ```
-   - Akun Admin di desktop yang sudah membuka website sejak awal menyimpan snapshot `listings` lama di memori tab. Ketika admin membuka `/kost/...`, `KostDetailWrapper` mendeteksi bahwa properti sudah ada di `listings`, sehingga **melewatkan pemanggilan `getPublishedPropertyDetails(realPropertyId)`**.
-   - Sebaliknya, pada HP / tab incognito / guest, aplikasi dimuat dari nol sehingga langsung mengambil data properti terbaru dari server.
-2. **Ketiadaan Resolver `getDisplayImageUrl` & Metadata di `getAdminProperties` (`adminService.ts`)**:
-   - Pada `adminService.ts:394-403`, pembacaan data properti admin (`getAdminProperties`) memetakan `image_urls` mentah tanpa melalui `getDisplayImageUrl` / `getDisplayImageObject`, serta belum menyertakan `photosMeta`, `photoCategories`, dan `categorizedPhotos`.
-   - Jika admin melakukan navigasi internal atau membuka review modal, objek properti membawa URL yang belum teresolusi ke CDN proxy `media.ruangsinggah.id`.
-3. **Penyelarasan `photosMeta` & Verifikasi Role Admin di `userService.ts`**:
-   - Di `getPublishedProperties` dan `getPublishedPropertyDetails`, pemetaan `photosMeta` sebelumnya hanya memetakan `rawImages` dan belum memprioritaskan `row.metadata?.photos_meta`.
-   - Pemeriksaan admin pada mode preview draft perlu dipastikan membaca role admin dari database secara akurat.
+### A. Latar Belakang & Kebutuhan Pengguna
+- **Kondisi Saat Ini**:
+  - Pada bagian *"Lokasi & Lingkungan"* di `KostDetail.tsx`, terdapat mini map preview (iframe Google Maps) yang menampilkan titik lokasi kost.
+  - Di bawahnya terdapat daftar *"Kampus Terdekat"* dan *"Fasilitas Publik Terdekat"* dengan tombol *"Rute"*.
+  - Ketika tombol *"Rute"* diklik, sistem membuka tab baru ke website/aplikasi Google Maps eksternal (`window.open` / `target="_blank"`), yang membuat pengguna terlempar keluar dari website RuangSinggah.
+- **Tujuan Pengembangan**:
+  - Pengguna ingin agar ketika tombol *"Rute"* pada kampus atau fasilitas publik diklik, pengguna **tidak perlu keluar dari aplikasi**.
+  - Mini preview peta di bagian atas akan **langsung beralih fungsi menjadi layar visualisasi rute interaktif** (arah jalan dari Kost $\rightarrow$ Destinasi yang dipilih).
+  - Pengguna tetap disediakan tombol opsi jika sewaktu-waktu ingin membuka navigasi GPS penuh di Google Maps.
 
 ---
 
-## 2. Dampak Perubahan File
+## 2. Arsitektur & Desain Solusi (Interactive In-App Route Preview)
 
-1. **`functions/public/App.tsx`**:
-   - Menerapkan pola **Stale-While-Revalidate** pada `KostDetailWrapper`: menggunakan data dari `listings` untuk render instan 0ms pertama, namun **selalu melakukan background fetch `getPublishedPropertyDetails(realPropertyId)`** agar data foto dan harga langsung tersinkronisasi ke versi paling mutakhir tanpa terhalang stale state.
-2. **`functions/public/adminService.ts`**:
-   - Memperbarui `getAdminProperties` agar menggunakan `getDisplayImageUrl` dan `getDisplayImageObject`, serta memetakan `photosMeta`, `photoCategories`, dan `categorizedPhotos`.
-3. **`functions/public/userService.ts`**:
-   - Memperbarui `getPublishedProperties` dan `getPublishedPropertyDetails` agar konsisten memetakan `photosMeta` dari `row.metadata?.photos_meta || rawImages`.
-   - Memperkuat verifikasi role admin pada mode preview draft properti.
+### A. State Management & Dynamic URL Builder
+1. **State `activeRouteDestination`**:
+   ```typescript
+   interface RouteDestination {
+     name: string;
+     lat: number;
+     lng: number;
+     type: 'campus' | 'facility';
+     distance?: string;
+     walkDuration?: string;
+     motoDuration?: string;
+     carDuration?: string;
+   }
+   const [activeRouteDestination, setActiveRouteDestination] = useState<RouteDestination | null>(null);
+   ```
 
----
+2. **Dinamisasi Source Iframe Google Maps**:
+   - **Mode Standar (Pin Kost Tunggal)**:
+     `https://maps.google.com/maps?q=${kost.location.lat},${kost.location.lng}&z=16&output=embed`
+   - **Mode Rute Aktif (Directions Origin $\rightarrow$ Destination)**:
+     `https://maps.google.com/maps?saddr=${kost.location.lat},${kost.location.lng}&daddr=${activeRouteDestination.lat},${activeRouteDestination.lng}&output=embed`
 
-## 3. Langkah-Langkah Eksekusi (Fase 2 Setelah di-ACC)
-
-### Langkah 1: Pembaruan `KostDetailWrapper` di `App.tsx`
-- Mengubah `useEffect` di `KostDetailWrapper` agar selalu mengeksekusi `getPublishedPropertyDetails(realPropertyId)`:
-  ```typescript
-  useEffect(() => {
-    async function loadKost() {
-      if (!realPropertyId) return;
-      try {
-        const data = await getPublishedPropertyDetails(realPropertyId);
-        if (data) {
-          setKost(data);
-        }
-      } catch (e) {
-        console.error('Failed to refresh property details:', e);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadKost();
-  }, [realPropertyId]);
-  ```
-
-### Langkah 2: Penyempurnaan `getAdminProperties` di `adminService.ts`
-- Mengimpor `getDisplayImageUrl` dan `getDisplayImageObject` dari `userService.ts`.
-- Memetakan field `imageUrls: images`, `photosMeta`, `photoCategories`, dan `categorizedPhotos` pada objek yang dikembalikan oleh `getAdminProperties`.
-
-### Langkah 3: Penyelarasan `getPublishedPropertyDetails` di `userService.ts`
-- Memastikan `photosMeta` memprioritaskan `row.metadata?.photos_meta || rawImages`.
-- Memastikan pemeriksaan admin pada mode preview mencakup pemeriksaan tabel `users`.
-
-### Langkah 4: Uji Kompilasi & Build
-- Menjalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 0 error kompilasi.
-- Memperbarui `functions/PROGRESS.md` dan `WALKTHROUGH.md`.
-- Melakukan git commit dan git push ke branch `bukan-productions`.
+### B. UI/UX Enhancements & Feedback Visual
+1. **Banner Info Rute Interaktif di Atas Mini Map**:
+   - Ketika rute aktif, di atas iframe peta muncul *floating header bar*:
+     - 🧭 **Rute Aktif**: Nama Tempat (Badge Jarak `± 2.1 km`).
+     - Estimasi Waktu Tempuh: 🚶 Jalan Kaki • 🏍️ Motor • 🚗 Mobil.
+     - Tombol **"✕ Reset ke Titik Kost"** untuk mengembalikan peta ke posisi pin kost awal.
+2. **Highlight Item Aktif pada List Kampus & Fasilitas**:
+   - Kartu tempat yang rutenya sedang aktif mendapatkan penanda visual (border oranye/biru tebal + badge *"Rute Ditampilkan ✓"*).
+3. **Smooth Auto-Scroll**:
+   - Saat tombol *"Rute"* pada list diklik, layar dengan mulus (*smooth scroll*) menggulir ke arah mini preview peta agar pengguna langsung melihat jalurnya di layar.
+4. **Tombol Navigasi Sekunder**:
+   - Tombol di bawah peta bertransformasi secara dinamis:
+     - Jika mode pin tunggal: *"Buka Google Maps"* (melihat titik kost).
+     - Jika mode rute aktif: *"Buka Navigasi Google Maps ↗"* (membuka rute di app Google Maps eksternal sebagai opsi tambahan).
 
 ---
 
-## 4. Rencana Verifikasi
+## 3. Dampak Perubahan File
+
+- **`functions/public/pages/KostDetail.tsx`**:
+  - Menambahkan state `activeRouteDestination` dan ref target peta `mapPreviewRef`.
+  - Mengintegrasikan dynamic embed URL (Directions vs Single Pin).
+  - Menambahkan banner status rute aktif dengan tombol reset.
+  - Memperbarui event onClick tombol *"Rute"* pada item kampus & fasilitas publik untuk memicu `handleSelectRouteDestination`.
+
+---
+
+## 4. Langkah-Langkah Eksekusi (Fase 2 Setelah di-ACC)
+
+### Langkah 1: Penambahan State & Handler di `KostDetail.tsx`
+- Menambahkan state `activeRouteDestination`.
+- Membuat handler `handleSelectRoute(item)` yang menyetel destinasi dan memicu smooth scroll ke elemen peta.
+- Membuat handler `handleResetRoute()` untuk kembali ke pin lokasi awal.
+
+### Langkah 2: Pembaruan Render Komponen Mini Map Preview
+- Mengganti `embedMapsUrl` statis menjadi fungsi reaktif berbasis `activeRouteDestination`.
+- Menambahkan badge banner info rute di atas iframe.
+- Menyesuaikan tombol aksi utama di bawah peta.
+
+### Langkah 3: Penyesuaian Tombol "Rute" pada List Kampus & Fasilitas
+- Mengubah elemen `<a>` eksternal menjadi button interaktif yang memanggil `handleSelectRoute`.
+- Menambahkan highlight styling pada item yang sedang terpilih.
+
+### Langkah 4: Uji Kompilasi & Dokumentasi
+- Menjalankan `cmd /c npm run build` untuk memvalidasi kelulusan build (0 error).
+- Mencatat riwayat di `functions/PROGRESS.md`.
+- Memperbarui `WALKTHROUGH.md`.
+- Melakukan git push ke branch `bukan-productions`.
+
+---
+
+## 5. Rencana Verifikasi
 
 | Skenario Pengujian | Hasil yang Diharapkan |
 |---|---|
-| **Admin Membuka Halaman Publik `/kost/...`** | Foto tampil 100% sempurna di sesi Admin Desktop tanpa broken image. |
-| **User Guest / Mobile Membuka `/kost/...`** | Foto tetap tampil normal dan cepat. |
-| **Navigasi Internal dari Admin Panel** | Halaman detail kost selalu menampilkan data foto dan harga terupdate. |
+| **Klik Tombol "Rute" pada Kampus/Fasilitas** | Layar scroll mulus ke mini map, iframe langsung merender rute arah jalan tanpa berpindah halaman / tanpa membuka tab baru. |
+| **Klik Tombol "Reset ke Titik Kost"** | Peta kembali menampilkan pin tunggal lokasi Kost. |
+| **Klik "Buka Navigasi Google Maps ↗"** | Tetap tersedia sebagai opsi alternatif bagi user yang ingin membuka GPS Google Maps penuh di tab baru. |
 | **Kompilasi TypeScript** | `npm run build` lulus 100% dengan exit code 0. |
 
 ---

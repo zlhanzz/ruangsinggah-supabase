@@ -2,6 +2,34 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 277. Visualisasi Rute Interaktif Langsung pada Mini Peta Halaman Detail Kost (Interactive In-App Route Preview) (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Sebelumnya, ketika calon penghuni mengklik tombol *"Rute"* pada daftar Kampus Terdekat atau Fasilitas Publik Terdekat, sistem membuka tab baru ke Google Maps eksternal (`window.open`). Hal ini menyebabkan pengguna terlempar keluar dari website RuangSinggah.
+  - Pengguna meminta agar ketika tombol *"Rute"* diklik, visualisasi rute petunjuk arah langsung ditampilkan pada layar mini map preview di bagian atas tanpa harus keluar dari aplikasi.
+- **Implementasi Solusi**:
+  1. **Interactive Route State & Dynamic Map Embed (`KostDetail.tsx`)**:
+     - Mengembangkan state `activeRoute` dan ref `mapPreviewRef`.
+     - Ketika tombol *"Rute"* diklik pada kampus/fasilitas publik manapun, iframe peta mini secara dinamis beralih ke mode directions: `https://maps.google.com/maps?saddr=${originLat},${originLng}&daddr=${destLat},${destLng}&output=embed`.
+     - Peta mini langsung menampilkan garis jalur perjalanan, rute belokan, dan estimasi rute dari lokasi Kost menuju destinasi yang dipilih secara instan di dalam aplikasi.
+  2. **Banner Status Rute Aktif & Tombol Reset**:
+     - Menyajikan floating info banner di atas peta mini:
+       - 🧭 **Menampilkan Rute Menuju:** [Nama Tempat] (Badge Jarak `± X km`).
+       - Estimasi Waktu Tempuh 3 Moda: 🚶 Jalan Kaki • 🏍️ Sepeda Motor • 🚗 Mobil.
+       - Tombol **"✕ Titik Kost"** (`<RotateCcw />`) untuk mengembalikan peta ke mode pin tunggal properti.
+  3. **Smooth Scroll & Visual Highlight Aktif**:
+     - Mengintegrasikan fungsi *smooth scroll* otomatis ke layar mini map saat tombol *"Rute"* diklik.
+     - Kartu tempat yang rutenya sedang aktif mendapatkan penanda ring & border oranye/biru serta tombol bertuliskan *"Aktif ✓"*.
+  4. **Tombol Navigasi Alternatif Sekunder**:
+     - Tombol di bawah peta bertransformasi menjadi *"Buka Navigasi Penuh di Google Maps ↗"* jika pengguna sewaktu-waktu tetap ingin membuka GPS navigasi penuh di aplikasi Google Maps eksternal.
+  5. **Bebas FOUT**:
+     - 100% menggunakan SVG bundled lokal `lucide-react` (`Navigation`, `RotateCcw`, `GraduationCap`, `Building2`, `MapPin`).
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` lulus 100% (✓ 2509 modules transformed, built in 27.68s, 0 error).
+
 ### 276. Perbaikan Tampilan Foto Listing pada Sesi Admin & Penerapan Stale-While-Revalidate di Halaman Detail (`App.tsx`, `userService.ts`, `adminService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna melaporkan bahwa foto listing kost ("Kost Apalah Daya") tampil sempurna ketika diakses oleh real user, mobile, maupun guest (belum login), namun foto dan thumbnail tidak muncul (broken image icon) ketika diakses oleh akun Administrator di desktop browser saat membuka pratinjau / deep link `/kost/...`.

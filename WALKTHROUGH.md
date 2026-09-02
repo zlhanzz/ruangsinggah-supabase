@@ -1,23 +1,28 @@
-# WALKTHROUGH: Perbaikan Tampilan Foto Listing pada Sesi Admin & Penerapan Stale-While-Revalidate di Halaman Detail
+# WALKTHROUGH: Interactive In-App Route Preview pada Halaman Detail Kost
 
-## 1. Ringkasan Pekerjaan
-Telah diselesaikan perbaikan komprehensif terkait tampilan foto listing yang sempat tidak muncul di akun Administrator pada Desktop Browser saat membuka pratinjau / halaman publik `/kost/...`.
+## 1. Ringkasan Fitur
+Telah berhasil diimplementasikan fitur **Interactive In-App Route Preview** pada halaman detail kost (`KostDetail.tsx`). Pengguna kini dapat melihat rute petunjuk arah dari lokasi kost menuju kampus atau fasilitas publik terdekat secara langsung di layar mini map tanpa harus keluar ke aplikasi Google Maps eksternal.
 
 ---
 
 ## 2. Detail Perubahan Kode
 
-### A. Pola Stale-While-Revalidate pada `KostDetailWrapper` (`functions/public/App.tsx`)
-- **Masalah Lama**: `KostDetailWrapper` memiliki kondisi penahan `if (!kost || kost.id !== realPropertyId)`. Jika properti sudah pernah termuat di state `listings` (sebelum foto diedit/diupload ulang), sistem melewatkan pengambilan data terbaru dari database.
-- **Solusi Baru**: Menggunakan data in-memory `listings` sebagai cache rendering cepat (0ms), dan **selalu mengeksekusi `getPublishedPropertyDetails(realPropertyId)` di background** untuk menyinkronkan data foto, harga, dan ketersediaan terbaru secara reaktif seketika halaman dibuka.
-
-### B. Resolusi URL CDN & Metadata Lengkap pada `getAdminProperties` (`functions/public/adminService.ts`)
-- Memetakan seluruh URL foto properti melalui `getDisplayImageUrl` dan `getDisplayImageObject` agar teresolusi ke CDN proxy Cloudflare `https://media.ruangsinggah.id/...`.
-- Menyertakan field `photosMeta`, `photoCategories`, dan `categorizedPhotos` pada objek `BasicPropertyInfo`.
-
-### C. Penyelarasan `photosMeta` & Verifikasi Role Admin di `userService.ts`
-- Memastikan `photosMeta` memprioritaskan `row.metadata?.photos_meta` secara konsisten pada `getPublishedProperties` dan `getPublishedPropertyDetails`.
-- Memperkuat verifikasi admin pada mode pratinjau listing draft dengan memeriksa tabel `users`.
+### `functions/public/pages/KostDetail.tsx`
+1. **Interactive Route State & Dynamic Map Source**:
+   - Menambahkan state `activeRoute` dan ref `mapPreviewRef`.
+   - Mengubah iframe Google Maps agar secara reaktif beralih antara **Pin Tunggal Kost** (`maps?q=...`) dan **Rute Navigasi Lengkap** (`maps?saddr=...&daddr=...`).
+2. **Banner Status Rute Aktif**:
+   - Di atas mini map, disajikan banner informasi rute:
+     - 🧭 Menampilkan nama destinasi dan badge jarak (`± X km`).
+     - Estimasi waktu tempuh: 🚶 Jalan Kaki • 🏍️ Sepeda Motor • 🚗 Mobil.
+     - Tombol **"Titik Kost"** (`<RotateCcw />`) untuk mereset peta kembali ke lokasi awal.
+3. **Smooth Scroll & State Highlight**:
+   - Mengintegrasikan fungsi scroll halus ke elemen mini map saat tombol *"Rute"* pada kampus atau fasilitas publik diklik.
+   - Kartu tempat yang sedang aktif diberikan highlight ring warna dan tombol bertuliskan *"Aktif ✓"*.
+4. **Tombol Navigasi Sekunder**:
+   - Tombol di bawah peta secara cerdas bertransformasi menjadi *"Buka Navigasi Penuh di Google Maps ↗"* untuk opsi navigasi GPS eksternal jika diinginkan.
+5. **100% Bebas FOUT**:
+   - Seluruh ikon menggunakan komponen vector SVG bundled dari `lucide-react`.
 
 ---
 
@@ -30,16 +35,19 @@ Telah diselesaikan perbaikan komprehensif terkait tampilan foto listing yang sem
   **Hasil:**
   ```text
   ✓ 2509 modules transformed.
-  ✓ built in 25.93s
+  ✓ built in 27.68s
   Exit code: 0 (0 error)
   ```
 
 ---
 
-## 4. Panduan Verifikasi untuk Pengguna
+## 4. Panduan Pengujian untuk Pengguna
 
-1. **Buka Sesi Admin di Desktop**:
-   - Buka halaman listing publik (misal: `/kost/kost-apalah-daya-...` atau klik tombol **Halaman Publik** dari Review Modal Admin).
-   - Seluruh foto utama dan baris thumbnail (`1/9 Foto - BANGUNAN DEPAN`, dll.) sekarang tampil utuh dan jelas tanpa ada broken image.
-2. **Uji Transisi Edit**:
-   - Jika ada perubahan foto baru dari Dashboard Mitra, saat Admin membuka kembali halaman detail kost, data foto terbaru akan otomatis ter-refresh seketika tanpa perlu hard reload browser.
+1. Buka halaman detail kost manapun (misal: `/kost/...`).
+2. Gulir ke bagian **Lokasi & Lingkungan**.
+3. Di bawah daftar **Kampus Terdekat** atau **Fasilitas Publik**, klik tombol **"Rute"** pada salah satu tempat (misal: *Universitas Hasanuddin* atau *Makassar Town Square*).
+4. **Hasil Pengujian**:
+   - Halaman menggulir mulus ke atas ke layar mini preview peta.
+   - Mini preview peta langsung memvisualisasikan jalur rute jalan (Directions) dari Kost menuju lokasi tersebut.
+   - Di atas peta tampil banner info rute dan estimasi waktu tempuh.
+   - Klik tombol **"Titik Kost"** atau klik kembali tombol rute untuk mengembalikan peta ke pin lokasi kost awal.
