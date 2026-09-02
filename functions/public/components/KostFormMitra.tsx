@@ -2233,13 +2233,23 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                             'sd ', 'smp ', 'sma ', 'smk ', 'madrasah', 'driving school', 'kursus mengemudi',
                             'english course', 'lpk ', 'balai latihan', 'rektorat', 'fakultas', 'dekanat',
                             'prodi', 'jurusan', 'pintu ', 'gate ', 'danau ', 'gedung ', 'hall ', 'auditorium',
-                            'asrama', 'rusunawa', 'kantin', 'parkiran', 'full bright'
+                            'asrama', 'rusunawa', 'kantin', 'parkiran', 'full bright',
+                            'printer', 'service', 'servis', 'print', 'fotocopy', 'foto copy', 'percetakan', 'copy center',
+                            'cuci motor', 'cuci mobil', 'car wash', 'steam', 'bengkel', 'tambal ban', 'sparepart',
+                            'counter', 'konter', 'pulsa', 'cell', 'salon', 'barber'
                         ];
                         loadedForm.campuses = loadedForm.campuses.filter((c: any) => {
                             if (!c || !c.name) return false;
                             const lower = c.name.toLowerCase();
                             return !garbagePatterns.some(p => lower.includes(p));
                         });
+                        if (Array.isArray(loadedForm.publicFacilities)) {
+                            loadedForm.publicFacilities = loadedForm.publicFacilities.filter((f: any) => {
+                                if (!f || !f.name) return false;
+                                const lower = f.name.toLowerCase();
+                                return !garbagePatterns.some(p => lower.includes(p));
+                            });
+                        }
                     }
                     return loadedForm;
                 }
@@ -2611,6 +2621,21 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             'makassar islamic university', 'indonesia muslim university'
         ];
         return blacklist.some(b => lower.includes(b));
+    }, []);
+
+    // Helper sanitasi global multi-layer: menolak tempat usaha non-fasilitas publik kost (printer, servis, fotocopy, bengkel, konter, dll.)
+    const isGarbageFacility = useCallback((name: string) => {
+        if (!name) return false;
+        const lower = name.toLowerCase();
+        const garbageKeywords = [
+            'printer', 'service', 'servis', 'print',
+            'fotocopy', 'foto copy', 'percetakan', 'copy center',
+            'cuci motor', 'cuci mobil', 'car wash', 'steam',
+            'bengkel', 'tambal ban', 'sparepart', 'variasi motor', 'variasi mobil',
+            'counter pulsa', 'konter', 'cell', 'elektronik',
+            'salon', 'barber', 'barbershop', 'pijat', 'massage', 'spa'
+        ];
+        return garbageKeywords.some(b => lower.includes(b));
     }, []);
 
     // Helper validasi sanitasi nama & kategori fasilitas mikro (mencegah false-positive seperti "Service Printer", "Cuci Motor", "Bengkel")
@@ -3026,9 +3051,10 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 ...churchList
             ];
 
-            // 3. Gabungkan seluruh list bebas duplikasi untuk form
-            const combinedLandmarks = [...finalCampuses];
-            finalFacilities.forEach(fac => {
+            // 3. Gabungkan seluruh list bebas duplikasi untuk form & bersihkan mutlak dari tempat sampah
+            const cleanFinalFacilities = finalFacilities.filter(fac => !isGarbageFacility(fac.name));
+            const combinedLandmarks = [...finalCampuses.filter(c => !isGarbageFacility(c.name))];
+            cleanFinalFacilities.forEach(fac => {
                 const exists = combinedLandmarks.some(c => 
                     c.name.toLowerCase() === fac.name.toLowerCase() ||
                     (c.lat === fac.lat && c.lng === fac.lng)
@@ -3038,22 +3064,24 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 }
             });
 
-            if (combinedLandmarks.length > 0) {
+            const cleanCombinedLandmarks = combinedLandmarks.filter(c => !isGarbageFacility(c.name));
+
+            if (cleanCombinedLandmarks.length > 0) {
                 setForm(prev => ({
                     ...prev,
-                    campuses: combinedLandmarks.map(({ kmVal, ...item }: any) => item),
-                    publicFacilities: finalFacilities.map(({ kmVal, ...item }: any) => item)
+                    campuses: cleanCombinedLandmarks.map(({ kmVal, ...item }: any) => item),
+                    publicFacilities: cleanFinalFacilities.map(({ kmVal, ...item }: any) => item)
                 }));
 
                 // Langsung hitung rute nyata Google Maps via DistanceMatrixService
-                enrichLandmarksWithGoogleDistanceMatrix(centerLat, centerLng, combinedLandmarks);
+                enrichLandmarksWithGoogleDistanceMatrix(centerLat, centerLng, cleanCombinedLandmarks);
             }
         }).catch(() => {
             if (landmarkScanAbortRef.current === scanId) {
                 setIsScanningLandmarks(false);
             }
         });
-    }, [isInvalidCampus, isValidMicroFacility, enrichLandmarksWithGoogleDistanceMatrix]);
+    }, [isInvalidCampus, isValidMicroFacility, isGarbageFacility, enrichLandmarksWithGoogleDistanceMatrix]);
 
     // ── location ───────────────────────────────────────────────────────────────
     const handleLocationChange = useCallback((lat: number, lng: number, address: string, city?: string, area?: string, province?: string) => {
@@ -3071,20 +3099,29 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         }
     }, [detectNearbyLandmarks]);
 
-    // Auto-sync master landmarks saat step lokasi aktif jika campuses kosong atau memuat data sampah / bahasa Inggris
+    // Auto-sync & auto-purge master landmarks saat step lokasi aktif jika campuses kosong atau memuat data sampah
     useEffect(() => {
         if (step === 1 && form.location?.lat && form.location?.lng) {
             const currentCampuses = form.campuses || [];
             const hasGarbage = currentCampuses.some(c => 
                 isInvalidCampus(c.name) || 
+                isGarbageFacility(c.name) ||
                 c.name.toLowerCase().includes('university') ||
                 c.name.toLowerCase().includes('full bright')
             );
-            if (currentCampuses.length === 0 || hasGarbage) {
+            if (hasGarbage) {
+                // Langsung bersihkan state campuses seketika jika ada sampah tersisa dari draft lama
+                setForm(prev => ({
+                    ...prev,
+                    campuses: (prev.campuses || []).filter(c => !isGarbageFacility(c.name) && !isInvalidCampus(c.name)),
+                    publicFacilities: (prev.publicFacilities || []).filter(f => !isGarbageFacility(f.name))
+                }));
+            }
+            if (currentCampuses.length === 0) {
                 detectNearbyLandmarks(form.location.lat, form.location.lng);
             }
         }
-    }, [step, form.location?.lat, form.location?.lng, detectNearbyLandmarks, isInvalidCampus]);
+    }, [step, form.location?.lat, form.location?.lng, detectNearbyLandmarks, isInvalidCampus, isGarbageFacility]);
 
     // ── Image handling: Standardisasi Rasio 4:3 Landscape (1200 x 900) & Client-Side WebP ───
     const compressImageToWebP = async (file: File, quality = 0.82): Promise<File> => {
@@ -4098,17 +4135,27 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                     </div>
                                 )}
 
-                                {(form.campuses || []).map((c, i) => (
+                                {(form.campuses || []).filter(c => !isGarbageFacility(c.name)).map((c, i) => (
                                     <div key={i} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-gray-50 p-2.5 rounded-2xl border border-gray-100 transition-all hover:border-orange-200">
                                         <div className="flex-1 space-y-2 w-full">
                                             <div className="flex gap-2 w-full">
                                                 <Input placeholder="Nama kampus/landmark (Cth: UNHAS / RS Wahidin)" value={c.name}
-                                                    onChange={e => { const a = [...(form.campuses||[])]; a[i]={...a[i],name:e.target.value}; upd('campuses',a); }} 
+                                                    onChange={e => { 
+                                                        const a = [...(form.campuses||[])]; 
+                                                        const targetIdx = a.findIndex(item => item === c);
+                                                        if (targetIdx !== -1) {
+                                                            a[targetIdx] = { ...a[targetIdx], name: e.target.value };
+                                                            upd('campuses', a);
+                                                        }
+                                                    }} 
                                                     className="w-full"
                                                 />
                                                 <button 
                                                     type="button" 
-                                                    onClick={() => searchFacilityCoordinates('campuses', i, c.name)}
+                                                    onClick={() => {
+                                                        const targetIdx = (form.campuses || []).findIndex(item => item === c);
+                                                        if (targetIdx !== -1) searchFacilityCoordinates('campuses', targetIdx, c.name);
+                                                    }}
                                                     disabled={isSearchingFacility[`campuses-${i}`]}
                                                     className="bg-orange-500 text-white px-3 py-2 rounded-xl text-[10px] sm:text-xs font-bold shrink-0 hover:bg-orange-600 disabled:opacity-50"
                                                 >
@@ -4116,7 +4163,10 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                                 </button>
                                                 <button 
                                                     type="button" 
-                                                    onClick={() => setActiveMapPicker({ field: 'campuses', index: i })}
+                                                    onClick={() => {
+                                                        const targetIdx = (form.campuses || []).findIndex(item => item === c);
+                                                        if (targetIdx !== -1) setActiveMapPicker({ field: 'campuses', index: targetIdx });
+                                                    }}
                                                     className="bg-white border text-gray-500 border-gray-200 px-3 py-2 rounded-xl text-[10px] sm:text-xs font-bold flex items-center justify-center shrink-0 hover:bg-gray-50 hover:text-orange-500 transition-colors"
                                                     title="Pilih Manual di Peta"
                                                 >
@@ -4160,10 +4210,17 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <Input placeholder="Jarak" value={c.distance}
-                                                onChange={e => { const a=[...(form.campuses||[])]; a[i]={...a[i],distance:e.target.value}; upd('campuses',a); }}
+                                                onChange={e => { 
+                                                    const a = [...(form.campuses||[])]; 
+                                                    const targetIdx = a.findIndex(item => item === c);
+                                                    if (targetIdx !== -1) {
+                                                        a[targetIdx] = { ...a[targetIdx], distance: e.target.value };
+                                                        upd('campuses', a);
+                                                    }
+                                                }}
                                                 className="!w-24 sm:!w-32 shrink-0" 
                                             />
-                                            <button type="button" onClick={() => upd('campuses',(form.campuses||[]).filter((_,idx)=>idx!==i))}
+                                            <button type="button" onClick={() => upd('campuses', (form.campuses || []).filter(item => item !== c))}
                                                 className="p-3 text-rose-400 hover:bg-rose-100 bg-white rounded-xl shrink-0"
                                                 title="Hapus Landmark Ini">
                                                 <Trash2 size={16}/>

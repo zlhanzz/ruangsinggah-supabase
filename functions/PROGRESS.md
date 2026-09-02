@@ -5687,3 +5687,24 @@
   - WALKTHROUGH.md
 - **Verifikasi**:
   - Build Vite frontend npm run build di functions/public/ sukses 100% dengan 0 error dalam 27.65s (✓ 2506 modules transformed).
+
+### 268. Pembersihan Total (Multi-Layer Defense) Tempat Sampah / Service Printer dari Form Kost Mitra (September 2026)
+- **Permintaan & Masalah**:
+  1. Tempat Service Printer (jarak 0,5 KM) masih muncul di langkah lokasi & fasilitas formulir kost mitra saat diuji ulang.
+  2. Hal ini terjadi karena sisa draft yang pernah tersimpan di localStorage masih memuat data pemindaian lama, ketiadaan filter pembersihan pada pipeline akhir combinedLandmarks, serta belum adanya filter protektif pada level render JSX tampilan.
+- **Implementasi & Solusi (4 Lapisan Pertahanan / Defense in Depth)**:
+  * **Lapisan 1 (Pembersihan Draft Awal localStorage)**:
+    - Menambahkan kata kunci printer, service, servis, fotocopy, bengkel, cuci motor, konter pulsa, dll. ke garbagePatterns saat parsing localStorage draft.
+  * **Lapisan 2 (Helper Global isGarbageFacility)**:
+    - Dibuat fungsi helper standar untuk menolak seluruh nama usaha non-fasilitas publik kost (printer, servis, fotocopy, bengkel, cuci motor/mobil, sparepart, counter pulsa, salon, dsb.).
+  * **Lapisan 3 (Penyaringan Mutlak di Akhir Scanning)**:
+    - Seluruh combinedLandmarks dan finalFacilities di detectNearbyLandmarks disaring ketat dengan !isGarbageFacility(name) sebelum disimpan ke state form.
+  * **Lapisan 4 (Auto-Purge useEffect & Filter Render JSX UI)**:
+    - useEffect auto-sync secara instan membuang item sampah dari state form jika terdeteksi.
+    - JSX render form.campuses diproteksi dengan filter !isGarbageFacility(c.name) dengan mutasi referensi item yang aman.
+- **File Tersentuh**:
+  - functions/public/components/KostFormMitra.tsx
+  - functions/PROGRESS.md
+  - WALKTHROUGH.md
+- **Verifikasi**:
+  - Build Vite frontend npm run build di functions/public/ sukses 100% dengan 0 error dalam 34.39s (✓ 2506 modules transformed).
