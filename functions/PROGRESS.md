@@ -2,6 +2,20 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 281. Perbaikan TypeError toLowerCase pada Normalisasi Kampus dan Fasilitas Publik KostDetail (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna menemukan error `TypeError: Cannot read properties of undefined (reading 'toLowerCase')` saat membuka detail kost tertentu (terutama berjenis KostManager) akibat variasi format data JSON kolom `campuses` dan `publicFacilities` di database (array string mentah vs array objek).
+- **Implementasi Solusi**:
+  1. **Universal Safe Normalizer (`KostDetail.tsx`)**:
+     - Menerapkan fungsi normalizer cerdas yang otomatis mendeteksi apakah data berbentuk *string* (`"UNHAS"`) maupun *object* (`{ name: "UNHAS", ... }`), melakukan trim nama secara aman, serta menyaring elemen null/undefined.
+     - Melindungi pemanggilan `publicNames.map()` dan `raw.filter()` agar tidak pernah memicu crash saat properti `.name` tidak ada.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 1m 18s, 0 error).
+
 ### 280. Penyesuaian Badge "TERVERIFIKASI" Berwarna Biru pada Kartu Listing (`KostCard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna meminta agar teks badge verifikasi di kartu kost diubah dari `"VERIFIED"` menjadi `"TERVERIFIKASI"` dengan warna biru terverifikasi (`bg-[#2563eb]`).

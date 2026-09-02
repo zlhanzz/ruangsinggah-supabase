@@ -886,16 +886,49 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   // Check if location data is valid (non-zero coordinates)
   const hasValidLocation = kost.location && (kost.location.lat !== 0 || kost.location.lng !== 0);
 
-  // Pisahkan dan hilangkan duplikasi fasilitas publik dan kampus terdekat
+  // Pisahkan dan hilangkan duplikasi fasilitas publik dan kampus terdekat (Universal Safe Normalizer)
   const publicFacilitiesList = useMemo(() => {
-    return kost.publicFacilities || [];
+    const raw = kost.publicFacilities || [];
+    return raw
+      .map((item: any) => {
+        if (!item) return null;
+        if (typeof item === 'string' && item.trim().length > 0) {
+          return { name: item.trim(), distance: '-', walkDuration: '', motoDuration: '', carDuration: '' };
+        }
+        if (typeof item === 'object' && item.name && typeof item.name === 'string' && item.name.trim().length > 0) {
+          return {
+            ...item,
+            name: item.name.trim()
+          };
+        }
+        return null;
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item && item.name));
   }, [kost.publicFacilities]);
 
   const campusList = useMemo(() => {
     const raw = kost.campuses || [];
-    if (publicFacilitiesList.length === 0) return raw;
-    const publicNames = new Set(publicFacilitiesList.map(p => p.name.toLowerCase().trim()));
-    return raw.filter(c => !publicNames.has(c.name.toLowerCase().trim()));
+    const normalized = raw
+      .map((item: any) => {
+        if (!item) return null;
+        if (typeof item === 'string' && item.trim().length > 0) {
+          return { name: item.trim(), distance: '-', walkDuration: '', motoDuration: '', carDuration: '' };
+        }
+        if (typeof item === 'object' && item.name && typeof item.name === 'string' && item.name.trim().length > 0) {
+          return {
+            ...item,
+            name: item.name.trim()
+          };
+        }
+        return null;
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item && item.name));
+
+    if (publicFacilitiesList.length === 0) return normalized;
+    const publicNames = new Set(
+      publicFacilitiesList.map(p => (p.name || '').toLowerCase().trim())
+    );
+    return normalized.filter(c => !publicNames.has((c.name || '').toLowerCase().trim()));
   }, [kost.campuses, publicFacilitiesList]);
 
   const hasCampuses = campusList.length > 0;
