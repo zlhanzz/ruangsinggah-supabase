@@ -12,7 +12,7 @@ import { getOrCreateChatSession, SYSTEM_ADMIN_ID } from '../chatService';
 import { supabase } from '../supabase';
 import { 
   Bed, Home, Camera, Sparkles, CheckCircle2, ChevronDown, Layers, Flag, 
-  ShieldAlert, AlertTriangle, X, Check, Upload, Image as ImageIcon, Send, 
+  ShieldAlert, AlertTriangle, AlertCircle, X, Check, Upload, Image as ImageIcon, Send, 
   Phone, User as UserIcon, MessageSquare, Clock, Wifi, CookingPot, Car, 
   Bike, Bath, ShieldCheck, KeyRound, Shirt, Sun, Building2, Armchair, 
   Wind, Tv, Droplets, Utensils, Refrigerator, Lock, MapPin, Navigation, 

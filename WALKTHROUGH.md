@@ -1,32 +1,25 @@
-# WALKTHROUGH: Perbaikan Error TypeError toLowerCase pada KostDetail
+# WALKTHROUGH: Perbaikan ReferenceError AlertCircle pada KostDetail
 
 ## 1. Ringkasan Pekerjaan
-Telah berhasil diperbaiki error `TypeError: Cannot read properties of undefined (reading 'toLowerCase')` pada halaman detail kost (**`KostDetail.tsx`**):
-- **Universal Safe Normalizer**: Mengimplementasikan parser cerdas yang secara otomatis dan aman memproses data `campuses` maupun `publicFacilities` dalam bentuk *string array*, *object array*, maupun entri yang memiliki data kosong/null.
-- **Dukungan Penuh KostManager & Mitra**: Semua jenis listing kost kini dapat dibuka 100% mulus tanpa risiko crash.
+Telah berhasil diperbaiki error `ReferenceError: AlertCircle is not defined` pada halaman detail kost (**`KostDetail.tsx`**):
+- **Import Lucide React**: Menambahkan ikon `<AlertCircle />` ke dalam daftar impor komponen SVG `lucide-react`.
+- **Render Kamar Kosongan**: Badge status tipe kamar kosongan kini ter-render secara sempurna bebas dari error atau kedipan teks (FOUT).
 
 ---
 
 ## 2. Rincian Perubahan Berkas
 
 ### A. [`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx)
-- Menambahkan normalisasi aman pada `publicFacilitiesList` dan `campusList`:
+- Menambahkan `AlertCircle` pada baris import `lucide-react`:
   ```tsx
-  const publicFacilitiesList = useMemo(() => {
-    const raw = kost.publicFacilities || [];
-    return raw
-      .map((item: any) => {
-        if (!item) return null;
-        if (typeof item === 'string' && item.trim().length > 0) {
-          return { name: item.trim(), distance: '-', walkDuration: '', motoDuration: '', carDuration: '' };
-        }
-        if (typeof item === 'object' && item.name && typeof item.name === 'string' && item.name.trim().length > 0) {
-          return { ...item, name: item.name.trim() };
-        }
-        return null;
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item && item.name));
-  }, [kost.publicFacilities]);
+  import { 
+    Bed, Home, Camera, Sparkles, CheckCircle2, ChevronDown, Layers, Flag, 
+    ShieldAlert, AlertTriangle, AlertCircle, X, Check, Upload, Image as ImageIcon, Send, 
+    Phone, User as UserIcon, MessageSquare, Clock, Wifi, CookingPot, Car, 
+    Bike, Bath, ShieldCheck, KeyRound, Shirt, Sun, Building2, Armchair, 
+    Wind, Tv, Droplets, Utensils, Refrigerator, Lock, MapPin, Navigation, 
+    GraduationCap, RotateCcw
+  } from 'lucide-react';
   ```
 
 ---
@@ -39,7 +32,7 @@ cmd /c npm run build
 **Output:**
 ```text
 ✓ 2509 modules transformed.
-✓ built in 1m 18s
+✓ built in 30.55s
 Exit code: 0 (0 error)
 ```
 
@@ -47,6 +40,6 @@ Exit code: 0 (0 error)
 
 ## 4. Panduan Pengujian
 
-1. **Buka Halaman Detail Kost**:
-   - Klik kartu kost apapun di beranda atau hasil pencarian (termasuk kost berjenis KostManager).
-   - Halaman detail langsung terbuka dengan cepat dan lancar tanpa error di console browser.
+1. **Buka Halaman Detail Kost di `localhost:5173`**:
+   - Klik kartu kost (termasuk kost dengan varian tipe kamar kosongan).
+   - Halaman detail kost terbuka secara instan tanpa ada ReferenceError pada browser console.

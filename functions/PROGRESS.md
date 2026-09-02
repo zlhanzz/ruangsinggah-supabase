@@ -2,6 +2,19 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 282. Perbaikan ReferenceError AlertCircle is not defined pada KostDetail (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna menemukan error `ReferenceError: AlertCircle is not defined` saat membuka detail kost yang memiliki tipe kamar "Kosongan (Tanpa Perabot)".
+- **Implementasi Solusi**:
+  1. **Import AlertCircle dari `lucide-react` (`KostDetail.tsx`)**:
+     - Menambahkan ikon vector SVG `AlertCircle` ke dalam daftar impor `lucide-react` di bagian atas file `KostDetail.tsx`.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2509 modules transformed, built in 30.55s, 0 error).
+
 ### 281. Perbaikan TypeError toLowerCase pada Normalisasi Kampus dan Fasilitas Publik KostDetail (`KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna menemukan error `TypeError: Cannot read properties of undefined (reading 'toLowerCase')` saat membuka detail kost tertentu (terutama berjenis KostManager) akibat variasi format data JSON kolom `campuses` dan `publicFacilities` di database (array string mentah vs array objek).
