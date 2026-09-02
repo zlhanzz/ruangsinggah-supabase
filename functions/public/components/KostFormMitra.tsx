@@ -2613,6 +2613,75 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
         return blacklist.some(b => lower.includes(b));
     }, []);
 
+    // Helper validasi sanitasi nama & kategori fasilitas mikro (mencegah false-positive seperti "Service Printer", "Cuci Motor", "Bengkel")
+    const isValidMicroFacility = useCallback((category: 'minimarket' | 'laundry' | 'mosque' | 'church' | 'gas_station', place: any) => {
+        if (!place?.name) return false;
+        const name = place.name.toLowerCase();
+        const types: string[] = place.types || [];
+
+        if (category === 'laundry') {
+            // Wajib mengandung kata cuci baju / laundry
+            const validKeywords = ['laundry', 'loundry', 'cuci', 'wash', 'kiloan', 'dry clean', 'setrika'];
+            const hasKeyword = validKeywords.some(k => name.includes(k));
+            if (!hasKeyword && !types.includes('laundry')) return false;
+
+            // Blacklist nama usaha non-cuci baju
+            const blacklist = [
+                'printer', 'service', 'servis', 'fotocopy', 'foto copy', 'percetakan', 'print',
+                'cuci motor', 'cuci mobil', 'car wash', 'steam', 'bengkel', 'tambal ban',
+                'counter', 'pulsa', 'cell', 'helm', 'sepatu', 'elektronik'
+            ];
+            return !blacklist.some(b => name.includes(b));
+        }
+
+        if (category === 'minimarket') {
+            // Wajib mengandung nama ritel minimarket / supermarket
+            const validKeywords = [
+                'indomaret', 'alfamart', 'alfamidi', 'minimarket', 'supermarket', 'mart',
+                'circle k', 'family mart', 'familymart', 'lawson', 'toko kelontong', 'swalayan', 'toko'
+            ];
+            const hasKeyword = validKeywords.some(k => name.includes(k));
+            const hasType = types.some(t => ['convenience_store', 'supermarket', 'grocery_or_supermarket'].includes(t));
+            if (!hasKeyword && !hasType) return false;
+
+            // Blacklist
+            const blacklist = ['service', 'printer', 'bengkel', 'laundry', 'fotocopy', 'salon', 'barber', 'apotek', 'counter', 'pulsa'];
+            return !blacklist.some(b => name.includes(b));
+        }
+
+        if (category === 'mosque') {
+            const validKeywords = ['masjid', 'musholla', 'mushola', 'mesjid', 'surau', 'islamic center'];
+            const hasKeyword = validKeywords.some(k => name.includes(k));
+            const hasType = types.includes('mosque');
+            if (!hasKeyword && !hasType) return false;
+
+            if (name.includes('travel') || name.includes('tour') || name.includes('yayasan')) return false;
+            return true;
+        }
+
+        if (category === 'church') {
+            const validKeywords = [
+                'gereja', 'church', 'katedral', 'paroki', 'kapel', 'chapel', 'gki', 'gbi',
+                'hkbp', 'gpdi', 'bethel', 'pantekosta', 'toraja', 'katolik', 'kristen', 'advent'
+            ];
+            const hasKeyword = validKeywords.some(k => name.includes(k));
+            const hasType = types.some(t => ['church', 'place_of_worship'].includes(t));
+            return hasKeyword || hasType;
+        }
+
+        if (category === 'gas_station') {
+            const validKeywords = ['spbu', 'pertamina', 'shell', 'bp ', 'pom bensin'];
+            const hasKeyword = validKeywords.some(k => name.includes(k));
+            const hasType = types.includes('gas_station');
+            if (!hasKeyword && !hasType) return false;
+
+            if (name.includes('pertamini') || name.includes('eceran')) return false;
+            return true;
+        }
+
+        return true;
+    }, []);
+
     const detectNearbyLandmarks = useCallback((centerLat: number, centerLng: number) => {
         if (!centerLat || !centerLng) return;
 
@@ -2750,6 +2819,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             return combined
                 .filter(p => {
                     if (!p.name || !p.geometry?.location) return false;
+                    if (!isValidMicroFacility('minimarket', p)) return false;
                     const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
                     if (seen.has(key)) return false;
                     seen.add(key);
@@ -2781,7 +2851,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             keyword: 'laundry'
         }).then(results => {
             return results
-                .filter(p => p.name && p.geometry?.location)
+                .filter(p => p.name && p.geometry?.location && isValidMicroFacility('laundry', p))
                 .map(p => {
                     const pLat = p.geometry.location.lat();
                     const pLng = p.geometry.location.lng();
@@ -2819,6 +2889,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             return combined
                 .filter(p => {
                     if (!p.name || !p.geometry?.location) return false;
+                    if (!isValidMicroFacility('mosque', p)) return false;
                     const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
                     if (seen.has(key)) return false;
                     seen.add(key);
@@ -2861,6 +2932,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             return combined
                 .filter(p => {
                     if (!p.name || !p.geometry?.location) return false;
+                    if (!isValidMicroFacility('church', p)) return false;
                     const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
                     if (seen.has(key)) return false;
                     seen.add(key);
@@ -2903,6 +2975,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
             return combined
                 .filter(p => {
                     if (!p.name || !p.geometry?.location) return false;
+                    if (!isValidMicroFacility('gas_station', p)) return false;
                     const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
                     if (seen.has(key)) return false;
                     seen.add(key);
@@ -2980,7 +3053,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                 setIsScanningLandmarks(false);
             }
         });
-    }, [isInvalidCampus, enrichLandmarksWithGoogleDistanceMatrix]);
+    }, [isInvalidCampus, isValidMicroFacility, enrichLandmarksWithGoogleDistanceMatrix]);
 
     // ── location ───────────────────────────────────────────────────────────────
     const handleLocationChange = useCallback((lat: number, lng: number, address: string, city?: string, area?: string, province?: string) => {

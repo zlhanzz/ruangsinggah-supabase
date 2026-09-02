@@ -1,42 +1,48 @@
-# WALKTHROUGH: Peningkatan Presisi Scanning Fasilitas Terdekat (Google Places API `RankBy.DISTANCE`) — Fitur #266
+# WALKTHROUGH: Filter Validasi Semantik & Anti-False-Positive Scanning Fasilitas Terdekat — Fitur #267
 **Tanggal**: 2026-09-02 | **Branch**: `bukan-productions`
 
 ---
 
 ## 1. Ringkasan Masalah & Perbaikan
 
-### Masalah yang Ditemukan:
-- Pengguna melaporkan bahwa *"Gereja Katolik Paroki Maria Ratu Rosari"* yang terletak tepat di seberang jalan (jarak ~50 meter dari titik kost `-5.141243, 119.489717`) tidak terdeteksi oleh sistem pemindaian landmark, melainkan mendeteksi gereja lain (*Gereja Toraja Jemaat Bukit*) yang berjarak 1,3 KM.
+### Masalah yang Terjadi:
+- Pengguna mendapati tempat yang tidak relevan seperti **"Service Printer" (0,7 km)** muncul di daftar fasilitas terdekat (di atas Masjid).
 - **Penyebab**:
-  1. **Pengurutan Default Google adalah `PROMINENCE` (Popularitas / Ulasan Terbanyak)**: Secara default, Google Maps Places API mengembalikan maksimal 20 tempat berdasarkan popularitas/rating di seluruh radius 3,5 KM. Tempat di seberang jalan yang memiliki ulasan lebih sedikit kalah saing dan tereliminasi dari 20 hasil teratas Google.
-  2. **Karakter Pipe `|` di Keyword**: Sintaks seperti `'gereja|church|katedral|...'` tidak didukung oleh parameter `keyword` Google Places API dan merusak pencarian tempat.
+  - Google Places API mencocokkan kata kunci (seperti `keyword: 'laundry'`) tidak hanya ke nama toko, tetapi juga ke **ulasan pelanggan (*customer reviews*)**, ruko bersebelahan, atau kategori multi-usaha di Google My Business.
+  - Toko servis printer/fotokopi di area kampus sering kali berada di ruko samping laundry atau pelanggan menulis ulasan *"dekat laundry"*, sehingga Google mengembalikan toko tersebut saat sistem mencari laundry terdekat.
 
 ### Solusi yang Diimplementasikan:
-1. **Mengaktifkan `rankBy: google.maps.places.RankBy.DISTANCE`**:
-   - Google Places API kini dipaksa mengurutkan tempat **dari jarak fisik terdekat (0 meter ke atas)**.
-   - Tempat di seberang jalan (50 meter) otomatis dijamin menjadi hasil **#1**.
-2. **Dual Parallel Query & Deduplikasi Cerdas**:
-   - Menjalankan pencarian ganda (misal: `keyword: 'gereja'` + `type: 'church'`) via `Promise.all`.
-   - Menggabungkan dan mendeduplikasi tempat berdasarkan `place_id` atau koordinat unik.
-   - Menyortir jarak fisik murni dan membatasi radius maksimal di sisi front-end.
-3. **Penerapan Merata ke Seluruh Fasilitas Mikro**:
-   - Gereja (radius maks 3,5 KM)
-   - Masjid / Musholla (radius maks 2,5 KM)
-   - Minimarket (Indomaret, Alfamart, Minimarket - radius maks 2,5 KM)
-   - Laundry (radius maks 2,5 KM)
-   - SPBU (Pertamina/Shell/SPBU - radius maks 4,0 KM)
+1. **Fungsi Sanitasi Semantik (`isValidMicroFacility`)**:
+   - **Laundry**:
+     - **Wajib Ada**: Kata cuci pakaian (`laundry`, `loundry`, `cuci`, `wash`, `kiloan`, `dry clean`, `setrika`).
+     - **Blacklist Otomatis**: `printer`, `service`, `servis`, `fotocopy`, `percetakan`, `cuci motor`, `cuci mobil`, `car wash`, `steam`, `bengkel`, `counter pulsa`, `helm`, `sepatu`.
+     - *Hasil: "Service Printer" langsung ditolak 100%.*
+   - **Minimarket**:
+     - **Wajib Ada**: Ritel belanja harian (`indomaret`, `alfamart`, `alfamidi`, `mart`, `minimarket`, `swalayan`, `toko kelontong`).
+     - **Blacklist**: Jenis usaha jasa seperti servis, bengkel, salon, barber, apotek.
+   - **Masjid / Musholla**:
+     - **Wajib Ada**: Nama tempat ibadah (`masjid`, `musholla`, `mushola`, `mesjid`, `surau`).
+     - **Filter**: Menolak biro travel/kantor haji umroh non-masjid.
+   - **Gereja**:
+     - **Wajib Ada**: Nama gereja resmi (`gereja`, `church`, `katedral`, `paroki`, `kapel`, `gki`, `gbi`, `hkbp`, `gpdi`, `toraja`, `katolik`, `kristen`).
+   - **SPBU**:
+     - **Wajib Ada**: `spbu`, `pertamina`, `shell`, `bp `, `pom bensin`.
+     - **Filter**: Menolak penjual bensin botol/eceran pinggir jalan.
+2. **Pemasangan di Pipeline Scanning**:
+   - Seluruh hasil kueri Places API kini wajib lolos seleksi `isValidMicroFacility` sebelum dihitung dan disajikan ke formulir.
 
 ---
 
-## 2. Daftar File yang Diubah
+## 2. File yang Disentuh
 
 - **`functions/public/components/KostFormMitra.tsx`**:
-  - Mengubah implementasi `scanMinimarket`, `scanLaundry`, `scanMosque`, `scanChurch`, dan `scanGasStation` menggunakan `rankBy: google.maps.places.RankBy.DISTANCE`.
-  - Menerapkan deduplikasi tempat dan filter radius di sisi client.
+  - Menambahkan fungsi `isValidMicroFacility`.
+  - Memasang filter sanitasi pada `scanMinimarket`, `scanLaundry`, `scanMosque`, `scanChurch`, dan `scanGasStation`.
+  - Memperbarui dependency array `detectNearbyLandmarks`.
 - **`public/assets/` & `public/index.html`**:
   - Ter-regenerasi via `npm run build`.
 - **`functions/PROGRESS.md`**:
-  - Pencatatan resmi Fitur #266.
+  - Pencatatan riwayat Fitur #267.
 
 ---
 
@@ -48,8 +54,8 @@
 rendering chunks...
 computing gzip size...
 ../../public/index.html                                  7.36 kB │ gzip:   2.23 kB
-../../public/assets/MitraDashboard-DRr-l0G7.js         379.54 kB │ gzip:  83.96 kB
-✓ built in 41.64s
+../../public/assets/MitraDashboard-C2jqstHw.js         381.26 kB │ gzip:  84.64 kB
+✓ built in 27.65s
 Exit code: 0
 ```
 - **Kompilasi TypeScript & Vite**: Lulus 100% dengan **0 error**.
@@ -60,7 +66,7 @@ Exit code: 0
 
 1. Buka kembali halaman **Mitra Dashboard** -> **Tambah/Edit Kost**.
 2. Lanjut ke **Langkah 2: Lokasi & Fasilitas Terdekat**.
-3. Pastikan pin lokasi berada pada titik kost Anda (misal dekat jalan Perintis / depan gereja Maria Ratu Rosari: `Lat: -5.141243, Lng: 119.489717`).
-4. Klik tombol **"Pindai Ulang Landmark"**.
-5. **Perhatikan Hasilnya**:
-   - Gereja terdekat yang terdeteksi kini adalah **"Gereja Katolik Paroki Maria Ratu Rosari"** dengan jarak terdekat (~0.05 KM / puluhan meter), bukan lagi gereja yang berjarak 1,3 KM.
+3. Klik tombol **"Pindai Ulang Landmark"**.
+4. **Periksa Hasilnya**:
+   - Tempat yang tidak relevan seperti **"Service Printer"** tidak akan muncul lagi di daftar fasilitas.
+   - Tempat yang terpilih kini 100% relevan sesuai peruntukan fasilitas (Laundry cuci baju asli, Minimarket belanja asli, Masjid asli, Gereja asli, dan SPBU asli).

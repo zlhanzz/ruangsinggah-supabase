@@ -5667,3 +5667,23 @@
   - WALKTHROUGH.md
 - **Verifikasi**:
   - Build Vite frontend npm run build di functions/public/ sukses 100% dengan 0 error dalam 41.64s (✓ 2506 modules transformed).
+
+### 267. Filter Validasi Semantik & Anti-False-Positive Scanning Fasilitas Terdekat (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menemukan bahwa tempat yang tidak relevan seperti Service Printer (jarak 0,7 KM) masuk ke dalam daftar fasilitas terdekat di langkah lokasi & fasilitas formulir kost mitra.
+  2. Hal ini terjadi karena Google Places API mencocokkan parameter keyword (seperti laundry atau minimarket) tidak hanya ke nama tempat, melainkan juga ke ulasan pelanggan (review), ruko bersebelahan, atau kategori multi-usaha Google My Business.
+- **Implementasi & Solusi**:
+  * **1. Helper Validasi Semantik (isValidMicroFacility)**:
+    - Dibuat fungsi validator khusus di KostFormMitra.tsx untuk mengevaluasi kesesuaian nama dan tipe tempat sebelum dimasukkan ke form:
+      - Laundry: Wajib memuat kata cuci/laundry/wash/kiloan/dry clean dan mem-blacklist kata service, printer, fotocopy, cuci motor, cuci mobil, steam, bengkel, counter pulsa, dsb.
+      - Minimarket: Wajib memuat ritel belanja harian (indomaret, alfamart, alfamidi, mart, minimarket, swalayan) dan mem-blacklist jenis usaha jasa/servis.
+      - Tempat Ibadah: Memvalidasi nama resmi masjid/musholla dan gereja/katedral/paroki/kapel.
+      - SPBU: Memvalidasi nama resmi SPBU Pertamina/Shell/BP dan memfilter pertamini eceran.
+  * **2. Sanitasi Menyeluruh di Pipeline Scanning**:
+    - Seluruh hasil pencarian mikro (scanMinimarket, scanLaundry, scanMosque, scanChurch, scanGasStation) kini melewati filter isValidMicroFacility sebelum diurutkan dan disajikan ke form.
+- **File Tersentuh**:
+  - functions/public/components/KostFormMitra.tsx
+  - functions/PROGRESS.md
+  - WALKTHROUGH.md
+- **Verifikasi**:
+  - Build Vite frontend npm run build di functions/public/ sukses 100% dengan 0 error dalam 27.65s (✓ 2506 modules transformed).
