@@ -1,101 +1,90 @@
-# IMPLEMENTATION PLAN - Penerapan URL Ramah SEO (Slug Nama Kost & Area) pada Seluruh Listing
+# IMPLEMENTATION PLAN - Modal Pratinjau Interaktif Listing di Lingkup Dashboard Mitra (Opsi A)
 
 ## 1. Analisis Kebutuhan & Masalah
 
-### Kondisi Saat Ini:
-Saat ini, setiap halaman detail listing kost diakses menggunakan format URL berbasis UUID murni dari database:
-```text
-https://ruangsinggah.id/kost/bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f
-```
+### Kebutuhan Pengguna:
+Pengguna ingin memisahkan secara tegas lingkungan **Dashboard Mitra** dari **Lingkungan User Pencari Properti**:
+> *"kedepannya saya akan benar benar memisahkan antara dashboard mitra dengan tampilan user ke lingkungan yang benar benar berbeda, bisa nggak sih preview kost yang sedang diajukan itu masih dalam lingkup dashboard mitra tanpa harus tembus ke lingkungan user pencari properti?"*
 
-### Keterbatasan URL Berbasis UUID:
-1. **Kurang Ramah SEO (Search Engine Optimization)**: Google dan mesin pencari lainnya memprioritaskan kata kunci teks relevan (seperti nama kost, area/kecamatan, dan kota) di dalam URL untuk meningkatkan posisi ranking pencarian.
-2. **Keterbacaan Rendah (*Low Readability*)**: Calon penyewa tidak dapat mengetahui nama atau lokasi kost hanya dengan melihat link yang dibagikan melalui WhatsApp atau media sosial.
-3. **Potensi Masalah Nama Kembar**: Sistem membutuhkan arsitektur penamaan URL yang mampu mengantisipasi jika terdapat beberapa kost yang memiliki nama sama (misal *"Kost Melati"* atau *"Kost Pelangi"*).
-
-### Solusi Terpilih (Opsi 1 - Standar Airbnb & Mamikos):
-Format URL cerdas dan dinamis:
-```text
-https://ruangsinggah.id/kost/{nama-kost}-{area/kota}-{uuid}
-```
-**Contoh Nyata:**
-- `/kost/kost-apalah-daya-tamalanrea-bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f`
-- `/kost/kost-putri-anggrek-panakkukang-7f8a12bc-...`
-
-**Keunggulan Desain Ini:**
-1. **100% Bebas Tabrakan Nama (Zero Collision)**: Jika terdapat 2 kost bernama sama di area yang sama, keduanya tetap memiliki URL unik karena pembeda ID di bagian akhir.
-2. **Kekuatan SEO Maksimal**: Kata kunci penting seperti `kost`, `nama kost`, dan `lokasi/kecamatan` terbaca secara jelas oleh mesin pencari Google.
-3. **Performa Instan Tanpa Mengubah Skema Database**: Tidak memerlukan penambahan kolom database atau query pencocokan string berat, sehingga query database tetap berjalan instan menggunakan primary key.
-4. **Jaminan Kompatibilitas Mundur (Backward Compatibility)**: Tautan lama berbasis UUID murni yang sudah pernah dibagikan atau tersimpan di bookmark pengguna tetap berfungsi 100% dan secara otomatis di-update ke URL slug baru (*Canonical URL*).
+### Analisis Akar Kebutuhan:
+1. **Pemisahan Lingkungan (*Portal Isolation*)**:
+   - Saat ini tombol "Preview" di Dashboard Mitra melakukan navigasi langsung ke rute publik `/kost/{slug}`.
+   - Hal ini membuat mitra "terlempar" keluar dari lingkungan kerjanya ke lingkungan publik pencari properti yang memiliki navbar pencari, search bar publik, dan footer publik.
+   - Menuju pemisahan arsitektur masa depan (misal `mitra.ruangsinggah.id` vs `ruangsinggah.id`), fitur pratinjau kost harus dapat berdiri sendiri di dalam portal mitra.
+2. **Kenyamanan & Produktivitas Mitra**:
+   - Dengan modal pratinjau interaktif, mitra dapat memeriksa foto, harga, fasilitas kamar, dan aturan kostnya secara instan tanpa perlu reload halaman atau berpindah URL.
+   - Jika ada data atau foto yang salah, mitra dapat langsung mengklik tombol `[ ✏️ Edit Data ]` dari modal pratinjau, yang secara otomatis membuka form edit `KostFormMitra`.
 
 ---
 
-## 2. Dampak Perubahan
+## 2. Solusi yang Diajukan (Opsi A: In-Dashboard Interactive Preview Modal)
+
+Akan dibuat komponen modal khusus `MitraKostPreviewModal.tsx` yang dirender langsung di atas `MitraDashboard.tsx`:
+1. **Header Bilah Kendali Mitra**:
+   - Judul: **Pratinjau Listing Kost**
+   - Status Badge:
+     - `⏳ Sedang Ditinjau Admin (Estimasi 1×24 Jam)` (amber berdenyut)
+     - `● Tayang Publik` (hijau emerald)
+     - `● Ditangguhkan` (merah rose)
+   - Tombol Aksi Langsung:
+     - `[ ✏️ Edit Kost ]`: Menutup pratinjau dan langsung membuka form edit.
+     - `[ ✕ Tutup ]`: Menutup modal dan kembali ke daftar kost.
+2. **Body Pratinjau Representatif**:
+   - Galeri foto interaktif (foto utama dan thumbnail).
+   - Info dasar properti (Nama, Gender Tipe Kost, Alamat lengkap, Rating).
+   - Tipe Kamar & Fasilitas Kamar (Spesifikasi kasur, kamar mandi, AC/Non-AC, harga sewa bulanan/harian).
+   - Fasilitas Bersama & Peraturan Kost.
+   - Box Edukasi Mitra: *"Ini adalah simulasi tampilan bagaimana calon penyewa akan melihat kost Anda setelah disetujui oleh admin."*
+   - Tombol sewa yang dinonaktifkan dengan penanda *"Tombol sewa dinonaktifkan dalam mode pratinjau mitra"*.
+3. **Desain & Estetika Premium**:
+   - Backdrop modern bergradasi dengan efek *backdrop blur* (`bg-black/70 backdrop-blur-md`).
+   - Pure Lucide React SVG Icons (tanpa Google Fonts CDN/ligature untuk mencegah FOUT).
+   - Kontrol keyboard: Mendukung penutupan instan dengan tombol `Escape`.
+
+---
+
+## 3. Dampak Perubahan
 
 File yang akan disentuh:
-1. **File Baru** `c:\Users\ZHULL\Desktop\Firebase to Supabase\functions\public\utils\slugUtils.ts`:
-   - Membuat modul helper `createKostSlug(kost)` untuk mengubah nama kost dan area menjadi slug bersih (kebab-case) bebas karakter aneh/emoji.
-   - Membuat modul helper `extractKostId(param)` untuk mengekstrak UUID secara presisi dari parameter URL.
-2. `c:\Users\ZHULL\Desktop\Firebase to Supabase\functions\public\App.tsx`:
-   - Memperbarui fungsi navigasi `handleKostSelect` agar mengarahkan rute ke URL slug baru `/kost/${createKostSlug(kost)}`.
-   - Memperbarui `KostDetailWrapper` agar menggunakan `extractKostId(id)` dalam memuat data properti.
-   - Memperbarui browser address bar (*Canonical URL replaceState*) saat link lama UUID diakses.
-3. `c:\Users\ZHULL\Desktop\Firebase to Supabase\functions\public\pages\KostDetail.tsx`:
-   - Menyelaraskan meta tag `canonicalUrl` dan tombol bagikan/share WhatsApp agar menggunakan format slug baru.
-4. `c:\Users\ZHULL\Desktop\Firebase to Supabase\functions\public\pages\MitraDashboard.tsx`:
-   - Memperbarui tombol **Preview** agar membuka pratinjau dengan format URL slug baru yang rapi.
-5. `c:\Users\ZHULL\Desktop\Firebase to Supabase\functions\public\components\admin\PropertyManagement.tsx` & `KostManagerPortal.tsx`:
-   - Menyelaraskan tautan "Kunjungi Halaman Publik" agar mengarah ke format URL slug baru.
+1. **File Baru** `c:\Users\ZHULL\Desktop\Firebase to Supabase\functions\public\components\mitra\MitraKostPreviewModal.tsx`:
+   - Komponen modal visual pratinjau kost yang elegan dan kaya informasi.
+2. `c:\Users\ZHULL\Desktop\Firebase to Supabase\functions\public\pages\MitraDashboard.tsx`:
+   - Menambahkan state `previewingKost: Kost | null`.
+   - Mengubah aksi tombol `[ 👁️ Preview ]` pada kartu kost dan tombol "Lihat Listing" agar memanggil `setPreviewingKost(p)` (bukan lagi `navigate('/kost/...')`).
+   - Merender `<MitraKostPreviewModal ... />` ketika `previewingKost` tidak null.
+   - Menyediakan handler edit langsung: saat tombol edit di modal ditekan, modal pratinjau ditutup dan form edit dibuka.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (Fase 2 - Menunggu Persetujuan / ACC)
+## 4. Langkah-Langkah Eksekusi (Fase 2 - Menunggu Persetujuan / ACC)
 
-### Langkah 1: Pembuatan Helper Slug Generator & Parser (`slugUtils.ts`)
-- Fungsi `createKostSlug`:
-  - Mengambil judul properti (`title` / `namaKost`) dan lokasi (`area` / `city`).
-  - Menghapus simbol khusus, tanda kurung, dan emoji.
-  - Mengonversi ke huruf kecil dan mengganti spasi berlebih dengan tanda hubung `-`.
-  - Menggabungkan slug teks dengan UUID di bagian akhir.
-- Fungsi `extractKostId`:
-  - Menggunakan regex UUID `/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i` untuk mengambil UUID asli baik dari URL slug baru maupun URL UUID lama.
-
-### Langkah 2: Integrasi Perutean di `App.tsx` & `KostDetailWrapper`
-- Mengadaptasi `KostDetailWrapper`:
-  ```typescript
-  const { id } = useParams();
-  const realPropertyId = extractKostId(id || '');
-  ```
-- Saat properti berhasil dimuat, sinkronkan URL browser jika URL saat ini masih menggunakan format UUID lama tanpa me-reload halaman (*smooth canonical replace*).
-- Menyesuaikan `handleKostSelect` agar menghasilkan navigasi `/kost/${createKostSlug(kost)}`.
-
-### Langkah 3: Penyelarasan di Komponen Tautan Terkait
-- Perbarui navigasi tombol Preview di `MitraDashboard.tsx`.
-- Perbarui tautan publik di `KostDetail.tsx` (SEO canonical & share URL).
-- Perbarui tautan publik di portal admin (`PropertyManagement.tsx` & `KostManagerPortal.tsx`).
-
-### Langkah 4: Uji Kompilasi & Pengujian
-- Jalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 0 error kompilasi TypeScript/Vite.
-
-### Langkah 5: Pencatatan Riwayat & Git Push
-- Catat ke `functions/PROGRESS.md` sebagai **Fitur #268**.
-- Terbitkan dokumen laporan `WALKTHROUGH.md`.
-- Commit dan push ke branch GitHub `bukan-productions`.
+1. **Langkah 1: Pembuatan Komponen `MitraKostPreviewModal.tsx`**:
+   - Membangun struktur layout modal responsif (desktop & tablet/mobile).
+   - Mengintegrasikan tabs/section: Galeri Foto, Informasi Kost, Pilihan Tipe Kamar & Harga, Fasilitas & Aturan.
+   - Menambahkan tombol aksi navigasi cepat `Tutup` dan `Edit`.
+2. **Langkah 2: Integrasi ke `MitraDashboard.tsx`**:
+   - Import `MitraKostPreviewModal`.
+   - Pasang state `const [previewingKost, setPreviewingKost] = useState<Kost | null>(null);`.
+   - Hubungkan tombol Preview pada kartu kost untuk mengaktifkan modal.
+   - Hubungkan aksi `onEdit` dari modal ke pembukaan `KostFormMitra`.
+3. **Langkah 3: Kompilasi & Pengujian**:
+   - Jalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 0 error TypeScript/Vite.
+4. **Langkah 4: Anti-Amnesia & Pelaporan**:
+   - Catat riwayat perubahan ke `functions/PROGRESS.md` sebagai **Fitur #269**.
+   - Terbitkan dokumen laporan `WALKTHROUGH.md`.
+   - Lakukan commit dan git push ke branch `bukan-productions`.
 
 ---
 
-## 4. Rencana Verifikasi
+## 5. Rencana Verifikasi
 
-- **Verifikasi Kompilasi**: `npm run build` selesai tanpa error.
-- **Verifikasi Navigasi dari Katalog**:
-  - Klik salah satu kost di halaman Beranda / Katalog.
-  - Pastikan URL browser berubah menjadi:
-    `http://localhost:5173/kost/nama-kost-area-bb6b0ccc-...`
-- **Verifikasi Tombol Preview di Dashboard Mitra**:
-  - Klik tombol **Preview** pada kartu kost di "Kost Saya".
-  - Pastikan URL yang terbuka berformat slug ramah SEO.
-- **Verifikasi Kompatibilitas Mundur (Backward Compatibility)**:
-  - Akses URL langsung menggunakan format UUID lama: `http://localhost:5173/kost/bb6b0ccc-6d9e-494a-b972-aa7dd9cbd81f`.
-  - Halaman tetap terbuka dengan sukses dan URL di address bar otomatis diperbarui ke format slug baru.
-- **Verifikasi Sanitasi Teks**:
-  - Uji nama kost yang memiliki karakter khusus (seperti tanda petik, tanda kurung, garis miring) terkonversi rapi menjadi huruf kecil dan tanda hubung.
+- **Verifikasi Kompilasi**: `npm run build` lulus 100% tanpa error.
+- **Verifikasi Lingkungan Terisolasi**:
+  - Buka halaman **Kost Saya** di Dashboard Mitra (`/dashboard-mitra`).
+  - Klik tombol **`[ 👁️ Preview ]`** pada kost Anda.
+  - Pastikan URL browser **tetap berada di `/dashboard-mitra`** dan **TIDAK PERNAH berpindah ke `/kost/...`**.
+- **Verifikasi Fungsi Modal Pratinjau**:
+  - Modal overlay terbuka dengan mulus menampilkan seluruh foto, detail harga kamar, fasilitas, dan peraturan kost.
+  - Periksa apakah status badge peninjauan terlihat jelas di bagian atas modal.
+  - Klik tombol **`[ ✕ Tutup ]`** atau tekan tombol `Escape` di keyboard -> modal tertutup instan dan kembali ke daftar kost.
+  - Klik tombol **`[ ✏️ Edit Kost ]`** di header modal -> modal pratinjau tertutup dan form edit kost langsung terbuka untuk pengeditan.

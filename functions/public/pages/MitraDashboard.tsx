@@ -9,6 +9,7 @@ import { getResidentStatus } from '../adminService';
 import { getMyChatSessions, ChatSession, getOrCreateChatSession } from '../chatService';
 import { getCurrentDate, setMockDate, getMockDateStr, parseDateSafely } from '../utils/timeUtils';
 import { createKostSlug } from '../utils/slugUtils';
+import MitraKostPreviewModal from '../components/mitra/MitraKostPreviewModal';
 import { notifyAdminWithdrawalRequest } from '../emailService';
 import TimeSimulator from '../components/TimeSimulator';
 import { 
@@ -151,6 +152,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     const [stats, setStats] = useState({ totalRevenue: 0, availableBalance: 0, pendingApprovals: 0, totalViews: 1240, ctr: 4.2, activeTenants: 0 });
     const [showKostForm, setShowKostForm] = useState(false);
     const [editingKost, setEditingKost] = useState<Partial<Kost> | null>(null);
+    const [previewingKost, setPreviewingKost] = useState<Kost | null>(null);
     const [isStartingFresh, setIsStartingFresh] = useState(false);
     const draftStorageKey = useMemo(() => uid ? `kost_form_draft_${uid}` : 'kost_form_draft_guest', [uid]);
     const [activeDraft, setActiveDraft] = useState<{
@@ -249,7 +251,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
 
     const handleViewListing = () => {
         if (properties.length > 0) {
-            window.open('/kost/' + createKostSlug(properties[0]), '_blank');
+            setPreviewingKost(properties[0]);
         } else {
             navigate(Page.LISTINGS);
         }
@@ -1594,8 +1596,8 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                 ) : (
                                                     <div className="flex gap-2 mt-4">
                                                         <button 
-                                                            onClick={() => navigate(`/kost/${createKostSlug(p)}`)}
-                                                            className="flex-1 h-11 rounded-xl bg-gray-50 text-gray-700 font-bold text-xs hover:bg-gray-100 transition-colors border border-gray-100 flex items-center justify-center gap-1"
+                                                            onClick={() => setPreviewingKost(p)}
+                                                            className="flex-1 h-11 rounded-xl bg-gray-50 text-gray-700 font-bold text-xs hover:bg-gray-100 transition-colors border border-gray-100 flex items-center justify-center gap-1 cursor-pointer"
                                                         >
                                                             <Eye size={14} /> Preview
                                                         </button>
@@ -2082,6 +2084,19 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
     return (
         <>
             {render}
+            {previewingKost && (
+                <MitraKostPreviewModal
+                    kost={previewingKost}
+                    onClose={() => setPreviewingKost(null)}
+                    onEdit={(k) => {
+                        setPreviewingKost(null);
+                        if (checkVerification()) {
+                            setEditingKost(k);
+                            setShowKostForm(true);
+                        }
+                    }}
+                />
+            )}
             {showKostForm && (
                 <KostFormMitra
                     user={user}
