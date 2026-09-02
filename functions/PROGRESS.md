@@ -2,37 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
-### 269. Modal Pratinjau Interaktif Listing Terisolasi di Lingkup Dashboard Mitra (Opsi A) (`MitraKostPreviewModal.tsx`, `MitraDashboard.tsx`) (September 2026)
+### 269. Modal Pratinjau Interaktif Listing Terisolasi 1:1 UI/UX Asli User di Lingkup Dashboard Mitra (`KostDetail.tsx`, `MitraKostPreviewModal.tsx`, `MitraDashboard.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna ingin memisahkan secara tegas lingkungan portal mitra dari lingkungan user pencari kost untuk persiapan arsitektur masa depan (seperti subdomain mandiri), dan meminta agar fitur preview listing kost yang sedang diajukan tetap berada di dalam lingkup dashboard mitra tanpa harus menembus/melompat ke rute publik:
     > *"kedepannya saya akan benar benar memisahkan antara dashboard mitra dengan tampilan user ke lingkungan yang benar benar berbeda, bisa nggak sih preview kost yang sedang diajukan itu masih dalam lingkup dashboard mitra tanpa harus tembus ke lingkungan user pencari properti?"*
-  - Pengguna menyetujui penerapan **Opsi A**: Modal Pratinjau Interaktif In-Dashboard.
+  - Pada pengujian awal, pengguna memberikan masukan bahwa tampilan modal pratinjau sebelumnya tidak mencerminkan tata letak asli halaman detail kost user:
+    > *"kenapa tidak merepresentasikan langsung ui/ux tampilan user kita? kenapa beda? saya ingin agar 1:1 tampilannya, tapi tanpa tombol booking atau chat"*
 - **Investigasi & Analisis Akar Masalah**:
   1. *Portal Bleeding*: Sebelumnya tombol Preview di menu "Kost Saya" melakukan navigasi keluar ke rute publik `/kost/{slug}`. Mitra "terlempar" ke halaman publik yang menampilkan navbar publik, search bar, dan footer umum.
-  2. *Productivity Friction*: Ketika mitra ingin memeriksa kembali foto atau harga kamar kost yang baru saja diajukan, mereka harus berpindah halaman dan kemudian menekan tombol back browser untuk kembali ke dashboard.
-  3. *Isolated Environment Architecture*: Untuk mendukung arsitektur modular di masa depan (misal `mitra.ruangsinggah.id`), portal mitra harus memiliki komponen pratinjau mandiri yang tidak bergantung pada layout publik pencari kost.
+  2. *Discrepancy UI*: Pembuatan tampilan tiruan terpisah menimbulkan perbedaan tata letak dengan halaman detail publik (`KostDetail.tsx`), seperti varian kamar, fasilitas, dan galeri grid foto.
+  3. *Authentic 1:1 Representation*: Mitra berhak melihat tampilan yang persis 100% sama dengan apa yang dilihat oleh calon penyewa, namun dengan keamanan: tanpa tombol booking aktif dan tanpa chat.
 - **Implementasi Solusi**:
-  1. **Pembuatan Komponen Modal Pratinjau ([`MitraKostPreviewModal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/mitra/MitraKostPreviewModal.tsx))**:
-     - Membangun modal overlay premium berbasis backdrop blur (`bg-black/75 backdrop-blur-md`).
-     - **Topbar Kontrol Mitra**: Menampilkan judul, status badge dinamis (`⏳ Sedang Ditinjau Admin`, `● Tayang Publik`, atau `● Ditangguhkan`), tombol `[ ✏️ Edit Kost ]`, dan tombol `[ ✕ Tutup ]` (mendukung tombol `Escape` keyboard).
-     - **Status Banner Edukatif**: Menginformasikan bahwa modal ini adalah simulasi pratinjau dan transaksi sewa dinonaktifkan.
-     - **Galeri Foto Interaktif**: Viewer foto utama beresolusi tinggi dengan kontrol navigasi panah kiri/kanan, indikator slide foto, dan thumbnail strip.
-     - **Tabs Konten**:
-       - *Tipe Kamar*: Menampilkan seluruh kamar kost lengkap dengan foto kamar, ukuran, harga sewa bulanan, dan badge fasilitas kamar.
-       - *Fasilitas Umum*: Menampilkan seluruh fasilitas bersama dan umum dalam bentuk grid rapi.
-       - *Peraturan & Deskripsi*: Menampilkan deskripsi lengkap kost dan daftar aturan kost.
-     - Menggunakan 100% SVG lokal dari `lucide-react` untuk mencegah FOUT dan kedipan font eksternal.
-  2. **Integrasi ke Dashboard Mitra ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**:
-     - Menambahkan state `previewingKost: Kost | null`.
-     - Tombol `[ 👁️ Preview ]` pada setiap kartu kost dan tombol "Lihat Listing" kini memicu `setPreviewingKost(p)`, sehingga modal terbuka langsung di atas dashboard tanpa merubah URL dan tanpa reload halaman.
-     - Tombol "Edit Kost" di dalam modal langsung menutup pratinjau dan membuka form edit `KostFormMitra` secara mulus.
+  1. **Dukungan Mode Pratinjau pada Komponen Utama ([`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx))**:
+     - Menambahkan prop `hideBookingAndChat?: boolean` pada `KostDetailProps`.
+     - Ketika `hideBookingAndChat === true`:
+       - Tombol **"Ajukan Sewa"**, **"Chat Pemilik"**, dan **"Laporkan Properti"** disembunyikan dan digantikan dengan badge informasi: *"Mode Pratinjau Mitra • Tombol transaksi sewa dan chat calon penyewa dinonaktifkan dalam mode pratinjau mitra."*
+       - Tombol chat "Tanya" pada mobile sticky header disembunyikan.
+       - Penghitungan metrik view publik (`incrementPropertyView`) dinonaktifkan agar tidak menaikkan metrik analitik palsu dari pemilik sendiri.
+  2. **Integrasi 1:1 Langsung di Modal Pratinjau ([`MitraKostPreviewModal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/mitra/MitraKostPreviewModal.tsx))**:
+     - Alih-alih merender layout tiruan, modal langsung membungkus komponen asli `<KostDetail kost={kost} onBack={onClose} hideBookingAndChat={true} />`.
+     - **Topbar Kontrol Mitra (Sticky)**: Menyediakan status badge review admin, tombol **`[ ✏️ Edit Kost ]`** untuk membuka form edit mitra secara instan, dan tombol **`[ ✕ Tutup ]`** (didukung shortcut tombol `Escape`).
+     - Menghadirkan tampilan 100% identik dengan seluruh fitur asli: grid galeri foto, pilihan varian kamar, fasilitas, peraturan, dan peta kampus.
+  3. **Dashboard Mitra ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**:
+     - State `previewingKost: Kost | null` memicu modal terbuka di layer atas tanpa pernah mengubah URL browser dari `/dashboard-mitra`.
 - **File Tersentuh**:
-  - `functions/public/components/mitra/MitraKostPreviewModal.tsx` (baru)
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/public/components/mitra/MitraKostPreviewModal.tsx`
   - `functions/public/pages/MitraDashboard.tsx`
   - `functions/PROGRESS.md`
   - `WALKTHROUGH.md`
 - **Verifikasi**:
-  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2508 modules transformed, built in 35.37s, 0 error).
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2508 modules transformed, built in 37.40s, 0 error).
 
 ### 268. Penerapan URL Ramah SEO (Slug Nama Kost & Lokasi) pada Seluruh Listing Berbasis Opsi 1 (`slugUtils.ts`, `App.tsx`, `MitraDashboard.tsx`, `KostDetail.tsx`, dll.) (September 2026)
 - **Permintaan & Masalah**:

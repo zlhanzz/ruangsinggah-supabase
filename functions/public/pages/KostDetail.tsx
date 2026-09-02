@@ -20,6 +20,7 @@ interface KostDetailProps {
   user?: any;
   onLoginRedirect?: () => void;
   validateProfile?: () => boolean;
+  hideBookingAndChat?: boolean;
 }
 
 const InfoSection: React.FC<{ title: string; children: React.ReactNode; defaultOpen?: boolean; className?: string }> = ({ title, children, defaultOpen = true, className = "" }) => {
@@ -50,7 +51,7 @@ const InfoSection: React.FC<{ title: string; children: React.ReactNode; defaultO
 
 
 
-const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user, onLoginRedirect, validateProfile }) => {
+const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user, onLoginRedirect, validateProfile, hideBookingAndChat = false }) => {
   const [currentPhoto, setCurrentPhoto] = useState(0);
   const [selectedParentTypeIdx, setSelectedParentTypeIdx] = useState(0);
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
@@ -113,12 +114,12 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
   };
   // === END SEO ===
 
-  // Auto-track view
+  // Auto-track view (only when not in isolated preview mode)
   useEffect(() => {
-    if (kost.id) {
+    if (kost.id && !hideBookingAndChat) {
       incrementPropertyView(kost.id);
     }
-  }, [kost.id]);
+  }, [kost.id, hideBookingAndChat]);
 
   const [selectedPeriod, setSelectedPeriod] = useState<PricingPeriod>('bulanan');
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
@@ -968,13 +969,17 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </button>
         <span className="font-bold text-gray-900 truncate max-w-[200px] uppercase tracking-tight text-xs">{kost.title}</span>
-        <button
-          onClick={handleOpenChat}
-          disabled={isSubmittingChat}
-          className="text-orange-500 font-black text-sm uppercase tracking-widest disabled:opacity-50"
-        >
-          {isSubmittingChat ? '...' : 'Tanya'}
-        </button>
+        {hideBookingAndChat ? (
+          <div className="w-8" />
+        ) : (
+          <button
+            onClick={handleOpenChat}
+            disabled={isSubmittingChat}
+            className="text-orange-500 font-black text-sm uppercase tracking-widest disabled:opacity-50"
+          >
+            {isSubmittingChat ? '...' : 'Tanya'}
+          </button>
+        )}
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-12">
@@ -1611,58 +1616,69 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                   </ul>
                 </div>
 
-                <div className="space-y-3">
-                  {(() => {
-                    const isUnpublished = kost.status !== 'published';
-                    const isManaged = Boolean(kost.isManaged);
-                    const isAvailable = isManaged
-                      ? Boolean(selectedChildRoom && selectedChildRoom.isAvailable)
-                      : Boolean(selectedRoom && selectedRoom.isAvailable !== false);
+                {hideBookingAndChat ? (
+                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-center space-y-1.5">
+                    <div className="text-xs font-black text-amber-900 flex items-center justify-center gap-1.5">
+                      <Clock size={14} className="text-amber-600" /> Mode Pratinjau Mitra
+                    </div>
+                    <p className="text-[11px] text-amber-700 font-medium leading-relaxed">
+                      Tombol transaksi sewa dan chat calon penyewa dinonaktifkan dalam mode pratinjau mitra.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(() => {
+                      const isUnpublished = kost.status !== 'published';
+                      const isManaged = Boolean(kost.isManaged);
+                      const isAvailable = isManaged
+                        ? Boolean(selectedChildRoom && selectedChildRoom.isAvailable)
+                        : Boolean(selectedRoom && selectedRoom.isAvailable !== false);
 
-                    const buttonText = isUnpublished
-                      ? 'Pratinjau (Belum Tayang)'
-                      : isManaged
-                        ? (!selectedChildRoom
-                            ? 'Pilih Kamar'
-                            : !selectedChildRoom.isAvailable
+                      const buttonText = isUnpublished
+                        ? 'Pratinjau (Belum Tayang)'
+                        : isManaged
+                          ? (!selectedChildRoom
+                              ? 'Pilih Kamar'
+                              : !selectedChildRoom.isAvailable
+                                ? 'Kamar Penuh'
+                                : `Ajukan Sewa ${selectedChildRoom.displayName}`)
+                          : (!isAvailable
                               ? 'Kamar Penuh'
-                              : `Ajukan Sewa ${selectedChildRoom.displayName}`)
-                        : (!isAvailable
-                            ? 'Kamar Penuh'
-                            : `Ajukan Sewa (${periodLabels[selectedPeriod] || selectedPeriod})`);
+                              : `Ajukan Sewa (${periodLabels[selectedPeriod] || selectedPeriod})`);
 
-                    return (
-                      <button
-                        onClick={isUnpublished ? () => alert('Ini adalah mode pratinjau pemilik. Calon penyewa belum dapat mengajukan sewa sampai listing disetujui dan berstatus tayang publik oleh admin.') : handleBookingClick}
-                        disabled={!isAvailable && !isUnpublished}
-                        className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl transition-all active:scale-95 ${
-                          isUnpublished
-                            ? 'bg-amber-500 text-white shadow-amber-100 hover:bg-amber-600 cursor-pointer'
-                            : !isAvailable
-                              ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
-                              : 'bg-orange-500 text-white shadow-orange-100 hover:bg-orange-600 cursor-pointer'
-                        }`}
-                      >
-                        {buttonText}
-                      </button>
-                    );
-                  })()}
-                  <button
-                    onClick={handleOpenChat}
-                    disabled={isSubmittingChat}
-                    className="w-full bg-white text-gray-900 border-2 border-gray-100 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:border-gray-900 transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    {isSubmittingChat ? 'Membuka Chat...' : 'Chat Pemilik'}
-                  </button>
+                      return (
+                        <button
+                          onClick={isUnpublished ? () => alert('Ini adalah mode pratinjau pemilik. Calon penyewa belum dapat mengajukan sewa sampai listing disetujui dan berstatus tayang publik oleh admin.') : handleBookingClick}
+                          disabled={!isAvailable && !isUnpublished}
+                          className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl transition-all active:scale-95 ${
+                            isUnpublished
+                              ? 'bg-amber-500 text-white shadow-amber-100 hover:bg-amber-600 cursor-pointer'
+                              : !isAvailable
+                                ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                                : 'bg-orange-500 text-white shadow-orange-100 hover:bg-orange-600 cursor-pointer'
+                          }`}
+                        >
+                          {buttonText}
+                        </button>
+                      );
+                    })()}
+                    <button
+                      onClick={handleOpenChat}
+                      disabled={isSubmittingChat}
+                      className="w-full bg-white text-gray-900 border-2 border-gray-100 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:border-gray-900 transition-all active:scale-95 disabled:opacity-50"
+                    >
+                      {isSubmittingChat ? 'Membuka Chat...' : 'Chat Pemilik'}
+                    </button>
 
-                  <button
-                    onClick={handleOpenReportModal}
-                    className="w-full text-gray-400 hover:text-rose-600 font-bold text-xs flex items-center justify-center gap-1.5 py-2 hover:bg-rose-50/50 rounded-xl transition-all cursor-pointer"
-                  >
-                    <Flag size={12} />
-                    <span>Laporkan Properti</span>
-                  </button>
-                </div>
+                    <button
+                      onClick={handleOpenReportModal}
+                      className="w-full text-gray-400 hover:text-rose-600 font-bold text-xs flex items-center justify-center gap-1.5 py-2 hover:bg-rose-50/50 rounded-xl transition-all cursor-pointer"
+                    >
+                      <Flag size={12} />
+                      <span>Laporkan Properti</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

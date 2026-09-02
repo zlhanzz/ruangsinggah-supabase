@@ -1,90 +1,68 @@
-# IMPLEMENTATION PLAN - Modal Pratinjau Interaktif Listing di Lingkup Dashboard Mitra (Opsi A)
+# IMPLEMENTATION PLAN - Pratinjau 1:1 UI/UX Asli User Menggunakan KostDetail di Dalam Modal Mitra
 
 ## 1. Analisis Kebutuhan & Masalah
 
-### Kebutuhan Pengguna:
-Pengguna ingin memisahkan secara tegas lingkungan **Dashboard Mitra** dari **Lingkungan User Pencari Properti**:
-> *"kedepannya saya akan benar benar memisahkan antara dashboard mitra dengan tampilan user ke lingkungan yang benar benar berbeda, bisa nggak sih preview kost yang sedang diajukan itu masih dalam lingkup dashboard mitra tanpa harus tembus ke lingkungan user pencari properti?"*
+### Masukan & Keinginan Pengguna:
+Pengguna melihat hasil pratinjau modal sebelumnya memiliki tata letak custom (menggunakan tabs Tipe Kamar, Fasilitas Umum, Peraturan) yang berbeda dari tampilan halaman publik (`KostDetail.tsx`):
+> *"kenapa tidak merepresentasikan langsung ui/ux tampilan user kita? kenapa beda? saya ingin agar 1:1 tampilannya, tapi tanpa tombol booking atau chat"*
 
-### Analisis Akar Kebutuhan:
-1. **Pemisahan Lingkungan (*Portal Isolation*)**:
-   - Saat ini tombol "Preview" di Dashboard Mitra melakukan navigasi langsung ke rute publik `/kost/{slug}`.
-   - Hal ini membuat mitra "terlempar" keluar dari lingkungan kerjanya ke lingkungan publik pencari properti yang memiliki navbar pencari, search bar publik, dan footer publik.
-   - Menuju pemisahan arsitektur masa depan (misal `mitra.ruangsinggah.id` vs `ruangsinggah.id`), fitur pratinjau kost harus dapat berdiri sendiri di dalam portal mitra.
-2. **Kenyamanan & Produktivitas Mitra**:
-   - Dengan modal pratinjau interaktif, mitra dapat memeriksa foto, harga, fasilitas kamar, dan aturan kostnya secara instan tanpa perlu reload halaman atau berpindah URL.
-   - Jika ada data atau foto yang salah, mitra dapat langsung mengklik tombol `[ ✏️ Edit Data ]` dari modal pratinjau, yang secara otomatis membuka form edit `KostFormMitra`.
+### Analisis Solusi:
+1. **Mengapa Berbeda Sebelumnya?**:
+   - Komponen modal sebelumnya (`MitraKostPreviewModal.tsx`) menggunakan layout tabs mandiri terpisah dari `KostDetail.tsx`.
+2. **Solusi 1:1 Representasi Otentik**:
+   - Alih-alih membuat tampilan tiruan yang terpisah, kita akan langsung merender komponen asli **[`KostDetail.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/KostDetail.tsx)** di dalam modal pratinjau mitra!
+   - Dengan menambahkan properti `hideBookingAndChat?: boolean` pada `KostDetailProps`:
+     - Seluruh UI/UX (grid galeri foto interaktif, header nama & lokasi, pilihan varian & sub-tipe kamar, fasilitas lengkap, peraturan, maps, dll.) akan **100% identik (1:1)** dengan apa yang dilihat calon penyewa di frontend publik.
+     - Tombol **"Ajukan Sewa"** dan **"Chat Pemilik"** disembunyikan / digantikan dengan banner penanda ringkas bahwa listing sedang dalam pratinjau mitra.
+     - Mitra tetap berada di dalam modal Dashboard Mitra tanpa me-redirect URL ke publik.
 
 ---
 
-## 2. Solusi yang Diajukan (Opsi A: In-Dashboard Interactive Preview Modal)
+## 2. Solusi & Rencana Perubahan
 
-Akan dibuat komponen modal khusus `MitraKostPreviewModal.tsx` yang dirender langsung di atas `MitraDashboard.tsx`:
-1. **Header Bilah Kendali Mitra**:
-   - Judul: **Pratinjau Listing Kost**
-   - Status Badge:
-     - `⏳ Sedang Ditinjau Admin (Estimasi 1×24 Jam)` (amber berdenyut)
-     - `● Tayang Publik` (hijau emerald)
-     - `● Ditangguhkan` (merah rose)
-   - Tombol Aksi Langsung:
-     - `[ ✏️ Edit Kost ]`: Menutup pratinjau dan langsung membuka form edit.
-     - `[ ✕ Tutup ]`: Menutup modal dan kembali ke daftar kost.
-2. **Body Pratinjau Representatif**:
-   - Galeri foto interaktif (foto utama dan thumbnail).
-   - Info dasar properti (Nama, Gender Tipe Kost, Alamat lengkap, Rating).
-   - Tipe Kamar & Fasilitas Kamar (Spesifikasi kasur, kamar mandi, AC/Non-AC, harga sewa bulanan/harian).
-   - Fasilitas Bersama & Peraturan Kost.
-   - Box Edukasi Mitra: *"Ini adalah simulasi tampilan bagaimana calon penyewa akan melihat kost Anda setelah disetujui oleh admin."*
-   - Tombol sewa yang dinonaktifkan dengan penanda *"Tombol sewa dinonaktifkan dalam mode pratinjau mitra"*.
-3. **Desain & Estetika Premium**:
-   - Backdrop modern bergradasi dengan efek *backdrop blur* (`bg-black/70 backdrop-blur-md`).
-   - Pure Lucide React SVG Icons (tanpa Google Fonts CDN/ligature untuk mencegah FOUT).
-   - Kontrol keyboard: Mendukung penutupan instan dengan tombol `Escape`.
+### A. Penambahan Properti pada `KostDetail.tsx`
+- Tambahkan prop `hideBookingAndChat?: boolean` ke interface `KostDetailProps`.
+- Jika `hideBookingAndChat === true`:
+  - Sembunyikan tombol **Ajukan Sewa** dan **Chat Pemilik** pada kartu booking sidebar desktop.
+  - Tampilkan banner mini:
+    *"Mode Pratinjau Mitra • Tombol booking & chat dinonaktifkan."*
+  - Sembunyikan modal/tombol chat dan cegah penambahan metrik view publik (`incrementPropertyView`).
+
+### B. Penyempurnaan `MitraKostPreviewModal.tsx`
+- Ubah isi `MitraKostPreviewModal.tsx` agar langsung merender komponen `<KostDetail kost={kost} onBack={onClose} hideBookingAndChat={true} />`.
+- Pertahankan **Bilah Kontrol Mitra (Sticky Topbar)** di bagian atas modal:
+  - Status Badge: `⏳ Sedang Ditinjau Admin (1×24 Jam)` / `● Tayang Publik`
+  - Tombol **`[ ✏️ Edit Kost ]`** (langsung membuka form edit mitra)
+  - Tombol **`[ ✕ Tutup ]`** (dan handler tombol `Esc`)
+- Bungkus `KostDetail` dalam modal scrollable berukuran penuh (`w-full max-w-7xl max-h-[95vh] bg-white rounded-3xl overflow-y-auto`) agar mitra dapat melihat tampilan web persis seperti pengguna desktop maupun mobile.
 
 ---
 
 ## 3. Dampak Perubahan
 
 File yang akan disentuh:
-1. **File Baru** `c:\Users\ZHULL\Desktop\Firebase to Supabase\functions\public\components\mitra\MitraKostPreviewModal.tsx`:
-   - Komponen modal visual pratinjau kost yang elegan dan kaya informasi.
-2. `c:\Users\ZHULL\Desktop\Firebase to Supabase\functions\public\pages\MitraDashboard.tsx`:
-   - Menambahkan state `previewingKost: Kost | null`.
-   - Mengubah aksi tombol `[ 👁️ Preview ]` pada kartu kost dan tombol "Lihat Listing" agar memanggil `setPreviewingKost(p)` (bukan lagi `navigate('/kost/...')`).
-   - Merender `<MitraKostPreviewModal ... />` ketika `previewingKost` tidak null.
-   - Menyediakan handler edit langsung: saat tombol edit di modal ditekan, modal pratinjau ditutup dan form edit dibuka.
+1. `c:\Users\ZHULL\Desktop\Firebase to Supabase\functions\public\pages\KostDetail.tsx`:
+   - Menambahkan prop `hideBookingAndChat?: boolean` dan kondisional rendering untuk menyembunyikan tombol booking & chat.
+2. `c:\Users\ZHULL\Desktop\Firebase to Supabase\functions\public\components\mitra\MitraKostPreviewModal.tsx`:
+   - Merender `<KostDetail kost={kost} onBack={onClose} hideBookingAndChat={true} />` secara 1:1 di dalam modal container.
 
 ---
 
 ## 4. Langkah-Langkah Eksekusi (Fase 2 - Menunggu Persetujuan / ACC)
 
-1. **Langkah 1: Pembuatan Komponen `MitraKostPreviewModal.tsx`**:
-   - Membangun struktur layout modal responsif (desktop & tablet/mobile).
-   - Mengintegrasikan tabs/section: Galeri Foto, Informasi Kost, Pilihan Tipe Kamar & Harga, Fasilitas & Aturan.
-   - Menambahkan tombol aksi navigasi cepat `Tutup` dan `Edit`.
-2. **Langkah 2: Integrasi ke `MitraDashboard.tsx`**:
-   - Import `MitraKostPreviewModal`.
-   - Pasang state `const [previewingKost, setPreviewingKost] = useState<Kost | null>(null);`.
-   - Hubungkan tombol Preview pada kartu kost untuk mengaktifkan modal.
-   - Hubungkan aksi `onEdit` dari modal ke pembukaan `KostFormMitra`.
-3. **Langkah 3: Kompilasi & Pengujian**:
-   - Jalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 0 error TypeScript/Vite.
-4. **Langkah 4: Anti-Amnesia & Pelaporan**:
-   - Catat riwayat perubahan ke `functions/PROGRESS.md` sebagai **Fitur #269**.
-   - Terbitkan dokumen laporan `WALKTHROUGH.md`.
-   - Lakukan commit dan git push ke branch `bukan-productions`.
+1. **Langkah 1**: Perbarui `KostDetail.tsx` dengan prop `hideBookingAndChat?: boolean`.
+2. **Langkah 2**: Perbarui `MitraKostPreviewModal.tsx` untuk membungkus `KostDetail` dengan bilah kontrol mitra di atasnya.
+3. **Langkah 3**: Jalankan `cmd /c npm run build` di `functions/public/` untuk memastikan 0 error kompilasi.
+4. **Langkah 4**: Catat ke `functions/PROGRESS.md`, perbarui `WALKTHROUGH.md`, dan lakukan `git push origin bukan-productions`.
 
 ---
 
 ## 5. Rencana Verifikasi
 
-- **Verifikasi Kompilasi**: `npm run build` lulus 100% tanpa error.
-- **Verifikasi Lingkungan Terisolasi**:
-  - Buka halaman **Kost Saya** di Dashboard Mitra (`/dashboard-mitra`).
-  - Klik tombol **`[ 👁️ Preview ]`** pada kost Anda.
-  - Pastikan URL browser **tetap berada di `/dashboard-mitra`** dan **TIDAK PERNAH berpindah ke `/kost/...`**.
-- **Verifikasi Fungsi Modal Pratinjau**:
-  - Modal overlay terbuka dengan mulus menampilkan seluruh foto, detail harga kamar, fasilitas, dan peraturan kost.
-  - Periksa apakah status badge peninjauan terlihat jelas di bagian atas modal.
-  - Klik tombol **`[ ✕ Tutup ]`** atau tekan tombol `Escape` di keyboard -> modal tertutup instan dan kembali ke daftar kost.
-  - Klik tombol **`[ ✏️ Edit Kost ]`** di header modal -> modal pratinjau tertutup dan form edit kost langsung terbuka untuk pengeditan.
+- **Uji Kompilasi**: `npm run build` lulus 100% tanpa error TypeScript.
+- **Uji Visual 1:1**:
+  - Buka menu **Kost Saya** pada Dashboard Mitra (`/dashboard-mitra`).
+  - Klik tombol **`[ 👁️ Preview ]`**.
+  - Modal akan terbuka menampilkan **halaman detail kost asli 1:1** persis seperti tampilan pengguna umum (galeri grid foto, rincian varian kamar, fasilitas, dll.).
+  - Tombol "Ajukan Sewa" dan "Chat Pemilik" tidak ada / dinonaktifkan dengan tanda mode pratinjau.
+  - Klik tombol "Edit Kost" untuk mengedit data, atau tekan "Tutup" / `Esc` untuk kembali ke daftar kost.
