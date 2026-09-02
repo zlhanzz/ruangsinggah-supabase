@@ -2,6 +2,37 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 271. Modal Pratinjau 1:1 Super Admin dengan Fitur Minta Catatan Revisi Mitra & Integrasi Status Perlu Revisi di Dashboard Mitra (`PropertyReviewModal.tsx`, `PropertyManagement.tsx`, `MitraDashboard.tsx`, `adminService.ts`) (September 2026)
+- **Permintaan & Masalah**:
+  - Super Admin memerlukan kemampuan untuk meninjau listing baru secara 1:1 persis seperti tampilan asli pengguna/pencari kost tanpa tombol booking/chat aktif, serta memberikan catatan revisi terstruktur jika data kost masih kurang lengkap atau belum memenuhi standar sebelum disetujui.
+  - Mitra kost perlu melihat catatan evaluasi spesifik dari admin langsung pada kartu listing di Dashboard Mitra dengan label jelas "Perlu Revisi", sehingga mitra tahu apa yang perlu diperbaiki.
+- **Investigasi & Analisis**:
+  1. *Keseragaman Pengalaman Pratinjau*: Super Admin sebelumnya memiliki modal tinjauan manual yang bentuknya berbeda dari halaman publik asli. Dengan memanfaatkan `hideBookingAndChat={true}` pada `KostDetail.tsx`, Super Admin dapat melihat tata letak otentik 1:1.
+  2. *Alur Moderasi Dua Arah*: Admin butuh tombol "Minta Revisi" yang membuka form catatan perbaikan. Ketika dikirim, status properti kembali menjadi draft dengan catatan evaluasi tersimpan di `metadata.revision_notes` dan kolom `revision_notes`.
+  3. *Umpan Balik Jelas Bagi Mitra*: Mitra yang listingnya membutuhkan revisi langsung disajikan kartu bertanda badge oranye "Perlu Revisi" dan banner peringatan berisi instruksi admin serta tombol "Edit".
+- **Implementasi Solusi**:
+  1. **Komponen Pratinjau 1:1 Super Admin ([`PropertyReviewModal.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyReviewModal.tsx))**:
+     - Membungkus `<KostDetail kost={property} hideBookingAndChat={true} />` dalam layout layar penuh dengan topbar kontrol moderasi lengkap.
+     - Topbar menyediakan tombol aksi: "Setujui & Publikasikan", "Minta Revisi", "Beri/Hapus Centang Biru", "Bekukan Kost", dan "Tutup".
+     - Dialog catatan revisi interaktif dengan textarea untuk menuliskan pesan evaluasi admin secara detail.
+  2. **Layanan Moderasi Admin ([`adminService.ts`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/adminService.ts))**:
+     - Menambahkan fungsi `requestPropertyRevision(propertyId, revisionNotes)` yang memperbarui status properti menjadi `draft` dan mencatat `revision_notes` serta `revision_requested_at`.
+  3. **Manajemen Properti Admin ([`PropertyManagement.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/components/admin/PropertyManagement.tsx))**:
+     - Menggantikan modal peninjauan kustom dengan `PropertyReviewModal`.
+     - Menyediakan handler `handleRequestRevision` yang memanggil `requestPropertyRevision` dan menyegarkan data.
+  4. **Tampilan Umpan Balik Mitra ([`MitraDashboard.tsx`](file:///c:/Users/ZHULL/Desktop/Firebase%20to%20Supabase/functions/public/pages/MitraDashboard.tsx))**:
+     - Mendeteksi ketersediaan catatan revisi (`revisionNotes` / `metadata.revision_notes`).
+     - Menampilkan badge "Perlu Revisi" dan banner instruksi admin dengan latar amber yang jelas.
+- **File Tersentuh**:
+  - `functions/public/components/admin/PropertyReviewModal.tsx` (baru)
+  - `functions/public/components/admin/PropertyManagement.tsx`
+  - `functions/public/adminService.ts`
+  - `functions/public/pages/MitraDashboard.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Kompilasi Vite `cmd /c npm run build` di `functions/public/` sukses 100% (✓ 2509 modules transformed, built in 28.95s, 0 error).
+
 ### 270. Konversi Banner Statis KostManager Menjadi Pop-up Iklan Grafis Dinamis dengan Kontrol Super Admin (`BannerManagement.tsx`, `MitraDashboard.tsx`, `adminService.ts`, `types.ts`) (September 2026)
 - **Permintaan & Masalah**:
   - Pengguna merasa terganggu dengan banner statis oranye besar KostManager yang *hardcoded* di atas halaman "Kost Saya" dan Beranda mitra, yang memakan ruang vertikal secara permanen:

@@ -1446,6 +1446,10 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                         <span className="px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-rose-500 text-white border border-rose-400 shadow-md flex items-center gap-1">
                                                             <AlertCircle size={11} /> Ditangguhkan
                                                         </span>
+                                                    ) : ((p as any).revisionNotes || (p as any).metadata?.revision_notes) ? (
+                                                        <span className="px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-500 text-white border border-amber-400 shadow-md flex items-center gap-1">
+                                                            <AlertCircle size={11} /> Perlu Revisi
+                                                        </span>
                                                     ) : (
                                                         <span className="px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-500 text-white border border-amber-400 shadow-md flex items-center gap-1 animate-pulse">
                                                             <Clock size={11} /> Sedang Ditinjau
@@ -1500,8 +1504,30 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                     </div>
                                                 )}
 
-                                                {/* Info Banner Khusus Properti Dalam Tahap Peninjauan */}
-                                                {p.status !== 'published' && p.status !== 'suspended' && (
+                                                {/* Info Banner Khusus Properti Dalam Tahap Peninjauan / Revisi */}
+                                                {p.status !== 'published' && p.status !== 'suspended' && ((p as any).revisionNotes || (p as any).metadata?.revision_notes) ? (
+                                                    <div className="mt-3.5 p-3.5 bg-amber-50/90 border border-amber-300 rounded-2xl flex items-start gap-2.5 shadow-xs">
+                                                        <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                                                            <AlertCircle size={15} />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <p className="font-black text-amber-950 text-xs uppercase tracking-wide">
+                                                                    Perlu Revisi dari Admin
+                                                                </p>
+                                                                <span className="px-1.5 py-0.5 bg-amber-200/80 text-amber-900 rounded text-[9px] font-black uppercase tracking-wider">
+                                                                    Catatan Evaluasi
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-[11px] text-amber-900 font-semibold leading-relaxed">
+                                                                {(p as any).revisionNotes || (p as any).metadata?.revision_notes}
+                                                            </p>
+                                                            <p className="text-[10px] text-amber-700/90 mt-1">
+                                                                Silakan klik tombol <strong>Edit</strong> untuk memperbaiki data yang diminta, lalu ajukan kembali.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                ) : p.status !== 'published' && p.status !== 'suspended' ? (
                                                     <div className="mt-3.5 p-3.5 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-amber-50/90 border border-amber-200/80 rounded-2xl flex items-start gap-2.5 shadow-xs">
                                                         <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
                                                             <Clock size={15} className="animate-pulse" />
@@ -1520,7 +1546,7 @@ const MitraDashboard: React.FC<MitraDashboardProps> = ({ uid, user, onPageChange
                                                             </p>
                                                         </div>
                                                     </div>
-                                                )}
+                                                ) : null}
 
                                                 {/* Info Banner Khusus Properti Ditangguhkan */}
                                                 {p.status === 'suspended' && (

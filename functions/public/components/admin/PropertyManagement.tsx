@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     BasicPropertyInfo, updatePropertyStatus, freezeProperty, unfreezeProperty,
-    togglePropertyVerification, PropertyReportItem, getPropertyReports, updatePropertyReportStatus
+    togglePropertyVerification, PropertyReportItem, getPropertyReports, updatePropertyReportStatus,
+    requestPropertyRevision
 } from '../../adminService';
+import PropertyReviewModal from './PropertyReviewModal';
 import { createKostSlug } from '../../utils/slugUtils';
 import {
     Building2, Home, Search, Filter, Sparkles, ShieldCheck, CheckCircle2,
@@ -195,6 +197,27 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
             alert('Listing dialihkan ke status Draft.');
         } catch (e: any) {
             alert('Gagal mengubah status: ' + (e.message || e));
+        } finally {
+            setIsProcessingAction(false);
+        }
+    };
+
+    const handleRequestRevision = async (prop: BasicPropertyInfo, notes: string) => {
+        setIsProcessingAction(true);
+        try {
+            await requestPropertyRevision(prop.id, notes);
+            await refreshData();
+            if (selectedPropertyForReview?.id === prop.id) {
+                setSelectedPropertyForReview(prev => prev ? {
+                    ...prev,
+                    status: 'draft',
+                    revisionNotes: notes,
+                    revisionRequestedAt: new Date().toISOString()
+                } : null);
+            }
+            alert('Catatan evaluasi revisi berhasil dikirimkan ke mitra dan status dialihkan ke Draft.');
+        } catch (e: any) {
+            alert('Gagal mengirim catatan revisi: ' + (e.message || e));
         } finally {
             setIsProcessingAction(false);
         }
@@ -1002,245 +1025,19 @@ const PropertyManagement: React.FC<PropertyManagementProps> = ({
                 </div>
             )}
 
-            {/* ── MODAL 1: TINJAUAN & SUPERVISI DETAIL LISTING ── */}
+            {/* ── MODAL 1: TINJAUAN & SUPERVISI DETAIL LISTING (KOMPREHENSIF 3-TAB) ── */}
             {selectedPropertyForReview && (
-                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-gray-900/70 backdrop-blur-sm animate-in fade-in" onClick={() => setSelectedPropertyForReview(null)} />
-                    <div className="relative bg-white w-full max-w-4xl max-h-[90vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col z-10 animate-in zoom-in-95 duration-200">
-                        {/* Modal Header */}
-                        <div className="p-6 sm:p-8 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-orange-50/50 via-white to-white">
-                            <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                                        selectedPropertyForReview.isManaged ? 'bg-emerald-600 text-white' : 'bg-blue-100 text-blue-700'
-                                    }`}>
-                                        {selectedPropertyForReview.isManaged ? 'KostManager (Terverifikasi)' : 'Self Listing (Mandiri)'}
-                                    </span>
-                                    {selectedPropertyForReview.status === 'suspended' && (
-                                        <span className="px-2.5 py-0.5 bg-rose-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest">
-                                            Dibekukan
-                                        </span>
-                                    )}
-                                </div>
-                                <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
-                                    {selectedPropertyForReview.title || selectedPropertyForReview.namaKost}
-                                </h3>
-                                <p className="text-xs text-gray-400 font-medium flex items-center gap-1">
-                                    <MapPin size={13} className="text-orange-500 shrink-0" />
-                                    {selectedPropertyForReview.address || selectedPropertyForReview.city}
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => setSelectedPropertyForReview(null)}
-                                className="w-10 h-10 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors cursor-pointer"
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        {/* Modal Body */}
-                        <div className="p-6 sm:p-8 overflow-y-auto space-y-6 flex-1 text-left">
-                            {/* Suspended Alert Banner (If Frozen) */}
-                            {selectedPropertyForReview.status === 'suspended' && (
-                                <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3">
-                                    <AlertTriangle size={20} className="text-rose-600 shrink-0 mt-0.5" />
-                                    <div className="space-y-1 text-xs text-rose-900">
-                                        <p className="font-black uppercase tracking-wider">Listing Sedang Dibekukan</p>
-                                        <p className="leading-relaxed">{selectedPropertyForReview.suspendReason || 'Listing dinonaktifkan sementara karena pelanggaran atau data yang perlu direvisi oleh mitra.'}</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Foto Galeri */}
-                            <div className="space-y-2">
-                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-                                    <Camera size={14} className="text-orange-500" />
-                                    Galeri Foto ({selectedPropertyForReview.imageUrls?.length || 0})
-                                </h4>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                    {selectedPropertyForReview.imageUrls?.map((img, idx) => (
-                                        <div key={idx} className="relative h-28 rounded-2xl overflow-hidden bg-gray-100 border border-gray-100 group">
-                                            <img src={img} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                                            <a href={img} target="_blank" rel="noopener noreferrer" className="absolute bottom-1 right-1 p-1 bg-black/60 text-white rounded-lg text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">
-                                                Lihat
-                                            </a>
-                                        </div>
-                                    ))}
-                                    {(!selectedPropertyForReview.imageUrls || selectedPropertyForReview.imageUrls.length === 0) && (
-                                        <p className="col-span-4 text-xs text-gray-400 italic py-4">Belum ada foto yang diunggah.</p>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Info Mitra & Kontak */}
-                            <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <div>
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Nama Pemilik / Mitra</span>
-                                    <p className="font-black text-gray-900 text-sm">{selectedPropertyForReview.ownerName || 'Mitra'}</p>
-                                    <span className="text-[10px] text-gray-400 font-medium">{selectedPropertyForReview.ownerEmail || '-'}</span>
-                                </div>
-
-                                <div>
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">WhatsApp Pemilik</span>
-                                    <p className="font-black text-gray-900 text-sm">{selectedPropertyForReview.ownerPhone || selectedPropertyForReview.omnichannelContactPhone || '-'}</p>
-                                    <button
-                                        onClick={() => handleOpenWhatsApp(selectedPropertyForReview.ownerPhone || selectedPropertyForReview.omnichannelContactPhone, selectedPropertyForReview.title, selectedPropertyForReview.status === 'suspended', selectedPropertyForReview.suspendReason)}
-                                        className="mt-1 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md hover:bg-emerald-100 transition-colors cursor-pointer"
-                                    >
-                                        <Phone size={10} /> Chat WhatsApp
-                                    </button>
-                                </div>
-
-                                <div>
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Status Verifikasi</span>
-                                    <p className="font-bold text-xs text-gray-800">
-                                        Akun KTP: <span className="font-black text-orange-600">{selectedPropertyForReview.ownerVerificationStatus === 'verified' ? 'Terverifikasi ✓' : 'Belum Verifikasi'}</span>
-                                    </p>
-                                    <p className="font-bold text-xs text-gray-800 mt-0.5">
-                                        Listing Kost: <span className="font-black text-blue-600">{selectedPropertyForReview.isVerified ? 'Centang Biru ✓' : 'Standar'}</span>
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Deskripsi */}
-                            <div className="space-y-1">
-                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Deskripsi Kost</h4>
-                                <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-line bg-gray-50/50 p-4 rounded-2xl border border-gray-100">
-                                    {selectedPropertyForReview.description || 'Tidak ada deskripsi.'}
-                                </p>
-                            </div>
-
-                            {/* Tipe Kamar & Harga */}
-                            <div className="space-y-3">
-                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-                                    <Bed size={14} className="text-orange-500" />
-                                    Tipe Kamar & Skema Harga ({selectedPropertyForReview.roomTypes?.length || 0})
-                                </h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {selectedPropertyForReview.roomTypes?.map((room, idx) => (
-                                        <div key={idx} className="p-4 rounded-2xl bg-white border border-gray-200 shadow-sm space-y-2">
-                                            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                                                <h5 className="font-black text-gray-900 text-xs uppercase">{room.name || `Kamar Tipe ${idx + 1}`}</h5>
-                                                <span className="text-[10px] font-bold text-gray-400">{room.size || '-'}</span>
-                                            </div>
-                                            <div className="space-y-1 text-xs">
-                                                {room.pricing && room.pricing.length > 0 ? (
-                                                    <div className="flex flex-wrap gap-1.5">
-                                                        {room.pricing.map((p, pIdx) => (
-                                                            <span key={pIdx} className="px-2 py-0.5 bg-orange-50 text-orange-700 rounded-lg text-[10px] font-bold">
-                                                                {p.period}: {FORMAT_CURRENCY(p.price)}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <p className="font-black text-orange-600">{FORMAT_CURRENCY(room.price || 0)} / Bulan</p>
-                                                )}
-                                            </div>
-                                            {room.roomFacilities && room.roomFacilities.length > 0 && (
-                                                <p className="text-[10px] text-gray-500">
-                                                    <span className="font-bold">Fasilitas: </span>{room.roomFacilities.join(', ')}
-                                                </p>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Fasilitas Gedung & Peraturan */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="space-y-2 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                                        <Wifi size={12} /> Fasilitas Umum
-                                    </h4>
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {selectedPropertyForReview.facilities?.map((f, i) => (
-                                            <span key={i} className="px-2 py-0.5 bg-white text-gray-700 rounded-lg text-[10px] font-bold border border-gray-200">
-                                                {f}
-                                            </span>
-                                        ))}
-                                        {(!selectedPropertyForReview.facilities || selectedPropertyForReview.facilities.length === 0) && (
-                                            <span className="text-xs text-gray-400 italic">Tidak ada fasilitas dicantumkan.</span>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                                        <BookOpen size={12} /> Peraturan Kost
-                                    </h4>
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {selectedPropertyForReview.rules?.map((r, i) => (
-                                            <span key={i} className="px-2 py-0.5 bg-white text-gray-700 rounded-lg text-[10px] font-bold border border-gray-200">
-                                                {r}
-                                            </span>
-                                        ))}
-                                        {(!selectedPropertyForReview.rules || selectedPropertyForReview.rules.length === 0) && (
-                                            <span className="text-xs text-gray-400 italic">Tidak ada aturan khusus.</span>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Modal Sticky Footer (Aksi Moderasi) */}
-                        <div className="p-6 sm:p-8 border-t border-gray-100 bg-gray-50/80 flex flex-col sm:flex-row items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 w-full sm:w-auto">
-                                <button
-                                    onClick={() => handleToggleVerification(selectedPropertyForReview)}
-                                    className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
-                                        selectedPropertyForReview.isVerified
-                                            ? 'bg-blue-100 text-blue-800 hover:bg-blue-200'
-                                            : 'bg-white border border-gray-200 text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                                    }`}
-                                >
-                                    <ShieldCheck size={14} />
-                                    {selectedPropertyForReview.isVerified ? 'Hapus Centang Biru' : 'Beri Centang Biru'}
-                                </button>
-
-                                {selectedPropertyForReview.status === 'suspended' ? (
-                                    <button
-                                        onClick={() => handleUnfreeze(selectedPropertyForReview)}
-                                        className="px-4 py-2.5 bg-green-600 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-green-700 transition-all flex items-center gap-1.5 cursor-pointer"
-                                    >
-                                        <Check size={14} /> Buka Pembekuan
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={() => handleOpenFreeze(selectedPropertyForReview)}
-                                        className="px-4 py-2.5 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-rose-100 transition-all flex items-center gap-1.5 cursor-pointer"
-                                    >
-                                        <Snowflake size={14} /> Bekukan Kost
-                                    </button>
-                                )}
-                            </div>
-
-                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                                <button
-                                    onClick={() => window.open('/kost/' + createKostSlug(selectedPropertyForReview), '_blank')}
-                                    className="px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-100 transition-all flex items-center gap-1.5 cursor-pointer"
-                                >
-                                    <ExternalLink size={14} /> Halaman Publik
-                                </button>
-
-                                {selectedPropertyForReview.status === 'published' ? (
-                                    <button
-                                        onClick={() => handleUnpublishToDraft(selectedPropertyForReview)}
-                                        className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95 cursor-pointer"
-                                    >
-                                        Jadikan Draft
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={() => handlePublish(selectedPropertyForReview)}
-                                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95 cursor-pointer"
-                                    >
-                                        Setujui & Publikasikan
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <PropertyReviewModal
+                    property={selectedPropertyForReview}
+                    onClose={() => setSelectedPropertyForReview(null)}
+                    onPublish={handlePublish}
+                    onUnpublishToDraft={handleUnpublishToDraft}
+                    onRequestRevision={handleRequestRevision}
+                    onToggleVerification={handleToggleVerification}
+                    onOpenFreeze={handleOpenFreeze}
+                    onUnfreeze={handleUnfreeze}
+                    FORMAT_CURRENCY={FORMAT_CURRENCY}
+                />
             )}
 
             {/* ── MODAL 2: PEMBEKUAN LISTING (SUSPEND / PENALTI) ── */}

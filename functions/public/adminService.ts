@@ -21,6 +21,9 @@ export interface BasicPropertyInfo extends Partial<Kost> {
   ownerEmail?: string;
   ownerVerificationStatus?: string;
   suspendReason?: string;
+  revisionNotes?: string;
+  revisionRequestedAt?: string;
+  metadata?: any;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -364,9 +367,14 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
     const isManaged = Boolean(row.is_managed);
 
     let suspendReason = '';
+    let revisionNotes = '';
+    let revisionRequestedAt = '';
+    let parsedMeta: any = null;
     if (row.metadata) {
-      const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata;
-      suspendReason = meta?.suspend_reason || meta?.suspendReason || '';
+      parsedMeta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata;
+      suspendReason = parsedMeta?.suspend_reason || parsedMeta?.suspendReason || '';
+      revisionNotes = parsedMeta?.revision_notes || parsedMeta?.revisionNotes || '';
+      revisionRequestedAt = parsedMeta?.revision_requested_at || parsedMeta?.revisionRequestedAt || '';
     }
 
     return {
@@ -404,6 +412,9 @@ export async function getAdminProperties(ownerUid?: string): Promise<BasicProper
       ownerEmail: ownerData?.email || '',
       ownerVerificationStatus: ownerData?.verification_status || 'unverified',
       suspendReason: suspendReason,
+      revisionNotes: revisionNotes,
+      revisionRequestedAt: revisionRequestedAt,
+      metadata: parsedMeta,
       createdAt: row.created_at,
       updatedAt: row.updated_at
     } as BasicPropertyInfo;
@@ -2347,6 +2358,40 @@ export async function freezeProperty(propertyId: string, reason: string): Promis
 
 export async function unfreezeProperty(propertyId: string): Promise<void> {
   return updatePropertyStatus(propertyId, 'published', '');
+}
+
+export async function requestPropertyRevision(propertyId: string, revisionNotes: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Tidak ada admin yang login.');
+
+  const isAdmin = await checkIfUserIsAdmin(user.id);
+  if (!isAdmin) throw new Error('Hanya admin yang dapat meminta revisi listing properti.');
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('properties')
+    .select('owner_uid, metadata')
+    .eq('id', propertyId)
+    .single();
+
+  if (fetchError || !existing) throw new Error('Properti tidak ditemukan.');
+
+  const currentMeta = typeof existing.metadata === 'string' ? JSON.parse(existing.metadata) : (existing.metadata || {});
+  const updatedMeta = {
+    ...currentMeta,
+    revision_notes: revisionNotes.trim(),
+    revision_requested_at: getCurrentDate().toISOString()
+  };
+
+  const { error } = await supabase
+    .from('properties')
+    .update({ 
+      status: 'draft', 
+      metadata: updatedMeta,
+      updated_at: getCurrentDate().toISOString() 
+    })
+    .eq('id', propertyId);
+
+  if (error) throw error;
 }
 
 export async function togglePropertyVerification(propertyId: string, isVerified: boolean): Promise<void> {
