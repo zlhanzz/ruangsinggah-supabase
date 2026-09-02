@@ -2727,14 +2727,34 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                     .slice(0, 3);
             });
 
-        // 4. Scan Fasilitas Harian Mikro: Minimarket Terdekat (Radius 2 KM - Tepat 1 Terdekat)
-        const scanMinimarket = performSearch({
+        // 4. Scan Fasilitas Harian Mikro: Minimarket Terdekat (Urutan Jarak Fisik Sejati - Tepat 1 Terdekat)
+        const searchMini1 = performSearch({
             location: centerLatLng,
-            radius: 2000,
-            keyword: 'indomaret|alfamidi|alfamart|supermarket'
-        }).then(results => {
-            return results
-                .filter(p => p.name && p.geometry?.location)
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            keyword: 'indomaret'
+        });
+        const searchMini2 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            keyword: 'alfamart'
+        });
+        const searchMini3 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            keyword: 'minimarket'
+        });
+
+        const scanMinimarket = Promise.all([searchMini1, searchMini2, searchMini3]).then(([r1, r2, r3]) => {
+            const combined = [...r1, ...r2, ...r3];
+            const seen = new Set<string>();
+            return combined
+                .filter(p => {
+                    if (!p.name || !p.geometry?.location) return false;
+                    const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                })
                 .map(p => {
                     const pLat = p.geometry.location.lat();
                     const pLng = p.geometry.location.lng();
@@ -2749,15 +2769,16 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         isLiveGoogleApi: true
                     };
                 })
+                .filter(p => p.kmVal <= 2.5)
                 .sort((a, b) => a.kmVal - b.kmVal)
                 .slice(0, 1);
         });
 
-        // 5. Scan Fasilitas Harian Mikro: Laundry Kiloan Terdekat (Radius 2 KM - Tepat 1 Terdekat)
+        // 5. Scan Fasilitas Harian Mikro: Laundry Kiloan Terdekat (Urutan Jarak Fisik Sejati - Tepat 1 Terdekat)
         const scanLaundry = performSearch({
             location: centerLatLng,
-            radius: 2000,
-            keyword: 'laundry|laundry kiloan|cuci pakaian'
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            keyword: 'laundry'
         }).then(results => {
             return results
                 .filter(p => p.name && p.geometry?.location)
@@ -2775,19 +2796,34 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         isLiveGoogleApi: true
                     };
                 })
+                .filter(p => p.kmVal <= 2.5)
                 .sort((a, b) => a.kmVal - b.kmVal)
                 .slice(0, 1);
         });
 
-        // 6. Scan Fasilitas Harian Mikro: Masjid / Musholla Terdekat (Radius 2 KM - Tepat 1 Terdekat)
-        const scanMosque = performSearch({
+        // 6. Scan Fasilitas Harian Mikro: Masjid / Musholla Terdekat (Urutan Jarak Fisik Sejati - Tepat 1 Terdekat)
+        const searchMosque1 = performSearch({
             location: centerLatLng,
-            radius: 2000,
-            type: 'mosque',
-            keyword: 'masjid|musholla'
-        }).then(results => {
-            return results
-                .filter(p => p.name && p.geometry?.location)
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            keyword: 'masjid'
+        });
+        const searchMosque2 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            type: 'mosque'
+        });
+
+        const scanMosque = Promise.all([searchMosque1, searchMosque2]).then(([r1, r2]) => {
+            const combined = [...r1, ...r2];
+            const seen = new Set<string>();
+            return combined
+                .filter(p => {
+                    if (!p.name || !p.geometry?.location) return false;
+                    const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                })
                 .map(p => {
                     const pLat = p.geometry.location.lat();
                     const pLng = p.geometry.location.lng();
@@ -2802,19 +2838,34 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         isLiveGoogleApi: true
                     };
                 })
+                .filter(p => p.kmVal <= 2.5)
                 .sort((a, b) => a.kmVal - b.kmVal)
                 .slice(0, 1);
         });
 
-        // 7. Scan Fasilitas Harian Mikro: Gereja Terdekat (Radius 3.5 KM - Tepat 1 Terdekat)
-        const scanChurch = performSearch({
+        // 7. Scan Fasilitas Harian Mikro: Gereja Terdekat (Urutan Jarak Fisik Sejati - Tepat 1 Terdekat)
+        const searchChurch1 = performSearch({
             location: centerLatLng,
-            radius: 3500,
-            type: 'church',
-            keyword: 'gereja|church|katedral|gki|gbi|hkbp|gpdi'
-        }).then(results => {
-            return results
-                .filter(p => p.name && p.geometry?.location)
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            keyword: 'gereja'
+        });
+        const searchChurch2 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            type: 'church'
+        });
+
+        const scanChurch = Promise.all([searchChurch1, searchChurch2]).then(([r1, r2]) => {
+            const combined = [...r1, ...r2];
+            const seen = new Set<string>();
+            return combined
+                .filter(p => {
+                    if (!p.name || !p.geometry?.location) return false;
+                    const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                })
                 .map(p => {
                     const pLat = p.geometry.location.lat();
                     const pLng = p.geometry.location.lng();
@@ -2829,19 +2880,34 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         isLiveGoogleApi: true
                     };
                 })
+                .filter(p => p.kmVal <= 3.5)
                 .sort((a, b) => a.kmVal - b.kmVal)
                 .slice(0, 1);
         });
 
-        // 8. Scan Fasilitas Vital: SPBU / Pom Bensin Terdekat (Radius 3.5 KM - Tepat 1 Terdekat)
-        const scanGasStation = performSearch({
+        // 8. Scan Fasilitas Vital: SPBU / Pom Bensin Terdekat (Urutan Jarak Fisik Sejati - Tepat 1 Terdekat)
+        const searchSpbu1 = performSearch({
             location: centerLatLng,
-            radius: 3500,
-            type: 'gas_station',
-            keyword: 'spbu|pertamina|shell|bp|pom bensin'
-        }).then(results => {
-            return results
-                .filter(p => p.name && p.geometry?.location)
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            type: 'gas_station'
+        });
+        const searchSpbu2 = performSearch({
+            location: centerLatLng,
+            rankBy: google.maps.places.RankBy.DISTANCE,
+            keyword: 'spbu'
+        });
+
+        const scanGasStation = Promise.all([searchSpbu1, searchSpbu2]).then(([r1, r2]) => {
+            const combined = [...r1, ...r2];
+            const seen = new Set<string>();
+            return combined
+                .filter(p => {
+                    if (!p.name || !p.geometry?.location) return false;
+                    const key = p.place_id || `${p.name}_${p.geometry.location.lat().toFixed(4)}_${p.geometry.location.lng().toFixed(4)}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                })
                 .map(p => {
                     const pLat = p.geometry.location.lat();
                     const pLng = p.geometry.location.lng();
@@ -2856,6 +2922,7 @@ const KostFormMitra: React.FC<KostFormMitraProps> = ({ user, editingKost, onClos
                         isLiveGoogleApi: true
                     };
                 })
+                .filter(p => p.kmVal <= 4.0)
                 .sort((a, b) => a.kmVal - b.kmVal)
                 .slice(0, 1);
         });

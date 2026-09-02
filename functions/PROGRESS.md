@@ -5648,3 +5648,22 @@
 - **Verifikasi**:
   - Build Vite frontend npm run build di functions/public/ sukses 100% dengan 0 error dalam 53.98s (✓ 2506 modules transformed).
   - Skrip Google Maps API di public/index.html dan functions/public/index.html terverifikasi memuat language=id&region=ID.
+
+### 266. Peningkatan Presisi Scanning Fasilitas Terdekat Google Places API Menggunakan RankBy.DISTANCE (September 2026)
+- **Permintaan & Masalah**:
+  1. Pengguna menemukan bahwa tempat ibadah terdekat (Gereja Katolik Paroki Maria Ratu Rosari) yang berada tepat di seberang jalan (jarak ~50 meter) dari titik kost tidak terdeteksi oleh sistem scanning formulir mitra, melainkan mendeteksi gereja lain yang berjarak 1,3 KM.
+  2. Hal ini terjadi karena Google Places API nearbySearch secara default mengurutkan berdasarkan PROMINENCE (popularitas / jumlah ulasan terbanyak) di seluruh radius 3,5 KM dan hanya mengembalikan maksimal 20 tempat. Tempat dengan ulasan lebih sedikit di seberang jalan tereliminasi dari 20 hasil teratas Google.
+  3. Penggunaan sintaks pipe regex (|) pada parameter keyword tidak didukung oleh Google Places API.
+- **Implementasi & Solusi**:
+  * **1. Penerapan RankBy.DISTANCE pada Scanning Fasilitas Mikro**:
+    - Mengubah query scanning Gereja, Masjid, Minimarket, Laundry, dan SPBU di KostFormMitra.tsx menggunakan rankBy: google.maps.places.RankBy.DISTANCE.
+    - Google Places API menjamin hasil diurutkan dari jarak terdekat 0 meter ke atas secara fisik.
+  * **2. Multi-Query Dual Search & Pembersihan Keyword**:
+    - Menggunakan pencarian paralel (misal: keyword gereja + type church, keyword masjid + type mosque) dan mendeduplikasi hasil berdasarkan place_id.
+    - Menghapus sintaks pipe yang tidak didukung dan menerapkan filter radius aman di sisi front-end.
+- **File Tersentuh**:
+  - functions/public/components/KostFormMitra.tsx
+  - functions/PROGRESS.md
+  - WALKTHROUGH.md
+- **Verifikasi**:
+  - Build Vite frontend npm run build di functions/public/ sukses 100% dengan 0 error dalam 41.64s (✓ 2506 modules transformed).
