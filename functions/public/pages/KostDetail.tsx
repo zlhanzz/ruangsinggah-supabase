@@ -885,8 +885,21 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
 
   // Check if location data is valid (non-zero coordinates)
   const hasValidLocation = kost.location && (kost.location.lat !== 0 || kost.location.lng !== 0);
-  const hasCampuses = kost.campuses && kost.campuses.length > 0;
-  const hasPublicFacilities = kost.publicFacilities && kost.publicFacilities.length > 0;
+
+  // Pisahkan dan hilangkan duplikasi fasilitas publik dan kampus terdekat
+  const publicFacilitiesList = useMemo(() => {
+    return kost.publicFacilities || [];
+  }, [kost.publicFacilities]);
+
+  const campusList = useMemo(() => {
+    const raw = kost.campuses || [];
+    if (publicFacilitiesList.length === 0) return raw;
+    const publicNames = new Set(publicFacilitiesList.map(p => p.name.toLowerCase().trim()));
+    return raw.filter(c => !publicNames.has(c.name.toLowerCase().trim()));
+  }, [kost.campuses, publicFacilitiesList]);
+
+  const hasCampuses = campusList.length > 0;
+  const hasPublicFacilities = publicFacilitiesList.length > 0;
   const hasLocationSection = hasValidLocation || hasCampuses || hasPublicFacilities;
 
   const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${kost.location?.lat || 0},${kost.location?.lng || 0}`;
@@ -1567,52 +1580,43 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                   )}
 
                   {hasCampuses && (
-                    <div className="space-y-2 pt-1">
+                    <div className="space-y-1.5 pt-1">
                       <div className="flex items-center justify-between pl-1">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center">
-                            <GraduationCap size={14} />
-                          </div>
-                          <h4 className="font-bold text-gray-900 text-xs uppercase tracking-widest">Kampus Terdekat</h4>
+                        <div className="flex items-center gap-1.5">
+                          <GraduationCap size={14} className="text-orange-600" />
+                          <h4 className="font-bold text-gray-900 text-xs uppercase tracking-wider">Kampus Terdekat</h4>
                         </div>
-                        <span className="text-[11px] font-bold text-gray-400">
-                          {kost.campuses!.length} Lokasi
+                        <span className="text-[10px] font-bold text-gray-400">
+                          {campusList.length} Lokasi
                         </span>
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {kost.campuses!.map((campus, idx) => {
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                        {campusList.map((campus, idx) => {
                           const kmMatch = campus.distance?.match(/[\d.]+/);
                           const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
                           const walkText = campus.walkDuration || `${Math.ceil((km / 4.2) * 60)}m`;
                           const motoText = campus.motoDuration || `${Math.ceil((km / 28) * 60) + 1}m`;
-                          const carText = campus.carDuration || `${Math.ceil((km / 18) * 60) + 2}m`;
 
                           return (
                             <div 
                               key={idx} 
-                              className="bg-white border border-gray-100 hover:border-orange-200 rounded-2xl p-2.5 px-3.5 flex items-center justify-between gap-2.5 transition-all hover:bg-orange-50/20 group shadow-2xs"
+                              className="bg-white border border-gray-100 hover:border-orange-200 rounded-xl px-2.5 py-1.5 flex items-center justify-between gap-2 transition-all hover:bg-orange-50/20 group shadow-2xs"
                             >
-                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                <div className="w-8 h-8 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                                  <GraduationCap size={15} />
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div className="w-5 h-5 rounded-md bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
+                                  <GraduationCap size={12} />
                                 </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="font-bold text-gray-900 text-xs truncate" title={campus.name}>
-                                    {campus.name}
-                                  </div>
-                                  <div className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-400 mt-0.5">
-                                    <span title="Jalan Kaki">🚶 {walkText}</span>
-                                    <span>•</span>
-                                    <span title="Sepeda Motor">🏍️ {motoText}</span>
-                                    <span>•</span>
-                                    <span title="Mobil">🚗 {carText}</span>
-                                  </div>
-                                </div>
+                                <span className="font-bold text-gray-800 text-xs truncate" title={campus.name}>
+                                  {campus.name}
+                                </span>
                               </div>
 
                               <div className="flex items-center gap-1.5 shrink-0">
-                                <span className="font-black text-orange-600 bg-orange-50 border border-orange-100/80 px-2 py-1 rounded-xl text-[10px]">
+                                <span className="text-[10px] font-semibold text-gray-400 hidden sm:inline" title="Waktu tempuh">
+                                  🚶{walkText} • 🏍️{motoText}
+                                </span>
+                                <span className="font-bold text-orange-600 bg-orange-50 border border-orange-100/80 px-1.5 py-0.5 rounded-lg text-[10px] whitespace-nowrap">
                                   {campus.distance}
                                 </span>
 
@@ -1621,10 +1625,10 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                     href={`https://www.google.com/maps/dir/?api=1&origin=${kost.location?.lat || 0},${kost.location?.lng || 0}&destination=${campus.lat},${campus.lng}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center gap-1 text-[10px] font-bold text-orange-600 hover:text-white bg-orange-50 hover:bg-orange-500 border border-orange-100/60 hover:border-orange-500 px-2.5 py-1 rounded-xl transition-all active:scale-95 shadow-2xs"
+                                    className="flex items-center gap-1 text-[10px] font-bold text-orange-600 hover:text-white bg-orange-50 hover:bg-orange-500 border border-orange-100/60 hover:border-orange-500 px-2 py-0.5 rounded-lg transition-all active:scale-95 shadow-2xs"
                                     title="Petunjuk Arah"
                                   >
-                                    <Navigation size={10} className="shrink-0" />
+                                    <Navigation size={9} className="shrink-0" />
                                     <span>Rute</span>
                                   </a>
                                 )}
@@ -1637,52 +1641,43 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                   )}
 
                   {hasPublicFacilities && (
-                    <div className="space-y-2 pt-1">
+                    <div className="space-y-1.5 pt-1">
                       <div className="flex items-center justify-between pl-1">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-                            <Building2 size={14} />
-                          </div>
-                          <h4 className="font-bold text-gray-900 text-xs uppercase tracking-widest">Fasilitas Publik</h4>
+                        <div className="flex items-center gap-1.5">
+                          <Building2 size={14} className="text-blue-600" />
+                          <h4 className="font-bold text-gray-900 text-xs uppercase tracking-wider">Fasilitas Publik</h4>
                         </div>
-                        <span className="text-[11px] font-bold text-gray-400">
-                          {kost.publicFacilities!.length} Lokasi
+                        <span className="text-[10px] font-bold text-gray-400">
+                          {publicFacilitiesList.length} Lokasi
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {kost.publicFacilities!.map((fac, idx) => {
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                        {publicFacilitiesList.map((fac, idx) => {
                           const kmMatch = fac.distance?.match(/[\d.]+/);
                           const km = kmMatch ? parseFloat(kmMatch[0]) : 1;
                           const walkText = fac.walkDuration || `${Math.ceil((km / 4.2) * 60)}m`;
                           const motoText = fac.motoDuration || `${Math.ceil((km / 28) * 60) + 1}m`;
-                          const carText = fac.carDuration || `${Math.ceil((km / 18) * 60) + 2}m`;
 
                           return (
                             <div 
                               key={idx} 
-                              className="bg-white border border-gray-100 hover:border-blue-200 rounded-2xl p-2.5 px-3.5 flex items-center justify-between gap-2.5 transition-all hover:bg-blue-50/20 group shadow-2xs"
+                              className="bg-white border border-gray-100 hover:border-blue-200 rounded-xl px-2.5 py-1.5 flex items-center justify-between gap-2 transition-all hover:bg-blue-50/20 group shadow-2xs"
                             >
-                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                                  <Building2 size={15} />
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div className="w-5 h-5 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                                  <Building2 size={12} />
                                 </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="font-bold text-gray-900 text-xs truncate" title={fac.name}>
-                                    {fac.name}
-                                  </div>
-                                  <div className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-400 mt-0.5">
-                                    <span title="Jalan Kaki">🚶 {walkText}</span>
-                                    <span>•</span>
-                                    <span title="Sepeda Motor">🏍️ {motoText}</span>
-                                    <span>•</span>
-                                    <span title="Mobil">🚗 {carText}</span>
-                                  </div>
-                                </div>
+                                <span className="font-bold text-gray-800 text-xs truncate" title={fac.name}>
+                                  {fac.name}
+                                </span>
                               </div>
 
                               <div className="flex items-center gap-1.5 shrink-0">
-                                <span className="font-black text-blue-600 bg-blue-50 border border-blue-100/80 px-2 py-1 rounded-xl text-[10px]">
+                                <span className="text-[10px] font-semibold text-gray-400 hidden sm:inline" title="Waktu tempuh">
+                                  🚶{walkText} • 🏍️{motoText}
+                                </span>
+                                <span className="font-black text-blue-600 bg-blue-50 border border-blue-100/80 px-1.5 py-0.5 rounded-lg text-[10px] whitespace-nowrap">
                                   {fac.distance}
                                 </span>
 
@@ -1691,10 +1686,10 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
                                     href={`https://www.google.com/maps/dir/?api=1&origin=${kost.location?.lat || 0},${kost.location?.lng || 0}&destination=${fac.lat},${fac.lng}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-100/60 hover:border-blue-600 px-2.5 py-1 rounded-xl transition-all active:scale-95 shadow-2xs"
+                                    className="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-100/60 hover:border-blue-600 px-2 py-0.5 rounded-lg transition-all active:scale-95 shadow-2xs"
                                     title="Petunjuk Arah"
                                   >
-                                    <Navigation size={10} className="shrink-0" />
+                                    <Navigation size={9} className="shrink-0" />
                                     <span>Rute</span>
                                   </a>
                                 )}
