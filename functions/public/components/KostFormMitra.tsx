@@ -1302,13 +1302,8 @@ const HierarchicalPublicFacilityInput: React.FC<{
             ]);
             onChange(facilities.filter(f => !toRemove.has(f.toLowerCase().trim())));
         } else {
-            // Aktifkan grup dan default sub-opsi pertama jika ada
+            // Aktifkan grup tanpa mencentang sub-opsi apapun secara otomatis
             const toAdd = [item.label];
-            if (item.hasSub && item.subOptions && item.subOptions.length > 0) {
-                if (!facilities.some(f => f.toLowerCase().trim() === item.subOptions![0].toLowerCase().trim())) {
-                    toAdd.push(item.subOptions[0]);
-                }
-            }
             onChange([...facilities, ...toAdd]);
         }
     };
@@ -1554,6 +1549,9 @@ const HierarchicalRoomFacilityInput: React.FC<{
                 // Nonaktifkan Kamar Mandi Dalam
                 updatedRoomFacs = updatedRoomFacs.filter(f => f !== 'Kamar Mandi Dalam');
                 updatedBathFacs = updatedBathFacs.filter(f => f !== 'Kamar Mandi Dalam');
+                // Bersihkan sub-fasilitas kamar mandi dalam jika dinonaktifkan
+                const bathSubSet = new Set(ROOM_BATHROOM_SUB_OPTIONS.map(o => o.label.toLowerCase()));
+                updatedBathFacs = updatedBathFacs.filter(b => !bathSubSet.has(b.toLowerCase().trim()));
             } else {
                 // Aktifkan Kamar Mandi Dalam & nonaktifkan Kamar Mandi Luar
                 if (!updatedRoomFacs.includes('Kamar Mandi Dalam')) updatedRoomFacs.push('Kamar Mandi Dalam');
@@ -1561,9 +1559,6 @@ const HierarchicalRoomFacilityInput: React.FC<{
                 
                 updatedBathFacs = updatedBathFacs.filter(f => f !== 'Kamar Mandi Luar');
                 if (!updatedBathFacs.includes('Kamar Mandi Dalam')) updatedBathFacs.unshift('Kamar Mandi Dalam');
-                if (!updatedBathFacs.some(b => ['Kloset Duduk', 'Kloset Jongkok', 'Shower'].includes(b))) {
-                    updatedBathFacs.push('Shower');
-                }
             }
         } else if (label === 'Kamar Mandi Luar') {
             if (isOutsideBath) {
@@ -1580,12 +1575,10 @@ const HierarchicalRoomFacilityInput: React.FC<{
             if (isInsideKitchen) {
                 // Nonaktifkan Dapur Dalam
                 updatedRoomFacs = updatedRoomFacs.filter(f => f !== 'Dapur Dalam');
+                updatedKitchenFacs = [];
             } else {
                 // Aktifkan Dapur Dalam
                 if (!updatedRoomFacs.includes('Dapur Dalam')) updatedRoomFacs.push('Dapur Dalam');
-                if (updatedKitchenFacs.length === 0) {
-                    updatedKitchenFacs = ['Kompor', 'Wastafel Cuci Piring'];
-                }
             }
         } else {
             // Fasilitas umum / perabot kamar

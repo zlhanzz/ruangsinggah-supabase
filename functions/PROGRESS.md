@@ -2,6 +2,34 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 266. Penghapusan Auto-Check Sub-Fasilitas Saat Memilih Fasilitas Induk (`KostFormMitra.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna melaporkan bahwa ketika mencentang fasilitas induk pada form fasilitas, beberapa sub-fasilitas ikut tercentang secara otomatis padahal belum dipilih oleh pengguna.
+- **Investigasi & Analisis Akar Masalah**:
+  1. *Fasilitas Gedung / Umum (`HierarchicalPublicFacilityInput` - Langkah 4)*:
+     - Pada fungsi `toggleItem`, terdapat logika bawaan yang menyuntikkan sub-opsi indeks ke-0 (`toAdd.push(item.subOptions[0])`) saat grup diaktifkan:
+       - Mencentang "Area Parkir" $\rightarrow$ Otomatis mencentang "Parkir Motor".
+       - Mencentang "Dapur Bersama" $\rightarrow$ Otomatis mencentang "Kompor".
+       - Mencentang "WC Umum" $\rightarrow$ Otomatis mencentang "Kloset Duduk".
+  2. *Fasilitas Kamar (`HierarchicalRoomFacilityInput` - Langkah 3)*:
+     - Pada `handleToggleFacility`, terdapat logika bawaan:
+       - Mencentang "Kamar Mandi Dalam" $\rightarrow$ Otomatis menyuntikkan "Shower" ke dalam `bathroomFacilities`.
+       - Mencentang "Dapur Dalam" $\rightarrow$ Otomatis menyuntikkan "Kompor" dan "Wastafel Cuci Piring" ke dalam `kitchenFacilities`.
+- **Implementasi Solusi**:
+  1. **Pembersihan Logika `HierarchicalPublicFacilityInput`**:
+     - Memperbarui fungsi `toggleItem` agar hanya menambahkan `item.label` ke dalam array `facilities` tanpa menyuntikkan sub-opsi default apa pun.
+     - Sub-panel kelengkapan fasilitas tetap terbuka rapi di bawah kartu fasilitas dengan seluruh sub-opsi dalam kondisi kosong (tidak tercentang).
+  2. **Pembersihan Logika `HierarchicalRoomFacilityInput`**:
+     - Menghapus baris auto-inject `updatedBathFacs.push('Shower')` saat mencentang "Kamar Mandi Dalam".
+     - Menghapus baris auto-inject `updatedKitchenFacs = ['Kompor', 'Wastafel Cuci Piring']` saat mencentang "Dapur Dalam".
+     - Menambahkan pembersihan bersih (*clean reset*) sub-fasilitas kamar mandi dan dapur saat fasilitas induknya dinonaktifkan (uncheck).
+- **File Tersentuh**:
+  - `functions/public/components/KostFormMitra.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` di `functions/public/` lulus 100% (✓ 2506 modules transformed, built in 36.28s, 0 error).
+
 ### 265. Pemulihan Metadata Kategori Foto Properti Saat Edit Listing Kost Mitra (`userService.ts`, `KostFormMitra.tsx`, `adminService.ts`) (September 2026)
 - **Permintaan & Masalah**:
   - Mitra menanyakan mengapa setelah mempublikasikan kost, hampir semua foto kecuali "Bangunan Depan" hilang / menjadi 0 foto ketika kartu kost diklik "Edit" (`media_1788356202994.png`).

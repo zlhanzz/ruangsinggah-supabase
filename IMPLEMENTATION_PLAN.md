@@ -1,79 +1,96 @@
-# IMPLEMENTATION PLAN: Pemulihan Foto Per Kategori Saat Edit Listing Kost Mitra
+# IMPLEMENTATION PLAN - Penghapusan Auto-Check Sub-Fasilitas Saat Memilih Fasilitas Induk
 
 ## 1. Analisis Masalah & Kebutuhan
 
-### A. Pertanyaan Pengguna
-> *"ketika selesai klik publish, kenapa hampir semua foto kecuali foto bangunan depan hilang saat kita klik tombol edit pada kartu kost setelah publish? apakah foto kost itu tidak benar benar tersimpan di database supabase untuk mitra biasa?"*
+### Masalah Saat Ini:
+Pada formulir pendaftaran dan pengeditan kost mitra (`KostFormMitra.tsx`), terdapat beberapa fasilitas induk berjenjang (*hierarchical facilities*) yang memiliki sub-opsi kelengkapan. Ketika pengguna mencentang kotak fasilitas induk, sistem secara otomatis mencentang satu atau beberapa sub-fasilitas secara paksa (*auto-injected default*), meskipun pengguna belum memilihnya:
 
-### B. Hasil Investigasi & Fakta Sistem
-1. **Apakah foto benar-benar tersimpan di database Supabase untuk mitra biasa?**
-   - **YA, 100% TERSIMPAN DENGAN AMAN.**
-   - Seluruh file foto berhasil diunggah ke Supabase Storage (`properties/{userId}/{propertyId}/...`) dalam format WebP berkualitas tinggi.
-   - Di tabel `properties` PostgreSQL Supabase, kolom `image_urls` menyimpan array objek foto lengkap dengan label kategori, dan kolom `metadata` menyimpan:
-     - `metadata.photo_categories`: daftar kategori foto (misal: `["Bangunan Depan", "Koridor", "Area Parkir", "Lingkungan"]`).
-     - `metadata.categorized_photos`: mapping kategori ke URL foto.
-     - `metadata.photos_meta`: daftar objek citra lengkap dengan `category`, `label`, dan `caption`.
+1. **Fasilitas Umum / Gedung (`HierarchicalPublicFacilityInput` - Langkah 4)**:
+   - Baris 1307-1311: Logika `toggleItem` secara otomatis menambahkan sub-opsi indeks ke-0 (`item.subOptions[0]`) ke dalam array `facilities`:
+     - Mencentang **Area Parkir** $\rightarrow$ Otomatis mencentang **Parkir Motor**.
+     - Mencentang **Dapur Bersama** $\rightarrow$ Otomatis mencentang **Kompor**.
+     - Mencentang **WC Umum** $\rightarrow$ Otomatis mencentang **Kloset Duduk**.
+2. **Fasilitas Kamar (`HierarchicalRoomFacilityInput` - Langkah 3)**:
+   - Baris 1564-1566: Saat mencentang **Kamar Mandi Dalam**, sistem secara otomatis memasukkan **Shower** ke dalam `bathroomFacilities`.
+   - Baris 1586-1588: Saat mencentang **Dapur Dalam**, sistem secara otomatis memasukkan **Kompor** dan **Wastafel Cuci Piring** ke dalam `kitchenFacilities`.
 
-2. **Akar Masalah (Root Cause): Mengapa saat klik Edit, foto selain Bangunan Depan hilang (0 Foto)?**
-   - **Omission Mapping pada `getOwnerProperties` (`functions/public/userService.ts`)**:
-     Ketika mitra membuka dashboard, properti diambil melalui fungsi `getOwnerProperties(uid)`. Pada fungsi ini, `row.image_urls` diubah menjadi array string URL datar (`images = ['url1', 'url2', ...]`), sementara field `photosMeta`, `photoCategories`, `categorizedPhotos`, dan `metadata` **TIDAK DI-RETURN**.
-   - **Dampaknya pada Formulir Edit (`KostFormMitra.tsx`)**:
-     Saat mitra mengklik tombol **Edit** pada kartu kost, objek properti `p` yang masuk ke state `editingKost` hanya memiliki array string URL tanpa label kategori.
-     Pada Langkah 5 (Foto), logika `existingWithCats` memeriksa:
-     - Indeks 0 -> Karena tidak ada label kategori, di-fallback ke `'Bangunan Depan'` (sehingga hanya foto ini yang muncul).
-     - Indeks 1, 2, 3, dst. -> Dialihkan ke `'Fasilitas Lainnya'` (bukan ke `'Koridor'`, `'Area Parkir'`, atau `'Lingkungan'`). Akibatnya, kartu kategori wajib seperti "Koridor & Akses Masuk", "Area Parkir", dan "Lingkungan Sekitar" semuanya menampilkan **0 FOTO**.
+### Dampak Masalah:
+- Pengguna merasa bingung dan terganggu karena fasilitas yang tidak dimiliki kost (misalnya kost yang hanya menyediakan parkir mobil, atau kamar mandi dalam yang hanya memakai bak mandi/gayung tanpa shower, atau dapur dalam tanpa kompor) ikut tercentang tanpa disengaja.
+- Pengguna harus mencari dan menghapus centang sub-fasilitas yang otomatis tercentang tersebut satu per satu.
 
----
-
-## 2. Dampak Perubahan (Files Affected)
-
-1. `functions/public/userService.ts`:
-   - Memperbarui fungsi `getOwnerProperties(ownerUid)` agar memetakan dan mengembalikan `photosMeta`, `photoCategories`, `categorizedPhotos`, dan `metadata` dari baris database properti secara lengkap.
-2. `functions/public/components/KostFormMitra.tsx`:
-   - Memperkuat logika pemulihan foto pada Langkah 5 (`existingWithCats`):
-     - Membaca dari `form.photosMeta` bila tersedia.
-     - Melakukan pencocokan balik (*reverse lookup*) ke `form.categorizedPhotos` berdasarkan URL jika properti lama tidak memiliki label objek.
-     - Menginisialisasi state `customCategories` dari `editingKost.photoCategories` agar kategori foto kustom yang dibuat mitra tidak hilang.
-3. `functions/public/adminService.ts`:
-   - Memperkuat fungsi `updatePropertyWithMedia`: menjaga kesinambungan label kategori foto dari `existing.metadata` / `currentImageObjects` sehingga penyimpanan ulang tidak akan menghapus kategori yang ada.
+### Tujuan Pengembangan:
+- Memastikan bahwa saat fasilitas induk dicentang, **TIDAK ADA** sub-fasilitas yang dicentang secara otomatis.
+- Sub-panel kelengkapan tetap terbuka rapi di bawah fasilitas induk dengan semua sub-opsi dalam keadaan kosong/belum tercentang, sehingga pengguna dapat dengan leluasa dan akurat memilih sub-fasilitas yang benar-benar tersedia.
+- Ketika fasilitas induk dinonaktifkan (uncheck), seluruh sub-fasilitas di bawahnya dibersihkan secara rapi agar tidak ada data residu.
 
 ---
 
-## 3. Langkah-Langkah Eksekusi (Fase 2 - Setelah Approval)
+## 2. Dampak Perubahan
 
-### Langkah 1: Penguatan Data Fetching di `functions/public/userService.ts`
-- Pada `getOwnerProperties(ownerUid)`:
-  - Bangun `photosMeta` menggunakan `getDisplayImageObject` dari `row.metadata?.photos_meta` atau `row.image_urls`.
-  - Sertakan field `photoCategories`, `categorizedPhotos`, `photosMeta`, dan `metadata` pada objek `Kost` yang di-return, setara dengan implementasi di `getPublishedPropertyDetails`.
+File yang akan disentuh:
+- `c:\Users\ZHULL\Desktop\Firebase to Supabase\functions\public\components\KostFormMitra.tsx`:
+  - Komponen `HierarchicalPublicFacilityInput` (fungsi `toggleItem`): Menghapus injeksi `item.subOptions[0]`.
+  - Komponen `HierarchicalRoomFacilityInput` (fungsi `handleToggleFacility`):
+    - Menghapus injeksi otomatis `Shower` saat mengaktifkan `Kamar Mandi Dalam`.
+    - Menghapus injeksi otomatis `['Kompor', 'Wastafel Cuci Piring']` saat mengaktifkan `Dapur Dalam`.
+    - Membersihkan sub-fasilitas terkait saat induk dinonaktifkan.
 
-### Langkah 2: Penyempurnaan Mapping Foto & Kategori di `functions/public/components/KostFormMitra.tsx`
-- Pada inisialisasi state `customCategories`:
-  - Ambil kategori tambahan non-standar yang ada di `editingKost.photoCategories` agar kategori kustom langsung aktif di form edit.
-- Pada `existingWithCats` (Langkah 5):
-  - Prioritaskan pembacaan foto dari `form.photosMeta` yang memuat `category`, `label`, dan `caption`.
-  - Tambahkan fallback cerdas ke `form.categorizedPhotos`: jika ada foto URL yang cocok dengan daftar URL suatu kategori di `categorizedPhotos`, otomatis petakan ke kategori tersebut.
+---
 
-### Langkah 3: Pengamanan Penyimpanan Edit di `functions/public/adminService.ts`
-- Pada `updatePropertyWithMedia`:
-  - Pastikan sinkronisasi foto yang dipertahankan (`keptImageStrings`) mempertahankan label kategori dari `currentImageObjects` dan `existing.metadata`.
+## 3. Langkah-Langkah Eksekusi (Fase 2 - Menunggu Persetujuan/ACC)
 
-### Langkah 4: Pengujian Kompilasi & Dokumentasi
-- Jalankan kompilasi TypeScript & Vite build: `cmd /c npm run build`.
-- Catat riwayat perubahan ke `functions/PROGRESS.md`.
-- Buat laporan walkthrough di `WALKTHROUGH.md`.
-- Lakukan Git commit dan push ke branch non-production `bukan-productions`.
+1. **Pembersihan Logika `HierarchicalPublicFacilityInput`**:
+   - Pada fungsi `toggleItem(item: PublicFacilityItemDef)`:
+     ```typescript
+     // Sebelum:
+     const toAdd = [item.label];
+     if (item.hasSub && item.subOptions && item.subOptions.length > 0) {
+         if (!facilities.some(f => f.toLowerCase().trim() === item.subOptions![0].toLowerCase().trim())) {
+             toAdd.push(item.subOptions[0]);
+         }
+     }
+     onChange([...facilities, ...toAdd]);
+
+     // Sesudah:
+     const toAdd = [item.label];
+     onChange([...facilities, ...toAdd]);
+     ```
+   - Hasil: Mencentang "Area Parkir", "Dapur Bersama", atau "WC Umum" hanya akan mengaktifkan induknya dan membuka sub-panel tanpa mencentang satu pun sub-opsi.
+
+2. **Pembersihan Logika `HierarchicalRoomFacilityInput`**:
+   - Pada `label === 'Kamar Mandi Dalam'`:
+     - Hapus baris:
+       ```typescript
+       if (!updatedBathFacs.some(b => ['Kloset Duduk', 'Kloset Jongkok', 'Shower'].includes(b))) {
+           updatedBathFacs.push('Shower');
+       }
+       ```
+     - Saat dinonaktifkan (`isInsideBath === true`), bersihkan juga sub-fasilitas kamar mandi agar tidak meninggalkan status menggantung.
+   - Pada `label === 'Dapur Dalam'`:
+     - Hapus baris:
+       ```typescript
+       if (updatedKitchenFacs.length === 0) {
+           updatedKitchenFacs = ['Kompor', 'Wastafel Cuci Piring'];
+       }
+       ```
+     - Saat dinonaktifkan (`isInsideKitchen === true`), bersihkan `updatedKitchenFacs = []`.
+
+3. **Pengujian & Validasi Build**:
+   - Jalankan `cmd /c npm run build` di direktori `functions/public/` untuk memastikan 0 error kompilasi TypeScript dan bundler Vite.
+4. **Pencatatan Riwayat & Git Push**:
+   - Catat ke `functions/PROGRESS.md` sebagai **Fitur #266**.
+   - Terbitkan dokumen `WALKTHROUGH.md`.
+   - Commit dan push ke branch `bukan-productions`.
 
 ---
 
 ## 4. Rencana Verifikasi
 
-1. **Uji Kompilasi Build**:
-   - Menjalankan `cmd /c npm run build` di `functions/public/` dan memastikan 0 error kompilasi TypeScript.
-2. **Verifikasi Alur UI (Simulasi Edit Mitra)**:
-   - Buat/buka kost yang sudah dipublikasikan yang memiliki foto di berbagai kategori ("Bangunan Depan", "Koridor & Akses Masuk", "Lingkungan Sekitar", "Area Parkir").
-   - Klik tombol **Edit** pada kartu kost di `MitraDashboard`.
-   - Buka Langkah 5 (Foto):
-     - Pastikan "Bangunan Depan" memiliki fotonya.
-     - Pastikan "Koridor & Akses Masuk" memiliki fotonya (bukan 0 Foto).
-     - Pastikan "Lingkungan Sekitar" memiliki fotonya (bukan 0 Foto).
-     - Pastikan "Area Parkir" memiliki fotonya (bukan 0 Foto).
+- **Verifikasi Build**: Memastikan `npm run build` sukses 100% tanpa error kompilasi.
+- **Verifikasi UI Skenario**:
+  1. Centang **Area Parkir** $\rightarrow$ Pastikan sub-panel terbuka dan "Parkir Motor", "Parkir Mobil", "Parkir Sepeda" semuanya **tidak tercentang**.
+  2. Centang **Dapur Bersama** $\rightarrow$ Pastikan sub-panel terbuka dan "Kompor", "Kulkas Bersama", dll. semuanya **tidak tercentang**.
+  3. Centang **WC Umum** $\rightarrow$ Pastikan sub-panel terbuka dan "Kloset Duduk", "Shower", dll. semuanya **tidak tercentang**.
+  4. Centang **Kamar Mandi Dalam** $\rightarrow$ Pastikan "Shower" **tidak ikut tercentang otomatis**.
+  5. Centang **Dapur Dalam** $\rightarrow$ Pastikan "Kompor" dan "Wastafel Cuci Piring" **tidak ikut tercentang otomatis**.
+  6. Uncheck fasilitas induk $\rightarrow$ Pastikan sub-panel tertutup dan data sub-fasilitas dibersihkan secara konsisten.
