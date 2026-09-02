@@ -2,6 +2,31 @@
 
 ## Fitur Selesai (Completed Features)
 
+### 278. Penyederhanaan UI Mini Peta Rute & Fitur Auto-Scale Adaptive Viewport (`KostDetail.tsx`) (September 2026)
+- **Permintaan & Masalah**:
+  - Pengguna meminta agar tampilan peta dibuat lebih bersih (*clean & minimalis*) dengan:
+    1. Menghapus banner oranye di atas peta ("Menampilkan rute menuju...").
+    2. Menghapus tombol link di bawah peta ("Buka navigasi penuh di Google Maps").
+    3. Menerapkan fitur *auto-scale* / *adaptive viewport* pada layar mini preview peta agar skala dan tingginya otomatis menyesuaikan diri secara proporsional saat rute jalan jarak jauh ditampilkan.
+- **Implementasi Solusi**:
+  1. **Pembersihan Elemen UI (*Ultra Clean Map Preview*)**:
+     - Menghapus komponen banner atas dan tombol link bawah secara total.
+     - Section peta kini tampil bersih, modern, dan bebas distraksi.
+  2. **Fitur Auto-Scale Adaptive Height**:
+     - **Saat Mode Pin Kost (Normal)**: Iframe berukuran compact `h-60 sm:h-72`.
+     - **Saat Mode Rute Aktif**: Container peta secara otomatis membesar (*auto-scale*) menjadi `h-96 sm:h-[420px] md:h-[460px]` dengan animasi CSS transisi halus (`transition-all duration-500 ease-in-out`).
+     - Seluruh garis rute belokan dan titik asal-tujuan tampil lega tanpa terpotong.
+  3. **Floating Reset Pill Ringkas**:
+     - Menempatkan tombol mini semi-transparan yang elegan di sudut kanan atas peta bertuliskan *"✕ Titik Kost"* (`<RotateCcw />`) saat rute aktif, sehingga pengguna dapat kembali ke titik kost dengan satu klik cepat (atau dengan mengklik ulang tombol *"Aktif ✓"* pada list).
+  4. **Bebas FOUT**:
+     - 100% menggunakan SVG bundled lokal `lucide-react`.
+- **File Tersentuh**:
+  - `functions/public/pages/KostDetail.tsx`
+  - `functions/PROGRESS.md`
+  - `WALKTHROUGH.md`
+- **Verifikasi**:
+  - Uji kompilasi build Vite `cmd /c npm run build` lulus 100% (✓ 2509 modules transformed, built in 30.64s, 0 error).
+
 ### 277. Visualisasi Rute Interaktif Langsung pada Mini Peta Halaman Detail Kost (Interactive In-App Route Preview) (`KostDetail.tsx`) (September 2026)
 - **Permintaan & Masalah**:
   - Sebelumnya, ketika calon penghuni mengklik tombol *"Rute"* pada daftar Kampus Terdekat atau Fasilitas Publik Terdekat, sistem membuka tab baru ke Google Maps eksternal (`window.open`). Hal ini menyebabkan pengguna terlempar keluar dari website RuangSinggah.

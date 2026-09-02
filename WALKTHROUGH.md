@@ -1,28 +1,25 @@
-# WALKTHROUGH: Interactive In-App Route Preview pada Halaman Detail Kost
+# WALKTHROUGH: Penyederhanaan UI Mini Peta Rute & Fitur Auto-Scale Adaptive Viewport
 
 ## 1. Ringkasan Fitur
-Telah berhasil diimplementasikan fitur **Interactive In-App Route Preview** pada halaman detail kost (`KostDetail.tsx`). Pengguna kini dapat melihat rute petunjuk arah dari lokasi kost menuju kampus atau fasilitas publik terdekat secara langsung di layar mini map tanpa harus keluar ke aplikasi Google Maps eksternal.
+Telah diselesaikan penyederhanaan antarmuka peta pada halaman detail kost (`KostDetail.tsx`) menjadi **Ultra Clean & Minimalis**, disertai dengan fitur **Auto-Scale Adaptive Viewport** yang secara cerdas memperluas area pandang peta saat rute perjalanan sedang aktif.
 
 ---
 
 ## 2. Detail Perubahan Kode
 
 ### `functions/public/pages/KostDetail.tsx`
-1. **Interactive Route State & Dynamic Map Source**:
-   - Menambahkan state `activeRoute` dan ref `mapPreviewRef`.
-   - Mengubah iframe Google Maps agar secara reaktif beralih antara **Pin Tunggal Kost** (`maps?q=...`) dan **Rute Navigasi Lengkap** (`maps?saddr=...&daddr=...`).
-2. **Banner Status Rute Aktif**:
-   - Di atas mini map, disajikan banner informasi rute:
-     - 🧭 Menampilkan nama destinasi dan badge jarak (`± X km`).
-     - Estimasi waktu tempuh: 🚶 Jalan Kaki • 🏍️ Sepeda Motor • 🚗 Mobil.
-     - Tombol **"Titik Kost"** (`<RotateCcw />`) untuk mereset peta kembali ke lokasi awal.
-3. **Smooth Scroll & State Highlight**:
-   - Mengintegrasikan fungsi scroll halus ke elemen mini map saat tombol *"Rute"* pada kampus atau fasilitas publik diklik.
-   - Kartu tempat yang sedang aktif diberikan highlight ring warna dan tombol bertuliskan *"Aktif ✓"*.
-4. **Tombol Navigasi Sekunder**:
-   - Tombol di bawah peta secara cerdas bertransformasi menjadi *"Buka Navigasi Penuh di Google Maps ↗"* untuk opsi navigasi GPS eksternal jika diinginkan.
-5. **100% Bebas FOUT**:
-   - Seluruh ikon menggunakan komponen vector SVG bundled dari `lucide-react`.
+1. **Pembersihan Elemen UI**:
+   - Menghapus banner oranye atas (*"Menampilkan Rute Menuju..."*).
+   - Menghapus tombol tautan bawah (*"Buka Navigasi Penuh di Google Maps"*).
+   - Menghasilkan area peta yang bersih, fokus, dan bebas distraksi.
+2. **Fitur Auto-Scale Adaptive Viewport**:
+   - Container peta kini menggunakan tinggi dinamis:
+     - **Mode Pin Kost (Normal)**: `h-60 sm:h-72` (compact & proporsional).
+     - **Mode Rute Aktif**: Otomatis membesar (*auto-scale*) menjadi `h-96 sm:h-[420px] md:h-[460px]` dengan transisi animasi halus (`transition-all duration-500 ease-in-out`).
+     - Seluruh garis belokan, rute jalan, dan titik asal-tujuan termuat secara leluasa tanpa terpotong.
+3. **Floating Reset Pill Ringkas**:
+   - Menyematkan tombol mini semi-transparan di sudut kanan atas peta bertuliskan *"✕ Titik Kost"* (`<RotateCcw />`) saat rute aktif untuk mereset peta ke titik asal kost dengan mudah.
+   - Tombol *"Aktif ✓"* pada item list juga tetap berfungsi sebagai toggle.
 
 ---
 
@@ -35,7 +32,7 @@ Telah berhasil diimplementasikan fitur **Interactive In-App Route Preview** pada
   **Hasil:**
   ```text
   ✓ 2509 modules transformed.
-  ✓ built in 27.68s
+  ✓ built in 30.64s
   Exit code: 0 (0 error)
   ```
 
@@ -43,11 +40,12 @@ Telah berhasil diimplementasikan fitur **Interactive In-App Route Preview** pada
 
 ## 4. Panduan Pengujian untuk Pengguna
 
-1. Buka halaman detail kost manapun (misal: `/kost/...`).
-2. Gulir ke bagian **Lokasi & Lingkungan**.
-3. Di bawah daftar **Kampus Terdekat** atau **Fasilitas Publik**, klik tombol **"Rute"** pada salah satu tempat (misal: *Universitas Hasanuddin* atau *Makassar Town Square*).
-4. **Hasil Pengujian**:
-   - Halaman menggulir mulus ke atas ke layar mini preview peta.
-   - Mini preview peta langsung memvisualisasikan jalur rute jalan (Directions) dari Kost menuju lokasi tersebut.
-   - Di atas peta tampil banner info rute dan estimasi waktu tempuh.
-   - Klik tombol **"Titik Kost"** atau klik kembali tombol rute untuk mengembalikan peta ke pin lokasi kost awal.
+1. Buka halaman detail kost (`/kost/...`).
+2. Lihat bagian **Lokasi & Lingkungan**:
+   - Peta kini tampil bersih dan ringkas tanpa banner oranye di atas dan tanpa tombol di bawah.
+3. Klik tombol **"Rute"** pada kampus terdekat (misal: *Politeknik Negeri Ujung Pandang*):
+   - Layar melakukan *smooth scroll* ke peta.
+   - Peta secara otomatis membesar (*auto-scale*) menjadi lebih tinggi dan lapang dengan animasi mulus.
+   - Rute perjalanan dari Kost ke kampus tampil penuh tanpa terpotong.
+4. Klik tombol **"Titik Kost"** di sudut kanan atas peta (atau klik tombol **"Aktif ✓"** pada list):
+   - Peta kembali mengecil ke ukuran compact dan menampilkan pin tunggal lokasi kost.

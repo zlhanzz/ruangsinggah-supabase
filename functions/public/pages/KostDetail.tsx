@@ -1608,83 +1608,35 @@ const KostDetail: React.FC<KostDetailProps> = ({ kost, onBack, onStartChat, user
               <InfoSection title="Lokasi & Lingkungan">
                 <div className="space-y-6">
                   {hasValidLocation && (
-                    <div ref={mapPreviewRef} className="space-y-3 scroll-mt-24">
-                      {/* Active Route Header Banner (Muncul dinamis saat rute dipilih) */}
-                      {activeRoute && (
-                        <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white rounded-2xl p-3 px-4 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-8 h-8 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0">
-                              <Navigation size={16} className="text-white" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-[10px] uppercase font-black tracking-wider text-orange-100">
-                                  Menampilkan Rute Menuju
-                                </span>
-                                {activeRoute.distance && (
-                                  <span className="bg-white/25 text-white px-2 py-0.5 rounded-full text-[10px] font-black">
-                                    {activeRoute.distance}
-                                  </span>
-                                )}
-                              </div>
-                              <h5 className="font-black text-sm truncate max-w-[280px] sm:max-w-md text-white">
-                                {activeRoute.name}
-                              </h5>
-                              <div className="flex items-center gap-2 text-[10px] text-orange-100 font-bold mt-0.5 flex-wrap">
-                                {activeRoute.walkDuration && <span>🚶 {activeRoute.walkDuration}</span>}
-                                {activeRoute.motoDuration && <span>• 🏍️ {activeRoute.motoDuration}</span>}
-                                {activeRoute.carDuration && <span>• 🚗 {activeRoute.carDuration}</span>}
-                              </div>
-                            </div>
-                          </div>
-
+                    <div ref={mapPreviewRef} className="scroll-mt-24">
+                      <div className={`relative bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 group transition-all duration-500 ease-in-out ${
+                        activeRoute ? 'h-96 sm:h-[420px] md:h-[460px]' : 'h-60 sm:h-72'
+                      }`}>
+                        {/* Floating Pill: Reset ke Titik Kost (Hanya saat rute aktif) */}
+                        {activeRoute && (
                           <button
                             type="button"
                             onClick={handleResetRoute}
-                            className="self-end sm:self-center px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white text-white hover:text-orange-600 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer shrink-0"
+                            className="absolute top-3 right-3 z-10 px-3 py-1.5 rounded-full bg-gray-900/80 hover:bg-gray-900 text-white backdrop-blur-md text-[11px] font-bold shadow-md transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer border border-white/20 animate-in fade-in zoom-in-95 duration-200"
                             title="Kembalikan Peta ke Titik Kost"
                           >
-                            <RotateCcw size={12} />
+                            <RotateCcw size={12} className="text-orange-400" />
                             <span>Titik Kost</span>
                           </button>
-                        </div>
-                      )}
+                        )}
 
-                      <div className="relative bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 group">
                         <iframe
                           key={currentEmbedUrl}
                           title={activeRoute ? `Rute ke ${activeRoute.name}` : "Kost Location"}
                           width="100%"
-                          height="260"
+                          height="100%"
                           style={{ border: 0 }}
                           loading="lazy"
                           allowFullScreen
                           src={currentEmbedUrl}
-                          className="w-full h-64 sm:h-72 object-cover"
+                          className="w-full h-full object-cover"
                         ></iframe>
                       </div>
-
-                      {/* Action Button: Buka Google Maps / Navigasi Penuh */}
-                      <a 
-                        href={externalMapsUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className={`w-full ${
-                          activeRoute ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-md' : 'bg-white hover:bg-gray-50 text-gray-900 border border-gray-200 shadow-sm'
-                        } py-3.5 px-4 rounded-2xl font-bold text-center transition-all text-xs sm:text-sm uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]`}
-                      >
-                        {activeRoute ? (
-                          <>
-                            <Navigation size={16} />
-                            <span>Buka Navigasi Penuh di Google Maps ↗</span>
-                          </>
-                        ) : (
-                          <>
-                            <MapPin size={16} className="text-orange-500" />
-                            <span>Buka Google Maps</span>
-                          </>
-                        )}
-                      </a>
                     </div>
                   )}
 
